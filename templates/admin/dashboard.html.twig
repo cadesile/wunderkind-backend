@@ -1,0 +1,26 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div style="padding: 1.5rem 0;">
+    <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: #1e293b;">Dashboard</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
+            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Total Users</div>
+            <div style="font-size: 2rem; font-weight: 700; color: #6366f1;">{{ stats.users }}</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
+            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Academies</div>
+            <div style="font-size: 2rem; font-weight: 700; color: #6366f1;">{{ stats.academies }}</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
+            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Total Syncs</div>
+            <div style="font-size: 2rem; font-weight: 700; color: #6366f1;">{{ stats.syncs }}</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
+            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Invalid Syncs</div>
+            <div style="font-size: 2rem; font-weight: 700; color: #ef4444;">{{ stats.invalidSyncs }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
