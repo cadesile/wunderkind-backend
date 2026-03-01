@@ -37,6 +37,21 @@ lando php bin/console debug:router
 lando php bin/console debug:firewall
 ```
 
+## Git Workflow
+
+Always use feature branches — never commit directly to `master`.
+
+```bash
+# Start new work
+git checkout -b feat/<short-description>   # e.g. feat/leaderboard-endpoint
+
+# When done: commit, push, open PR
+git push -u origin HEAD
+gh pr create --title "..." --body "..."
+```
+
+Branch naming: `feat/`, `fix/`, `chore/` prefixes. Base branch is `master`.
+
 ## Architecture
 
 ### Sync Model
