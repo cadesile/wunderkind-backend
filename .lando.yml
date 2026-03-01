@@ -1,7 +1,7 @@
 name: wunderkind-backend
 recipe: symfony
 config:
-  php: '8.2'
+  php: '8.4'
   via: nginx
   webroot: public
   database: mysql:8.0

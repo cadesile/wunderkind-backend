@@ -3,10 +3,11 @@
 namespace App\Entity;
 
 use App\Enum\LeaderboardCategory;
+use App\Repository\LeaderboardEntryRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: LeaderboardEntryRepository::class)]
 #[ORM\UniqueConstraint(name: 'uq_leaderboard_academy_category_period', columns: ['academy_id', 'category', 'period'])]
 class LeaderboardEntry
 {
@@ -33,7 +34,7 @@ class LeaderboardEntry
     private string $period;
 
     /** Computed rank — null until the ranking job runs */
-    #[ORM\Column(type: 'integer', nullable: true, options: ['unsigned' => true])]
+    #[ORM\Column(name: 'rank_position', type: 'integer', nullable: true, options: ['unsigned' => true])]
     private ?int $rank = null;
 
     #[ORM\Column]
