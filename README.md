@@ -1,1 +1,72 @@
-⚽ The Wunderkind Factory: Project Proposal1. Project READMEThe Wunderkind Factory is a mobile-first strategy game focused on the high-stakes business of youth football academy management. Players take on the role of an Academy Director, tasked with discovering, developing, and trading the world's next superstars in a charming, 16-bit retro-inspired world.🏗 Architecture: The Hybrid ModelThe game utilizes a Client-Authoritative, Asynchronous Sync Model:Local Execution: The "Weekly Tick" and core gameplay (Training, Morale, Aging) happen entirely on the device.Legacy Sync: High-level metrics (Total Career Earnings, Academy Reputation, Hall of Fame) are pushed to the Symfony API.Security: While development is client-side, the API validates timestamps to prevent basic rollback exploits for the global leaderboards.2. Final Game Design Document (GDD)I. Core Identity and Technical StackAreaDetailGame GoalMaximize Total Career Earnings from player sales to top the global "Top Earner" leaderboard.AestheticPixelated, 16-bit retro graphics (Sensible Soccer / Theme Hospital influence).FrontendReact Native (Mobile-First Development).BackendSymfony (PHP) for API, complex game logic, and database management.Data AbstractionCRITICAL: Numerical values for CA/PA/Trait Scores are hidden. Represented by Star Ratings, Progress Bars, and Radar Charts.II. Time and Progression SystemThe game operates on a weekly cycle (The Weekly Tick).Time Advancement: Controlled by the player using the "Continue" button (advance 1, 2, 3, or 4 weeks).Weekly Tick Actions: Deduct coach salaries, apply training boosts, apply facility degradation, check behavioral incidents, and age players.Inbox Pause: Time advancement is paused if an urgent item (transfer offer, incident) is pending.III. The Academy Entity and ReputationAcademy Reputation Score (1-100): A weighted average of five pillars:Facilities Standard: Level/quality of all owned facilities.Financial Stability: Bank Balance / Total Career Earnings.Coaching Quality: Average Training Specialty of hired coaches.Players Developed: Total quantity of players sold.Standing & Respect: Sales to "Category A" clubs and Hall of Fame milestones.IV. Wunderkind and Coaching Staff SystemsA. The Dynamic Personality MatrixDefined by eight hidden traits (1-100), visualized using an 8-spoke Radar Chart.Mental: Confidence, Maturity, Teamwork, Leadership.Risk: Ego, Bravery, Greed, Loyalty.Management Impact: Praise (↑ Confidence, ↑ Ego) vs. Punishment (↓ Ego, ↓ Loyalty).Tamagotchi Events: Incidents triggered by low Morale or high Ego require "Support" or "Punish" choices.B. Coaching StaffInfluence: Coach personality traits slowly "rub off" on assigned players.Attributes: Training Specialty and Scouting Skill.V. Recruitment and ScoutingPathGated ByScouting NetworkFacility Level (Local $\rightarrow$ International).Coach FindsAverage Coaching Staff Scouting Skill.Agent OfferAgent Relationship Score (ARS).Youth RequestAcademy Reputation.VI. Transfer Market and Risk ManagementA. Player Valuation Formula$$Valuation = (CA \times F_{CA}) + (PA \times F_{PA}) \times (1 + F_{Facility} + F_{Reputation})$$B. Universal Agent & GuardiansUniversal Agent: Persistent entities that negotiate profit sharing and loyalty bonuses.Guardian/Parent Management: Interacts via Inbox for personal requests (gifts, travel).Sibling Dynamic: Managing siblings creates linked morale; upsetting a guardian risks losing both players.VII. User Interface (UI) PrinciplesGame Clock Bar: Persistent bottom bar with Time Selector and Inbox.Academy Inbox: Pauses the game for high-stakes decisions.Dashboard: Fast access to Facilities, Scouting, and Agents.Player Profile: Focus on the Radar Chart and visual growth bars.Built with passion for the "Business of Football".
+⚽ The Wunderkind Factory
+
+The Wunderkind Factory is a mobile-first strategy game focused on the high-stakes business of youth football academy management. Players take on the role of an Academy Director, tasked with discovering, developing, and trading the world's next superstars in a charming, 16-bit retro-inspired world.
+
+📖 Project Overview
+
+Unlike traditional management sims, Wunderkind Factory prioritizes the "human element" of development. Success isn't just about high stats; it's about navigating complex personalities, managing demanding guardians, and negotiating with calculated agents.
+
+Core Pillars
+
+The Weekly Tick: Time advances in discrete weekly intervals, processing training, injuries, and behavioral incidents.
+
+Dynamic Personality Matrix: An 8-spoke radar chart defines every player, influenced by your management decisions (Praise/Punishment).
+
+Data Abstraction: No "under-the-hood" numbers. Performance and potential are judged via visual cues like stars, bars, and charts.
+
+Hybrid Sync Engine: Play offline anywhere; sync your academy’s legacy and earnings to global leaderboards when connected.
+
+🛠 Tech Stack
+
+| Layer | Technology |
+| Frontend | React Native (Mobile) |
+| Backend | Symfony (PHP 8.2) + API Platform |
+| Database | MySQL 8.0 |
+| Dev Ops | Lando + Docker |
+| Persistence | MMKV (Client) / Doctrine ORM (Server) |
+
+🏗 Architecture: The Hybrid Model
+
+The game utilizes a Client-Authoritative, Asynchronous Sync Model:
+
+Local Execution: The "Weekly Tick" and core gameplay (Training, Morale, Aging) happen entirely on the device.
+
+Legacy Sync: High-level metrics (Total Career Earnings, Academy Reputation, Hall of Fame) are pushed to the Symfony API.
+
+Security: While development is client-side, the API validates timestamps to prevent basic rollback exploits for the global leaderboards.
+
+🚀 Repositories
+
+This project is split into two primary repositories:
+
+wunderkind-backend: The Symfony API & Leaderboard engine.
+
+wunderkind-app: The React Native mobile application.
+
+📋 Key Game Systems
+
+1. The Personality Matrix
+
+Players are defined by eight hidden traits:
+
+Mental: Confidence, Maturity, Teamwork, Leadership.
+
+Risk: Ego, Bravery, Greed, Loyalty.
+
+2. Recruitment Pipelines
+
+Acquire talent through four distinct paths:
+
+Scouting Network: Facility-based reach.
+
+Coaching Finds: Driven by staff attributes.
+
+Agent Offers: Proactive relationship management.
+
+Youth Requests: Driven by Academy Reputation.
+
+3. Guardian & Agent Management
+
+Every transfer is a triangle of interests. Negotiate with Universal Agents for profit and manage Guardians to maintain player loyalty—especially when dealing with siblings in the academy.
+
+Built with passion for the "Business of Football".
