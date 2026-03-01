@@ -13,6 +13,18 @@ security:
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false
 
+        admin:
+            pattern: ^/admin
+            lazy: true
+            provider: app_user_provider
+            form_login:
+                login_path: admin_login
+                check_path: admin_login
+                default_target_path: /admin
+            logout:
+                path: admin_logout
+                target: admin_login
+
         login:
             pattern: ^/api/login
             stateless: true
@@ -27,6 +39,8 @@ security:
             jwt: ~
 
     access_control:
+        - { path: ^/admin/login, roles: PUBLIC_ACCESS }
+        - { path: ^/admin,       roles: ROLE_ADMIN }
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api,          roles: IS_AUTHENTICATED_FULLY }
