@@ -34,7 +34,7 @@ class LeaderboardEntryCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->hideOnForm();
         yield AssociationField::new('academy');
-        yield TextField::new('category');
+        yield TextField::new('categoryValue', 'Category');
         yield TextField::new('period');
         yield IntegerField::new('score');
         yield IntegerField::new('rank')->setRequired(false);

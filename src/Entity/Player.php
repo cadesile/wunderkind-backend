@@ -127,9 +127,11 @@ class Player
 
     public function getPosition(): PlayerPosition { return $this->position; }
     public function setPosition(PlayerPosition $position): void { $this->position = $position; }
+    public function getPositionValue(): string { return $this->position->value; }
 
     public function getStatus(): PlayerStatus { return $this->status; }
     public function setStatus(PlayerStatus $status): void { $this->status = $status; }
+    public function getStatusValue(): string { return $this->status->value; }
 
     public function getRecruitmentSource(): RecruitmentSource { return $this->recruitmentSource; }
 

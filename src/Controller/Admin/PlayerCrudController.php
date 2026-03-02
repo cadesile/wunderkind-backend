@@ -34,8 +34,8 @@ class PlayerCrudController extends AbstractCrudController
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('firstName');
         yield TextField::new('lastName');
-        yield TextField::new('position');
-        yield TextField::new('status');
+        yield TextField::new('positionValue', 'Position');
+        yield TextField::new('statusValue', 'Status');
         yield TextField::new('nationality');
         yield DateField::new('dateOfBirth')->setFormat('yyyy-MM-dd');
         yield AssociationField::new('academy');

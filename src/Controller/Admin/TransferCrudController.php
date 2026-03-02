@@ -35,7 +35,7 @@ class TransferCrudController extends AbstractCrudController
         yield IdField::new('id')->hideOnForm();
         yield AssociationField::new('player');
         yield AssociationField::new('academy');
-        yield TextField::new('type');
+        yield TextField::new('typeValue', 'Type');
         yield IntegerField::new('fee');
         yield IntegerField::new('agentCommission');
         yield TextField::new('destinationClubName');

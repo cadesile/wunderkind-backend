@@ -68,6 +68,7 @@ class Transfer
     public function setDestinationClubName(string $name): void { $this->destinationClubName = $name; }
 
     public function getType(): TransferType { return $this->type; }
+    public function getTypeValue(): string { return $this->type->value; }
 
     public function getFee(): int { return $this->fee; }
     public function setFee(int $fee): void { $this->fee = $fee; }
