@@ -52,6 +52,7 @@ class LeaderboardEntry
     public function getId(): UuidV7 { return $this->id; }
     public function getAcademy(): Academy { return $this->academy; }
     public function getCategory(): LeaderboardCategory { return $this->category; }
+    public function getCategoryValue(): string { return $this->category->value; }
     public function getPeriod(): string { return $this->period; }
 
     public function getScore(): int { return $this->score; }

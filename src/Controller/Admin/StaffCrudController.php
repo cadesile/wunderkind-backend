@@ -34,7 +34,7 @@ class StaffCrudController extends AbstractCrudController
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('firstName');
         yield TextField::new('lastName');
-        yield TextField::new('role');
+        yield TextField::new('roleValue', 'Role');
         yield IntegerField::new('coachingAbility');
         yield IntegerField::new('scoutingRange');
         yield AssociationField::new('academy');

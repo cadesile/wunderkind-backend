@@ -72,6 +72,7 @@ class Staff
 
     public function getRole(): StaffRole { return $this->role; }
     public function setRole(StaffRole $role): void { $this->role = $role; }
+    public function getRoleValue(): string { return $this->role->value; }
 
     public function getCoachingAbility(): int { return $this->coachingAbility; }
     public function setCoachingAbility(int $v): void { $this->coachingAbility = max(1, min(100, $v)); }
