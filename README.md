@@ -1,72 +1,197 @@
-⚽ The Wunderkind Factory
+# The Wunderkind Factory — Backend
 
 The Wunderkind Factory is a mobile-first strategy game focused on the high-stakes business of youth football academy management. Players take on the role of an Academy Director, tasked with discovering, developing, and trading the world's next superstars in a charming, 16-bit retro-inspired world.
 
-📖 Project Overview
+---
+
+## Project Overview
 
 Unlike traditional management sims, Wunderkind Factory prioritizes the "human element" of development. Success isn't just about high stats; it's about navigating complex personalities, managing demanding guardians, and negotiating with calculated agents.
 
-Core Pillars
+**Core Pillars**
 
-The Weekly Tick: Time advances in discrete weekly intervals, processing training, injuries, and behavioral incidents.
+- **The Weekly Tick** — Time advances in discrete weekly intervals, processing training, injuries, and behavioral incidents.
+- **Dynamic Personality Matrix** — An 8-spoke radar chart defines every player, influenced by management decisions (Praise/Punishment).
+- **Data Abstraction** — No "under-the-hood" numbers. Performance and potential are judged via visual cues like stars, bars, and charts.
+- **Hybrid Sync Engine** — Play offline anywhere; sync your academy's legacy and earnings to global leaderboards when connected.
 
-Dynamic Personality Matrix: An 8-spoke radar chart defines every player, influenced by your management decisions (Praise/Punishment).
+---
 
-Data Abstraction: No "under-the-hood" numbers. Performance and potential are judged via visual cues like stars, bars, and charts.
-
-Hybrid Sync Engine: Play offline anywhere; sync your academy’s legacy and earnings to global leaderboards when connected.
-
-🛠 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
+|---|---|
 | Frontend | React Native (Mobile) |
-| Backend | Symfony (PHP 8.2) + API Platform |
+| Backend | Symfony 8.0 (PHP 8.4) + API Platform v4 |
 | Database | MySQL 8.0 |
 | Dev Ops | Lando + Docker |
-| Persistence | MMKV (Client) / Doctrine ORM (Server) |
+| Auth | lexik/jwt-authentication-bundle v3.2 |
+| Admin UI | EasyAdmin v5 |
+| Persistence | MMKV (Client) / Doctrine ORM 3 (Server) |
 
-🏗 Architecture: The Hybrid Model
+---
 
-The game utilizes a Client-Authoritative, Asynchronous Sync Model:
+## Architecture: The Hybrid Model
 
-Local Execution: The "Weekly Tick" and core gameplay (Training, Morale, Aging) happen entirely on the device.
+The game uses a **Client-Authoritative, Asynchronous Sync Model**:
 
-Legacy Sync: High-level metrics (Total Career Earnings, Academy Reputation, Hall of Fame) are pushed to the Symfony API.
+- **Local Execution** — The "Weekly Tick" and core gameplay (Training, Morale, Aging) happen entirely on the device.
+- **Legacy Sync** — High-level metrics (Total Career Earnings, Academy Reputation, Hall of Fame Points) are pushed to the Symfony API.
+- **Anti-Cheat** — The API validates `weekNumber` to prevent rollback exploits; every sync is recorded in `SyncRecord` even if rejected.
+- **Leaderboards** — Upserts `LeaderboardEntry` rows for `all-time` and current ISO week on every valid sync.
 
-Security: While development is client-side, the API validates timestamps to prevent basic rollback exploits for the global leaderboards.
+### Request Flow — `POST /api/sync`
 
-🚀 Repositories
+```
+JWT firewall → SyncController::sync()
+  → #[MapRequestPayload] deserializes + validates SyncRequest DTO
+  → SyncService::process()
+      → AcademyRepository::findByUser()
+      → persist SyncRecord (always)
+      → anti-cheat check → 409 if week < lastSyncedWeek
+      → update Academy aggregates
+      → LeaderboardEntryRepository::findOrCreate() × 6
+      → flush → return JSON
+```
 
-This project is split into two primary repositories:
+---
 
-wunderkind-backend: The Symfony API & Leaderboard engine.
+## Local Development
 
-wunderkind-app: The React Native mobile application.
+### Prerequisites
 
-📋 Key Game Systems
+- [Lando](https://lando.dev/) (runs PHP 8.4 + MySQL 8.0 via Docker)
 
-1. The Personality Matrix
+### Setup
 
-Players are defined by eight hidden traits:
+```bash
+# Start the environment
+lando start
 
-Mental: Confidence, Maturity, Teamwork, Leadership.
+# Install dependencies
+lando composer install
 
-Risk: Ego, Bravery, Greed, Loyalty.
+# Generate JWT keys (once, or after key rotation)
+lando php bin/console lexik:jwt:generate-keypair
 
-2. Recruitment Pipelines
+# Fresh database setup
+lando php bin/console doctrine:database:drop --force
+lando php bin/console doctrine:database:create
+lando php bin/console doctrine:schema:create
+lando php bin/console doctrine:migrations:sync-metadata-storage
+lando php bin/console doctrine:migrations:version --add --all --no-interaction
 
-Acquire talent through four distinct paths:
+# Clear cache
+lando php bin/console cache:clear
+```
 
-Scouting Network: Facility-based reach.
+### Useful Commands
 
-Coaching Finds: Driven by staff attributes.
+```bash
+lando logs -s appserver           # view app logs
+lando php bin/console debug:router    # inspect registered routes
+lando php bin/console debug:firewall  # inspect firewall config
+lando mysql                           # MySQL shell (db: wunderkind)
+```
 
-Agent Offers: Proactive relationship management.
+### Environment Variables
 
-Youth Requests: Driven by Academy Reputation.
+```bash
+APP_ENV=
+APP_SECRET=
+DATABASE_URL=mysql://wunderkind:wunderkind@database:3306/wunderkind?serverVersion=8.0&charset=utf8mb4
+CORS_ALLOW_ORIGIN=
+JWT_SECRET_KEY=
+JWT_PUBLIC_KEY=
+JWT_PASSPHRASE=
+```
 
-3. Guardian & Agent Management
+---
 
-Every transfer is a triangle of interests. Negotiate with Universal Agents for profit and manage Guardians to maintain player loyalty—especially when dealing with siblings in the academy.
+## API Endpoints
 
-Built with passion for the "Business of Football".
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/register` | Public | Create user + academy |
+| `POST` | `/api/login` | Public | JWT login → returns token |
+| `POST` | `/api/sync` | `ROLE_ACADEMY` | Anti-cheat sync + leaderboard upsert |
+| `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
+| `GET` | `/api/market-data` | JWT | Returns agents, scouts, investors, sponsors |
+
+Admin UI is available at `/admin` (session-based, `ROLE_ADMIN`).
+
+---
+
+## Source Layout
+
+| Path | Purpose |
+|---|---|
+| `src/Entity/` | Doctrine ORM entities |
+| `src/Enum/` | PHP 8.1 backed enums |
+| `src/Dto/` | Validated input/output DTOs |
+| `src/Repository/` | Domain-specific query methods |
+| `src/Service/` | Business logic |
+| `src/Controller/` | Thin HTTP layer |
+| `src/Controller/Admin/` | EasyAdmin CRUD controllers |
+| `src/ApiResource/` | API Platform v4 resource definitions |
+| `migrations/` | Doctrine migrations |
+| `config/jwt/` | RSA keypair (gitignored) |
+
+---
+
+## Entities
+
+| Entity | Key Fields |
+|---|---|
+| `User` | email, roles (`ROLE_ACADEMY` / `ROLE_ADMIN`), OneToOne Academy |
+| `Academy` | name, reputation, totalCareerEarnings, hallOfFamePoints, lastSyncedWeek |
+| `Player` | position, status, recruitmentSource, potential, currentAbility, PersonalityProfile |
+| `PersonalityProfile` | confidence, maturity, teamwork, leadership, ego, bravery, greed, loyalty (0–100) |
+| `Guardian` | demandLevel (1–10), loyaltyToAcademy (0–100), OneToOne Player |
+| `Agent` | isUniversal, commissionRate, experience, rating, OneToMany Players |
+| `Scout` | name, dob, nationality, judgements (json), experience |
+| `Investor` | company, nationality, size (CompanySize), isActive |
+| `Sponsor` | company, nationality, size (CompanySize), isActive |
+| `Staff` | role, coachingAbility, scoutingRange, weeklySalary |
+| `Transfer` | fee + agentCommission (pence); getNetProceeds() helper |
+| `SyncRecord` | clientWeekNumber, isValid, invalidReason — every sync logged |
+| `LeaderboardEntry` | UNIQUE(academy, category, period); score BIGINT; rank_position column |
+
+**Enums:** `PlayerPosition`, `PlayerStatus`, `RecruitmentSource`, `StaffRole`, `TransferType`, `LeaderboardCategory`, `CompanySize`
+
+---
+
+## Security
+
+Two separate firewalls:
+
+- **`api`** — stateless JWT, covers `/api/*`
+- **`admin`** — session form_login, covers `/admin`
+
+Role separation: `ROLE_ACADEMY` for game clients, `ROLE_ADMIN` for the admin panel. See `config/packages/security.yaml` for full access control rules.
+
+**Grant admin access:**
+```bash
+lando mysql -e "UPDATE user SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';" wunderkind
+```
+
+---
+
+## Key Gotchas
+
+- **UUID columns** are `BINARY(16)` (Doctrine's `uuid` type for MySQL) — not `VARCHAR(36)`.
+- **`rank`** is reserved in MySQL 8.0; `LeaderboardEntry` uses column name `rank_position`.
+- **`hallOfFamePoints`** is `max(current, incoming)` — never decreases.
+- **`reputation`** floors at 0. **`totalCareerEarnings`** accumulates deltas.
+- Symfony `RouterListener` (priority 32) runs before `FirewallListener` (priority 8) — `json_login` check_path must be a real registered route.
+
+---
+
+## Repositories
+
+- `wunderkind-backend` — this repo: Symfony API & leaderboard engine
+- `wunderkind-app` — React Native mobile application
+
+---
+
+Built with passion for the Business of Football.
