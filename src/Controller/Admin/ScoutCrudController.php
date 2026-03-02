@@ -2,28 +2,27 @@
 
 namespace App\Controller\Admin;
 
-use App\Entity\Agent;
+use App\Entity\Scout;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class AgentCrudController extends AbstractCrudController
+class ScoutCrudController extends AbstractCrudController
 {
     public static function getEntityFqcn(): string
     {
-        return Agent::class;
+        return Scout::class;
     }
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        return $actions->disable(Action::DELETE);
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -35,12 +34,12 @@ class AgentCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name');
-        yield BooleanField::new('isUniversal');
-        yield NumberField::new('commissionRate')->setNumDecimals(2);
-        yield NumberField::new('reputation');
         yield DateField::new('dob')->setLabel('Date of Birth');
         yield TextField::new('nationality');
         yield IntegerField::new('experience');
-        yield IntegerField::new('rating');
+        yield TextareaField::new('judgements')
+            ->setHelp('JSON array of judgement tags')
+            ->formatValue(fn($v) => is_array($v) ? json_encode($v) : $v)
+            ->hideOnIndex();
     }
 }

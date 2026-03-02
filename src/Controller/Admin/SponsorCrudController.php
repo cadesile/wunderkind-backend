@@ -2,45 +2,46 @@
 
 namespace App\Controller\Admin;
 
-use App\Entity\Agent;
+use App\Entity\Sponsor;
+use App\Enum\CompanySize;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class AgentCrudController extends AbstractCrudController
+class SponsorCrudController extends AbstractCrudController
 {
     public static function getEntityFqcn(): string
     {
-        return Agent::class;
+        return Sponsor::class;
     }
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        return $actions->disable(Action::DELETE);
     }
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['name' => 'ASC']);
+        return $crud->setDefaultSort(['company' => 'ASC']);
     }
 
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->hideOnForm();
-        yield TextField::new('name');
-        yield BooleanField::new('isUniversal');
-        yield NumberField::new('commissionRate')->setNumDecimals(2);
-        yield NumberField::new('reputation');
-        yield DateField::new('dob')->setLabel('Date of Birth');
+        yield TextField::new('company');
         yield TextField::new('nationality');
-        yield IntegerField::new('experience');
-        yield IntegerField::new('rating');
+        yield ChoiceField::new('size')
+            ->setChoices(array_combine(
+                array_map(fn($c) => ucfirst($c->value), CompanySize::cases()),
+                CompanySize::cases()
+            ));
+        yield BooleanField::new('isActive');
+        yield DateTimeField::new('createdAt')->hideOnForm();
     }
 }

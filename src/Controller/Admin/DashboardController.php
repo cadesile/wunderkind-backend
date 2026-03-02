@@ -13,9 +13,13 @@ use App\Controller\Admin\StaffCrudController;
 use App\Controller\Admin\SyncRecordCrudController;
 use App\Controller\Admin\TransferCrudController;
 use App\Controller\Admin\AdminCrudController;
+use App\Controller\Admin\InvestorCrudController;
+use App\Controller\Admin\ScoutCrudController;
+use App\Controller\Admin\SponsorCrudController;
 use App\Controller\Admin\UserCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
@@ -30,7 +34,15 @@ class DashboardController extends AbstractDashboardController
     {
         return Dashboard::new()
             ->setTitle('Wunderkind Admin')
-            ->setFaviconPath('favicon.ico');
+            ->setFaviconPath('favicon.ico')
+            ->renderContentMaximized();
+    }
+
+    public function configureAssets(): Assets
+    {
+        return Assets::new()
+            ->addCssFile('admin-theme.css')
+            ->addHtmlContentToHead('<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">');
     }
 
     public function index(): Response
@@ -60,5 +72,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-chalkboard-teacher');
         yield MenuItem::linkTo(TransferCrudController::class, 'Transfers', 'fa fa-exchange-alt');
         yield MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake');
+        yield MenuItem::section('Market');
+        yield MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars');
+        yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
+        yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
     }
 }

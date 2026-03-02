@@ -2,12 +2,13 @@
 
 namespace App\Entity;
 
+use App\Repository\AgentRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: AgentRepository::class)]
 class Agent
 {
     #[ORM\Id]
@@ -28,6 +29,21 @@ class Agent
     /** Commission rate as a percentage (e.g. 10 = 10%) */
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2)]
     private string $commissionRate = '10.00';
+
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $dob = null;
+
+    #[ORM\Column(length: 60, nullable: true)]
+    private ?string $nationality = null;
+
+    #[ORM\Column(type: 'json')]
+    private array $judgements = [];
+
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    private int $experience = 0;
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
+    private int $rating = 50;
 
     #[ORM\OneToMany(mappedBy: 'agent', targetEntity: Player::class)]
     private Collection $players;
@@ -55,4 +71,19 @@ class Agent
     public function setCommissionRate(string $rate): void { $this->commissionRate = $rate; }
 
     public function getPlayers(): Collection { return $this->players; }
+
+    public function getDob(): ?\DateTimeImmutable { return $this->dob; }
+    public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
+
+    public function getNationality(): ?string { return $this->nationality; }
+    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
+
+    public function getJudgements(): array { return $this->judgements; }
+    public function setJudgements(array $judgements): void { $this->judgements = $judgements; }
+
+    public function getExperience(): int { return $this->experience; }
+    public function setExperience(int $experience): void { $this->experience = $experience; }
+
+    public function getRating(): int { return $this->rating; }
+    public function setRating(int $rating): void { $this->rating = $rating; }
 }

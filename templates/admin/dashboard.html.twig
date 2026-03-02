@@ -2,24 +2,24 @@
 
 {% block content %}
 <div style="padding: 1.5rem 0;">
-    <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: #1e293b;">Dashboard</h2>
+    <h2 style="font-size: 10px; font-family: 'Press Start 2P', monospace; margin-bottom: 1.5rem; color: #f5c842; text-shadow: 2px 2px 0 rgba(0,0,0,0.5); letter-spacing: 1px;">DASHBOARD</h2>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
-            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Total Users</div>
-            <div style="font-size: 2rem; font-weight: 700; color: #6366f1;">{{ stats.users }}</div>
+        <div style="background: #1a4a4a; border: 4px solid #0d2e28; box-shadow: inset 2px 2px 0 rgba(255,255,255,0.08), inset -2px -2px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.3); padding: 1.25rem 1.5rem;">
+            <div style="font-size: 6px; font-family: 'Press Start 2P', monospace; color: #8ecfbe; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.75rem;">TOTAL USERS</div>
+            <div style="font-size: 22px; font-family: 'Press Start 2P', monospace; color: #f5c842; text-shadow: 2px 2px 0 rgba(0,0,0,0.4);">{{ stats.users }}</div>
         </div>
-        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
-            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Academies</div>
-            <div style="font-size: 2rem; font-weight: 700; color: #6366f1;">{{ stats.academies }}</div>
+        <div style="background: #1a4a4a; border: 4px solid #0d2e28; box-shadow: inset 2px 2px 0 rgba(255,255,255,0.08), inset -2px -2px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.3); padding: 1.25rem 1.5rem;">
+            <div style="font-size: 6px; font-family: 'Press Start 2P', monospace; color: #8ecfbe; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.75rem;">ACADEMIES</div>
+            <div style="font-size: 22px; font-family: 'Press Start 2P', monospace; color: #f5c842; text-shadow: 2px 2px 0 rgba(0,0,0,0.4);">{{ stats.academies }}</div>
         </div>
-        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
-            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Total Syncs</div>
-            <div style="font-size: 2rem; font-weight: 700; color: #6366f1;">{{ stats.syncs }}</div>
+        <div style="background: #1a4a4a; border: 4px solid #0d2e28; box-shadow: inset 2px 2px 0 rgba(255,255,255,0.08), inset -2px -2px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.3); padding: 1.25rem 1.5rem;">
+            <div style="font-size: 6px; font-family: 'Press Start 2P', monospace; color: #8ecfbe; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.75rem;">TOTAL SYNCS</div>
+            <div style="font-size: 22px; font-family: 'Press Start 2P', monospace; color: #f5c842; text-shadow: 2px 2px 0 rgba(0,0,0,0.4);">{{ stats.syncs }}</div>
         </div>
-        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem 1.5rem;">
-            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Invalid Syncs</div>
-            <div style="font-size: 2rem; font-weight: 700; color: #ef4444;">{{ stats.invalidSyncs }}</div>
+        <div style="background: #1a4a4a; border: 4px solid #0d2e28; box-shadow: inset 2px 2px 0 rgba(255,255,255,0.08), inset -2px -2px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.3); padding: 1.25rem 1.5rem;">
+            <div style="font-size: 6px; font-family: 'Press Start 2P', monospace; color: #8ecfbe; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.75rem;">INVALID SYNCS</div>
+            <div style="font-size: 22px; font-family: 'Press Start 2P', monospace; color: #d94040; text-shadow: 2px 2px 0 rgba(0,0,0,0.4);">{{ stats.invalidSyncs }}</div>
         </div>
     </div>
 </div>
