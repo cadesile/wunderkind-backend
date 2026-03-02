@@ -8,4 +8,5 @@ enum RecruitmentSource: string
     case COACHING_FIND    = 'coaching_find';
     case AGENT_OFFER      = 'agent_offer';
     case YOUTH_REQUEST    = 'youth_request';
+    case YOUTH_INTAKE     = 'youth_intake';
 }

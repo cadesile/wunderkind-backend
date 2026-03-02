@@ -37,6 +37,10 @@ class Academy
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastSyncedAt = null;
 
+    /** Target market-pool size for dynamic replenishment (future use) */
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 20])]
+    private int $marketPoolSize = 20;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -93,6 +97,9 @@ class Academy
 
     public function getLastSyncedAt(): ?\DateTimeImmutable { return $this->lastSyncedAt; }
     public function setLastSyncedAt(?\DateTimeImmutable $at): void { $this->lastSyncedAt = $at; }
+
+    public function getMarketPoolSize(): int { return $this->marketPoolSize; }
+    public function setMarketPoolSize(int $size): void { $this->marketPoolSize = $size; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

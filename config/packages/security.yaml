@@ -44,8 +44,11 @@ security:
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
-        - { path: ^/api/sync,     roles: ROLE_ACADEMY }
-        - { path: ^/api,          roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/sync,             roles: ROLE_ACADEMY }
+        - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
+        - { path: ^/api/market/assign,   roles: ROLE_ACADEMY }
+        - { path: ^/api/academy/,        roles: ROLE_ACADEMY }
+        - { path: ^/api,                 roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:

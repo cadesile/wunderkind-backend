@@ -9,5 +9,7 @@ class MarketDataResponse
         public readonly array $scouts,
         public readonly array $investors,
         public readonly array $sponsors,
+        public readonly array $players = [],
+        public readonly array $coaches = [],
     ) {}
 }

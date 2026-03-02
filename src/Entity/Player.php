@@ -5,13 +5,15 @@ namespace App\Entity;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
+use App\Repository\PlayerRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: PlayerRepository::class)]
 #[ORM\HasLifecycleCallbacks]
+#[ORM\Index(columns: ['academy_id'], name: 'idx_player_academy')]
 class Player
 {
     #[ORM\Id]
@@ -54,8 +56,8 @@ class Player
     private PersonalityProfile $personality;
 
     #[ORM\ManyToOne(inversedBy: 'players')]
-    #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    #[ORM\JoinColumn(nullable: true)]
+    private ?Academy $academy = null;
 
     #[ORM\OneToOne(mappedBy: 'player', cascade: ['persist', 'remove'])]
     private ?Guardian $guardian = null;
@@ -86,7 +88,7 @@ class Player
         RecruitmentSource $recruitmentSource,
         int $potential,
         int $currentAbility,
-        Academy $academy,
+        ?Academy $academy = null,
     ) {
         $this->id                = new UuidV7();
         $this->firstName         = $firstName;
@@ -148,8 +150,10 @@ class Player
 
     public function getPersonality(): PersonalityProfile { return $this->personality; }
 
-    public function getAcademy(): Academy { return $this->academy; }
-    public function setAcademy(Academy $academy): void { $this->academy = $academy; }
+    public function isInMarketPool(): bool { return $this->academy === null; }
+
+    public function getAcademy(): ?Academy { return $this->academy; }
+    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
 
     public function getGuardian(): ?Guardian { return $this->guardian; }
     public function setGuardian(?Guardian $guardian): void { $this->guardian = $guardian; }

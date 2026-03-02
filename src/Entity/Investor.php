@@ -26,6 +26,10 @@ class Investor
     #[ORM\Column]
     private bool $isActive = true;
 
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?Academy $academy = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -49,6 +53,11 @@ class Investor
 
     public function isActive(): bool { return $this->isActive; }
     public function setIsActive(bool $isActive): void { $this->isActive = $isActive; }
+
+    public function isInMarketPool(): bool { return $this->academy === null; }
+
+    public function getAcademy(): ?Academy { return $this->academy; }
+    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

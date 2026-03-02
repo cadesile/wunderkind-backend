@@ -3,10 +3,12 @@
 namespace App\Entity;
 
 use App\Enum\StaffRole;
+use App\Repository\StaffRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: StaffRepository::class)]
+#[ORM\Index(columns: ['academy_id'], name: 'idx_staff_academy')]
 class Staff
 {
     #[ORM\Id]
@@ -40,8 +42,8 @@ class Staff
     private int $weeklySalary = 0;
 
     #[ORM\ManyToOne(inversedBy: 'staff')]
-    #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    #[ORM\JoinColumn(nullable: true)]
+    private ?Academy $academy = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $hiredAt;
@@ -50,7 +52,7 @@ class Staff
         string $firstName,
         string $lastName,
         StaffRole $role,
-        Academy $academy,
+        ?Academy $academy = null,
     ) {
         $this->id        = new UuidV7();
         $this->firstName = $firstName;
@@ -83,8 +85,10 @@ class Staff
     public function getWeeklySalary(): int { return $this->weeklySalary; }
     public function setWeeklySalary(int $salary): void { $this->weeklySalary = $salary; }
 
-    public function getAcademy(): Academy { return $this->academy; }
-    public function setAcademy(Academy $academy): void { $this->academy = $academy; }
+    public function isInMarketPool(): bool { return $this->academy === null; }
+
+    public function getAcademy(): ?Academy { return $this->academy; }
+    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
 
     public function getHiredAt(): \DateTimeImmutable { return $this->hiredAt; }
 }

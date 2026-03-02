@@ -12,4 +12,10 @@ class AgentRepository extends ServiceEntityRepository
     {
         parent::__construct($registry, Agent::class);
     }
+
+    /** @return Agent[] */
+    public function findUniversal(): array
+    {
+        return $this->findBy(['isUniversal' => true]);
+    }
 }
