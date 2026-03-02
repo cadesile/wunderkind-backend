@@ -121,6 +121,7 @@ class Player
     public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
 
     public function getDateOfBirth(): \DateTimeImmutable { return $this->dateOfBirth; }
+    public function setDateOfBirth(\DateTimeImmutable $dob): void { $this->dateOfBirth = $dob; }
 
     public function getNationality(): string { return $this->nationality; }
     public function setNationality(string $nationality): void { $this->nationality = $nationality; }
@@ -134,6 +135,7 @@ class Player
     public function getStatusValue(): string { return $this->status->value; }
 
     public function getRecruitmentSource(): RecruitmentSource { return $this->recruitmentSource; }
+    public function setRecruitmentSource(RecruitmentSource $source): void { $this->recruitmentSource = $source; }
 
     public function getPotential(): int { return $this->potential; }
     public function setPotential(int $potential): void { $this->potential = $potential; }

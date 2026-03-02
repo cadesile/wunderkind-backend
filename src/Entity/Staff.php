@@ -84,6 +84,7 @@ class Staff
     public function setWeeklySalary(int $salary): void { $this->weeklySalary = $salary; }
 
     public function getAcademy(): Academy { return $this->academy; }
+    public function setAcademy(Academy $academy): void { $this->academy = $academy; }
 
     public function getHiredAt(): \DateTimeImmutable { return $this->hiredAt; }
 }

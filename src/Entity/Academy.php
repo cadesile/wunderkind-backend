@@ -72,6 +72,8 @@ class Academy
         $this->leaderboardEntries = new ArrayCollection();
     }
 
+    public function __toString(): string { return $this->name; }
+
     public function getId(): UuidV7 { return $this->id; }
 
     public function getName(): string { return $this->name; }

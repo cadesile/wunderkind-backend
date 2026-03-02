@@ -6,9 +6,16 @@ namespace App\Command;
 
 use App\Entity\Agent;
 use App\Entity\Investor;
+use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Sponsor;
+use App\Entity\Staff;
 use App\Enum\CompanySize;
+use App\Enum\PlayerPosition;
+use App\Enum\PlayerStatus;
+use App\Enum\RecruitmentSource;
+use App\Enum\StaffRole;
+use App\Repository\AcademyRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -95,6 +102,51 @@ class GenerateMarketDataCommand extends Command
     ];
 
     // ---------------------------------------------------------------------------
+    // Player / Staff name pools
+    // ---------------------------------------------------------------------------
+    private const PLAYER_FIRST_NAMES = [
+        'Luca', 'Noah', 'Mateo', 'Elias', 'Omar', 'Ibrahim', 'Karim', 'Yusuf',
+        'Thiago', 'Gabriel', 'Samuel', 'Daniel', 'Leo', 'Felix', 'Emil',
+        'Axel', 'Noa', 'Kian', 'Tariq', 'Amadou', 'Seun', 'Kwame', 'Taye',
+        'Soren', 'Finn', 'Erik', 'Tobias', 'Adrian', 'Julian', 'Oscar',
+        'Cristian', 'Remy', 'Enzo', 'Vitor', 'Bruno', 'Edu', 'Nico', 'Max',
+        'Jan', 'Kai', 'Zach', 'Tyler', 'Jordan', 'Marcus', 'Raheem', 'Callum',
+        'Caden', 'Jayden', 'Isaiah', 'Kofi', 'Aidan', 'Ethan', 'Javier', 'Pablo',
+    ];
+
+    private const PLAYER_LAST_NAMES = [
+        'Rossi', 'Bianchi', 'Ferrari', 'Conti', 'Esposito', 'Romano', 'Ricci',
+        'Silva', 'Santos', 'Oliveira', 'Ferreira', 'Costa', 'Carvalho', 'Gomes',
+        'García', 'Martínez', 'López', 'González', 'Rodríguez', 'Sánchez',
+        'Müller', 'Schmidt', 'Fischer', 'Weber', 'Meyer', 'Hoffmann', 'Koch',
+        'Dupont', 'Dubois', 'Bernard', 'Moreau', 'Laurent', 'Simon', 'Leroy',
+        'Smith', 'Jones', 'Williams', 'Taylor', 'Brown', 'Davies', 'Evans',
+        'Diallo', 'Camara', 'Traoré', 'Koné', 'Coulibaly', 'Touré', 'Dembélé',
+        'De Jong', 'Van Dijk', 'Bakker', 'Janssen', 'Smit', 'Visser',
+        'Andersen', 'Nielsen', 'Hansen', 'Pedersen', 'Christensen',
+        'Johansson', 'Lindqvist', 'Eriksson', 'Larsson', 'Nilsson',
+    ];
+
+    private const STAFF_FIRST_NAMES = [
+        'Roberto', 'Marco', 'Fabio', 'Luca', 'Giovanni', 'Antonio', 'Francesco',
+        'Carlos', 'Luis', 'Javier', 'Pedro', 'Alejandro', 'Fernando',
+        'Thomas', 'Michael', 'Stefan', 'Andreas', 'Markus', 'Ralf', 'Jürgen',
+        'Patrick', 'Nicolas', 'Sébastien', 'Laurent', 'Thierry', 'Didier',
+        'Gary', 'Steve', 'Mark', 'Paul', 'Chris', 'Andrew', 'James',
+        'Nuno', 'Rui', 'Filipe', 'Tiago', 'André',
+    ];
+
+    private const STAFF_LAST_NAMES = [
+        'Conte', 'Mancini', 'Capello', 'Ancelotti', 'Allegri', 'Spalletti',
+        'Scolari', 'Tite', 'Zagallo', 'Parreira', 'Dunga',
+        'Simeone', 'Valverde', 'Marcelino', 'Unzué', 'Lopetegui',
+        'Flick', 'Nagelsmann', 'Tuchel', 'Klopp', 'Rangnick', 'Hütter',
+        'Deschamps', 'Blanc', 'Jacquet', 'Domenech', 'Gerets',
+        'Hodgson', 'Southgate', 'McLaren', 'Robson', 'Venables',
+        'Fonseca', 'Conceição', 'Villas-Boas', 'Jardim',
+    ];
+
+    // ---------------------------------------------------------------------------
     // Shared nationalities
     // ---------------------------------------------------------------------------
     private const NATIONALITIES = [
@@ -118,8 +170,10 @@ class GenerateMarketDataCommand extends Command
         ['mental', 'personality'],
     ];
 
-    public function __construct(private readonly EntityManagerInterface $em)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly AcademyRepository      $academyRepository,
+    ) {
         parent::__construct();
     }
 
@@ -130,7 +184,9 @@ class GenerateMarketDataCommand extends Command
             ->addOption('scouts',    's', InputOption::VALUE_OPTIONAL, 'Number of scouts to generate',    30)
             ->addOption('investors', 'i', InputOption::VALUE_OPTIONAL, 'Number of investors to generate', 20)
             ->addOption('sponsors',  'p', InputOption::VALUE_OPTIONAL, 'Number of sponsors to generate',  40)
-            ->addOption('clear',     'c', InputOption::VALUE_NONE,     'Delete existing market data before generating')
+            ->addOption('players',   'l', InputOption::VALUE_OPTIONAL, 'Number of players to generate',   50)
+            ->addOption('staff',     't', InputOption::VALUE_OPTIONAL, 'Number of staff to generate',     20)
+            ->addOption('clear',     'c', InputOption::VALUE_NONE,     'Delete existing data before generating')
         ;
     }
 
@@ -143,6 +199,8 @@ class GenerateMarketDataCommand extends Command
         $scoutCount    = (int) $input->getOption('scouts');
         $investorCount = (int) $input->getOption('investors');
         $sponsorCount  = (int) $input->getOption('sponsors');
+        $playerCount   = (int) $input->getOption('players');
+        $staffCount    = (int) $input->getOption('staff');
         $clear         = (bool) $input->getOption('clear');
 
         try {
@@ -154,6 +212,14 @@ class GenerateMarketDataCommand extends Command
             $this->generateScouts($io, $scoutCount);
             $this->generateInvestors($io, $investorCount);
             $this->generateSponsors($io, $sponsorCount);
+
+            $academies = $this->academyRepository->findAll();
+            if (empty($academies)) {
+                $io->warning('No academies found — skipping Player and Staff generation. Register at least one user first.');
+            } else {
+                $this->generatePlayers($io, $playerCount, $academies);
+                $this->generateStaff($io, $staffCount, $academies);
+            }
         } catch (\Throwable $e) {
             $io->error(sprintf('Failed: %s', $e->getMessage()));
             return Command::FAILURE;
@@ -165,6 +231,8 @@ class GenerateMarketDataCommand extends Command
             ['Scouts'    => $scoutCount],
             ['Investors' => $investorCount],
             ['Sponsors'  => $sponsorCount],
+            ['Players'   => $playerCount],
+            ['Staff'     => $staffCount],
         );
 
         return Command::SUCCESS;
@@ -182,6 +250,8 @@ class GenerateMarketDataCommand extends Command
         $this->em->createQuery('DELETE FROM App\Entity\Scout')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Investor')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Sponsor')->execute();
+        $this->em->createQuery('DELETE FROM App\Entity\Player')->execute();
+        $this->em->createQuery('DELETE FROM App\Entity\Staff')->execute();
 
         $io->text('Done. Generating fresh data.');
         $io->newLine();
@@ -340,6 +410,134 @@ class GenerateMarketDataCommand extends Command
     }
 
     // ---------------------------------------------------------------------------
+    // Players
+    // ---------------------------------------------------------------------------
+
+    /** @param \App\Entity\Academy[] $academies */
+    private function generatePlayers(SymfonyStyle $io, int $count, array $academies): void
+    {
+        $io->text(sprintf('Generating %d Players...', $count));
+        $progressBar = $io->createProgressBar($count);
+        $progressBar->start();
+
+        $sources = RecruitmentSource::cases();
+
+        // Load all agents for optional assignment
+        $agents = $this->em->getRepository(\App\Entity\Agent::class)->findAll();
+
+        $academyCount = count($academies);
+
+        for ($i = 0; $i < $count; $i++) {
+            $potential      = random_int(50, 99);
+            $currentAbility = max(30, $potential - random_int(5, 25));
+            $age            = random_int(14, 22);
+
+            // Contract value scales loosely with ability (in pence/cents per week)
+            $contractValue = $currentAbility * random_int(100, 400);
+
+            $player = new Player(
+                firstName:         $this->pick(self::PLAYER_FIRST_NAMES),
+                lastName:          $this->pick(self::PLAYER_LAST_NAMES),
+                dateOfBirth:       $this->dobFromAge($age),
+                nationality:       $this->pick(self::NATIONALITIES),
+                position:          $this->weightedPlayerPosition(),
+                recruitmentSource: $sources[array_rand($sources)],
+                potential:         $potential,
+                currentAbility:    $currentAbility,
+                academy:           $academies[$i % $academyCount],
+            );
+
+            $player->setStatus($this->weightedPlayerStatus());
+            $player->setContractValue($contractValue);
+
+            // 40 % chance of having an agent
+            if (!empty($agents) && random_int(1, 100) <= 40) {
+                $player->setAgent($agents[array_rand($agents)]);
+            }
+
+            // Randomise personality matrix
+            $p = $player->getPersonality();
+            $p->setConfidence(random_int(30, 90));
+            $p->setMaturity(random_int(30, 90));
+            $p->setTeamwork(random_int(30, 90));
+            $p->setLeadership(random_int(20, 85));
+            $p->setEgo(random_int(20, 85));
+            $p->setBravery(random_int(30, 90));
+            $p->setGreed(random_int(20, 80));
+            $p->setLoyalty(random_int(30, 90));
+
+            $this->em->persist($player);
+
+            if ($i > 0 && $i % 50 === 0) {
+                $this->em->flush();
+                $this->em->clear(Player::class);
+                // Re-fetch agents after clear so references stay valid
+                $agents = $this->em->getRepository(\App\Entity\Agent::class)->findAll();
+            }
+
+            $progressBar->advance();
+        }
+
+        $this->em->flush();
+        $progressBar->finish();
+        $io->newLine(2);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Staff
+    // ---------------------------------------------------------------------------
+
+    /** @param \App\Entity\Academy[] $academies */
+    private function generateStaff(SymfonyStyle $io, int $count, array $academies): void
+    {
+        $io->text(sprintf('Generating %d Staff...', $count));
+        $progressBar = $io->createProgressBar($count);
+        $progressBar->start();
+
+        $roles = StaffRole::cases();
+        $academyCount = count($academies);
+
+        $weeklySalaryRanges = [
+            StaffRole::HEAD_COACH->value      => [80000, 200000],
+            StaffRole::ASSISTANT_COACH->value => [40000, 100000],
+            StaffRole::SCOUT->value           => [25000, 70000],
+            StaffRole::FITNESS_COACH->value   => [30000, 80000],
+            StaffRole::ANALYST->value         => [30000, 75000],
+        ];
+
+        for ($i = 0; $i < $count; $i++) {
+            $role          = $roles[array_rand($roles)];
+            $salaryRange   = $weeklySalaryRanges[$role->value];
+            $coachingAbility = random_int(30, 90);
+            $scoutingRange   = random_int(30, 90);
+
+            $staff = new Staff(
+                firstName: $this->pick(self::STAFF_FIRST_NAMES),
+                lastName:  $this->pick(self::STAFF_LAST_NAMES),
+                role:      $role,
+                academy:   $academies[$i % $academyCount],
+            );
+
+            $staff->setCoachingAbility($coachingAbility);
+            $staff->setScoutingRange($scoutingRange);
+            $staff->setWeeklySalary(random_int($salaryRange[0], $salaryRange[1]));
+
+            $this->em->persist($staff);
+
+            if ($i > 0 && $i % 50 === 0) {
+                $this->em->flush();
+                $this->em->clear(Staff::class);
+            }
+
+            $progressBar->advance();
+        }
+
+        $this->em->flush();
+        $progressBar->finish();
+        $io->newLine(2);
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
@@ -441,6 +639,30 @@ class GenerateMarketDataCommand extends Command
             $roll <= 20 => CompanySize::SMALL,
             $roll <= 45 => CompanySize::MEDIUM,
             default     => CompanySize::LARGE,
+        };
+    }
+
+    /** GK 8 % / DEF 30 % / MID 38 % / ATT 24 % */
+    private function weightedPlayerPosition(): PlayerPosition
+    {
+        $roll = random_int(1, 100);
+        return match (true) {
+            $roll <= 8  => PlayerPosition::GOALKEEPER,
+            $roll <= 38 => PlayerPosition::DEFENDER,
+            $roll <= 76 => PlayerPosition::MIDFIELDER,
+            default     => PlayerPosition::ATTACKER,
+        };
+    }
+
+    /** ACTIVE 80 % / LOANED_OUT 15 % / TRANSFERRED 4 % / RETIRED 1 % */
+    private function weightedPlayerStatus(): PlayerStatus
+    {
+        $roll = random_int(1, 100);
+        return match (true) {
+            $roll <= 80 => PlayerStatus::ACTIVE,
+            $roll <= 95 => PlayerStatus::LOANED_OUT,
+            $roll <= 99 => PlayerStatus::TRANSFERRED,
+            default     => PlayerStatus::RETIRED,
         };
     }
 }
