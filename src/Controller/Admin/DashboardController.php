@@ -12,6 +12,7 @@ use App\Controller\Admin\PlayerCrudController;
 use App\Controller\Admin\StaffCrudController;
 use App\Controller\Admin\SyncRecordCrudController;
 use App\Controller\Admin\TransferCrudController;
+use App\Controller\Admin\AdminCrudController;
 use App\Controller\Admin\UserCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
@@ -50,6 +51,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Users & Academies');
         yield MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users');
         yield MenuItem::linkTo(AcademyCrudController::class, 'Academies', 'fa fa-school');
+        yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-sync');
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');

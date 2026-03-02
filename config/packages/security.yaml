@@ -39,10 +39,12 @@ security:
             jwt: ~
 
     access_control:
-        - { path: ^/admin/login, roles: PUBLIC_ACCESS }
-        - { path: ^/admin,       roles: ROLE_ADMIN }
+        - { path: ^/admin/login,  roles: PUBLIC_ACCESS }
+        - { path: ^/admin,        roles: ROLE_ADMIN }
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/admin/,   roles: ROLE_ADMIN }
+        - { path: ^/api/sync,     roles: ROLE_ACADEMY }
         - { path: ^/api,          roles: IS_AUTHENTICATED_FULLY }
 
 when@test:

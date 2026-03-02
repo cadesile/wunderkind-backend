@@ -11,6 +11,9 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: '`user`')]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
+    public const ROLE_ACADEMY = 'ROLE_ACADEMY';
+    public const ROLE_ADMIN   = 'ROLE_ADMIN';
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
@@ -26,6 +29,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
     private ?Academy $academy = null;
+
+    #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
+    private ?Admin $admin = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
@@ -47,12 +53,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getPassword(): string { return $this->password; }
     public function setPassword(string $password): void { $this->password = $password; }
 
-    public function getRoles(): array
-    {
-        $roles = $this->roles;
-        $roles[] = 'ROLE_USER';
-        return array_unique($roles);
-    }
+    public function getRoles(): array { return array_unique($this->roles); }
 
     public function setRoles(array $roles): void { $this->roles = $roles; }
 
@@ -60,6 +61,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getAcademy(): ?Academy { return $this->academy; }
     public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
+
+    public function getAdmin(): ?Admin { return $this->admin; }
+    public function setAdmin(?Admin $admin): void { $this->admin = $admin; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

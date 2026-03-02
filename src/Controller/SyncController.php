@@ -47,6 +47,7 @@ class SyncController extends AbstractController
 
         $user = new User($data['email']);
         $user->setPassword($hasher->hashPassword($user, $data['password']));
+        $user->setRoles([User::ROLE_ACADEMY]);
 
         $academy = new Academy($data['academyName'], $user);
         $em->persist($user);
