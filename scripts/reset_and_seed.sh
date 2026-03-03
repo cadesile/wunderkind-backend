@@ -180,16 +180,17 @@ if [[ "$ADMIN_COUNT" -gt 0 ]]; then
 fi
 
 # ─── Phase 3: Re-seed market data ────────────────────────────────────────────
-# app:generate-market-data seeds agents, scouts, investors, sponsors (no --clear
-# needed — tables were already truncated above).
-# app:market:generate adds pool players, coaches, and more agents/scouts.
+# app:generate-market-data is the sole owner of agents (25). app:market:generate
+# skips agent generation (--agents=0) to avoid duplicate names from both commands
+# drawing the same name pool. Pool players (100), coaches (20), and scouts (10)
+# come from app:market:generate only.
 echo ""
 echo -e "${BLUE}🌱 Phase 3a: Generating market data (agents · scouts · investors · sponsors)...${NC}"
 lando php bin/console app:generate-market-data
 
 echo ""
-echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · coaches · scouts · agents)...${NC}"
-lando php bin/console app:market:generate
+echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · coaches · scouts, no agents)...${NC}"
+lando php bin/console app:market:generate --agents=0
 
 # ─── Verification ────────────────────────────────────────────────────────────
 echo ""
