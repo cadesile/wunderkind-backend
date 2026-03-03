@@ -33,8 +33,8 @@ class DashboardController extends AbstractDashboardController
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('Wunderkind Admin')
-            ->setFaviconPath('favicon.ico')
+            ->setTitle('<img src="/images/logo.webp" alt="Wunderkind Factory" style="width:48px;height:48px;image-rendering:pixelated;vertical-align:middle;margin-right:8px;"> Wunderkind')
+            ->setFaviconPath('images/logo.webp')
             ->renderContentMaximized();
     }
 

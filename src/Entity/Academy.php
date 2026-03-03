@@ -80,6 +80,9 @@ class Academy
     #[ORM\OneToMany(mappedBy: 'academy', targetEntity: InboxMessage::class, cascade: ['persist', 'remove'])]
     private Collection $inboxMessages;
 
+    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Facility::class, cascade: ['persist', 'remove'])]
+    private Collection $facilities;
+
     public function __construct(string $name, User $user)
     {
         $this->id                 = new UuidV7();
@@ -94,6 +97,7 @@ class Academy
         $this->investors          = new ArrayCollection();
         $this->sponsors           = new ArrayCollection();
         $this->inboxMessages      = new ArrayCollection();
+        $this->facilities         = new ArrayCollection();
     }
 
     public function __toString(): string { return $this->name; }
@@ -138,6 +142,9 @@ class Academy
         return true;
     }
 
+    public function hasDebt(): bool { return $this->balance < 0; }
+    public function getDebtAmount(): int { return max(0, -$this->balance); }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
     public function getUser(): User { return $this->user; }
@@ -150,6 +157,7 @@ class Academy
     public function getInvestors(): Collection { return $this->investors; }
     public function getSponsors(): Collection { return $this->sponsors; }
     public function getInboxMessages(): Collection { return $this->inboxMessages; }
+    public function getFacilities(): Collection { return $this->facilities; }
 
     public function canAcceptInvestor(float $percentage): bool
     {

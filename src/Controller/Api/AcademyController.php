@@ -3,6 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Dto\AcademyInitRequest;
+use App\Entity\Investor;
 use App\Entity\User;
 use App\Service\AcademyInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -37,5 +38,37 @@ class AcademyController extends AbstractController
             'players'       => $academy->getPlayers()->count(),
             'staff'         => $academy->getStaff()->count(),
         ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/status', name: 'api_academy_status', methods: ['GET'])]
+    #[IsGranted('ROLE_ACADEMY')]
+    public function status(): JsonResponse
+    {
+        /** @var User $user */
+        $user    = $this->getUser();
+        $academy = $user->getAcademy();
+
+        if ($academy === null) {
+            return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $activeInvestorCount = $academy->getInvestors()
+            ->filter(fn (Investor $i) => $i->isActive())
+            ->count();
+
+        return $this->json([
+            'id'                  => $academy->getId()->toRfc4122(),
+            'name'                => $academy->getName(),
+            'balance'             => $academy->getBalance(),
+            'hasDebt'             => $academy->hasDebt(),
+            'reputation'          => $academy->getReputation(),
+            'weekNumber'          => $academy->getLastSyncedWeek(),
+            'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
+            'hallOfFamePoints'    => $academy->getHallOfFamePoints(),
+            'playerCount'         => $academy->getPlayers()->count(),
+            'staffCount'          => $academy->getStaff()->count(),
+            'activeSponsors'      => $academy->getActiveSponsors()->count(),
+            'activeInvestors'     => $activeInvestorCount,
+        ]);
     }
 }

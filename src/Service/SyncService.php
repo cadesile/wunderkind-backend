@@ -6,6 +6,7 @@ use App\Dto\SyncRequest;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
+use App\Enum\PlayerStatus;
 use App\Repository\AcademyRepository;
 use App\Repository\LeaderboardEntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -13,10 +14,11 @@ use Doctrine\ORM\EntityManagerInterface;
 class SyncService
 {
     public function __construct(
-        private readonly AcademyRepository $academyRepository,
+        private readonly AcademyRepository          $academyRepository,
         private readonly LeaderboardEntryRepository $leaderboardEntryRepository,
-        private readonly EntityManagerInterface $em,
-        private readonly EconomicService $economicService,
+        private readonly EntityManagerInterface     $em,
+        private readonly EconomicService            $economicService,
+        private readonly InboxService               $inboxService,
     ) {}
 
     /**
@@ -63,6 +65,15 @@ class SyncService
         $academy->setLastSyncedWeek($request->weekNumber);
         $academy->setLastSyncedAt(new \DateTimeImmutable());
 
+        // Add earnings delta to liquid balance
+        $academy->addFunds((int) round($request->earningsDelta));
+
+        // Process sponsor payments (monthly, based on contract)
+        $this->processSponsorPayments($academy, $clientTimestamp);
+
+        // Deduct weekly staff and player salaries
+        $this->deductWeeklySalaries($academy);
+
         // Upsert leaderboard entries for all-time and current ISO week
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
@@ -102,7 +113,36 @@ class SyncService
                 'reputation'          => $academy->getReputation(),
                 'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
                 'hallOfFamePoints'    => $academy->getHallOfFamePoints(),
+                'balance'             => $academy->getBalance(),
+                'hasDebt'             => $academy->hasDebt(),
             ],
         ];
+    }
+
+    private function deductWeeklySalaries(Academy $academy): void
+    {
+        $total = 0;
+
+        foreach ($academy->getStaff() as $staff) {
+            $total += $staff->getWeeklySalary();
+        }
+
+        foreach ($academy->getPlayers() as $player) {
+            if ($player->getStatus() === PlayerStatus::ACTIVE) {
+                $total += $player->getContractValue();
+            }
+        }
+
+        $academy->addFunds(-$total);
+    }
+
+    private function processSponsorPayments(Academy $academy, \DateTimeImmutable $now): void
+    {
+        foreach ($academy->getActiveSponsors() as $sponsor) {
+            if ($sponsor->isPaymentDue($now)) {
+                $academy->addFunds($sponsor->getMonthlyPayment());
+                $sponsor->setLastPaymentAt($now);
+            }
+        }
     }
 }

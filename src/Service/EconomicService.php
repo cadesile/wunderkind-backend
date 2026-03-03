@@ -124,6 +124,7 @@ class EconomicService
 
             $payout = $investor->calculateAnnualPayout($annualProfit);
             $investor->setLastPayoutAt($now);
+            $academy->addFunds(-$payout);
 
             $this->inboxService->sendSystemNotification(
                 $academy,

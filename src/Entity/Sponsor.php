@@ -58,6 +58,9 @@ class Sponsor
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $earlyTerminationFee = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $lastPaymentAt = null;
+
     public function __construct(string $company)
     {
         $this->id        = new UuidV7();
@@ -109,6 +112,20 @@ class Sponsor
 
     public function getEarlyTerminationFee(): ?int { return $this->earlyTerminationFee; }
     public function setEarlyTerminationFee(?int $fee): void { $this->earlyTerminationFee = $fee; }
+
+    public function getLastPaymentAt(): ?\DateTimeImmutable { return $this->lastPaymentAt; }
+    public function setLastPaymentAt(?\DateTimeImmutable $at): void { $this->lastPaymentAt = $at; }
+
+    public function isPaymentDue(\DateTimeImmutable $now): bool
+    {
+        if ($this->status !== SponsorStatus::ACTIVE) {
+            return false;
+        }
+        if ($this->lastPaymentAt === null) {
+            return true;
+        }
+        return $this->lastPaymentAt <= $now->modify('-1 month');
+    }
 
     public function getExpectedReturnPercentage(): int
     {

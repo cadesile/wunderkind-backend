@@ -19,6 +19,7 @@ class AcademyInitializationService
 
     public function __construct(
         private readonly MarketPoolService     $pool,
+        private readonly FacilityService       $facilityService,
         private readonly EntityManagerInterface $em,
     ) {}
 
@@ -121,5 +122,8 @@ class AcademyInitializationService
         foreach (array_slice($investors, 0, self::STARTING_INVESTORS) as $investor) {
             $this->pool->assignToAcademy($investor, $academy);
         }
+
+        // Facilities — one per type, all at level 0
+        $this->facilityService->initializeFacilities($academy);
     }
 }

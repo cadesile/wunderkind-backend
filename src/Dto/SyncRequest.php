@@ -13,12 +13,12 @@ class SyncRequest
     public string $clientTimestamp;
 
     #[Assert\PositiveOrZero]
-    public int $earningsDelta;
+    public float $earningsDelta;
 
-    public int $reputationDelta = 0;
+    public float $reputationDelta = 0;
 
     #[Assert\PositiveOrZero]
-    public int $hallOfFamePoints = 0;
+    public float $hallOfFamePoints = 0;
 
     public array $transfers = [];
 }

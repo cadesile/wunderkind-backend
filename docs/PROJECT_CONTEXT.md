@@ -84,11 +84,20 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── migrations
 │   ├── Version20260301214628.php
 │   ├── Version20260302000001.php
-│   └── Version20260302000002.php
+│   ├── Version20260302000002.php
+│   ├── Version20260302000003.php
+│   ├── Version20260303000001.php
+│   ├── Version20260303000002.php
+│   ├── Version20260303000003.php
+│   ├── Version20260303000004.php
+│   ├── Version20260303000005.php
+│   └── Version20260303000006.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
 │   │   └── easyadmin
+│   ├── images
+│   │   └── logo.webp
 │   ├── admin-theme.css
 │   └── index.php
 ├── scripts
@@ -96,7 +105,8 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── src
 │   ├── ApiResource
 │   ├── Command
-│   │   └── GenerateMarketDataCommand.php
+│   │   ├── GenerateMarketDataCommand.php
+│   │   └── GenerateMarketPoolCommand.php
 │   ├── Controller
 │   │   ├── Admin
 │   │   ├── Api
@@ -104,6 +114,8 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── LeaderboardController.php
 │   │   └── SyncController.php
 │   ├── Dto
+│   │   ├── AcademyInitRequest.php
+│   │   ├── MarketAssignRequest.php
 │   │   ├── MarketDataResponse.php
 │   │   └── SyncRequest.php
 │   ├── Entity
@@ -111,6 +123,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── Admin.php
 │   │   ├── Agent.php
 │   │   ├── Guardian.php
+│   │   ├── InboxMessage.php
 │   │   ├── Investor.php
 │   │   ├── LeaderboardEntry.php
 │   │   ├── PersonalityProfile.php
@@ -123,10 +136,15 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   └── User.php
 │   ├── Enum
 │   │   ├── CompanySize.php
+│   │   ├── InvestorTier.php
 │   │   ├── LeaderboardCategory.php
+│   │   ├── MarketEntityType.php
+│   │   ├── MessageSenderType.php
+│   │   ├── MessageStatus.php
 │   │   ├── PlayerPosition.php
 │   │   ├── PlayerStatus.php
 │   │   ├── RecruitmentSource.php
+│   │   ├── SponsorStatus.php
 │   │   ├── StaffRole.php
 │   │   └── TransferType.php
 │   ├── EventSubscriber
@@ -135,11 +153,19 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── AcademyRepository.php
 │   │   ├── AdminRepository.php
 │   │   ├── AgentRepository.php
+│   │   ├── InboxMessageRepository.php
 │   │   ├── InvestorRepository.php
 │   │   ├── LeaderboardEntryRepository.php
+│   │   ├── PlayerRepository.php
 │   │   ├── ScoutRepository.php
-│   │   └── SponsorRepository.php
+│   │   ├── SponsorRepository.php
+│   │   └── StaffRepository.php
 │   ├── Service
+│   │   ├── AcademyInitializationService.php
+│   │   ├── EconomicService.php
+│   │   ├── InboxService.php
+│   │   ├── MarketDataService.php
+│   │   ├── MarketPoolService.php
 │   │   └── SyncService.php
 │   └── Kernel.php
 ├── templates
@@ -147,6 +173,12 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── dashboard.html.twig
 │   │   └── login.html.twig
 │   └── base.html.twig
+├── tests
+│   ├── Controller
+│   │   └── Api
+│   └── Service
+│       ├── EconomicServiceTest.php
+│       └── InboxServiceTest.php
 ├── translations
 ├── CLAUDE.md
 ├── compose.override.yaml
@@ -157,7 +189,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── README.md
 └── symfony.lock
 
-28 directories, 83 files
+33 directories, 110 files
 ```
 
 ---
@@ -177,6 +209,8 @@ class Academy
     private int $hallOfFamePoints = 0;
     private int $lastSyncedWeek = 0;
     private ?\DateTimeImmutable $lastSyncedAt = null;
+    private int $marketPoolSize = 20;
+    private int $financialYearStart = 4;
     private \DateTimeImmutable $createdAt;
     private User $user;
     private Collection $players;
@@ -184,12 +218,10 @@ class Academy
     private Collection $transfers;
     private Collection $syncRecords;
     private Collection $leaderboardEntries;
+    private Collection $investors;
+    private Collection $sponsors;
+    private Collection $inboxMessages;
     public function __construct(string $name, User $user)
-    public function __toString(): string { return $this->name; }
-    public function getId(): UuidV7 { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function setName(string $name): void { $this->name = $name; }
-    public function getReputation(): int { return $this->reputation; }
 ```
 
 #### Admin
@@ -263,6 +295,32 @@ class Guardian
     public function setLoyaltyToAcademy(int $loyalty): void { $this->loyaltyToAcademy = max(0, min(100, $loyalty)); }
 ```
 
+#### InboxMessage
+```php
+class InboxMessage
+{
+    private UuidV7 $id;
+    private Academy $academy;
+    private MessageSenderType $senderType;
+    private string $senderName;
+    private string $subject;
+    private string $body;
+    private ?array $offerData = null;
+    private MessageStatus $status = MessageStatus::UNREAD;
+    private ?string $relatedEntityType = null;
+    private ?string $relatedEntityId = null;
+    private \DateTimeImmutable $createdAt;
+    private ?\DateTimeImmutable $respondedAt = null;
+    public function __construct(
+    public function getId(): UuidV7 { return $this->id; }
+    public function getAcademy(): Academy { return $this->academy; }
+    public function getSenderType(): MessageSenderType { return $this->senderType; }
+    public function getSenderName(): string { return $this->senderName; }
+    public function getSubject(): string { return $this->subject; }
+    public function getBody(): string { return $this->body; }
+    public function getOfferData(): ?array { return $this->offerData; }
+```
+
 #### Investor
 ```php
 class Investor
@@ -272,7 +330,13 @@ class Investor
     private ?string $nationality = null;
     private CompanySize $size = CompanySize::MEDIUM;
     private bool $isActive = true;
+    private ?Academy $academy = null;
     private \DateTimeImmutable $createdAt;
+    private InvestorTier $tier = InvestorTier::ANGEL;
+    private int $investmentAmount = 0;
+    private string $percentageOwned = '5.00';
+    private ?\DateTimeImmutable $investedAt = null;
+    private ?\DateTimeImmutable $lastPayoutAt = null;
     public function __construct(string $company)
     public function getId(): UuidV7 { return $this->id; }
     public function getCompany(): string { return $this->company; }
@@ -281,10 +345,6 @@ class Investor
     public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
     public function getSize(): CompanySize { return $this->size; }
     public function setSize(CompanySize $size): void { $this->size = $size; }
-    public function isActive(): bool { return $this->isActive; }
-    public function setIsActive(bool $isActive): void { $this->isActive = $isActive; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
-    public function getExpectedReturnPercentage(): int
 ```
 
 #### LeaderboardEntry
@@ -353,14 +413,14 @@ class Player
     private int $currentAbility;
     private int $contractValue = 0;
     private PersonalityProfile $personality;
-    private Academy $academy;
+    private ?Academy $academy = null;
     private ?Guardian $guardian = null;
     private ?Agent $agent = null;
     private Collection $siblings;
+    private bool $ageOutWarningIssued = false;
+    private bool $forcedSaleExecuted = false;
+    private ?int $forcedSaleWeek = null;
     private \DateTimeImmutable $createdAt;
-    private \DateTimeImmutable $updatedAt;
-    public function __construct(
-    public function onPreUpdate(): void
 ```
 
 #### Scout
@@ -398,19 +458,21 @@ class Sponsor
     private ?string $nationality = null;
     private CompanySize $size = CompanySize::MEDIUM;
     private bool $isActive = true;
+    private ?Academy $academy = null;
     private \DateTimeImmutable $createdAt;
+    private int $monthlyPayment = 0;
+    private ?\DateTimeImmutable $contractStartDate = null;
+    private ?\DateTimeImmutable $contractEndDate = null;
+    private int $reputationMinThreshold = 0;
+    private ?int $reputationBonusThreshold = null;
+    private string $bonusMultiplier = '1.00';
+    private SponsorStatus $status = SponsorStatus::ACTIVE;
+    private ?int $earlyTerminationFee = null;
     public function __construct(string $company)
     public function getId(): UuidV7 { return $this->id; }
     public function getCompany(): string { return $this->company; }
     public function setCompany(string $company): void { $this->company = $company; }
     public function getNationality(): ?string { return $this->nationality; }
-    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
-    public function getSize(): CompanySize { return $this->size; }
-    public function setSize(CompanySize $size): void { $this->size = $size; }
-    public function isActive(): bool { return $this->isActive; }
-    public function setIsActive(bool $isActive): void { $this->isActive = $isActive; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
-    public function getExpectedReturnPercentage(): int
 ```
 
 #### Staff
@@ -424,7 +486,7 @@ class Staff
     private int $coachingAbility = 50;
     private int $scoutingRange = 50;
     private int $weeklySalary = 0;
-    private Academy $academy;
+    private ?Academy $academy = null;
     private \DateTimeImmutable $hiredAt;
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
@@ -561,6 +623,73 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
 ## Services
 
+### AcademyInitializationService
+
+```php
+class AcademyInitializationService
+{
+    public function __construct(
+    public function initializeAcademy(User $user, string $academyName): Academy
+    public function getStarterBundle(): array
+```
+
+### EconomicService
+
+```php
+class EconomicService
+{
+    public function __construct(
+    public function generateSponsorOffer(Academy $academy): array
+    public function generateInvestorOffer(Academy $academy): array
+    public function calculatePlayerMarketValue(Player $player): int
+    public function processFinancialYearEnd(Academy $academy): void
+    public function checkSponsorContracts(Academy $academy, int $currentReputation): void
+    public function checkAgeOutPlayers(Academy $academy, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
+    public function executeForcedSale(Player $player, Academy $academy): Transfer
+```
+
+### InboxService
+
+```php
+class InboxService
+{
+    public function __construct(
+    public function sendSponsorOffer(Academy $academy, array $offerData): InboxMessage
+    public function sendInvestorOffer(Academy $academy, array $offerData): InboxMessage
+    public function sendAgentSaleOffer(Player $player, array $offerData): InboxMessage
+    public function sendAgeOutWarning(Player $player, int $weeksRemaining): InboxMessage
+    public function sendForcedSaleNotification(Player $player, int $salePrice): InboxMessage
+    public function sendSystemNotification(Academy $academy, string $subject, string $body, array $details = []): InboxMessage
+    public function acceptMessage(InboxMessage $message, User $user): void
+    public function rejectMessage(InboxMessage $message): void
+```
+
+### MarketDataService
+
+```php
+class MarketDataService
+{
+    public function __construct(private readonly MarketPoolService $pool) {}
+    public function getMarketSnapshot(): MarketDataResponse
+```
+
+### MarketPoolService
+
+```php
+class MarketPoolService
+{
+    public function __construct(
+    public function generatePlayers(int $count): array
+    public function generateCoaches(int $count): array
+    public function generateScouts(int $count): array
+    public function generateUniversalAgents(int $count): array
+    public function generateSponsors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
+    public function generateInvestors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
+    public function getAvailablePlayers(int $limit = 100): array
+    public function getAvailableCoaches(int $limit = 20): array
+    public function getAvailableScouts(int $limit = 10): array
+```
+
 ### SyncService
 
 ```php
@@ -622,8 +751,13 @@ security:
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
-        - { path: ^/api/sync,     roles: ROLE_ACADEMY }
-        - { path: ^/api,          roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/sync,             roles: ROLE_ACADEMY }
+        - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
+        - { path: ^/api/market/assign,   roles: ROLE_ACADEMY }
+        - { path: ^/api/academy/,        roles: ROLE_ACADEMY }
+        - { path: ^/api/inbox,           roles: ROLE_ACADEMY }
+        - { path: ^/api/finance/,        roles: ROLE_ACADEMY }
+        - { path: ^/api,                 roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:
@@ -695,6 +829,9 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+e21235b feat: economic balance system — inbox, finance endpoints, age-out mechanics
+76afa10 update README
+b45a9c1 feat: market pool system — pool services, academy init, pool endpoints
 90b8207 fix: add Agent::__toString() so PlayerCrudController AssociationField renders
 617d6c5 feat: extend seeder + writable admin CRUD for Player and Staff
 dbd0810 feat: market entity expansion — Scout/Investor/Sponsor + seeder command
@@ -702,9 +839,6 @@ dbd0810 feat: market entity expansion — Scout/Investor/Sponsor + seeder comman
 7bb3df8 Merge pull request #2 from cadesile/fix/admin-enum-fields
 c272265 Fix EasyAdmin enum-to-string crash on admin list views
 a05761a Create project_plan.md
-bf80f6a Add frontend integration prompt doc
-c9bfd42 Fix EasyAdmin v5 MenuItem API in DashboardController
-7357a78 Merge pull request #1 from cadesile/feat/admin-ui
 ```
 
 ---

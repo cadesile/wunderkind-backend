@@ -46,12 +46,10 @@
             text-align: center;
         }
 
-        h1 {
-            color: #f5c842;
-            font-size: 11px;
-            letter-spacing: 2px;
-            text-shadow: 3px 3px 0 rgba(0,0,0,0.5);
-            line-height: 1.6;
+        .logo {
+            width: 120px;
+            height: 120px;
+            image-rendering: pixelated;
             margin-bottom: 0.75rem;
         }
 
@@ -134,8 +132,8 @@
 <body>
     <div class="card">
         <div class="card-header">
-            <h1>WUNDERKIND FACTORY</h1>
-            <p class="subtitle">⚽ ADMIN PANEL</p>
+            <img src="/images/logo.webp" alt="Wunderkind Factory" class="logo">
+            <p class="subtitle">ADMIN PANEL</p>
         </div>
 
         {% if error %}

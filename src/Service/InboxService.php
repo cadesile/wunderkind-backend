@@ -6,19 +6,22 @@ namespace App\Service;
 
 use App\Entity\Academy;
 use App\Entity\InboxMessage;
-use App\Entity\Investor;
 use App\Entity\Player;
-use App\Entity\Sponsor;
 use App\Entity\User;
 use App\Enum\InvestorTier;
 use App\Enum\MessageSenderType;
+use App\Enum\MessageStatus;
 use App\Enum\SponsorStatus;
+use App\Repository\InvestorRepository;
+use App\Repository\SponsorRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class InboxService
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly SponsorRepository      $sponsorRepository,
+        private readonly InvestorRepository     $investorRepository,
     ) {}
 
     public function sendSponsorOffer(Academy $academy, array $offerData): InboxMessage
@@ -151,6 +154,10 @@ class InboxService
 
     public function acceptMessage(InboxMessage $message, User $user): void
     {
+        if ($message->getStatus() === MessageStatus::ACCEPTED || $message->getStatus() === MessageStatus::REJECTED) {
+            throw new \RuntimeException('Message has already been processed.');
+        }
+
         $message->accept();
         $offerData = $message->getOfferData();
 
@@ -173,13 +180,14 @@ class InboxService
 
     private function acceptSponsorOffer(Academy $academy, array $offerData): void
     {
-        $sponsor = $this->em->getRepository(Sponsor::class)->find($offerData['sponsorId'] ?? null);
+        $sponsor = $this->sponsorRepository->find($offerData['sponsorId'] ?? null);
         if ($sponsor === null) {
             return;
         }
 
         $durationMonths = $offerData['durationMonths'] ?? 12;
         $now            = new \DateTimeImmutable();
+        $signingBonus   = $offerData['signingBonus'] ?? 0;
 
         $sponsor->setAcademy($academy);
         $sponsor->setStatus(SponsorStatus::ACTIVE);
@@ -188,11 +196,15 @@ class InboxService
         $sponsor->setContractEndDate($now->modify("+{$durationMonths} months"));
         $sponsor->setReputationMinThreshold($offerData['reputationMinThreshold'] ?? 0);
         $sponsor->setReputationBonusThreshold($offerData['reputationBonusThreshold'] ?? null);
+
+        if ($signingBonus > 0) {
+            $academy->addFunds($signingBonus);
+        }
     }
 
     private function acceptInvestorOffer(Academy $academy, array $offerData): void
     {
-        $investor = $this->em->getRepository(Investor::class)->find($offerData['investorId'] ?? null);
+        $investor = $this->investorRepository->find($offerData['investorId'] ?? null);
         if ($investor === null) {
             return;
         }
@@ -207,5 +219,8 @@ class InboxService
         $investor->setPercentageOwned($offerData['percentageOwned'] ?? 5.0);
         $investor->setInvestedAt(new \DateTimeImmutable());
         $investor->setIsActive(true);
+
+        // Capital injection — add investment to academy balance
+        $academy->addFunds($offerData['investmentAmount'] ?? 0);
     }
 }
