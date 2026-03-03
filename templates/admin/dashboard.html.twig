@@ -1,0 +1,38 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-3 mt-1">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Users</div>
+                <div class="fs-3 fw-bold">{{ stats.users }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Academies</div>
+                <div class="fs-3 fw-bold">{{ stats.academies }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Syncs</div>
+                <div class="fs-3 fw-bold">{{ stats.syncs }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Invalid Syncs</div>
+                <div class="fs-3 fw-bold text-danger">{{ stats.invalidSyncs }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

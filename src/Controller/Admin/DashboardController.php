@@ -2,6 +2,9 @@
 
 namespace App\Controller\Admin;
 
+use App\Entity\Academy;
+use App\Entity\SyncRecord;
+use App\Entity\User;
 use App\Controller\Admin\AcademyCrudController;
 use App\Controller\Admin\AgentCrudController;
 use App\Controller\Admin\LeaderboardEntryCrudController;
@@ -14,13 +17,30 @@ use App\Controller\Admin\InvestorCrudController;
 use App\Controller\Admin\ScoutCrudController;
 use App\Controller\Admin\SponsorCrudController;
 use App\Controller\Admin\UserCrudController;
+use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
+use Symfony\Component\HttpFoundation\Response;
+
 #[AdminDashboard(routePath: '/admin', routeName: 'admin')]
 class DashboardController extends AbstractDashboardController
 {
+    public function __construct(private EntityManagerInterface $em) {}
+
+    public function index(): Response
+    {
+        return $this->render('admin/dashboard.html.twig', [
+            'stats' => [
+                'users'        => $this->em->getRepository(User::class)->count([]),
+                'academies'    => $this->em->getRepository(Academy::class)->count([]),
+                'syncs'        => $this->em->getRepository(SyncRecord::class)->count([]),
+                'invalidSyncs' => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
+            ],
+        ]);
+    }
+
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
