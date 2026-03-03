@@ -7,6 +7,7 @@ use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\PlayerStatus;
+use App\Entity\Academy;
 use App\Repository\AcademyRepository;
 use App\Repository\LeaderboardEntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
