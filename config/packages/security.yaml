@@ -39,6 +39,9 @@ security:
             jwt: ~
 
     access_control:
+        # Allow CORS preflight requests through without JWT authentication.
+        # NelmioCorsBundle handles OPTIONS and returns the correct headers.
+        - { path: ^/api, roles: PUBLIC_ACCESS, methods: [OPTIONS] }
         - { path: ^/admin/login,  roles: PUBLIC_ACCESS }
         - { path: ^/admin,        roles: ROLE_ADMIN }
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
