@@ -1,0 +1,199 @@
+#!/bin/bash
+#
+# reset_and_seed.sh
+# Resets the Wunderkind database, preserves ROLE_ADMIN users, and re-seeds market data.
+#
+# Usage:
+#   bash scripts/reset_and_seed.sh
+#
+# To make executable:
+#   chmod +x scripts/reset_and_seed.sh
+
+set -e
+
+# ─── Colors ──────────────────────────────────────────────────────────────────
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+# ─── Config ───────────────────────────────────────────────────────────────────
+DB="wunderkind"
+BACKUP_FILE="/tmp/wunderkind_admins_backup.json"
+RESTORE_SQL="/tmp/wunderkind_admins_restore.sql"
+RESET_SQL="/tmp/wunderkind_reset_tables.sql"
+
+# ─── Safety confirmation ─────────────────────────────────────────────────────
+echo ""
+echo -e "${YELLOW}⚠️  WARNING${NC}"
+echo "   This will DELETE all academies, players, staff, and game data."
+echo "   Admin users (ROLE_ADMIN) and their Admin records will be preserved."
+echo ""
+echo -n "   Continue? (y/N) "
+read -r confirm
+echo ""
+
+if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "   Aborted."
+    exit 0
+fi
+
+# ─── Dependency checks ───────────────────────────────────────────────────────
+if ! command -v lando &>/dev/null; then
+    echo -e "${RED}Error: 'lando' is not in PATH.${NC}"
+    echo "Install Lando from https://lando.dev and run 'lando start' first."
+    exit 1
+fi
+
+if ! lando mysql -se "SELECT 1" 2>/dev/null | grep -q "1"; then
+    echo -e "${RED}Error: Cannot connect to MySQL via Lando.${NC}"
+    echo "Run 'lando start' to bring up the environment."
+    exit 1
+fi
+
+# ─── Phase 1: Back up admin users ────────────────────────────────────────────
+echo -e "${BLUE}🔄 Phase 1: Backing up admin users...${NC}"
+
+ADMIN_COUNT=$(lando mysql -se \
+    "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
+    2>/dev/null)
+
+echo "   Found: ${ADMIN_COUNT} admin user(s)"
+
+# Human-readable JSON backup
+lando mysql -se "
+SELECT COALESCE(
+    JSON_PRETTY(JSON_ARRAYAGG(
+        JSON_OBJECT(
+            'email',      u.email,
+            'roles',      CAST(u.roles AS JSON),
+            'createdAt',  DATE_FORMAT(u.created_at, '%Y-%m-%dT%T+00:00'),
+            'admin', JSON_OBJECT(
+                'department',  a.department,
+                'accessLevel', a.access_level
+            )
+        )
+    )),
+    '[]'
+)
+FROM \`user\` u
+LEFT JOIN \`admin\` a ON a.user_id = u.id
+WHERE JSON_CONTAINS(u.roles, '\"ROLE_ADMIN\"')
+" 2>/dev/null > "$BACKUP_FILE"
+
+# Validate JSON backup before proceeding
+if [[ "$ADMIN_COUNT" -gt 0 ]]; then
+    if [[ ! -s "$BACKUP_FILE" ]]; then
+        echo -e "${RED}  ERROR: JSON backup is empty. Aborting.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}  ✓ JSON backup → ${BACKUP_FILE}${NC}"
+fi
+
+# Restorable SQL backup — user rows
+lando mysql -se "
+SELECT CONCAT(
+    'INSERT INTO \`user\` (id, email, password, roles, created_at) VALUES (0x',
+    HEX(id),              ', ',
+    QUOTE(email),         ', ',
+    QUOTE(password),      ', ',
+    QUOTE(roles),         ', ',
+    QUOTE(created_at),    ');'
+)
+FROM \`user\`
+WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')
+" 2>/dev/null > "$RESTORE_SQL"
+
+# Restorable SQL backup — admin rows (appended after user inserts)
+lando mysql -se "
+SELECT CONCAT(
+    'INSERT INTO \`admin\` (id, user_id, department, access_level, created_at) VALUES (0x',
+    HEX(a.id),            ', 0x',
+    HEX(a.user_id),       ', ',
+    IF(a.department IS NULL, 'NULL', QUOTE(a.department)), ', ',
+    a.access_level,       ', ',
+    QUOTE(a.created_at),  ');'
+)
+FROM \`admin\` a
+INNER JOIN \`user\` u ON u.id = a.user_id
+WHERE JSON_CONTAINS(u.roles, '\"ROLE_ADMIN\"')
+" 2>/dev/null >> "$RESTORE_SQL"
+
+if [[ "$ADMIN_COUNT" -gt 0 && ! -s "$RESTORE_SQL" ]]; then
+    echo -e "${RED}  ERROR: SQL restore file is empty. Aborting to protect admin users.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}  ✓ SQL restore → ${RESTORE_SQL}${NC}"
+
+# ─── Phase 2: Truncate tables ────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}🗑️  Phase 2: Truncating database (preserving admins)...${NC}"
+
+cat > "$RESET_SQL" << 'SQL'
+SET FOREIGN_KEY_CHECKS = 0;
+
+TRUNCATE TABLE inbox_message;
+TRUNCATE TABLE facility;
+TRUNCATE TABLE leaderboard_entry;
+TRUNCATE TABLE sync_record;
+TRUNCATE TABLE transfer;
+TRUNCATE TABLE player_siblings;
+TRUNCATE TABLE player;
+TRUNCATE TABLE staff;
+TRUNCATE TABLE investor;
+TRUNCATE TABLE sponsor;
+TRUNCATE TABLE scout;
+TRUNCATE TABLE agent;
+TRUNCATE TABLE academy;
+TRUNCATE TABLE admin;
+DELETE FROM `user` WHERE NOT JSON_CONTAINS(roles, '"ROLE_ADMIN"');
+
+SET FOREIGN_KEY_CHECKS = 1;
+SQL
+
+lando mysql < "$RESET_SQL"
+echo -e "${GREEN}  ✓ All game tables cleared${NC}"
+
+# Restore admin users (user rows first, then admin rows due to FK)
+if [[ "$ADMIN_COUNT" -gt 0 ]]; then
+    echo "   Restoring admin users..."
+    lando mysql < "$RESTORE_SQL"
+
+    RESTORED=$(lando mysql -se \
+        "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
+        2>/dev/null)
+
+    if [[ "$RESTORED" != "$ADMIN_COUNT" ]]; then
+        echo -e "${RED}  ERROR: Restoration mismatch — expected ${ADMIN_COUNT}, got ${RESTORED}.${NC}"
+        echo -e "${RED}  Restore SQL preserved at: ${RESTORE_SQL}${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}  ✓ ${RESTORED} admin user(s) restored${NC}"
+fi
+
+# ─── Phase 3: Re-seed market data ────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}🌱 Phase 3: Generating market pool...${NC}"
+lando php bin/console app:market:generate
+
+echo ""
+echo -e "${BLUE}🌱 Phase 3: Generating market data...${NC}"
+lando php bin/console app:generate-market-data
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${GREEN}✓ Reset complete!${NC}"
+echo ""
+echo "   Preserved  : ${ADMIN_COUNT} admin user(s)"
+echo "   Cleared    : academies, players, staff, scouts, agents, sponsors, investors,"
+echo "                transfers, leaderboard entries, sync records, inbox messages, facilities"
+echo "   Regenerated: market pool (100 players · 20 coaches · 10 scouts · 30 agents)"
+echo "                market data (25 agents · 30 scouts · 20 investors · 40 sponsors)"
+echo ""
+echo "   Backups    :"
+echo "     JSON : ${BACKUP_FILE}"
+echo "     SQL  : ${RESTORE_SQL}"
+echo ""
