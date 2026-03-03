@@ -246,7 +246,7 @@ class GenerateMarketDataCommand extends Command
     {
         $io->text('Clearing existing market data...');
 
-        $this->em->createQuery('DELETE FROM App\Entity\Agent a WHERE a.isUniversal = true')->execute();
+        $this->em->createQuery('DELETE FROM App\Entity\Agent')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Scout')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Investor')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Sponsor')->execute();

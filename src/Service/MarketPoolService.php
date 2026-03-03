@@ -138,7 +138,7 @@ class MarketPoolService
     /** @return Player[] */
     public function generatePlayers(int $count): array
     {
-        $agents  = $this->agentRepo->findUniversal();
+        $agents  = $this->agentRepo->findAll();
         $players = [];
 
         for ($i = 0; $i < $count; $i++) {
@@ -181,7 +181,7 @@ class MarketPoolService
             if ($i > 0 && $i % 50 === 0) {
                 $this->em->flush();
                 $this->em->clear(Player::class);
-                $agents = $this->agentRepo->findUniversal(); // re-fetch after clear
+                $agents = $this->agentRepo->findAll(); // re-fetch after clear
             }
         }
 
@@ -271,7 +271,7 @@ class MarketPoolService
     }
 
     /** @return Agent[] */
-    public function generateUniversalAgents(int $count): array
+    public function generateAgents(int $count): array
     {
         $agents = [];
         $names  = $this->pickUnique(self::AGENT_NAMES, $count);
@@ -371,9 +371,9 @@ class MarketPoolService
     }
 
     /** @return Agent[] */
-    public function getUniversalAgents(): array
+    public function getAgents(): array
     {
-        return $this->agentRepo->findUniversal();
+        return $this->agentRepo->findAll();
     }
 
     /** @return Sponsor[] */

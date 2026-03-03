@@ -2,9 +2,6 @@
 
 namespace App\Controller\Admin;
 
-use App\Entity\Academy;
-use App\Entity\SyncRecord;
-use App\Entity\User;
 use App\Controller\Admin\AcademyCrudController;
 use App\Controller\Admin\AgentCrudController;
 use App\Controller\Admin\LeaderboardEntryCrudController;
@@ -17,44 +14,19 @@ use App\Controller\Admin\InvestorCrudController;
 use App\Controller\Admin\ScoutCrudController;
 use App\Controller\Admin\SponsorCrudController;
 use App\Controller\Admin\UserCrudController;
-use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
-use Symfony\Component\HttpFoundation\Response;
-
 #[AdminDashboard(routePath: '/admin', routeName: 'admin')]
 class DashboardController extends AbstractDashboardController
 {
-    public function __construct(private EntityManagerInterface $em) {}
-
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
             ->setTitle('<img src="/images/logo.webp" alt="Wunderkind Factory" style="width:48px;height:48px;image-rendering:pixelated;vertical-align:middle;margin-right:8px;"> Wunderkind')
             ->setFaviconPath('images/logo.webp')
             ->renderContentMaximized();
-    }
-
-    public function configureAssets(): Assets
-    {
-        return Assets::new()
-            ->addCssFile('admin-theme.css')
-            ->addHtmlContentToHead('<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">');
-    }
-
-    public function index(): Response
-    {
-        $stats = [
-            'users'        => $this->em->getRepository(User::class)->count([]),
-            'academies'    => $this->em->getRepository(Academy::class)->count([]),
-            'syncs'        => $this->em->getRepository(SyncRecord::class)->count([]),
-            'invalidSyncs' => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
-        ];
-
-        return $this->render('admin/dashboard.html.twig', ['stats' => $stats]);
     }
 
     public function configureMenuItems(): iterable

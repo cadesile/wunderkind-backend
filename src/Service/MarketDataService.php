@@ -19,7 +19,7 @@ class MarketDataService
     public function getMarketSnapshot(): MarketDataResponse
     {
         return new MarketDataResponse(
-            agents:    array_map($this->serializeAgent(...),    $this->pool->getUniversalAgents()),
+            agents:    array_map($this->serializeAgent(...),    $this->pool->getAgents()),
             scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10)),
             investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(10)),
             sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(20)),
@@ -71,7 +71,6 @@ class MarketDataService
             'experience'     => $a->getExperience(),
             'rating'         => $a->getRating(),
             'commissionRate' => $a->getCommissionRate(),
-            'isUniversal'    => $a->isUniversal(),
         ];
     }
 

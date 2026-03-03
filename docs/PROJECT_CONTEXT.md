@@ -91,7 +91,11 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── Version20260303000003.php
 │   ├── Version20260303000004.php
 │   ├── Version20260303000005.php
-│   └── Version20260303000006.php
+│   ├── Version20260303000006.php
+│   ├── Version20260303195108.php
+│   ├── Version20260303200052.php
+│   ├── Version20260303201455.php
+│   └── Version20260303210001.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -101,12 +105,14 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── admin-theme.css
 │   └── index.php
 ├── scripts
-│   └── generate_project_context.sh
+│   ├── generate_project_context.sh
+│   └── reset_and_seed.sh
 ├── src
 │   ├── ApiResource
 │   ├── Command
 │   │   ├── GenerateMarketDataCommand.php
-│   │   └── GenerateMarketPoolCommand.php
+│   │   ├── GenerateMarketPoolCommand.php
+│   │   └── SetExistingAcademyBalancesCommand.php
 │   ├── Controller
 │   │   ├── Admin
 │   │   ├── Api
@@ -122,6 +128,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── Academy.php
 │   │   ├── Admin.php
 │   │   ├── Agent.php
+│   │   ├── Facility.php
 │   │   ├── Guardian.php
 │   │   ├── InboxMessage.php
 │   │   ├── Investor.php
@@ -136,6 +143,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   └── User.php
 │   ├── Enum
 │   │   ├── CompanySize.php
+│   │   ├── FacilityType.php
 │   │   ├── InvestorTier.php
 │   │   ├── LeaderboardCategory.php
 │   │   ├── MarketEntityType.php
@@ -153,6 +161,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── AcademyRepository.php
 │   │   ├── AdminRepository.php
 │   │   ├── AgentRepository.php
+│   │   ├── FacilityRepository.php
 │   │   ├── InboxMessageRepository.php
 │   │   ├── InvestorRepository.php
 │   │   ├── LeaderboardEntryRepository.php
@@ -163,6 +172,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── Service
 │   │   ├── AcademyInitializationService.php
 │   │   ├── EconomicService.php
+│   │   ├── FacilityService.php
 │   │   ├── InboxService.php
 │   │   ├── MarketDataService.php
 │   │   ├── MarketPoolService.php
@@ -189,7 +199,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── README.md
 └── symfony.lock
 
-33 directories, 110 files
+33 directories, 120 files
 ```
 
 ---
@@ -211,6 +221,7 @@ class Academy
     private ?\DateTimeImmutable $lastSyncedAt = null;
     private int $marketPoolSize = 20;
     private int $financialYearStart = 4;
+    private int $balance = 0;
     private \DateTimeImmutable $createdAt;
     private User $user;
     private Collection $players;
@@ -221,7 +232,6 @@ class Academy
     private Collection $investors;
     private Collection $sponsors;
     private Collection $inboxMessages;
-    public function __construct(string $name, User $user)
 ```
 
 #### Admin
@@ -267,6 +277,30 @@ class Agent
     public function setIsUniversal(bool $v): void { $this->isUniversal = $v; }
     public function getReputation(): int { return $this->reputation; }
     public function setReputation(int $reputation): void { $this->reputation = $reputation; }
+```
+
+#### Facility
+```php
+class Facility
+{
+    private const UPGRADE_COSTS = [0, 50_000, 150_000, 300_000, 500_000, 1_000_000];
+    private UuidV7 $id;
+    private FacilityType $type;
+    private int $level = 0;
+    private Academy $academy;
+    private ?\DateTimeImmutable $lastUpgradedAt = null;
+    public function __construct(FacilityType $type, Academy $academy)
+    public function getId(): UuidV7 { return $this->id; }
+    public function getType(): FacilityType { return $this->type; }
+    public function getTypeValue(): string { return $this->type->value; }
+    public function getLevel(): int { return $this->level; }
+    public function setLevel(int $level): void { $this->level = max(0, min(5, $level)); }
+    public function getAcademy(): Academy { return $this->academy; }
+    public function getLastUpgradedAt(): ?\DateTimeImmutable { return $this->lastUpgradedAt; }
+    public function setLastUpgradedAt(?\DateTimeImmutable $at): void { $this->lastUpgradedAt = $at; }
+    public function canUpgrade(): bool
+    public function getUpgradeCost(): int
+    public function getCurrentEffect(): string
 ```
 
 #### Guardian
@@ -417,10 +451,10 @@ class Player
     private ?Guardian $guardian = null;
     private ?Agent $agent = null;
     private Collection $siblings;
+    private int $morale = 50;
     private bool $ageOutWarningIssued = false;
     private bool $forcedSaleExecuted = false;
     private ?int $forcedSaleWeek = null;
-    private \DateTimeImmutable $createdAt;
 ```
 
 #### Scout
@@ -468,11 +502,11 @@ class Sponsor
     private string $bonusMultiplier = '1.00';
     private SponsorStatus $status = SponsorStatus::ACTIVE;
     private ?int $earlyTerminationFee = null;
+    private ?\DateTimeImmutable $lastPaymentAt = null;
     public function __construct(string $company)
     public function getId(): UuidV7 { return $this->id; }
     public function getCompany(): string { return $this->company; }
     public function setCompany(string $company): void { $this->company = $company; }
-    public function getNationality(): ?string { return $this->nationality; }
 ```
 
 #### Staff
@@ -486,6 +520,8 @@ class Staff
     private int $coachingAbility = 50;
     private int $scoutingRange = 50;
     private int $weeklySalary = 0;
+    private int $morale = 50;
+    private ?string $specialty = null;
     private ?Academy $academy = null;
     private \DateTimeImmutable $hiredAt;
     public function __construct(
@@ -497,8 +533,6 @@ class Staff
     public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
     public function getRole(): StaffRole { return $this->role; }
     public function setRole(StaffRole $role): void { $this->role = $role; }
-    public function getRoleValue(): string { return $this->role->value; }
-    public function getCoachingAbility(): int { return $this->coachingAbility; }
 ```
 
 #### SyncRecord
@@ -648,6 +682,17 @@ class EconomicService
     public function executeForcedSale(Player $player, Academy $academy): Transfer
 ```
 
+### FacilityService
+
+```php
+class FacilityService
+{
+    public function __construct(
+    public function getAcademyFacilitiesData(Academy $academy): array
+    public function upgradeFacility(Facility $facility): void
+    public function initializeFacilities(Academy $academy): void
+```
+
 ### InboxService
 
 ```php
@@ -757,6 +802,9 @@ security:
         - { path: ^/api/academy/,        roles: ROLE_ACADEMY }
         - { path: ^/api/inbox,           roles: ROLE_ACADEMY }
         - { path: ^/api/finance/,        roles: ROLE_ACADEMY }
+        - { path: ^/api/squad,           roles: ROLE_ACADEMY }
+        - { path: ^/api/staff,           roles: ROLE_ACADEMY }
+        - { path: ^/api/facilities,      roles: ROLE_ACADEMY }
         - { path: ^/api,                 roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
@@ -829,16 +877,16 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+5a80d57 chore: add reset_and_seed.sh — DB reset script preserving admin users
+9377c6f feat: facilities, dashboard endpoints, and balance integration (Phases 2–5)
+b22ec82 feat: Phase 1 — balance, morale, specialty fields
+a113f98 docs: update frontend-integration.md for economic balance system
 e21235b feat: economic balance system — inbox, finance endpoints, age-out mechanics
 76afa10 update README
 b45a9c1 feat: market pool system — pool services, academy init, pool endpoints
 90b8207 fix: add Agent::__toString() so PlayerCrudController AssociationField renders
 617d6c5 feat: extend seeder + writable admin CRUD for Player and Staff
 dbd0810 feat: market entity expansion — Scout/Investor/Sponsor + seeder command
-6dc85ab feat: introduce ROLE_ACADEMY / ROLE_ADMIN domain separation
-7bb3df8 Merge pull request #2 from cadesile/fix/admin-enum-fields
-c272265 Fix EasyAdmin enum-to-string crash on admin list views
-a05761a Create project_plan.md
 ```
 
 ---

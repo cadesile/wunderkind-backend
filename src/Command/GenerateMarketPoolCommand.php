@@ -56,10 +56,10 @@ class GenerateMarketPoolCommand extends Command
         $agentCount  = (int) $input->getOption('agents');
 
         try {
-            $io->text(sprintf('Generating %d universal agents...', $agentCount));
+            $io->text(sprintf('Generating %d agents...', $agentCount));
             $bar = $io->createProgressBar($agentCount);
             $bar->start();
-            $this->pool->generateUniversalAgents($agentCount);
+            $this->pool->generateAgents($agentCount);
             $bar->finish();
             $io->newLine(2);
 
@@ -91,7 +91,7 @@ class GenerateMarketPoolCommand extends Command
 
         $io->success('Market pool generated successfully!');
         $io->definitionList(
-            ['Universal Agents' => $agentCount],
+            ['Agents'           => $agentCount],
             ['Pool Players'     => $playerCount],
             ['Pool Coaches'     => $coachCount],
             ['Scouts'           => $scoutCount],

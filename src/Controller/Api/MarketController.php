@@ -122,7 +122,6 @@ class MarketController extends AbstractController
                 'experience'     => $a->getExperience(),
                 'rating'         => $a->getRating(),
                 'commissionRate' => $a->getCommissionRate(),
-                'isUniversal'    => $a->isUniversal(),
             ], $agents->findAll()),
             'scouts'    => array_map(fn($s) => [
                 'id'          => $s->getId()->toRfc4122(),
