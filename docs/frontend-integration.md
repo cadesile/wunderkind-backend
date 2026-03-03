@@ -29,6 +29,25 @@ All API requests must:
 
 ---
 
+## Balance model
+
+The academy has a server-side liquid `balance` (integer, pence/cents). It is updated on every accepted sync:
+
+| Event | Effect on balance |
+|---|---|
+| `earningsDelta` from sync | `+earningsDelta` |
+| Monthly sponsor payment (if due) | `+monthlyPayment` |
+| Weekly staff salaries | `−sum(staff.weeklySalary)` |
+| Weekly player wages | `−sum(player.contractValue)` where status = active |
+| Sponsor offer accepted (signing bonus) | `+signingBonus` (if present in offerData) |
+| Investor offer accepted | `+investmentAmount` (capital injection) |
+| Annual investor payout (every 52 weeks) | `−payout` (deducted per investor's equity share) |
+| Facility upgrade | `−upgradeCost` |
+
+Balance can go **negative** (debt). Use `hasDebt` and `debtAmount` from `/api/academy/status` or the sync response to surface a warning in the UI.
+
+---
+
 ## Endpoints
 
 ### `POST /api/register` — Public
@@ -74,7 +93,7 @@ Response `200`:
 ---
 
 ### `POST /api/academy/initialize` — JWT required (`ROLE_ACADEMY`)
-Called once after registration to set up the academy with a starter bundle of players and staff. Do not call if the academy is already initialized.
+Called once after registration to set up the academy with a starter bundle of players, staff, sponsors, investors, and facilities. Do not call if the academy is already initialized.
 
 Request body:
 ```json
@@ -89,25 +108,138 @@ Response `201`:
 {
   "id": "uuid",
   "name": "string",
-  "starterBundle": {},
-  "players": 5,
+  "starterBundle": {
+    "players": 20,
+    "coaches": 2,
+    "scouts": 1,
+    "sponsors": 2,
+    "investors": 1
+  },
+  "players": 20,
   "staff": 3
 }
 ```
 Errors:
 - `409` — academy already initialized
 
+Starting balance is £5,000 (500,000 pence). Four facilities are created at level 0 automatically.
+
+---
+
+### `GET /api/academy/status` — JWT required (`ROLE_ACADEMY`)
+Snapshot of the academy's current state. Poll after each sync to refresh UI totals.
+
+Response `200`:
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "balance": 487500,
+  "hasDebt": false,
+  "reputation": 310,
+  "weekNumber": 42,
+  "totalCareerEarnings": 12500000,
+  "hallOfFamePoints": 250,
+  "playerCount": 20,
+  "staffCount": 3,
+  "activeSponsors": 2,
+  "activeInvestors": 1
+}
+```
+- `balance` — liquid cash in pence/cents (can be negative)
+- `hasDebt` — `true` when `balance < 0`
+- `weekNumber` — last successfully synced game week
+
+Errors:
+- `404` — no academy found for the authenticated user
+
+---
+
+### `GET /api/squad` — JWT required (`ROLE_ACADEMY`)
+Full player roster for the authenticated academy, including morale and personality traits. Personality traits are hidden from the player in-game but available for server-side processing.
+
+Response `200`:
+```json
+{
+  "players": [
+    {
+      "id": "uuid",
+      "firstName": "string",
+      "lastName": "string",
+      "dateOfBirth": "YYYY-MM-DD",
+      "nationality": "string",
+      "position": "GK | DEF | MID | ATT",
+      "status": "active | loaned_out | transferred | retired",
+      "morale": 75,
+      "contractValue": 1200,
+      "personality": {
+        "confidence": 70,
+        "maturity": 65,
+        "teamwork": 80,
+        "leadership": 50,
+        "ego": 40,
+        "bravery": 75,
+        "greed": 30,
+        "loyalty": 85
+      },
+      "agentName": "Jorge Mendes"
+    }
+  ]
+}
+```
+- `morale` — 0–100; affects training output and transfer negotiation
+- `contractValue` — weekly wage in pence/cents; deducted from balance each sync
+- `agentName` — `null` if the player has no agent
+- Personality traits are all 0–100; values are intentionally hidden from the game UI
+
+Errors:
+- `404` — no academy found for the authenticated user
+
+---
+
+### `GET /api/staff` — JWT required (`ROLE_ACADEMY`)
+Full staff roster for the authenticated academy.
+
+Response `200`:
+```json
+{
+  "staff": [
+    {
+      "id": "uuid",
+      "firstName": "string",
+      "lastName": "string",
+      "role": "head_coach | assistant_coach | scout | fitness_coach | analyst",
+      "specialty": "Technique | Physicality | Tactical | Mental | null",
+      "morale": 82,
+      "coachingAbility": 75,
+      "scoutingRange": 50,
+      "weeklySalary": 15000
+    }
+  ]
+}
+```
+- `specialty` — set for `head_coach` and `assistant_coach` only; drives which training pipeline they excel at
+- `coachingAbility` — 1–100; influences training effectiveness
+- `scoutingRange` — 1–100; influences scouting network pipeline
+- `weeklySalary` — deducted from academy balance each sync
+
+Errors:
+- `404` — no academy found for the authenticated user
+
 ---
 
 ### `POST /api/sync` — JWT required (`ROLE_ACADEMY`)
-Called once per Weekly Tick. Sends aggregate deltas from the current week; server updates leaderboards and persists academy state.
+Called once per Weekly Tick. Sends aggregate deltas from the current week; server updates leaderboards, persists academy state, processes finances, and checks economic events.
 
-After a valid sync the server automatically runs:
-- **Financial year-end** (every 52 weeks): investor payout notifications sent to inbox
-- **Sponsor contract check**: voids contracts below reputation threshold; marks completed contracts
-- **Age-out check**: warns when a player is ≤ 4 weeks from turning 21; executes forced sale at week 21
+After each accepted sync the server automatically:
+1. **Credits** `earningsDelta` to the academy's liquid balance
+2. **Processes sponsor payments** — any active sponsor whose monthly payment is due is credited to balance; `lastPaymentAt` is updated
+3. **Deducts weekly salaries** — all active player wages and staff salaries subtracted from balance (balance can go negative)
+4. **Financial year-end** (every 52 weeks) — deducts investor profit-share payouts from balance; sends payout notifications to inbox
+5. **Sponsor contract health check** — voids contracts below `reputationMinThreshold`; marks contracts as `completed` when end date passes
+6. **Age-out checks** — sends inbox warning at ≤ 4 weeks before a player turns 21; executes forced sale and credits proceeds to balance at week 21
 
-Any events generated by these checks appear as new messages in `GET /api/inbox`.
+Any events generated by steps 4–6 appear as new messages in `GET /api/inbox`. Poll the inbox after each accepted sync.
 
 Request body:
 ```json
@@ -121,7 +253,7 @@ Request body:
 }
 ```
 - `weekNumber` — current game week (positive integer, must never go backwards)
-- `clientTimestamp` — ISO 8601 device time at tick
+- `clientTimestamp` — ISO 8601 device time at tick; used to compute player age-out dates
 - `earningsDelta` — earnings this week in pence/cents (≥ 0)
 - `reputationDelta` — reputation change this week (can be negative)
 - `hallOfFamePoints` — all-time HoF total (server takes `max(current, incoming)`, never decreases)
@@ -136,10 +268,15 @@ Response `200` (accepted):
   "academy": {
     "reputation": 310,
     "totalCareerEarnings": 12500000,
-    "hallOfFamePoints": 250
+    "hallOfFamePoints": 250,
+    "balance": 487500,
+    "hasDebt": false
   }
 }
 ```
+- `balance` reflects all financial processing that occurred during this sync
+- `hasDebt: true` should surface a UI warning immediately
+
 Response `409` (anti-cheat rejection — week rolled back):
 ```json
 {
@@ -148,8 +285,6 @@ Response `409` (anti-cheat rejection — week rolled back):
   "currentWeek": 45
 }
 ```
-
-**After each accepted sync**, poll `GET /api/inbox` to surface any new messages (age-out warnings, forced sale notifications, investor payouts, voided sponsor contracts).
 
 ---
 
@@ -340,7 +475,12 @@ Errors:
 ---
 
 ### `POST /api/inbox/{id}/accept` — JWT required (`ROLE_ACADEMY`)
-Accept an offer message. For sponsor and investor offers, this creates the active contract/investment on the academy. Business logic is applied server-side based on the message's `senderType` and `offerData`.
+Accept an offer message. Business logic applied server-side based on `senderType`:
+
+- **Sponsor** — sets sponsor to `active`, populates contract dates, payment amount, reputation thresholds; if `offerData.signingBonus > 0`, that amount is immediately credited to the academy's balance
+- **Investor** — sets investor to `active`, records `percentageOwned` and `investmentAmount`; the full `investmentAmount` is injected into the academy's balance as a capital investment
+
+An idempotency guard prevents double-accepting: calling this on an already-`accepted` or `rejected` message returns `409`.
 
 Response `200`:
 ```json
@@ -348,6 +488,7 @@ Response `200`:
 ```
 Errors:
 - `404` — message not found
+- `409` — message already accepted or rejected
 
 ---
 
@@ -395,7 +536,7 @@ Response `200`:
 }
 ```
 - All monetary values in pence/cents
-- `totalOwnershipGiven` — sum of all investor `percentageOwned` values; academy loses autonomy if this approaches 50 %
+- `totalOwnershipGiven` — sum of all investor `percentageOwned` values; new investors cannot be accepted if this would reach or exceed 50 %
 - `buybackPrice` — `investmentAmount × 1.3` (30 % premium to buy back equity)
 
 ---
@@ -469,6 +610,89 @@ Errors:
 
 ---
 
+### `GET /api/facilities` — JWT required (`ROLE_ACADEMY`)
+List all four academy facilities and their current state. Facilities are created at level 0 when the academy is initialized.
+
+Response `200`:
+```json
+{
+  "facilities": {
+    "training_pitch": {
+      "type": "training_pitch",
+      "level": 1,
+      "canUpgrade": true,
+      "upgradeCost": 150000,
+      "currentEffect": "+5% coaching effectiveness",
+      "lastUpgradedAt": "2026-03-01T10:00:00+00:00"
+    },
+    "medical_centre": {
+      "type": "medical_centre",
+      "level": 0,
+      "canUpgrade": true,
+      "upgradeCost": 50000,
+      "currentEffect": "No bonus",
+      "lastUpgradedAt": null
+    },
+    "medical_network": {
+      "type": "medical_network",
+      "level": 0,
+      "canUpgrade": true,
+      "upgradeCost": 50000,
+      "currentEffect": "No bonus",
+      "lastUpgradedAt": null
+    },
+    "scouting_network": {
+      "type": "scouting_network",
+      "level": 0,
+      "canUpgrade": true,
+      "upgradeCost": 50000,
+      "currentEffect": "No bonus",
+      "lastUpgradedAt": null
+    }
+  }
+}
+```
+
+Facility levels run 0–5. Upgrade costs and effects per level:
+
+| Level | Upgrade cost | training_pitch | medical_centre | medical_network | scouting_network |
+|------:|-------------:|----------------|----------------|-----------------|------------------|
+| 0→1 | £500 | +5% coaching | +10% recovery | +5% prevention | +10 range |
+| 1→2 | £1,500 | +10% coaching | +20% recovery | +10% prevention | +20 range |
+| 2→3 | £3,000 | +15% coaching | +30% recovery | +15% prevention | +30 range |
+| 3→4 | £5,000 | +20% coaching | +40% recovery | +20% prevention | +40 range |
+| 4→5 | £10,000 | +25% coaching | +50% recovery | +25% prevention | +50 range |
+
+Errors:
+- `404` — no academy found for the authenticated user
+
+---
+
+### `POST /api/facilities/{type}/upgrade` — JWT required (`ROLE_ACADEMY`)
+Upgrade a facility by one level. The upgrade cost is deducted from the academy's balance immediately.
+
+`{type}` — one of: `training_pitch` · `medical_centre` · `medical_network` · `scouting_network`
+
+Response `200`:
+```json
+{
+  "type": "training_pitch",
+  "level": 2,
+  "canUpgrade": true,
+  "upgradeCost": 300000,
+  "currentEffect": "+10% coaching effectiveness",
+  "balance": 337500
+}
+```
+- `balance` — the academy's remaining balance after the upgrade cost was deducted
+
+Errors:
+- `400` — invalid facility type string
+- `404` — facility or academy not found
+- `409` — facility is already at max level (5), or insufficient funds
+
+---
+
 ## CORS
 
 The backend allows all origins in dev (`CORS_ALLOW_ORIGIN=*`). In production this will be locked to the app's domain. Allowed headers: `Content-Type`, `Authorization`.
@@ -477,7 +701,7 @@ The backend allows all origins in dev (`CORS_ALLOW_ORIGIN=*`). In production thi
 
 ## Wage & salary scale
 
-All monetary values are stored and returned in **pence/cents** (integer). Current weekly salary ranges after the economic-balance adjustment:
+All monetary values are stored and returned in **pence/cents** (integer). Current weekly salary ranges:
 
 | Staff role | Weekly salary range |
 |------------|---------------------|
@@ -507,3 +731,4 @@ Player `contractValue` is `currentAbility × rand(10, 40)` pence/week.
 | `status` (sponsor) | `active`, `completed`, `voided`, `early_terminated` |
 | `senderType` (inbox) | `agent`, `sponsor`, `investor`, `system` |
 | `status` (inbox) | `unread`, `read`, `accepted`, `rejected` |
+| `type` (facility) | `training_pitch`, `medical_centre`, `medical_network`, `scouting_network` |
