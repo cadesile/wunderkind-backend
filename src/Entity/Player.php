@@ -73,6 +73,15 @@ class Player
     #[ORM\JoinTable(name: 'player_siblings')]
     private Collection $siblings;
 
+    #[ORM\Column(options: ['default' => false])]
+    private bool $ageOutWarningIssued = false;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $forcedSaleExecuted = false;
+
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $forcedSaleWeek = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -169,6 +178,23 @@ class Player
             $this->siblings->add($sibling);
             $sibling->addSibling($this);
         }
+    }
+
+    public function isAgeOutWarningIssued(): bool { return $this->ageOutWarningIssued; }
+    public function setAgeOutWarningIssued(bool $issued): void { $this->ageOutWarningIssued = $issued; }
+
+    public function isForcedSaleExecuted(): bool { return $this->forcedSaleExecuted; }
+    public function setForcedSaleExecuted(bool $executed): void { $this->forcedSaleExecuted = $executed; }
+
+    public function getForcedSaleWeek(): ?int { return $this->forcedSaleWeek; }
+    public function setForcedSaleWeek(?int $week): void { $this->forcedSaleWeek = $week; }
+
+    public function getWeeksUntil21(int $currentWeek): int
+    {
+        if ($this->forcedSaleWeek === null) {
+            return PHP_INT_MAX;
+        }
+        return max(0, $this->forcedSaleWeek - $currentWeek);
     }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }

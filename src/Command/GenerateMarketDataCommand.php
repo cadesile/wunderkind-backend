@@ -433,7 +433,7 @@ class GenerateMarketDataCommand extends Command
             $age            = random_int(14, 22);
 
             // Contract value scales loosely with ability (in pence/cents per week)
-            $contractValue = $currentAbility * random_int(100, 400);
+            $contractValue = $currentAbility * random_int(10, 40);
 
             $player = new Player(
                 firstName:         $this->pick(self::PLAYER_FIRST_NAMES),
@@ -498,11 +498,11 @@ class GenerateMarketDataCommand extends Command
         $academyCount = count($academies);
 
         $weeklySalaryRanges = [
-            StaffRole::HEAD_COACH->value      => [80000, 200000],
-            StaffRole::ASSISTANT_COACH->value => [40000, 100000],
-            StaffRole::SCOUT->value           => [25000, 70000],
-            StaffRole::FITNESS_COACH->value   => [30000, 80000],
-            StaffRole::ANALYST->value         => [30000, 75000],
+            StaffRole::HEAD_COACH->value      => [8000, 20000],
+            StaffRole::ASSISTANT_COACH->value => [4000, 10000],
+            StaffRole::SCOUT->value           => [2500, 7000],
+            StaffRole::FITNESS_COACH->value   => [3000, 8000],
+            StaffRole::ANALYST->value         => [3000, 7500],
         ];
 
         for ($i = 0; $i < $count; $i++) {

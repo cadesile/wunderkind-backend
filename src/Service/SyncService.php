@@ -16,6 +16,7 @@ class SyncService
         private readonly AcademyRepository $academyRepository,
         private readonly LeaderboardEntryRepository $leaderboardEntryRepository,
         private readonly EntityManagerInterface $em,
+        private readonly EconomicService $economicService,
     ) {}
 
     /**
@@ -56,9 +57,9 @@ class SyncService
         }
 
         // Update Academy aggregate state
-        $academy->setTotalCareerEarnings($academy->getTotalCareerEarnings() + $request->earningsDelta);
-        $academy->setReputation(max(0, $academy->getReputation() + $request->reputationDelta));
-        $academy->setHallOfFamePoints(max($academy->getHallOfFamePoints(), $request->hallOfFamePoints));
+        $academy->setTotalCareerEarnings((int) round($academy->getTotalCareerEarnings() + $request->earningsDelta));
+        $academy->setReputation(max(0, (int) round($academy->getReputation() + $request->reputationDelta)));
+        $academy->setHallOfFamePoints(max($academy->getHallOfFamePoints(), (int) round($request->hallOfFamePoints)));
         $academy->setLastSyncedWeek($request->weekNumber);
         $academy->setLastSyncedAt(new \DateTimeImmutable());
 
@@ -77,6 +78,17 @@ class SyncService
                 $entry->setScore($score);
             }
         }
+
+        // Financial year-end processing
+        if ($academy->isFinancialYearEnd($request->weekNumber)) {
+            $this->economicService->processFinancialYearEnd($academy);
+        }
+
+        // Sponsor contract health check
+        $this->economicService->checkSponsorContracts($academy, $academy->getReputation());
+
+        // Age-out checks
+        $this->economicService->checkAgeOutPlayers($academy, $request->weekNumber, $clientTimestamp);
 
         $this->em->flush();
 

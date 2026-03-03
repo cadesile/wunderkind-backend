@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Enum\CompanySize;
+use App\Enum\InvestorTier;
 use App\Repository\InvestorRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
@@ -26,12 +27,27 @@ class Investor
     #[ORM\Column]
     private bool $isActive = true;
 
-    #[ORM\ManyToOne]
+    #[ORM\ManyToOne(inversedBy: 'investors')]
     #[ORM\JoinColumn(nullable: true)]
     private ?Academy $academy = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
+
+    #[ORM\Column(type: 'string', enumType: InvestorTier::class, options: ['default' => 'angel'])]
+    private InvestorTier $tier = InvestorTier::ANGEL;
+
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    private int $investmentAmount = 0;
+
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, options: ['default' => '5.00'])]
+    private string $percentageOwned = '5.00';
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $investedAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $lastPayoutAt = null;
 
     public function __construct(string $company)
     {
@@ -61,6 +77,21 @@ class Investor
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    public function getTier(): InvestorTier { return $this->tier; }
+    public function setTier(InvestorTier $tier): void { $this->tier = $tier; }
+
+    public function getInvestmentAmount(): int { return $this->investmentAmount; }
+    public function setInvestmentAmount(int $amount): void { $this->investmentAmount = $amount; }
+
+    public function getPercentageOwned(): float { return (float) $this->percentageOwned; }
+    public function setPercentageOwned(float $percentage): void { $this->percentageOwned = number_format($percentage, 2, '.', ''); }
+
+    public function getInvestedAt(): ?\DateTimeImmutable { return $this->investedAt; }
+    public function setInvestedAt(?\DateTimeImmutable $investedAt): void { $this->investedAt = $investedAt; }
+
+    public function getLastPayoutAt(): ?\DateTimeImmutable { return $this->lastPayoutAt; }
+    public function setLastPayoutAt(?\DateTimeImmutable $lastPayoutAt): void { $this->lastPayoutAt = $lastPayoutAt; }
+
     public function getExpectedReturnPercentage(): int
     {
         return match ($this->size) {
@@ -68,5 +99,15 @@ class Investor
             CompanySize::MEDIUM => 10,
             CompanySize::LARGE  => 20,
         };
+    }
+
+    public function calculateAnnualPayout(int $annualProfit): int
+    {
+        return (int) round($annualProfit * $this->getPercentageOwned() / 100);
+    }
+
+    public function getBuybackPrice(): int
+    {
+        return (int) round($this->investmentAmount * 1.3);
     }
 }

@@ -200,10 +200,10 @@ class MarketPoolService
         ];
 
         $salaryRanges = [
-            StaffRole::HEAD_COACH->value      => [60000, 150000],
-            StaffRole::ASSISTANT_COACH->value => [35000, 90000],
-            StaffRole::FITNESS_COACH->value   => [30000, 75000],
-            StaffRole::ANALYST->value         => [28000, 70000],
+            StaffRole::HEAD_COACH->value      => [6000, 15000],
+            StaffRole::ASSISTANT_COACH->value => [3500, 9000],
+            StaffRole::FITNESS_COACH->value   => [3000, 7500],
+            StaffRole::ANALYST->value         => [2800, 7000],
         ];
 
         $coaches = [];

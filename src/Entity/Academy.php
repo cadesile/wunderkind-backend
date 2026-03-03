@@ -41,6 +41,10 @@ class Academy
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 20])]
     private int $marketPoolSize = 20;
 
+    /** Month number (1–12) at which the financial year starts. Default 4 = April (UK tax year). */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 4])]
+    private int $financialYearStart = 4;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -63,6 +67,15 @@ class Academy
     #[ORM\OneToMany(mappedBy: 'academy', targetEntity: LeaderboardEntry::class, cascade: ['persist', 'remove'])]
     private Collection $leaderboardEntries;
 
+    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Investor::class)]
+    private Collection $investors;
+
+    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Sponsor::class)]
+    private Collection $sponsors;
+
+    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: InboxMessage::class, cascade: ['persist', 'remove'])]
+    private Collection $inboxMessages;
+
     public function __construct(string $name, User $user)
     {
         $this->id                 = new UuidV7();
@@ -74,6 +87,9 @@ class Academy
         $this->transfers          = new ArrayCollection();
         $this->syncRecords        = new ArrayCollection();
         $this->leaderboardEntries = new ArrayCollection();
+        $this->investors          = new ArrayCollection();
+        $this->sponsors           = new ArrayCollection();
+        $this->inboxMessages      = new ArrayCollection();
     }
 
     public function __toString(): string { return $this->name; }
@@ -101,6 +117,9 @@ class Academy
     public function getMarketPoolSize(): int { return $this->marketPoolSize; }
     public function setMarketPoolSize(int $size): void { $this->marketPoolSize = $size; }
 
+    public function getFinancialYearStart(): int { return $this->financialYearStart; }
+    public function setFinancialYearStart(int $month): void { $this->financialYearStart = $month; }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
     public function getUser(): User { return $this->user; }
@@ -110,4 +129,40 @@ class Academy
     public function getTransfers(): Collection { return $this->transfers; }
     public function getSyncRecords(): Collection { return $this->syncRecords; }
     public function getLeaderboardEntries(): Collection { return $this->leaderboardEntries; }
+    public function getInvestors(): Collection { return $this->investors; }
+    public function getSponsors(): Collection { return $this->sponsors; }
+    public function getInboxMessages(): Collection { return $this->inboxMessages; }
+
+    public function canAcceptInvestor(float $percentage): bool
+    {
+        $totalOwned = array_sum(
+            $this->investors->map(fn (Investor $i) => $i->getPercentageOwned())->toArray()
+        );
+        return ($totalOwned + $percentage) < 50.0;
+    }
+
+    public function getActiveSponsors(): Collection
+    {
+        return $this->sponsors->filter(
+            fn (Sponsor $s) => $s->getStatus() === \App\Enum\SponsorStatus::ACTIVE
+        );
+    }
+
+    public function getMonthlyRevenue(): int
+    {
+        return array_sum(
+            $this->getActiveSponsors()->map(fn (Sponsor $s) => $s->getMonthlyPayment())->toArray()
+        );
+    }
+
+    public function calculateAnnualProfit(): int
+    {
+        // Real formula is client-side; server approximates from stored totals.
+        return $this->totalCareerEarnings;
+    }
+
+    public function isFinancialYearEnd(int $currentWeek): bool
+    {
+        return $currentWeek % 52 === 0;
+    }
 }
