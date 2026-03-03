@@ -73,6 +73,10 @@ class Player
     #[ORM\JoinTable(name: 'player_siblings')]
     private Collection $siblings;
 
+    /** Player morale (0–100) */
+    #[ORM\Column(type: 'integer')]
+    private int $morale = 50;
+
     #[ORM\Column(options: ['default' => false])]
     private bool $ageOutWarningIssued = false;
 
@@ -156,6 +160,9 @@ class Player
 
     public function getContractValue(): int { return $this->contractValue; }
     public function setContractValue(int $value): void { $this->contractValue = $value; }
+
+    public function getMorale(): int { return $this->morale; }
+    public function setMorale(int $morale): void { $this->morale = max(0, min(100, $morale)); }
 
     public function getPersonality(): PersonalityProfile { return $this->personality; }
 

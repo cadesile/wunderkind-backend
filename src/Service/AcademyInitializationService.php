@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\Academy;
 use App\Entity\User;
+use App\Enum\StaffRole;
 use Doctrine\ORM\EntityManagerInterface;
 
 class AcademyInitializationService
@@ -35,6 +36,7 @@ class AcademyInitializationService
 
         if ($academy === null) {
             $academy = new Academy($academyName, $user);
+            $academy->setBalance(500000); // Starting balance: £5,000 in pence
             $this->em->persist($academy);
             $this->em->flush();
         }
@@ -71,6 +73,7 @@ class AcademyInitializationService
             $players = array_merge($players, $extra);
         }
         foreach (array_slice($players, 0, self::STARTING_PLAYERS) as $player) {
+            $player->setMorale(rand(60, 80));
             $this->pool->assignToAcademy($player, $academy);
         }
 
@@ -80,7 +83,12 @@ class AcademyInitializationService
             $extra = $this->pool->generateCoaches(self::STARTING_COACHES - count($coaches));
             $coaches = array_merge($coaches, $extra);
         }
+        $coachSpecialties = ['Technique', 'Physicality', 'Tactical', 'Mental'];
         foreach (array_slice($coaches, 0, self::STARTING_COACHES) as $coach) {
+            $coach->setMorale(rand(70, 90));
+            if (in_array($coach->getRole(), [StaffRole::HEAD_COACH, StaffRole::ASSISTANT_COACH], true)) {
+                $coach->setSpecialty($coachSpecialties[array_rand($coachSpecialties)]);
+            }
             $this->pool->assignToAcademy($coach, $academy);
         }
 

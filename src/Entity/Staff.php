@@ -41,6 +41,13 @@ class Staff
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $weeklySalary = 0;
 
+    /** Staff morale (0–100) */
+    #[ORM\Column(type: 'integer')]
+    private int $morale = 50;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $specialty = null;
+
     #[ORM\ManyToOne(inversedBy: 'staff')]
     #[ORM\JoinColumn(nullable: true)]
     private ?Academy $academy = null;
@@ -84,6 +91,12 @@ class Staff
 
     public function getWeeklySalary(): int { return $this->weeklySalary; }
     public function setWeeklySalary(int $salary): void { $this->weeklySalary = $salary; }
+
+    public function getMorale(): int { return $this->morale; }
+    public function setMorale(int $morale): void { $this->morale = max(0, min(100, $morale)); }
+
+    public function getSpecialty(): ?string { return $this->specialty; }
+    public function setSpecialty(?string $specialty): void { $this->specialty = $specialty; }
 
     public function isInMarketPool(): bool { return $this->academy === null; }
 

@@ -45,6 +45,10 @@ class Academy
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 4])]
     private int $financialYearStart = 4;
 
+    /** Academy cash balance in pence/cents */
+    #[ORM\Column(type: 'integer')]
+    private int $balance = 0;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -119,6 +123,20 @@ class Academy
 
     public function getFinancialYearStart(): int { return $this->financialYearStart; }
     public function setFinancialYearStart(int $month): void { $this->financialYearStart = $month; }
+
+    public function getBalance(): int { return $this->balance; }
+    public function setBalance(int $balance): void { $this->balance = $balance; }
+
+    public function addFunds(int $amount): void { $this->balance += $amount; }
+
+    public function deductFunds(int $amount): bool
+    {
+        if ($this->balance < $amount) {
+            return false;
+        }
+        $this->balance -= $amount;
+        return true;
+    }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
