@@ -24,6 +24,10 @@ BACKUP_FILE="/tmp/wunderkind_admins_backup.json"
 RESTORE_SQL="/tmp/wunderkind_admins_restore.sql"
 RESET_SQL="/tmp/wunderkind_reset_tables.sql"
 
+# Wrapper: always pass -D so the database is selected in non-interactive mode.
+# lando mysql does not auto-select the database when invoked with flags or piped input.
+mysql() { lando mysql -D "$DB" "$@"; }
+
 # ─── Safety confirmation ─────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}⚠️  WARNING${NC}"
@@ -46,7 +50,7 @@ if ! command -v lando &>/dev/null; then
     exit 1
 fi
 
-if ! lando mysql -se "SELECT 1" 2>/dev/null | grep -q "1"; then
+if ! lando mysql -D "$DB" -se "SELECT 1" 2>/dev/null | grep -q "1"; then
     echo -e "${RED}Error: Cannot connect to MySQL via Lando.${NC}"
     echo "Run 'lando start' to bring up the environment."
     exit 1
@@ -55,14 +59,14 @@ fi
 # ─── Phase 1: Back up admin users ────────────────────────────────────────────
 echo -e "${BLUE}🔄 Phase 1: Backing up admin users...${NC}"
 
-ADMIN_COUNT=$(lando mysql -se \
+ADMIN_COUNT=$(mysql -Nse \
     "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
     2>/dev/null)
 
 echo "   Found: ${ADMIN_COUNT} admin user(s)"
 
 # Human-readable JSON backup
-lando mysql -se "
+mysql -Nse "
 SELECT COALESCE(
     JSON_PRETTY(JSON_ARRAYAGG(
         JSON_OBJECT(
@@ -91,29 +95,29 @@ if [[ "$ADMIN_COUNT" -gt 0 ]]; then
     echo -e "${GREEN}  ✓ JSON backup → ${BACKUP_FILE}${NC}"
 fi
 
-# Restorable SQL backup — user rows
-lando mysql -se "
+# Restorable SQL — user rows
+mysql -Nse "
 SELECT CONCAT(
     'INSERT INTO \`user\` (id, email, password, roles, created_at) VALUES (0x',
-    HEX(id),              ', ',
-    QUOTE(email),         ', ',
-    QUOTE(password),      ', ',
-    QUOTE(roles),         ', ',
-    QUOTE(created_at),    ');'
+    HEX(id),           ', ',
+    QUOTE(email),      ', ',
+    QUOTE(password),   ', ',
+    QUOTE(roles),      ', ',
+    QUOTE(created_at), ');'
 )
 FROM \`user\`
 WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')
 " 2>/dev/null > "$RESTORE_SQL"
 
-# Restorable SQL backup — admin rows (appended after user inserts)
-lando mysql -se "
+# Restorable SQL — admin rows (appended; must run after user rows due to FK)
+mysql -Nse "
 SELECT CONCAT(
     'INSERT INTO \`admin\` (id, user_id, department, access_level, created_at) VALUES (0x',
-    HEX(a.id),            ', 0x',
-    HEX(a.user_id),       ', ',
+    HEX(a.id),       ', 0x',
+    HEX(a.user_id),  ', ',
     IF(a.department IS NULL, 'NULL', QUOTE(a.department)), ', ',
-    a.access_level,       ', ',
-    QUOTE(a.created_at),  ');'
+    a.access_level,  ', ',
+    QUOTE(a.created_at), ');'
 )
 FROM \`admin\` a
 INNER JOIN \`user\` u ON u.id = a.user_id
@@ -153,15 +157,15 @@ DELETE FROM `user` WHERE NOT JSON_CONTAINS(roles, '"ROLE_ADMIN"');
 SET FOREIGN_KEY_CHECKS = 1;
 SQL
 
-lando mysql < "$RESET_SQL"
+mysql < "$RESET_SQL"
 echo -e "${GREEN}  ✓ All game tables cleared${NC}"
 
 # Restore admin users (user rows first, then admin rows due to FK)
 if [[ "$ADMIN_COUNT" -gt 0 ]]; then
     echo "   Restoring admin users..."
-    lando mysql < "$RESTORE_SQL"
+    mysql < "$RESTORE_SQL"
 
-    RESTORED=$(lando mysql -se \
+    RESTORED=$(mysql -Nse \
         "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
         2>/dev/null)
 
