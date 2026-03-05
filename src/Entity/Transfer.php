@@ -9,6 +9,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: \App\Repository\TransferRepository::class)]
 #[ORM\Index(columns: ['academy_id', 'occurred_at'], name: 'idx_transfer_academy_occurred')]
 #[ORM\Index(columns: ['net_proceeds'], name: 'idx_transfer_net_proceeds')]
+#[ORM\HasLifecycleCallbacks]
 class Transfer
 {
     #[ORM\Id]
@@ -110,4 +111,19 @@ class Transfer
 
     public function getSyncedAt(): ?\DateTimeImmutable { return $this->syncedAt; }
     public function setSyncedAt(?\DateTimeImmutable $at): void { $this->syncedAt = $at; }
+
+    #[ORM\PrePersist]
+    #[ORM\PreUpdate]
+    public function validate(): void
+    {
+        if ($this->fee < 0) {
+            throw new \InvalidArgumentException('Transfer fee cannot be negative');
+        }
+        if ($this->agentCommission < 0) {
+            throw new \InvalidArgumentException('Agent commission cannot be negative');
+        }
+        if ($this->agentCommission > $this->fee) {
+            throw new \InvalidArgumentException('Agent commission cannot exceed transfer fee');
+        }
+    }
 }

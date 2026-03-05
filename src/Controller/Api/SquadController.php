@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
-use App\Entity\Player;
 use App\Entity\User;
+use App\Repository\PlayerRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,6 +16,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ACADEMY')]
 class SquadController extends AbstractController
 {
+    public function __construct(private readonly PlayerRepository $playerRepository) {}
+
     #[Route('', name: 'api_squad_index', methods: ['GET'])]
     public function index(): JsonResponse
     {
@@ -27,7 +29,9 @@ class SquadController extends AbstractController
             return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
         }
 
-        $players = $academy->getPlayers()->map(function (Player $player): array {
+        $activePlayers = $this->playerRepository->findActiveByAcademy($academy);
+
+        $players = array_map(function ($player): array {
             $p = $player->getPersonality();
 
             return [
@@ -52,7 +56,7 @@ class SquadController extends AbstractController
                 ],
                 'agentName'     => $player->getAgent()?->getName(),
             ];
-        })->toArray();
+        }, $activePlayers);
 
         return $this->json(['players' => array_values($players)]);
     }

@@ -87,16 +87,18 @@ class PlayerCrudController extends AbstractCrudController
 
         yield ChoiceField::new('status')
             ->setChoices([
-                'Active'      => PlayerStatus::ACTIVE,
-                'Loaned Out'  => PlayerStatus::LOANED_OUT,
-                'Transferred' => PlayerStatus::TRANSFERRED,
-                'Retired'     => PlayerStatus::RETIRED,
+                'Active'               => PlayerStatus::ACTIVE,
+                'Loaned Out'           => PlayerStatus::LOANED_OUT,
+                'Transferred'          => PlayerStatus::TRANSFERRED,
+                'Transferred (Agent)'  => PlayerStatus::TRANSFERRED_VIA_AGENT,
+                'Retired'              => PlayerStatus::RETIRED,
             ])
             ->renderAsBadges([
-                PlayerStatus::ACTIVE->value      => 'success',
-                PlayerStatus::LOANED_OUT->value  => 'warning',
-                PlayerStatus::TRANSFERRED->value => 'secondary',
-                PlayerStatus::RETIRED->value     => 'secondary',
+                PlayerStatus::ACTIVE->value                => 'success',
+                PlayerStatus::LOANED_OUT->value            => 'warning',
+                PlayerStatus::TRANSFERRED->value           => 'secondary',
+                PlayerStatus::TRANSFERRED_VIA_AGENT->value => 'secondary',
+                PlayerStatus::RETIRED->value               => 'secondary',
             ]);
 
         yield ChoiceField::new('recruitmentSource')

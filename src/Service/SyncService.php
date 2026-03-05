@@ -183,11 +183,15 @@ class SyncService
                 ? new \DateTimeImmutable($data['occurredAt'])
                 : $syncedAt;
 
+            $type = isset($data['type'])
+                ? (TransferType::tryFrom($data['type']) ?? TransferType::SALE)
+                : TransferType::SALE;
+
             $transfer = new Transfer(
                 $player,
                 $academy,
                 $data['buyingClub'] ?? 'Unknown Club',
-                TransferType::SALE,
+                $type,
                 $occurredAt,
             );
 
@@ -198,6 +202,15 @@ class SyncService
             $transfer->setReputationGained($data['reputationGained'] ?? 0);
             $transfer->setBuyingClub($data['buyingClub'] ?? null);
             $transfer->setSyncedAt($syncedAt);
+
+            // Update player status to reflect transfer type
+            if ($player !== null && $player->getAcademy() === $academy) {
+                $player->setStatus(
+                    $type === TransferType::AGENT_ASSISTED
+                        ? PlayerStatus::TRANSFERRED_VIA_AGENT
+                        : PlayerStatus::TRANSFERRED
+                );
+            }
 
             $this->em->persist($transfer);
         }

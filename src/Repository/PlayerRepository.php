@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Academy;
 use App\Entity\Player;
+use App\Enum\PlayerStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -38,5 +39,25 @@ class PlayerRepository extends ServiceEntityRepository
     public function findByAcademy(Academy $academy): array
     {
         return $this->findBy(['academy' => $academy]);
+    }
+
+    /**
+     * Returns players excluding all transferred statuses.
+     *
+     * @return Player[]
+     */
+    public function findActiveByAcademy(Academy $academy): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.academy = :academy')
+            ->andWhere('p.status NOT IN (:excluded)')
+            ->setParameter('academy', $academy)
+            ->setParameter('excluded', [
+                PlayerStatus::TRANSFERRED->value,
+                PlayerStatus::TRANSFERRED_VIA_AGENT->value,
+            ])
+            ->orderBy('p.lastName', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 }
