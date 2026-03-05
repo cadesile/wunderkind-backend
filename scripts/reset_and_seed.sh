@@ -125,7 +125,7 @@ echo -e "${BLUE}🔄 Phase 1: Backing up admin users...${NC}"
 
 ADMIN_COUNT=$(mysql -Nse \
     "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
-    2>/dev/null)
+    2>/dev/null | tr -d '\r')
 
 echo "   Found: ${ADMIN_COUNT} admin user(s)"
 
@@ -232,7 +232,7 @@ if [[ "$ADMIN_COUNT" -gt 0 ]]; then
 
     RESTORED=$(mysql -Nse \
         "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
-        2>/dev/null)
+        2>/dev/null | tr -d '\r')
 
     if [[ "$RESTORED" != "$ADMIN_COUNT" ]]; then
         echo -e "${RED}  ERROR: Restoration mismatch — expected ${ADMIN_COUNT}, got ${RESTORED}.${NC}"
@@ -272,13 +272,13 @@ lando php bin/console app:seed-game-events
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"
 
-POOL_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL" 2>/dev/null)
-POOL_STAFF=$(mysql -Nse "SELECT COUNT(*) FROM \`staff\` WHERE academy_id IS NULL" 2>/dev/null)
-SCOUTS=$(mysql -Nse "SELECT COUNT(*) FROM \`scout\`" 2>/dev/null)
-AGENTS=$(mysql -Nse "SELECT COUNT(*) FROM \`agent\`" 2>/dev/null)
-INVESTORS=$(mysql -Nse "SELECT COUNT(*) FROM \`investor\`" 2>/dev/null)
-SPONSORS=$(mysql -Nse "SELECT COUNT(*) FROM \`sponsor\`" 2>/dev/null)
-EVENT_TEMPLATES=$(mysql -Nse "SELECT COUNT(*) FROM \`game_event_template\`" 2>/dev/null)
+POOL_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL" 2>/dev/null | tr -d '\r')
+POOL_STAFF=$(mysql -Nse "SELECT COUNT(*) FROM \`staff\` WHERE academy_id IS NULL" 2>/dev/null | tr -d '\r')
+SCOUTS=$(mysql -Nse "SELECT COUNT(*) FROM \`scout\`" 2>/dev/null | tr -d '\r')
+AGENTS=$(mysql -Nse "SELECT COUNT(*) FROM \`agent\`" 2>/dev/null | tr -d '\r')
+INVESTORS=$(mysql -Nse "SELECT COUNT(*) FROM \`investor\`" 2>/dev/null | tr -d '\r')
+SPONSORS=$(mysql -Nse "SELECT COUNT(*) FROM \`sponsor\`" 2>/dev/null | tr -d '\r')
+EVENT_TEMPLATES=$(mysql -Nse "SELECT COUNT(*) FROM \`game_event_template\`" 2>/dev/null | tr -d '\r')
 
 echo "   Pool players    : ${POOL_PLAYERS}"
 echo "   Pool coaches    : ${POOL_STAFF}"
