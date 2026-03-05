@@ -43,6 +43,41 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     exit 0
 fi
 
+# ─── Seed configuration ───────────────────────────────────────────────────────
+echo -e "${BLUE}⚙️  Seed configuration${NC}"
+echo "   Press Enter to accept defaults."
+echo ""
+
+prompt_int() {
+    local label="$1" default="$2" varname="$3"
+    echo -n "   ${label} [${default}]: "
+    read -r input
+    if [[ -z "$input" ]]; then
+        eval "$varname=$default"
+    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+        eval "$varname=$input"
+    else
+        echo -e "   ${RED}Invalid value '${input}' — using default ${default}.${NC}"
+        eval "$varname=$default"
+    fi
+}
+
+echo "   — Market entities (agents, scouts, investors, sponsors) —"
+prompt_int "Agents"    25  SEED_AGENTS
+prompt_int "Scouts"    30  SEED_SCOUTS
+prompt_int "Investors" 20  SEED_INVESTORS
+prompt_int "Sponsors"  40  SEED_SPONSORS
+echo ""
+echo "   — Market pool (unassigned players & coaches) —"
+prompt_int "Pool players"  100 SEED_PLAYERS
+prompt_int "Pool coaches"  20  SEED_COACHES
+prompt_int "Pool scouts"   10  SEED_POOL_SCOUTS
+echo ""
+echo -e "   ${GREEN}Configuration confirmed:${NC}"
+echo "     Agents ${SEED_AGENTS} · Scouts ${SEED_SCOUTS} · Investors ${SEED_INVESTORS} · Sponsors ${SEED_SPONSORS}"
+echo "     Pool players ${SEED_PLAYERS} · Pool coaches ${SEED_COACHES} · Pool scouts ${SEED_POOL_SCOUTS}"
+echo ""
+
 # ─── Dependency checks ───────────────────────────────────────────────────────
 if ! command -v lando &>/dev/null; then
     echo -e "${RED}Error: 'lando' is not in PATH.${NC}"
@@ -186,11 +221,19 @@ fi
 # come from app:market:generate only.
 echo ""
 echo -e "${BLUE}🌱 Phase 3a: Generating market data (agents · scouts · investors · sponsors)...${NC}"
-lando php bin/console app:generate-market-data
+lando php bin/console app:generate-market-data \
+    --agents="$SEED_AGENTS" \
+    --scouts="$SEED_SCOUTS" \
+    --investors="$SEED_INVESTORS" \
+    --sponsors="$SEED_SPONSORS"
 
 echo ""
 echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · coaches · scouts, no agents)...${NC}"
-lando php bin/console app:market:generate --agents=0
+lando php bin/console app:market:generate \
+    --agents=0 \
+    --players="$SEED_PLAYERS" \
+    --coaches="$SEED_COACHES" \
+    --scouts="$SEED_POOL_SCOUTS"
 
 echo ""
 echo -e "${BLUE}🌱 Phase 3c: Seeding game event templates (idempotent)...${NC}"
