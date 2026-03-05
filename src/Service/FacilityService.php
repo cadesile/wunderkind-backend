@@ -58,11 +58,14 @@ class FacilityService
         $this->em->flush();
     }
 
-    /** Initialize all facility types at level 0 for a new academy. */
+    /** Initialize all facility types for a new academy. Training Pitch starts at level 1; others at 0. */
     public function initializeFacilities(Academy $academy): void
     {
         foreach (FacilityType::cases() as $type) {
             $facility = new Facility($type, $academy);
+            if ($type === FacilityType::TRAINING_PITCH) {
+                $facility->setLevel(1);
+            }
             $this->em->persist($facility);
         }
     }

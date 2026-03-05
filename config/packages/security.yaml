@@ -46,6 +46,7 @@ security:
         - { path: ^/admin,        roles: ROLE_ADMIN }
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/sync,             roles: ROLE_ACADEMY }
         - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
@@ -53,6 +54,7 @@ security:
         - { path: ^/api/academy/,        roles: ROLE_ACADEMY }
         - { path: ^/api/inbox,           roles: ROLE_ACADEMY }
         - { path: ^/api/finance/,        roles: ROLE_ACADEMY }
+        - { path: ^/api/events/,         roles: ROLE_ACADEMY }
         - { path: ^/api/squad,           roles: ROLE_ACADEMY }
         - { path: ^/api/staff,           roles: ROLE_ACADEMY }
         - { path: ^/api/facilities,      roles: ROLE_ACADEMY }

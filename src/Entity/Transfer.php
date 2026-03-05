@@ -6,7 +6,9 @@ use App\Enum\TransferType;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: \App\Repository\TransferRepository::class)]
+#[ORM\Index(columns: ['academy_id', 'occurred_at'], name: 'idx_transfer_academy_occurred')]
+#[ORM\Index(columns: ['net_proceeds'], name: 'idx_transfer_net_proceeds')]
 class Transfer
 {
     #[ORM\Id]
@@ -14,8 +16,8 @@ class Transfer
     private UuidV7 $id;
 
     #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: false)]
-    private Player $player;
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Player $player = null;
 
     #[ORM\ManyToOne(inversedBy: 'transfers')]
     #[ORM\JoinColumn(nullable: false)]
@@ -36,6 +38,22 @@ class Transfer
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $agentCommission = 0;
 
+    /** Net proceeds stored from frontend (fee minus commission, in pence) */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $netProceeds = 0;
+
+    /** CA points gained at this academy (currentCA - joiningCA) */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $developmentPoints = 0;
+
+    /** Reputation awarded to the academy for this sale */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $reputationGained = 0;
+
+    /** Destination club name for display (alias for destinationClubName) */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $buyingClub = null;
+
     /** When the transfer occurred on the client (game time) */
     #[ORM\Column]
     private \DateTimeImmutable $occurredAt;
@@ -45,7 +63,7 @@ class Transfer
     private ?\DateTimeImmutable $syncedAt = null;
 
     public function __construct(
-        Player $player,
+        ?Player $player,
         Academy $academy,
         string $destinationClubName,
         TransferType $type,
@@ -61,7 +79,7 @@ class Transfer
 
     public function getId(): UuidV7 { return $this->id; }
 
-    public function getPlayer(): Player { return $this->player; }
+    public function getPlayer(): ?Player { return $this->player; }
     public function getAcademy(): Academy { return $this->academy; }
 
     public function getDestinationClubName(): string { return $this->destinationClubName; }
@@ -76,8 +94,17 @@ class Transfer
     public function getAgentCommission(): int { return $this->agentCommission; }
     public function setAgentCommission(int $commission): void { $this->agentCommission = $commission; }
 
-    /** Net proceeds to the academy after agent cut */
-    public function getNetProceeds(): int { return $this->fee - $this->agentCommission; }
+    public function getNetProceeds(): int { return $this->netProceeds; }
+    public function setNetProceeds(int $proceeds): void { $this->netProceeds = $proceeds; }
+
+    public function getDevelopmentPoints(): int { return $this->developmentPoints; }
+    public function setDevelopmentPoints(int $points): void { $this->developmentPoints = $points; }
+
+    public function getReputationGained(): int { return $this->reputationGained; }
+    public function setReputationGained(int $rep): void { $this->reputationGained = $rep; }
+
+    public function getBuyingClub(): ?string { return $this->buyingClub; }
+    public function setBuyingClub(?string $club): void { $this->buyingClub = $club; }
 
     public function getOccurredAt(): \DateTimeImmutable { return $this->occurredAt; }
 

@@ -136,10 +136,11 @@ class MarketPoolService
     // -------------------------------------------------------------------------
 
     /** @return Player[] */
-    public function generatePlayers(int $count): array
+    public function generatePlayers(int $count, ?int $academyReputation = null): array
     {
-        $agents  = $this->agentRepo->findAll();
-        $players = [];
+        $agents      = $this->agentRepo->findAll();
+        $multipliers = $this->getWageMultiplier($academyReputation);
+        $players     = [];
 
         for ($i = 0; $i < $count; $i++) {
             $potential      = $this->bellCurveInt(40, 80, 60);
@@ -159,7 +160,8 @@ class MarketPoolService
             );
 
             $player->setStatus(PlayerStatus::ACTIVE);
-            $player->setContractValue(0);
+            $baseWage = $currentAbility * random_int(10, 40);
+            $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
             if (!empty($agents) && random_int(1, 100) <= 40) {
                 $player->setAgent($agents[array_rand($agents)]);
@@ -190,7 +192,7 @@ class MarketPoolService
     }
 
     /** @return Staff[] */
-    public function generateCoaches(int $count): array
+    public function generateCoaches(int $count, ?int $academyReputation = null): array
     {
         $coachRoles = [
             StaffRole::HEAD_COACH,
@@ -199,19 +201,12 @@ class MarketPoolService
             StaffRole::ANALYST,
         ];
 
-        $salaryRanges = [
-            StaffRole::HEAD_COACH->value      => [6000, 15000],
-            StaffRole::ASSISTANT_COACH->value => [3500, 9000],
-            StaffRole::FITNESS_COACH->value   => [3000, 7500],
-            StaffRole::ANALYST->value         => [2800, 7000],
-        ];
-
-        $coaches = [];
+        $multipliers = $this->getWageMultiplier($academyReputation);
+        $coaches     = [];
 
         for ($i = 0; $i < $count; $i++) {
             $role    = $coachRoles[array_rand($coachRoles)];
             $ability = random_int(40, 75);
-            $range   = $salaryRanges[$role->value];
 
             $staff = new Staff(
                 firstName: $this->pick(self::STAFF_FIRST_NAMES),
@@ -222,9 +217,15 @@ class MarketPoolService
 
             $staff->setCoachingAbility($ability);
             $staff->setScoutingRange(random_int(40, 75));
-            $staff->setWeeklySalary(
-                (int) ($ability / 75 * ($range[1] - $range[0]) + $range[0] + random_int(-5000, 5000))
-            );
+
+            $baseSalary = match ($role) {
+                StaffRole::HEAD_COACH      => random_int(8000, 20000),
+                StaffRole::ASSISTANT_COACH => random_int(4000, 10000),
+                StaffRole::SCOUT           => random_int(2500, 7000),
+                StaffRole::FITNESS_COACH   => random_int(3000, 8000),
+                StaffRole::ANALYST         => random_int(3000, 7500),
+            };
+            $staff->setWeeklySalary((int) ($baseSalary * $multipliers['staff']));
 
             $this->em->persist($staff);
             $coaches[] = $staff;
@@ -403,11 +404,14 @@ class MarketPoolService
      */
     public function assignToAcademy(mixed $entity, Academy $academy): void
     {
+        $now = new \DateTimeImmutable();
+
         if ($entity instanceof Player) {
             if (!$entity->isInMarketPool()) {
                 throw new \RuntimeException('Player is already assigned to an academy.');
             }
             $entity->setAcademy($academy);
+            $entity->setAssignedAt($now);
             $this->em->flush();
             return;
         }
@@ -417,6 +421,7 @@ class MarketPoolService
                 throw new \RuntimeException('Staff member is already assigned to an academy.');
             }
             $entity->setAcademy($academy);
+            $entity->setAssignedAt($now);
             $this->em->flush();
             return;
         }
@@ -441,6 +446,7 @@ class MarketPoolService
                 throw new \RuntimeException('Sponsor is already assigned to an academy.');
             }
             $entity->setAcademy($academy);
+            $entity->setAssignedAt($now);
             $this->em->flush();
             return;
         }
@@ -450,6 +456,7 @@ class MarketPoolService
                 throw new \RuntimeException('Investor is already assigned to an academy.');
             }
             $entity->setAcademy($academy);
+            $entity->setAssignedAt($now);
             $this->em->flush();
             return;
         }
@@ -496,6 +503,26 @@ class MarketPoolService
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Returns wage multipliers based on academy reputation tier.
+     * When no academy context is provided (global pool generation), returns base multipliers (1.0).
+     *
+     * @return array{player: float, staff: float}
+     */
+    private function getWageMultiplier(?int $academyReputation): array
+    {
+        if ($academyReputation === null) {
+            return ['player' => 1.0, 'staff' => 1.0];
+        }
+
+        return match (true) {
+            $academyReputation < 100 => ['player' => 0.5,  'staff' => 0.6],
+            $academyReputation < 300 => ['player' => 1.0,  'staff' => 1.0],
+            $academyReputation < 600 => ['player' => 2.5,  'staff' => 2.0],
+            default                  => ['player' => 5.0,  'staff' => 4.0],
+        };
+    }
 
     private function pick(array $items): mixed
     {

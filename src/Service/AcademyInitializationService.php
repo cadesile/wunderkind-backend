@@ -11,11 +11,25 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class AcademyInitializationService
 {
-    private const STARTING_PLAYERS   = 20;
+    private const STARTING_PLAYERS   = 10;
     private const STARTING_COACHES   = 2;
     private const STARTING_SCOUTS    = 1;
-    private const STARTING_SPONSORS  = 2;
-    private const STARTING_INVESTORS = 1;
+    private const STARTING_SPONSORS  = 1;
+    private const STARTING_INVESTORS = 0;
+
+    private const PA_FIRST_NAMES = [
+        'Marcus', 'Daniel', 'James', 'Ryan', 'Michael',
+        'Jordan', 'Liam', 'Ethan', 'Nathan', 'Kyle',
+        'Sophia', 'Emma', 'Olivia', 'Ava', 'Isabella',
+        'Mia', 'Charlotte', 'Amelia', 'Harper', 'Evelyn',
+    ];
+
+    private const PA_LAST_NAMES = [
+        'Richards', 'Thompson', 'Johnson', 'Clarke', 'Edwards',
+        'Wilson', 'Hughes', 'Davies', 'Morris', 'Bennett',
+        'Campbell', 'Foster', 'Patel', 'Khan', 'Okafor',
+        'Mensah', 'Asante', 'Diallo', 'Nkosi', 'Osei',
+    ];
 
     public function __construct(
         private readonly MarketPoolService     $pool,
@@ -38,6 +52,10 @@ class AcademyInitializationService
         if ($academy === null) {
             $academy = new Academy($academyName, $user);
             $academy->setBalance(500000); // Starting balance: £5,000 in pence
+            $academy->setPaName($this->generatePaName());
+            $academy->setManagerTemperament(rand(40, 60));
+            $academy->setManagerDiscipline(rand(40, 60));
+            $academy->setManagerAmbition(rand(40, 60));
             $this->em->persist($academy);
             $this->em->flush();
         }
@@ -57,11 +75,11 @@ class AcademyInitializationService
     public function getStarterBundle(): array
     {
         return [
-            'players'   => self::STARTING_PLAYERS,
-            'coaches'   => self::STARTING_COACHES,
-            'scouts'    => self::STARTING_SCOUTS,
-            'sponsors'  => self::STARTING_SPONSORS,
-            'investors' => self::STARTING_INVESTORS,
+            'players'   => self::STARTING_PLAYERS,   // 10
+            'coaches'   => self::STARTING_COACHES,   // 2
+            'scouts'    => self::STARTING_SCOUTS,    // 1
+            'sponsors'  => self::STARTING_SPONSORS,  // 1
+            'investors' => self::STARTING_INVESTORS, // 0
         ];
     }
 
@@ -113,17 +131,26 @@ class AcademyInitializationService
             $this->pool->assignToAcademy($sponsor, $academy);
         }
 
-        // Investors
-        $investors = $this->pool->getAvailableInvestorPool(self::STARTING_INVESTORS);
-        if (count($investors) < self::STARTING_INVESTORS) {
-            $extra = $this->pool->generateInvestors(self::STARTING_INVESTORS - count($investors));
-            $investors = array_merge($investors, $extra);
-        }
-        foreach (array_slice($investors, 0, self::STARTING_INVESTORS) as $investor) {
-            $this->pool->assignToAcademy($investor, $academy);
+        // Investors — 0 at start; academies earn investors through gameplay
+        if (self::STARTING_INVESTORS > 0) {
+            $investors = $this->pool->getAvailableInvestorPool(self::STARTING_INVESTORS);
+            if (count($investors) < self::STARTING_INVESTORS) {
+                $extra     = $this->pool->generateInvestors(self::STARTING_INVESTORS - count($investors));
+                $investors = array_merge($investors, $extra);
+            }
+            foreach (array_slice($investors, 0, self::STARTING_INVESTORS) as $investor) {
+                $this->pool->assignToAcademy($investor, $academy);
+            }
         }
 
         // Facilities — one per type, all at level 0
         $this->facilityService->initializeFacilities($academy);
+    }
+
+    private function generatePaName(): string
+    {
+        $first = self::PA_FIRST_NAMES[array_rand(self::PA_FIRST_NAMES)];
+        $last  = self::PA_LAST_NAMES[array_rand(self::PA_LAST_NAMES)];
+        return "$first $last";
     }
 }

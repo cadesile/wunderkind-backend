@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: InvestorRepository::class)]
+#[ORM\Index(columns: ['assigned_at'], name: 'idx_investor_assigned_at')]
 class Investor
 {
     #[ORM\Id]
@@ -43,13 +44,17 @@ class Investor
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, options: ['default' => '5.00'])]
     private string $percentageOwned = '5.00';
 
+    /** Set when the investor is assigned from the market pool to an academy. Used for 52-week lifecycle cleanup. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $assignedAt = null;
+
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $investedAt = null;
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastPayoutAt = null;
 
-    public function __construct(string $company)
+    public function __construct(string $company = '')
     {
         $this->id        = new UuidV7();
         $this->company   = $company;
@@ -85,6 +90,10 @@ class Investor
 
     public function getPercentageOwned(): float { return (float) $this->percentageOwned; }
     public function setPercentageOwned(float $percentage): void { $this->percentageOwned = number_format($percentage, 2, '.', ''); }
+
+    public function getAssignedAt(): ?\DateTimeImmutable { return $this->assignedAt; }
+    public function setAssignedAt(?\DateTimeImmutable $at): void { $this->assignedAt = $at; }
+    public function isAssigned(): bool { return $this->assignedAt !== null; }
 
     public function getInvestedAt(): ?\DateTimeImmutable { return $this->investedAt; }
     public function setInvestedAt(?\DateTimeImmutable $investedAt): void { $this->investedAt = $investedAt; }

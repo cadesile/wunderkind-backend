@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: SponsorRepository::class)]
+#[ORM\Index(columns: ['assigned_at'], name: 'idx_sponsor_assigned_at')]
 class Sponsor
 {
     #[ORM\Id]
@@ -58,10 +59,14 @@ class Sponsor
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $earlyTerminationFee = null;
 
+    /** Set when the sponsor is assigned from the market pool to an academy. Used for 52-week lifecycle cleanup. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $assignedAt = null;
+
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastPaymentAt = null;
 
-    public function __construct(string $company)
+    public function __construct(string $company = '')
     {
         $this->id        = new UuidV7();
         $this->company   = $company;
@@ -112,6 +117,10 @@ class Sponsor
 
     public function getEarlyTerminationFee(): ?int { return $this->earlyTerminationFee; }
     public function setEarlyTerminationFee(?int $fee): void { $this->earlyTerminationFee = $fee; }
+
+    public function getAssignedAt(): ?\DateTimeImmutable { return $this->assignedAt; }
+    public function setAssignedAt(?\DateTimeImmutable $at): void { $this->assignedAt = $at; }
+    public function isAssigned(): bool { return $this->assignedAt !== null; }
 
     public function getLastPaymentAt(): ?\DateTimeImmutable { return $this->lastPaymentAt; }
     public function setLastPaymentAt(?\DateTimeImmutable $at): void { $this->lastPaymentAt = $at; }

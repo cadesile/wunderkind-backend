@@ -31,7 +31,7 @@ class Scout
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
-    public function __construct(string $name)
+    public function __construct(string $name = '')
     {
         $this->id        = new UuidV7();
         $this->name      = $name;

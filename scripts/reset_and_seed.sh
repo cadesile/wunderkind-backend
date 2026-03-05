@@ -192,6 +192,10 @@ echo ""
 echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · coaches · scouts, no agents)...${NC}"
 lando php bin/console app:market:generate --agents=0
 
+echo ""
+echo -e "${BLUE}🌱 Phase 3c: Seeding game event templates (idempotent)...${NC}"
+lando php bin/console app:seed-game-events
+
 # ─── Verification ────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"
@@ -202,13 +206,15 @@ SCOUTS=$(mysql -Nse "SELECT COUNT(*) FROM \`scout\`" 2>/dev/null)
 AGENTS=$(mysql -Nse "SELECT COUNT(*) FROM \`agent\`" 2>/dev/null)
 INVESTORS=$(mysql -Nse "SELECT COUNT(*) FROM \`investor\`" 2>/dev/null)
 SPONSORS=$(mysql -Nse "SELECT COUNT(*) FROM \`sponsor\`" 2>/dev/null)
+EVENT_TEMPLATES=$(mysql -Nse "SELECT COUNT(*) FROM \`game_event_template\`" 2>/dev/null)
 
-echo "   Pool players : ${POOL_PLAYERS}"
-echo "   Pool coaches : ${POOL_STAFF}"
-echo "   Scouts       : ${SCOUTS}"
-echo "   Agents       : ${AGENTS}"
-echo "   Investors    : ${INVESTORS}"
-echo "   Sponsors     : ${SPONSORS}"
+echo "   Pool players    : ${POOL_PLAYERS}"
+echo "   Pool coaches    : ${POOL_STAFF}"
+echo "   Scouts          : ${SCOUTS}"
+echo "   Agents          : ${AGENTS}"
+echo "   Investors       : ${INVESTORS}"
+echo "   Sponsors        : ${SPONSORS}"
+echo "   Event templates : ${EVENT_TEMPLATES}"
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 echo ""
@@ -220,6 +226,7 @@ echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
 echo "   Regenerated: ${AGENTS} agents · ${SCOUTS} scouts · ${POOL_PLAYERS} pool players"
 echo "                ${POOL_STAFF} pool coaches · ${INVESTORS} investors · ${SPONSORS} sponsors"
+echo "                ${EVENT_TEMPLATES} event templates"
 echo ""
 echo "   Backups    :"
 echo "     JSON : ${BACKUP_FILE}"

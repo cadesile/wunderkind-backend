@@ -45,6 +45,22 @@ class Academy
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 4])]
     private int $financialYearStart = 4;
 
+    /** Player Agent / PA name assigned at academy creation */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $paName = null;
+
+    /** Manager personality trait: how hot or cold-tempered the manager is (0–100) */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
+    private int $managerTemperament = 50;
+
+    /** Manager personality trait: strictness in enforcing rules and standards (0–100) */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
+    private int $managerDiscipline = 50;
+
+    /** Manager personality trait: drive to win trophies and push players hard (0–100) */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
+    private int $managerAmbition = 50;
+
     /** Academy cash balance in pence/cents */
     #[ORM\Column(type: 'integer')]
     private int $balance = 0;
@@ -127,6 +143,18 @@ class Academy
 
     public function getFinancialYearStart(): int { return $this->financialYearStart; }
     public function setFinancialYearStart(int $month): void { $this->financialYearStart = $month; }
+
+    public function getPaName(): ?string { return $this->paName; }
+    public function setPaName(?string $paName): void { $this->paName = $paName; }
+
+    public function getManagerTemperament(): int { return $this->managerTemperament; }
+    public function setManagerTemperament(int $v): void { $this->managerTemperament = max(0, min(100, $v)); }
+
+    public function getManagerDiscipline(): int { return $this->managerDiscipline; }
+    public function setManagerDiscipline(int $v): void { $this->managerDiscipline = max(0, min(100, $v)); }
+
+    public function getManagerAmbition(): int { return $this->managerAmbition; }
+    public function setManagerAmbition(int $v): void { $this->managerAmbition = max(0, min(100, $v)); }
 
     public function getBalance(): int { return $this->balance; }
     public function setBalance(int $balance): void { $this->balance = $balance; }

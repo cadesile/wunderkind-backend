@@ -21,4 +21,13 @@ class SyncRequest
     public float $hallOfFamePoints = 0;
 
     public array $transfers = [];
+
+    /**
+     * Manager personality shift deltas sent by the client each week.
+     * Keys: 'temperament', 'discipline', 'ambition'. Values: signed int deltas.
+     * Example: {"temperament": 2, "discipline": -1, "ambition": 0}
+     *
+     * @var array<string, int>
+     */
+    public array $managerShifts = [];
 }

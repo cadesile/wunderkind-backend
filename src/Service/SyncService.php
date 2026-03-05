@@ -3,10 +3,13 @@
 namespace App\Service;
 
 use App\Dto\SyncRequest;
+use App\Entity\Player;
 use App\Entity\SyncRecord;
+use App\Entity\Transfer;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\PlayerStatus;
+use App\Enum\TransferType;
 use App\Entity\Academy;
 use App\Repository\AcademyRepository;
 use App\Repository\LeaderboardEntryRepository;
@@ -43,6 +46,7 @@ class SyncService
                 'reputationDelta' => $request->reputationDelta,
                 'hallOfFamePoints' => $request->hallOfFamePoints,
                 'transfers'       => $request->transfers,
+                'managerShifts'   => $request->managerShifts,
             ],
         );
         $this->em->persist($syncRecord);
@@ -65,6 +69,9 @@ class SyncService
         $academy->setHallOfFamePoints(max($academy->getHallOfFamePoints(), (int) round($request->hallOfFamePoints)));
         $academy->setLastSyncedWeek($request->weekNumber);
         $academy->setLastSyncedAt(new \DateTimeImmutable());
+
+        // Apply manager personality shifts from client
+        $this->applyManagerShifts($academy, $request->managerShifts);
 
         // Add earnings delta to liquid balance
         $academy->addFunds((int) round($request->earningsDelta));
@@ -102,6 +109,9 @@ class SyncService
         // Age-out checks
         $this->economicService->checkAgeOutPlayers($academy, $request->weekNumber, $clientTimestamp);
 
+        // Persist transfer records for leaderboard tracking
+        $this->processTransfers($academy, $request->transfers, $clientTimestamp);
+
         $this->em->flush();
 
         $syncedAt = $academy->getLastSyncedAt();
@@ -116,8 +126,32 @@ class SyncService
                 'hallOfFamePoints'    => $academy->getHallOfFamePoints(),
                 'balance'             => $academy->getBalance(),
                 'hasDebt'             => $academy->hasDebt(),
+                'manager'             => [
+                    'temperament' => $academy->getManagerTemperament(),
+                    'discipline'  => $academy->getManagerDiscipline(),
+                    'ambition'    => $academy->getManagerAmbition(),
+                ],
             ],
         ];
+    }
+
+    /**
+     * Applies incremental manager personality trait shifts sent by the client.
+     * Each trait is clamped to [0, 100] by the Academy setters.
+     *
+     * @param array<string, int> $shifts  e.g. ['temperament' => 2, 'discipline' => -1]
+     */
+    private function applyManagerShifts(Academy $academy, array $shifts): void
+    {
+        if (isset($shifts['temperament'])) {
+            $academy->setManagerTemperament($academy->getManagerTemperament() + (int) $shifts['temperament']);
+        }
+        if (isset($shifts['discipline'])) {
+            $academy->setManagerDiscipline($academy->getManagerDiscipline() + (int) $shifts['discipline']);
+        }
+        if (isset($shifts['ambition'])) {
+            $academy->setManagerAmbition($academy->getManagerAmbition() + (int) $shifts['ambition']);
+        }
     }
 
     private function deductWeeklySalaries(Academy $academy): void
@@ -135,6 +169,38 @@ class SyncService
         }
 
         $academy->addFunds(-$total);
+    }
+
+    private function processTransfers(Academy $academy, array $transfers, \DateTimeImmutable $syncedAt): void
+    {
+        foreach ($transfers as $data) {
+            $player = null;
+            if (!empty($data['playerId'])) {
+                $player = $this->em->getRepository(Player::class)->find($data['playerId']);
+            }
+
+            $occurredAt = isset($data['occurredAt'])
+                ? new \DateTimeImmutable($data['occurredAt'])
+                : $syncedAt;
+
+            $transfer = new Transfer(
+                $player,
+                $academy,
+                $data['buyingClub'] ?? 'Unknown Club',
+                TransferType::SALE,
+                $occurredAt,
+            );
+
+            $transfer->setFee($data['transferFee'] ?? 0);
+            $transfer->setAgentCommission($data['agentCommission'] ?? 0);
+            $transfer->setNetProceeds($data['netProceeds'] ?? 0);
+            $transfer->setDevelopmentPoints($data['developmentPoints'] ?? 0);
+            $transfer->setReputationGained($data['reputationGained'] ?? 0);
+            $transfer->setBuyingClub($data['buyingClub'] ?? null);
+            $transfer->setSyncedAt($syncedAt);
+
+            $this->em->persist($transfer);
+        }
     }
 
     private function processSponsorPayments(Academy $academy, \DateTimeImmutable $now): void

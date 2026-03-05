@@ -10,10 +10,10 @@ use App\Entity\Transfer;
 use App\Enum\InvestorTier;
 use App\Enum\PlayerStatus;
 use App\Enum\SponsorStatus;
-use App\Enum\TransferType;
 use App\Repository\InvestorRepository;
 use App\Repository\SponsorRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 class EconomicService
 {
@@ -22,6 +22,7 @@ class EconomicService
         private readonly InboxService           $inboxService,
         private readonly InvestorRepository     $investorRepository,
         private readonly SponsorRepository      $sponsorRepository,
+        private readonly LoggerInterface        $logger,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -165,89 +166,77 @@ class EconomicService
 
     public function checkAgeOutPlayers(Academy $academy, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
     {
+        $playersToDelete = [];
+
         foreach ($academy->getPlayers() as $player) {
             if ($player->getStatus() !== PlayerStatus::ACTIVE) {
                 continue;
             }
 
-            // Compute forced-sale week on first encounter
-            if ($player->getForcedSaleWeek() === null) {
-                $forcedSaleWeek = $this->computeForcedSaleWeek($player, $currentWeek, $clientTimestamp);
-                if ($forcedSaleWeek !== null) {
-                    $player->setForcedSaleWeek($forcedSaleWeek);
+            $age = $this->calculateAge($player->getDateOfBirth(), $clientTimestamp);
+
+            // Send warning when age is 20 and within 4 weeks of turning 21
+            if ($age === 20 && !$player->isAgeOutWarningIssued()) {
+                $weeksRemaining = $this->weeksUntilAge21($player->getDateOfBirth(), $clientTimestamp);
+                if ($weeksRemaining <= 4) {
+                    $this->inboxService->sendAgeOutWarning($player, $weeksRemaining);
+                    $player->setAgeOutWarningIssued(true);
                 }
             }
 
-            $weeksUntil21 = $player->getWeeksUntil21($currentWeek);
-
-            // Send warning at 4 weeks
-            if ($weeksUntil21 <= 4 && !$player->isAgeOutWarningIssued()) {
-                $this->inboxService->sendAgeOutWarning($player, $weeksUntil21);
-                $player->setAgeOutWarningIssued(true);
-            }
-
-            // Execute forced sale
-            if ($player->getForcedSaleWeek() !== null
-                && $currentWeek >= $player->getForcedSaleWeek()
-                && !$player->isForcedSaleExecuted()
-            ) {
-                $this->executeForcedSale($player, $academy);
+            // Hard delete at age 21 — collect for removal after iteration
+            if ($age >= 21 && !$player->isForcedSaleExecuted()) {
+                $this->inboxService->sendSystemNotification(
+                    $academy,
+                    'Player Aged Out: ' . $player->getFullName(),
+                    sprintf(
+                        '%s has turned 21 and left the academy. All records have been removed.',
+                        $player->getFullName()
+                    ),
+                    ['type' => 'age_out', 'player_id' => $player->getId()->toRfc4122()],
+                );
+                // Mark flag to prevent duplicate processing within same flush cycle
+                $player->setForcedSaleExecuted(true);
+                $playersToDelete[] = $player;
             }
         }
 
+        // Hard delete collected players — after the loop to avoid collection mutation issues
+        foreach ($playersToDelete as $player) {
+            // Remove transfers first (DB-level ON DELETE CASCADE also handles this, belt-and-braces)
+            $transfers = $this->em->getRepository(Transfer::class)->findBy(['player' => $player]);
+            foreach ($transfers as $transfer) {
+                $this->em->remove($transfer);
+            }
+
+            // Guardian is cascade: remove in Doctrine mapping, handled automatically
+            $this->em->remove($player);
+
+            $this->logger->info('Player aged out and permanently deleted', [
+                'player_id'  => $player->getId()->toRfc4122(),
+                'academy_id' => $academy->getId()->toRfc4122(),
+                'week'       => $currentWeek,
+            ]);
+        }
+
         $this->em->flush();
-    }
-
-    public function executeForcedSale(Player $player, Academy $academy): Transfer
-    {
-        $marketValue = $this->calculatePlayerMarketValue($player);
-
-        $transfer = new Transfer(
-            player:             $player,
-            academy:            $academy,
-            destinationClubName: 'Age-out (automatic)',
-            type:               TransferType::SALE,
-            occurredAt:         new \DateTimeImmutable(),
-        );
-        $transfer->setFee($marketValue);
-
-        $player->setStatus(PlayerStatus::TRANSFERRED);
-        $player->setForcedSaleExecuted(true);
-        $player->setAcademy(null);
-
-        $this->em->persist($transfer);
-
-        $this->inboxService->sendForcedSaleNotification($player, $marketValue);
-
-        return $transfer;
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Compute the game week at which a player turns 21, based on their DOB
-     * and the client timestamp mapped to the current game week.
-     */
-    private function computeForcedSaleWeek(Player $player, int $currentWeek, \DateTimeImmutable $clientTimestamp): ?int
+    private function calculateAge(\DateTimeImmutable $dob, \DateTimeImmutable $currentDate): int
     {
-        $dob = $player->getDateOfBirth();
+        return (int) $currentDate->diff($dob)->y;
+    }
 
-        // Date when the player turns 21
-        $turns21At = $dob->modify('+21 years');
-
-        $diff = $clientTimestamp->diff($turns21At);
-
-        // If already past 21, forced sale should happen immediately
-        if ($turns21At <= $clientTimestamp) {
-            return $currentWeek;
+    private function weeksUntilAge21(\DateTimeImmutable $dob, \DateTimeImmutable $currentDate): int
+    {
+        $age21Date = $dob->modify('+21 years');
+        if ($age21Date <= $currentDate) {
+            return 0;
         }
-
-        // Convert remaining real-time days to approximate game weeks (1:1 ratio assumed)
-        $daysRemaining  = (int) $diff->days;
-        $weeksRemaining = (int) ceil($daysRemaining / 7);
-
-        return $currentWeek + $weeksRemaining;
+        return (int) ceil($currentDate->diff($age21Date)->days / 7);
     }
 }

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # generate_project_context.sh
-# Generates a comprehensive PROJECT_CONTEXT.md file for Claude.ai integration
+# Generates a comprehensive ${OUTPUT_FILE} file for Claude.ai integration
 
 set -e
 
@@ -10,13 +10,18 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}Generating PROJECT_CONTEXT.md...${NC}"
+# Get the repository name from the current directory
+REPO_NAME=$(basename "$PWD")
+# Define the output path using the repo name
+OUTPUT_FILE="${REPO_NAME}-context.md"
+
+echo -e "${BLUE}Generating ${OUTPUT_FILE}...${NC}"
 
 # Ensure docs directory exists
 mkdir -p docs
 
 # Start building the context file
-cat > docs/PROJECT_CONTEXT.md << 'EOF'
+cat > docs/${OUTPUT_FILE} << 'EOF'
 # Wunderkind Backend - Project Context
 
 > Last Updated: $(date +"%Y-%m-%d %H:%M:%S")
@@ -39,17 +44,17 @@ EOF
 
 # Add composer packages
 echo "- Extracting Composer dependencies..."
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ```json
 EOF
 
 if [ -f "composer.json" ]; then
-    cat composer.json | jq -r '.require' >> docs/PROJECT_CONTEXT.md 2>/dev/null || \
-    grep -A 50 '"require"' composer.json | grep -B 50 '}' | head -n -1 >> docs/PROJECT_CONTEXT.md
+    cat composer.json | jq -r '.require' >> docs/${OUTPUT_FILE} 2>/dev/null || \
+    grep -A 50 '"require"' composer.json | grep -B 50 '}' | head -n -1 >> docs/${OUTPUT_FILE}
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 ```
 
 ---
@@ -62,13 +67,13 @@ EOF
 # Add directory tree (limited depth)
 echo "- Building directory structure..."
 if command -v tree &> /dev/null; then
-    tree -L 3 -I 'vendor|var|node_modules' --dirsfirst >> docs/PROJECT_CONTEXT.md
+    tree -L 3 -I 'vendor|var|node_modules' --dirsfirst >> docs/${OUTPUT_FILE}
 else
-    echo "Note: 'tree' command not found. Install with: brew install tree (macOS) or apt-get install tree (Linux)" >> docs/PROJECT_CONTEXT.md
-    find . -type d -not -path '*/vendor/*' -not -path '*/var/*' -not -path '*/node_modules/*' -not -path '*/.git/*' | head -30 >> docs/PROJECT_CONTEXT.md
+    echo "Note: 'tree' command not found. Install with: brew install tree (macOS) or apt-get install tree (Linux)" >> docs/${OUTPUT_FILE}
+    find . -type d -not -path '*/vendor/*' -not -path '*/var/*' -not -path '*/node_modules/*' -not -path '*/.git/*' | head -30 >> docs/${OUTPUT_FILE}
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 ```
 
 ---
@@ -80,23 +85,23 @@ EOF
 # List all entities
 echo "- Scanning entities..."
 if [ -d "src/Entity" ]; then
-    echo "### Available Entities" >> docs/PROJECT_CONTEXT.md
-    echo "" >> docs/PROJECT_CONTEXT.md
+    echo "### Available Entities" >> docs/${OUTPUT_FILE}
+    echo "" >> docs/${OUTPUT_FILE}
     for entity in src/Entity/*.php; do
         if [ -f "$entity" ]; then
             entity_name=$(basename "$entity" .php)
-            echo "#### $entity_name" >> docs/PROJECT_CONTEXT.md
-            echo '```php' >> docs/PROJECT_CONTEXT.md
+            echo "#### $entity_name" >> docs/${OUTPUT_FILE}
+            echo '```php' >> docs/${OUTPUT_FILE}
             # Extract class definition and properties
-            sed -n '/^class /,/^{/p' "$entity" >> docs/PROJECT_CONTEXT.md
-            grep -E '^\s*(private|protected|public)\s+' "$entity" | head -20 >> docs/PROJECT_CONTEXT.md
-            echo '```' >> docs/PROJECT_CONTEXT.md
-            echo "" >> docs/PROJECT_CONTEXT.md
+            sed -n '/^class /,/^{/p' "$entity" >> docs/${OUTPUT_FILE}
+            grep -E '^\s*(private|protected|public)\s+' "$entity" | head -20 >> docs/${OUTPUT_FILE}
+            echo '```' >> docs/${OUTPUT_FILE}
+            echo "" >> docs/${OUTPUT_FILE}
         fi
     done
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -107,17 +112,17 @@ EOF
 # Get API routes
 echo "- Extracting API routes..."
 if command -v lando &> /dev/null; then
-    echo '```' >> docs/PROJECT_CONTEXT.md
-    lando php bin/console debug:router 2>/dev/null | grep -E '^[a-z_]' | head -50 >> docs/PROJECT_CONTEXT.md || echo "Run 'lando php bin/console debug:router' to see routes" >> docs/PROJECT_CONTEXT.md
-    echo '```' >> docs/PROJECT_CONTEXT.md
+    echo '```' >> docs/${OUTPUT_FILE}
+    lando php bin/console debug:router 2>/dev/null | grep -E '^[a-z_]' | head -50 >> docs/${OUTPUT_FILE} || echo "Run 'lando php bin/console debug:router' to see routes" >> docs/${OUTPUT_FILE}
+    echo '```' >> docs/${OUTPUT_FILE}
 else
-    echo '```' >> docs/PROJECT_CONTEXT.md
-    echo "Lando not available. Routes can be found via:" >> docs/PROJECT_CONTEXT.md
-    echo "php bin/console debug:router" >> docs/PROJECT_CONTEXT.md
-    echo '```' >> docs/PROJECT_CONTEXT.md
+    echo '```' >> docs/${OUTPUT_FILE}
+    echo "Lando not available. Routes can be found via:" >> docs/${OUTPUT_FILE}
+    echo "php bin/console debug:router" >> docs/${OUTPUT_FILE}
+    echo '```' >> docs/${OUTPUT_FILE}
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -131,18 +136,18 @@ if [ -d "src/Controller" ]; then
     for controller in src/Controller/*.php; do
         if [ -f "$controller" ]; then
             controller_name=$(basename "$controller" .php)
-            echo "### $controller_name" >> docs/PROJECT_CONTEXT.md
-            echo "" >> docs/PROJECT_CONTEXT.md
-            echo '```php' >> docs/PROJECT_CONTEXT.md
+            echo "### $controller_name" >> docs/${OUTPUT_FILE}
+            echo "" >> docs/${OUTPUT_FILE}
+            echo '```php' >> docs/${OUTPUT_FILE}
             # Extract public methods (route handlers)
-            grep -E '^\s*#\[Route\(|^\s*public function' "$controller" | head -20 >> docs/PROJECT_CONTEXT.md
-            echo '```' >> docs/PROJECT_CONTEXT.md
-            echo "" >> docs/PROJECT_CONTEXT.md
+            grep -E '^\s*#\[Route\(|^\s*public function' "$controller" | head -20 >> docs/${OUTPUT_FILE}
+            echo '```' >> docs/${OUTPUT_FILE}
+            echo "" >> docs/${OUTPUT_FILE}
         fi
     done
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -156,19 +161,19 @@ if [ -d "src/Service" ]; then
     for service in src/Service/*.php; do
         if [ -f "$service" ]; then
             service_name=$(basename "$service" .php)
-            echo "### $service_name" >> docs/PROJECT_CONTEXT.md
-            echo "" >> docs/PROJECT_CONTEXT.md
-            echo '```php' >> docs/PROJECT_CONTEXT.md
+            echo "### $service_name" >> docs/${OUTPUT_FILE}
+            echo "" >> docs/${OUTPUT_FILE}
+            echo '```php' >> docs/${OUTPUT_FILE}
             # Extract class definition and public methods
-            sed -n '/^class /,/^{/p' "$service" >> docs/PROJECT_CONTEXT.md
-            grep -E '^\s*public function' "$service" | head -10 >> docs/PROJECT_CONTEXT.md
-            echo '```' >> docs/PROJECT_CONTEXT.md
-            echo "" >> docs/PROJECT_CONTEXT.md
+            sed -n '/^class /,/^{/p' "$service" >> docs/${OUTPUT_FILE}
+            grep -E '^\s*public function' "$service" | head -10 >> docs/${OUTPUT_FILE}
+            echo '```' >> docs/${OUTPUT_FILE}
+            echo "" >> docs/${OUTPUT_FILE}
         fi
     done
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -179,12 +184,12 @@ EOF
 # Add security.yaml
 echo "- Extracting security configuration..."
 if [ -f "config/packages/security.yaml" ]; then
-    echo '```yaml' >> docs/PROJECT_CONTEXT.md
-    cat config/packages/security.yaml >> docs/PROJECT_CONTEXT.md
-    echo '```' >> docs/PROJECT_CONTEXT.md
+    echo '```yaml' >> docs/${OUTPUT_FILE}
+    cat config/packages/security.yaml >> docs/${OUTPUT_FILE}
+    echo '```' >> docs/${OUTPUT_FILE}
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -196,16 +201,16 @@ EOF
 
 # Extract .env.example or .env variables
 if [ -f ".env.example" ]; then
-    echo '```bash' >> docs/PROJECT_CONTEXT.md
-    grep -v '^#' .env.example | grep -v '^$' >> docs/PROJECT_CONTEXT.md
-    echo '```' >> docs/PROJECT_CONTEXT.md
+    echo '```bash' >> docs/${OUTPUT_FILE}
+    grep -v '^#' .env.example | grep -v '^$' >> docs/${OUTPUT_FILE}
+    echo '```' >> docs/${OUTPUT_FILE}
 elif [ -f ".env" ]; then
-    echo '```bash' >> docs/PROJECT_CONTEXT.md
-    grep -v '^#' .env | grep -v '^$' | sed 's/=.*/=***/' >> docs/PROJECT_CONTEXT.md
-    echo '```' >> docs/PROJECT_CONTEXT.md
+    echo '```bash' >> docs/${OUTPUT_FILE}
+    grep -v '^#' .env | grep -v '^$' | sed 's/=.*/=***/' >> docs/${OUTPUT_FILE}
+    echo '```' >> docs/${OUTPUT_FILE}
 fi
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -252,11 +257,11 @@ EOF
 
 # Add recent git commits
 echo "- Extracting recent commits..."
-echo '```' >> docs/PROJECT_CONTEXT.md
-git log --oneline -10 2>/dev/null >> docs/PROJECT_CONTEXT.md || echo "Git history not available" >> docs/PROJECT_CONTEXT.md
-echo '```' >> docs/PROJECT_CONTEXT.md
+echo '```' >> docs/${OUTPUT_FILE}
+git log --oneline -10 2>/dev/null >> docs/${OUTPUT_FILE} || echo "Git history not available" >> docs/${OUTPUT_FILE}
+echo '```' >> docs/${OUTPUT_FILE}
 
-cat >> docs/PROJECT_CONTEXT.md << 'EOF'
+cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
@@ -289,9 +294,9 @@ cat >> docs/PROJECT_CONTEXT.md << 'EOF'
 
 EOF
 
-echo -e "${GREEN}✓ PROJECT_CONTEXT.md generated successfully at docs/PROJECT_CONTEXT.md${NC}"
+echo -e "${GREEN}✓ ${OUTPUT_FILE} generated successfully at docs/${OUTPUT_FILE}${NC}"
 echo ""
 echo "Next steps:"
-echo "1. Review docs/PROJECT_CONTEXT.md"
+echo "1. Review docs/${OUTPUT_FILE}"
 echo "2. Upload to Claude.ai project knowledge base"
 echo "3. Re-run this script whenever major changes occur"

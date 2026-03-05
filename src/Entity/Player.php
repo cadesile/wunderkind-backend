@@ -14,6 +14,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: PlayerRepository::class)]
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Index(columns: ['academy_id'], name: 'idx_player_academy')]
+#[ORM\Index(columns: ['assigned_at'], name: 'idx_player_assigned_at')]
 class Player
 {
     #[ORM\Id]
@@ -86,6 +87,10 @@ class Player
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $forcedSaleWeek = null;
 
+    /** Set when the player is assigned from the market pool to an academy. Used for 52-week lifecycle cleanup. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $assignedAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -93,14 +98,14 @@ class Player
     private \DateTimeImmutable $updatedAt;
 
     public function __construct(
-        string $firstName,
-        string $lastName,
-        \DateTimeImmutable $dateOfBirth,
-        string $nationality,
-        PlayerPosition $position,
-        RecruitmentSource $recruitmentSource,
-        int $potential,
-        int $currentAbility,
+        string $firstName = '',
+        string $lastName = '',
+        \DateTimeImmutable $dateOfBirth = new \DateTimeImmutable(),
+        string $nationality = '',
+        PlayerPosition $position = PlayerPosition::MIDFIELDER,
+        RecruitmentSource $recruitmentSource = RecruitmentSource::SCOUTING_NETWORK,
+        int $potential = 0,
+        int $currentAbility = 0,
         ?Academy $academy = null,
     ) {
         $this->id                = new UuidV7();
@@ -203,6 +208,10 @@ class Player
         }
         return max(0, $this->forcedSaleWeek - $currentWeek);
     }
+
+    public function getAssignedAt(): ?\DateTimeImmutable { return $this->assignedAt; }
+    public function setAssignedAt(?\DateTimeImmutable $at): void { $this->assignedAt = $at; }
+    public function isAssigned(): bool { return $this->assignedAt !== null; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
