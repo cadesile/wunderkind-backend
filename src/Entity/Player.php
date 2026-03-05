@@ -74,6 +74,34 @@ class Player
     #[ORM\JoinTable(name: 'player_siblings')]
     private Collection $siblings;
 
+    // ── Granular attributes (0–100 each) ──────────────────────────────────────
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $pace = 0;
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $technical = 0;
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $vision = 0;
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $power = 0;
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $stamina = 0;
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $heart = 0;
+
+    // ── Physical measurements ──────────────────────────────────────────────────
+    /** Height in centimetres */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $height = 0;
+
+    /** Weight in kilograms */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $weight = 0;
+
     /** Player morale (0–100) */
     #[ORM\Column(type: 'integer')]
     private int $morale = 50;
@@ -168,6 +196,37 @@ class Player
 
     public function getMorale(): int { return $this->morale; }
     public function setMorale(int $morale): void { $this->morale = max(0, min(100, $morale)); }
+
+    // ── Attribute getters/setters ──────────────────────────────────────────────
+    public function getPace(): int { return $this->pace; }
+    public function setPace(int $v): void { $this->pace = max(0, min(100, $v)); }
+
+    public function getTechnical(): int { return $this->technical; }
+    public function setTechnical(int $v): void { $this->technical = max(0, min(100, $v)); }
+
+    public function getVision(): int { return $this->vision; }
+    public function setVision(int $v): void { $this->vision = max(0, min(100, $v)); }
+
+    public function getPower(): int { return $this->power; }
+    public function setPower(int $v): void { $this->power = max(0, min(100, $v)); }
+
+    public function getStamina(): int { return $this->stamina; }
+    public function setStamina(int $v): void { $this->stamina = max(0, min(100, $v)); }
+
+    public function getHeart(): int { return $this->heart; }
+    public function setHeart(int $v): void { $this->heart = max(0, min(100, $v)); }
+
+    /** Calculated overall: average of the 6 attributes. */
+    public function getOverall(): int
+    {
+        return (int) round(($this->pace + $this->technical + $this->vision + $this->power + $this->stamina + $this->heart) / 6);
+    }
+
+    public function getHeight(): int { return $this->height; }
+    public function setHeight(int $cm): void { $this->height = max(0, $cm); }
+
+    public function getWeight(): int { return $this->weight; }
+    public function setWeight(int $kg): void { $this->weight = max(0, $kg); }
 
     public function getPersonality(): PersonalityProfile { return $this->personality; }
 

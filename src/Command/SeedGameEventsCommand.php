@@ -123,6 +123,14 @@ class SeedGameEventsCommand extends Command
                     ['target' => 'academy.reputation', 'delta' => -1],
                 ],
             ],
+            [
+                'slug'         => 'coach_weekly_report',
+                'category'     => EventCategory::STAFF,
+                'weight'       => 0, // Triggered programmatically, not randomly selected
+                'title'        => '{coachName} Weekly Report',
+                'bodyTemplate' => '{reportSummary}',
+                'impacts'      => [],
+            ],
         ];
     }
 }

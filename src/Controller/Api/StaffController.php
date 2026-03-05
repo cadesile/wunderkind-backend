@@ -34,6 +34,7 @@ class StaffController extends AbstractController
                 'lastName'        => $member->getLastName(),
                 'role'            => $member->getRoleValue(),
                 'specialty'       => $member->getSpecialty(),
+                'specialisms'     => $member->getSpecialisms(),
                 'morale'          => $member->getMorale(),
                 'coachingAbility' => $member->getCoachingAbility(),
                 'scoutingRange'   => $member->getScoutingRange(),

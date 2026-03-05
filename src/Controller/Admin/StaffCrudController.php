@@ -79,6 +79,16 @@ class StaffCrudController extends AbstractCrudController
 
         yield IntegerField::new('coachingAbility')->setHelp('1–100');
         yield IntegerField::new('scoutingRange')->setHelp('1–100');
+
+        yield TextField::new('specialisms', 'Specialisms')
+            ->formatValue(function ($v) {
+                if (!is_array($v) || empty($v)) return '—';
+                return implode(', ', array_map(
+                    fn($k, $val) => ucfirst($k) . ': ' . $val,
+                    array_keys($v), $v
+                ));
+            })
+            ->hideOnForm();
         yield IntegerField::new('weeklySalary')->setHelp('In pence/cents')->hideOnIndex();
 
         yield AssociationField::new('academy');

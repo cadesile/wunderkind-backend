@@ -44,6 +44,20 @@ class SquadController extends AbstractController
                 'status'        => $player->getStatusValue(),
                 'morale'        => $player->getMorale(),
                 'contractValue' => $player->getContractValue(),
+                'attributes'    => [
+                    'pace'      => $player->getPace(),
+                    'technical' => $player->getTechnical(),
+                    'vision'    => $player->getVision(),
+                    'power'     => $player->getPower(),
+                    'stamina'   => $player->getStamina(),
+                    'heart'     => $player->getHeart(),
+                    'overall'   => $player->getOverall(),
+                ],
+                'physical'      => [
+                    'height' => $player->getHeight(),
+                    'weight' => $player->getWeight(),
+                ],
+                'potential'     => $player->getPotential(),
                 'personality'   => [
                     'confidence' => $p->getConfidence(),
                     'maturity'   => $p->getMaturity(),

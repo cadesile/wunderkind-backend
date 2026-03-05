@@ -111,7 +111,23 @@ class PlayerCrudController extends AbstractCrudController
             ->hideOnIndex();
 
         yield IntegerField::new('potential')->hideOnIndex();
-        yield IntegerField::new('currentAbility');
+        yield IntegerField::new('currentAbility')->hideOnIndex();
+
+        // Calculated overall (read-only, list view only)
+        yield IntegerField::new('overall', 'Overall')
+            ->hideOnForm()
+            ->setHelp('(pace+technical+vision+power+stamina+heart) / 6');
+
+        yield IntegerField::new('pace')->setHelp('0–100')->hideOnIndex();
+        yield IntegerField::new('technical')->setHelp('0–100')->hideOnIndex();
+        yield IntegerField::new('vision')->setHelp('0–100')->hideOnIndex();
+        yield IntegerField::new('power')->setHelp('0–100')->hideOnIndex();
+        yield IntegerField::new('stamina')->setHelp('0–100')->hideOnIndex();
+        yield IntegerField::new('heart')->setHelp('0–100')->hideOnIndex();
+
+        yield IntegerField::new('height')->setHelp('cm')->hideOnIndex();
+        yield IntegerField::new('weight')->setHelp('kg')->hideOnIndex();
+
         yield IntegerField::new('contractValue')->setHelp('In pence/cents')->hideOnIndex();
 
         yield AssociationField::new('academy');

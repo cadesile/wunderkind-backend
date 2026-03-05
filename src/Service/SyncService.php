@@ -109,6 +109,9 @@ class SyncService
         // Age-out checks
         $this->economicService->checkAgeOutPlayers($academy, $request->weekNumber, $clientTimestamp);
 
+        // Persist player attribute snapshots from client
+        $this->processPlayerUpdates($academy, $request->players);
+
         // Persist transfer records for leaderboard tracking
         $this->processTransfers($academy, $request->transfers, $clientTimestamp);
 
@@ -169,6 +172,38 @@ class SyncService
         }
 
         $academy->addFunds(-$total);
+    }
+
+    /**
+     * Apply player attribute snapshots from the client (fat-client authoritative).
+     * Only updates players that belong to the syncing academy.
+     */
+    private function processPlayerUpdates(Academy $academy, array $players): void
+    {
+        if (empty($players)) {
+            return;
+        }
+
+        foreach ($players as $data) {
+            if (empty($data['playerId'])) {
+                continue;
+            }
+
+            $player = $this->em->getRepository(Player::class)->find($data['playerId']);
+            if ($player === null || $player->getAcademy() !== $academy) {
+                continue; // Skip unknown or foreign players
+            }
+
+            if (isset($data['pace']))      { $player->setPace((int) $data['pace']); }
+            if (isset($data['technical'])) { $player->setTechnical((int) $data['technical']); }
+            if (isset($data['vision']))    { $player->setVision((int) $data['vision']); }
+            if (isset($data['power']))     { $player->setPower((int) $data['power']); }
+            if (isset($data['stamina']))   { $player->setStamina((int) $data['stamina']); }
+            if (isset($data['heart']))     { $player->setHeart((int) $data['heart']); }
+            if (isset($data['height']))    { $player->setHeight((int) $data['height']); }
+            if (isset($data['weight']))    { $player->setWeight((int) $data['weight']); }
+            if (isset($data['morale']))    { $player->setMorale((int) $data['morale']); }
+        }
     }
 
     private function processTransfers(Academy $academy, array $transfers, \DateTimeImmutable $syncedAt): void

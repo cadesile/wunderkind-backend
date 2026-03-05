@@ -121,6 +121,16 @@ class MarketPoolService
         'English', 'Spanish', 'Brazilian', 'French', 'German',
     ];
 
+    private const ATTRIBUTE_KEYS = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
+
+    /** Position-weighted attribute ranges: [min, max] per attribute */
+    private const POSITION_ATTRIBUTES = [
+        'DEF' => ['stamina' => [10, 30], 'heart' => [10, 30], 'power' => [10, 30], 'pace' => [5, 20], 'technical' => [5, 20], 'vision' => [5, 20]],
+        'GK'  => ['stamina' => [10, 30], 'heart' => [10, 30], 'power' => [10, 30], 'pace' => [5, 20], 'technical' => [5, 20], 'vision' => [5, 20]],
+        'MID' => ['vision' => [10, 30], 'technical' => [8, 25], 'stamina' => [8, 25], 'pace' => [5, 20], 'power' => [5, 20], 'heart' => [5, 20]],
+        'ATT' => ['pace' => [10, 30], 'technical' => [10, 30], 'power' => [8, 25], 'vision' => [5, 20], 'stamina' => [5, 20], 'heart' => [5, 20]],
+    ];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly PlayerRepository       $playerRepo,
@@ -162,6 +172,20 @@ class MarketPoolService
             $player->setStatus(PlayerStatus::ACTIVE);
             $baseWage = $currentAbility * random_int(10, 40);
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
+
+            // Position-weighted attributes
+            $posKey = $player->getPosition()->value; // GK, DEF, MID, ATT
+            $ranges = self::POSITION_ATTRIBUTES[$posKey] ?? self::POSITION_ATTRIBUTES['MID'];
+            $player->setPace(random_int(...$ranges['pace']));
+            $player->setTechnical(random_int(...$ranges['technical']));
+            $player->setVision(random_int(...$ranges['vision']));
+            $player->setPower(random_int(...$ranges['power']));
+            $player->setStamina(random_int(...$ranges['stamina']));
+            $player->setHeart(random_int(...$ranges['heart']));
+
+            // Physical measurements (youth players aged 13-14)
+            $player->setHeight(random_int(155, 165));
+            $player->setWeight(random_int(50, 65));
 
             if (!empty($agents) && random_int(1, 100) <= 40) {
                 $player->setAgent($agents[array_rand($agents)]);
@@ -217,6 +241,7 @@ class MarketPoolService
 
             $staff->setCoachingAbility($ability);
             $staff->setScoutingRange(random_int(40, 75));
+            $staff->setSpecialisms($this->generateSpecialisms());
 
             $baseSalary = match ($role) {
                 StaffRole::HEAD_COACH      => random_int(8000, 20000),
@@ -581,6 +606,23 @@ class MarketPoolService
             $r <= 76 => PlayerPosition::MIDFIELDER,
             default  => PlayerPosition::ATTACKER,
         };
+    }
+
+    /**
+     * Generate 1–2 random coaching specialisms.
+     * 40% chance single specialism, 60% chance dual.
+     * Values 50–90; keys drawn from ATTRIBUTE_KEYS.
+     */
+    private function generateSpecialisms(): array
+    {
+        $keys  = self::ATTRIBUTE_KEYS;
+        shuffle($keys);
+        $count = random_int(1, 100) <= 40 ? 1 : 2;
+        $specialisms = [];
+        foreach (array_slice($keys, 0, $count) as $key) {
+            $specialisms[$key] = random_int(50, 90);
+        }
+        return $specialisms;
     }
 
     /** Return preferred size 80 % of the time; random otherwise */

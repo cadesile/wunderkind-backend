@@ -49,6 +49,13 @@ class Staff
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $specialty = null;
 
+    /**
+     * Structured coaching specialisms, e.g. {"pace": 85, "technical": 70}.
+     * Valid keys: pace, technical, vision, power, stamina, heart. Values 50–90.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $specialisms = null;
+
     #[ORM\ManyToOne(inversedBy: 'staff')]
     #[ORM\JoinColumn(nullable: true)]
     private ?Academy $academy = null;
@@ -102,6 +109,9 @@ class Staff
 
     public function getSpecialty(): ?string { return $this->specialty; }
     public function setSpecialty(?string $specialty): void { $this->specialty = $specialty; }
+
+    public function getSpecialisms(): ?array { return $this->specialisms; }
+    public function setSpecialisms(?array $specialisms): void { $this->specialisms = $specialisms; }
 
     public function isInMarketPool(): bool { return $this->academy === null; }
 

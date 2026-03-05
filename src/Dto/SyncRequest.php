@@ -30,4 +30,12 @@ class SyncRequest
      * @var array<string, int>
      */
     public array $managerShifts = [];
+
+    /**
+     * Player attribute snapshots sent by the client each week.
+     * Each entry: {playerId, pace, technical, vision, power, stamina, heart, height, weight, morale}
+     *
+     * @var array<array{playerId: string, pace?: int, technical?: int, vision?: int, power?: int, stamina?: int, heart?: int, height?: int, weight?: int, morale?: int}>
+     */
+    public array $players = [];
 }
