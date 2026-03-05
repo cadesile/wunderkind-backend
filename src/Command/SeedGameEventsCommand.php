@@ -80,7 +80,7 @@ class SeedGameEventsCommand extends Command
             ],
             [
                 'slug'         => 'training_argument',
-                'category'     => EventCategory::STAFF,
+                'category'     => EventCategory::PLAYER,
                 'weight'       => 2,
                 'title'        => 'Training Ground Dispute',
                 'bodyTemplate' => '{staff} and {player} clashed on the training pitch today. Team cohesion has suffered slightly.',
