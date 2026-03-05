@@ -72,10 +72,39 @@ echo "   — Market pool (unassigned players & coaches) —"
 prompt_int "Pool players"  100 SEED_PLAYERS
 prompt_int "Pool coaches"  20  SEED_COACHES
 prompt_int "Pool scouts"   10  SEED_POOL_SCOUTS
+
+# ─── Review & confirm config ─────────────────────────────────────────────────
+while true; do
+    echo ""
+    echo -e "${BLUE}📋 Seed summary — review before proceeding:${NC}"
+    echo ""
+    echo "     [1] Agents       : ${SEED_AGENTS}"
+    echo "     [2] Scouts       : ${SEED_SCOUTS}"
+    echo "     [3] Investors    : ${SEED_INVESTORS}"
+    echo "     [4] Sponsors     : ${SEED_SPONSORS}"
+    echo "     [5] Pool players : ${SEED_PLAYERS}"
+    echo "     [6] Pool coaches : ${SEED_COACHES}"
+    echo "     [7] Pool scouts  : ${SEED_POOL_SCOUTS}"
+    echo ""
+    echo "   Enter a number to edit that value, or press Enter to proceed."
+    echo -n "   Choice: "
+    read -r choice
+
+    case "$choice" in
+        1) prompt_int "Agents"       "$SEED_AGENTS"      SEED_AGENTS ;;
+        2) prompt_int "Scouts"       "$SEED_SCOUTS"      SEED_SCOUTS ;;
+        3) prompt_int "Investors"    "$SEED_INVESTORS"   SEED_INVESTORS ;;
+        4) prompt_int "Sponsors"     "$SEED_SPONSORS"    SEED_SPONSORS ;;
+        5) prompt_int "Pool players" "$SEED_PLAYERS"     SEED_PLAYERS ;;
+        6) prompt_int "Pool coaches" "$SEED_COACHES"     SEED_COACHES ;;
+        7) prompt_int "Pool scouts"  "$SEED_POOL_SCOUTS" SEED_POOL_SCOUTS ;;
+        "") break ;;
+        *) echo -e "   ${RED}Invalid choice — enter 1-7 or press Enter to proceed.${NC}" ;;
+    esac
+done
+
 echo ""
-echo -e "   ${GREEN}Configuration confirmed:${NC}"
-echo "     Agents ${SEED_AGENTS} · Scouts ${SEED_SCOUTS} · Investors ${SEED_INVESTORS} · Sponsors ${SEED_SPONSORS}"
-echo "     Pool players ${SEED_PLAYERS} · Pool coaches ${SEED_COACHES} · Pool scouts ${SEED_POOL_SCOUTS}"
+echo -e "   ${GREEN}✓ Configuration locked in. Starting reset...${NC}"
 echo ""
 
 # ─── Dependency checks ───────────────────────────────────────────────────────
