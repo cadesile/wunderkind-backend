@@ -17,6 +17,7 @@ use App\Controller\Admin\ScoutCrudController;
 use App\Controller\Admin\SponsorCrudController;
 use App\Controller\Admin\UserCrudController;
 use App\Controller\Admin\GameEventTemplateCrudController;
+use App\Controller\Admin\PlayerArchetypeCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
@@ -65,6 +66,7 @@ class DashboardController extends AbstractDashboardController
 yield MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake');
         yield MenuItem::section('Narrative');
         yield MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll');
+        yield MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-cogs', 'admin_settings');
         yield MenuItem::section('Market');

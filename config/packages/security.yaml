@@ -55,6 +55,7 @@ security:
         - { path: ^/api/inbox,           roles: ROLE_ACADEMY }
         - { path: ^/api/finance/,        roles: ROLE_ACADEMY }
         - { path: ^/api/events/,         roles: ROLE_ACADEMY }
+        - { path: ^/api/archetypes,      roles: ROLE_ACADEMY }
         - { path: ^/api/squad,           roles: ROLE_ACADEMY }
         - { path: ^/api/staff,           roles: ROLE_ACADEMY }
         - { path: ^/api/facilities,      roles: ROLE_ACADEMY }
