@@ -80,7 +80,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   └── services.yaml
 ├── docs
 │   ├── frontend-integration.md
-│   └── PROJECT_CONTEXT.md
+│   └── wunderkind-backend-context.md
 ├── migrations
 │   ├── Version20260301214628.php
 │   ├── Version20260302000001.php
@@ -95,14 +95,20 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── Version20260303195108.php
 │   ├── Version20260303200052.php
 │   ├── Version20260303201455.php
-│   └── Version20260303210001.php
+│   ├── Version20260303210001.php
+│   ├── Version20260303214629.php
+│   ├── Version20260304000334.php
+│   ├── Version20260305000906.php
+│   ├── Version20260305130043.php
+│   ├── Version20260305234642.php
+│   └── Version20260306090200.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
 │   │   └── easyadmin
 │   ├── images
 │   │   └── logo.webp
-│   ├── admin-theme.css
+│   ├── admin-login.css
 │   └── index.php
 ├── scripts
 │   ├── generate_project_context.sh
@@ -110,8 +116,11 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── src
 │   ├── ApiResource
 │   ├── Command
+│   │   ├── CleanupAssignedEntitiesCommand.php
 │   │   ├── GenerateMarketDataCommand.php
 │   │   ├── GenerateMarketPoolCommand.php
+│   │   ├── SeedArchetypesCommand.php
+│   │   ├── SeedGameEventsCommand.php
 │   │   └── SetExistingAcademyBalancesCommand.php
 │   ├── Controller
 │   │   ├── Admin
@@ -129,12 +138,14 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── Admin.php
 │   │   ├── Agent.php
 │   │   ├── Facility.php
+│   │   ├── GameEventTemplate.php
 │   │   ├── Guardian.php
 │   │   ├── InboxMessage.php
 │   │   ├── Investor.php
 │   │   ├── LeaderboardEntry.php
 │   │   ├── PersonalityProfile.php
 │   │   ├── Player.php
+│   │   ├── PlayerArchetype.php
 │   │   ├── Scout.php
 │   │   ├── Sponsor.php
 │   │   ├── Staff.php
@@ -143,6 +154,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   └── User.php
 │   ├── Enum
 │   │   ├── CompanySize.php
+│   │   ├── EventCategory.php
 │   │   ├── FacilityType.php
 │   │   ├── InvestorTier.php
 │   │   ├── LeaderboardCategory.php
@@ -162,13 +174,16 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── AdminRepository.php
 │   │   ├── AgentRepository.php
 │   │   ├── FacilityRepository.php
+│   │   ├── GameEventTemplateRepository.php
 │   │   ├── InboxMessageRepository.php
 │   │   ├── InvestorRepository.php
 │   │   ├── LeaderboardEntryRepository.php
+│   │   ├── PlayerArchetypeRepository.php
 │   │   ├── PlayerRepository.php
 │   │   ├── ScoutRepository.php
 │   │   ├── SponsorRepository.php
-│   │   └── StaffRepository.php
+│   │   ├── StaffRepository.php
+│   │   └── TransferRepository.php
 │   ├── Service
 │   │   ├── AcademyInitializationService.php
 │   │   ├── EconomicService.php
@@ -176,19 +191,25 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── InboxService.php
 │   │   ├── MarketDataService.php
 │   │   ├── MarketPoolService.php
-│   │   └── SyncService.php
+│   │   ├── SyncService.php
+│   │   └── TransferLeaderboardService.php
 │   └── Kernel.php
 ├── templates
 │   ├── admin
 │   │   ├── dashboard.html.twig
-│   │   └── login.html.twig
+│   │   ├── login.html.twig
+│   │   └── settings.html.twig
 │   └── base.html.twig
 ├── tests
 │   ├── Controller
 │   │   └── Api
+│   ├── Repository
+│   │   └── GameEventTemplateRepositoryTest.php
 │   └── Service
+│       ├── AcademyInitializationServiceTest.php
 │       ├── EconomicServiceTest.php
-│       └── InboxServiceTest.php
+│       ├── InboxServiceTest.php
+│       └── SyncServiceManagerShiftsTest.php
 ├── translations
 ├── CLAUDE.md
 ├── compose.override.yaml
@@ -197,9 +218,10 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── composer.lock
 ├── project_plan.md
 ├── README.md
-└── symfony.lock
+├── symfony.lock
+└── wunderkind-backend-context.md
 
-33 directories, 120 files
+34 directories, 141 files
 ```
 
 ---
@@ -221,6 +243,10 @@ class Academy
     private ?\DateTimeImmutable $lastSyncedAt = null;
     private int $marketPoolSize = 20;
     private int $financialYearStart = 4;
+    private ?string $paName = null;
+    private int $managerTemperament = 50;
+    private int $managerDiscipline = 50;
+    private int $managerAmbition = 50;
     private int $balance = 0;
     private \DateTimeImmutable $createdAt;
     private User $user;
@@ -228,10 +254,6 @@ class Academy
     private Collection $staff;
     private Collection $transfers;
     private Collection $syncRecords;
-    private Collection $leaderboardEntries;
-    private Collection $investors;
-    private Collection $sponsors;
-    private Collection $inboxMessages;
 ```
 
 #### Admin
@@ -259,7 +281,6 @@ class Agent
 {
     private UuidV7 $id;
     private string $name;
-    private bool $isUniversal = true;
     private int $reputation = 50;
     private string $commissionRate = '10.00';
     private ?\DateTimeImmutable $dob = null;
@@ -268,15 +289,16 @@ class Agent
     private int $experience = 0;
     private int $rating = 50;
     private Collection $players;
-    public function __construct(string $name, bool $isUniversal = true)
+    public function __construct(string $name)
     public function __toString(): string { return $this->name; }
     public function getId(): UuidV7 { return $this->id; }
     public function getName(): string { return $this->name; }
     public function setName(string $name): void { $this->name = $name; }
-    public function isUniversal(): bool { return $this->isUniversal; }
-    public function setIsUniversal(bool $v): void { $this->isUniversal = $v; }
     public function getReputation(): int { return $this->reputation; }
     public function setReputation(int $reputation): void { $this->reputation = $reputation; }
+    public function getCommissionRate(): string { return $this->commissionRate; }
+    public function setCommissionRate(string $rate): void { $this->commissionRate = $rate; }
+    public function getPlayers(): Collection { return $this->players; }
 ```
 
 #### Facility
@@ -301,6 +323,32 @@ class Facility
     public function canUpgrade(): bool
     public function getUpgradeCost(): int
     public function getCurrentEffect(): string
+```
+
+#### GameEventTemplate
+```php
+class GameEventTemplate
+{
+    private UuidV7 $id;
+    private string $slug;
+    private EventCategory $category;
+    private int $weight = 1;
+    private string $title;
+    private string $bodyTemplate;
+    private array $impacts = [];
+    private \DateTimeImmutable $createdAt;
+    public function __construct(
+    public function getId(): UuidV7 { return $this->id; }
+    public function getSlug(): string { return $this->slug; }
+    public function setSlug(string $slug): void { $this->slug = $slug; }
+    public function getCategory(): EventCategory { return $this->category; }
+    public function setCategory(EventCategory|string $category): void
+    public function getWeight(): int { return $this->weight; }
+    public function setWeight(int $weight): void { $this->weight = max(0, $weight); }
+    public function getTitle(): string { return $this->title; }
+    public function setTitle(string $title): void { $this->title = $title; }
+    public function getBodyTemplate(): string { return $this->bodyTemplate; }
+    public function setBodyTemplate(string $bodyTemplate): void { $this->bodyTemplate = $bodyTemplate; }
 ```
 
 #### Guardian
@@ -369,16 +417,16 @@ class Investor
     private InvestorTier $tier = InvestorTier::ANGEL;
     private int $investmentAmount = 0;
     private string $percentageOwned = '5.00';
+    private ?\DateTimeImmutable $assignedAt = null;
     private ?\DateTimeImmutable $investedAt = null;
     private ?\DateTimeImmutable $lastPayoutAt = null;
-    public function __construct(string $company)
+    public function __construct(string $company = '')
     public function getId(): UuidV7 { return $this->id; }
     public function getCompany(): string { return $this->company; }
     public function setCompany(string $company): void { $this->company = $company; }
     public function getNationality(): ?string { return $this->nationality; }
     public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
     public function getSize(): CompanySize { return $this->size; }
-    public function setSize(CompanySize $size): void { $this->size = $size; }
 ```
 
 #### LeaderboardEntry
@@ -451,10 +499,33 @@ class Player
     private ?Guardian $guardian = null;
     private ?Agent $agent = null;
     private Collection $siblings;
-    private int $morale = 50;
-    private bool $ageOutWarningIssued = false;
-    private bool $forcedSaleExecuted = false;
-    private ?int $forcedSaleWeek = null;
+    private int $pace = 0;
+    private int $technical = 0;
+    private int $vision = 0;
+    private int $power = 0;
+```
+
+#### PlayerArchetype
+```php
+class PlayerArchetype
+{
+    private ?int $id = null;
+    private string $name;
+    private string $description;
+    private array $traitMapping = [];
+    private \DateTimeImmutable $createdAt;
+    private \DateTimeImmutable $updatedAt;
+    public function __construct(
+    public function getId(): ?int { return $this->id; }
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): void { $this->name = $name; }
+    public function getDescription(): string { return $this->description; }
+    public function setDescription(string $description): void { $this->description = $description; }
+    public function getTraitMapping(): array { return $this->traitMapping; }
+    public function setTraitMapping(array $traitMapping): void { $this->traitMapping = $traitMapping; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
+    public function touch(): void { $this->updatedAt = new \DateTimeImmutable(); }
 ```
 
 #### Scout
@@ -468,7 +539,7 @@ class Scout
     private array $judgements = [];
     private int $experience = 0;
     private \DateTimeImmutable $createdAt;
-    public function __construct(string $name)
+    public function __construct(string $name = '')
     public function getId(): UuidV7 { return $this->id; }
     public function getName(): string { return $this->name; }
     public function setName(string $name): void { $this->name = $name; }
@@ -502,11 +573,11 @@ class Sponsor
     private string $bonusMultiplier = '1.00';
     private SponsorStatus $status = SponsorStatus::ACTIVE;
     private ?int $earlyTerminationFee = null;
+    private ?\DateTimeImmutable $assignedAt = null;
     private ?\DateTimeImmutable $lastPaymentAt = null;
-    public function __construct(string $company)
+    public function __construct(string $company = '')
     public function getId(): UuidV7 { return $this->id; }
     public function getCompany(): string { return $this->company; }
-    public function setCompany(string $company): void { $this->company = $company; }
 ```
 
 #### Staff
@@ -522,7 +593,9 @@ class Staff
     private int $weeklySalary = 0;
     private int $morale = 50;
     private ?string $specialty = null;
+    private ?array $specialisms = null;
     private ?Academy $academy = null;
+    private ?\DateTimeImmutable $assignedAt = null;
     private \DateTimeImmutable $hiredAt;
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
@@ -531,8 +604,6 @@ class Staff
     public function getLastName(): string { return $this->lastName; }
     public function setLastName(string $lastName): void { $this->lastName = $lastName; }
     public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
-    public function getRole(): StaffRole { return $this->role; }
-    public function setRole(StaffRole $role): void { $this->role = $role; }
 ```
 
 #### SyncRecord
@@ -564,25 +635,25 @@ class SyncRecord
 class Transfer
 {
     private UuidV7 $id;
-    private Player $player;
+    private ?Player $player = null;
     private Academy $academy;
     private string $destinationClubName;
     private TransferType $type;
     private int $fee = 0;
     private int $agentCommission = 0;
+    private int $netProceeds = 0;
+    private int $developmentPoints = 0;
+    private int $reputationGained = 0;
+    private ?string $buyingClub = null;
     private \DateTimeImmutable $occurredAt;
     private ?\DateTimeImmutable $syncedAt = null;
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
-    public function getPlayer(): Player { return $this->player; }
+    public function getPlayer(): ?Player { return $this->player; }
     public function getAcademy(): Academy { return $this->academy; }
     public function getDestinationClubName(): string { return $this->destinationClubName; }
     public function setDestinationClubName(string $name): void { $this->destinationClubName = $name; }
     public function getType(): TransferType { return $this->type; }
-    public function getTypeValue(): string { return $this->type->value; }
-    public function getFee(): int { return $this->fee; }
-    public function setFee(int $fee): void { $this->fee = $fee; }
-    public function getAgentCommission(): int { return $this->agentCommission; }
 ```
 
 #### User
@@ -679,7 +750,6 @@ class EconomicService
     public function processFinancialYearEnd(Academy $academy): void
     public function checkSponsorContracts(Academy $academy, int $currentReputation): void
     public function checkAgeOutPlayers(Academy $academy, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
-    public function executeForcedSale(Player $player, Academy $academy): Transfer
 ```
 
 ### FacilityService
@@ -724,10 +794,10 @@ class MarketDataService
 class MarketPoolService
 {
     public function __construct(
-    public function generatePlayers(int $count): array
-    public function generateCoaches(int $count): array
+    public function generatePlayers(int $count, ?int $academyReputation = null): array
+    public function generateCoaches(int $count, ?int $academyReputation = null): array
     public function generateScouts(int $count): array
-    public function generateUniversalAgents(int $count): array
+    public function generateAgents(int $count): array
     public function generateSponsors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
     public function generateInvestors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
     public function getAvailablePlayers(int $limit = 100): array
@@ -742,6 +812,16 @@ class SyncService
 {
     public function __construct(
     public function process(User $user, SyncRequest $request): array
+```
+
+### TransferLeaderboardService
+
+```php
+class TransferLeaderboardService
+{
+    public function __construct(
+    public function getTopSellers(string $period = 'week', int $limit = 10): array
+    public function getMostValuableSale(string $period = 'week'): ?array
 ```
 
 
@@ -791,10 +871,14 @@ security:
             jwt: ~
 
     access_control:
+        # Allow CORS preflight requests through without JWT authentication.
+        # NelmioCorsBundle handles OPTIONS and returns the correct headers.
+        - { path: ^/api, roles: PUBLIC_ACCESS, methods: [OPTIONS] }
         - { path: ^/admin/login,  roles: PUBLIC_ACCESS }
         - { path: ^/admin,        roles: ROLE_ADMIN }
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/sync,             roles: ROLE_ACADEMY }
         - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
@@ -802,6 +886,8 @@ security:
         - { path: ^/api/academy/,        roles: ROLE_ACADEMY }
         - { path: ^/api/inbox,           roles: ROLE_ACADEMY }
         - { path: ^/api/finance/,        roles: ROLE_ACADEMY }
+        - { path: ^/api/events/,         roles: ROLE_ACADEMY }
+        - { path: ^/api/archetypes,      roles: ROLE_ACADEMY }
         - { path: ^/api/squad,           roles: ROLE_ACADEMY }
         - { path: ^/api/staff,           roles: ROLE_ACADEMY }
         - { path: ^/api/facilities,      roles: ROLE_ACADEMY }
@@ -877,16 +963,16 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
-5a80d57 chore: add reset_and_seed.sh — DB reset script preserving admin users
-9377c6f feat: facilities, dashboard endpoints, and balance integration (Phases 2–5)
-b22ec82 feat: Phase 1 — balance, morale, specialty fields
-a113f98 docs: update frontend-integration.md for economic balance system
-e21235b feat: economic balance system — inbox, finance endpoints, age-out mechanics
-76afa10 update README
-b45a9c1 feat: market pool system — pool services, academy init, pool endpoints
-90b8207 fix: add Agent::__toString() so PlayerCrudController AssociationField renders
-617d6c5 feat: extend seeder + writable admin CRUD for Player and Staff
-dbd0810 feat: market entity expansion — Scout/Investor/Sponsor + seeder command
+2ec0448 feat: expand PlayerArchetype to 30 archetypes with formula/threshold schema
+194625c feat: PlayerArchetype entity, API endpoint, admin CRUD, and seed data
+e7a466e fix: truncate user table fully before restoring admins in reset script
+3de4241 feat: player development system — granular attributes + staff specialisms
+06d49c8 fix: strip carriage returns from MySQL output in reset_and_seed.sh
+88a4485 chore: add numbered review/edit loop before seed execution
+1e35c94 chore: add interactive seed configuration to reset_and_seed.sh
+5a34b4e feat: agent-assisted transfer support
+419629e fix: correct training_argument category from STAFF to PLAYER
+95f316a feat: transfer leaderboard system + admin entity fixes
 ```
 
 ---
