@@ -268,6 +268,10 @@ echo ""
 echo -e "${BLUE}🌱 Phase 3c: Seeding game event templates (idempotent)...${NC}"
 lando php bin/console app:seed-game-events
 
+echo ""
+echo -e "${BLUE}🌱 Phase 3d: Seeding player archetypes (truncates and re-seeds 30)...${NC}"
+lando php bin/console app:seed-archetypes
+
 # ─── Verification ────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"
@@ -279,6 +283,7 @@ AGENTS=$(mysql -Nse "SELECT COUNT(*) FROM \`agent\`" 2>/dev/null | tr -d '\r')
 INVESTORS=$(mysql -Nse "SELECT COUNT(*) FROM \`investor\`" 2>/dev/null | tr -d '\r')
 SPONSORS=$(mysql -Nse "SELECT COUNT(*) FROM \`sponsor\`" 2>/dev/null | tr -d '\r')
 EVENT_TEMPLATES=$(mysql -Nse "SELECT COUNT(*) FROM \`game_event_template\`" 2>/dev/null | tr -d '\r')
+ARCHETYPES=$(mysql -Nse "SELECT COUNT(*) FROM \`player_archetype\`" 2>/dev/null | tr -d '\r')
 
 echo "   Pool players    : ${POOL_PLAYERS}"
 echo "   Pool coaches    : ${POOL_STAFF}"
@@ -287,6 +292,7 @@ echo "   Agents          : ${AGENTS}"
 echo "   Investors       : ${INVESTORS}"
 echo "   Sponsors        : ${SPONSORS}"
 echo "   Event templates : ${EVENT_TEMPLATES}"
+echo "   Archetypes      : ${ARCHETYPES}"
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 echo ""
@@ -298,7 +304,7 @@ echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
 echo "   Regenerated: ${AGENTS} agents · ${SCOUTS} scouts · ${POOL_PLAYERS} pool players"
 echo "                ${POOL_STAFF} pool coaches · ${INVESTORS} investors · ${SPONSORS} sponsors"
-echo "                ${EVENT_TEMPLATES} event templates"
+echo "                ${EVENT_TEMPLATES} event templates · ${ARCHETYPES} archetypes"
 echo ""
 echo "   Backups    :"
 echo "     JSON : ${BACKUP_FILE}"

@@ -45,8 +45,9 @@ class PlayerArchetypeCrudController extends AbstractCrudController
         yield TextareaField::new('traitMapping', 'Trait Mapping (JSON)')
             ->formatValue(fn ($v) => is_array($v) ? json_encode($v, JSON_PRETTY_PRINT) : $v)
             ->setHelp(
-                'Schema: {"threshold":"all|any","rules":[{"trait":"leadership","min":70},{"trait":"ego","max":40}]}. ' .
-                'Traits: confidence, maturity, teamwork, leadership, ego, bravery, greed, loyalty.'
+                'Schema: {"formula":{"bravery":0.4,"consistency":0.3,"loyalty":0.3},"threshold":70}. ' .
+                'Traits: bravery, consistency, loyalty, professionalism, ambition, ego, confidence, pressure. ' .
+                'Weights must sum to 1.0. Threshold = minimum weighted score (0–100) to match.'
             )
             ->hideOnForm();
 

@@ -4,65 +4,44 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\GetCollection;
 use App\Repository\PlayerArchetypeRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: PlayerArchetypeRepository::class)]
-#[ApiResource(
-    operations: [
-        new GetCollection(
-            uriTemplate: '/archetypes',
-            normalizationContext: ['groups' => ['archetype:read']],
-            security: "is_granted('ROLE_ACADEMY')",
-        ),
-    ]
-)]
+#[ORM\HasLifecycleCallbacks]
 class PlayerArchetype
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['archetype:read'])]
     private ?int $id = null;
 
-    /**
-     * Display name shown to the user in-game, e.g. "The Captain".
-     */
     #[ORM\Column(length: 100, unique: true)]
-    #[Groups(['archetype:read'])]
     private string $name;
 
-    /**
-     * Flavour text explaining the archetype's personality.
-     */
+    /** Scouting-report flavour text describing the archetype's personality. */
     #[ORM\Column(type: Types::TEXT)]
-    #[Groups(['archetype:read'])]
     private string $description;
 
     /**
-     * Rule set evaluated by the client to assign this archetype.
+     * Weighted formula evaluated by the client to assign this archetype.
      *
      * Schema:
      * {
-     *   "threshold": "all" | "any",
-     *   "rules": [
-     *     {"trait": "leadership", "min": 70},
-     *     {"trait": "teamwork",   "min": 65},
-     *     {"trait": "ego",        "max": 40}
-     *   ]
+     *   "formula":   {"bravery": 0.4, "consistency": 0.3, "loyalty": 0.3},
+     *   "threshold": 70
      * }
      *
-     * Traits: confidence, maturity, teamwork, leadership, ego, bravery, greed, loyalty
-     * threshold "all" = every rule must match; "any" = at least one rule must match
+     * Available traits: bravery, consistency, loyalty, professionalism,
+     *                   ambition, ego, confidence, pressure
+     *
+     * Weights must sum to 1.0. Threshold is the minimum weighted score (0–100)
+     * for the player to match this archetype.
      *
      * @var array<string, mixed>
      */
     #[ORM\Column(type: Types::JSON)]
-    #[Groups(['archetype:read'])]
     private array $traitMapping = [];
 
     #[ORM\Column]
