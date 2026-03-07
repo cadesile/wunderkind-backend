@@ -113,6 +113,18 @@ class Staff
     public function getSpecialisms(): ?array { return $this->specialisms; }
     public function setSpecialisms(?array $specialisms): void { $this->specialisms = $specialisms; }
 
+    /** Virtual property for admin form — serialises specialisms as a JSON string. */
+    public function getSpecialismsJson(): string
+    {
+        return json_encode($this->specialisms ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
+
+    public function setSpecialismsJson(string $json): void
+    {
+        $decoded = json_decode($json, true);
+        $this->specialisms = is_array($decoded) && !empty($decoded) ? $decoded : null;
+    }
+
     public function isInMarketPool(): bool { return $this->academy === null; }
 
     public function getAcademy(): ?Academy { return $this->academy; }

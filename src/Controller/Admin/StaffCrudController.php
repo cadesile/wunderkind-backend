@@ -90,6 +90,15 @@ class StaffCrudController extends AbstractCrudController
             })
             ->hideOnIndex()
             ->hideOnForm();
+
+        yield \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('specialismsJson', 'Specialisms (JSON)')
+            ->setHelp(
+                'Keys: pace, technical, vision, power, stamina, heart. Values 50–90. ' .
+                'Example: {"pace":85,"technical":70}. Leave as {} to clear.'
+            )
+            ->hideOnIndex()
+            ->setNumOfRows(4)
+            ->onlyOnForms();
         yield IntegerField::new('weeklySalary')->setHelp('In pence/cents')->hideOnIndex();
 
         yield AssociationField::new('academy');
