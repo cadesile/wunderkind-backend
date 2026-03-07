@@ -84,5 +84,17 @@ class GameEventTemplate
     public function getImpacts(): array { return $this->impacts; }
     public function setImpacts(array $impacts): void { $this->impacts = $impacts; }
 
+    /** Virtual property for admin form — serialises impacts as a JSON string. */
+    public function getImpactsJson(): string
+    {
+        return json_encode($this->impacts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]';
+    }
+
+    public function setImpactsJson(string $json): void
+    {
+        $decoded = json_decode($json, true);
+        $this->impacts = is_array($decoded) ? $decoded : [];
+    }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

@@ -42,10 +42,14 @@ class GameEventTemplateCrudController extends AbstractCrudController
         yield TextareaField::new('bodyTemplate')
             ->setHelp('Use {player}, {staff}, {facility}, {amount} as placeholders.')
             ->hideOnIndex();
-        yield TextareaField::new('impacts')
-            ->formatValue(fn ($v) => is_array($v) ? json_encode($v) : $v)
+        yield TextareaField::new('impactsJson', 'Impacts (JSON)')
+            ->setHelp(
+                'Array of impact descriptors. Example: [{"target":"player.morale","delta":-10},{"target":"academy.reputation","delta":5}]. ' .
+                'target can be: player.morale, player.confidence, player.energy, academy.reputation, academy.finances, staff.morale.'
+            )
             ->hideOnIndex()
-            ->hideOnForm(); // JSON array — edit via app:seed-game-events or direct migration
+            ->setNumOfRows(6)
+            ->setRequired(false);
         yield DateTimeField::new('createdAt')->hideOnForm();
     }
 }
