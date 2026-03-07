@@ -73,6 +73,18 @@ class PlayerArchetype
     public function getTraitMapping(): array { return $this->traitMapping; }
     public function setTraitMapping(array $traitMapping): void { $this->traitMapping = $traitMapping; }
 
+    /** Virtual property for admin form — serialises traitMapping as a JSON string. */
+    public function getTraitMappingJson(): string
+    {
+        return json_encode($this->traitMapping, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
+
+    public function setTraitMappingJson(string $json): void
+    {
+        $decoded = json_decode($json, true);
+        $this->traitMapping = is_array($decoded) ? $decoded : [];
+    }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 
