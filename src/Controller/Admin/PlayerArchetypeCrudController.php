@@ -49,6 +49,7 @@ class PlayerArchetypeCrudController extends AbstractCrudController
                 'Traits: bravery, consistency, loyalty, professionalism, ambition, ego, confidence, pressure. ' .
                 'Weights must sum to 1.0. Threshold = minimum weighted score (0–100) to match.'
             )
+            ->hideOnIndex()
             ->hideOnForm();
 
         yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
