@@ -88,6 +88,7 @@ class StaffCrudController extends AbstractCrudController
                     array_keys($v), $v
                 ));
             })
+            ->hideOnIndex()
             ->hideOnForm();
         yield IntegerField::new('weeklySalary')->setHelp('In pence/cents')->hideOnIndex();
 
