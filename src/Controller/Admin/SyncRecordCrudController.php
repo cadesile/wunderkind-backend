@@ -9,6 +9,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -23,7 +24,9 @@ class SyncRecordCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        return $actions
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL);
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -40,5 +43,8 @@ class SyncRecordCrudController extends AbstractCrudController
         yield TextField::new('invalidReason')->setRequired(false);
         yield DateTimeField::new('clientTimestamp')->setFormat('yyyy-MM-dd HH:mm');
         yield DateTimeField::new('serverTimestamp')->setFormat('yyyy-MM-dd HH:mm');
+        yield CodeEditorField::new('payloadJson', 'Payload')
+            ->setLanguage('js')
+            ->onlyOnDetail();
     }
 }

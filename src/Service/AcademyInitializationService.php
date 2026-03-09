@@ -32,9 +32,11 @@ class AcademyInitializationService
     ];
 
     public function __construct(
-        private readonly MarketPoolService     $pool,
-        private readonly FacilityService       $facilityService,
+        private readonly MarketPoolService      $pool,
+        private readonly FacilityService        $facilityService,
         private readonly EntityManagerInterface $em,
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire('%app.academy_starting_balance%')]
+        private readonly int $startingBalance = 500000,
     ) {}
 
     /**
@@ -51,7 +53,7 @@ class AcademyInitializationService
 
         if ($academy === null) {
             $academy = new Academy($academyName, $user);
-            $academy->setBalance(500000); // Starting balance: £5,000 in pence
+            $academy->setBalance($this->startingBalance);
             $academy->setPaName($this->generatePaName());
             $academy->setManagerTemperament(rand(40, 60));
             $academy->setManagerDiscipline(rand(40, 60));
@@ -75,11 +77,12 @@ class AcademyInitializationService
     public function getStarterBundle(): array
     {
         return [
-            'players'   => self::STARTING_PLAYERS,   // 10
-            'coaches'   => self::STARTING_COACHES,   // 2
-            'scouts'    => self::STARTING_SCOUTS,    // 1
-            'sponsors'  => self::STARTING_SPONSORS,  // 1
-            'investors' => self::STARTING_INVESTORS, // 0
+            'startingBalance'   => $this->startingBalance,
+            'players'           => self::STARTING_PLAYERS,   // 10
+            'coaches'           => self::STARTING_COACHES,   // 2
+            'scouts'            => self::STARTING_SCOUTS,    // 1
+            'sponsors'          => self::STARTING_SPONSORS,  // 0
+            'investors'         => self::STARTING_INVESTORS, // 0
         ];
     }
 

@@ -1,4 +1,4 @@
-# Wunderkind Backend - Project Context
+# ${OUTPUT_FILE} - Project Context
 
 > Last Updated: $(date +"%Y-%m-%d %H:%M:%S")
 
@@ -79,6 +79,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── routes.yaml
 │   └── services.yaml
 ├── docs
+│   ├── event-guide.md
 │   ├── frontend-integration.md
 │   └── wunderkind-backend-context.md
 ├── migrations
@@ -221,7 +222,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-34 directories, 141 files
+34 directories, 142 files
 ```
 
 ---
@@ -523,6 +524,8 @@ class PlayerArchetype
     public function setDescription(string $description): void { $this->description = $description; }
     public function getTraitMapping(): array { return $this->traitMapping; }
     public function setTraitMapping(array $traitMapping): void { $this->traitMapping = $traitMapping; }
+    public function getTraitMappingJson(): string
+    public function setTraitMappingJson(string $json): void
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
     public function touch(): void { $this->updatedAt = new \DateTimeImmutable(); }
@@ -963,16 +966,16 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+4f9e314 docs: add event guide
+f01a3ba docs: update frontend integration guide — sync managerShifts, archetypes, events, transfer leaderboards, corrected starter bundle
+fb3092c feat: editable specialisms field on staff edit form via virtual JSON string property
+c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField type error
+39fd43b feat: editable impacts field on event template admin form via virtual JSON string property
+4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
+584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
+7239619 chore: rename project context doc, add repository test stub, add root context snapshot
 2ec0448 feat: expand PlayerArchetype to 30 archetypes with formula/threshold schema
 194625c feat: PlayerArchetype entity, API endpoint, admin CRUD, and seed data
-e7a466e fix: truncate user table fully before restoring admins in reset script
-3de4241 feat: player development system — granular attributes + staff specialisms
-06d49c8 fix: strip carriage returns from MySQL output in reset_and_seed.sh
-88a4485 chore: add numbered review/edit loop before seed execution
-1e35c94 chore: add interactive seed configuration to reset_and_seed.sh
-5a34b4e feat: agent-assisted transfer support
-419629e fix: correct training_argument category from STAFF to PLAYER
-95f316a feat: transfer leaderboard system + admin entity fixes
 ```
 
 ---

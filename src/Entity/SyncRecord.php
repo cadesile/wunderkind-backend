@@ -82,4 +82,9 @@ class SyncRecord
     }
 
     public function getInvalidReason(): ?string { return $this->invalidReason; }
+
+    public function getPayloadJson(): string
+    {
+        return json_encode($this->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
 }

@@ -22,7 +22,7 @@ mkdir -p docs
 
 # Start building the context file
 cat > docs/${OUTPUT_FILE} << 'EOF'
-# Wunderkind Backend - Project Context
+# ${OUTPUT_FILE} - Project Context
 
 > Last Updated: $(date +"%Y-%m-%d %H:%M:%S")
 
