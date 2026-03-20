@@ -40,6 +40,18 @@ class GameEventTemplate
     #[ORM\Column(type: 'json')]
     private array $impacts = [];
 
+    /**
+     * Optional firing conditions for NPC_INTERACTION templates.
+     * Shape: { maxSquadMorale, minSquadMorale, maxPairRelationship, minPairRelationship,
+     *           requiresCoLocation, actorTraitRequirements[], subjectTraitRequirements[] }
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $firingConditions = null;
+
+    /** 'minor' = read-only inbox report. 'major' = AMP must respond. */
+    #[ORM\Column(length: 10, nullable: true)]
+    private ?string $severity = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -95,6 +107,31 @@ class GameEventTemplate
         $decoded = json_decode($json, true);
         $this->impacts = is_array($decoded) ? $decoded : [];
     }
+
+    public function getFiringConditions(): ?array { return $this->firingConditions; }
+    public function setFiringConditions(?array $firingConditions): void { $this->firingConditions = $firingConditions; }
+
+    /** Virtual property for admin form — serialises firingConditions as a JSON string. */
+    public function getFiringConditionsJson(): string
+    {
+        return $this->firingConditions !== null
+            ? (json_encode($this->firingConditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}')
+            : '';
+    }
+
+    public function setFiringConditionsJson(string $json): void
+    {
+        $trimmed = trim($json);
+        if ($trimmed === '') {
+            $this->firingConditions = null;
+            return;
+        }
+        $decoded = json_decode($trimmed, true);
+        $this->firingConditions = is_array($decoded) ? $decoded : null;
+    }
+
+    public function getSeverity(): ?string { return $this->severity; }
+    public function setSeverity(?string $severity): void { $this->severity = $severity; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

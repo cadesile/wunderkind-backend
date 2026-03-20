@@ -47,6 +47,7 @@ security:
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
+        - { path: ^/api/game-config,          roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/sync,             roles: ROLE_ACADEMY }
         - { path: ^/api/market/data,     roles: ROLE_ACADEMY }

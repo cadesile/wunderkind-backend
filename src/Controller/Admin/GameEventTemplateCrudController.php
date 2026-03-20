@@ -50,6 +50,14 @@ class GameEventTemplateCrudController extends AbstractCrudController
             ->hideOnIndex()
             ->setNumOfRows(6)
             ->setRequired(false);
+        yield ChoiceField::new('severity')
+            ->setChoices(['Minor' => 'minor', 'Major' => 'major'])
+            ->setRequired(false)
+            ->setHelp('minor = read-only inbox report. major = AMP must respond.');
+        yield TextareaField::new('firingConditionsJson', 'Firing Conditions (JSON)')
+            ->setRequired(false)
+            ->setHelp('JSON: maxSquadMorale, maxPairRelationship, requiresCoLocation, actorTraitRequirements, subjectTraitRequirements')
+            ->hideOnIndex();
         yield DateTimeField::new('createdAt')->hideOnForm();
     }
 }

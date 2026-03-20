@@ -26,12 +26,14 @@ class EventController extends AbstractController
         $items = $this->templates->findAllActive();
 
         $data = array_map(static fn ($t) => [
-            'slug'         => $t->getSlug(),
-            'category'     => $t->getCategory()->value,
-            'weight'       => $t->getWeight(),
-            'title'        => $t->getTitle(),
-            'bodyTemplate' => $t->getBodyTemplate(),
-            'impacts'      => $t->getImpacts(),
+            'slug'             => $t->getSlug(),
+            'category'         => $t->getCategory()->value,
+            'weight'           => $t->getWeight(),
+            'title'            => $t->getTitle(),
+            'bodyTemplate'     => $t->getBodyTemplate(),
+            'impacts'          => $t->getImpacts(),
+            'firingConditions' => $t->getFiringConditions(),
+            'severity'         => $t->getSeverity(),
         ], $items);
 
         $response = new JsonResponse(['templates' => $data]);
