@@ -8,6 +8,11 @@ config:
   xdebug: false
 
 services:
+  appserver_nginx:
+    overrides:
+      ports:
+        - "127.0.0.1:52100:80"
+
   database:
     type: mysql:8.0
     portforward: 3306

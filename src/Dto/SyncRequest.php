@@ -20,7 +20,61 @@ class SyncRequest
     #[Assert\PositiveOrZero]
     public float $hallOfFamePoints = 0;
 
+    /**
+     * Transfer summaries for players bought/sold during this tick.
+     *
+     * @var TransferSyncDto[]
+     */
+    #[Assert\Valid]
+    #[Assert\All([new Assert\Type(TransferSyncDto::class)])]
     public array $transfers = [];
+
+    /**
+     * Archival snapshot of this week's financial ledger.
+     *
+     * @var LedgerEntrySyncDto[]
+     */
+    #[Assert\Valid]
+    #[Assert\All([new Assert\Type(LedgerEntrySyncDto::class)])]
+    public array $ledger = [];
+
+    /**
+     * @param array<array{playerId?: string, playerName?: string, destinationClub?: string, grossFee?: int, agentCommission?: int, netProceeds?: int, type?: string}|TransferSyncDto> $transfers
+     */
+    public function setTransfers(array $transfers): void
+    {
+        $this->transfers = array_map(static function (array|TransferSyncDto $item): TransferSyncDto {
+            if ($item instanceof TransferSyncDto) {
+                return $item;
+            }
+            $dto = new TransferSyncDto();
+            $dto->playerId = $item['playerId'] ?? '';
+            $dto->playerName = $item['playerName'] ?? '';
+            $dto->destinationClub = $item['destinationClub'] ?? '';
+            $dto->grossFee = (int) ($item['grossFee'] ?? 0);
+            $dto->agentCommission = (int) ($item['agentCommission'] ?? 0);
+            $dto->netProceeds = (int) ($item['netProceeds'] ?? 0);
+            $dto->type = $item['type'] ?? '';
+            return $dto;
+        }, $transfers);
+    }
+
+    /**
+     * @param array<array{category?: string, amount?: int, description?: string}|LedgerEntrySyncDto> $ledger
+     */
+    public function setLedger(array $ledger): void
+    {
+        $this->ledger = array_map(static function (array|LedgerEntrySyncDto $item): LedgerEntrySyncDto {
+            if ($item instanceof LedgerEntrySyncDto) {
+                return $item;
+            }
+            $dto = new LedgerEntrySyncDto();
+            $dto->category = $item['category'] ?? '';
+            $dto->amount = (int) ($item['amount'] ?? 0);
+            $dto->description = $item['description'] ?? '';
+            return $dto;
+        }, $ledger);
+    }
 
     /**
      * Manager personality shift deltas sent by the client each week.

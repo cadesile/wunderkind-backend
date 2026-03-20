@@ -102,7 +102,9 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── Version20260305000906.php
 │   ├── Version20260305130043.php
 │   ├── Version20260305234642.php
-│   └── Version20260306090200.php
+│   ├── Version20260306090200.php
+│   ├── Version20260319143231.php
+│   └── Version20260319163437.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -131,14 +133,17 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   └── SyncController.php
 │   ├── Dto
 │   │   ├── AcademyInitRequest.php
+│   │   ├── LedgerEntrySyncDto.php
 │   │   ├── MarketAssignRequest.php
 │   │   ├── MarketDataResponse.php
-│   │   └── SyncRequest.php
+│   │   ├── SyncRequest.php
+│   │   └── TransferSyncDto.php
 │   ├── Entity
 │   │   ├── Academy.php
 │   │   ├── Admin.php
 │   │   ├── Agent.php
 │   │   ├── Facility.php
+│   │   ├── GameConfig.php
 │   │   ├── GameEventTemplate.php
 │   │   ├── Guardian.php
 │   │   ├── InboxMessage.php
@@ -175,6 +180,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── AdminRepository.php
 │   │   ├── AgentRepository.php
 │   │   ├── FacilityRepository.php
+│   │   ├── GameConfigRepository.php
 │   │   ├── GameEventTemplateRepository.php
 │   │   ├── InboxMessageRepository.php
 │   │   ├── InvestorRepository.php
@@ -222,7 +228,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-34 directories, 142 files
+34 directories, 148 files
 ```
 
 ---
@@ -326,6 +332,23 @@ class Facility
     public function getCurrentEffect(): string
 ```
 
+#### GameConfig
+```php
+class GameConfig
+{
+    private ?int $id = null;
+    private int $cliqueRelationshipThreshold = 20;
+    private int $cliqueSquadCapPercent = 30;
+    private int $cliqueMinTenureWeeks = 3;
+    public function getId(): ?int { return $this->id; }
+    public function getCliqueRelationshipThreshold(): int { return $this->cliqueRelationshipThreshold; }
+    public function setCliqueRelationshipThreshold(int $v): static { $this->cliqueRelationshipThreshold = $v; return $this; }
+    public function getCliqueSquadCapPercent(): int { return $this->cliqueSquadCapPercent; }
+    public function setCliqueSquadCapPercent(int $v): static { $this->cliqueSquadCapPercent = $v; return $this; }
+    public function getCliqueMinTenureWeeks(): int { return $this->cliqueMinTenureWeeks; }
+    public function setCliqueMinTenureWeeks(int $v): static { $this->cliqueMinTenureWeeks = $v; return $this; }
+```
+
 #### GameEventTemplate
 ```php
 class GameEventTemplate
@@ -337,6 +360,8 @@ class GameEventTemplate
     private string $title;
     private string $bodyTemplate;
     private array $impacts = [];
+    private ?array $firingConditions = null;
+    private ?string $severity = null;
     private \DateTimeImmutable $createdAt;
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
@@ -348,8 +373,6 @@ class GameEventTemplate
     public function setWeight(int $weight): void { $this->weight = max(0, $weight); }
     public function getTitle(): string { return $this->title; }
     public function setTitle(string $title): void { $this->title = $title; }
-    public function getBodyTemplate(): string { return $this->bodyTemplate; }
-    public function setBodyTemplate(string $bodyTemplate): void { $this->bodyTemplate = $bodyTemplate; }
 ```
 
 #### Guardian
@@ -631,6 +654,7 @@ class SyncRecord
     public function isValid(): bool { return $this->isValid; }
     public function markInvalid(string $reason): void
     public function getInvalidReason(): ?string { return $this->invalidReason; }
+    public function getPayloadJson(): string
 ```
 
 #### Transfer
@@ -882,6 +906,7 @@ security:
         - { path: ^/api/login,    roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
+        - { path: ^/api/game-config,          roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/sync,             roles: ROLE_ACADEMY }
         - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
@@ -922,6 +947,7 @@ CORS_ALLOW_ORIGIN=***
 JWT_SECRET_KEY=***
 JWT_PUBLIC_KEY=***
 JWT_PASSPHRASE=***
+ACADEMY_STARTING_BALANCE=***
 ```
 
 ---
@@ -966,6 +992,8 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+cbe4328 feat: Phase 3 & 4 — NPC interaction system + GameConfig API
+9e730a5 feat: configurable starting balance + SyncRecord payload viewer in admin
 4f9e314 docs: add event guide
 f01a3ba docs: update frontend integration guide — sync managerShifts, archetypes, events, transfer leaderboards, corrected starter bundle
 fb3092c feat: editable specialisms field on staff edit form via virtual JSON string property
@@ -974,8 +1002,6 @@ c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField t
 4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
 584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
 7239619 chore: rename project context doc, add repository test stub, add root context snapshot
-2ec0448 feat: expand PlayerArchetype to 30 archetypes with formula/threshold schema
-194625c feat: PlayerArchetype entity, API endpoint, admin CRUD, and seed data
 ```
 
 ---

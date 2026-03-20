@@ -42,11 +42,24 @@ class SyncService
             $request->weekNumber,
             $clientTimestamp,
             [
-                'earningsDelta'   => $request->earningsDelta,
-                'reputationDelta' => $request->reputationDelta,
+                'earningsDelta'    => $request->earningsDelta,
+                'reputationDelta'  => $request->reputationDelta,
                 'hallOfFamePoints' => $request->hallOfFamePoints,
-                'transfers'       => $request->transfers,
-                'managerShifts'   => $request->managerShifts,
+                'managerShifts'    => $request->managerShifts,
+                'transfers'        => array_map(fn($t) => [
+                    'playerId'        => $t->playerId,
+                    'playerName'      => $t->playerName,
+                    'destinationClub' => $t->destinationClub,
+                    'grossFee'        => $t->grossFee,
+                    'agentCommission' => $t->agentCommission,
+                    'netProceeds'     => $t->netProceeds,
+                    'type'            => $t->type,
+                ], $request->transfers),
+                'ledger'           => array_map(fn($e) => [
+                    'category'    => $e->category,
+                    'amount'      => $e->amount,
+                    'description' => $e->description,
+                ], $request->ledger),
             ],
         );
         $this->em->persist($syncRecord);
@@ -111,9 +124,6 @@ class SyncService
 
         // Persist player attribute snapshots from client
         $this->processPlayerUpdates($academy, $request->players);
-
-        // Persist transfer records for leaderboard tracking
-        $this->processTransfers($academy, $request->transfers, $clientTimestamp);
 
         $this->em->flush();
 
