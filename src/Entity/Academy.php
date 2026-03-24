@@ -45,6 +45,10 @@ class Academy
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 4])]
     private int $financialYearStart = 4;
 
+    /** ISO 3166-1 alpha-2 style country code for the academy's home nation (e.g. 'EN', 'IT') */
+    #[ORM\Column(length: 2, nullable: true)]
+    private ?string $country = null;
+
     /** Player Agent / PA name assigned at academy creation */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $paName = null;
@@ -64,6 +68,13 @@ class Academy
     /** Academy cash balance in pence/cents */
     #[ORM\Column(type: 'integer')]
     private int $balance = 0;
+
+    /**
+     * Academy manager profile: { name, dateOfBirth, gender, nationality }
+     * Stored as JSON for schema flexibility.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $managerProfile = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
@@ -144,6 +155,9 @@ class Academy
     public function getFinancialYearStart(): int { return $this->financialYearStart; }
     public function setFinancialYearStart(int $month): void { $this->financialYearStart = $month; }
 
+    public function getCountry(): ?string { return $this->country; }
+    public function setCountry(?string $country): void { $this->country = $country; }
+
     public function getPaName(): ?string { return $this->paName; }
     public function setPaName(?string $paName): void { $this->paName = $paName; }
 
@@ -172,6 +186,9 @@ class Academy
 
     public function hasDebt(): bool { return $this->balance < 0; }
     public function getDebtAmount(): int { return max(0, -$this->balance); }
+
+    public function getManagerProfile(): ?array { return $this->managerProfile; }
+    public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

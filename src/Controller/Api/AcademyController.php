@@ -25,8 +25,15 @@ class AcademyController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
+        $managerProfile = $dto->manager !== null ? [
+            'name'        => $dto->manager->name,
+            'dateOfBirth' => $dto->manager->dateOfBirth,
+            'gender'      => $dto->manager->gender,
+            'nationality' => $dto->manager->nationality,
+        ] : null;
+
         try {
-            $academy = $service->initializeAcademy($user, $dto->academyName);
+            $academy = $service->initializeAcademy($user, $dto->academyName, $dto->country, $managerProfile);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
         }
@@ -38,6 +45,21 @@ class AcademyController extends AbstractController
             'players'       => $academy->getPlayers()->count(),
             'staff'         => $academy->getStaff()->count(),
         ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/check', name: 'api_academy_check', methods: ['GET'])]
+    #[IsGranted('ROLE_ACADEMY')]
+    public function check(): JsonResponse
+    {
+        /** @var User $user */
+        $user    = $this->getUser();
+        $academy = $user->getAcademy();
+
+        if ($academy === null) {
+            return $this->json(['exists' => false, 'reason' => 'academy_not_found'], Response::HTTP_NOT_FOUND);
+        }
+
+        return $this->json(['exists' => true, 'academyId' => $academy->getId()->toRfc4122()]);
     }
 
     #[Route('/status', name: 'api_academy_status', methods: ['GET'])]

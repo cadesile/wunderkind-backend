@@ -32,12 +32,33 @@ class DashboardController extends AbstractDashboardController
 
     public function index(): Response
     {
+        $conn = $this->em->getConnection();
+
+        $byNationality = $conn->fetchAllAssociative(
+            'SELECT nationality, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY nationality ORDER BY cnt DESC LIMIT 15'
+        );
+        $byPosition = $conn->fetchAllAssociative(
+            'SELECT position, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY position ORDER BY cnt DESC'
+        );
+        $byAge = $conn->fetchAllAssociative(
+            'SELECT (YEAR(CURDATE()) - YEAR(date_of_birth)) AS age, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY age ORDER BY age'
+        );
+
         return $this->render('admin/dashboard.html.twig', [
             'stats' => [
-                'users'        => $this->em->getRepository(User::class)->count([]),
-                'academies'    => $this->em->getRepository(Academy::class)->count([]),
-                'syncs'        => $this->em->getRepository(SyncRecord::class)->count([]),
-                'invalidSyncs' => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
+                'users'            => $this->em->getRepository(User::class)->count([]),
+                'academies'        => $this->em->getRepository(Academy::class)->count([]),
+                'syncs'            => $this->em->getRepository(SyncRecord::class)->count([]),
+                'invalidSyncs'     => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
+                'poolPlayers'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE academy_id IS NULL'),
+                'assignedPlayers'  => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE academy_id IS NOT NULL'),
+                'poolStaff'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NULL'),
+                'assignedStaff'    => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NOT NULL'),
+            ],
+            'charts' => [
+                'byNationality' => $byNationality,
+                'byPosition'    => $byPosition,
+                'byAge'         => $byAge,
             ],
         ]);
     }

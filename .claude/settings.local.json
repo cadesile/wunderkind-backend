@@ -40,7 +40,8 @@
       "Bash(lando start:*)",
       "Bash(npx tsc:*)",
       "Bash(grep:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(curl:*)"
     ]
   }
 }

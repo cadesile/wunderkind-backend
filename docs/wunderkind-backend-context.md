@@ -104,7 +104,10 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── Version20260305234642.php
 │   ├── Version20260306090200.php
 │   ├── Version20260319143231.php
-│   └── Version20260319163437.php
+│   ├── Version20260319163437.php
+│   ├── Version20260322000001.php
+│   ├── Version20260322184350.php
+│   └── Version20260323000001.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -124,6 +127,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── GenerateMarketPoolCommand.php
 │   │   ├── SeedArchetypesCommand.php
 │   │   ├── SeedGameEventsCommand.php
+│   │   ├── SeedProspectPoolCommand.php
 │   │   └── SetExistingAcademyBalancesCommand.php
 │   ├── Controller
 │   │   ├── Admin
@@ -198,6 +202,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── InboxService.php
 │   │   ├── MarketDataService.php
 │   │   ├── MarketPoolService.php
+│   │   ├── NameGeneratorService.php
 │   │   ├── SyncService.php
 │   │   └── TransferLeaderboardService.php
 │   └── Kernel.php
@@ -228,7 +233,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-34 directories, 148 files
+34 directories, 153 files
 ```
 
 ---
@@ -250,17 +255,17 @@ class Academy
     private ?\DateTimeImmutable $lastSyncedAt = null;
     private int $marketPoolSize = 20;
     private int $financialYearStart = 4;
+    private ?string $country = null;
     private ?string $paName = null;
     private int $managerTemperament = 50;
     private int $managerDiscipline = 50;
     private int $managerAmbition = 50;
     private int $balance = 0;
+    private ?array $managerProfile = null;
     private \DateTimeImmutable $createdAt;
     private User $user;
     private Collection $players;
     private Collection $staff;
-    private Collection $transfers;
-    private Collection $syncRecords;
 ```
 
 #### Admin
@@ -695,6 +700,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private array $roles = [];
     private ?Academy $academy = null;
     private ?Admin $admin = null;
+    private ?array $managerProfile = null;
     private \DateTimeImmutable $createdAt;
     public function __construct(string $email)
     public function getId(): UuidV7 { return $this->id; }
@@ -706,7 +712,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getRoles(): array { return array_unique($this->roles); }
     public function setRoles(array $roles): void { $this->roles = $roles; }
     public function eraseCredentials(): void {}
-    public function getAcademy(): ?Academy { return $this->academy; }
 ```
 
 
@@ -761,7 +766,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 class AcademyInitializationService
 {
     public function __construct(
-    public function initializeAcademy(User $user, string $academyName): Academy
+    public function initializeAcademy(User $user, string $academyName, ?string $country = null, ?array $managerProfile = null): Academy
     public function getStarterBundle(): array
 ```
 
@@ -812,7 +817,8 @@ class InboxService
 class MarketDataService
 {
     public function __construct(private readonly MarketPoolService $pool) {}
-    public function getMarketSnapshot(): MarketDataResponse
+    public function getMarketSnapshot(?string $nationality = null): MarketDataResponse
+    public function getProspectSnapshot(): array
 ```
 
 ### MarketPoolService
@@ -821,15 +827,24 @@ class MarketDataService
 class MarketPoolService
 {
     public function __construct(
-    public function generatePlayers(int $count, ?int $academyReputation = null): array
+    public function generatePlayers(int $count, ?int $academyReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
     public function generateCoaches(int $count, ?int $academyReputation = null): array
     public function generateScouts(int $count): array
     public function generateAgents(int $count): array
     public function generateSponsors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
     public function generateInvestors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
-    public function getAvailablePlayers(int $limit = 100): array
+    public function getAvailablePlayers(int $limit = 100, ?string $nationality = null): array
+    public function getAvailableProspects(int $limit = 150): array
     public function getAvailableCoaches(int $limit = 20): array
-    public function getAvailableScouts(int $limit = 10): array
+```
+
+### NameGeneratorService
+
+```php
+class NameGeneratorService
+{
+    public function generateName(string $nationality): string
+    public function getRandomNationality(): string
 ```
 
 ### SyncService
@@ -908,6 +923,7 @@ security:
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,          roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
+        - { path: ^/api/pool,             roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/sync,             roles: ROLE_ACADEMY }
         - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
         - { path: ^/api/market/assign,   roles: ROLE_ACADEMY }
@@ -992,6 +1008,7 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+b16643f update context
 cbe4328 feat: Phase 3 & 4 — NPC interaction system + GameConfig API
 9e730a5 feat: configurable starting balance + SyncRecord payload viewer in admin
 4f9e314 docs: add event guide
@@ -1001,7 +1018,6 @@ c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField t
 39fd43b feat: editable impacts field on event template admin form via virtual JSON string property
 4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
 584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
-7239619 chore: rename project context doc, add repository test stub, add root context snapshot
 ```
 
 ---

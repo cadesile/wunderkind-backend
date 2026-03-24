@@ -2,9 +2,15 @@
 
 {% block content %}
 <div class="row g-3 mt-1">
+
+    {# ── Platform stats ────────────────────────────────────────────── #}
+    <div class="col-12">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;">Platform</h6>
+    </div>
+
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
-            <div class="card-body">
+            <div class="card-body py-3">
                 <div class="text-muted small mb-1">Total Users</div>
                 <div class="fs-3 fw-bold">{{ stats.users }}</div>
             </div>
@@ -12,7 +18,7 @@
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
-            <div class="card-body">
+            <div class="card-body py-3">
                 <div class="text-muted small mb-1">Academies</div>
                 <div class="fs-3 fw-bold">{{ stats.academies }}</div>
             </div>
@@ -20,7 +26,7 @@
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
-            <div class="card-body">
+            <div class="card-body py-3">
                 <div class="text-muted small mb-1">Total Syncs</div>
                 <div class="fs-3 fw-bold">{{ stats.syncs }}</div>
             </div>
@@ -28,11 +34,203 @@
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
-            <div class="card-body">
+            <div class="card-body py-3">
                 <div class="text-muted small mb-1">Invalid Syncs</div>
                 <div class="fs-3 fw-bold text-danger">{{ stats.invalidSyncs }}</div>
             </div>
         </div>
     </div>
+
+    {# ── Pool stats ────────────────────────────────────────────────── #}
+    <div class="col-12 mt-2">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;">Market Pool</h6>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1">Players in Pool</div>
+                <div class="fs-3 fw-bold text-success">{{ stats.poolPlayers }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1">Players Assigned</div>
+                <div class="fs-3 fw-bold">{{ stats.assignedPlayers }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1">Staff in Pool</div>
+                <div class="fs-3 fw-bold text-success">{{ stats.poolStaff }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1">Staff Assigned</div>
+                <div class="fs-3 fw-bold">{{ stats.assignedStaff }}</div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Charts ────────────────────────────────────────────────────── #}
+    <div class="col-12 mt-2">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;">Pool Players — Breakdown</h6>
+    </div>
+
+    {# Nationality chart #}
+    <div class="col-12 col-xl-6">
+        <div class="card">
+            <div class="card-header py-2">
+                <span class="fw-semibold small">By Nationality</span>
+                <span class="text-muted small ms-1">(unassigned pool)</span>
+            </div>
+            <div class="card-body" style="height:260px;">
+                <canvas id="chartNationality"></canvas>
+            </div>
+        </div>
+    </div>
+
+    {# Position + Age side by side #}
+    <div class="col-12 col-xl-6">
+        <div class="row g-3 h-100">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header py-2">
+                        <span class="fw-semibold small">By Position</span>
+                        <span class="text-muted small ms-1">(unassigned pool)</span>
+                    </div>
+                    <div class="card-body" style="height:100px;">
+                        <canvas id="chartPosition"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header py-2">
+                        <span class="fw-semibold small">By Age</span>
+                        <span class="text-muted small ms-1">(unassigned pool)</span>
+                    </div>
+                    <div class="card-body" style="height:100px;">
+                        <canvas id="chartAge"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+{# Chart.js #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const COLORS = [
+        '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
+        '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
+        '#54a0d4','#f9896b','#34b49e','#a48cf4','#fb8072',
+    ];
+
+    function makeGradient(ctx, color) {
+        const g = ctx.createLinearGradient(0, 0, 0, 200);
+        g.addColorStop(0, color + 'cc');
+        g.addColorStop(1, color + '33');
+        return g;
+    }
+
+    // ── Nationality (horizontal bar) ─────────────────────────────────
+    (function () {
+        const raw = {{ charts.byNationality | json_encode | raw }};
+        const labels = raw.map(r => r.nationality);
+        const data   = raw.map(r => parseInt(r.cnt));
+        const ctx    = document.getElementById('chartNationality').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: labels.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
+                    borderColor:     labels.map((_, i) => COLORS[i % COLORS.length]),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { precision: 0 } },
+                    y: { ticks: { font: { size: 11 } } },
+                },
+            },
+        });
+    })();
+
+    // ── Position (doughnut) ──────────────────────────────────────────
+    (function () {
+        const posLabels = { GK: 'GK', DEF: 'DEF', MID: 'MID', ATT: 'ATT' };
+        const raw    = {{ charts.byPosition | json_encode | raw }};
+        const labels = raw.map(r => posLabels[r.position] ?? r.position);
+        const data   = raw.map(r => parseInt(r.cnt));
+        const ctx    = document.getElementById('chartPosition').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: COLORS.slice(0, labels.length),
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } },
+                },
+            },
+        });
+    })();
+
+    // ── Age (bar) ────────────────────────────────────────────────────
+    (function () {
+        const raw    = {{ charts.byAge | json_encode | raw }};
+        const labels = raw.map(r => r.age + ' yrs');
+        const data   = raw.map(r => parseInt(r.cnt));
+        const ctx    = document.getElementById('chartAge').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: makeGradient(ctx, '#4e79a7'),
+                    borderColor: '#4e79a7',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                    x: { ticks: { font: { size: 11 } } },
+                },
+            },
+        });
+    })();
+})();
+</script>
 {% endblock %}

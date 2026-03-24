@@ -69,9 +69,10 @@ prompt_int "Investors" 20  SEED_INVESTORS
 prompt_int "Sponsors"  40  SEED_SPONSORS
 echo ""
 echo "   — Market pool (unassigned players & coaches) —"
-prompt_int "Pool players"  100 SEED_PLAYERS
-prompt_int "Pool coaches"  20  SEED_COACHES
-prompt_int "Pool scouts"   10  SEED_POOL_SCOUTS
+prompt_int "Pool players"     100 SEED_PLAYERS
+prompt_int "Prospect players" 150 SEED_PROSPECTS
+prompt_int "Pool coaches"      20 SEED_COACHES
+prompt_int "Pool scouts"       10 SEED_POOL_SCOUTS
 
 # ─── Review & confirm config ─────────────────────────────────────────────────
 while true; do
@@ -82,24 +83,26 @@ while true; do
     echo "     [2] Scouts       : ${SEED_SCOUTS}"
     echo "     [3] Investors    : ${SEED_INVESTORS}"
     echo "     [4] Sponsors     : ${SEED_SPONSORS}"
-    echo "     [5] Pool players : ${SEED_PLAYERS}"
-    echo "     [6] Pool coaches : ${SEED_COACHES}"
-    echo "     [7] Pool scouts  : ${SEED_POOL_SCOUTS}"
+    echo "     [5] Pool players     : ${SEED_PLAYERS}"
+    echo "     [6] Prospect players : ${SEED_PROSPECTS}"
+    echo "     [7] Pool coaches     : ${SEED_COACHES}"
+    echo "     [8] Pool scouts      : ${SEED_POOL_SCOUTS}"
     echo ""
     echo "   Enter a number to edit that value, or press Enter to proceed."
     echo -n "   Choice: "
     read -r choice
 
     case "$choice" in
-        1) prompt_int "Agents"       "$SEED_AGENTS"      SEED_AGENTS ;;
-        2) prompt_int "Scouts"       "$SEED_SCOUTS"      SEED_SCOUTS ;;
-        3) prompt_int "Investors"    "$SEED_INVESTORS"   SEED_INVESTORS ;;
-        4) prompt_int "Sponsors"     "$SEED_SPONSORS"    SEED_SPONSORS ;;
-        5) prompt_int "Pool players" "$SEED_PLAYERS"     SEED_PLAYERS ;;
-        6) prompt_int "Pool coaches" "$SEED_COACHES"     SEED_COACHES ;;
-        7) prompt_int "Pool scouts"  "$SEED_POOL_SCOUTS" SEED_POOL_SCOUTS ;;
+        1) prompt_int "Agents"           "$SEED_AGENTS"      SEED_AGENTS ;;
+        2) prompt_int "Scouts"           "$SEED_SCOUTS"      SEED_SCOUTS ;;
+        3) prompt_int "Investors"        "$SEED_INVESTORS"   SEED_INVESTORS ;;
+        4) prompt_int "Sponsors"         "$SEED_SPONSORS"    SEED_SPONSORS ;;
+        5) prompt_int "Pool players"     "$SEED_PLAYERS"     SEED_PLAYERS ;;
+        6) prompt_int "Prospect players" "$SEED_PROSPECTS"   SEED_PROSPECTS ;;
+        7) prompt_int "Pool coaches"     "$SEED_COACHES"     SEED_COACHES ;;
+        8) prompt_int "Pool scouts"      "$SEED_POOL_SCOUTS" SEED_POOL_SCOUTS ;;
         "") break ;;
-        *) echo -e "   ${RED}Invalid choice — enter 1-7 or press Enter to proceed.${NC}" ;;
+        *) echo -e "   ${RED}Invalid choice — enter 1-8 or press Enter to proceed.${NC}" ;;
     esac
 done
 
@@ -257,10 +260,11 @@ lando php bin/console app:generate-market-data \
     --sponsors="$SEED_SPONSORS"
 
 echo ""
-echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · coaches · scouts, no agents)...${NC}"
+echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · prospects · coaches · scouts, no agents)...${NC}"
 lando php bin/console app:market:generate \
     --agents=0 \
     --players="$SEED_PLAYERS" \
+    --prospects="$SEED_PROSPECTS" \
     --coaches="$SEED_COACHES" \
     --scouts="$SEED_POOL_SCOUTS"
 
@@ -276,7 +280,8 @@ lando php bin/console app:seed-archetypes
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"
 
-POOL_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL" 2>/dev/null | tr -d '\r')
+POOL_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'" 2>/dev/null | tr -d '\r')
+PROSPECT_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL AND recruitment_source = 'scouting_network'" 2>/dev/null | tr -d '\r')
 POOL_STAFF=$(mysql -Nse "SELECT COUNT(*) FROM \`staff\` WHERE academy_id IS NULL" 2>/dev/null | tr -d '\r')
 SCOUTS=$(mysql -Nse "SELECT COUNT(*) FROM \`scout\`" 2>/dev/null | tr -d '\r')
 AGENTS=$(mysql -Nse "SELECT COUNT(*) FROM \`agent\`" 2>/dev/null | tr -d '\r')
@@ -285,7 +290,8 @@ SPONSORS=$(mysql -Nse "SELECT COUNT(*) FROM \`sponsor\`" 2>/dev/null | tr -d '\r
 EVENT_TEMPLATES=$(mysql -Nse "SELECT COUNT(*) FROM \`game_event_template\`" 2>/dev/null | tr -d '\r')
 ARCHETYPES=$(mysql -Nse "SELECT COUNT(*) FROM \`player_archetype\`" 2>/dev/null | tr -d '\r')
 
-echo "   Pool players    : ${POOL_PLAYERS}"
+echo "   Market players  : ${POOL_PLAYERS}"
+echo "   Prospect players: ${PROSPECT_PLAYERS}"
 echo "   Pool coaches    : ${POOL_STAFF}"
 echo "   Scouts          : ${SCOUTS}"
 echo "   Agents          : ${AGENTS}"
@@ -302,8 +308,9 @@ echo "   Preserved  : ${ADMIN_COUNT} admin user(s)"
 echo "   Cleared    : academies, players, guardians, staff, scouts, agents, sponsors,"
 echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
-echo "   Regenerated: ${AGENTS} agents · ${SCOUTS} scouts · ${POOL_PLAYERS} pool players"
-echo "                ${POOL_STAFF} pool coaches · ${INVESTORS} investors · ${SPONSORS} sponsors"
+echo "   Regenerated: ${AGENTS} agents · ${SCOUTS} scouts · ${POOL_PLAYERS} market players"
+echo "                ${PROSPECT_PLAYERS} prospect players · ${POOL_STAFF} pool coaches"
+echo "                ${INVESTORS} investors · ${SPONSORS} sponsors"
 echo "                ${EVENT_TEMPLATES} event templates · ${ARCHETYPES} archetypes"
 echo ""
 echo "   Backups    :"

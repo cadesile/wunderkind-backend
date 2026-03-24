@@ -33,6 +33,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
     private ?Admin $admin = null;
 
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $managerProfile = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -64,6 +67,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getAdmin(): ?Admin { return $this->admin; }
     public function setAdmin(?Admin $admin): void { $this->admin = $admin; }
+
+    public function getManagerProfile(): ?array { return $this->managerProfile; }
+    public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

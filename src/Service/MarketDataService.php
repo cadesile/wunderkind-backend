@@ -16,16 +16,27 @@ class MarketDataService
 {
     public function __construct(private readonly MarketPoolService $pool) {}
 
-    public function getMarketSnapshot(): MarketDataResponse
+    /**
+     * @param string|null $nationality Optional nationality filter (e.g. 'English').
+     *   When provided, the player list is pre-filtered to that nationality.
+     *   Coaches, scouts, agents, sponsors and investors are never nationality-filtered.
+     */
+    public function getMarketSnapshot(?string $nationality = null): MarketDataResponse
     {
         return new MarketDataResponse(
             agents:    array_map($this->serializeAgent(...),    $this->pool->getAgents()),
             scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10)),
             investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(10)),
             sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(20)),
-            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100)),
+            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100, $nationality)),
             coaches:   array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(20)),
         );
+    }
+
+    /** @return array<int, array<string, mixed>> SCOUTING_NETWORK players for the prospect pool endpoint */
+    public function getProspectSnapshot(): array
+    {
+        return array_map($this->serializePlayer(...), $this->pool->getAvailableProspects(150));
     }
 
     private function serializePlayer(Player $p): array
@@ -41,6 +52,15 @@ class MarketDataService
             'currentAbility'    => $p->getCurrentAbility(),
             'contractValue'     => $p->getContractValue(),
             'recruitmentSource' => $p->getRecruitmentSource()->value,
+            'pace'              => $p->getPace(),
+            'technical'         => $p->getTechnical(),
+            'vision'            => $p->getVision(),
+            'power'             => $p->getPower(),
+            'stamina'           => $p->getStamina(),
+            'heart'             => $p->getHeart(),
+            'overall'           => $p->getOverall(),
+            'height'            => $p->getHeight(),
+            'weight'            => $p->getWeight(),
             'agent'             => $p->getAgent() ? [
                 'id'             => $p->getAgent()->getId()->toRfc4122(),
                 'name'           => $p->getAgent()->getName(),
@@ -59,6 +79,8 @@ class MarketDataService
             'coachingAbility' => $s->getCoachingAbility(),
             'scoutingRange'   => $s->getScoutingRange(),
             'weeklySalary'    => $s->getWeeklySalary(),
+            'morale'          => $s->getMorale(),
+            'specialisms'     => $s->getSpecialisms() ?? [],
         ];
     }
 
@@ -79,6 +101,7 @@ class MarketDataService
         return [
             'id'          => $s->getId()->toRfc4122(),
             'name'        => $s->getName(),
+            'dateOfBirth' => $s->getDob()?->format('Y-m-d'),
             'nationality' => $s->getNationality(),
             'experience'  => $s->getExperience(),
             'judgements'  => $s->getJudgements(),

@@ -21,6 +21,7 @@ use App\Service\MarketDataService;
 use App\Service\MarketPoolService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
@@ -34,12 +35,38 @@ class MarketController extends AbstractController
     // New endpoints
     // -------------------------------------------------------------------------
 
+    /** Maps the 2-letter academy country code to its player nationality string. */
+    private const COUNTRY_TO_NATIONALITY = [
+        'EN' => 'English',
+        'IT' => 'Italian',
+        'DE' => 'German',
+        'ES' => 'Spanish',
+        'BR' => 'Brazilian',
+        'AR' => 'Argentine',
+        'NL' => 'Dutch',
+    ];
+
     #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
     #[IsGranted('ROLE_ACADEMY')]
-    public function data(MarketDataService $service): JsonResponse
+    public function data(Request $request, MarketDataService $service): JsonResponse
     {
-        $response = $this->json($service->getMarketSnapshot());
+        $countryCode = $request->query->get('country');
+        $nationality = $countryCode !== null
+            ? (self::COUNTRY_TO_NATIONALITY[$countryCode] ?? null)
+            : null;
+
+        $response = $this->json($service->getMarketSnapshot($nationality));
         $response->setMaxAge(300); // 5-minute cache hint for client
+        return $response;
+    }
+
+    #[Route('/prospects', name: 'api_market_prospects', methods: ['GET'])]
+    #[IsGranted('ROLE_ACADEMY')]
+    public function prospects(MarketDataService $service): JsonResponse
+    {
+        $players  = $service->getProspectSnapshot();
+        $response = $this->json(['players' => $players]);
+        $response->setMaxAge(3600); // 1-hour cache hint — prospects refresh slowly
         return $response;
     }
 

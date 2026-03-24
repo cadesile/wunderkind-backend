@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\Academy;
 use App\Entity\User;
+use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -16,6 +17,29 @@ class AcademyInitializationService
     private const STARTING_SCOUTS    = 1;
     private const STARTING_SPONSORS  = 1;
     private const STARTING_INVESTORS = 0;
+
+    /** Maps the frontend country code to the nationality string used in the player pool. */
+    private const COUNTRY_TO_NATIONALITY = [
+        'EN' => 'English',
+        'IT' => 'Italian',
+        'DE' => 'German',
+        'ES' => 'Spanish',
+        'BR' => 'Brazilian',
+        'AR' => 'Argentine',
+        'NL' => 'Dutch',
+        'FR' => 'French',
+        'PT' => 'Portuguese',
+        'NG' => 'Nigerian',
+        'GH' => 'Ghanaian',
+        'JP' => 'Japanese',
+        'KR' => 'South Korean',
+        'SE' => 'Swedish',
+        'DK' => 'Danish',
+        'IE' => 'Irish',
+        'CI' => 'Ivorian',
+        'SN' => 'Senegalese',
+        'CN' => 'Chinese',
+    ];
 
     private const PA_FIRST_NAMES = [
         'Marcus', 'Daniel', 'James', 'Ryan', 'Michael',
@@ -47,7 +71,7 @@ class AcademyInitializationService
      *
      * @throws \RuntimeException if the user already has an initialized academy (has players)
      */
-    public function initializeAcademy(User $user, string $academyName): Academy
+    public function initializeAcademy(User $user, string $academyName, ?string $country = null, ?array $managerProfile = null): Academy
     {
         $academy = $user->getAcademy();
 
@@ -58,6 +82,12 @@ class AcademyInitializationService
             $academy->setManagerTemperament(rand(40, 60));
             $academy->setManagerDiscipline(rand(40, 60));
             $academy->setManagerAmbition(rand(40, 60));
+            if ($country !== null) {
+                $academy->setCountry($country);
+            }
+            if ($managerProfile !== null) {
+                $academy->setManagerProfile($managerProfile);
+            }
             $this->em->persist($academy);
             $this->em->flush();
         }
@@ -68,10 +98,15 @@ class AcademyInitializationService
         }
 
         $this->em->wrapInTransaction(function () use ($academy): void {
-            $this->assignEntities($academy);
+            $this->assignEntities($academy, $academy->getCountry());
         });
 
         return $academy;
+    }
+
+    public static function countryToNationality(string $countryCode): ?string
+    {
+        return self::COUNTRY_TO_NATIONALITY[$countryCode] ?? null;
     }
 
     public function getStarterBundle(): array
@@ -86,12 +121,16 @@ class AcademyInitializationService
         ];
     }
 
-    private function assignEntities(Academy $academy): void
+    private function assignEntities(Academy $academy, ?string $countryCode = null): void
     {
-        // Players
-        $players = $this->pool->getAvailablePlayers(self::STARTING_PLAYERS);
+        $nationality = $countryCode !== null
+            ? (self::COUNTRY_TO_NATIONALITY[$countryCode] ?? null)
+            : null;
+
+        // Players — filtered by academy nationality when country is set
+        $players = $this->pool->getAvailablePlayers(self::STARTING_PLAYERS, $nationality);
         if (count($players) < self::STARTING_PLAYERS) {
-            $extra = $this->pool->generatePlayers(self::STARTING_PLAYERS - count($players));
+            $extra = $this->pool->generatePlayers(self::STARTING_PLAYERS - count($players), null, RecruitmentSource::YOUTH_INTAKE, $nationality);
             $players = array_merge($players, $extra);
         }
         foreach (array_slice($players, 0, self::STARTING_PLAYERS) as $player) {

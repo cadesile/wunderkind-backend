@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Academy;
 use App\Entity\Player;
 use App\Enum\PlayerStatus;
+use App\Enum\RecruitmentSource;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -15,15 +16,22 @@ class PlayerRepository extends ServiceEntityRepository
         parent::__construct($registry, Player::class);
     }
 
-    /** @return Player[] Players with no academy (market pool) */
-    public function findInPool(int $limit = 100): array
+    /** @return Player[] Unassigned YOUTH_INTAKE players (open market pool) */
+    public function findInPool(int $limit = 100, ?string $nationality = null): array
     {
-        return $this->createQueryBuilder('p')
+        $qb = $this->createQueryBuilder('p')
             ->where('p.academy IS NULL')
+            ->andWhere('p.recruitmentSource = :source')
+            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
             ->orderBy('p.createdAt', 'DESC')
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
+            ->setMaxResults($limit);
+
+        if ($nationality !== null) {
+            $qb->andWhere('p.nationality = :nationality')
+               ->setParameter('nationality', $nationality);
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     public function countInPool(): int
@@ -31,6 +39,32 @@ class PlayerRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
             ->where('p.academy IS NULL')
+            ->andWhere('p.recruitmentSource = :source')
+            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /** @return Player[] Unassigned SCOUTING_NETWORK players (scout prospect pool) */
+    public function findProspects(int $limit = 150): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.academy IS NULL')
+            ->andWhere('p.recruitmentSource = :source')
+            ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
+            ->orderBy('p.createdAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function countProspects(): int
+    {
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.academy IS NULL')
+            ->andWhere('p.recruitmentSource = :source')
+            ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
             ->getQuery()
             ->getSingleScalarResult();
     }

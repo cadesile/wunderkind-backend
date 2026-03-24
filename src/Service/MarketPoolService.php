@@ -33,65 +33,6 @@ class MarketPoolService
     private const SPONSOR_THRESHOLD  = 10;
     private const INVESTOR_THRESHOLD = 5;
 
-    // Name pools
-    private const FIRST_NAMES = [
-        'Luca', 'Noah', 'Mateo', 'Elias', 'Omar', 'Ibrahim', 'Karim', 'Yusuf',
-        'Thiago', 'Gabriel', 'Samuel', 'Daniel', 'Leo', 'Felix', 'Emil',
-        'Axel', 'Noa', 'Kian', 'Tariq', 'Amadou', 'Seun', 'Kwame', 'Taye',
-        'Soren', 'Finn', 'Erik', 'Tobias', 'Adrian', 'Julian', 'Oscar',
-        'Cristian', 'Remy', 'Enzo', 'Vitor', 'Bruno', 'Edu', 'Nico', 'Max',
-        'Jan', 'Kai', 'Zach', 'Tyler', 'Jordan', 'Marcus', 'Raheem', 'Callum',
-        'Caden', 'Jayden', 'Isaiah', 'Kofi', 'Aidan', 'Ethan', 'Javier', 'Pablo',
-    ];
-
-    private const LAST_NAMES = [
-        'Rossi', 'Bianchi', 'Ferrari', 'Conti', 'Esposito', 'Romano',
-        'Silva', 'Santos', 'Oliveira', 'Ferreira', 'Costa', 'Carvalho',
-        'García', 'Martínez', 'López', 'González', 'Rodríguez',
-        'Müller', 'Schmidt', 'Fischer', 'Weber', 'Meyer', 'Hoffmann',
-        'Dupont', 'Dubois', 'Bernard', 'Moreau', 'Laurent', 'Simon',
-        'Smith', 'Jones', 'Williams', 'Taylor', 'Brown', 'Davies',
-        'Diallo', 'Camara', 'Traoré', 'Koné', 'Coulibaly', 'Touré',
-        'De Jong', 'Van Dijk', 'Bakker', 'Janssen', 'Christensen',
-        'Andersen', 'Nielsen', 'Hansen', 'Pedersen', 'Larsson', 'Nilsson',
-    ];
-
-    private const STAFF_FIRST_NAMES = [
-        'Roberto', 'Marco', 'Fabio', 'Luca', 'Giovanni', 'Antonio',
-        'Carlos', 'Luis', 'Javier', 'Pedro', 'Alejandro', 'Fernando',
-        'Thomas', 'Michael', 'Stefan', 'Andreas', 'Markus', 'Ralf',
-        'Patrick', 'Nicolas', 'Sébastien', 'Laurent', 'Thierry',
-        'Gary', 'Steve', 'Mark', 'Paul', 'Chris', 'Andrew', 'James',
-        'Nuno', 'Rui', 'Filipe', 'Tiago', 'André',
-    ];
-
-    private const STAFF_LAST_NAMES = [
-        'Conte', 'Mancini', 'Capello', 'Ancelotti', 'Allegri',
-        'Scolari', 'Tite', 'Zagallo', 'Parreira',
-        'Simeone', 'Valverde', 'Marcelino', 'Lopetegui',
-        'Flick', 'Nagelsmann', 'Tuchel', 'Klopp', 'Rangnick',
-        'Deschamps', 'Blanc', 'Jacquet', 'Domenech',
-        'Hodgson', 'Southgate', 'McLaren', 'Robson',
-        'Fonseca', 'Conceição', 'Villas-Boas',
-    ];
-
-    private const AGENT_NAMES = [
-        'Jorge Mendes', 'Jonathan Barnett', 'Pini Zahavi', 'Kia Joorabchian',
-        'Fernando Felicevich', 'Volker Struth', 'Pere Guardiola',
-        'Frederic Massara', 'Giovanni Branchini', 'Atta Aneke',
-        'John Shier', 'David Manasseh', 'Rob Segal', 'Nick Arcuri',
-        'Marc Roger', 'Christophe Henrotay', 'Saif Rubie', 'Sky Andrew',
-        'Global Sports Agency', 'Stellar Group', 'CAA Sports', 'Wasserman Media',
-        'Base Soccer Agency', 'ICM Stellar Sports', 'Octagon Sports',
-    ];
-
-    private const SCOUT_NAMES = [
-        'Carlos Silva', 'Luis Santos', 'Miguel Rodriguez', 'Antonio Garcia',
-        'Marco Rossi', 'Lars Müller', 'Hans Schmidt', 'Pierre Dubois',
-        'John Smith', 'David Johnson', 'Alex Meyer', 'Viktor Fischer',
-        'Rafael Costa', 'Andre Ferreira', 'Diego Pereira', 'Sergio Lopez',
-        'Ivan Novak', 'Leon Wagner', 'Stefan Hoffmann', 'Tomasz Kowalski',
-    ];
 
     private const INVESTOR_COMPANIES = [
         'RedBird Capital Partners', 'Oaktree Capital Management', 'Elliott Management',
@@ -110,15 +51,51 @@ class MarketPoolService
         'Visa', 'Mastercard', 'PayPal', 'Rolex', 'TAG Heuer',
     ];
 
-    private const NATIONALITIES = [
-        'Brazilian', 'Argentine', 'Spanish', 'Portuguese', 'Italian',
-        'German', 'French', 'English', 'Dutch', 'Belgian',
-        'Croatian', 'Uruguayan', 'Mexican', 'Colombian', 'American',
-        'Japanese', 'South Korean', 'Turkish', 'Danish', 'Swedish',
+    /** Country-code-keyed male name pools for player generation. */
+    private const MALE_NAMES = [
+        'EN' => [
+            'first' => ['Jack','Harry','George','Oliver','Charlie','Alfie','Freddie','Archie','Tommy','Louie','Mason','Theo','Finley','Elliot','Reuben','Dylan','Callum','Kieran','Jamie','Ryan'],
+            'last'  => ['Smith','Jones','Williams','Taylor','Brown','Davies','Evans','Wilson','Thomas','Roberts','Walker','White','Thompson','Hughes','Martin','Clarke','Hall','Wood','Jackson','Harris'],
+        ],
+        'IT' => [
+            'first' => ['Luca','Matteo','Leonardo','Francesco','Alessandro','Lorenzo','Giacomo','Andrea','Davide','Riccardo','Edoardo','Filippo','Marco','Simone','Federico','Nicola','Pietro','Giovanni','Stefano','Tommaso'],
+            'last'  => ['Rossi','Ferrari','Russo','Bianchi','Colombo','Bruni','Conti','De Luca','Costa','Mancini','Ricci','Marino','Greco','Bruno','Gallo','Conte','Lombardi','Moretti','Barbieri','Fontana'],
+        ],
+        'DE' => [
+            'first' => ['Leon','Lukas','Felix','Jonas','Finn','Noah','Elias','Maximilian','Paul','Ben','Tobias','Jan','Niklas','Tim','Moritz','Sebastian','Fabian','Philipp','Julian','Florian'],
+            'last'  => ['Müller','Schmidt','Schneider','Fischer','Weber','Meyer','Wagner','Becker','Schulz','Hoffmann','Schäfer','Koch','Bauer','Richter','Klein','Wolf','Schröder','Neumann','Schwarz','Zimmermann'],
+        ],
+        'ES' => [
+            'first' => ['Alejandro','Pablo','Daniel','Carlos','Javier','Miguel','Sergio','Adrián','Marcos','Álvaro','Diego','Rubén','Iván','Raúl','Hugo','Iker','Borja','Unai','Aitor','Jon'],
+            'last'  => ['García','Martínez','López','Sánchez','González','Pérez','Rodríguez','Fernández','Torres','Ramírez','Flores','Moreno','Jiménez','Ruiz','Díaz','Hernández','Romero','Alonso','Navarro','Molina'],
+        ],
+        'BR' => [
+            'first' => ['Gabriel','Lucas','Mateus','Pedro','Guilherme','Rafael','Felipe','Bruno','Thiago','André','Vinicius','Rodrigo','Diego','Caio','Leandro','Renan','Igor','Renato','Gustavo','Henrique'],
+            'last'  => ['Silva','Santos','Oliveira','Souza','Rodrigues','Ferreira','Alves','Pereira','Lima','Carvalho','Gomes','Martins','Costa','Ribeiro','Nascimento','Araújo','Moreira','Nunes','Barbosa','Cavalcanti'],
+        ],
+        'AR' => [
+            'first' => ['Matías','Nicolás','Facundo','Agustín','Sebastián','Maximiliano','Rodrigo','Ezequiel','Leandro','Cristian','Lucas','Federico','Gonzalo','Martín','Pablo','Ignacio','Hernán','Ramiro','Emiliano','Santiago'],
+            'last'  => ['González','Rodríguez','Gómez','Fernández','López','Díaz','Martínez','Pérez','García','Sánchez','Romero','Torres','Flores','Acosta','Medina','Herrera','Aguirre','Morales','Suárez','Delgado'],
+        ],
+        'NL' => [
+            'first' => ['Daan','Sem','Finn','Levi','Luuk','Thijs','Ruben','Lars','Bram','Joris','Sander','Tim','Niels','Bas','Stef','Wouter','Jasper','Rick','Milan','Robin'],
+            'last'  => ['De Jong','Janssen','De Vries','Van den Berg','Van Dijk','Bakker','Visser','Smit','Meijer','De Boer','Mulder','De Graaf','Bos','Hendriks','Van Leeuwen','Peters','Dekker','Brouwer','Kok','Kuiper'],
+        ],
+        '_fallback' => [
+            'first' => ['Kai','Omar','Ryo','Yusuf','Kwame','Alexis','Emil','Ivan','Dami','Noa'],
+            'last'  => ['Okafor','Park','Mensah','Boateng','Nakamura','Dupont','Andersen','Makinen','Afolabi','Svensson'],
+        ],
     ];
 
-    private const PRIME_NATIONALITIES = [
-        'English', 'Spanish', 'Brazilian', 'French', 'German',
+    /** Maps nationality strings (stored on the Player entity) to MALE_NAMES country codes. */
+    private const NATIONALITY_TO_CODE = [
+        'English'   => 'EN',
+        'Italian'   => 'IT',
+        'German'    => 'DE',
+        'Spanish'   => 'ES',
+        'Brazilian' => 'BR',
+        'Argentine' => 'AR',
+        'Dutch'     => 'NL',
     ];
 
     private const ATTRIBUTE_KEYS = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
@@ -139,6 +116,7 @@ class MarketPoolService
         private readonly AgentRepository        $agentRepo,
         private readonly SponsorRepository      $sponsorRepo,
         private readonly InvestorRepository     $investorRepo,
+        private readonly NameGeneratorService   $nameGenerator,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -146,7 +124,7 @@ class MarketPoolService
     // -------------------------------------------------------------------------
 
     /** @return Player[] */
-    public function generatePlayers(int $count, ?int $academyReputation = null): array
+    public function generatePlayers(int $count, ?int $academyReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
     {
         $agents      = $this->agentRepo->findAll();
         $multipliers = $this->getWageMultiplier($academyReputation);
@@ -154,16 +132,20 @@ class MarketPoolService
 
         for ($i = 0; $i < $count; $i++) {
             $potential      = $this->bellCurveInt(40, 80, 60);
-            $currentAbility = max(20, $potential - random_int(10, 20));
-            $age            = random_int(13, 14);
+            $currentAbility = random_int(3, 10);
+            $age            = random_int(12, 13);
+            $nat       = $nationality ?? $this->nameGenerator->getRandomNationality();
+            $code      = self::NATIONALITY_TO_CODE[$nat] ?? '_fallback';
+            $firstName = $this->pickName($code, 'first');
+            $lastName  = $this->pickName($code, 'last');
 
             $player = new Player(
-                firstName:         $this->pick(self::FIRST_NAMES),
-                lastName:          $this->pick(self::LAST_NAMES),
+                firstName:         $firstName,
+                lastName:          $lastName,
                 dateOfBirth:       $this->dobFromAge($age),
-                nationality:       $this->weightedNationality(),
+                nationality:       $nat,
                 position:          $this->weightedPosition(),
-                recruitmentSource: RecruitmentSource::YOUTH_INTAKE,
+                recruitmentSource: $source,
                 potential:         $potential,
                 currentAbility:    $currentAbility,
                 academy:           null,
@@ -173,19 +155,19 @@ class MarketPoolService
             $baseWage = $currentAbility * random_int(10, 40);
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
-            // Position-weighted attributes
-            $posKey = $player->getPosition()->value; // GK, DEF, MID, ATT
-            $ranges = self::POSITION_ATTRIBUTES[$posKey] ?? self::POSITION_ATTRIBUTES['MID'];
-            $player->setPace(random_int(...$ranges['pace']));
-            $player->setTechnical(random_int(...$ranges['technical']));
-            $player->setVision(random_int(...$ranges['vision']));
-            $player->setPower(random_int(...$ranges['power']));
-            $player->setStamina(random_int(...$ranges['stamina']));
-            $player->setHeart(random_int(...$ranges['heart']));
+            // Distribute a total attribute budget of 6–20 across 6 attributes, position-weighted
+            $attrBudget = random_int(6, 20);
+            $attrs      = $this->distributeAttributes($player->getPosition(), $attrBudget);
+            $player->setPace($attrs['pace']);
+            $player->setTechnical($attrs['technical']);
+            $player->setVision($attrs['vision']);
+            $player->setPower($attrs['power']);
+            $player->setStamina($attrs['stamina']);
+            $player->setHeart($attrs['heart']);
 
-            // Physical measurements (youth players aged 13-14)
-            $player->setHeight(random_int(155, 165));
-            $player->setWeight(random_int(50, 65));
+            // Physical measurements (youth players aged 12-13)
+            $player->setHeight(random_int(145, 160));
+            $player->setWeight(random_int(38, 55));
 
             if (!empty($agents) && random_int(1, 100) <= 40) {
                 $player->setAgent($agents[array_rand($agents)]);
@@ -231,10 +213,12 @@ class MarketPoolService
         for ($i = 0; $i < $count; $i++) {
             $role    = $coachRoles[array_rand($coachRoles)];
             $ability = random_int(40, 75);
+            $coachName = $this->nameGenerator->generateName($this->nameGenerator->getRandomNationality());
+            [$coachFirst, $coachLast] = array_pad(explode(' ', $coachName, 2), 2, '');
 
             $staff = new Staff(
-                firstName: $this->pick(self::STAFF_FIRST_NAMES),
-                lastName:  $this->pick(self::STAFF_LAST_NAMES),
+                firstName: $coachFirst,
+                lastName:  $coachLast,
                 role:      $role,
                 academy:   null,
             );
@@ -271,14 +255,14 @@ class MarketPoolService
         $scouts = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $age        = random_int(28, 40);
-            $experience = random_int(0, 10);
-            $name       = self::SCOUT_NAMES[$i % count(self::SCOUT_NAMES)]
-                . ($i >= count(self::SCOUT_NAMES) ? ' ' . ($i + 1) : '');
+            $age         = random_int(28, 40);
+            $experience  = random_int(0, 10);
+            $scoutNat    = $this->nameGenerator->getRandomNationality();
+            $scoutName   = $this->nameGenerator->generateName($scoutNat);
 
-            $scout = new Scout($name);
+            $scout = new Scout($scoutName);
             $scout->setDob($this->dobFromAge($age));
-            $scout->setNationality($this->pick(self::NATIONALITIES));
+            $scout->setNationality($scoutNat);
             $scout->setExperience($experience);
             $scout->setJudgements([
                 'potential'   => random_int(40, 80),
@@ -300,24 +284,25 @@ class MarketPoolService
     public function generateAgents(int $count): array
     {
         $agents = [];
-        $names  = $this->pickUnique(self::AGENT_NAMES, $count);
 
         for ($i = 0; $i < $count; $i++) {
             $reputation = random_int(30, 70);
             $rating     = max(1, min(100, $reputation + random_int(-10, 10)));
             $experience = max(5, $reputation - random_int(5, 15));
             $age        = random_int(30, 60);
+            $agentNat   = $this->nameGenerator->getRandomNationality();
+            $agentName  = $this->nameGenerator->generateName($agentNat);
 
             $commissionBase = (int) (800 + ($reputation / 100) * 700);
             $commissionRate = number_format(random_int($commissionBase, $commissionBase + 400) / 100, 2);
 
-            $agent = new Agent($names[$i]);
+            $agent = new Agent($agentName);
             $agent->setReputation($reputation);
             $agent->setRating($rating);
             $agent->setExperience($experience);
             $agent->setCommissionRate($commissionRate);
             $agent->setDob($this->dobFromAge($age));
-            $agent->setNationality($this->pick(self::NATIONALITIES));
+            $agent->setNationality($agentNat);
             $agent->setJudgements([
                 'potential'   => random_int(40, 85),
                 'current'     => random_int(40, 85),
@@ -342,7 +327,7 @@ class MarketPoolService
 
         for ($i = 0; $i < $count; $i++) {
             $sponsor = new Sponsor($companies[$i]);
-            $sponsor->setNationality($this->pick(self::NATIONALITIES));
+            $sponsor->setNationality($this->nameGenerator->getRandomNationality());
             $sponsor->setSize($this->sizeWithVariance($preferredSize));
             $sponsor->setIsActive(true);
 
@@ -362,7 +347,7 @@ class MarketPoolService
 
         for ($i = 0; $i < $count; $i++) {
             $investor = new Investor($companies[$i]);
-            $investor->setNationality($this->pick(self::NATIONALITIES));
+            $investor->setNationality($this->nameGenerator->getRandomNationality());
             $investor->setSize($this->sizeWithVariance($preferredSize));
             $investor->setIsActive(true);
 
@@ -378,10 +363,16 @@ class MarketPoolService
     // Fetch
     // -------------------------------------------------------------------------
 
-    /** @return Player[] */
-    public function getAvailablePlayers(int $limit = 100): array
+    /** @return Player[] Unassigned YOUTH_INTAKE players for the open market */
+    public function getAvailablePlayers(int $limit = 100, ?string $nationality = null): array
     {
-        return $this->playerRepo->findInPool($limit);
+        return $this->playerRepo->findInPool($limit, $nationality);
+    }
+
+    /** @return Player[] Unassigned SCOUTING_NETWORK players for the scout prospect pool */
+    public function getAvailableProspects(int $limit = 150): array
+    {
+        return $this->playerRepo->findProspects($limit);
     }
 
     /** @return Staff[] */
@@ -549,6 +540,13 @@ class MarketPoolService
         };
     }
 
+    private function pickName(string $countryCode, string $type): string
+    {
+        $pool  = self::MALE_NAMES[$countryCode] ?? self::MALE_NAMES['_fallback'];
+        $names = $pool[$type];
+        return $names[array_rand($names)];
+    }
+
     private function pick(array $items): mixed
     {
         return $items[array_rand($items)];
@@ -588,13 +586,6 @@ class MarketPoolService
         return (int) round(($raw + $mean) / 2);
     }
 
-    /** 70 % prime nationalities, 30 % diverse */
-    private function weightedNationality(): string
-    {
-        return random_int(1, 100) <= 70
-            ? $this->pick(self::PRIME_NATIONALITIES)
-            : $this->pick(self::NATIONALITIES);
-    }
 
     /** GK 8 % / DEF 30 % / MID 38 % / ATT 24 % */
     private function weightedPosition(): PlayerPosition
@@ -606,6 +597,45 @@ class MarketPoolService
             $r <= 76 => PlayerPosition::MIDFIELDER,
             default  => PlayerPosition::ATTACKER,
         };
+    }
+
+    /**
+     * Distribute a total attribute budget across the 6 attributes, weighted by position.
+     * Ensures the sum equals $total exactly (max 20 for youth pool players).
+     *
+     * @return array{pace: int, technical: int, vision: int, power: int, stamina: int, heart: int}
+     */
+    private function distributeAttributes(PlayerPosition $position, int $total): array
+    {
+        $posKey = $position->value;
+        $ranges = self::POSITION_ATTRIBUTES[$posKey] ?? self::POSITION_ATTRIBUTES['MID'];
+
+        // Use midpoint of each position range as the weight for that attribute
+        $weights    = [];
+        $totalWeight = 0.0;
+        foreach (self::ATTRIBUTE_KEYS as $key) {
+            $w             = ($ranges[$key][0] + $ranges[$key][1]) / 2.0;
+            $weights[$key] = $w;
+            $totalWeight  += $w;
+        }
+
+        // Proportional allocation with remainder assigned to the highest-weighted attribute
+        $attrs     = [];
+        $allocated = 0;
+        $keys      = self::ATTRIBUTE_KEYS;
+
+        foreach ($keys as $idx => $key) {
+            if ($idx === count($keys) - 1) {
+                $attrs[$key] = max(0, $total - $allocated);
+            } else {
+                $share       = (int) round($total * $weights[$key] / $totalWeight);
+                $share       = min($share, $total - $allocated);
+                $attrs[$key] = max(0, $share);
+                $allocated  += $attrs[$key];
+            }
+        }
+
+        return $attrs;
     }
 
     /**

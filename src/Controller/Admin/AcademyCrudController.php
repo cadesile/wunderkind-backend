@@ -34,6 +34,7 @@ class AcademyCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name');
+        yield TextField::new('country');
         yield AssociationField::new('user');
         yield IntegerField::new('reputation');
         yield IntegerField::new('totalCareerEarnings');

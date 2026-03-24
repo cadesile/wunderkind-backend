@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Dto\SyncRequest;
-use App\Entity\Academy;
 use App\Entity\User;
 use App\Service\SyncService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,8 +35,8 @@ class SyncController extends AbstractController
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
 
-        if (empty($data['email']) || empty($data['password']) || empty($data['academyName'])) {
-            return $this->json(['error' => 'email, password and academyName are required.'], Response::HTTP_BAD_REQUEST);
+        if (empty($data['email']) || empty($data['password'])) {
+            return $this->json(['error' => 'email and password are required.'], Response::HTTP_BAD_REQUEST);
         }
 
         $existing = $em->getRepository(User::class)->findOneBy(['email' => $data['email']]);
@@ -49,15 +48,17 @@ class SyncController extends AbstractController
         $user->setPassword($hasher->hashPassword($user, $data['password']));
         $user->setRoles([User::ROLE_ACADEMY]);
 
-        $academy = new Academy($data['academyName'], $user);
+        // Store optional manager profile (name, dateOfBirth, gender, nationality)
+        if (!empty($data['manager']) && is_array($data['manager'])) {
+            $user->setManagerProfile($data['manager']);
+        }
+
         $em->persist($user);
-        $em->persist($academy);
         $em->flush();
 
         return $this->json([
-            'id'          => (string) $user->getId(),
-            'email'       => $user->getEmail(),
-            'academyName' => $academy->getName(),
+            'id'    => (string) $user->getId(),
+            'email' => $user->getEmail(),
         ], Response::HTTP_CREATED);
     }
 
