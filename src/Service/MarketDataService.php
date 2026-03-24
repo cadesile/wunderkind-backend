@@ -66,6 +66,16 @@ class MarketDataService
                 'name'           => $p->getAgent()->getName(),
                 'commissionRate' => $p->getAgent()->getCommissionRate(),
             ] : null,
+            'guardians'         => array_map(fn($g) => [
+                'id'               => $g->getId()->toRfc4122(),
+                'firstName'        => $g->getFirstName(),
+                'lastName'         => $g->getLastName(),
+                'dateOfBirth'      => $g->getDateOfBirth()?->format('Y-m-d'),
+                'gender'           => $g->getGender(),
+                'demandLevel'      => $g->getDemandLevel(),
+                'loyaltyToAcademy' => $g->getLoyaltyToAcademy(),
+                'contactEmail'     => $g->getContactEmail(),
+            ], $p->getGuardians()->toArray()),
         ];
     }
 
@@ -75,6 +85,7 @@ class MarketDataService
             'id'              => $s->getId()->toRfc4122(),
             'firstName'       => $s->getFirstName(),
             'lastName'        => $s->getLastName(),
+            'dateOfBirth'     => $s->getDob()?->format('Y-m-d'),
             'role'            => $s->getRole()->value,
             'coachingAbility' => $s->getCoachingAbility(),
             'scoutingRange'   => $s->getScoutingRange(),

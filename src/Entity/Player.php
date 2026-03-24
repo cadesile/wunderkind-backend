@@ -60,8 +60,8 @@ class Player
     #[ORM\JoinColumn(nullable: true)]
     private ?Academy $academy = null;
 
-    #[ORM\OneToOne(mappedBy: 'player', cascade: ['persist', 'remove'])]
-    private ?Guardian $guardian = null;
+    #[ORM\OneToMany(mappedBy: 'player', targetEntity: Guardian::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $guardians;
 
     #[ORM\ManyToOne(inversedBy: 'players')]
     private ?Agent $agent = null;
@@ -147,6 +147,7 @@ class Player
         $this->currentAbility    = $currentAbility;
         $this->academy           = $academy;
         $this->personality       = new PersonalityProfile();
+        $this->guardians         = new ArrayCollection();
         $this->siblings          = new ArrayCollection();
         $this->createdAt         = new \DateTimeImmutable();
         $this->updatedAt         = new \DateTimeImmutable();
@@ -235,8 +236,20 @@ class Player
     public function getAcademy(): ?Academy { return $this->academy; }
     public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
 
-    public function getGuardian(): ?Guardian { return $this->guardian; }
-    public function setGuardian(?Guardian $guardian): void { $this->guardian = $guardian; }
+    public function getGuardians(): Collection { return $this->guardians; }
+
+    public function addGuardian(Guardian $guardian): void
+    {
+        if (!$this->guardians->contains($guardian)) {
+            $this->guardians->add($guardian);
+            $guardian->setPlayer($this);
+        }
+    }
+
+    public function removeGuardian(Guardian $guardian): void
+    {
+        $this->guardians->removeElement($guardian);
+    }
 
     public function getAgent(): ?Agent { return $this->agent; }
     public function setAgent(?Agent $agent): void { $this->agent = $agent; }

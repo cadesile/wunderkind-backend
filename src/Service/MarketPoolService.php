@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\Academy;
 use App\Entity\Agent;
+use App\Entity\Guardian;
 use App\Entity\Investor;
 use App\Entity\Player;
 use App\Entity\Scout;
@@ -183,6 +184,29 @@ class MarketPoolService
             $p->setGreed(random_int(30, 70));
             $p->setLoyalty(random_int(30, 70));
 
+            // Guardian generation:
+            // 80% → two parents, male + female
+            // 10% → one parent, random gender
+            // 10% → two parents, same gender (both male or both female)
+            $roll = random_int(1, 100);
+            if ($roll <= 80) {
+                $genderPair = ['male', 'female'];
+            } elseif ($roll <= 90) {
+                $genderPair = [random_int(0, 1) === 0 ? 'male' : 'female'];
+            } else {
+                $sameGender = random_int(0, 1) === 0 ? 'male' : 'female';
+                $genderPair = [$sameGender, $sameGender];
+            }
+
+            foreach ($genderPair as $guardianGender) {
+                $guardianFirstName = $this->pickName($code, 'first');
+                $guardian          = new Guardian($guardianFirstName, $lastName, $player, $guardianGender);
+                $guardian->setDateOfBirth($this->dobFromAge(random_int(30, 55)));
+                $guardian->setDemandLevel(random_int(1, 10));
+                $guardian->setLoyaltyToAcademy(random_int(30, 80));
+                $this->em->persist($guardian);
+            }
+
             $this->em->persist($player);
             $players[] = $player;
 
@@ -223,6 +247,7 @@ class MarketPoolService
                 academy:   null,
             );
 
+            $staff->setDob($this->dobFromAge(random_int(28, 60)));
             $staff->setCoachingAbility($ability);
             $staff->setScoutingRange(random_int(40, 75));
             $staff->setSpecialisms($this->generateSpecialisms());

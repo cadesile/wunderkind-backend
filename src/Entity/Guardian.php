@@ -2,10 +2,11 @@
 
 namespace App\Entity;
 
+use App\Repository\GuardianRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: GuardianRepository::class)]
 class Guardian
 {
     #[ORM\Id]
@@ -17,6 +18,12 @@ class Guardian
 
     #[ORM\Column(length: 100)]
     private string $lastName;
+
+    #[ORM\Column(length: 10)]
+    private string $gender = 'male';
+
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $dateOfBirth = null;
 
     #[ORM\Column(length: 180, nullable: true)]
     private ?string $contactEmail = null;
@@ -35,16 +42,17 @@ class Guardian
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
     private int $loyaltyToAcademy = 50;
 
-    #[ORM\OneToOne(inversedBy: 'guardian')]
+    #[ORM\ManyToOne(inversedBy: 'guardians')]
     #[ORM\JoinColumn(nullable: false)]
     private Player $player;
 
-    public function __construct(string $firstName, string $lastName, Player $player)
+    public function __construct(string $firstName, string $lastName, Player $player, string $gender = 'male')
     {
         $this->id        = new UuidV7();
         $this->firstName = $firstName;
         $this->lastName  = $lastName;
         $this->player    = $player;
+        $this->gender    = $gender;
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -57,6 +65,14 @@ class Guardian
 
     public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
 
+    public function __toString(): string { return $this->getFullName(); }
+
+    public function getGender(): string { return $this->gender; }
+    public function setGender(string $gender): void { $this->gender = $gender; }
+
+    public function getDateOfBirth(): ?\DateTimeImmutable { return $this->dateOfBirth; }
+    public function setDateOfBirth(?\DateTimeImmutable $dob): void { $this->dateOfBirth = $dob; }
+
     public function getContactEmail(): ?string { return $this->contactEmail; }
     public function setContactEmail(?string $email): void { $this->contactEmail = $email; }
 
@@ -67,4 +83,5 @@ class Guardian
     public function setLoyaltyToAcademy(int $loyalty): void { $this->loyaltyToAcademy = max(0, min(100, $loyalty)); }
 
     public function getPlayer(): Player { return $this->player; }
+    public function setPlayer(Player $player): void { $this->player = $player; }
 }

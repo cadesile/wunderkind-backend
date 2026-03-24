@@ -41,7 +41,11 @@
       "Bash(npx tsc:*)",
       "Bash(grep:*)",
       "Bash(git:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(xxd:*)",
+      "Bash(bash:*)",
+      "Bash(chmod +x:*)",
+      "Bash(claude:*)"
     ]
   }
 }

@@ -30,7 +30,10 @@ class PlayerCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::DELETE);
+        return $actions
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->add(Crud::PAGE_EDIT, Action::DETAIL)
+            ->disable(Action::DELETE);
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -132,6 +135,7 @@ class PlayerCrudController extends AbstractCrudController
 
         yield AssociationField::new('academy');
         yield AssociationField::new('agent')->setRequired(false)->hideOnIndex();
+        yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
 
         yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
     }

@@ -1,44 +1,61 @@
-# ${OUTPUT_FILE} - Project Context
+# wunderkind-backend — Project Context
 
-> Last Updated: $(date +"%Y-%m-%d %H:%M:%S")
+> Generated: 2026-03-24 13:06:42 | Stack: symfony 80 · PHP 8.4 · mysql:8.0 | Dev: lando
+
+---
 
 ## Overview
-Wunderkind Factory backend API built with Symfony for managing youth football academies and leaderboard systems.
+
+Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young footballers. The backend follows a client-authoritative hybrid sync model — gameplay (weekly ticks, training, aging) runs fully on-device, while this server handles JWT-authenticated sync validation, global leaderboards, anti-cheat enforcement, and market/economic data. Built on Symfony 8.0 with Doctrine ORM, it exposes a REST API consumed by a React Native mobile client, backed by a MySQL database running in a Lando containerized dev environment.
+
+---
+
+## Metrics
+
+| Category | Count |
+|---|---|
+| PHP files         | 146 |
+| Entities/Models   | 19 |
+| Controllers       | 34 |
+| Services          | 9 |
+| Migrations        | 27 |
 
 ---
 
 ## Technology Stack
 
-### Core Framework
-- **Symfony**: 6.4
-- **PHP**: 8.x
-- **Database**: MySQL/MariaDB
-- **Local Dev**: Lando
+| | |
+|---|---|
+| **Language**      | php |
+| **Framework**     | symfony 80 |
+| **PHP**           | 8.4 |
+| **Database**      | mysql:8.0 |
+| **Dev env**       | lando (symfony) |
 
-### Key Packages
+### Dependencies
 
-```json
-{
-  "php": ">=8.4",
-  "ext-ctype": "*",
-  "ext-iconv": "*",
-  "api-platform/core": "^4.2",
-  "doctrine/doctrine-bundle": "^3.2",
-  "doctrine/doctrine-migrations-bundle": "^4.0",
-  "doctrine/orm": "^3.6",
-  "easycorp/easyadmin-bundle": "^5.0",
-  "lexik/jwt-authentication-bundle": "^3.2",
-  "nelmio/cors-bundle": "^2.6",
-  "symfony/console": "8.0.*",
-  "symfony/dotenv": "8.0.*",
-  "symfony/flex": "^2",
-  "symfony/framework-bundle": "8.0.*",
-  "symfony/runtime": "8.0.*",
-  "symfony/security-bundle": "8.0.*",
-  "symfony/uid": "8.0.*",
-  "symfony/yaml": "8.0.*"
-}
-```
+**require:**
+- `php`: >=8.4
+- `ext-ctype`: *
+- `ext-iconv`: *
+- `api-platform/core`: ^4.2
+- `doctrine/doctrine-bundle`: ^3.2
+- `doctrine/doctrine-migrations-bundle`: ^4.0
+- `doctrine/orm`: ^3.6
+- `easycorp/easyadmin-bundle`: ^5.0
+- `lexik/jwt-authentication-bundle`: ^3.2
+- `nelmio/cors-bundle`: ^2.6
+- `symfony/console`: 8.0.*
+- `symfony/dotenv`: 8.0.*
+- `symfony/flex`: ^2
+- `symfony/framework-bundle`: 8.0.*
+- `symfony/runtime`: 8.0.*
+- `symfony/security-bundle`: 8.0.*
+- `symfony/uid`: 8.0.*
+- `symfony/yaml`: 8.0.*
+
+**require-dev:**
+- `symfony/maker-bundle`: ^1.66
 
 ---
 
@@ -81,7 +98,8 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── docs
 │   ├── event-guide.md
 │   ├── frontend-integration.md
-│   └── wunderkind-backend-context.md
+│   ├── wunderkind-backend-context.md
+│   └── wunderkind-backend-context.md.tmp
 ├── migrations
 │   ├── Version20260301214628.php
 │   ├── Version20260302000001.php
@@ -107,7 +125,9 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── Version20260319163437.php
 │   ├── Version20260322000001.php
 │   ├── Version20260322184350.php
-│   └── Version20260323000001.php
+│   ├── Version20260323000001.php
+│   ├── Version20260324092239.php
+│   └── Version20260324114203.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -186,6 +206,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   │   ├── FacilityRepository.php
 │   │   ├── GameConfigRepository.php
 │   │   ├── GameEventTemplateRepository.php
+│   │   ├── GuardianRepository.php
 │   │   ├── InboxMessageRepository.php
 │   │   ├── InvestorRepository.php
 │   │   ├── LeaderboardEntryRepository.php
@@ -233,19 +254,15 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-34 directories, 153 files
+34 directories, 157 files
 ```
 
 ---
 
-## Database Entities
-
-### Available Entities
+## Data Models
 
 #### Academy
 ```php
-class Academy
-{
     private UuidV7 $id;
     private string $name;
     private int $reputation = 0;
@@ -261,17 +278,10 @@ class Academy
     private int $managerDiscipline = 50;
     private int $managerAmbition = 50;
     private int $balance = 0;
-    private ?array $managerProfile = null;
-    private \DateTimeImmutable $createdAt;
-    private User $user;
-    private Collection $players;
-    private Collection $staff;
 ```
 
 #### Admin
 ```php
-class Admin
-{
     private UuidV7 $id;
     private User $user;
     private ?string $department = null;
@@ -289,8 +299,6 @@ class Admin
 
 #### Agent
 ```php
-class Agent
-{
     private UuidV7 $id;
     private string $name;
     private int $reputation = 50;
@@ -306,17 +314,10 @@ class Agent
     public function getId(): UuidV7 { return $this->id; }
     public function getName(): string { return $this->name; }
     public function setName(string $name): void { $this->name = $name; }
-    public function getReputation(): int { return $this->reputation; }
-    public function setReputation(int $reputation): void { $this->reputation = $reputation; }
-    public function getCommissionRate(): string { return $this->commissionRate; }
-    public function setCommissionRate(string $rate): void { $this->commissionRate = $rate; }
-    public function getPlayers(): Collection { return $this->players; }
 ```
 
 #### Facility
 ```php
-class Facility
-{
     private const UPGRADE_COSTS = [0, 50_000, 150_000, 300_000, 500_000, 1_000_000];
     private UuidV7 $id;
     private FacilityType $type;
@@ -332,15 +333,10 @@ class Facility
     public function getAcademy(): Academy { return $this->academy; }
     public function getLastUpgradedAt(): ?\DateTimeImmutable { return $this->lastUpgradedAt; }
     public function setLastUpgradedAt(?\DateTimeImmutable $at): void { $this->lastUpgradedAt = $at; }
-    public function canUpgrade(): bool
-    public function getUpgradeCost(): int
-    public function getCurrentEffect(): string
 ```
 
 #### GameConfig
 ```php
-class GameConfig
-{
     private ?int $id = null;
     private int $cliqueRelationshipThreshold = 20;
     private int $cliqueSquadCapPercent = 30;
@@ -356,8 +352,6 @@ class GameConfig
 
 #### GameEventTemplate
 ```php
-class GameEventTemplate
-{
     private UuidV7 $id;
     private string $slug;
     private EventCategory $category;
@@ -373,43 +367,29 @@ class GameEventTemplate
     public function getSlug(): string { return $this->slug; }
     public function setSlug(string $slug): void { $this->slug = $slug; }
     public function getCategory(): EventCategory { return $this->category; }
-    public function setCategory(EventCategory|string $category): void
-    public function getWeight(): int { return $this->weight; }
-    public function setWeight(int $weight): void { $this->weight = max(0, $weight); }
-    public function getTitle(): string { return $this->title; }
-    public function setTitle(string $title): void { $this->title = $title; }
 ```
 
 #### Guardian
 ```php
-class Guardian
-{
     private UuidV7 $id;
     private string $firstName;
     private string $lastName;
+    private string $gender = 'male';
+    private ?\DateTimeImmutable $dateOfBirth = null;
     private ?string $contactEmail = null;
     private int $demandLevel = 5;
     private int $loyaltyToAcademy = 50;
     private Player $player;
-    public function __construct(string $firstName, string $lastName, Player $player)
+    public function __construct(string $firstName, string $lastName, Player $player, string $gender = 'male')
     public function getId(): UuidV7 { return $this->id; }
     public function getFirstName(): string { return $this->firstName; }
     public function setFirstName(string $firstName): void { $this->firstName = $firstName; }
     public function getLastName(): string { return $this->lastName; }
     public function setLastName(string $lastName): void { $this->lastName = $lastName; }
-    public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
-    public function getContactEmail(): ?string { return $this->contactEmail; }
-    public function setContactEmail(?string $email): void { $this->contactEmail = $email; }
-    public function getDemandLevel(): int { return $this->demandLevel; }
-    public function setDemandLevel(int $level): void { $this->demandLevel = max(1, min(10, $level)); }
-    public function getLoyaltyToAcademy(): int { return $this->loyaltyToAcademy; }
-    public function setLoyaltyToAcademy(int $loyalty): void { $this->loyaltyToAcademy = max(0, min(100, $loyalty)); }
 ```
 
 #### InboxMessage
 ```php
-class InboxMessage
-{
     private UuidV7 $id;
     private Academy $academy;
     private MessageSenderType $senderType;
@@ -425,17 +405,10 @@ class InboxMessage
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
     public function getAcademy(): Academy { return $this->academy; }
-    public function getSenderType(): MessageSenderType { return $this->senderType; }
-    public function getSenderName(): string { return $this->senderName; }
-    public function getSubject(): string { return $this->subject; }
-    public function getBody(): string { return $this->body; }
-    public function getOfferData(): ?array { return $this->offerData; }
 ```
 
 #### Investor
 ```php
-class Investor
-{
     private UuidV7 $id;
     private string $company;
     private ?string $nationality = null;
@@ -451,17 +424,10 @@ class Investor
     private ?\DateTimeImmutable $lastPayoutAt = null;
     public function __construct(string $company = '')
     public function getId(): UuidV7 { return $this->id; }
-    public function getCompany(): string { return $this->company; }
-    public function setCompany(string $company): void { $this->company = $company; }
-    public function getNationality(): ?string { return $this->nationality; }
-    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
-    public function getSize(): CompanySize { return $this->size; }
 ```
 
 #### LeaderboardEntry
 ```php
-class LeaderboardEntry
-{
     private UuidV7 $id;
     private Academy $academy;
     private LeaderboardCategory $category;
@@ -477,15 +443,10 @@ class LeaderboardEntry
     public function getPeriod(): string { return $this->period; }
     public function getScore(): int { return $this->score; }
     public function setScore(int $score): void
-    public function getRank(): ?int { return $this->rank; }
-    public function setRank(?int $rank): void { $this->rank = $rank; }
-    public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 ```
 
 #### PersonalityProfile
 ```php
-class PersonalityProfile
-{
     private int $confidence = 50;
     private int $maturity = 50;
     private int $teamwork = 50;
@@ -501,17 +462,10 @@ class PersonalityProfile
     public function getTeamwork(): int { return $this->teamwork; }
     public function setTeamwork(int $v): void { $this->teamwork = $this->clamp($v); }
     public function getLeadership(): int { return $this->leadership; }
-    public function setLeadership(int $v): void { $this->leadership = $this->clamp($v); }
-    public function getEgo(): int { return $this->ego; }
-    public function setEgo(int $v): void { $this->ego = $this->clamp($v); }
-    public function getBravery(): int { return $this->bravery; }
-    public function setBravery(int $v): void { $this->bravery = $this->clamp($v); }
 ```
 
 #### Player
 ```php
-class Player
-{
     private UuidV7 $id;
     private string $firstName;
     private string $lastName;
@@ -525,19 +479,12 @@ class Player
     private int $contractValue = 0;
     private PersonalityProfile $personality;
     private ?Academy $academy = null;
-    private ?Guardian $guardian = null;
+    private Collection $guardians;
     private ?Agent $agent = null;
-    private Collection $siblings;
-    private int $pace = 0;
-    private int $technical = 0;
-    private int $vision = 0;
-    private int $power = 0;
 ```
 
 #### PlayerArchetype
 ```php
-class PlayerArchetype
-{
     private ?int $id = null;
     private string $name;
     private string $description;
@@ -553,16 +500,10 @@ class PlayerArchetype
     public function getTraitMapping(): array { return $this->traitMapping; }
     public function setTraitMapping(array $traitMapping): void { $this->traitMapping = $traitMapping; }
     public function getTraitMappingJson(): string
-    public function setTraitMappingJson(string $json): void
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
-    public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
-    public function touch(): void { $this->updatedAt = new \DateTimeImmutable(); }
 ```
 
 #### Scout
 ```php
-class Scout
-{
     private UuidV7 $id;
     private string $name;
     private ?\DateTimeImmutable $dob = null;
@@ -578,17 +519,10 @@ class Scout
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
     public function getNationality(): ?string { return $this->nationality; }
     public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
-    public function getJudgements(): array { return $this->judgements; }
-    public function setJudgements(array $judgements): void { $this->judgements = $judgements; }
-    public function getExperience(): int { return $this->experience; }
-    public function setExperience(int $experience): void { $this->experience = $experience; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 ```
 
 #### Sponsor
 ```php
-class Sponsor
-{
     private UuidV7 $id;
     private string $company;
     private ?string $nationality = null;
@@ -604,17 +538,10 @@ class Sponsor
     private string $bonusMultiplier = '1.00';
     private SponsorStatus $status = SponsorStatus::ACTIVE;
     private ?int $earlyTerminationFee = null;
-    private ?\DateTimeImmutable $assignedAt = null;
-    private ?\DateTimeImmutable $lastPaymentAt = null;
-    public function __construct(string $company = '')
-    public function getId(): UuidV7 { return $this->id; }
-    public function getCompany(): string { return $this->company; }
 ```
 
 #### Staff
 ```php
-class Staff
-{
     private UuidV7 $id;
     private string $firstName;
     private string $lastName;
@@ -627,20 +554,13 @@ class Staff
     private ?array $specialisms = null;
     private ?Academy $academy = null;
     private ?\DateTimeImmutable $assignedAt = null;
+    private ?\DateTimeImmutable $dob = null;
     private \DateTimeImmutable $hiredAt;
     public function __construct(
-    public function getId(): UuidV7 { return $this->id; }
-    public function getFirstName(): string { return $this->firstName; }
-    public function setFirstName(string $firstName): void { $this->firstName = $firstName; }
-    public function getLastName(): string { return $this->lastName; }
-    public function setLastName(string $lastName): void { $this->lastName = $lastName; }
-    public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
 ```
 
 #### SyncRecord
 ```php
-class SyncRecord
-{
     private UuidV7 $id;
     private Academy $academy;
     private int $clientWeekNumber;
@@ -656,16 +576,10 @@ class SyncRecord
     public function getClientTimestamp(): \DateTimeImmutable { return $this->clientTimestamp; }
     public function getServerTimestamp(): \DateTimeImmutable { return $this->serverTimestamp; }
     public function getPayload(): array { return $this->payload; }
-    public function isValid(): bool { return $this->isValid; }
-    public function markInvalid(string $reason): void
-    public function getInvalidReason(): ?string { return $this->invalidReason; }
-    public function getPayloadJson(): string
 ```
 
 #### Transfer
 ```php
-class Transfer
-{
     private UuidV7 $id;
     private ?Player $player = null;
     private Academy $academy;
@@ -681,17 +595,10 @@ class Transfer
     private ?\DateTimeImmutable $syncedAt = null;
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
-    public function getPlayer(): ?Player { return $this->player; }
-    public function getAcademy(): Academy { return $this->academy; }
-    public function getDestinationClubName(): string { return $this->destinationClubName; }
-    public function setDestinationClubName(string $name): void { $this->destinationClubName = $name; }
-    public function getType(): TransferType { return $this->type; }
 ```
 
 #### User
 ```php
-class User implements UserInterface, PasswordAuthenticatedUserInterface
-{
     public const ROLE_ACADEMY = 'ROLE_ACADEMY';
     public const ROLE_ADMIN   = 'ROLE_ADMIN';
     private UuidV7 $id;
@@ -707,11 +614,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getEmail(): string { return $this->email; }
     public function setEmail(string $email): void { $this->email = $email; }
     public function getUserIdentifier(): string { return $this->email; }
-    public function getPassword(): string { return $this->password; }
-    public function setPassword(string $password): void { $this->password = $password; }
-    public function getRoles(): array { return array_unique($this->roles); }
-    public function setRoles(array $roles): void { $this->roles = $roles; }
-    public function eraseCredentials(): void {}
 ```
 
 
@@ -720,14 +622,209 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 ## API Routes
 
 ```
+ ------------------------------------------ ---------------- ---------------------------------------------- 
+ [32m Name                                     [39m [32m Method         [39m [32m Path                                         [39m 
+ ------------------------------------------ ---------------- ---------------------------------------------- 
+  api_doc                                    [34mGET[39m|[35mHEAD[39m         /api/docs.{_format}                           
+  api_genid                                  [34mGET[39m|[35mHEAD[39m         /api/.well-known/genid/{id}                   
+  api_validation_errors                      [34mGET[39m|[35mHEAD[39m         /api/validation_errors/{id}                   
+  api_entrypoint                             [34mGET[39m|[35mHEAD[39m         /api/{index}.{_format}                        
+  api_jsonld_context                         [34mGET[39m|[35mHEAD[39m         /api/contexts/{shortName}.{_format}           
+  _api_errors                                [34mGET[39m              /api/errors/{status}.{_format}                
+  _api_validation_errors_problem             [34mGET[39m              /api/validation_errors/{id}                   
+  _api_validation_errors_hydra               [34mGET[39m              /api/validation_errors/{id}                   
+  _api_validation_errors_jsonapi             [34mGET[39m              /api/validation_errors/{id}                   
+  _api_validation_errors_xml                 [34mGET[39m              /api/validation_errors/{id}                   
+  admin                                      [39mANY[39m              /admin                                        
+  admin_academy_index                        [34mGET[39m              /admin/academy                                
+  admin_academy_new                          [34mGET[39m|[32mPOST[39m         /admin/academy/new                            
+  admin_academy_batch_delete                 [32mPOST[39m             /admin/academy/batch-delete                   
+  admin_academy_autocomplete                 [34mGET[39m              /admin/academy/autocomplete                   
+  admin_academy_render_filters               [34mGET[39m              /admin/academy/render-filters                 
+  admin_academy_edit                         [34mGET[39m|[32mPOST[39m|[33mPATCH[39m   /admin/academy/{entityId}/edit                
+  admin_academy_delete                       [32mPOST[39m             /admin/academy/{entityId}/delete              
+  admin_academy_detail                       [34mGET[39m              /admin/academy/{entityId}                     
+  admin_admin_index                          [34mGET[39m              /admin/admin                                  
+  admin_admin_new                            [34mGET[39m|[32mPOST[39m         /admin/admin/new                              
+  admin_admin_batch_delete                   [32mPOST[39m             /admin/admin/batch-delete                     
+  admin_admin_autocomplete                   [34mGET[39m              /admin/admin/autocomplete                     
+  admin_admin_render_filters                 [34mGET[39m              /admin/admin/render-filters                   
+  admin_admin_edit                           [34mGET[39m|[32mPOST[39m|[33mPATCH[39m   /admin/admin/{entityId}/edit                  
+  admin_admin_delete                         [32mPOST[39m             /admin/admin/{entityId}/delete                
+  admin_admin_detail                         [34mGET[39m              /admin/admin/{entityId}                       
+  admin_agent_index                          [34mGET[39m              /admin/agent                                  
+  admin_agent_new                            [34mGET[39m|[32mPOST[39m         /admin/agent/new                              
+  admin_agent_batch_delete                   [32mPOST[39m             /admin/agent/batch-delete                     
+  admin_agent_autocomplete                   [34mGET[39m              /admin/agent/autocomplete                     
+  admin_agent_render_filters                 [34mGET[39m              /admin/agent/render-filters                   
+  admin_agent_edit                           [34mGET[39m|[32mPOST[39m|[33mPATCH[39m   /admin/agent/{entityId}/edit                  
+  admin_agent_delete                         [32mPOST[39m             /admin/agent/{entityId}/delete                
+  admin_agent_detail                         [34mGET[39m              /admin/agent/{entityId}                       
+  admin_game_event_template_index            [34mGET[39m              /admin/game-event-template                    
+  admin_game_event_template_new              [34mGET[39m|[32mPOST[39m         /admin/game-event-template/new                
+  admin_game_event_template_batch_delete     [32mPOST[39m             /admin/game-event-template/batch-delete       
+  admin_game_event_template_autocomplete     [34mGET[39m              /admin/game-event-template/autocomplete       
+  admin_game_event_template_render_filters   [34mGET[39m              /admin/game-event-template/render-filters     
+  admin_game_event_template_edit             [34mGET[39m|[32mPOST[39m|[33mPATCH[39m   /admin/game-event-template/{entityId}/edit    
+  admin_game_event_template_delete           [32mPOST[39m             /admin/game-event-template/{entityId}/delete  
+  admin_game_event_template_detail           [34mGET[39m              /admin/game-event-template/{entityId}         
+  admin_guardian_index                       [34mGET[39m              /admin/guardian                               
+  admin_guardian_new                         [34mGET[39m|[32mPOST[39m         /admin/guardian/new                           
+  admin_guardian_batch_delete                [32mPOST[39m             /admin/guardian/batch-delete                  
+  admin_guardian_autocomplete                [34mGET[39m              /admin/guardian/autocomplete                  
+  admin_guardian_render_filters              [34mGET[39m              /admin/guardian/render-filters                
+  admin_guardian_edit                        [34mGET[39m|[32mPOST[39m|[33mPATCH[39m   /admin/guardian/{entityId}/edit               
+  admin_guardian_delete                      [32mPOST[39m             /admin/guardian/{entityId}/delete             
+  admin_guardian_detail                      [34mGET[39m              /admin/guardian/{entityId}                    
+  admin_investor_index                       [34mGET[39m              /admin/investor                               
+  admin_investor_new                         [34mGET[39m|[32mPOST[39m         /admin/investor/new                           
+  admin_investor_batch_delete                [32mPOST[39m             /admin/investor/batch-delete                  
+  admin_investor_autocomplete                [34mGET[39m              /admin/investor/autocomplete                  
+  admin_investor_render_filters              [34mGET[39m              /admin/investor/render-filters                
+  admin_investor_edit                        [34mGET[39m|[32mPOST[39m|[33mPATCH[39m   /admin/investor/{entityId}/edit               
 ```
 
 ---
 
 ## Controllers
 
-### AdminSecurityController
+#### AcademyCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
 
+#### AdminCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### AgentCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### DashboardController
+```php
+    public function __construct(private EntityManagerInterface $em) {}
+    public function index(): Response
+    public function configureDashboard(): Dashboard
+    public function configureMenuItems(): iterable
+```
+
+#### DeveloperToolsController
+```php
+#[Route('/admin/developer-tools')]
+    #[Route('/trigger-age21', name: 'admin_trigger_age21', methods: ['GET'])]
+    public function triggerAge21Deletion(
+    #[Route('/cleanup-entities', name: 'admin_cleanup_entities', methods: ['GET'])]
+    public function cleanupEntities(KernelInterface $kernel): Response
+    #[Route('/reset-database', name: 'admin_reset_database', methods: ['GET'])]
+    public function resetDatabase(): Response
+```
+
+#### GameEventTemplateCrudController
+```php
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### GuardianCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### InvestorCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### LeaderboardEntryCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### PlayerArchetypeCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### PlayerCrudController
+```php
+    public function __construct(private readonly AcademyRepository $academyRepository) {}
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function createEntity(string $entityFqcn): Player
+    public function configureFields(string $pageName): iterable
+```
+
+#### ScoutCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### SettingsController
+```php
+    public function __construct(
+    #[Route('/admin/settings', name: 'admin_settings')]
+    public function index(): Response
+    #[Route('/admin/settings/save-config', name: 'admin_settings_save_config', methods: ['POST'])]
+    public function saveConfig(Request $request): Response
+```
+
+#### SponsorCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### StaffCrudController
+```php
+    public function __construct(private readonly AcademyRepository $academyRepository) {}
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function createEntity(string $entityFqcn): Staff
+    public function configureFields(string $pageName): iterable
+```
+
+#### SyncRecordCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### TransferCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### UserCrudController
+```php
+    public function configureActions(Actions $actions): Actions
+    public function configureCrud(Crud $crud): Crud
+    public function configureFields(string $pageName): iterable
+```
+
+#### AdminSecurityController
 ```php
     #[Route('/admin/login', name: 'admin_login')]
     public function login(AuthenticationUtils $authenticationUtils): Response
@@ -735,16 +832,139 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function logout(): never
 ```
 
-### LeaderboardController
+#### AcademyController
+```php
+#[Route('/api/academy')]
+    #[Route('/initialize', name: 'api_academy_initialize', methods: ['POST'])]
+    public function initialize(
+    #[Route('/check', name: 'api_academy_check', methods: ['GET'])]
+    public function check(): JsonResponse
+    #[Route('/status', name: 'api_academy_status', methods: ['GET'])]
+    public function status(): JsonResponse
+```
 
+#### AdminController
+```php
+#[Route('/api/admin')]
+    #[Route('/stats', name: 'api_admin_stats', methods: ['GET'])]
+    public function stats(): JsonResponse
+```
+
+#### ArchetypeController
+```php
+#[Route('/api/archetypes', name: 'api_archetypes', methods: ['GET'])]
+    public function __construct(
+    public function __invoke(): JsonResponse
+```
+
+#### EventController
+```php
+#[Route('/api/events')]
+    public function __construct(
+    #[Route('/templates', name: 'api_events_templates', methods: ['GET'])]
+    public function templates(): JsonResponse
+```
+
+#### FacilityController
+```php
+#[Route('/api/facilities')]
+    #[Route('', name: 'api_facilities_index', methods: ['GET'])]
+    public function index(FacilityService $facilityService): JsonResponse
+    #[Route('/{type}/upgrade', name: 'api_facilities_upgrade', methods: ['POST'])]
+    public function upgrade(
+```
+
+#### FinanceController
+```php
+#[Route('/api/finance')]
+    public function __construct(
+    #[Route('/overview', methods: ['GET'])]
+    public function overview(): JsonResponse
+    #[Route('/investors', methods: ['GET'])]
+    public function investors(): JsonResponse
+    #[Route('/sponsors', methods: ['GET'])]
+    public function sponsors(): JsonResponse
+    #[Route('/sponsors/{id}/terminate', methods: ['POST'])]
+    public function terminateSponsor(string $id): JsonResponse
+```
+
+#### GameConfigController
+```php
+#[Route('/api')]
+    public function __construct(
+    #[Route('/game-config', name: 'api_game_config', methods: ['GET'])]
+    public function index(): JsonResponse
+```
+
+#### InboxController
+```php
+#[Route('/api/inbox')]
+    public function __construct(
+    #[Route('', methods: ['GET'])]
+    public function list(): JsonResponse
+    #[Route('/{id}', methods: ['GET'])]
+    public function show(string $id): JsonResponse
+    #[Route('/{id}/accept', methods: ['POST'])]
+    public function accept(string $id): JsonResponse
+    #[Route('/{id}/reject', methods: ['POST'])]
+    public function reject(string $id): JsonResponse
+    #[Route('/{id}/read', methods: ['POST'])]
+    public function markRead(string $id): JsonResponse
+```
+
+#### MarketController
+```php
+#[Route('/api/market')]
+    #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
+    public function data(Request $request, MarketDataService $service): JsonResponse
+    #[Route('/prospects', name: 'api_market_prospects', methods: ['GET'])]
+    public function prospects(MarketDataService $service): JsonResponse
+    #[Route('/assign', name: 'api_market_assign', methods: ['POST'])]
+    public function assign(
+    #[Route('/legacy', name: 'api_market_data_legacy', methods: ['GET'])]
+    public function legacyData(
+```
+
+#### PoolController
+```php
+#[Route('/api/pool')]
+    #[Route('/ensure', name: 'api_pool_ensure', methods: ['POST'])]
+    public function ensure(
+```
+
+#### SquadController
+```php
+#[Route('/api/squad')]
+    public function __construct(private readonly PlayerRepository $playerRepository) {}
+    #[Route('', name: 'api_squad_index', methods: ['GET'])]
+    public function index(): JsonResponse
+```
+
+#### StaffController
+```php
+#[Route('/api/staff')]
+    #[Route('', name: 'api_staff_index', methods: ['GET'])]
+    public function index(): JsonResponse
+```
+
+#### TransferLeaderboardController
+```php
+#[Route('/api/leaderboard/transfers')]
+    public function __construct(
+    #[Route('/top-sellers', name: 'api_transfer_leaderboard_top_sellers', methods: ['GET'])]
+    public function topSellers(Request $request): JsonResponse
+    #[Route('/most-valuable', name: 'api_transfer_leaderboard_most_valuable', methods: ['GET'])]
+    public function mostValuable(Request $request): JsonResponse
+```
+
+#### LeaderboardController
 ```php
 #[Route('/api')]
     #[Route('/leaderboard/{category}', name: 'api_leaderboard', methods: ['GET'])]
     public function index(
 ```
 
-### SyncController
-
+#### SyncController
 ```php
 #[Route('/api')]
     #[Route('/login', name: 'api_login', methods: ['POST'])]
@@ -760,21 +980,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
 ## Services
 
-### AcademyInitializationService
-
+#### AcademyInitializationService
 ```php
-class AcademyInitializationService
-{
     public function __construct(
     public function initializeAcademy(User $user, string $academyName, ?string $country = null, ?array $managerProfile = null): Academy
     public function getStarterBundle(): array
 ```
 
-### EconomicService
-
+#### EconomicService
 ```php
-class EconomicService
-{
     public function __construct(
     public function generateSponsorOffer(Academy $academy): array
     public function generateInvestorOffer(Academy $academy): array
@@ -784,22 +998,16 @@ class EconomicService
     public function checkAgeOutPlayers(Academy $academy, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
 ```
 
-### FacilityService
-
+#### FacilityService
 ```php
-class FacilityService
-{
     public function __construct(
     public function getAcademyFacilitiesData(Academy $academy): array
     public function upgradeFacility(Facility $facility): void
     public function initializeFacilities(Academy $academy): void
 ```
 
-### InboxService
-
+#### InboxService
 ```php
-class InboxService
-{
     public function __construct(
     public function sendSponsorOffer(Academy $academy, array $offerData): InboxMessage
     public function sendInvestorOffer(Academy $academy, array $offerData): InboxMessage
@@ -811,21 +1019,15 @@ class InboxService
     public function rejectMessage(InboxMessage $message): void
 ```
 
-### MarketDataService
-
+#### MarketDataService
 ```php
-class MarketDataService
-{
     public function __construct(private readonly MarketPoolService $pool) {}
     public function getMarketSnapshot(?string $nationality = null): MarketDataResponse
     public function getProspectSnapshot(): array
 ```
 
-### MarketPoolService
-
+#### MarketPoolService
 ```php
-class MarketPoolService
-{
     public function __construct(
     public function generatePlayers(int $count, ?int $academyReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
     public function generateCoaches(int $count, ?int $academyReputation = null): array
@@ -836,31 +1038,24 @@ class MarketPoolService
     public function getAvailablePlayers(int $limit = 100, ?string $nationality = null): array
     public function getAvailableProspects(int $limit = 150): array
     public function getAvailableCoaches(int $limit = 20): array
+    public function getAvailableScouts(int $limit = 10): array
+    public function getAgents(): array
 ```
 
-### NameGeneratorService
-
+#### NameGeneratorService
 ```php
-class NameGeneratorService
-{
     public function generateName(string $nationality): string
     public function getRandomNationality(): string
 ```
 
-### SyncService
-
+#### SyncService
 ```php
-class SyncService
-{
     public function __construct(
     public function process(User $user, SyncRequest $request): array
 ```
 
-### TransferLeaderboardService
-
+#### TransferLeaderboardService
 ```php
-class TransferLeaderboardService
-{
     public function __construct(
     public function getTopSellers(string $period = 'week', int $limit = 10): array
     public function getMostValuableSale(string $period = 'week'): ?array
@@ -869,89 +1064,25 @@ class TransferLeaderboardService
 
 ---
 
-## Security Configuration
+## Migrations
 
-```yaml
-security:
-    password_hashers:
-        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
-
-    providers:
-        app_user_provider:
-            entity:
-                class: App\Entity\User
-                property: email
-
-    firewalls:
-        dev:
-            pattern: ^/(_profiler|_wdt|assets|build)/
-            security: false
-
-        admin:
-            pattern: ^/admin
-            lazy: true
-            provider: app_user_provider
-            form_login:
-                login_path: admin_login
-                check_path: admin_login
-                default_target_path: /admin
-            logout:
-                path: admin_logout
-                target: admin_login
-
-        login:
-            pattern: ^/api/login
-            stateless: true
-            json_login:
-                check_path: /api/login
-                success_handler: lexik_jwt_authentication.handler.authentication_success
-                failure_handler: lexik_jwt_authentication.handler.authentication_failure
-
-        api:
-            pattern: ^/api
-            stateless: true
-            jwt: ~
-
-    access_control:
-        # Allow CORS preflight requests through without JWT authentication.
-        # NelmioCorsBundle handles OPTIONS and returns the correct headers.
-        - { path: ^/api, roles: PUBLIC_ACCESS, methods: [OPTIONS] }
-        - { path: ^/admin/login,  roles: PUBLIC_ACCESS }
-        - { path: ^/admin,        roles: ROLE_ADMIN }
-        - { path: ^/api/login,    roles: PUBLIC_ACCESS }
-        - { path: ^/api/register, roles: PUBLIC_ACCESS }
-        - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
-        - { path: ^/api/game-config,          roles: PUBLIC_ACCESS }
-        - { path: ^/api/admin/,   roles: ROLE_ADMIN }
-        - { path: ^/api/pool,             roles: IS_AUTHENTICATED_FULLY }
-        - { path: ^/api/sync,             roles: ROLE_ACADEMY }
-        - { path: ^/api/market/data,     roles: ROLE_ACADEMY }
-        - { path: ^/api/market/assign,   roles: ROLE_ACADEMY }
-        - { path: ^/api/academy/,        roles: ROLE_ACADEMY }
-        - { path: ^/api/inbox,           roles: ROLE_ACADEMY }
-        - { path: ^/api/finance/,        roles: ROLE_ACADEMY }
-        - { path: ^/api/events/,         roles: ROLE_ACADEMY }
-        - { path: ^/api/archetypes,      roles: ROLE_ACADEMY }
-        - { path: ^/api/squad,           roles: ROLE_ACADEMY }
-        - { path: ^/api/staff,           roles: ROLE_ACADEMY }
-        - { path: ^/api/facilities,      roles: ROLE_ACADEMY }
-        - { path: ^/api,                 roles: IS_AUTHENTICATED_FULLY }
-
-when@test:
-    security:
-        password_hashers:
-            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
-                algorithm: auto
-                cost: 4
-                time_cost: 3
-                memory_cost: 10
-```
+| Migration | Date |
+|---|---|
+| `Version20260305130043` | 20260305 |
+| `Version20260305234642` | 20260305 |
+| `Version20260306090200` | 20260306 |
+| `Version20260319143231` | 20260319 |
+| `Version20260319163437` | 20260319 |
+| `Version20260322000001` | 20260322 |
+| `Version20260322184350` | 20260322 |
+| `Version20260323000001` | 20260323 |
+| `Version20260324092239` | 20260324 |
+| `Version20260324114203` | 20260324 |
+_Showing latest 10 of 27 total._
 
 ---
 
-## Environment Configuration
-
-### Required Environment Variables
+## Environment Variables
 
 ```bash
 APP_ENV=***
@@ -970,44 +1101,19 @@ ACADEMY_STARTING_BALANCE=***
 
 ## Development Setup
 
-### Local Development with Lando
-
 ```bash
-# Start the environment
 lando start
-
-# Install dependencies
 lando composer install
-
-# Database setup
-lando php bin/console doctrine:database:create
 lando php bin/console doctrine:migrations:migrate
-
-# Clear cache
 lando php bin/console cache:clear
-```
-
-### Useful Commands
-
-```bash
-# View logs
-lando logs -s appserver
-
-# Run tests
-lando php bin/phpunit
-
-# Debug routes
-lando php bin/console debug:router
-
-# Debug firewall
-lando php bin/console debug:firewall
 ```
 
 ---
 
-## Recent Development Activity
+## Recent Git Activity
 
 ```
+fa4ac61 updated context
 1ce30f0 latest
 b16643f update context
 cbe4328 feat: Phase 3 & 4 — NPC interaction system + GameConfig API
@@ -1018,34 +1124,32 @@ fb3092c feat: editable specialisms field on staff edit form via virtual JSON str
 c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField type error
 39fd43b feat: editable impacts field on event template admin form via virtual JSON string property
 4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
+584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
+7239619 chore: rename project context doc, add repository test stub, add root context snapshot
+2ec0448 feat: expand PlayerArchetype to 30 archetypes with formula/threshold schema
+194625c feat: PlayerArchetype entity, API endpoint, admin CRUD, and seed data
 ```
 
 ---
 
-## Notes for AI Context
+## Architecture Notes
 
-### Current Focus Areas
-- JWT Authentication implementation
-- Leaderboard sync endpoints
-- Admin UI development
-- Academy management system
-
-### Key Design Patterns
-- Repository pattern for data access
-- Service layer for business logic
-- DTO pattern for API requests/responses
-- Event-driven architecture where applicable
-
-### Testing Strategy
-- Unit tests for services
-- Integration tests for repositories
-- API tests for controllers
+- **Repository Pattern** — dedicated `*Repository` classes per entity encapsulate all query logic, keeping data access out of controllers and services
+- **Service Layer** — business logic is isolated in named services (`SyncService`, `EconomicService`, `MarketPoolService`, etc.) with controllers acting as thin HTTP adapters
+- **DTO / Input Validation** — `src/Dto/` holds request DTOs (e.g. `SyncRequest`) deserialized and validated before reaching the service layer, keeping entity classes clean of HTTP concerns
+- **CQRS-lite via API Platform** — `src/ApiResource/` separates resource definitions from controllers, with read (`MarketDataService`, `GET` endpoints) and write (`SyncService`, `InboxService`) paths handled by distinct classes
+- **Domain Events / Observer** — `src/EventSubscriber/` signals a pub/sub layer decoupling side-effects (e.g. post-sync economic triggers) from the primary request flow
 
 ---
 
-## Additional Resources
+## Current Development Focus
 
-- [Symfony Documentation](https://symfony.com/doc/current/index.html)
-- [Doctrine ORM](https://www.doctrine-project.org/projects/doctrine-orm/en/latest/)
-- [JWT Authentication Bundle](https://github.com/lexik/LexikJWTAuthenticationBundle)
+- **NPC interaction system** — The Phase 3 & 4 commit introduces game logic for NPC behaviour and GameConfig; AI could help generate varied, contextually coherent NPC dialogue, decision weights, and interaction outcomes that are difficult to hand-tune at scale.
 
+- **Market & prospect pool generation** — `GenerateMarketPoolCommand` and `SeedProspectPoolCommand` are actively evolving; AI could replace or augment static seeding logic with procedurally generated player/staff profiles (names, personalities, stats) that feel realistic and non-repetitive.
+
+- **Game event template authoring** — `SeedGameEventsCommand` and the admin editor for `impacts` JSON suggest manual content creation; AI could draft new `GameEventTemplate` entries (bodyTemplate copy, impact deltas, weight suggestions) aligned to existing category/slug conventions.
+
+- **Schema migration churn** — Five migrations landed in five days, indicating rapid entity changes; AI could help predict downstream breakages (cascade rules, index gaps, reserved-word collisions like `rank`) before `doctrine:migrations:diff` is run.
+
+- **Admin panel JSON field editing** — Both `specialisms` and `impacts` now use virtual string properties to expose JSON in EasyAdmin forms; AI could validate and suggest corrections to freeform JSON input at the UI layer, reducing malformed data entering the database.

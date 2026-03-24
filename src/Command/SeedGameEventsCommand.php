@@ -479,6 +479,68 @@ class SeedGameEventsCommand extends Command
                     'minSquadMorale' => 40,
                 ],
             ],
+            // ── Guardian Events ───────────────────────────────────────────────
+
+            // Background noise — weight 3
+            [
+                'slug'         => 'guardian_request_financial_gift',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 3,
+                'title'        => 'Guardian Gift Request',
+                'bodyTemplate' => '{guardian_name} has been in touch. They feel {player_name} deserves a little recognition for their hard work and are asking the academy to show some goodwill — a small financial gesture would go a long way.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'guardian_request_travel_upgrade',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 3,
+                'title'        => 'Travel Arrangement Request',
+                'bodyTemplate' => '{guardian_name} has contacted us regarding travel arrangements for {player_name}. They feel the current setup isn\'t appropriate for a player of their child\'s standing and are requesting an upgrade.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'guardian_request_playing_time',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 3,
+                'title'        => 'Playing Time Concern',
+                'bodyTemplate' => '{guardian_name} has raised concerns about {player_name}\'s development pathway. They believe he isn\'t receiving enough on-pitch time to reach his potential and want a formal response.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'guardian_complaint_coach',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 3,
+                'title'        => 'Coach Complaint',
+                'bodyTemplate' => '{guardian_name} has filed a complaint regarding the coaching {player_name} is receiving. They feel the current approach isn\'t suited to their child\'s personality and are requesting a meeting.',
+                'impacts'      => [],
+            ],
+
+            // Event-driven — weight 1
+            [
+                'slug'         => 'guardian_threat_withdrawal',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 1,
+                'title'        => 'Withdrawal Threat',
+                'bodyTemplate' => '{guardian_name} has contacted the academy in a formal capacity. They are seriously considering withdrawing {player_name} from the programme if the situation does not improve immediately.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'guardian_low_morale_concern',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 1,
+                'title'        => 'Guardian Morale Concern',
+                'bodyTemplate' => '{guardian_name} reached out after noticing a change in {player_name}\'s mood at home. They want to know what\'s going on and whether the academy is doing enough to support him.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'guardian_agent_approach_concern',
+                'category'     => EventCategory::GUARDIAN,
+                'weight'       => 1,
+                'title'        => 'Agent Approach Concern',
+                'bodyTemplate' => '{guardian_name} has informed us that {player_name} has been approached by an agent. They want to understand what this means for his future at the academy before making any decisions.',
+                'impacts'      => [],
+            ],
+
             [
                 'slug'             => 'npc-squad-banter',
                 'category'         => EventCategory::NPC_INTERACTION,

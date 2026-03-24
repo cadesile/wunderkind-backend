@@ -64,6 +64,9 @@ class Staff
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $assignedAt = null;
 
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $dob = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $hiredAt;
 
@@ -133,6 +136,9 @@ class Staff
     public function getAssignedAt(): ?\DateTimeImmutable { return $this->assignedAt; }
     public function setAssignedAt(?\DateTimeImmutable $at): void { $this->assignedAt = $at; }
     public function isAssigned(): bool { return $this->assignedAt !== null; }
+
+    public function getDob(): ?\DateTimeImmutable { return $this->dob; }
+    public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
 
     public function getHiredAt(): \DateTimeImmutable { return $this->hiredAt; }
 }
