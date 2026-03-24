@@ -1008,6 +1008,7 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+1ce30f0 latest
 b16643f update context
 cbe4328 feat: Phase 3 & 4 — NPC interaction system + GameConfig API
 9e730a5 feat: configurable starting balance + SyncRecord payload viewer in admin
@@ -1017,7 +1018,6 @@ fb3092c feat: editable specialisms field on staff edit form via virtual JSON str
 c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField type error
 39fd43b feat: editable impacts field on event template admin form via virtual JSON string property
 4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
-584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
 ```
 
 ---
