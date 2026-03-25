@@ -28,8 +28,15 @@
 
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
 
-            <button type="submit">SIGN IN</button>
+            <button type="submit" id="submitBtn">SIGN IN</button>
         </form>
     </div>
+<script>
+document.querySelector('form').addEventListener('submit', function () {
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'SIGNING IN…';
+});
+</script>
 </body>
 </html>

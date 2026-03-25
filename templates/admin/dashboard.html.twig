@@ -1,16 +1,22 @@
 {% extends '@EasyAdmin/layout.html.twig' %}
 
 {% block content %}
+{% set totalPlayers = stats.poolPlayers + stats.assignedPlayers %}
+{% set totalStaff   = stats.poolStaff   + stats.assignedStaff %}
+{% set playerPct    = totalPlayers > 0 ? ((stats.assignedPlayers / totalPlayers) * 100)|round : 0 %}
+{% set staffPct     = totalStaff   > 0 ? ((stats.assignedStaff   / totalStaff)   * 100)|round : 0 %}
+
 <div class="row g-3 mt-1">
 
-    {# ── Platform stats ────────────────────────────────────────────── #}
+    {# ── Platform stats ────────────────────────────────────────────────── #}
     <div class="col-12">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;">Platform</h6>
+        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-primary, #0d6efd);padding-left:.5rem;">Platform</h6>
     </div>
 
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-users fa-lg"></i></div>
                 <div class="text-muted small mb-1">Total Users</div>
                 <div class="fs-3 fw-bold">{{ stats.users }}</div>
             </div>
@@ -19,6 +25,7 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-school fa-lg"></i></div>
                 <div class="text-muted small mb-1">Academies</div>
                 <div class="fs-3 fw-bold">{{ stats.academies }}</div>
             </div>
@@ -27,6 +34,7 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-sync fa-lg"></i></div>
                 <div class="text-muted small mb-1">Total Syncs</div>
                 <div class="fs-3 fw-bold">{{ stats.syncs }}</div>
             </div>
@@ -35,20 +43,22 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-danger mb-2"><i class="fa fa-triangle-exclamation fa-lg"></i></div>
                 <div class="text-muted small mb-1">Invalid Syncs</div>
                 <div class="fs-3 fw-bold text-danger">{{ stats.invalidSyncs }}</div>
             </div>
         </div>
     </div>
 
-    {# ── Pool stats ────────────────────────────────────────────────── #}
+    {# ── Pool stats ────────────────────────────────────────────────────── #}
     <div class="col-12 mt-2">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;">Market Pool</h6>
+        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-success,#198754);padding-left:.5rem;">Market Pool</h6>
     </div>
 
     <div class="col-sm-6 col-xl-3">
-        <div class="card text-center border-success">
+        <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-person-running fa-lg"></i></div>
                 <div class="text-muted small mb-1">Players in Pool</div>
                 <div class="fs-3 fw-bold text-success">{{ stats.poolPlayers }}</div>
             </div>
@@ -57,14 +67,17 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-circle-check fa-lg"></i></div>
                 <div class="text-muted small mb-1">Players Assigned</div>
                 <div class="fs-3 fw-bold">{{ stats.assignedPlayers }}</div>
+                <div class="text-muted" style="font-size:.7rem;">{{ stats.assignedPlayers }} / {{ totalPlayers }} &middot; {{ playerPct }}% assigned</div>
             </div>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card text-center border-success">
+        <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-chalkboard-user fa-lg"></i></div>
                 <div class="text-muted small mb-1">Staff in Pool</div>
                 <div class="fs-3 fw-bold text-success">{{ stats.poolStaff }}</div>
             </div>
@@ -73,15 +86,17 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card text-center">
             <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-circle-check fa-lg"></i></div>
                 <div class="text-muted small mb-1">Staff Assigned</div>
                 <div class="fs-3 fw-bold">{{ stats.assignedStaff }}</div>
+                <div class="text-muted" style="font-size:.7rem;">{{ stats.assignedStaff }} / {{ totalStaff }} &middot; {{ staffPct }}% assigned</div>
             </div>
         </div>
     </div>
 
-    {# ── Charts ────────────────────────────────────────────────────── #}
+    {# ── Charts ────────────────────────────────────────────────────────── #}
     <div class="col-12 mt-2">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;">Pool Players — Breakdown</h6>
+        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-secondary,#6c757d);padding-left:.5rem;">Pool Players — Breakdown</h6>
     </div>
 
     {# Nationality chart #}
@@ -106,7 +121,7 @@
                         <span class="fw-semibold small">By Position</span>
                         <span class="text-muted small ms-1">(unassigned pool)</span>
                     </div>
-                    <div class="card-body" style="height:100px;">
+                    <div class="card-body" style="height:170px;">
                         <canvas id="chartPosition"></canvas>
                     </div>
                 </div>
@@ -117,7 +132,7 @@
                         <span class="fw-semibold small">By Age</span>
                         <span class="text-muted small ms-1">(unassigned pool)</span>
                     </div>
-                    <div class="card-body" style="height:100px;">
+                    <div class="card-body" style="height:170px;">
                         <canvas id="chartAge"></canvas>
                     </div>
                 </div>
@@ -144,7 +159,7 @@
         return g;
     }
 
-    // ── Nationality (horizontal bar) ─────────────────────────────────
+    // ── Nationality (horizontal bar) ──────────────────────────────────
     (function () {
         const raw = {{ charts.byNationality | json_encode | raw }};
         const labels = raw.map(r => r.nationality);
@@ -175,7 +190,7 @@
         });
     })();
 
-    // ── Position (doughnut) ──────────────────────────────────────────
+    // ── Position (doughnut) ───────────────────────────────────────────
     (function () {
         const posLabels = { GK: 'GK', DEF: 'DEF', MID: 'MID', ATT: 'ATT' };
         const raw    = {{ charts.byPosition | json_encode | raw }};
@@ -202,7 +217,7 @@
         });
     })();
 
-    // ── Age (bar) ────────────────────────────────────────────────────
+    // ── Age (bar) ─────────────────────────────────────────────────────
     (function () {
         const raw    = {{ charts.byAge | json_encode | raw }};
         const labels = raw.map(r => r.age + ' yrs');

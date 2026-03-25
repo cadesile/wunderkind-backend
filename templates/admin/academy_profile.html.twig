@@ -1,0 +1,366 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% set payload = latestValidSync ? latestValidSync.payload : {} %}
+
+{% block content %}
+<div class="row g-3 mt-1">
+
+    {# ── Breadcrumb / back link ───────────────────────────────────────── #}
+    <div class="col-12 mb-1">
+        <a href="{{ ea_url().setController('App\\Controller\\Admin\\AcademyCrudController') }}"
+           class="text-muted text-decoration-none small">
+            <i class="fa fa-arrow-left me-1"></i> Back to Academies
+        </a>
+    </div>
+
+    {# ── Academy header card ──────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-3">
+                <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+                    <div>
+                        <h4 class="fw-bold mb-1">
+                            {% if academy.country %}
+                                <span class="text-muted small me-1">{{ academy.country }}</span>
+                            {% endif %}
+                            {{ academy.name }}
+                        </h4>
+                        <div class="text-muted small d-flex flex-wrap gap-3">
+                            <span><i class="fa fa-envelope me-1"></i>{{ academy.user.email }}</span>
+                            {% if academy.paName %}
+                                <span><i class="fa fa-id-badge me-1"></i>PA: {{ academy.paName }}</span>
+                            {% endif %}
+                            <span><i class="fa fa-calendar me-1"></i>Joined {{ academy.createdAt|date('d M Y') }}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        {% if academy.lastSyncedAt %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                <i class="fa fa-circle-check me-1"></i>
+                                Last sync: Week {{ academy.lastSyncedWeek }} &middot; {{ academy.lastSyncedAt|date('d M Y H:i') }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                <i class="fa fa-circle-xmark me-1"></i> Never synced
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Core stat cards ──────────────────────────────────────────────── #}
+    <div class="col-12">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-primary);padding-left:.5rem;">
+            Core Stats
+        </h6>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-star fa-lg"></i></div>
+                <div class="text-muted small mb-1">Reputation</div>
+                <div class="fs-3 fw-bold">{{ academy.reputation|number_format }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-sterling-sign fa-lg"></i></div>
+                <div class="text-muted small mb-1">Balance</div>
+                <div class="fs-3 fw-bold {{ academy.balance < 0 ? 'text-danger' : '' }}">
+                    {{ academy.balance < 0 ? '-' : '' }}£{{ (academy.balance|abs / 100)|number_format(0, '.', ',') }}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-chart-line fa-lg"></i></div>
+                <div class="text-muted small mb-1">Career Earnings</div>
+                <div class="fs-3 fw-bold">£{{ (academy.totalCareerEarnings / 100)|number_format(0, '.', ',') }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted mb-2"><i class="fa fa-trophy fa-lg"></i></div>
+                <div class="text-muted small mb-1">Hall of Fame</div>
+                <div class="fs-3 fw-bold text-warning">{{ academy.hallOfFamePoints|number_format }}</div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Latest sync info + Manager profile ───────────────────────────── #}
+    <div class="col-12 mt-2">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-success);padding-left:.5rem;">
+            Latest Sync Snapshot
+        </h6>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-sync me-1 text-muted"></i> Week {{ payload.weekNumber ?? academy.lastSyncedWeek }} snapshot</span>
+                {% if latestValidSync %}
+                    <span class="text-muted" style="font-size:.7rem;">
+                        received {{ latestValidSync.serverTimestamp|date('d M Y H:i') }}
+                    </span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if latestValidSync %}
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3 text-center">
+                            <div class="fw-bold fs-5">{{ payload.squadSize ?? '—' }}</div>
+                            <div class="text-muted" style="font-size:.75rem;">Squad Size</div>
+                        </div>
+                        <div class="col-6 col-md-3 text-center">
+                            <div class="fw-bold fs-5">{{ payload.staffCount ?? '—' }}</div>
+                            <div class="text-muted" style="font-size:.75rem;">Staff Count</div>
+                        </div>
+                        <div class="col-6 col-md-3 text-center">
+                            {% set ed = payload.earningsDelta ?? 0 %}
+                            <div class="fw-bold fs-5 {{ ed >= 0 ? 'text-success' : 'text-danger' }}">
+                                {{ ed >= 0 ? '+' : '' }}£{{ (ed / 100)|number_format(0, '.', ',') }}
+                            </div>
+                            <div class="text-muted" style="font-size:.75rem;">Earnings Delta</div>
+                        </div>
+                        <div class="col-6 col-md-3 text-center">
+                            {% set rd = payload.reputationDelta ?? 0 %}
+                            <div class="fw-bold fs-5 {{ rd >= 0 ? 'text-success' : 'text-danger' }}">
+                                {{ rd >= 0 ? '+' : '' }}{{ rd|number_format(1) }}
+                            </div>
+                            <div class="text-muted" style="font-size:.75rem;">Rep Delta</div>
+                        </div>
+                    </div>
+
+                    {# Facility levels #}
+                    {% if payload.facilityLevels is defined and payload.facilityLevels|length > 0 %}
+                        <hr class="my-3">
+                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
+                            <i class="fa fa-building me-1"></i> Facility Levels
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for slug, level in payload.facilityLevels %}
+                                <span class="badge {{ level > 0 ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}">
+                                    {{ slug|replace({'_': ' '})|title }} Lv{{ level }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {# Manager shifts this week #}
+                    {% if payload.managerShifts is defined and payload.managerShifts|length > 0 %}
+                        <hr class="my-3">
+                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
+                            <i class="fa fa-person-walking me-1"></i> Manager Shifts This Week
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for trait, delta in payload.managerShifts %}
+                                <span class="badge {{ delta > 0 ? 'bg-success-subtle text-success border border-success-subtle' : (delta < 0 ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle') }}">
+                                    {{ trait|title }} {{ delta > 0 ? '+' : '' }}{{ delta }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted small mb-0"><i class="fa fa-circle-info me-1"></i> No valid syncs recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header py-2">
+                <span class="fw-semibold small"><i class="fa fa-user-tie me-1 text-muted"></i> Manager Profile</span>
+            </div>
+            <div class="card-body">
+                {% if academy.managerProfile %}
+                    <div class="mb-3">
+                        <div class="fw-semibold">{{ academy.managerProfile.name ?? '—' }}</div>
+                        <div class="text-muted small">
+                            {% if academy.managerProfile.nationality is defined %}
+                                {{ academy.managerProfile.nationality }}
+                            {% endif %}
+                            {% if academy.managerProfile.dateOfBirth is defined %}
+                                &middot; b. {{ academy.managerProfile.dateOfBirth }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                {% endif %}
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span><i class="fa fa-fire text-warning me-1"></i> Temperament</span>
+                        <span class="fw-semibold">{{ academy.managerTemperament }}</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                        <div class="progress-bar bg-warning" style="width:{{ academy.managerTemperament }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span><i class="fa fa-gavel text-danger me-1"></i> Discipline</span>
+                        <span class="fw-semibold">{{ academy.managerDiscipline }}</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                        <div class="progress-bar bg-danger" style="width:{{ academy.managerDiscipline }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span><i class="fa fa-bolt text-primary me-1"></i> Ambition</span>
+                        <span class="fw-semibold">{{ academy.managerAmbition }}</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                        <div class="progress-bar bg-primary" style="width:{{ academy.managerAmbition }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Leaderboard standings ─────────────────────────────────────────── #}
+    {% if leaderboardEntries|length > 0 %}
+    <div class="col-12 mt-2">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-warning);padding-left:.5rem;">
+            Leaderboard Standings
+        </h6>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Category</th>
+                            <th class="small text-muted fw-semibold">Period</th>
+                            <th class="small text-muted fw-semibold text-end">Score</th>
+                            <th class="small text-muted fw-semibold text-end">Rank</th>
+                            <th class="small text-muted fw-semibold text-end">Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in leaderboardEntries %}
+                        <tr>
+                            <td class="small">
+                                {% if entry.categoryValue == 'career_earnings' %}
+                                    <i class="fa fa-chart-line text-success me-1"></i> Career Earnings
+                                {% elseif entry.categoryValue == 'academy_reputation' %}
+                                    <i class="fa fa-star text-warning me-1"></i> Reputation
+                                {% else %}
+                                    <i class="fa fa-trophy text-warning me-1"></i> Hall of Fame
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {{ entry.period == 'all-time' ? 'bg-dark' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }} small">
+                                    {{ entry.period }}
+                                </span>
+                            </td>
+                            <td class="text-end small fw-semibold">{{ entry.score|number_format }}</td>
+                            <td class="text-end small">
+                                {% if entry.rank %}
+                                    <span class="fw-bold">#{{ entry.rank }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-muted small">{{ entry.updatedAt|date('d M Y') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Sync log ─────────────────────────────────────────────────────── #}
+    <div class="col-12 mt-2">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-secondary);padding-left:.5rem;">
+            Sync Log
+            <span class="text-muted fw-normal ms-1" style="font-size:.7rem;">(last {{ syncRecords|length }})</span>
+        </h6>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            {% if syncRecords|length > 0 %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Week</th>
+                            <th class="small text-muted fw-semibold">Status</th>
+                            <th class="small text-muted fw-semibold text-end">Earnings Δ</th>
+                            <th class="small text-muted fw-semibold text-end">Rep Δ</th>
+                            <th class="small text-muted fw-semibold text-end">Squad</th>
+                            <th class="small text-muted fw-semibold">Client Time</th>
+                            <th class="small text-muted fw-semibold">Server Received</th>
+                            <th class="small text-muted fw-semibold">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in syncRecords %}
+                        {% set p = record.payload %}
+                        <tr>
+                            <td class="small fw-semibold">{{ record.clientWeekNumber }}</td>
+                            <td>
+                                {% if record.isValid %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">valid</span>
+                                {% else %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">invalid</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end small">
+                                {% if p.earningsDelta is defined %}
+                                    {% set ed = p.earningsDelta %}
+                                    <span class="{{ ed >= 0 ? 'text-success' : 'text-danger' }}">
+                                        {{ ed >= 0 ? '+' : '' }}£{{ (ed / 100)|number_format(0) }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end small">
+                                {% if p.reputationDelta is defined %}
+                                    {% set rd = p.reputationDelta %}
+                                    <span class="{{ rd >= 0 ? 'text-success' : 'text-danger' }}">
+                                        {{ rd >= 0 ? '+' : '' }}{{ rd|number_format(1) }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end small text-muted">{{ p.squadSize ?? '—' }}</td>
+                            <td class="small text-muted">{{ record.clientTimestamp|date('d M Y H:i') }}</td>
+                            <td class="small text-muted">{{ record.serverTimestamp|date('d M Y H:i') }}</td>
+                            <td class="small text-muted">{{ record.invalidReason ?? '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <div class="card-body">
+                    <p class="text-muted small mb-0"><i class="fa fa-circle-info me-1"></i> No sync records yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

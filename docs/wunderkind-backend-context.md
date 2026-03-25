@@ -1,12 +1,12 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-03-24 13:06:42 | Stack: symfony 80 · PHP 8.4 · mysql:8.0 | Dev: lando
+> Generated: 2026-03-25 23:19:34 | Stack: symfony 80 · PHP 8.4 · mysql:8.0 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young footballers. The backend follows a client-authoritative hybrid sync model — gameplay (weekly ticks, training, aging) runs fully on-device, while this server handles JWT-authenticated sync validation, global leaderboards, anti-cheat enforcement, and market/economic data. Built on Symfony 8.0 with Doctrine ORM, it exposes a REST API consumed by a React Native mobile client, backed by a MySQL database running in a Lando containerized dev environment.
+Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young talent. The architecture follows a client-authoritative hybrid sync model — all gameplay logic runs offline on-device, while this Symfony 8 / PHP 8.4 API handles legacy metric syncing, anti-cheat validation, global leaderboards, and NPC market interactions. It exposes a JWT-secured REST API consumed by the mobile client, backed by MySQL via Doctrine ORM, with an EasyAdmin v5 panel for administrative oversight.
 
 ---
 
@@ -14,9 +14,9 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 
 | Category | Count |
 |---|---|
-| PHP files         | 146 |
+| PHP files         | 144 |
 | Entities/Models   | 19 |
-| Controllers       | 34 |
+| Controllers       | 32 |
 | Services          | 9 |
 | Migrations        | 27 |
 
@@ -137,6 +137,7 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 │   ├── admin-login.css
 │   └── index.php
 ├── scripts
+│   ├── generate_project_context_push.sh
 │   ├── generate_project_context.sh
 │   └── reset_and_seed.sh
 ├── src
@@ -229,6 +230,7 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 │   └── Kernel.php
 ├── templates
 │   ├── admin
+│   │   ├── academy_profile.html.twig
 │   │   ├── dashboard.html.twig
 │   │   ├── login.html.twig
 │   │   └── settings.html.twig
@@ -254,7 +256,7 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-34 directories, 157 files
+34 directories, 159 files
 ```
 
 ---
@@ -690,7 +692,9 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 
 #### AcademyCrudController
 ```php
+    public function __construct(private EntityManagerInterface $em) {}
     public function configureActions(Actions $actions): Actions
+    public function detail(AdminContext $context): Response
     public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
 ```
@@ -711,21 +715,20 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 
 #### DashboardController
 ```php
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(
     public function index(): Response
+    #[Route('/admin/settings', name: 'admin_settings')]
+    public function settings(): Response
+    #[Route('/admin/settings/save-config', name: 'admin_settings_save_config', methods: ['POST'])]
+    public function saveConfig(Request $request): Response
+    #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
+    public function triggerAge21Deletion(Request $request, EconomicService $economicService): Response
+    #[Route('/admin/developer-tools/cleanup-entities', name: 'admin_cleanup_entities', methods: ['POST'])]
+    public function cleanupEntities(Request $request, KernelInterface $kernel): Response
+    #[Route('/admin/developer-tools/reset-database', name: 'admin_reset_database', methods: ['GET'])]
+    public function resetDatabase(): Response
     public function configureDashboard(): Dashboard
     public function configureMenuItems(): iterable
-```
-
-#### DeveloperToolsController
-```php
-#[Route('/admin/developer-tools')]
-    #[Route('/trigger-age21', name: 'admin_trigger_age21', methods: ['GET'])]
-    public function triggerAge21Deletion(
-    #[Route('/cleanup-entities', name: 'admin_cleanup_entities', methods: ['GET'])]
-    public function cleanupEntities(KernelInterface $kernel): Response
-    #[Route('/reset-database', name: 'admin_reset_database', methods: ['GET'])]
-    public function resetDatabase(): Response
 ```
 
 #### GameEventTemplateCrudController
@@ -776,15 +779,6 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
     public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
-```
-
-#### SettingsController
-```php
-    public function __construct(
-    #[Route('/admin/settings', name: 'admin_settings')]
-    public function index(): Response
-    #[Route('/admin/settings/save-config', name: 'admin_settings_save_config', methods: ['POST'])]
-    public function saveConfig(Request $request): Response
 ```
 
 #### SponsorCrudController
@@ -1033,8 +1027,8 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
     public function generateCoaches(int $count, ?int $academyReputation = null): array
     public function generateScouts(int $count): array
     public function generateAgents(int $count): array
-    public function generateSponsors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
-    public function generateInvestors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
+    public function generateSponsors(int $count): array
+    public function generateInvestors(int $count): array
     public function getAvailablePlayers(int $limit = 100, ?string $nationality = null): array
     public function getAvailableProspects(int $limit = 150): array
     public function getAvailableCoaches(int $limit = 20): array
@@ -1045,6 +1039,9 @@ Wunderkind Backend is the API server for The Wunderkind Factory, a mobile-first 
 #### NameGeneratorService
 ```php
     public function generateName(string $nationality): string
+    public function generatePlayerName(string $nationality): array
+    public function generateFirstName(string $nationality): string
+    public function generateLastName(string $nationality): string
     public function getRandomNationality(): string
 ```
 
@@ -1113,6 +1110,8 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
+8a5ff03 latest
+2715bcd latest code
 fa4ac61 updated context
 1ce30f0 latest
 b16643f update context
@@ -1126,30 +1125,24 @@ c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField t
 4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
 584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
 7239619 chore: rename project context doc, add repository test stub, add root context snapshot
-2ec0448 feat: expand PlayerArchetype to 30 archetypes with formula/threshold schema
-194625c feat: PlayerArchetype entity, API endpoint, admin CRUD, and seed data
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Repository Pattern** — dedicated `*Repository` classes per entity encapsulate all query logic, keeping data access out of controllers and services
-- **Service Layer** — business logic is isolated in named services (`SyncService`, `EconomicService`, `MarketPoolService`, etc.) with controllers acting as thin HTTP adapters
-- **DTO / Input Validation** — `src/Dto/` holds request DTOs (e.g. `SyncRequest`) deserialized and validated before reaching the service layer, keeping entity classes clean of HTTP concerns
-- **CQRS-lite via API Platform** — `src/ApiResource/` separates resource definitions from controllers, with read (`MarketDataService`, `GET` endpoints) and write (`SyncService`, `InboxService`) paths handled by distinct classes
-- **Domain Events / Observer** — `src/EventSubscriber/` signals a pub/sub layer decoupling side-effects (e.g. post-sync economic triggers) from the primary request flow
+- **Repository Pattern** — dedicated repository classes per entity (e.g. `AcademyRepository`, `LeaderboardEntryRepository`) encapsulate all query logic, keeping entities free of persistence concerns
+- **Service Layer** — business logic isolated in focused services (`SyncService`, `EconomicService`, `MarketPoolService`, `InboxService`) that controllers delegate to, keeping HTTP handlers thin
+- **DTO / Input Mapping** — `src/Dto/` holds validated input objects (e.g. `SyncRequest`) deserialized via `#[MapRequestPayload]`, decoupling HTTP input from domain entities
+- **Domain Enum modeling** — rich PHP 8.1 backed enums (`src/Enum/`) encode domain state machines (player status, leaderboard category, message status) rather than stringly-typed fields
+- **Command pattern (CLI)** — `src/Command/` separates operational/admin tasks (seeding, cleanup, market generation) from the HTTP layer, enabling safe background or one-off execution
 
 ---
 
 ## Current Development Focus
 
-- **NPC interaction system** — The Phase 3 & 4 commit introduces game logic for NPC behaviour and GameConfig; AI could help generate varied, contextually coherent NPC dialogue, decision weights, and interaction outcomes that are difficult to hand-tune at scale.
-
-- **Market & prospect pool generation** — `GenerateMarketPoolCommand` and `SeedProspectPoolCommand` are actively evolving; AI could replace or augment static seeding logic with procedurally generated player/staff profiles (names, personalities, stats) that feel realistic and non-repetitive.
-
-- **Game event template authoring** — `SeedGameEventsCommand` and the admin editor for `impacts` JSON suggest manual content creation; AI could draft new `GameEventTemplate` entries (bodyTemplate copy, impact deltas, weight suggestions) aligned to existing category/slug conventions.
-
-- **Schema migration churn** — Five migrations landed in five days, indicating rapid entity changes; AI could help predict downstream breakages (cascade rules, index gaps, reserved-word collisions like `rank`) before `doctrine:migrations:diff` is run.
-
-- **Admin panel JSON field editing** — Both `specialisms` and `impacts` now use virtual string properties to expose JSON in EasyAdmin forms; AI could validate and suggest corrections to freeform JSON input at the UI layer, reducing malformed data entering the database.
+- **NPC interaction system** — the Phase 3/4 commit suggests a new subsystem for agent/sponsor/investor NPCs; AI could help generate varied, contextually appropriate NPC dialogue, offer logic, and decision trees that feel organic rather than scripted
+- **Rapid schema evolution** — 5 migrations across 3 days indicates frequent entity changes; AI could help audit migration diffs for data-loss risks, reserved-word conflicts (like the `rank` issue), and index coverage before each `migrations:diff`
+- **Market & prospect pool generation** — both `GenerateMarketPoolCommand` and `SeedProspectPoolCommand` were recently modified; AI could improve procedural generation of realistic player/staff attributes, wage curves, and name diversity
+- **Admin CRUD surface** — `AcademyCrudController`, `PlayerCrudController`, `GuardianCrudController`, and `DashboardController` all changed recently; AI could help design richer admin views (e.g. inline stat charts, batch actions, computed fields) without bloating EasyAdmin config
+- **GameConfig API** — a new config endpoint implies the client needs server-driven tuning knobs; AI could assist in designing a versioned, cache-friendly config schema that safely decouples balance tweaks from app releases

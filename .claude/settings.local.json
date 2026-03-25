@@ -45,7 +45,8 @@
       "Bash(xxd:*)",
       "Bash(bash:*)",
       "Bash(chmod +x:*)",
-      "Bash(claude:*)"
+      "Bash(claude:*)",
+      "Bash(python3:*)"
     ]
   }
 }

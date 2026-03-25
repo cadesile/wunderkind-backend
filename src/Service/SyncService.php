@@ -12,6 +12,7 @@ use App\Enum\PlayerStatus;
 use App\Enum\TransferType;
 use App\Entity\Academy;
 use App\Repository\AcademyRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -23,6 +24,7 @@ class SyncService
         private readonly EntityManagerInterface     $em,
         private readonly EconomicService            $economicService,
         private readonly InboxService               $inboxService,
+        private readonly GameConfigRepository       $gameConfigRepository,
     ) {}
 
     /**
@@ -139,6 +141,10 @@ class SyncService
 
         $syncedAt = $academy->getLastSyncedAt();
 
+        // Fetch runtime config to embed in response. Falls back to defaults if
+        // the row doesn't exist yet (fresh install before seeder has run).
+        $gameConfig = $this->gameConfigRepository->getConfig();
+
         return [
             'accepted'   => true,
             'weekNumber' => $request->weekNumber,
@@ -154,6 +160,20 @@ class SyncService
                     'discipline'  => $academy->getManagerDiscipline(),
                     'ambition'    => $academy->getManagerAmbition(),
                 ],
+            ],
+            'gameConfig' => [
+                'cliqueRelationshipThreshold'      => $gameConfig->getCliqueRelationshipThreshold(),
+                'cliqueSquadCapPercent'             => $gameConfig->getCliqueSquadCapPercent(),
+                'cliqueMinTenureWeeks'              => $gameConfig->getCliqueMinTenureWeeks(),
+                'baseXP'                            => $gameConfig->getBaseXP(),
+                'baseInjuryProbability'             => $gameConfig->getBaseInjuryProbability(),
+                'regressionUpperThreshold'          => $gameConfig->getRegressionUpperThreshold(),
+                'regressionLowerThreshold'          => $gameConfig->getRegressionLowerThreshold(),
+                'reputationDeltaBase'               => $gameConfig->getReputationDeltaBase(),
+                'reputationDeltaFacilityMultiplier' => $gameConfig->getReputationDeltaFacilityMultiplier(),
+                'injuryMinorWeight'                 => $gameConfig->getInjuryMinorWeight(),
+                'injuryModerateWeight'              => $gameConfig->getInjuryModerateWeight(),
+                'injurySeriousWeight'               => $gameConfig->getInjurySeriousWeight(),
             ],
         ];
     }

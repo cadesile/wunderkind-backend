@@ -118,6 +118,14 @@ button[type="submit"]:active {
     box-shadow: 2px 2px 0 rgba(0,0,0,0.4);
 }
 
+button[type="submit"]:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    background: #c9a52e;
+}
+
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #0d2e28; }
 ::-webkit-scrollbar-thumb { background: #2a8a7a; border: 2px solid #0d2e28; }
