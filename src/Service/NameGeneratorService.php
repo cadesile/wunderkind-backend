@@ -10,8 +10,13 @@ class NameGeneratorService
         'English', 'Spanish', 'French', 'German', 'Brazilian', 'Portuguese',
         'Nigerian', 'Ghanaian', 'Japanese', 'South Korean', 'Argentine',
         'Dutch', 'Italian', 'Swedish', 'Danish', 'Irish', 'Ivorian', 'Senegalese', 'Chinese',
+        'Polish',
     ];
 
+    /**
+     * Generate a simple full-name string (used for scouts, agents, coaches).
+     * Brazilian players have a 20% chance of a mononym.
+     */
     public function generateName(string $nationality): string
     {
         $pools = self::getNamePools();
@@ -23,7 +28,6 @@ class NameGeneratorService
         $pool      = $pools[$nationality];
         $firstName = $pool['firstNames'][array_rand($pool['firstNames'])];
 
-        // Brazilian: 20% chance of mononym (single name only)
         if ($nationality === 'Brazilian' && random_int(1, 5) === 1) {
             return $firstName;
         }
@@ -31,6 +35,90 @@ class NameGeneratorService
         $lastName = $pool['lastNames'][array_rand($pool['lastNames'])];
 
         return "{$firstName} {$lastName}";
+    }
+
+    /**
+     * Generate a player name with cultural complexity, returned as separate parts.
+     *
+     * Rules applied in order:
+     *  - Brazilian: 20% mononym (lastName = '')
+     *  - Spanish / Portuguese / Brazilian / Argentine: 15% double-surname
+     *  - All: 5% generational suffix appended to lastName
+     *
+     * @return array{firstName: string, lastName: string}
+     */
+    public function generatePlayerName(string $nationality): array
+    {
+        $pools = self::getNamePools();
+
+        if (!isset($pools[$nationality])) {
+            $nationality = 'English';
+        }
+
+        $pool      = $pools[$nationality];
+        $firstName = $pool['firstNames'][array_rand($pool['firstNames'])];
+
+        // Brazilian mononym (20%)
+        if ($nationality === 'Brazilian' && random_int(1, 5) === 1) {
+            return ['firstName' => $firstName, 'lastName' => ''];
+        }
+
+        $lastName = $pool['lastNames'][array_rand($pool['lastNames'])];
+
+        // Double-surname for Iberian / Latin cultures (15%)
+        $doubleSurnameNats = ['Spanish', 'Portuguese', 'Brazilian', 'Argentine'];
+        if (in_array($nationality, $doubleSurnameNats, true) && random_int(1, 100) <= 15) {
+            $second = $pool['lastNames'][array_rand($pool['lastNames'])];
+            // Avoid identical pair
+            $attempts = 0;
+            while ($second === $lastName && $attempts < 5) {
+                $second = $pool['lastNames'][array_rand($pool['lastNames'])];
+                $attempts++;
+            }
+            $lastName = "{$lastName} {$second}";
+        }
+
+        // Generational suffix (5%)
+        if (random_int(1, 100) <= 5) {
+            $suffixes = match ($nationality) {
+                'Brazilian', 'Portuguese' => ['Jr.', 'Filho', 'Neto'],
+                'Spanish', 'Argentine'    => ['Jr.', 'II', 'III'],
+                default                   => ['Jr.', 'II', 'III'],
+            };
+            $lastName .= ' ' . $suffixes[array_rand($suffixes)];
+        }
+
+        return ['firstName' => $firstName, 'lastName' => $lastName];
+    }
+
+    /**
+     * Return a single first name for a given nationality (used for guardian generation).
+     */
+    public function generateFirstName(string $nationality): string
+    {
+        $pools = self::getNamePools();
+
+        if (!isset($pools[$nationality])) {
+            $nationality = 'English';
+        }
+
+        $pool = $pools[$nationality];
+        return $pool['firstNames'][array_rand($pool['firstNames'])];
+    }
+
+    /**
+     * Return a single last name for a given nationality.
+     */
+    public function generateLastName(string $nationality): string
+    {
+        $pools = self::getNamePools();
+
+        if (!isset($pools[$nationality])) {
+            $nationality = 'English';
+        }
+
+        $pool = $pools[$nationality];
+        return $pool['lastNames'][array_rand($pool['lastNames'])];
     }
 
     public function getRandomNationality(): string
@@ -191,32 +279,24 @@ class NameGeneratorService
             // -----------------------------------------------------------------
             'Nigerian' => [
                 'firstNames' => [
-                    // From source
                     'Olumide', 'Babatunde', 'Ifeoma', 'Chidi', 'Nneka', 'Tayo', 'Sade', 'Olatunji',
                     'Temilade', 'Femi', 'Yejide', 'Kehinde', 'Taiwo', 'Eniola',
-                    // Yoruba
                     'Adebayo', 'Afolabi', 'Akin', 'Biodun', 'Bolanle', 'Funmi', 'Gbemisola',
                     'Iyabo', 'Jumoke', 'Kemi', 'Kola', 'Kunle', 'Nike', 'Niyi', 'Omotola',
                     'Ronke', 'Seun', 'Shade', 'Tobi', 'Tosin', 'Wale', 'Yemi', 'Bukola',
-                    // Igbo
                     'Adaeze', 'Chioma', 'Emeka', 'Ngozi', 'Nnamdi', 'Obinna', 'Ugochukwu',
                     'Uchenna', 'Somto', 'Chidinma', 'Chijioke', 'Ekene',
-                    // Hausa
                     'Aliyu', 'Aminu', 'Garba', 'Haruna', 'Ibrahim', 'Kabiru', 'Musa',
                     'Rabiu', 'Sani', 'Usman', 'Yusuf', 'Zainab', 'Abubakar', 'Bello',
                 ],
                 'lastNames' => [
-                    // From source
                     'Balogun', 'Okoro', 'Adeyemi', 'Eze', 'Okafor', 'Nwosu', 'Anyanwu', 'Igbokwe',
-                    // Generated Yoruba
                     'Ajayi', 'Ajibade', 'Akinbiyi', 'Akinwale', 'Alabi', 'Ayoola', 'Ayodele',
                     'Bamidele', 'Bakare', 'Dike', 'Fashola', 'Idowu', 'Jegede', 'Lawal',
                     'Obafemi', 'Ogundele', 'Ogundimu', 'Ogunleye', 'Adesanya', 'Adewale',
                     'Adefope', 'Akintola', 'Awolowo', 'Agboola', 'Agoro',
-                    // Generated Igbo
                     'Chukwu', 'Ekwueme', 'Nweke', 'Obasi', 'Obi', 'Onwudiwe', 'Onyekachi',
                     'Okonkwo', 'Nnaji', 'Ikenna', 'Ifeanyi', 'Ezeji',
-                    // Generated Hausa
                     'Abubakar', 'Aliyu', 'Danladi', 'Musa', 'Shehu', 'Sulaiman',
                     'Umar', 'Yusuf', 'Badawi', 'Gwandu',
                 ],
@@ -227,12 +307,9 @@ class NameGeneratorService
             // -----------------------------------------------------------------
             'Ghanaian' => [
                 'firstNames' => [
-                    // From source (Akan/Twi day names)
                     'Kwame', 'Efua', 'Kofi', 'Adwoa', 'Kojo', 'Abena', 'Kwesi', 'Akua',
-                    // Day names (extended)
                     'Kwabena', 'Kweku', 'Yaw', 'Yaa', 'Ama', 'Akosua', 'Paa', 'Kow', 'Ebo',
                     'Araba', 'Kukua', 'Ekua', 'Abenaa', 'Adjoa',
-                    // Wider Ghanaian pool
                     'Nana', 'Fiifi', 'Dela', 'Elikem', 'Selorm', 'Selasi', 'Kafui', 'Eyram',
                     'Elom', 'Naki', 'Dzidzor', 'Mawuli', 'Yayra', 'Sena', 'Dzifa', 'Enyonam',
                     'Kwamena', 'Akweley', 'Nyameye', 'Mame', 'Maame', 'Kodzo', 'Kekeli',
@@ -241,9 +318,7 @@ class NameGeneratorService
                     'Kwamina', 'Kwesi', 'Ato', 'Atta', 'Ataa', 'Afua',
                 ],
                 'lastNames' => [
-                    // From source
                     'Mensah', 'Owusu',
-                    // Generated
                     'Asante', 'Boateng', 'Osei', 'Amponsah', 'Acheampong', 'Antwi', 'Amoah',
                     'Ofori', 'Asiedu', 'Appiah', 'Oteng', 'Quaye', 'Asamoah', 'Tetteh',
                     'Adjei', 'Sarfo', 'Opoku', 'Amankwah', 'Darko', 'Yeboah', 'Frimpong',
@@ -271,10 +346,8 @@ class NameGeneratorService
                     'Yapi', 'Yacouba', 'Youssouf', 'Zié', 'Valéry', 'Ursule', 'Prisca', 'Rosine',
                 ],
                 'lastNames' => [
-                    // From source
                     'Diakité', 'Coulibaly', 'Koné', 'Sidibé', 'Ouattara', 'Sangaré', 'Sylla',
                     'Cissé', 'Camara', 'Bamba', 'Touré',
-                    // Generated
                     'Fofana', 'Konaté', 'Diabaté', 'Doumbia', 'Dembélé', 'Bah', 'Barry',
                     'Baldé', 'Kouyaté', 'Diané', 'N\'Guessan', 'Koffi', 'Yao', 'Kouassi',
                     'Kouadio', 'N\'Goran', 'N\'Zi', 'Assi', 'Brou', 'Kouakou', 'Amoikon',
@@ -299,9 +372,7 @@ class NameGeneratorService
                     'Tidiane', 'Malik', 'Aisha', 'Fatou', 'Bara', 'Babacar', 'Ndèye',
                 ],
                 'lastNames' => [
-                    // From source
                     'Diallo', 'Keita', 'Traoré', 'Sow', 'N\'Diaye', 'Diop', 'Fall',
-                    // Generated
                     'Ba', 'Gueye', 'Sarr', 'Sy', 'Diouf', 'Faye', 'Wade', 'Mboup', 'Thiam',
                     'Ndour', 'Badji', 'Bassène', 'Coly', 'Dièye', 'Diagne', 'Diatta',
                     'Diédhiou', 'Diémé', 'Dramé', 'Faty', 'Gaye', 'Kanté', 'Manga',
@@ -371,13 +442,11 @@ class NameGeneratorService
                     'Ariel', 'Susana', 'Tomás', 'Graciela', 'Juan', 'Bárbara', 'Maximiliano', 'Carla',
                 ],
                 'lastNames' => [
-                    // Spanish-origin
                     'Gómez', 'Rodríguez', 'Fernández', 'García', 'Pérez', 'Martínez', 'López',
                     'González', 'Sánchez', 'Romero', 'Torres', 'Flores', 'Álvarez', 'Díaz',
                     'Medina', 'Herrera', 'Suárez', 'Morales', 'Castro', 'Ruiz', 'Acosta',
                     'Vega', 'Ríos', 'Blanco', 'Cabral', 'Ferreyra', 'Quiroga', 'Villanueva',
                     'Sosa', 'Ibáñez',
-                    // Italian-origin
                     'Rossi', 'Ferrari', 'Bianchi', 'Conti', 'Gallo', 'Romano', 'Esposito',
                     'Greco', 'Leone', 'De Luca', 'Palermo', 'Mancini', 'Bruno', 'Ricci',
                     'Marino', 'Lombardi', 'Russo', 'Colombo', 'Santoro', 'Montagna',
@@ -525,6 +594,31 @@ class NameGeneratorService
                     'Zheng', 'Xie', 'Han', 'Tang', 'Feng', 'Yu', 'Dong', 'Xiao', 'Cheng', 'Cao',
                     'Yuan', 'Deng', 'Fu', 'Shen', 'Zeng', 'Peng', 'Su', 'Lu', 'Jiang', 'Ye',
                     'Yan', 'Pan', 'Wei', 'Fan', 'Jin', 'Jia', 'Yao', 'Bai', 'Shao',
+                ],
+            ],
+
+            // -----------------------------------------------------------------
+            // Polish
+            // -----------------------------------------------------------------
+            'Polish' => [
+                'firstNames' => [
+                    'Kamil', 'Piotr', 'Marek', 'Tomasz', 'Krzysztof', 'Jakub', 'Michał', 'Rafał',
+                    'Bartłomiej', 'Łukasz', 'Wojciech', 'Adam', 'Szymon', 'Jan', 'Paweł', 'Mateusz',
+                    'Grzegorz', 'Dominik', 'Sebastian', 'Robert', 'Marcin', 'Maciej', 'Karol',
+                    'Radosław', 'Filip', 'Przemysław', 'Dariusz', 'Artur', 'Tadeusz', 'Stanisław',
+                    'Anna', 'Maria', 'Katarzyna', 'Małgorzata', 'Agnieszka', 'Joanna', 'Barbara',
+                    'Monika', 'Zofia', 'Natalia', 'Marta', 'Paulina', 'Karolina', 'Magdalena',
+                    'Ewa', 'Aleksandra', 'Julia', 'Weronika', 'Patrycja', 'Elżbieta',
+                ],
+                'lastNames' => [
+                    'Kowalski', 'Nowak', 'Wiśniewski', 'Wójcik', 'Kowalczyk', 'Kamiński',
+                    'Lewandowski', 'Zieliński', 'Szymański', 'Woźniak', 'Dąbrowski', 'Kozłowski',
+                    'Jankowski', 'Mazur', 'Kwiatkowski', 'Krawczyk', 'Piotrowski', 'Grabowski',
+                    'Nowakowski', 'Pawlak', 'Michalski', 'Nowicki', 'Adamczyk', 'Dudek', 'Zając',
+                    'Wieczorek', 'Jabłoński', 'Kaczmarek', 'Rutkowski', 'Ostrowski', 'Tomczak',
+                    'Karpowicz', 'Baran', 'Wojtyla', 'Sikora', 'Walczak', 'Pietrzak', 'Głowacki',
+                    'Krupa', 'Sobieraj', 'Witek', 'Czarnecki', 'Majewski', 'Olszewski', 'Wróbel',
+                    'Borkowski', 'Stępień', 'Duda', 'Kubiak', 'Marciniak',
                 ],
             ],
 

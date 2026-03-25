@@ -37,16 +37,23 @@ class SyncService
 
         $clientTimestamp = new \DateTimeImmutable($request->clientTimestamp);
 
+        // Record every sync attempt for audit and anti-cheat review.
         $syncRecord = new SyncRecord(
             $academy,
             $request->weekNumber,
             $clientTimestamp,
             [
-                'earningsDelta'    => $request->earningsDelta,
-                'reputationDelta'  => $request->reputationDelta,
-                'hallOfFamePoints' => $request->hallOfFamePoints,
-                'managerShifts'    => $request->managerShifts,
-                'transfers'        => array_map(fn($t) => [
+                'earningsDelta'       => $request->earningsDelta,
+                'balance'             => $request->balance,
+                'totalCareerEarnings' => $request->totalCareerEarnings,
+                'reputationDelta'     => $request->reputationDelta,
+                'reputation'          => $request->reputation,
+                'hallOfFamePoints'    => $request->hallOfFamePoints,
+                'squadSize'           => $request->squadSize,
+                'staffCount'          => $request->staffCount,
+                'facilityLevels'      => $request->facilityLevels,
+                'managerShifts'       => $request->managerShifts,
+                'transfers'           => array_map(fn($t) => [
                     'playerId'        => $t->playerId,
                     'playerName'      => $t->playerName,
                     'destinationClub' => $t->destinationClub,
@@ -55,7 +62,7 @@ class SyncService
                     'netProceeds'     => $t->netProceeds,
                     'type'            => $t->type,
                 ], $request->transfers),
-                'ledger'           => array_map(fn($e) => [
+                'ledger'              => array_map(fn($e) => [
                     'category'    => $e->category,
                     'amount'      => $e->amount,
                     'description' => $e->description,
@@ -64,7 +71,7 @@ class SyncService
         );
         $this->em->persist($syncRecord);
 
-        // Anti-cheat: reject week rollbacks
+        // Anti-cheat: reject week rollbacks.
         if ($request->weekNumber < $academy->getLastSyncedWeek()) {
             $syncRecord->markInvalid('week_rollback');
             $this->em->flush();
@@ -76,26 +83,30 @@ class SyncService
             ];
         }
 
-        // Update Academy aggregate state
-        $academy->setTotalCareerEarnings((int) round($academy->getTotalCareerEarnings() + $request->earningsDelta));
-        $academy->setReputation(max(0, (int) round($academy->getReputation() + $request->reputationDelta)));
-        $academy->setHallOfFamePoints(max($academy->getHallOfFamePoints(), (int) round($request->hallOfFamePoints)));
+        // ── Academy state update (fat-client authoritative) ───────────────────
+        // The client is the game engine. balance, totalCareerEarnings, and
+        // reputation are accepted as authoritative snapshots from the device.
+        // The server does NOT recalculate wages or sponsor payments — those
+        // already run on-device and are reflected in the incoming balance.
+
+        $academy->setBalance($request->balance);
+        $academy->setTotalCareerEarnings($request->totalCareerEarnings);
+        $academy->setReputation(max(0, (int) round($request->reputation)));
+
+        // hallOfFamePoints never decreases — server keeps the high-water mark.
+        $academy->setHallOfFamePoints(
+            max($academy->getHallOfFamePoints(), (int) round($request->hallOfFamePoints))
+        );
+
         $academy->setLastSyncedWeek($request->weekNumber);
         $academy->setLastSyncedAt(new \DateTimeImmutable());
 
-        // Apply manager personality shifts from client
-        $this->applyManagerShifts($academy, $request->managerShifts);
+        // Apply optional manager personality shifts (field may be absent in newer clients).
+        if (!empty($request->managerShifts)) {
+            $this->applyManagerShifts($academy, $request->managerShifts);
+        }
 
-        // Add earnings delta to liquid balance
-        $academy->addFunds((int) round($request->earningsDelta));
-
-        // Process sponsor payments (monthly, based on contract)
-        $this->processSponsorPayments($academy, $clientTimestamp);
-
-        // Deduct weekly staff and player salaries
-        $this->deductWeeklySalaries($academy);
-
-        // Upsert leaderboard entries for all-time and current ISO week
+        // ── Leaderboard upserts ───────────────────────────────────────────────
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
         foreach ([LeaderboardCategory::CAREER_EARNINGS, LeaderboardCategory::ACADEMY_REPUTATION, LeaderboardCategory::HALL_OF_FAME] as $category) {
@@ -111,19 +122,18 @@ class SyncService
             }
         }
 
-        // Financial year-end processing
+        // ── Economic lifecycle checks ─────────────────────────────────────────
         if ($academy->isFinancialYearEnd($request->weekNumber)) {
             $this->economicService->processFinancialYearEnd($academy);
         }
 
-        // Sponsor contract health check
         $this->economicService->checkSponsorContracts($academy, $academy->getReputation());
-
-        // Age-out checks
         $this->economicService->checkAgeOutPlayers($academy, $request->weekNumber, $clientTimestamp);
 
-        // Persist player attribute snapshots from client
-        $this->processPlayerUpdates($academy, $request->players);
+        // ── Player attribute snapshots ────────────────────────────────────────
+        if (!empty($request->players)) {
+            $this->processPlayerUpdates($academy, $request->players);
+        }
 
         $this->em->flush();
 
@@ -167,33 +177,12 @@ class SyncService
         }
     }
 
-    private function deductWeeklySalaries(Academy $academy): void
-    {
-        $total = 0;
-
-        foreach ($academy->getStaff() as $staff) {
-            $total += $staff->getWeeklySalary();
-        }
-
-        foreach ($academy->getPlayers() as $player) {
-            if ($player->getStatus() === PlayerStatus::ACTIVE) {
-                $total += $player->getContractValue();
-            }
-        }
-
-        $academy->addFunds(-$total);
-    }
-
     /**
      * Apply player attribute snapshots from the client (fat-client authoritative).
      * Only updates players that belong to the syncing academy.
      */
     private function processPlayerUpdates(Academy $academy, array $players): void
     {
-        if (empty($players)) {
-            return;
-        }
-
         foreach ($players as $data) {
             if (empty($data['playerId'])) {
                 continue;
@@ -201,7 +190,7 @@ class SyncService
 
             $player = $this->em->getRepository(Player::class)->find($data['playerId']);
             if ($player === null || $player->getAcademy() !== $academy) {
-                continue; // Skip unknown or foreign players
+                continue;
             }
 
             if (isset($data['pace']))      { $player->setPace((int) $data['pace']); }
@@ -248,7 +237,6 @@ class SyncService
             $transfer->setBuyingClub($data['buyingClub'] ?? null);
             $transfer->setSyncedAt($syncedAt);
 
-            // Update player status to reflect transfer type
             if ($player !== null && $player->getAcademy() === $academy) {
                 $player->setStatus(
                     $type === TransferType::AGENT_ASSISTED
@@ -258,16 +246,6 @@ class SyncService
             }
 
             $this->em->persist($transfer);
-        }
-    }
-
-    private function processSponsorPayments(Academy $academy, \DateTimeImmutable $now): void
-    {
-        foreach ($academy->getActiveSponsors() as $sponsor) {
-            if ($sponsor->isPaymentDue($now)) {
-                $academy->addFunds($sponsor->getMonthlyPayment());
-                $sponsor->setLastPaymentAt($now);
-            }
         }
     }
 }

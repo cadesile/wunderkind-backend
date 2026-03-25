@@ -27,81 +27,111 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class MarketPoolService
 {
-    // Replenishment thresholds
+    // ── Replenishment thresholds ─────────────────────────────────────────────
     private const PLAYER_THRESHOLD   = 50;
     private const COACH_THRESHOLD    = 10;
     private const SCOUT_THRESHOLD    = 5;
     private const SPONSOR_THRESHOLD  = 10;
     private const INVESTOR_THRESHOLD = 5;
 
-
-    private const INVESTOR_COMPANIES = [
-        'RedBird Capital Partners', 'Oaktree Capital Management', 'Elliott Management',
-        'Silver Lake Partners', 'CVC Capital Partners', 'Clearlake Capital Group',
-        'KKR & Co', 'Blackstone Group', 'Apollo Global Management', 'Bain Capital',
-        'TPG Capital', 'Warburg Pincus', 'General Atlantic', 'Advent International',
-        'Permira Advisers', 'BC Partners', 'PAI Partners', 'Cinven Partners',
-        'EQT Partners', 'Ardian Investment',
+    // ── Nationality → regional cluster ──────────────────────────────────────
+    // Used to add regional flavour to SMALL and MEDIUM business names.
+    private const NATIONALITY_MAP = [
+        'English'      => 'british_isles',
+        'Irish'        => 'british_isles',
+        'German'       => 'central_europe',
+        'Dutch'        => 'central_europe',
+        'Polish'       => 'eastern_europe',
+        'French'       => 'western_europe',
+        'Italian'      => 'southern_europe',
+        'Spanish'      => 'southern_europe',
+        'Portuguese'   => 'southern_europe',
+        'Brazilian'    => 'south_america',
+        'Argentine'    => 'south_america',
+        'Swedish'      => 'scandinavia',
+        'Danish'       => 'scandinavia',
+        'Irish'        => 'british_isles',
+        'Senegalese'   => 'west_africa',
+        'Nigerian'     => 'west_africa',
+        'Ghanaian'     => 'west_africa',
+        'Ivorian'      => 'west_africa',
+        'Japanese'     => 'east_asia',
+        'South Korean' => 'east_asia',
+        'Chinese'      => 'east_asia',
     ];
 
-    private const SPONSOR_COMPANIES = [
-        'Nike', 'Adidas', 'Puma', 'Under Armour', 'New Balance', 'Umbro',
-        'Emirates', 'Etihad Airways', 'Qatar Airways', 'Turkish Airlines',
-        'Coca-Cola', 'Pepsi', 'Red Bull', 'Monster Energy', 'Heineken',
-        'EA Sports', 'Samsung', 'Sony', 'BMW', 'Audi', 'Mercedes-Benz',
-        'Visa', 'Mastercard', 'PayPal', 'Rolex', 'TAG Heuer',
+    // ── Business cluster location words (MEDIUM business names) ─────────────
+    private const BUSINESS_CLUSTERS = [
+        'british_isles'  => ['Northern', 'Yorkshire', 'Midlands', 'Westfield', 'Broadshire', 'Crestwood', 'Pennine', 'Lakeland'],
+        'central_europe' => ['Rhine', 'Alpine', 'Westmark', 'Nordhaven', 'Mittelfeld', 'Silesian', 'Bavarian', 'Thuringian'],
+        'eastern_europe' => ['Vistula', 'Amber', 'Baltica', 'Carpathian', 'Masovian', 'Silesian', 'Pomeranian', 'Podolian'],
+        'western_europe' => ['Normandy', 'Atlantic', 'Vendôme', 'Breton', 'Burgundy', 'Aquitaine', 'Provençal', 'Alsatian'],
+        'southern_europe' => ['Mediterranean', 'Adriatic', 'Iberian', 'Tuscan', 'Andaluz', 'Ligurian', 'Sardinian', 'Valencian'],
+        'south_america'  => ['Pampas', 'Andean', 'Cerrado', 'Plata', 'Gaucho', 'Patagonian', 'Rioplatense', 'Amazonian'],
+        'scandinavia'    => ['Nordic', 'Viking', 'Baltic', 'Fjord', 'Boreal', 'Midnight', 'Lapland', 'Archipelago'],
+        'west_africa'    => ['Sahel', 'Coastal', 'Savanna', 'Harmattan', 'Gulf', 'Tropical', 'Atlantic', 'Lagoon'],
+        'east_asia'      => ['Pacific', 'Sunrise', 'Tokai', 'Hokkai', 'Yangtze', 'Pearl River', 'Mekong', 'Eastern'],
+        '_fallback'      => ['Global', 'International', 'Central', 'Northern', 'Eastern', 'Western', 'Continental', 'Universal'],
     ];
 
-    /** Country-code-keyed male name pools for player generation. */
-    private const MALE_NAMES = [
-        'EN' => [
-            'first' => ['Jack','Harry','George','Oliver','Charlie','Alfie','Freddie','Archie','Tommy','Louie','Mason','Theo','Finley','Elliot','Reuben','Dylan','Callum','Kieran','Jamie','Ryan'],
-            'last'  => ['Smith','Jones','Williams','Taylor','Brown','Davies','Evans','Wilson','Thomas','Roberts','Walker','White','Thompson','Hughes','Martin','Clarke','Hall','Wood','Jackson','Harris'],
-        ],
-        'IT' => [
-            'first' => ['Luca','Matteo','Leonardo','Francesco','Alessandro','Lorenzo','Giacomo','Andrea','Davide','Riccardo','Edoardo','Filippo','Marco','Simone','Federico','Nicola','Pietro','Giovanni','Stefano','Tommaso'],
-            'last'  => ['Rossi','Ferrari','Russo','Bianchi','Colombo','Bruni','Conti','De Luca','Costa','Mancini','Ricci','Marino','Greco','Bruno','Gallo','Conte','Lombardi','Moretti','Barbieri','Fontana'],
-        ],
-        'DE' => [
-            'first' => ['Leon','Lukas','Felix','Jonas','Finn','Noah','Elias','Maximilian','Paul','Ben','Tobias','Jan','Niklas','Tim','Moritz','Sebastian','Fabian','Philipp','Julian','Florian'],
-            'last'  => ['Müller','Schmidt','Schneider','Fischer','Weber','Meyer','Wagner','Becker','Schulz','Hoffmann','Schäfer','Koch','Bauer','Richter','Klein','Wolf','Schröder','Neumann','Schwarz','Zimmermann'],
-        ],
-        'ES' => [
-            'first' => ['Alejandro','Pablo','Daniel','Carlos','Javier','Miguel','Sergio','Adrián','Marcos','Álvaro','Diego','Rubén','Iván','Raúl','Hugo','Iker','Borja','Unai','Aitor','Jon'],
-            'last'  => ['García','Martínez','López','Sánchez','González','Pérez','Rodríguez','Fernández','Torres','Ramírez','Flores','Moreno','Jiménez','Ruiz','Díaz','Hernández','Romero','Alonso','Navarro','Molina'],
-        ],
-        'BR' => [
-            'first' => ['Gabriel','Lucas','Mateus','Pedro','Guilherme','Rafael','Felipe','Bruno','Thiago','André','Vinicius','Rodrigo','Diego','Caio','Leandro','Renan','Igor','Renato','Gustavo','Henrique'],
-            'last'  => ['Silva','Santos','Oliveira','Souza','Rodrigues','Ferreira','Alves','Pereira','Lima','Carvalho','Gomes','Martins','Costa','Ribeiro','Nascimento','Araújo','Moreira','Nunes','Barbosa','Cavalcanti'],
-        ],
-        'AR' => [
-            'first' => ['Matías','Nicolás','Facundo','Agustín','Sebastián','Maximiliano','Rodrigo','Ezequiel','Leandro','Cristian','Lucas','Federico','Gonzalo','Martín','Pablo','Ignacio','Hernán','Ramiro','Emiliano','Santiago'],
-            'last'  => ['González','Rodríguez','Gómez','Fernández','López','Díaz','Martínez','Pérez','García','Sánchez','Romero','Torres','Flores','Acosta','Medina','Herrera','Aguirre','Morales','Suárez','Delgado'],
-        ],
-        'NL' => [
-            'first' => ['Daan','Sem','Finn','Levi','Luuk','Thijs','Ruben','Lars','Bram','Joris','Sander','Tim','Niels','Bas','Stef','Wouter','Jasper','Rick','Milan','Robin'],
-            'last'  => ['De Jong','Janssen','De Vries','Van den Berg','Van Dijk','Bakker','Visser','Smit','Meijer','De Boer','Mulder','De Graaf','Bos','Hendriks','Van Leeuwen','Peters','Dekker','Brouwer','Kok','Kuiper'],
-        ],
-        '_fallback' => [
-            'first' => ['Kai','Omar','Ryo','Yusuf','Kwame','Alexis','Emil','Ivan','Dami','Noa'],
-            'last'  => ['Okafor','Park','Mensah','Boateng','Nakamura','Dupont','Andersen','Makinen','Afolabi','Svensson'],
-        ],
+    // ── SMALL business name components ───────────────────────────────────────
+    private const SMALL_GIVEN_NAMES = [
+        'Dave', 'Ricky', 'Terry', 'Gary', 'Mick', 'Pete', 'Tony', 'Billy', 'Bobby',
+        'Ian', 'Steve', 'Andy', 'Kev', 'Stu', 'Daz', 'Baz', 'Mo', 'Sal', 'Reg', 'Lenny',
+        'Vince', 'Ray', 'Roy', 'Sid', 'Clive', 'Barry', 'Des', 'Neil', 'Alan', 'Phil',
+        'Geoff', 'Cliff', 'Den', 'Vic', 'Len', 'Alf', 'Ron', 'Stan', 'Bert', 'Walt',
     ];
 
-    /** Maps nationality strings (stored on the Player entity) to MALE_NAMES country codes. */
-    private const NATIONALITY_TO_CODE = [
-        'English'   => 'EN',
-        'Italian'   => 'IT',
-        'German'    => 'DE',
-        'Spanish'   => 'ES',
-        'Brazilian' => 'BR',
-        'Argentine' => 'AR',
-        'Dutch'     => 'NL',
+    private const SMALL_TRADES = [
+        'Plastering', 'Roofing', 'Motors', 'Bakery', 'Butchers', 'Hardware', 'Electrics',
+        'Plumbing', 'Carpentry', 'Fencing', 'Groundworks', 'Landscaping', 'Tyres', 'Autos',
+        'Print Shop', 'Removals', 'Cleaning', 'Security', 'Catering', 'Flooring',
+        'Decorating', 'Signage', 'Welding', 'Drainage', 'Pest Control', 'Locksmithing',
+        'Upholstery', 'Glazing', 'Tiling', 'Scaffolding', 'Tree Surgery',
     ];
 
+    private const SMALL_ADJECTIVES = [
+        'Village', 'Local', 'Family', 'County', 'High Street', 'Corner', 'Market', 'Friendly',
+        'Community', 'Trusty', 'Traditional', 'Heritage', 'Classic', 'Reliable', 'Old Town',
+        'Neighbourhood', 'Independent', 'Honest', 'Homegrown', 'Artisan',
+    ];
+
+    private const SMALL_PLACE_NOUNS = [
+        'Bakery', 'Cafe', 'Garage', 'Workshop', 'Kitchen', 'Diner', 'Stores', 'Services',
+        'Supplies', 'Centre', 'Shop', 'Traders', 'Works', 'Yard',
+    ];
+
+    // ── MEDIUM business name components ──────────────────────────────────────
+    private const MEDIUM_INDUSTRIES = [
+        'Logistics', 'Engineering', 'Manufacturing', 'Technology', 'Construction', 'Media',
+        'Finance', 'Solutions', 'Consultancy', 'Services', 'Supplies', 'Distribution',
+        'Development', 'Recruitment', 'Communications', 'Transport', 'Energy',
+        'Healthcare', 'Education', 'Marketing', 'Analytics', 'Procurement', 'Trading',
+    ];
+
+    private const MEDIUM_QUALIFIERS = ['Group', 'Ltd', 'Co.', 'Partners', 'Associates', 'Alliance'];
+
+    // ── LARGE (corporate) business name components ────────────────────────────
+    private const LARGE_PREFIXES = [
+        'Omni', 'Apex', 'Velt', 'Nex', 'Quant', 'Syn', 'Kor', 'Striv', 'Alt', 'Prox',
+        'Zenith', 'Axiom', 'Verex', 'Kalis', 'Novus', 'Priva', 'Solus', 'Auro', 'Crest',
+        'Davan', 'Elara', 'Forta', 'Helix', 'Inver', 'Karya', 'Macro', 'Norva', 'Orbis',
+        'Paragon', 'Quorum', 'Strix', 'Talvex', 'Umbra', 'Vantage', 'Wyrd', 'Xeno',
+        'Yotta', 'Zephyr', 'Castor', 'Draken', 'Evren',
+    ];
+
+    private const LARGE_COINED_SUFFIXES = [
+        'Corp', 'io', 'ra', 'ex', 'ive', 'us', 'a', 'ix', 'on', 'al', 'yx', 'en', 'ar',
+    ];
+
+    private const LARGE_CORP_TERMS = [
+        'Group', 'Capital', 'Holdings', 'Partners', 'Ventures', 'Global', 'International',
+        'Alliance', 'Network', 'Industries', 'Dynamics', 'Systems', 'Collective', 'Advisors',
+    ];
+
+    // ── Player attribute configuration ───────────────────────────────────────
     private const ATTRIBUTE_KEYS = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
 
-    /** Position-weighted attribute ranges: [min, max] per attribute */
     private const POSITION_ATTRIBUTES = [
         'DEF' => ['stamina' => [10, 30], 'heart' => [10, 30], 'power' => [10, 30], 'pace' => [5, 20], 'technical' => [5, 20], 'vision' => [5, 20]],
         'GK'  => ['stamina' => [10, 30], 'heart' => [10, 30], 'power' => [10, 30], 'pace' => [5, 20], 'technical' => [5, 20], 'vision' => [5, 20]],
@@ -120,9 +150,7 @@ class MarketPoolService
         private readonly NameGeneratorService   $nameGenerator,
     ) {}
 
-    // -------------------------------------------------------------------------
-    // Generate
-    // -------------------------------------------------------------------------
+    // ── Generate ─────────────────────────────────────────────────────────────
 
     /** @return Player[] */
     public function generatePlayers(int $count, ?int $academyReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
@@ -135,10 +163,10 @@ class MarketPoolService
             $potential      = $this->bellCurveInt(40, 80, 60);
             $currentAbility = random_int(3, 10);
             $age            = random_int(12, 13);
-            $nat       = $nationality ?? $this->nameGenerator->getRandomNationality();
-            $code      = self::NATIONALITY_TO_CODE[$nat] ?? '_fallback';
-            $firstName = $this->pickName($code, 'first');
-            $lastName  = $this->pickName($code, 'last');
+            $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();
+
+            // Complex name generation: mononyms, double-surnames, generational suffixes
+            ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
 
             $player = new Player(
                 firstName:         $firstName,
@@ -156,7 +184,6 @@ class MarketPoolService
             $baseWage = $currentAbility * random_int(10, 40);
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
-            // Distribute a total attribute budget of 6–20 across 6 attributes, position-weighted
             $attrBudget = random_int(6, 20);
             $attrs      = $this->distributeAttributes($player->getPosition(), $attrBudget);
             $player->setPace($attrs['pace']);
@@ -166,7 +193,6 @@ class MarketPoolService
             $player->setStamina($attrs['stamina']);
             $player->setHeart($attrs['heart']);
 
-            // Physical measurements (youth players aged 12-13)
             $player->setHeight(random_int(145, 160));
             $player->setWeight(random_int(38, 55));
 
@@ -198,9 +224,15 @@ class MarketPoolService
                 $genderPair = [$sameGender, $sameGender];
             }
 
+            // Guardians inherit the player's family name. For mononym players (lastName = ''),
+            // generate an independent last name from the same nationality pool.
+            $guardianLastName = $lastName !== ''
+                ? $lastName
+                : $this->nameGenerator->generateLastName($nat);
+
             foreach ($genderPair as $guardianGender) {
-                $guardianFirstName = $this->pickName($code, 'first');
-                $guardian          = new Guardian($guardianFirstName, $lastName, $player, $guardianGender);
+                $guardianFirstName = $this->nameGenerator->generateFirstName($nat);
+                $guardian          = new Guardian($guardianFirstName, $guardianLastName, $player, $guardianGender);
                 $guardian->setDateOfBirth($this->dobFromAge(random_int(30, 55)));
                 $guardian->setDemandLevel(random_int(1, 10));
                 $guardian->setLoyaltyToAcademy(random_int(30, 80));
@@ -213,7 +245,7 @@ class MarketPoolService
             if ($i > 0 && $i % 50 === 0) {
                 $this->em->flush();
                 $this->em->clear(Player::class);
-                $agents = $this->agentRepo->findAll(); // re-fetch after clear
+                $agents = $this->agentRepo->findAll();
             }
         }
 
@@ -235,9 +267,10 @@ class MarketPoolService
         $coaches     = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $role    = $coachRoles[array_rand($coachRoles)];
-            $ability = random_int(40, 75);
-            $coachName = $this->nameGenerator->generateName($this->nameGenerator->getRandomNationality());
+            $role      = $coachRoles[array_rand($coachRoles)];
+            $ability   = random_int(40, 75);
+            $coachNat  = $this->nameGenerator->getRandomNationality();
+            $coachName = $this->nameGenerator->generateName($coachNat);
             [$coachFirst, $coachLast] = array_pad(explode(' ', $coachName, 2), 2, '');
 
             $staff = new Staff(
@@ -280,10 +313,10 @@ class MarketPoolService
         $scouts = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $age         = random_int(28, 40);
-            $experience  = random_int(0, 10);
-            $scoutNat    = $this->nameGenerator->getRandomNationality();
-            $scoutName   = $this->nameGenerator->generateName($scoutNat);
+            $age        = random_int(28, 40);
+            $experience = random_int(0, 10);
+            $scoutNat   = $this->nameGenerator->getRandomNationality();
+            $scoutName  = $this->nameGenerator->generateName($scoutNat);
 
             $scout = new Scout($scoutName);
             $scout->setDob($this->dobFromAge($age));
@@ -345,15 +378,18 @@ class MarketPoolService
     }
 
     /** @return Sponsor[] */
-    public function generateSponsors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
+    public function generateSponsors(int $count): array
     {
-        $companies = $this->pickUnique(self::SPONSOR_COMPANIES, $count);
-        $sponsors  = [];
+        $sponsors = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $sponsor = new Sponsor($companies[$i]);
-            $sponsor->setNationality($this->nameGenerator->getRandomNationality());
-            $sponsor->setSize($this->sizeWithVariance($preferredSize));
+            $nationality = $this->nameGenerator->getRandomNationality();
+            $size        = $this->weightedCompanySize();
+            $name        = $this->generateCompanyName($size, $nationality);
+
+            $sponsor = new Sponsor($name);
+            $sponsor->setNationality($nationality);
+            $sponsor->setSize($size);
             $sponsor->setIsActive(true);
 
             $this->em->persist($sponsor);
@@ -365,15 +401,18 @@ class MarketPoolService
     }
 
     /** @return Investor[] */
-    public function generateInvestors(int $count, CompanySize $preferredSize = CompanySize::SMALL): array
+    public function generateInvestors(int $count): array
     {
-        $companies = $this->pickUnique(self::INVESTOR_COMPANIES, $count);
         $investors = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $investor = new Investor($companies[$i]);
-            $investor->setNationality($this->nameGenerator->getRandomNationality());
-            $investor->setSize($this->sizeWithVariance($preferredSize));
+            $nationality = $this->nameGenerator->getRandomNationality();
+            $size        = $this->weightedCompanySize();
+            $name        = $this->generateCompanyName($size, $nationality);
+
+            $investor = new Investor($name);
+            $investor->setNationality($nationality);
+            $investor->setSize($size);
             $investor->setIsActive(true);
 
             $this->em->persist($investor);
@@ -384,9 +423,7 @@ class MarketPoolService
         return $investors;
     }
 
-    // -------------------------------------------------------------------------
-    // Fetch
-    // -------------------------------------------------------------------------
+    // ── Fetch ─────────────────────────────────────────────────────────────────
 
     /** @return Player[] Unassigned YOUTH_INTAKE players for the open market */
     public function getAvailablePlayers(int $limit = 100, ?string $nationality = null): array
@@ -430,9 +467,7 @@ class MarketPoolService
         return $this->investorRepo->findInPool($limit);
     }
 
-    // -------------------------------------------------------------------------
-    // Assign
-    // -------------------------------------------------------------------------
+    // ── Assign ────────────────────────────────────────────────────────────────
 
     /**
      * Assign a pool entity to an academy.
@@ -468,7 +503,6 @@ class MarketPoolService
         }
 
         if ($entity instanceof Scout) {
-            // Scouts are a reference pool — "hiring" one creates a Staff(SCOUT) entry
             $nameParts = explode(' ', $entity->getName(), 2);
             $staff = new Staff(
                 firstName: $nameParts[0],
@@ -505,9 +539,7 @@ class MarketPoolService
         throw new \InvalidArgumentException('Unknown entity type for assignment.');
     }
 
-    // -------------------------------------------------------------------------
-    // Replenishment
-    // -------------------------------------------------------------------------
+    // ── Replenishment ─────────────────────────────────────────────────────────
 
     public function replenishPool(): array
     {
@@ -541,14 +573,80 @@ class MarketPoolService
         return $generated;
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
+    // ── Business name generation ──────────────────────────────────────────────
+
+    private function generateCompanyName(CompanySize $size, string $nationality): string
+    {
+        return match ($size) {
+            CompanySize::SMALL  => $this->generateSmallCompanyName(),
+            CompanySize::MEDIUM => $this->generateMediumCompanyName($nationality),
+            CompanySize::LARGE  => $this->generateLargeCompanyName(),
+        };
+    }
 
     /**
-     * Returns wage multipliers based on academy reputation tier.
-     * When no academy context is provided (global pool generation), returns base multipliers (1.0).
-     *
+     * SMALL — local, personal, trade-focused.
+     * Patterns: "[Name]'s [Trade]" | "The [Adj] [PlaceNoun]" | "[Adj] [Trade]"
+     */
+    private function generateSmallCompanyName(): string
+    {
+        return match (random_int(1, 3)) {
+            1 => $this->pick(self::SMALL_GIVEN_NAMES) . "'s " . $this->pick(self::SMALL_TRADES),
+            2 => 'The ' . $this->pick(self::SMALL_ADJECTIVES) . ' ' . $this->pick(self::SMALL_PLACE_NOUNS),
+            3 => $this->pick(self::SMALL_ADJECTIVES) . ' ' . $this->pick(self::SMALL_TRADES),
+        };
+    }
+
+    /**
+     * MEDIUM — regional, professional.
+     * Pattern: "[ClusterLocation] [Industry]" with an optional qualifier.
+     */
+    private function generateMediumCompanyName(string $nationality): string
+    {
+        $cluster   = self::NATIONALITY_MAP[$nationality] ?? '_fallback';
+        $locations = self::BUSINESS_CLUSTERS[$cluster] ?? self::BUSINESS_CLUSTERS['_fallback'];
+        $location  = $this->pick($locations);
+        $industry  = $this->pick(self::MEDIUM_INDUSTRIES);
+
+        if (random_int(1, 10) <= 3) {
+            return "{$location} {$industry} " . $this->pick(self::MEDIUM_QUALIFIERS);
+        }
+
+        return "{$location} {$industry}";
+    }
+
+    /**
+     * LARGE — abstract/corporate.
+     * Patterns:
+     *   1. Coined word:  [Prefix][Suffix]                (e.g., "OmniCorp", "Veltra")
+     *   2. Named entity: [Prefix][Suffix] [CorpTerm]     (e.g., "Apexio Holdings")
+     *   3. Phrase:       [Prefix] [CorpTerm]             (e.g., "Zenith Capital")
+     */
+    private function generateLargeCompanyName(): string
+    {
+        return match (random_int(1, 3)) {
+            1 => $this->pick(self::LARGE_PREFIXES) . $this->pick(self::LARGE_COINED_SUFFIXES),
+            2 => $this->pick(self::LARGE_PREFIXES) . $this->pick(self::LARGE_COINED_SUFFIXES) . ' ' . $this->pick(self::LARGE_CORP_TERMS),
+            3 => $this->pick(self::LARGE_PREFIXES) . ' ' . $this->pick(self::LARGE_CORP_TERMS),
+        };
+    }
+
+    /**
+     * Size weighting: 70% Small · 20% Medium · 10% Large.
+     */
+    private function weightedCompanySize(): CompanySize
+    {
+        $r = random_int(1, 100);
+        return match (true) {
+            $r <= 70 => CompanySize::SMALL,
+            $r <= 90 => CompanySize::MEDIUM,
+            default  => CompanySize::LARGE,
+        };
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
      * @return array{player: float, staff: float}
      */
     private function getWageMultiplier(?int $academyReputation): array
@@ -558,37 +656,16 @@ class MarketPoolService
         }
 
         return match (true) {
-            $academyReputation < 100 => ['player' => 0.5,  'staff' => 0.6],
-            $academyReputation < 300 => ['player' => 1.0,  'staff' => 1.0],
-            $academyReputation < 600 => ['player' => 2.5,  'staff' => 2.0],
-            default                  => ['player' => 5.0,  'staff' => 4.0],
+            $academyReputation < 100 => ['player' => 0.5, 'staff' => 0.6],
+            $academyReputation < 300 => ['player' => 1.0, 'staff' => 1.0],
+            $academyReputation < 600 => ['player' => 2.5, 'staff' => 2.0],
+            default                  => ['player' => 5.0, 'staff' => 4.0],
         };
-    }
-
-    private function pickName(string $countryCode, string $type): string
-    {
-        $pool  = self::MALE_NAMES[$countryCode] ?? self::MALE_NAMES['_fallback'];
-        $names = $pool[$type];
-        return $names[array_rand($names)];
     }
 
     private function pick(array $items): mixed
     {
         return $items[array_rand($items)];
-    }
-
-    private function pickUnique(array $pool, int $n): array
-    {
-        shuffle($pool);
-        if ($n <= count($pool)) {
-            return array_slice($pool, 0, $n);
-        }
-        $result = [];
-        for ($i = 0; $i < $n; $i++) {
-            $base     = $pool[$i % count($pool)];
-            $result[] = $i < count($pool) ? $base : $base . ' ' . ($i + 1);
-        }
-        return $result;
     }
 
     private function dobFromAge(int $age): \DateTimeImmutable
@@ -604,15 +681,13 @@ class MarketPoolService
      */
     private function bellCurveInt(int $min, int $max, int $mean): int
     {
-        $a = random_int($min, $max);
-        $b = random_int($min, $max);
+        $a   = random_int($min, $max);
+        $b   = random_int($min, $max);
         $raw = (int) round(($a + $b) / 2);
-        // Nudge slightly toward mean
         return (int) round(($raw + $mean) / 2);
     }
 
-
-    /** GK 8 % / DEF 30 % / MID 38 % / ATT 24 % */
+    /** GK 8% / DEF 30% / MID 38% / ATT 24% */
     private function weightedPosition(): PlayerPosition
     {
         $r = random_int(1, 100);
@@ -626,7 +701,6 @@ class MarketPoolService
 
     /**
      * Distribute a total attribute budget across the 6 attributes, weighted by position.
-     * Ensures the sum equals $total exactly (max 20 for youth pool players).
      *
      * @return array{pace: int, technical: int, vision: int, power: int, stamina: int, heart: int}
      */
@@ -635,8 +709,7 @@ class MarketPoolService
         $posKey = $position->value;
         $ranges = self::POSITION_ATTRIBUTES[$posKey] ?? self::POSITION_ATTRIBUTES['MID'];
 
-        // Use midpoint of each position range as the weight for that attribute
-        $weights    = [];
+        $weights     = [];
         $totalWeight = 0.0;
         foreach (self::ATTRIBUTE_KEYS as $key) {
             $w             = ($ranges[$key][0] + $ranges[$key][1]) / 2.0;
@@ -644,7 +717,6 @@ class MarketPoolService
             $totalWeight  += $w;
         }
 
-        // Proportional allocation with remainder assigned to the highest-weighted attribute
         $attrs     = [];
         $allocated = 0;
         $keys      = self::ATTRIBUTE_KEYS;
@@ -665,28 +737,17 @@ class MarketPoolService
 
     /**
      * Generate 1–2 random coaching specialisms.
-     * 40% chance single specialism, 60% chance dual.
-     * Values 50–90; keys drawn from ATTRIBUTE_KEYS.
+     * 40% chance single specialism, 60% chance dual. Values 50–90.
      */
     private function generateSpecialisms(): array
     {
-        $keys  = self::ATTRIBUTE_KEYS;
+        $keys = self::ATTRIBUTE_KEYS;
         shuffle($keys);
-        $count = random_int(1, 100) <= 40 ? 1 : 2;
+        $count       = random_int(1, 100) <= 40 ? 1 : 2;
         $specialisms = [];
         foreach (array_slice($keys, 0, $count) as $key) {
             $specialisms[$key] = random_int(50, 90);
         }
         return $specialisms;
-    }
-
-    /** Return preferred size 80 % of the time; random otherwise */
-    private function sizeWithVariance(CompanySize $preferred): CompanySize
-    {
-        if (random_int(1, 100) <= 80) {
-            return $preferred;
-        }
-        $cases = CompanySize::cases();
-        return $cases[array_rand($cases)];
     }
 }
