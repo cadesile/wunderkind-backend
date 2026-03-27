@@ -1,9 +1,7 @@
 name: Deploy Staging
 
 on:
-  push:
-    branches:
-      - stage
+  workflow_dispatch: # Staging deployment dormant — trigger manually only
 
 permissions:
   contents: read

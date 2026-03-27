@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     environment:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET}
@@ -13,6 +14,9 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       ACADEMY_STARTING_BALANCE: ${ACADEMY_STARTING_BALANCE}
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
     depends_on:
       postgres-prod:
         condition: service_healthy
@@ -32,3 +36,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot-prod
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/www/certbot:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+      while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h & wait $${!};
+      done"
