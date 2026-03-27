@@ -54,10 +54,9 @@ jobs:
             APP_SECRET=${{ secrets.STAGE_APP_SECRET }}
             CORS_ALLOW_ORIGIN=${{ secrets.STAGE_CORS_ALLOW_ORIGIN }}
             ACADEMY_STARTING_BALANCE=${{ secrets.STAGE_ACADEMY_STARTING_BALANCE }}
+            JWT_SECRET_KEY=${{ secrets.STAGE_JWT_SECRET_KEY }}
+            JWT_PUBLIC_KEY=${{ secrets.STAGE_JWT_PUBLIC_KEY }}
             EOF
-
-            printf 'JWT_SECRET_KEY<<EOF\n%s\nEOF\n' '${{ secrets.STAGE_JWT_SECRET_KEY }}' >> .env
-            printf 'JWT_PUBLIC_KEY<<EOF\n%s\nEOF\n' '${{ secrets.STAGE_JWT_PUBLIC_KEY }}' >> .env
 
             docker compose -f docker-compose.staging.yml pull
             docker compose -f docker-compose.staging.yml up -d

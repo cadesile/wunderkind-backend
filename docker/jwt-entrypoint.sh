@@ -3,8 +3,8 @@ set -e
 
 mkdir -p config/jwt
 
-printf '%s' "$JWT_SECRET_KEY" > config/jwt/private.pem
-printf '%s' "$JWT_PUBLIC_KEY" > config/jwt/public.pem
+echo "$JWT_SECRET_KEY" | base64 -d > config/jwt/private.pem
+echo "$JWT_PUBLIC_KEY" | base64 -d > config/jwt/public.pem
 
 chmod 600 config/jwt/private.pem
 chmod 644 config/jwt/public.pem
