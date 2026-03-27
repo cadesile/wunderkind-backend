@@ -29,7 +29,7 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/jwt-entrypoint.sh /usr/local/bin/jwt-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/jwt-entrypoint.sh
-RUN chown -R www-data:www-data var/
+RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 
 EXPOSE 80
 
