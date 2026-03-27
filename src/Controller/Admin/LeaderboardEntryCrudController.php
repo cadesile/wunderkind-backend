@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\LeaderboardEntry;
+use App\Enum\LeaderboardCategory;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -36,7 +37,12 @@ class LeaderboardEntryCrudController extends AbstractCrudController
         yield AssociationField::new('academy');
         yield TextField::new('categoryValue', 'Category');
         yield TextField::new('period');
-        yield IntegerField::new('score');
+        yield IntegerField::new('score')
+            ->formatValue(fn($v, $e) =>
+                $v !== null && $e instanceof LeaderboardEntry && $e->getCategory() === LeaderboardCategory::CAREER_EARNINGS
+                    ? '£' . number_format((int) $v / 100)
+                    : number_format((int) ($v ?? 0))
+            );
         yield IntegerField::new('rank')->setRequired(false);
         yield DateTimeField::new('updatedAt')->setFormat('yyyy-MM-dd HH:mm');
     }

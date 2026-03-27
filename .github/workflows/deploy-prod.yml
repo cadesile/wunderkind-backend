@@ -1,0 +1,63 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/cadesile/wunderkind-backend:prod
+
+      - name: Copy compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_IP }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: docker-compose.prod.yml
+          target: /mnt/volume-wkf/wunderkind/prod/
+
+      - name: Deploy to Hetzner
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_IP }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /mnt/volume-wkf/wunderkind/prod
+
+            cat > .env <<EOF
+            DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
+            APP_SECRET=${{ secrets.PROD_APP_SECRET }}
+            CORS_ALLOW_ORIGIN=${{ secrets.PROD_CORS_ALLOW_ORIGIN }}
+            ACADEMY_STARTING_BALANCE=${{ secrets.PROD_ACADEMY_STARTING_BALANCE }}
+            EOF
+
+            printf 'JWT_SECRET_KEY<<EOF\n%s\nEOF\n' '${{ secrets.PROD_JWT_SECRET_KEY }}' >> .env
+            printf 'JWT_PUBLIC_KEY<<EOF\n%s\nEOF\n' '${{ secrets.PROD_JWT_PUBLIC_KEY }}' >> .env
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console doctrine:migrations:migrate --no-interaction
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console cache:clear

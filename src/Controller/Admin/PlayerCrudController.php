@@ -131,7 +131,10 @@ class PlayerCrudController extends AbstractCrudController
         yield IntegerField::new('height')->setHelp('cm')->hideOnIndex();
         yield IntegerField::new('weight')->setHelp('kg')->hideOnIndex();
 
-        yield IntegerField::new('contractValue')->setHelp('In pence/cents')->hideOnIndex();
+        yield IntegerField::new('contractValue', 'Contract Value')
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) . ' / wk' : '—')
+            ->setHelp('Weekly value in pence — £1,000 = 100,000')
+            ->hideOnIndex();
 
         yield AssociationField::new('academy');
         yield AssociationField::new('agent')->setRequired(false)->hideOnIndex();

@@ -1,0 +1,12 @@
+{% macro currency(pence) %}
+    {%- set pounds = pence / 100 -%}
+    {%- set abs = pounds|abs -%}
+    {%- set sign = pounds < 0 ? '-' : '' -%}
+    {%- if abs >= 1000000 -%}
+        {{ sign }}£{{ (abs / 1000000)|number_format(1) }}M
+    {%- elseif abs >= 1000 -%}
+        {{ sign }}£{{ (abs / 1000)|number_format(1) }}K
+    {%- else -%}
+        {{ sign }}£{{ abs|number_format(0) }}
+    {%- endif -%}
+{% endmacro %}

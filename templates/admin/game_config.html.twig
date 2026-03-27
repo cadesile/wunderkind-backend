@@ -1,0 +1,244 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Game Config</h5>
+        <p class="text-muted small mb-0">Runtime engine constants synced to every client on each /api/sync response. Changes take effect on the next sync.</p>
+    </div>
+
+    <div class="col-12">
+    <form method="POST" action="{{ path('admin_game_config_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_game_config') }}">
+        <div class="d-flex flex-column gap-4">
+
+            {# ── Clique System ──────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-people-group text-muted"></i>
+                    <span class="fw-semibold small">Clique System</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        A clique forms when 3+ players all have pairwise relationship values above the threshold.
+                        Total cliqued players across all cliques cannot exceed the squad cap %.
+                        Example: squad of 10, cap 30% → max 3 cliqued players → one clique of 3 maximum.
+                        Squad drops to 9 → cap becomes 2 → clique disbands automatically.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="cliqueRelationshipThreshold" class="form-label fw-semibold small">Relationship Threshold</label>
+                            <input type="number" id="cliqueRelationshipThreshold" name="cliqueRelationshipThreshold"
+                                   value="{{ config.cliqueRelationshipThreshold }}"
+                                   min="-100" max="100" class="form-control">
+                            <div class="form-text">Min pairwise value for clique eligibility. Default: 20</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="cliqueSquadCapPercent" class="form-label fw-semibold small">Squad Cap %</label>
+                            <input type="number" id="cliqueSquadCapPercent" name="cliqueSquadCapPercent"
+                                   value="{{ config.cliqueSquadCapPercent }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Max % of squad in cliques combined. Default: 30</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="cliqueMinTenureWeeks" class="form-label fw-semibold small">Min Tenure (weeks)</label>
+                            <input type="number" id="cliqueMinTenureWeeks" name="cliqueMinTenureWeeks"
+                                   value="{{ config.cliqueMinTenureWeeks }}"
+                                   min="1" max="52" class="form-control">
+                            <div class="form-text">Academy tenure required before clique eligibility. Default: 3</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── XP & Progression ───────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-star text-muted"></i>
+                    <span class="fw-semibold small">XP &amp; Progression</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="baseXP" class="form-label fw-semibold small">Base XP</label>
+                            <input type="number" id="baseXP" name="baseXP"
+                                   value="{{ config.baseXP }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Base XP awarded per player per week before facility/coach multipliers. Default: 10</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="regressionUpperThreshold" class="form-label fw-semibold small">Regression Upper Threshold</label>
+                            <input type="number" id="regressionUpperThreshold" name="regressionUpperThreshold"
+                                   value="{{ config.regressionUpperThreshold }}"
+                                   min="1" max="20" class="form-control">
+                            <div class="form-text">Trait value above which regression-to-mean pushes down (1–20 scale). Default: 14</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="regressionLowerThreshold" class="form-label fw-semibold small">Regression Lower Threshold</label>
+                            <input type="number" id="regressionLowerThreshold" name="regressionLowerThreshold"
+                                   value="{{ config.regressionLowerThreshold }}"
+                                   min="1" max="20" class="form-control">
+                            <div class="form-text">Trait value below which regression-to-mean pushes up (1–20 scale). Default: 7</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Reputation ─────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-chart-line text-muted"></i>
+                    <span class="fw-semibold small">Reputation</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="reputationDeltaBase" class="form-label fw-semibold small">Delta Base</label>
+                            <input type="number" id="reputationDeltaBase" name="reputationDeltaBase"
+                                   value="{{ config.reputationDeltaBase }}"
+                                   step="0.01" min="0" class="form-control">
+                            <div class="form-text">Base reputation delta per week before facility multiplier. Default: 0.5</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="reputationDeltaFacilityMultiplier" class="form-label fw-semibold small">Facility Multiplier</label>
+                            <input type="number" id="reputationDeltaFacilityMultiplier" name="reputationDeltaFacilityMultiplier"
+                                   value="{{ config.reputationDeltaFacilityMultiplier }}"
+                                   step="0.01" min="0" class="form-control">
+                            <div class="form-text">Per-level facility multiplier applied to reputation delta. Default: 1.2</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Injury ─────────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-kit-medical text-muted"></i>
+                    <span class="fw-semibold small">Injury</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="baseInjuryProbability" class="form-label fw-semibold small">Base Probability</label>
+                            <input type="number" id="baseInjuryProbability" name="baseInjuryProbability"
+                                   value="{{ config.baseInjuryProbability }}"
+                                   step="0.0001" min="0" max="1" class="form-control">
+                            <div class="form-text">Weekly injury chance per player (fraction). Default: 0.05</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="injuryMinorWeight" class="form-label fw-semibold small">Minor Weight</label>
+                            <input type="number" id="injuryMinorWeight" name="injuryMinorWeight"
+                                   value="{{ config.injuryMinorWeight }}"
+                                   min="0" class="form-control">
+                            <div class="form-text">Relative weight for minor severity. Default: 60</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="injuryModerateWeight" class="form-label fw-semibold small">Moderate Weight</label>
+                            <input type="number" id="injuryModerateWeight" name="injuryModerateWeight"
+                                   value="{{ config.injuryModerateWeight }}"
+                                   min="0" class="form-control">
+                            <div class="form-text">Relative weight for moderate severity. Default: 30</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="injurySeriousWeight" class="form-label fw-semibold small">Serious Weight</label>
+                            <input type="number" id="injurySeriousWeight" name="injurySeriousWeight"
+                                   value="{{ config.injurySeriousWeight }}"
+                                   min="0" class="form-control">
+                            <div class="form-text">Relative weight for serious severity. Default: 10</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Scouting ───────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-binoculars text-muted"></i>
+                    <span class="fw-semibold small">Scouting</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how scouts reveal players and how active missions discover prospects each week.
+                        The gem roll thresholds define a weighted table: a random float (0–1) is tested against
+                        the four cutoffs in order to determine how many players are found per tick.
+                        Example defaults: 25% chance of 0, 50% chance of 1, 10% chance of 2, 9% chance of 3, 6% chance of 4.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="scoutMoraleThreshold" class="form-label fw-semibold small">Morale Threshold</label>
+                            <input type="number" id="scoutMoraleThreshold" name="scoutMoraleThreshold"
+                                   value="{{ config.scoutMoraleThreshold }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Morale below this value halts all scouting progress. Default: 40</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="scoutRevealWeeks" class="form-label fw-semibold small">Reveal Weeks</label>
+                            <input type="number" id="scoutRevealWeeks" name="scoutRevealWeeks"
+                                   value="{{ config.scoutRevealWeeks }}"
+                                   min="1" max="52" class="form-control">
+                            <div class="form-text">Weekly ticks before an assigned player is fully revealed. Default: 2</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="scoutAbilityErrorRange" class="form-label fw-semibold small">Ability Error Range</label>
+                            <input type="number" id="scoutAbilityErrorRange" name="scoutAbilityErrorRange"
+                                   value="{{ config.scoutAbilityErrorRange }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Max ±variance on perceived ability, scaled by scout accuracy. Default: 30</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="scoutMaxAssignments" class="form-label fw-semibold small">Max Assignments</label>
+                            <input type="number" id="scoutMaxAssignments" name="scoutMaxAssignments"
+                                   value="{{ config.scoutMaxAssignments }}"
+                                   min="1" max="20" class="form-control">
+                            <div class="form-text">Max players a scout can be assigned to simultaneously. Default: 5</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label fw-semibold small">Mission Gem Roll Thresholds</label>
+                        <div class="row g-2">
+                            {% set thresholds = config.missionGemRollThresholds %}
+                            <div class="col-md-3">
+                                <label for="gemThreshold0" class="form-label small text-muted">0 players cutoff (t0)</label>
+                                <input type="number" id="gemThreshold0" name="gemThreshold0"
+                                       value="{{ thresholds[0] }}"
+                                       step="0.01" min="0" max="1" class="form-control">
+                                <div class="form-text">roll &lt; t0 → 0 found. Default: 0.25</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="gemThreshold1" class="form-label small text-muted">1 player cutoff (t1)</label>
+                                <input type="number" id="gemThreshold1" name="gemThreshold1"
+                                       value="{{ thresholds[1] }}"
+                                       step="0.01" min="0" max="1" class="form-control">
+                                <div class="form-text">t0 ≤ roll &lt; t1 → 1 found. Default: 0.75</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="gemThreshold2" class="form-label small text-muted">2 players cutoff (t2)</label>
+                                <input type="number" id="gemThreshold2" name="gemThreshold2"
+                                       value="{{ thresholds[2] }}"
+                                       step="0.01" min="0" max="1" class="form-control">
+                                <div class="form-text">t1 ≤ roll &lt; t2 → 2 found. Default: 0.85</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="gemThreshold3" class="form-label small text-muted">3 players cutoff (t3)</label>
+                                <input type="number" id="gemThreshold3" name="gemThreshold3"
+                                       value="{{ thresholds[3] }}"
+                                       step="0.01" min="0" max="1" class="form-control">
+                                <div class="form-text">t2 ≤ roll &lt; t3 → 3 found; ≥ t3 → 4. Default: 0.94</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>{# /gap wrapper #}
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary btn-sm">Save Game Config</button>
+        </div>
+    </form>
+    </div>
+
+</div>
+{% endblock %}

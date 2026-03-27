@@ -1,0 +1,34 @@
+services:
+  app:
+    image: ghcr.io/cadesile/wunderkind-backend:prod
+    container_name: wunderkind-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET}
+      DATABASE_URL: postgresql://wunderkind:${DB_PASSWORD}@postgres-prod:5432/wunderkind?serverVersion=16&charset=utf8
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      ACADEMY_STARTING_BALANCE: ${ACADEMY_STARTING_BALANCE}
+    depends_on:
+      postgres-prod:
+        condition: service_healthy
+
+  postgres-prod:
+    image: postgres:16-alpine
+    container_name: postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wunderkind
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: wunderkind
+    volumes:
+      - /mnt/volume-wkf/wunderkind/prod/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wunderkind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

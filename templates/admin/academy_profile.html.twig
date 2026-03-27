@@ -2,6 +2,8 @@
 
 {% set payload = latestValidSync ? latestValidSync.payload : {} %}
 
+{% from 'admin/_macros.html.twig' import currency as fmt_currency %}
+
 {% block content %}
 <div class="row g-3 mt-1">
 
@@ -72,8 +74,9 @@
             <div class="card-body py-3">
                 <div class="text-muted mb-2"><i class="fa fa-sterling-sign fa-lg"></i></div>
                 <div class="text-muted small mb-1">Balance</div>
-                <div class="fs-3 fw-bold {{ academy.balance < 0 ? 'text-danger' : '' }}">
-                    {{ academy.balance < 0 ? '-' : '' }}£{{ (academy.balance|abs / 100)|number_format(0, '.', ',') }}
+                <div class="fs-3 fw-bold {{ academy.balance < 0 ? 'text-danger' : '' }}"
+                     title="£{{ (academy.balance / 100)|number_format(0, '.', ',') }}">
+                    {{ fmt_currency(academy.balance) }}
                 </div>
             </div>
         </div>
@@ -83,7 +86,10 @@
             <div class="card-body py-3">
                 <div class="text-muted mb-2"><i class="fa fa-chart-line fa-lg"></i></div>
                 <div class="text-muted small mb-1">Career Earnings</div>
-                <div class="fs-3 fw-bold">£{{ (academy.totalCareerEarnings / 100)|number_format(0, '.', ',') }}</div>
+                <div class="fs-3 fw-bold"
+                     title="£{{ (academy.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
+                    {{ fmt_currency(academy.totalCareerEarnings) }}
+                </div>
             </div>
         </div>
     </div>
@@ -128,8 +134,9 @@
                         </div>
                         <div class="col-6 col-md-3 text-center">
                             {% set ed = payload.earningsDelta ?? 0 %}
-                            <div class="fw-bold fs-5 {{ ed >= 0 ? 'text-success' : 'text-danger' }}">
-                                {{ ed >= 0 ? '+' : '' }}£{{ (ed / 100)|number_format(0, '.', ',') }}
+                            <div class="fw-bold fs-5 {{ ed >= 0 ? 'text-success' : 'text-danger' }}"
+                                 title="{{ ed >= 0 ? '+' : '' }}£{{ (ed / 100)|number_format(0, '.', ',') }}">
+                                {{ ed >= 0 ? '+' : '' }}{{ fmt_currency(ed) }}
                             </div>
                             <div class="text-muted" style="font-size:.75rem;">Earnings Delta</div>
                         </div>

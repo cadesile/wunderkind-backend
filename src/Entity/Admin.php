@@ -4,18 +4,25 @@ namespace App\Entity;
 
 use App\Repository\AdminRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: AdminRepository::class)]
-class Admin
+class Admin implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
 
-    #[ORM\OneToOne(inversedBy: 'admin')]
-    #[ORM\JoinColumn(nullable: false)]
-    private User $user;
+    #[ORM\Column(length: 180, unique: true)]
+    private string $email;
+
+    #[ORM\Column]
+    private string $password;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $name = null;
 
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $department = null;
@@ -26,15 +33,29 @@ class Admin
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
-    public function __construct(User $user)
+    public function __construct(string $email)
     {
         $this->id        = new UuidV7();
-        $this->user      = $user;
+        $this->email     = $email;
         $this->createdAt = new \DateTimeImmutable();
     }
 
     public function getId(): UuidV7 { return $this->id; }
-    public function getUser(): User { return $this->user; }
+
+    public function getEmail(): string { return $this->email; }
+    public function setEmail(string $email): void { $this->email = $email; }
+
+    public function getUserIdentifier(): string { return $this->email; }
+
+    public function getPassword(): string { return $this->password; }
+    public function setPassword(string $password): void { $this->password = $password; }
+
+    public function getRoles(): array { return ['ROLE_ADMIN']; }
+
+    public function eraseCredentials(): void {}
+
+    public function getName(): ?string { return $this->name; }
+    public function setName(?string $name): void { $this->name = $name; }
 
     public function getDepartment(): ?string { return $this->department; }
     public function setDepartment(?string $department): void { $this->department = $department; }

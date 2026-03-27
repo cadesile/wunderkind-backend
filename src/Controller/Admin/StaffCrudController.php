@@ -99,7 +99,10 @@ class StaffCrudController extends AbstractCrudController
             ->hideOnIndex()
             ->setNumOfRows(4)
             ->onlyOnForms();
-        yield IntegerField::new('weeklySalary')->setHelp('In pence/cents')->hideOnIndex();
+        yield IntegerField::new('weeklySalary', 'Weekly Salary')
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) . ' / wk' : '—')
+            ->setHelp('Weekly salary in pence — £1,000 = 100,000')
+            ->hideOnIndex();
 
         yield AssociationField::new('academy');
 

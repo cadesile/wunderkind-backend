@@ -1,15 +1,27 @@
 #!/bin/bash
 #
 # reset_and_seed.sh
-# Resets the Wunderkind database, preserves ROLE_ADMIN users, and re-seeds market data.
+# Resets the Wunderkind database, re-seeds market data,
+# and restores game_config + starter_config to hardcoded defaults.
+#
+# The "admin" table is NEVER touched — admin users are always preserved.
 #
 # Usage:
-#   bash scripts/reset_and_seed.sh
+#   bash scripts/reset_and_seed.sh           # interactive (local / Lando)
+#   bash scripts/reset_and_seed.sh --yes     # non-interactive, all defaults (CI / deploy)
 #
-# To make executable:
-#   chmod +x scripts/reset_and_seed.sh
+# Connection mode is auto-detected:
+#   Lando available + .lando.yml present  →  lando psql / lando php bin/console
+#   Otherwise                             →  psql CLI + php bin/console
+#                                            (reads DATABASE_URL from env or .env)
 
 set -e
+
+# ─── Flags ────────────────────────────────────────────────────────────────────
+NON_INTERACTIVE=false
+for arg in "$@"; do
+    [[ "$arg" == "--yes" || "$arg" == "-y" ]] && NON_INTERACTIVE=true
+done
 
 # ─── Colors ──────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -18,38 +30,67 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# ─── Config ───────────────────────────────────────────────────────────────────
-DB="wunderkind"
-BACKUP_FILE="/tmp/wunderkind_admins_backup.json"
-RESTORE_SQL="/tmp/wunderkind_admins_restore.sql"
-RESET_SQL="/tmp/wunderkind_reset_tables.sql"
+# ─── Connection mode ──────────────────────────────────────────────────────────
+# psql_cmd  — runs a single SQL query, returns plain text value (tuples-only, unaligned)
+# psql_file — executes a SQL file; for lando the file must be inside the project dir
+#             (lando mounts the project at /app, so host ./foo.sql = container /app/foo.sql)
+RESET_SQL_HOST=".reset_tmp.sql"
+RESET_SQL_CONTAINER="/app/.reset_tmp.sql"
 
-# Wrapper: always pass -D so the database is selected in non-interactive mode.
-# lando mysql does not auto-select the database when invoked with flags or piped input.
-mysql() { lando mysql -D "$DB" "$@"; }
+if command -v lando &>/dev/null && [[ -f ".lando.yml" ]]; then
+    CONNECTION_MODE="lando"
+    psql_cmd()  { lando psql -tAc "$1"; }
+    psql_file() { lando psql -f "$RESET_SQL_CONTAINER"; }
+    console_cmd() { lando php bin/console "$@"; }
+    echo -e "${BLUE}ℹ  Connection mode: Lando (PostgreSQL)${NC}"
+else
+    CONNECTION_MODE="native"
+    if [[ -z "$DATABASE_URL" && -f ".env" ]]; then
+        _db_line=$(grep -m1 '^DATABASE_URL=' .env 2>/dev/null || true)
+        [[ -n "$_db_line" ]] && export DATABASE_URL="${_db_line#DATABASE_URL=}"
+        DATABASE_URL="${DATABASE_URL#\"}"
+        DATABASE_URL="${DATABASE_URL%\"}"
+        # Strip Symfony serverVersion param — psql doesn't understand it
+        DATABASE_URL="${DATABASE_URL%%\?*}"
+    fi
+    if [[ -z "$DATABASE_URL" ]]; then
+        echo -e "${RED}Error: DATABASE_URL is not set. Export it or ensure .env is present.${NC}"
+        exit 1
+    fi
+    psql_cmd()  { psql "$DATABASE_URL" -tAc "$1"; }
+    psql_file() { psql "$DATABASE_URL" -f "$RESET_SQL_HOST"; }
+    console_cmd() { php bin/console "$@"; }
+    echo -e "${BLUE}ℹ  Connection mode: native (PostgreSQL — ${DATABASE_URL%%@*}@...)${NC}"
+fi
 
 # ─── Safety confirmation ─────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}⚠️  WARNING${NC}"
 echo "   This will DELETE all academies, players, staff, and game data."
-echo "   Admin users (ROLE_ADMIN) and their Admin records will be preserved."
-echo ""
-echo -n "   Continue? (y/N) "
-read -r confirm
+echo "   The admin table is untouched — admin users are always preserved."
+echo "   game_config and starter_config will be reset to defaults."
 echo ""
 
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    echo "   Aborted."
-    exit 0
+if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    echo -n "   Continue? (y/N) "
+    read -r confirm
+    echo ""
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        echo "   Aborted."
+        exit 0
+    fi
+else
+    echo -e "   ${YELLOW}--yes flag set — proceeding with all defaults, no prompts.${NC}"
+    echo ""
 fi
 
 # ─── Seed configuration ───────────────────────────────────────────────────────
-echo -e "${BLUE}⚙️  Seed configuration${NC}"
-echo "   Press Enter to accept defaults."
-echo ""
-
 prompt_int() {
     local label="$1" default="$2" varname="$3"
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        eval "$varname=$default"
+        return
+    fi
     echo -n "   ${label} [${default}]: "
     read -r input
     if [[ -z "$input" ]]; then
@@ -62,206 +103,139 @@ prompt_int() {
     fi
 }
 
-echo "   — Market entities (agents, scouts, investors, sponsors) —"
-prompt_int "Agents"    25  SEED_AGENTS
-prompt_int "Scouts"    30  SEED_SCOUTS
-prompt_int "Investors" 20  SEED_INVESTORS
-prompt_int "Sponsors"  40  SEED_SPONSORS
-echo ""
-echo "   — Market pool (unassigned players & coaches) —"
-prompt_int "Pool players"     100 SEED_PLAYERS
-prompt_int "Prospect players" 150 SEED_PROSPECTS
-prompt_int "Pool coaches"      20 SEED_COACHES
-prompt_int "Pool scouts"       10 SEED_POOL_SCOUTS
+if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    echo -e "${BLUE}⚙️  Seed configuration${NC}"
+    echo "   Press Enter to accept defaults."
+    echo ""
+    echo "   — Market entities (agents, scouts, investors, sponsors) —"
+fi
 
-# ─── Review & confirm config ─────────────────────────────────────────────────
-while true; do
-    echo ""
-    echo -e "${BLUE}📋 Seed summary — review before proceeding:${NC}"
-    echo ""
-    echo "     [1] Agents       : ${SEED_AGENTS}"
-    echo "     [2] Scouts       : ${SEED_SCOUTS}"
-    echo "     [3] Investors    : ${SEED_INVESTORS}"
-    echo "     [4] Sponsors     : ${SEED_SPONSORS}"
-    echo "     [5] Pool players     : ${SEED_PLAYERS}"
-    echo "     [6] Prospect players : ${SEED_PROSPECTS}"
-    echo "     [7] Pool coaches     : ${SEED_COACHES}"
-    echo "     [8] Pool scouts      : ${SEED_POOL_SCOUTS}"
-    echo ""
-    echo "   Enter a number to edit that value, or press Enter to proceed."
-    echo -n "   Choice: "
-    read -r choice
+prompt_int "Agents"    100  SEED_AGENTS
+prompt_int "Scouts"    100  SEED_SCOUTS
+prompt_int "Investors" 100  SEED_INVESTORS
+prompt_int "Sponsors"  100  SEED_SPONSORS
 
-    case "$choice" in
-        1) prompt_int "Agents"           "$SEED_AGENTS"      SEED_AGENTS ;;
-        2) prompt_int "Scouts"           "$SEED_SCOUTS"      SEED_SCOUTS ;;
-        3) prompt_int "Investors"        "$SEED_INVESTORS"   SEED_INVESTORS ;;
-        4) prompt_int "Sponsors"         "$SEED_SPONSORS"    SEED_SPONSORS ;;
-        5) prompt_int "Pool players"     "$SEED_PLAYERS"     SEED_PLAYERS ;;
-        6) prompt_int "Prospect players" "$SEED_PROSPECTS"   SEED_PROSPECTS ;;
-        7) prompt_int "Pool coaches"     "$SEED_COACHES"     SEED_COACHES ;;
-        8) prompt_int "Pool scouts"      "$SEED_POOL_SCOUTS" SEED_POOL_SCOUTS ;;
-        "") break ;;
-        *) echo -e "   ${RED}Invalid choice — enter 1-8 or press Enter to proceed.${NC}" ;;
-    esac
-done
+if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    echo ""
+    echo "   — Market pool (unassigned players & coaches) —"
+fi
+
+prompt_int "Pool players"     5000 SEED_PLAYERS
+prompt_int "Prospect players" 2000 SEED_PROSPECTS
+prompt_int "Pool coaches"      100 SEED_COACHES
+prompt_int "Pool scouts"       100 SEED_POOL_SCOUTS
+
+# ─── Review / summary ─────────────────────────────────────────────────────────
+if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    while true; do
+        echo ""
+        echo -e "${BLUE}📋 Seed summary — review before proceeding:${NC}"
+        echo ""
+        echo "     [1] Agents           : ${SEED_AGENTS}"
+        echo "     [2] Scouts           : ${SEED_SCOUTS}"
+        echo "     [3] Investors        : ${SEED_INVESTORS}"
+        echo "     [4] Sponsors         : ${SEED_SPONSORS}"
+        echo "     [5] Pool players     : ${SEED_PLAYERS}"
+        echo "     [6] Prospect players : ${SEED_PROSPECTS}"
+        echo "     [7] Pool coaches     : ${SEED_COACHES}"
+        echo "     [8] Pool scouts      : ${SEED_POOL_SCOUTS}"
+        echo ""
+        echo "   Enter a number to edit that value, or press Enter to proceed."
+        echo -n "   Choice: "
+        read -r choice
+
+        case "$choice" in
+            1) prompt_int "Agents"           "$SEED_AGENTS"      SEED_AGENTS ;;
+            2) prompt_int "Scouts"           "$SEED_SCOUTS"      SEED_SCOUTS ;;
+            3) prompt_int "Investors"        "$SEED_INVESTORS"   SEED_INVESTORS ;;
+            4) prompt_int "Sponsors"         "$SEED_SPONSORS"    SEED_SPONSORS ;;
+            5) prompt_int "Pool players"     "$SEED_PLAYERS"     SEED_PLAYERS ;;
+            6) prompt_int "Prospect players" "$SEED_PROSPECTS"   SEED_PROSPECTS ;;
+            7) prompt_int "Pool coaches"     "$SEED_COACHES"     SEED_COACHES ;;
+            8) prompt_int "Pool scouts"      "$SEED_POOL_SCOUTS" SEED_POOL_SCOUTS ;;
+            "") break ;;
+            *) echo -e "   ${RED}Invalid choice — enter 1-8 or press Enter to proceed.${NC}" ;;
+        esac
+    done
+else
+    echo -e "${BLUE}📋 Seed summary (defaults):${NC}"
+    echo ""
+    echo "     Agents           : ${SEED_AGENTS}"
+    echo "     Scouts           : ${SEED_SCOUTS}"
+    echo "     Investors        : ${SEED_INVESTORS}"
+    echo "     Sponsors         : ${SEED_SPONSORS}"
+    echo "     Pool players     : ${SEED_PLAYERS}"
+    echo "     Prospect players : ${SEED_PROSPECTS}"
+    echo "     Pool coaches     : ${SEED_COACHES}"
+    echo "     Pool scouts      : ${SEED_POOL_SCOUTS}"
+fi
 
 echo ""
 echo -e "   ${GREEN}✓ Configuration locked in. Starting reset...${NC}"
 echo ""
 
-# ─── Dependency checks ───────────────────────────────────────────────────────
-if ! command -v lando &>/dev/null; then
-    echo -e "${RED}Error: 'lando' is not in PATH.${NC}"
-    echo "Install Lando from https://lando.dev and run 'lando start' first."
-    exit 1
-fi
+# ─── Phase 1: Truncate game tables (admin table is intentionally excluded) ────
+echo -e "${BLUE}🗑️  Phase 1: Truncating game tables + resetting config to defaults...${NC}"
+echo "   (admin table is skipped — admin users are always preserved)"
 
-if ! lando mysql -D "$DB" -se "SELECT 1" 2>/dev/null | grep -q "1"; then
-    echo -e "${RED}Error: Cannot connect to MySQL via Lando.${NC}"
-    echo "Run 'lando start' to bring up the environment."
-    exit 1
-fi
+# Write SQL to a file inside the project dir (lando mounts project at /app).
+# The admin table is intentionally absent from this list.
+cat > "$RESET_SQL_HOST" << 'SQL'
+-- Truncate all game tables; CASCADE resolves FK order automatically.
+-- admin table is intentionally excluded.
+TRUNCATE TABLE
+    inbox_message,
+    facility,
+    leaderboard_entry,
+    sync_record,
+    transfer,
+    guardian,
+    player_siblings,
+    player,
+    staff,
+    investor,
+    sponsor,
+    scout,
+    agent,
+    academy,
+    "user"
+CASCADE;
 
-# ─── Phase 1: Back up admin users ────────────────────────────────────────────
-echo -e "${BLUE}🔄 Phase 1: Backing up admin users...${NC}"
+-- Reset game_config (RESTART IDENTITY resets the PK sequence)
+TRUNCATE TABLE game_config RESTART IDENTITY CASCADE;
+INSERT INTO game_config (
+    clique_relationship_threshold, clique_squad_cap_percent, clique_min_tenure_weeks,
+    base_xp, base_injury_probability,
+    regression_upper_threshold, regression_lower_threshold,
+    reputation_delta_base, reputation_delta_facility_multiplier,
+    injury_minor_weight, injury_moderate_weight, injury_serious_weight
+) VALUES (20, 30, 3, 10, 0.05, 14, 7, 0.5, 1.2, 60, 30, 10);
 
-ADMIN_COUNT=$(mysql -Nse \
-    "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
-    2>/dev/null | tr -d '\r')
-
-echo "   Found: ${ADMIN_COUNT} admin user(s)"
-
-# Human-readable JSON backup
-mysql -Nse "
-SELECT COALESCE(
-    JSON_PRETTY(JSON_ARRAYAGG(
-        JSON_OBJECT(
-            'email',      u.email,
-            'roles',      CAST(u.roles AS JSON),
-            'createdAt',  DATE_FORMAT(u.created_at, '%Y-%m-%dT%T+00:00'),
-            'admin', JSON_OBJECT(
-                'department',  a.department,
-                'accessLevel', a.access_level
-            )
-        )
-    )),
-    '[]'
-)
-FROM \`user\` u
-LEFT JOIN \`admin\` a ON a.user_id = u.id
-WHERE JSON_CONTAINS(u.roles, '\"ROLE_ADMIN\"')
-" 2>/dev/null > "$BACKUP_FILE"
-
-# Validate JSON backup before proceeding
-if [[ "$ADMIN_COUNT" -gt 0 ]]; then
-    if [[ ! -s "$BACKUP_FILE" ]]; then
-        echo -e "${RED}  ERROR: JSON backup is empty. Aborting.${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}  ✓ JSON backup → ${BACKUP_FILE}${NC}"
-fi
-
-# Restorable SQL — user rows
-mysql -Nse "
-SELECT CONCAT(
-    'INSERT INTO \`user\` (id, email, password, roles, created_at) VALUES (0x',
-    HEX(id),           ', ',
-    QUOTE(email),      ', ',
-    QUOTE(password),   ', ',
-    QUOTE(roles),      ', ',
-    QUOTE(created_at), ');'
-)
-FROM \`user\`
-WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')
-" 2>/dev/null > "$RESTORE_SQL"
-
-# Restorable SQL — admin rows (appended; must run after user rows due to FK)
-mysql -Nse "
-SELECT CONCAT(
-    'INSERT INTO \`admin\` (id, user_id, department, access_level, created_at) VALUES (0x',
-    HEX(a.id),       ', 0x',
-    HEX(a.user_id),  ', ',
-    IF(a.department IS NULL, 'NULL', QUOTE(a.department)), ', ',
-    a.access_level,  ', ',
-    QUOTE(a.created_at), ');'
-)
-FROM \`admin\` a
-INNER JOIN \`user\` u ON u.id = a.user_id
-WHERE JSON_CONTAINS(u.roles, '\"ROLE_ADMIN\"')
-" 2>/dev/null >> "$RESTORE_SQL"
-
-if [[ "$ADMIN_COUNT" -gt 0 && ! -s "$RESTORE_SQL" ]]; then
-    echo -e "${RED}  ERROR: SQL restore file is empty. Aborting to protect admin users.${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}  ✓ SQL restore → ${RESTORE_SQL}${NC}"
-
-# ─── Phase 2: Truncate tables ────────────────────────────────────────────────
-echo ""
-echo -e "${BLUE}🗑️  Phase 2: Truncating database (preserving admins)...${NC}"
-
-cat > "$RESET_SQL" << 'SQL'
-SET FOREIGN_KEY_CHECKS = 0;
-
-TRUNCATE TABLE inbox_message;
-TRUNCATE TABLE facility;
-TRUNCATE TABLE leaderboard_entry;
-TRUNCATE TABLE sync_record;
-TRUNCATE TABLE transfer;
-TRUNCATE TABLE guardian;
-TRUNCATE TABLE player_siblings;
-TRUNCATE TABLE player;
-TRUNCATE TABLE staff;
-TRUNCATE TABLE investor;
-TRUNCATE TABLE sponsor;
-TRUNCATE TABLE scout;
-TRUNCATE TABLE agent;
-TRUNCATE TABLE academy;
-TRUNCATE TABLE admin;
-TRUNCATE TABLE `user`;
-
-SET FOREIGN_KEY_CHECKS = 1;
+-- Reset starter_config
+TRUNCATE TABLE starter_config RESTART IDENTITY CASCADE;
+INSERT INTO starter_config (id, starting_balance, starter_player_count, starter_coach_count, starter_scout_count, starter_sponsor_tier)
+VALUES (1, 5000000, 5, 1, 1, 'SMALL');
 SQL
 
-mysql < "$RESET_SQL"
+psql_file
+rm -f "$RESET_SQL_HOST"
+
 echo -e "${GREEN}  ✓ All game tables cleared${NC}"
+echo -e "${GREEN}  ✓ game_config  — reset to defaults (clique 20/30/3, baseXP 10, injury 0.05, weights 60/30/10)${NC}"
+echo -e "${GREEN}  ✓ starter_config — reset to defaults (balance £5m, 5 players, 1 coach, 1 scout, SMALL sponsor)${NC}"
 
-# Restore admin users (user rows first, then admin rows due to FK)
-if [[ "$ADMIN_COUNT" -gt 0 ]]; then
-    echo "   Restoring admin users..."
-    mysql < "$RESTORE_SQL"
-
-    RESTORED=$(mysql -Nse \
-        "SELECT COUNT(*) FROM \`user\` WHERE JSON_CONTAINS(roles, '\"ROLE_ADMIN\"')" \
-        2>/dev/null | tr -d '\r')
-
-    if [[ "$RESTORED" != "$ADMIN_COUNT" ]]; then
-        echo -e "${RED}  ERROR: Restoration mismatch — expected ${ADMIN_COUNT}, got ${RESTORED}.${NC}"
-        echo -e "${RED}  Restore SQL preserved at: ${RESTORE_SQL}${NC}"
-        exit 1
-    fi
-
-    echo -e "${GREEN}  ✓ ${RESTORED} admin user(s) restored${NC}"
-fi
-
-# ─── Phase 3: Re-seed market data ────────────────────────────────────────────
-# app:generate-market-data is the sole owner of agents (25). app:market:generate
-# skips agent generation (--agents=0) to avoid duplicate names from both commands
-# drawing the same name pool. Pool players (100), coaches (20), and scouts (10)
-# come from app:market:generate only.
+# ─── Phase 2: Re-seed market data ────────────────────────────────────────────
 echo ""
-echo -e "${BLUE}🌱 Phase 3a: Generating market data (agents · scouts · investors · sponsors)...${NC}"
-lando php bin/console app:generate-market-data \
+echo -e "${BLUE}🌱 Phase 2a: Generating market data (agents · scouts · investors · sponsors)...${NC}"
+console_cmd app:generate-market-data \
     --agents="$SEED_AGENTS" \
     --scouts="$SEED_SCOUTS" \
     --investors="$SEED_INVESTORS" \
     --sponsors="$SEED_SPONSORS"
 
 echo ""
-echo -e "${BLUE}🌱 Phase 3b: Generating market pool (players · prospects · coaches · scouts, no agents)...${NC}"
-lando php bin/console app:market:generate \
+echo -e "${BLUE}🌱 Phase 2b: Generating market pool (players · prospects · coaches · scouts)...${NC}"
+console_cmd app:market:generate \
     --agents=0 \
     --players="$SEED_PLAYERS" \
     --prospects="$SEED_PROSPECTS" \
@@ -269,51 +243,45 @@ lando php bin/console app:market:generate \
     --scouts="$SEED_POOL_SCOUTS"
 
 echo ""
-echo -e "${BLUE}🌱 Phase 3c: Seeding game event templates (idempotent)...${NC}"
-lando php bin/console app:seed-game-events
+echo -e "${BLUE}🌱 Phase 2c: Seeding game event templates (idempotent)...${NC}"
+console_cmd app:seed-game-events
 
 echo ""
-echo -e "${BLUE}🌱 Phase 3d: Seeding player archetypes (truncates and re-seeds 30)...${NC}"
-lando php bin/console app:seed-archetypes
+echo -e "${BLUE}🌱 Phase 2d: Seeding player archetypes...${NC}"
+console_cmd app:seed-archetypes
 
 # ─── Verification ────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"
+echo ""
 
-POOL_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'" 2>/dev/null | tr -d '\r')
-PROSPECT_PLAYERS=$(mysql -Nse "SELECT COUNT(*) FROM \`player\` WHERE academy_id IS NULL AND recruitment_source = 'scouting_network'" 2>/dev/null | tr -d '\r')
-POOL_STAFF=$(mysql -Nse "SELECT COUNT(*) FROM \`staff\` WHERE academy_id IS NULL" 2>/dev/null | tr -d '\r')
-SCOUTS=$(mysql -Nse "SELECT COUNT(*) FROM \`scout\`" 2>/dev/null | tr -d '\r')
-AGENTS=$(mysql -Nse "SELECT COUNT(*) FROM \`agent\`" 2>/dev/null | tr -d '\r')
-INVESTORS=$(mysql -Nse "SELECT COUNT(*) FROM \`investor\`" 2>/dev/null | tr -d '\r')
-SPONSORS=$(mysql -Nse "SELECT COUNT(*) FROM \`sponsor\`" 2>/dev/null | tr -d '\r')
-EVENT_TEMPLATES=$(mysql -Nse "SELECT COUNT(*) FROM \`game_event_template\`" 2>/dev/null | tr -d '\r')
-ARCHETYPES=$(mysql -Nse "SELECT COUNT(*) FROM \`player_archetype\`" 2>/dev/null | tr -d '\r')
+# All counts in one file-based query — avoids lando TTY issues with subshells.
+cat > "$RESET_SQL_HOST" << 'SQL'
+SELECT
+    'Market players'   AS label, COUNT(*)::text AS value FROM player WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'
+UNION ALL SELECT 'Prospect players', COUNT(*)::text FROM player WHERE academy_id IS NULL AND recruitment_source = 'scouting_network'
+UNION ALL SELECT 'Pool coaches',     COUNT(*)::text FROM staff   WHERE academy_id IS NULL
+UNION ALL SELECT 'Scouts',           COUNT(*)::text FROM scout
+UNION ALL SELECT 'Agents',           COUNT(*)::text FROM agent
+UNION ALL SELECT 'Investors',        COUNT(*)::text FROM investor
+UNION ALL SELECT 'Sponsors',         COUNT(*)::text FROM sponsor
+UNION ALL SELECT 'Event templates',  COUNT(*)::text FROM game_event_template
+UNION ALL SELECT 'Archetypes',       COUNT(*)::text FROM player_archetype
+UNION ALL SELECT 'Admin users',      COUNT(*)::text FROM admin
+UNION ALL SELECT 'game_config',      clique_relationship_threshold||'/'||clique_squad_cap_percent||'/'||clique_min_tenure_weeks||' · baseXP='||base_xp||' · injury='||base_injury_probability FROM game_config LIMIT 1
+UNION ALL SELECT 'starter_config',   'balance='||starting_balance||' · players='||starter_player_count||' · sponsor='||starter_sponsor_tier FROM starter_config WHERE id = 1;
+SQL
 
-echo "   Market players  : ${POOL_PLAYERS}"
-echo "   Prospect players: ${PROSPECT_PLAYERS}"
-echo "   Pool coaches    : ${POOL_STAFF}"
-echo "   Scouts          : ${SCOUTS}"
-echo "   Agents          : ${AGENTS}"
-echo "   Investors       : ${INVESTORS}"
-echo "   Sponsors        : ${SPONSORS}"
-echo "   Event templates : ${EVENT_TEMPLATES}"
-echo "   Archetypes      : ${ARCHETYPES}"
+psql_file
+rm -f "$RESET_SQL_HOST"
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}✓ Reset complete!${NC}"
 echo ""
-echo "   Preserved  : ${ADMIN_COUNT} admin user(s)"
 echo "   Cleared    : academies, players, guardians, staff, scouts, agents, sponsors,"
 echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
-echo "   Regenerated: ${AGENTS} agents · ${SCOUTS} scouts · ${POOL_PLAYERS} market players"
-echo "                ${PROSPECT_PLAYERS} prospect players · ${POOL_STAFF} pool coaches"
-echo "                ${INVESTORS} investors · ${SPONSORS} sponsors"
-echo "                ${EVENT_TEMPLATES} event templates · ${ARCHETYPES} archetypes"
-echo ""
-echo "   Backups    :"
-echo "     JSON : ${BACKUP_FILE}"
-echo "     SQL  : ${RESTORE_SQL}"
+echo "   Config     : game_config + starter_config reset to defaults"
+echo "   Admin      : untouched"
 echo ""

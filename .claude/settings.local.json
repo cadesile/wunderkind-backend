@@ -46,7 +46,16 @@
       "Bash(bash:*)",
       "Bash(chmod +x:*)",
       "Bash(claude:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(xargs cat:*)",
+      "Bash(ls:*)",
+      "Bash(lando stop:*)",
+      "Bash(lando rebuild:*)",
+      "Bash(lsof:*)",
+      "Bash(lando:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker build:*)"
     ]
   }
 }

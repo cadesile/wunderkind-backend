@@ -141,9 +141,38 @@ class SyncService
 
         $syncedAt = $academy->getLastSyncedAt();
 
-        // Fetch runtime config to embed in response. Falls back to defaults if
-        // the row doesn't exist yet (fresh install before seeder has run).
-        $gameConfig = $this->gameConfigRepository->getConfig();
+        // Fetch runtime config to embed in response. Read-only: if no row exists
+        // yet (fresh install before seeder runs) fall back to hardcoded defaults
+        // without persisting anything.
+        $gameConfig = $this->gameConfigRepository->find(1);
+
+        $gameConfigData = $gameConfig !== null ? [
+            'cliqueRelationshipThreshold'       => $gameConfig->getCliqueRelationshipThreshold(),
+            'cliqueSquadCapPercent'              => $gameConfig->getCliqueSquadCapPercent(),
+            'cliqueMinTenureWeeks'               => $gameConfig->getCliqueMinTenureWeeks(),
+            'baseXP'                             => $gameConfig->getBaseXP(),
+            'baseInjuryProbability'              => $gameConfig->getBaseInjuryProbability(),
+            'regressionUpperThreshold'           => $gameConfig->getRegressionUpperThreshold(),
+            'regressionLowerThreshold'           => $gameConfig->getRegressionLowerThreshold(),
+            'reputationDeltaBase'                => $gameConfig->getReputationDeltaBase(),
+            'reputationDeltaFacilityMultiplier'  => $gameConfig->getReputationDeltaFacilityMultiplier(),
+            'injuryMinorWeight'                  => $gameConfig->getInjuryMinorWeight(),
+            'injuryModerateWeight'               => $gameConfig->getInjuryModerateWeight(),
+            'injurySeriousWeight'                => $gameConfig->getInjurySeriousWeight(),
+        ] : [
+            'cliqueRelationshipThreshold'       => 20,
+            'cliqueSquadCapPercent'             => 30,
+            'cliqueMinTenureWeeks'              => 3,
+            'baseXP'                            => 10,
+            'baseInjuryProbability'             => 0.05,
+            'regressionUpperThreshold'          => 14,
+            'regressionLowerThreshold'          => 7,
+            'reputationDeltaBase'               => 0.5,
+            'reputationDeltaFacilityMultiplier' => 1.2,
+            'injuryMinorWeight'                 => 60,
+            'injuryModerateWeight'              => 30,
+            'injurySeriousWeight'               => 10,
+        ];
 
         return [
             'accepted'   => true,
@@ -161,20 +190,7 @@ class SyncService
                     'ambition'    => $academy->getManagerAmbition(),
                 ],
             ],
-            'gameConfig' => [
-                'cliqueRelationshipThreshold'      => $gameConfig->getCliqueRelationshipThreshold(),
-                'cliqueSquadCapPercent'             => $gameConfig->getCliqueSquadCapPercent(),
-                'cliqueMinTenureWeeks'              => $gameConfig->getCliqueMinTenureWeeks(),
-                'baseXP'                            => $gameConfig->getBaseXP(),
-                'baseInjuryProbability'             => $gameConfig->getBaseInjuryProbability(),
-                'regressionUpperThreshold'          => $gameConfig->getRegressionUpperThreshold(),
-                'regressionLowerThreshold'          => $gameConfig->getRegressionLowerThreshold(),
-                'reputationDeltaBase'               => $gameConfig->getReputationDeltaBase(),
-                'reputationDeltaFacilityMultiplier' => $gameConfig->getReputationDeltaFacilityMultiplier(),
-                'injuryMinorWeight'                 => $gameConfig->getInjuryMinorWeight(),
-                'injuryModerateWeight'              => $gameConfig->getInjuryModerateWeight(),
-                'injurySeriousWeight'               => $gameConfig->getInjurySeriousWeight(),
-            ],
+            'gameConfig' => $gameConfigData,
         ];
     }
 

@@ -6,7 +6,11 @@ use App\Entity\Academy;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Repository\GameConfigRepository;
+use App\Repository\PlayerRepository;
+use App\Repository\PoolConfigRepository;
+use App\Repository\StarterConfigRepository;
 use App\Service\EconomicService;
+use App\Service\MarketPoolService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
@@ -27,6 +31,10 @@ class DashboardController extends AbstractDashboardController
     public function __construct(
         private EntityManagerInterface $em,
         private GameConfigRepository $gameConfigRepository,
+        private StarterConfigRepository $starterConfigRepository,
+        private PoolConfigRepository $poolConfigRepository,
+        private MarketPoolService $marketPoolService,
+        private PlayerRepository $playerRepository,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -42,7 +50,7 @@ class DashboardController extends AbstractDashboardController
             'SELECT position, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY position ORDER BY cnt DESC'
         );
         $byAge = $conn->fetchAllAssociative(
-            'SELECT (YEAR(CURDATE()) - YEAR(date_of_birth)) AS age, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY age ORDER BY age'
+            'SELECT (EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM date_of_birth)) AS age, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY age ORDER BY age'
         );
 
         return $this->render('admin/dashboard.html.twig', [
@@ -70,28 +78,206 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function settings(): Response
     {
-        return $this->render('admin/settings.html.twig', [
+        return $this->render('admin/settings.html.twig');
+    }
+
+    // ── Game Config ───────────────────────────────────────────────────────
+
+    #[Route('/admin/game-config', name: 'admin_game_config')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function gameConfig(): Response
+    {
+        return $this->render('admin/game_config.html.twig', [
             'config' => $this->gameConfigRepository->getConfig(),
         ]);
     }
 
-    #[Route('/admin/settings/save-config', name: 'admin_settings_save_config', methods: ['POST'])]
+    #[Route('/admin/game-config/save', name: 'admin_game_config_save', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
-    public function saveConfig(Request $request): Response
+    public function saveGameConfig(Request $request): Response
     {
-        if (!$this->isCsrfTokenValid('save_config', $request->request->get('_token'))) {
+        if (!$this->isCsrfTokenValid('save_game_config', $request->request->get('_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirectToRoute('admin_settings');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_game_config']));
         }
 
         $config = $this->gameConfigRepository->getConfig();
         $config->setCliqueRelationshipThreshold((int) $request->request->get('cliqueRelationshipThreshold', 20));
         $config->setCliqueSquadCapPercent((int) $request->request->get('cliqueSquadCapPercent', 30));
         $config->setCliqueMinTenureWeeks((int) $request->request->get('cliqueMinTenureWeeks', 3));
+        $config->setBaseXP((int) $request->request->get('baseXP', 10));
+        $config->setBaseInjuryProbability((float) $request->request->get('baseInjuryProbability', 0.05));
+        $config->setRegressionUpperThreshold((int) $request->request->get('regressionUpperThreshold', 14));
+        $config->setRegressionLowerThreshold((int) $request->request->get('regressionLowerThreshold', 7));
+        $config->setReputationDeltaBase((float) $request->request->get('reputationDeltaBase', 0.5));
+        $config->setReputationDeltaFacilityMultiplier((float) $request->request->get('reputationDeltaFacilityMultiplier', 1.2));
+        $config->setInjuryMinorWeight((int) $request->request->get('injuryMinorWeight', 60));
+        $config->setInjuryModerateWeight((int) $request->request->get('injuryModerateWeight', 30));
+        $config->setInjurySeriousWeight((int) $request->request->get('injurySeriousWeight', 10));
+
+        $config->setScoutMoraleThreshold((int) $request->request->get('scoutMoraleThreshold', 40));
+        $config->setScoutRevealWeeks((int) $request->request->get('scoutRevealWeeks', 2));
+        $config->setScoutAbilityErrorRange((int) $request->request->get('scoutAbilityErrorRange', 30));
+        $config->setScoutMaxAssignments((int) $request->request->get('scoutMaxAssignments', 5));
+        $config->setMissionGemRollThresholds([
+            (float) $request->request->get('gemThreshold0', 0.25),
+            (float) $request->request->get('gemThreshold1', 0.75),
+            (float) $request->request->get('gemThreshold2', 0.85),
+            (float) $request->request->get('gemThreshold3', 0.94),
+        ]);
         $this->em->flush();
 
-        $this->addFlash('success', 'Game configuration saved.');
-        return $this->redirectToRoute('admin_settings');
+        $this->addFlash('success', 'Game config saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_game_config']));
+    }
+
+    // ── Starter Config ────────────────────────────────────────────────────
+
+    #[Route('/admin/starter-config', name: 'admin_starter_config')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function starterConfig(): Response
+    {
+        return $this->render('admin/starter_config.html.twig', [
+            'config' => $this->starterConfigRepository->getConfig(),
+        ]);
+    }
+
+    #[Route('/admin/starter-config/save', name: 'admin_starter_config_save', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function saveStarterConfig(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('save_starter_config', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_starter_config']));
+        }
+
+        $config = $this->starterConfigRepository->getConfig();
+        $config->setStartingBalance((int) $request->request->get('startingBalance', 5_000_000));
+        $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
+        $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
+        $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
+        $config->setStarterSponsorTier($request->request->get('starterSponsorTier', 'SMALL'));
+        $this->em->persist($config);
+        $this->em->flush();
+
+        $this->addFlash('success', 'Starter config saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_starter_config']));
+    }
+
+    // ── Pool Config ───────────────────────────────────────────────────────
+
+    #[Route('/admin/pool-config', name: 'admin_pool_config')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function poolConfig(): Response
+    {
+        $conn = $this->em->getConnection();
+
+        $poolCounts = [
+            'players'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE academy_id IS NULL'),
+            'coaches'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NULL'),
+            'scouts'    => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
+            'sponsors'  => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE academy_id IS NULL'),
+            'investors' => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE academy_id IS NULL'),
+        ];
+
+        return $this->render('admin/pool_config.html.twig', [
+            'config'     => $this->poolConfigRepository->getConfig(),
+            'poolCounts' => $poolCounts,
+        ]);
+    }
+
+    #[Route('/admin/pool-config/save', name: 'admin_pool_config_save', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function savePoolConfig(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('save_pool_config', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
+        }
+
+        $config = $this->poolConfigRepository->getConfig();
+
+        // Player generation
+        $config->setPlayerAgeMin((int) $request->request->get('playerAgeMin', 12));
+        $config->setPlayerAgeMax((int) $request->request->get('playerAgeMax', 13));
+        $config->setPlayerPotentialMin((int) $request->request->get('playerPotentialMin', 40));
+        $config->setPlayerPotentialMax((int) $request->request->get('playerPotentialMax', 80));
+        $config->setPlayerPotentialMean((int) $request->request->get('playerPotentialMean', 60));
+        $config->setPlayerAbilityMin((int) $request->request->get('playerAbilityMin', 3));
+        $config->setPlayerAbilityMax((int) $request->request->get('playerAbilityMax', 10));
+        $config->setPlayerAttributeBudgetMin((int) $request->request->get('playerAttributeBudgetMin', 6));
+        $config->setPlayerAttributeBudgetMax((int) $request->request->get('playerAttributeBudgetMax', 20));
+        $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentChancePercent', 40));
+        $config->setPlayerHeightMin((int) $request->request->get('playerHeightMin', 145));
+        $config->setPlayerHeightMax((int) $request->request->get('playerHeightMax', 160));
+        $config->setPlayerWeightMin((int) $request->request->get('playerWeightMin', 38));
+        $config->setPlayerWeightMax((int) $request->request->get('playerWeightMax', 55));
+        $config->setPersonalityTraitMin((int) $request->request->get('personalityTraitMin', 30));
+        $config->setPersonalityTraitMax((int) $request->request->get('personalityTraitMax', 70));
+
+        // Position weighting
+        $config->setPositionWeightGk((int) $request->request->get('positionWeightGk', 8));
+        $config->setPositionWeightDef((int) $request->request->get('positionWeightDef', 30));
+        $config->setPositionWeightMid((int) $request->request->get('positionWeightMid', 38));
+        $config->setPositionWeightAtt((int) $request->request->get('positionWeightAtt', 24));
+
+        // Coach generation
+        $config->setCoachAgeMin((int) $request->request->get('coachAgeMin', 28));
+        $config->setCoachAgeMax((int) $request->request->get('coachAgeMax', 60));
+        $config->setCoachAbilityMin((int) $request->request->get('coachAbilityMin', 40));
+        $config->setCoachAbilityMax((int) $request->request->get('coachAbilityMax', 75));
+
+        // Scout generation
+        $config->setScoutAgeMin((int) $request->request->get('scoutAgeMin', 28));
+        $config->setScoutAgeMax((int) $request->request->get('scoutAgeMax', 40));
+        $config->setScoutExperienceMin((int) $request->request->get('scoutExperienceMin', 0));
+        $config->setScoutExperienceMax((int) $request->request->get('scoutExperienceMax', 10));
+        $config->setScoutJudgementMin((int) $request->request->get('scoutJudgementMin', 40));
+        $config->setScoutJudgementMax((int) $request->request->get('scoutJudgementMax', 80));
+
+        // Agent generation
+        $config->setAgentReputationMin((int) $request->request->get('agentReputationMin', 30));
+        $config->setAgentReputationMax((int) $request->request->get('agentReputationMax', 70));
+        $config->setAgentAgeMin((int) $request->request->get('agentAgeMin', 30));
+        $config->setAgentAgeMax((int) $request->request->get('agentAgeMax', 60));
+
+        // Pool targets
+        $config->setPlayerPoolTarget((int) $request->request->get('playerPoolTarget', 50));
+        $config->setCoachPoolTarget((int) $request->request->get('coachPoolTarget', 10));
+        $config->setScoutPoolTarget((int) $request->request->get('scoutPoolTarget', 5));
+        $config->setSponsorPoolTarget((int) $request->request->get('sponsorPoolTarget', 10));
+        $config->setInvestorPoolTarget((int) $request->request->get('investorPoolTarget', 5));
+
+        $this->em->flush();
+
+        $this->addFlash('success', 'Pool config saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
+    }
+
+    #[Route('/admin/pool-config/generate', name: 'admin_pool_generate', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function generatePool(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('generate_pool', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
+        }
+
+        $mode = $request->request->get('mode', 'replenish');
+
+        if ($mode === 'force') {
+            $generated = $this->marketPoolService->forceGeneratePool();
+            $this->addFlash('success', 'Force generated: ' . implode(', ', $generated) . '.');
+        } else {
+            $generated = $this->marketPoolService->replenishPool();
+            if (empty($generated)) {
+                $this->addFlash('info', 'All pools are already at or above their targets — nothing generated.');
+            } else {
+                $this->addFlash('success', 'Replenished: ' . implode(', ', $generated) . '.');
+            }
+        }
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
     }
 
     // ── Developer Tools ───────────────────────────────────────────────────
@@ -180,8 +366,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll');
         yield MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater');
         yield MenuItem::section('Configuration');
-        yield MenuItem::linkTo(StarterConfigCrudController::class, 'Starter Config', 'fa fa-flag');
-        yield MenuItem::linkTo(GameConfigCrudController::class, 'Game Config', 'fa fa-sliders');
+        yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
+        yield MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config');
+        yield MenuItem::linkToRoute('Pool Config', 'fa fa-layer-group', 'admin_pool_config');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::section('Market');

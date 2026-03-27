@@ -1,0 +1,400 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Pool Config</h5>
+        <p class="text-muted small mb-0">Controls all random ranges, probability weights, and pool size targets used when generating players, staff, scouts, and agents. Changes apply to the next generation run.</p>
+    </div>
+
+    {# ── Pool Status & Generate ──────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card border-primary-subtle">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-layer-group text-muted"></i>
+                <span class="fw-semibold small">Pool Status &amp; Generate</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Current unassigned counts vs configured targets. <strong>Replenish to Targets</strong> only generates for pools below their target.
+                    <strong>Force Add Batch</strong> generates the full target count unconditionally — useful for seeding a fresh environment.
+                </p>
+
+                <div class="row g-3 mb-4">
+                    {% set poolItems = [
+                        { label: 'Players',   icon: 'person-running', count: poolCounts.players,   target: config.playerPoolTarget },
+                        { label: 'Coaches',   icon: 'chalkboard-user', count: poolCounts.coaches,   target: config.coachPoolTarget },
+                        { label: 'Scouts',    icon: 'binoculars',      count: poolCounts.scouts,    target: config.scoutPoolTarget },
+                        { label: 'Sponsors',  icon: 'star',            count: poolCounts.sponsors,  target: config.sponsorPoolTarget },
+                        { label: 'Investors', icon: 'chart-line',      count: poolCounts.investors, target: config.investorPoolTarget },
+                    ] %}
+                    {% for item in poolItems %}
+                    <div class="col-6 col-md-2">
+                        {% set pct = item.target > 0 ? min(100, (item.count / item.target * 100)|round) : 100 %}
+                        {% set barClass = pct >= 100 ? 'bg-success' : (pct >= 50 ? 'bg-warning' : 'bg-danger') %}
+                        <div class="text-center">
+                            <i class="fa fa-{{ item.icon }} text-muted small"></i>
+                            <div class="fw-semibold">{{ item.count }} <span class="text-muted small fw-normal">/ {{ item.target }}</span></div>
+                            <div class="small text-muted">{{ item.label }}</div>
+                            <div class="progress mt-1" style="height:4px">
+                                <div class="progress-bar {{ barClass }}" style="width:{{ pct }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <form method="POST" action="{{ path('admin_pool_generate') }}" class="d-inline">
+                        <input type="hidden" name="_token" value="{{ csrf_token('generate_pool') }}">
+                        <input type="hidden" name="mode" value="replenish">
+                        <button type="submit" class="btn btn-sm btn-outline-primary"
+                                onclick="return confirm('Replenish all pools to their configured targets?')">
+                            <i class="fa fa-arrow-up me-1"></i>Replenish to Targets
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ path('admin_pool_generate') }}" class="d-inline">
+                        <input type="hidden" name="_token" value="{{ csrf_token('generate_pool') }}">
+                        <input type="hidden" name="mode" value="force">
+                        <button type="submit" class="btn btn-sm btn-outline-warning"
+                                onclick="return confirm('Force-add the full target batch for ALL entity types regardless of current counts?')">
+                            <i class="fa fa-bolt me-1"></i>Force Add Batch
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Config Form ─────────────────────────────────────────────────── #}
+    <div class="col-12">
+    <form method="POST" action="{{ path('admin_pool_config_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_pool_config') }}">
+        <div class="d-flex flex-column gap-4">
+
+            {# ── Pool Targets ────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-bullseye text-muted"></i>
+                    <span class="fw-semibold small">Pool Targets</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Minimum unassigned count before auto-replenishment triggers. Also used as the batch size for manual generation.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label for="playerPoolTarget" class="form-label fw-semibold small">Players</label>
+                            <input type="number" id="playerPoolTarget" name="playerPoolTarget"
+                                   value="{{ config.playerPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 50</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="coachPoolTarget" class="form-label fw-semibold small">Coaches</label>
+                            <input type="number" id="coachPoolTarget" name="coachPoolTarget"
+                                   value="{{ config.coachPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 10</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="scoutPoolTarget" class="form-label fw-semibold small">Scouts</label>
+                            <input type="number" id="scoutPoolTarget" name="scoutPoolTarget"
+                                   value="{{ config.scoutPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 5</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="sponsorPoolTarget" class="form-label fw-semibold small">Sponsors</label>
+                            <input type="number" id="sponsorPoolTarget" name="sponsorPoolTarget"
+                                   value="{{ config.sponsorPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 10</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="investorPoolTarget" class="form-label fw-semibold small">Investors</label>
+                            <input type="number" id="investorPoolTarget" name="investorPoolTarget"
+                                   value="{{ config.investorPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Player Age & Core Stats ──────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-person-running text-muted"></i>
+                    <span class="fw-semibold small">Player — Age &amp; Core Stats</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="playerAgeMin" value="{{ config.playerAgeMin }}"
+                                       min="10" max="21" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="playerAgeMax" value="{{ config.playerAgeMax }}"
+                                       min="10" max="21" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 12–13</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Current Ability Range</label>
+                            <div class="input-group">
+                                <input type="number" name="playerAbilityMin" value="{{ config.playerAbilityMin }}"
+                                       min="1" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="playerAbilityMax" value="{{ config.playerAbilityMax }}"
+                                       min="1" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 3–10</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Potential Range (bell curve)</label>
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <input type="number" name="playerPotentialMin" value="{{ config.playerPotentialMin }}"
+                                           min="1" max="100" class="form-control" placeholder="Min">
+                                    <div class="form-text">Min. Default: 40</div>
+                                </div>
+                                <div class="col-4">
+                                    <input type="number" name="playerPotentialMax" value="{{ config.playerPotentialMax }}"
+                                           min="1" max="100" class="form-control" placeholder="Max">
+                                    <div class="form-text">Max. Default: 80</div>
+                                </div>
+                                <div class="col-4">
+                                    <input type="number" name="playerPotentialMean" value="{{ config.playerPotentialMean }}"
+                                           min="1" max="100" class="form-control" placeholder="Mean">
+                                    <div class="form-text">Mean. Default: 60</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Attribute Budget Range</label>
+                            <div class="input-group">
+                                <input type="number" name="playerAttributeBudgetMin" value="{{ config.playerAttributeBudgetMin }}"
+                                       min="1" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="playerAttributeBudgetMax" value="{{ config.playerAttributeBudgetMax }}"
+                                       min="1" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Total points distributed across 6 stats. Default: 6–20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="playerAgentChancePercent" class="form-label fw-semibold small">Agent Chance (%)</label>
+                            <input type="number" id="playerAgentChancePercent" name="playerAgentChancePercent"
+                                   value="{{ config.playerAgentChancePercent }}" min="0" max="100" class="form-control">
+                            <div class="form-text">Probability a player has an agent on generation. Default: 40</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Player Physical ──────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-ruler-vertical text-muted"></i>
+                    <span class="fw-semibold small">Player — Physical</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Height (cm)</label>
+                            <div class="input-group">
+                                <input type="number" name="playerHeightMin" value="{{ config.playerHeightMin }}"
+                                       min="100" max="220" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="playerHeightMax" value="{{ config.playerHeightMax }}"
+                                       min="100" max="220" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 145–160</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Weight (kg)</label>
+                            <div class="input-group">
+                                <input type="number" name="playerWeightMin" value="{{ config.playerWeightMin }}"
+                                       min="20" max="120" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="playerWeightMax" value="{{ config.playerWeightMax }}"
+                                       min="20" max="120" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 38–55</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Personality Trait Range</label>
+                            <div class="input-group">
+                                <input type="number" name="personalityTraitMin" value="{{ config.personalityTraitMin }}"
+                                       min="0" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="personalityTraitMax" value="{{ config.personalityTraitMax }}"
+                                       min="0" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Applied to all 8 traits (confidence, maturity, …). Default: 30–70</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Position Weighting ───────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-sitemap text-muted"></i>
+                    <span class="fw-semibold small">Position Weighting</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Relative weights for each position. A random integer is rolled against the total of all four weights —
+                        so the values don't need to sum to 100, only their ratios matter.
+                        Example defaults (8 / 30 / 38 / 24 = 100 total): GK 8%, DEF 30%, MID 38%, ATT 24%.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="positionWeightGk" class="form-label fw-semibold small">GK</label>
+                            <input type="number" id="positionWeightGk" name="positionWeightGk"
+                                   value="{{ config.positionWeightGk }}" min="0" class="form-control">
+                            <div class="form-text">Default: 8</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="positionWeightDef" class="form-label fw-semibold small">DEF</label>
+                            <input type="number" id="positionWeightDef" name="positionWeightDef"
+                                   value="{{ config.positionWeightDef }}" min="0" class="form-control">
+                            <div class="form-text">Default: 30</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="positionWeightMid" class="form-label fw-semibold small">MID</label>
+                            <input type="number" id="positionWeightMid" name="positionWeightMid"
+                                   value="{{ config.positionWeightMid }}" min="0" class="form-control">
+                            <div class="form-text">Default: 38</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="positionWeightAtt" class="form-label fw-semibold small">ATT</label>
+                            <input type="number" id="positionWeightAtt" name="positionWeightAtt"
+                                   value="{{ config.positionWeightAtt }}" min="0" class="form-control">
+                            <div class="form-text">Default: 24</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Coaches ──────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-chalkboard-user text-muted"></i>
+                    <span class="fw-semibold small">Coaches</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="coachAgeMin" value="{{ config.coachAgeMin }}"
+                                       min="18" max="80" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="coachAgeMax" value="{{ config.coachAgeMax }}"
+                                       min="18" max="80" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 28–60</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Ability Range</label>
+                            <div class="input-group">
+                                <input type="number" name="coachAbilityMin" value="{{ config.coachAbilityMin }}"
+                                       min="1" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="coachAbilityMax" value="{{ config.coachAbilityMax }}"
+                                       min="1" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Coaching ability &amp; scouting range. Default: 40–75</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Scouts ───────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-binoculars text-muted"></i>
+                    <span class="fw-semibold small">Scouts</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutAgeMin" value="{{ config.scoutAgeMin }}"
+                                       min="18" max="80" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutAgeMax" value="{{ config.scoutAgeMax }}"
+                                       min="18" max="80" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 28–40</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Experience Range (years)</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutExperienceMin" value="{{ config.scoutExperienceMin }}"
+                                       min="0" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutExperienceMax" value="{{ config.scoutExperienceMax }}"
+                                       min="0" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 0–10</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Judgement Range</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutJudgementMin" value="{{ config.scoutJudgementMin }}"
+                                       min="0" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutJudgementMax" value="{{ config.scoutJudgementMax }}"
+                                       min="0" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">All 5 judgement categories. Default: 40–80</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Agents ───────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-handshake text-muted"></i>
+                    <span class="fw-semibold small">Agents</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="agentAgeMin" value="{{ config.agentAgeMin }}"
+                                       min="18" max="80" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="agentAgeMax" value="{{ config.agentAgeMax }}"
+                                       min="18" max="80" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 30–60</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Reputation Range</label>
+                            <div class="input-group">
+                                <input type="number" name="agentReputationMin" value="{{ config.agentReputationMin }}"
+                                       min="0" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="agentReputationMax" value="{{ config.agentReputationMax }}"
+                                       min="0" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Drives commission rate and rating. Default: 30–70</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>{# /gap wrapper #}
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary btn-sm">Save Pool Config</button>
+        </div>
+    </form>
+    </div>
+
+</div>
+{% endblock %}

@@ -7,7 +7,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -19,7 +18,7 @@ class AdminCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        return $actions->disable(Action::DELETE);
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -30,9 +29,10 @@ class AdminCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->hideOnForm();
-        yield AssociationField::new('user');
+        yield TextField::new('email');
+        yield TextField::new('name')->setRequired(false);
         yield TextField::new('department')->setRequired(false);
         yield IntegerField::new('accessLevel');
-        yield DateTimeField::new('createdAt')->setFormat('yyyy-MM-dd HH:mm');
+        yield DateTimeField::new('createdAt')->setFormat('yyyy-MM-dd HH:mm')->hideOnForm();
     }
 }

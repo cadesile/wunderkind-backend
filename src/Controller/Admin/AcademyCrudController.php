@@ -76,7 +76,8 @@ class AcademyCrudController extends AbstractCrudController
         yield TextField::new('country');
         yield AssociationField::new('user');
         yield IntegerField::new('reputation');
-        yield IntegerField::new('totalCareerEarnings');
+        yield IntegerField::new('totalCareerEarnings')
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—');
         yield IntegerField::new('hallOfFamePoints');
         yield IntegerField::new('lastSyncedWeek');
         yield DateTimeField::new('lastSyncedAt')->setFormat('yyyy-MM-dd HH:mm')->setRequired(false);

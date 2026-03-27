@@ -1,12 +1,12 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-03-25 23:19:34 | Stack: symfony 80 · PHP 8.4 · mysql:8.0 | Dev: lando
+> Generated: 2026-03-26 23:32:38 | Stack: symfony 80 · PHP 8.4 · wunderkind | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young talent. The architecture follows a client-authoritative hybrid sync model — all gameplay logic runs offline on-device, while this Symfony 8 / PHP 8.4 API handles legacy metric syncing, anti-cheat validation, global leaderboards, and NPC market interactions. It exposes a JWT-secured REST API consumed by the mobile client, backed by MySQL via Doctrine ORM, with an EasyAdmin v5 panel for administrative oversight.
+Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young talent. The backend follows a client-authoritative hybrid sync model — all gameplay (weekly ticks, training, aging) runs offline on-device, while this API handles legacy metric syncing, anti-cheat validation, and global leaderboards. Built with Symfony 8.0, PHP 8.4, PostgreSQL 16, and JWT authentication, it exposes a RESTful API consumed by the React Native mobile client alongside an EasyAdmin v5 panel for operational oversight.
 
 ---
 
@@ -14,11 +14,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Category | Count |
 |---|---|
-| PHP files         | 144 |
-| Entities/Models   | 19 |
-| Controllers       | 32 |
+| PHP files         | 155 |
+| Entities/Models   | 21 |
+| Controllers       | 33 |
 | Services          | 9 |
-| Migrations        | 27 |
+| Migrations        | 32 |
 
 ---
 
@@ -29,7 +29,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 | **Language**      | php |
 | **Framework**     | symfony 80 |
 | **PHP**           | 8.4 |
-| **Database**      | mysql:8.0 |
+| **Database**      | wunderkind |
 | **Dev env**       | lando (symfony) |
 
 ### Dependencies
@@ -101,33 +101,40 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── wunderkind-backend-context.md
 │   └── wunderkind-backend-context.md.tmp
 ├── migrations
-│   ├── Version20260301214628.php
-│   ├── Version20260302000001.php
-│   ├── Version20260302000002.php
-│   ├── Version20260302000003.php
-│   ├── Version20260303000001.php
-│   ├── Version20260303000002.php
-│   ├── Version20260303000003.php
-│   ├── Version20260303000004.php
-│   ├── Version20260303000005.php
-│   ├── Version20260303000006.php
-│   ├── Version20260303195108.php
-│   ├── Version20260303200052.php
-│   ├── Version20260303201455.php
-│   ├── Version20260303210001.php
-│   ├── Version20260303214629.php
-│   ├── Version20260304000334.php
-│   ├── Version20260305000906.php
-│   ├── Version20260305130043.php
-│   ├── Version20260305234642.php
-│   ├── Version20260306090200.php
-│   ├── Version20260319143231.php
-│   ├── Version20260319163437.php
-│   ├── Version20260322000001.php
-│   ├── Version20260322184350.php
-│   ├── Version20260323000001.php
-│   ├── Version20260324092239.php
-│   └── Version20260324114203.php
+│   ├── archive
+│   │   ├── README.md
+│   │   ├── Version20260301214628.php
+│   │   ├── Version20260302000001.php
+│   │   ├── Version20260302000002.php
+│   │   ├── Version20260302000003.php
+│   │   ├── Version20260303000001.php
+│   │   ├── Version20260303000002.php
+│   │   ├── Version20260303000003.php
+│   │   ├── Version20260303000004.php
+│   │   ├── Version20260303000005.php
+│   │   ├── Version20260303000006.php
+│   │   ├── Version20260303195108.php
+│   │   ├── Version20260303200052.php
+│   │   ├── Version20260303201455.php
+│   │   ├── Version20260303210001.php
+│   │   ├── Version20260303214629.php
+│   │   ├── Version20260304000334.php
+│   │   ├── Version20260305000906.php
+│   │   ├── Version20260305130043.php
+│   │   ├── Version20260305234642.php
+│   │   ├── Version20260306090200.php
+│   │   ├── Version20260319143231.php
+│   │   ├── Version20260319163437.php
+│   │   ├── Version20260322000001.php
+│   │   ├── Version20260322184350.php
+│   │   ├── Version20260323000001.php
+│   │   ├── Version20260324092239.php
+│   │   ├── Version20260324114203.php
+│   │   ├── Version20260325234055.php
+│   │   └── Version20260325234056.php
+│   ├── Version20260326000000_baseline_postgres.php
+│   ├── Version20260326222629.php
+│   └── Version20260327000001.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -144,6 +151,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── ApiResource
 │   ├── Command
 │   │   ├── CleanupAssignedEntitiesCommand.php
+│   │   ├── CreateAdminCommand.php
 │   │   ├── GenerateMarketDataCommand.php
 │   │   ├── GenerateMarketPoolCommand.php
 │   │   ├── SeedArchetypesCommand.php
@@ -177,9 +185,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── PersonalityProfile.php
 │   │   ├── Player.php
 │   │   ├── PlayerArchetype.php
+│   │   ├── PoolConfig.php
 │   │   ├── Scout.php
 │   │   ├── Sponsor.php
 │   │   ├── Staff.php
+│   │   ├── StarterConfig.php
 │   │   ├── SyncRecord.php
 │   │   ├── Transfer.php
 │   │   └── User.php
@@ -213,9 +223,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── LeaderboardEntryRepository.php
 │   │   ├── PlayerArchetypeRepository.php
 │   │   ├── PlayerRepository.php
+│   │   ├── PoolConfigRepository.php
 │   │   ├── ScoutRepository.php
 │   │   ├── SponsorRepository.php
 │   │   ├── StaffRepository.php
+│   │   ├── StarterConfigRepository.php
 │   │   └── TransferRepository.php
 │   ├── Service
 │   │   ├── AcademyInitializationService.php
@@ -230,10 +242,14 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   └── Kernel.php
 ├── templates
 │   ├── admin
+│   │   ├── _macros.html.twig
 │   │   ├── academy_profile.html.twig
 │   │   ├── dashboard.html.twig
+│   │   ├── game_config.html.twig
 │   │   ├── login.html.twig
-│   │   └── settings.html.twig
+│   │   ├── pool_config.html.twig
+│   │   ├── settings.html.twig
+│   │   └── starter_config.html.twig
 │   └── base.html.twig
 ├── tests
 │   ├── Controller
@@ -256,7 +272,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-34 directories, 159 files
+35 directories, 174 files
 ```
 
 ---
@@ -285,18 +301,20 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #### Admin
 ```php
     private UuidV7 $id;
-    private User $user;
+    private string $email;
+    private string $password;
+    private ?string $name = null;
     private ?string $department = null;
     private int $accessLevel = 1;
     private \DateTimeImmutable $createdAt;
-    public function __construct(User $user)
+    public function __construct(string $email)
     public function getId(): UuidV7 { return $this->id; }
-    public function getUser(): User { return $this->user; }
-    public function getDepartment(): ?string { return $this->department; }
-    public function setDepartment(?string $department): void { $this->department = $department; }
-    public function getAccessLevel(): int { return $this->accessLevel; }
-    public function setAccessLevel(int $accessLevel): void { $this->accessLevel = $accessLevel; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getEmail(): string { return $this->email; }
+    public function setEmail(string $email): void { $this->email = $email; }
+    public function getUserIdentifier(): string { return $this->email; }
+    public function getPassword(): string { return $this->password; }
+    public function setPassword(string $password): void { $this->password = $password; }
+    public function getRoles(): array { return ['ROLE_ADMIN']; }
 ```
 
 #### Agent
@@ -343,13 +361,17 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $cliqueRelationshipThreshold = 20;
     private int $cliqueSquadCapPercent = 30;
     private int $cliqueMinTenureWeeks = 3;
-    public function getId(): ?int { return $this->id; }
-    public function getCliqueRelationshipThreshold(): int { return $this->cliqueRelationshipThreshold; }
-    public function setCliqueRelationshipThreshold(int $v): static { $this->cliqueRelationshipThreshold = $v; return $this; }
-    public function getCliqueSquadCapPercent(): int { return $this->cliqueSquadCapPercent; }
-    public function setCliqueSquadCapPercent(int $v): static { $this->cliqueSquadCapPercent = $v; return $this; }
-    public function getCliqueMinTenureWeeks(): int { return $this->cliqueMinTenureWeeks; }
-    public function setCliqueMinTenureWeeks(int $v): static { $this->cliqueMinTenureWeeks = $v; return $this; }
+    private int $baseXP = 10;
+    private float $baseInjuryProbability = 0.05;
+    private int $regressionUpperThreshold = 14;
+    private int $regressionLowerThreshold = 7;
+    private float $reputationDeltaBase = 0.5;
+    private float $reputationDeltaFacilityMultiplier = 1.2;
+    private int $injuryMinorWeight = 60;
+    private int $injuryModerateWeight = 30;
+    private int $injurySeriousWeight = 10;
+    private int $scoutMoraleThreshold = 40;
+    private int $scoutRevealWeeks = 2;
 ```
 
 #### GameEventTemplate
@@ -504,6 +526,25 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function getTraitMappingJson(): string
 ```
 
+#### PoolConfig
+```php
+    private ?int $id = null;
+    private int $playerAgeMin = 12;
+    private int $playerAgeMax = 13;
+    private int $playerPotentialMin = 40;
+    private int $playerPotentialMax = 80;
+    private int $playerPotentialMean = 60;
+    private int $playerAbilityMin = 3;
+    private int $playerAbilityMax = 10;
+    private int $playerAttributeBudgetMin = 6;
+    private int $playerAttributeBudgetMax = 20;
+    private int $playerAgentChancePercent = 40;
+    private int $playerHeightMin = 145;
+    private int $playerHeightMax = 160;
+    private int $playerWeightMin = 38;
+    private int $playerWeightMax = 55;
+```
+
 #### Scout
 ```php
     private UuidV7 $id;
@@ -561,6 +602,25 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function __construct(
 ```
 
+#### StarterConfig
+```php
+    private int $id = 1;
+    private int $startingBalance = 5_000_000;
+    private int $starterPlayerCount = 5;
+    private int $starterCoachCount = 1;
+    private int $starterScoutCount = 1;
+    private string $starterSponsorTier = 'SMALL';
+    public static function defaults(): self
+    public function getId(): int { return $this->id; }
+    public function getStartingBalance(): int { return $this->startingBalance; }
+    public function setStartingBalance(int $v): static { $this->startingBalance = $v; return $this; }
+    public function getStartingBalancePounds(): int { return (int) round($this->startingBalance / 100); }
+    public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
+    public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
+    public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }
+    public function getStarterCoachCount(): int { return $this->starterCoachCount; }
+```
+
 #### SyncRecord
 ```php
     private UuidV7 $id;
@@ -602,13 +662,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #### User
 ```php
     public const ROLE_ACADEMY = 'ROLE_ACADEMY';
-    public const ROLE_ADMIN   = 'ROLE_ADMIN';
     private UuidV7 $id;
     private string $email;
     private string $password;
     private array $roles = [];
     private ?Academy $academy = null;
-    private ?Admin $admin = null;
     private ?array $managerProfile = null;
     private \DateTimeImmutable $createdAt;
     public function __construct(string $email)
@@ -616,6 +674,8 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function getEmail(): string { return $this->email; }
     public function setEmail(string $email): void { $this->email = $email; }
     public function getUserIdentifier(): string { return $this->email; }
+    public function getPassword(): string { return $this->password; }
+    public function setPassword(string $password): void { $this->password = $password; }
 ```
 
 
@@ -719,16 +779,22 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function index(): Response
     #[Route('/admin/settings', name: 'admin_settings')]
     public function settings(): Response
-    #[Route('/admin/settings/save-config', name: 'admin_settings_save_config', methods: ['POST'])]
-    public function saveConfig(Request $request): Response
+    #[Route('/admin/game-config', name: 'admin_game_config')]
+    public function gameConfig(): Response
+    #[Route('/admin/game-config/save', name: 'admin_game_config_save', methods: ['POST'])]
+    public function saveGameConfig(Request $request): Response
+    #[Route('/admin/starter-config', name: 'admin_starter_config')]
+    public function starterConfig(): Response
+    #[Route('/admin/starter-config/save', name: 'admin_starter_config_save', methods: ['POST'])]
+    public function saveStarterConfig(Request $request): Response
+    #[Route('/admin/pool-config', name: 'admin_pool_config')]
+    public function poolConfig(): Response
+    #[Route('/admin/pool-config/save', name: 'admin_pool_config_save', methods: ['POST'])]
+    public function savePoolConfig(Request $request): Response
+    #[Route('/admin/pool-config/generate', name: 'admin_pool_generate', methods: ['POST'])]
+    public function generatePool(Request $request): Response
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
     public function triggerAge21Deletion(Request $request, EconomicService $economicService): Response
-    #[Route('/admin/developer-tools/cleanup-entities', name: 'admin_cleanup_entities', methods: ['POST'])]
-    public function cleanupEntities(Request $request, KernelInterface $kernel): Response
-    #[Route('/admin/developer-tools/reset-database', name: 'admin_reset_database', methods: ['GET'])]
-    public function resetDatabase(): Response
-    public function configureDashboard(): Dashboard
-    public function configureMenuItems(): iterable
 ```
 
 #### GameEventTemplateCrudController
@@ -941,6 +1007,14 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function index(): JsonResponse
 ```
 
+#### StarterConfigController
+```php
+#[Route('/api')]
+    public function __construct(
+    #[Route('/starter-config', name: 'api_starter_config', methods: ['GET'])]
+    public function index(): JsonResponse
+```
+
 #### TransferLeaderboardController
 ```php
 #[Route('/api/leaderboard/transfers')]
@@ -1065,17 +1139,17 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Migration | Date |
 |---|---|
-| `Version20260305130043` | 20260305 |
-| `Version20260305234642` | 20260305 |
-| `Version20260306090200` | 20260306 |
-| `Version20260319143231` | 20260319 |
-| `Version20260319163437` | 20260319 |
 | `Version20260322000001` | 20260322 |
 | `Version20260322184350` | 20260322 |
 | `Version20260323000001` | 20260323 |
 | `Version20260324092239` | 20260324 |
 | `Version20260324114203` | 20260324 |
-_Showing latest 10 of 27 total._
+| `Version20260325234055` | 20260325 |
+| `Version20260325234056` | 20260325 |
+| `Version20260326000000_baseline_postgres` | 20260326 |
+| `Version20260326222629` | 20260326 |
+| `Version20260327000001` | 20260327 |
+_Showing latest 10 of 32 total._
 
 ---
 
@@ -1110,6 +1184,7 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
+466b273 latest admin
 8a5ff03 latest
 2715bcd latest code
 fa4ac61 updated context
@@ -1124,25 +1199,24 @@ c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField t
 39fd43b feat: editable impacts field on event template admin form via virtual JSON string property
 4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
 584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
-7239619 chore: rename project context doc, add repository test stub, add root context snapshot
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Repository Pattern** — dedicated repository classes per entity (e.g. `AcademyRepository`, `LeaderboardEntryRepository`) encapsulate all query logic, keeping entities free of persistence concerns
-- **Service Layer** — business logic isolated in focused services (`SyncService`, `EconomicService`, `MarketPoolService`, `InboxService`) that controllers delegate to, keeping HTTP handlers thin
-- **DTO / Input Mapping** — `src/Dto/` holds validated input objects (e.g. `SyncRequest`) deserialized via `#[MapRequestPayload]`, decoupling HTTP input from domain entities
-- **Domain Enum modeling** — rich PHP 8.1 backed enums (`src/Enum/`) encode domain state machines (player status, leaderboard category, message status) rather than stringly-typed fields
-- **Command pattern (CLI)** — `src/Command/` separates operational/admin tasks (seeding, cleanup, market generation) from the HTTP layer, enabling safe background or one-off execution
+- **Repository Pattern** — dedicated `*Repository` classes per entity encapsulate all query logic, keeping persistence concerns out of services and controllers
+- **Service Layer** — domain logic is centralized in `*Service` classes (e.g. `SyncService`, `EconomicService`, `MarketPoolService`), with controllers acting as thin HTTP adapters that delegate immediately to services
+- **DTO (Data Transfer Object)** — `src/Dto/` separates validated input contracts from entities, used for deserializing and validating API payloads before they reach the service layer
+- **CQRS-lite via API Platform resources** — `src/ApiResource/` suggests read-side resource definitions are decoupled from write-side controller/service flows, approximating command/query separation without a full CQRS bus
+- **Domain Event / Observer** — `src/EventSubscriber/` (e.g. `DomainSeparationSubscriber`) wires cross-cutting concerns (auth, domain routing) to Symfony's event dispatcher rather than embedding them in controllers or services
 
 ---
 
 ## Current Development Focus
 
-- **NPC interaction system** — the Phase 3/4 commit suggests a new subsystem for agent/sponsor/investor NPCs; AI could help generate varied, contextually appropriate NPC dialogue, offer logic, and decision trees that feel organic rather than scripted
-- **Rapid schema evolution** — 5 migrations across 3 days indicates frequent entity changes; AI could help audit migration diffs for data-loss risks, reserved-word conflicts (like the `rank` issue), and index coverage before each `migrations:diff`
-- **Market & prospect pool generation** — both `GenerateMarketPoolCommand` and `SeedProspectPoolCommand` were recently modified; AI could improve procedural generation of realistic player/staff attributes, wage curves, and name diversity
-- **Admin CRUD surface** — `AcademyCrudController`, `PlayerCrudController`, `GuardianCrudController`, and `DashboardController` all changed recently; AI could help design richer admin views (e.g. inline stat charts, batch actions, computed fields) without bloating EasyAdmin config
-- **GameConfig API** — a new config endpoint implies the client needs server-driven tuning knobs; AI could assist in designing a versioned, cache-friendly config schema that safely decouples balance tweaks from app releases
+- **GameConfig / StarterConfig / PoolConfig system** — new `PoolConfig` entity, deleted old CRUD controllers, and active changes to `GameConfig` suggest a configuration layer being rebuilt; AI can help design a clean, extensible config schema and admin UI for it.
+- **Admin panel consolidation** — multiple CRUD controllers deleted/replaced, new Twig templates added (`game_config`, `pool_config`, `starter_config`, `_macros`), and `DashboardController` actively modified; AI can accelerate template generation and enforce consistent EasyAdmin patterns.
+- **NPC interaction system (Phase 3 & 4)** — recent commit explicitly adds NPC interactions alongside `GameConfigController` changes; this domain (state machines, offer/response flows, event triggers) is complex enough to benefit from AI-generated scaffolding and edge-case reasoning.
+- **Migration hygiene** — 30+ migrations deleted and archived with a new Postgres baseline; as new entities (`PoolConfig`) are added, AI can help generate correct Doctrine Schema API migrations and flag reserved-word or type-compatibility issues early.
+- **MarketPoolService / SyncService business logic** — both files actively modified alongside economic and narrative systems; AI can help audit side-effect ordering, identify missing rollback paths, and surface invariant violations in the sync pipeline.

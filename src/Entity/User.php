@@ -12,7 +12,6 @@ use Symfony\Component\Uid\UuidV7;
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     public const ROLE_ACADEMY = 'ROLE_ACADEMY';
-    public const ROLE_ADMIN   = 'ROLE_ADMIN';
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
@@ -29,9 +28,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
     private ?Academy $academy = null;
-
-    #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
-    private ?Admin $admin = null;
 
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $managerProfile = null;
@@ -64,9 +60,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getAcademy(): ?Academy { return $this->academy; }
     public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
-
-    public function getAdmin(): ?Admin { return $this->admin; }
-    public function setAdmin(?Admin $admin): void { $this->admin = $admin; }
 
     public function getManagerProfile(): ?array { return $this->managerProfile; }
     public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }

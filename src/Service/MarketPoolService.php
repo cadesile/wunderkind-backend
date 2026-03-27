@@ -17,9 +17,11 @@ use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
+use App\Entity\PoolConfig;
 use App\Repository\AgentRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\PlayerRepository;
+use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
 use App\Repository\SponsorRepository;
 use App\Repository\StaffRepository;
@@ -27,13 +29,6 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class MarketPoolService
 {
-    // ── Replenishment thresholds ─────────────────────────────────────────────
-    private const PLAYER_THRESHOLD   = 50;
-    private const COACH_THRESHOLD    = 10;
-    private const SCOUT_THRESHOLD    = 5;
-    private const SPONSOR_THRESHOLD  = 10;
-    private const INVESTOR_THRESHOLD = 5;
-
     // ── Nationality → regional cluster ──────────────────────────────────────
     // Used to add regional flavour to SMALL and MEDIUM business names.
     private const NATIONALITY_MAP = [
@@ -148,6 +143,7 @@ class MarketPoolService
         private readonly SponsorRepository      $sponsorRepo,
         private readonly InvestorRepository     $investorRepo,
         private readonly NameGeneratorService   $nameGenerator,
+        private readonly PoolConfigRepository   $poolConfigRepo,
     ) {}
 
     // ── Generate ─────────────────────────────────────────────────────────────
@@ -155,14 +151,15 @@ class MarketPoolService
     /** @return Player[] */
     public function generatePlayers(int $count, ?int $academyReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
     {
+        $cfg         = $this->poolConfigRepo->getConfig();
         $agents      = $this->agentRepo->findAll();
         $multipliers = $this->getWageMultiplier($academyReputation);
         $players     = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $potential      = $this->bellCurveInt(40, 80, 60);
-            $currentAbility = random_int(3, 10);
-            $age            = random_int(12, 13);
+            $potential      = $this->bellCurveInt($cfg->getPlayerPotentialMin(), $cfg->getPlayerPotentialMax(), $cfg->getPlayerPotentialMean());
+            $currentAbility = random_int($cfg->getPlayerAbilityMin(), $cfg->getPlayerAbilityMax());
+            $age            = random_int($cfg->getPlayerAgeMin(), $cfg->getPlayerAgeMax());
             $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();
 
             // Complex name generation: mononyms, double-surnames, generational suffixes
@@ -173,7 +170,7 @@ class MarketPoolService
                 lastName:          $lastName,
                 dateOfBirth:       $this->dobFromAge($age),
                 nationality:       $nat,
-                position:          $this->weightedPosition(),
+                position:          $this->weightedPosition($cfg),
                 recruitmentSource: $source,
                 potential:         $potential,
                 currentAbility:    $currentAbility,
@@ -184,7 +181,7 @@ class MarketPoolService
             $baseWage = $currentAbility * random_int(10, 40);
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
-            $attrBudget = random_int(6, 20);
+            $attrBudget = random_int($cfg->getPlayerAttributeBudgetMin(), $cfg->getPlayerAttributeBudgetMax());
             $attrs      = $this->distributeAttributes($player->getPosition(), $attrBudget);
             $player->setPace($attrs['pace']);
             $player->setTechnical($attrs['technical']);
@@ -193,22 +190,24 @@ class MarketPoolService
             $player->setStamina($attrs['stamina']);
             $player->setHeart($attrs['heart']);
 
-            $player->setHeight(random_int(145, 160));
-            $player->setWeight(random_int(38, 55));
+            $player->setHeight(random_int($cfg->getPlayerHeightMin(), $cfg->getPlayerHeightMax()));
+            $player->setWeight(random_int($cfg->getPlayerWeightMin(), $cfg->getPlayerWeightMax()));
 
-            if (!empty($agents) && random_int(1, 100) <= 40) {
+            if (!empty($agents) && random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
                 $player->setAgent($agents[array_rand($agents)]);
             }
 
-            $p = $player->getPersonality();
-            $p->setConfidence(random_int(30, 70));
-            $p->setMaturity(random_int(30, 70));
-            $p->setTeamwork(random_int(30, 70));
-            $p->setLeadership(random_int(30, 70));
-            $p->setEgo(random_int(30, 70));
-            $p->setBravery(random_int(30, 70));
-            $p->setGreed(random_int(30, 70));
-            $p->setLoyalty(random_int(30, 70));
+            $pMin = $cfg->getPersonalityTraitMin();
+            $pMax = $cfg->getPersonalityTraitMax();
+            $p    = $player->getPersonality();
+            $p->setConfidence(random_int($pMin, $pMax));
+            $p->setMaturity(random_int($pMin, $pMax));
+            $p->setTeamwork(random_int($pMin, $pMax));
+            $p->setLeadership(random_int($pMin, $pMax));
+            $p->setEgo(random_int($pMin, $pMax));
+            $p->setBravery(random_int($pMin, $pMax));
+            $p->setGreed(random_int($pMin, $pMax));
+            $p->setLoyalty(random_int($pMin, $pMax));
 
             // Guardian generation:
             // 80% → two parents, male + female
@@ -256,6 +255,7 @@ class MarketPoolService
     /** @return Staff[] */
     public function generateCoaches(int $count, ?int $academyReputation = null): array
     {
+        $cfg        = $this->poolConfigRepo->getConfig();
         $coachRoles = [
             StaffRole::HEAD_COACH,
             StaffRole::ASSISTANT_COACH,
@@ -268,7 +268,7 @@ class MarketPoolService
 
         for ($i = 0; $i < $count; $i++) {
             $role      = $coachRoles[array_rand($coachRoles)];
-            $ability   = random_int(40, 75);
+            $ability   = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
             $coachNat  = $this->nameGenerator->getRandomNationality();
             $coachName = $this->nameGenerator->generateName($coachNat);
             [$coachFirst, $coachLast] = array_pad(explode(' ', $coachName, 2), 2, '');
@@ -280,9 +280,9 @@ class MarketPoolService
                 academy:   null,
             );
 
-            $staff->setDob($this->dobFromAge(random_int(28, 60)));
+            $staff->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
             $staff->setCoachingAbility($ability);
-            $staff->setScoutingRange(random_int(40, 75));
+            $staff->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
             $staff->setSpecialisms($this->generateSpecialisms());
 
             $baseSalary = match ($role) {
@@ -310,11 +310,12 @@ class MarketPoolService
     /** @return Scout[] */
     public function generateScouts(int $count): array
     {
+        $cfg    = $this->poolConfigRepo->getConfig();
         $scouts = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $age        = random_int(28, 40);
-            $experience = random_int(0, 10);
+            $age        = random_int($cfg->getScoutAgeMin(), $cfg->getScoutAgeMax());
+            $experience = random_int($cfg->getScoutExperienceMin(), $cfg->getScoutExperienceMax());
             $scoutNat   = $this->nameGenerator->getRandomNationality();
             $scoutName  = $this->nameGenerator->generateName($scoutNat);
 
@@ -323,11 +324,11 @@ class MarketPoolService
             $scout->setNationality($scoutNat);
             $scout->setExperience($experience);
             $scout->setJudgements([
-                'potential'   => random_int(40, 80),
-                'technical'   => random_int(40, 80),
-                'physical'    => random_int(40, 80),
-                'mental'      => random_int(40, 80),
-                'personality' => random_int(40, 80),
+                'potential'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+                'technical'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+                'physical'    => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+                'mental'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+                'personality' => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             ]);
 
             $this->em->persist($scout);
@@ -341,13 +342,14 @@ class MarketPoolService
     /** @return Agent[] */
     public function generateAgents(int $count): array
     {
+        $cfg    = $this->poolConfigRepo->getConfig();
         $agents = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $reputation = random_int(30, 70);
+            $reputation = random_int($cfg->getAgentReputationMin(), $cfg->getAgentReputationMax());
             $rating     = max(1, min(100, $reputation + random_int(-10, 10)));
             $experience = max(5, $reputation - random_int(5, 15));
-            $age        = random_int(30, 60);
+            $age        = random_int($cfg->getAgentAgeMin(), $cfg->getAgentAgeMax());
             $agentNat   = $this->nameGenerator->getRandomNationality();
             $agentName  = $this->nameGenerator->generateName($agentNat);
 
@@ -541,34 +543,70 @@ class MarketPoolService
 
     // ── Replenishment ─────────────────────────────────────────────────────────
 
+    /**
+     * Fills each pool up to its configured target.
+     * Only generates entities for pools currently below their target.
+     *
+     * @return string[] Human-readable summary of what was generated.
+     */
     public function replenishPool(): array
     {
+        $cfg       = $this->poolConfigRepo->getConfig();
         $generated = [];
 
-        if ($this->playerRepo->countInPool() < self::PLAYER_THRESHOLD) {
-            $this->generatePlayers(self::PLAYER_THRESHOLD);
-            $generated[] = self::PLAYER_THRESHOLD . ' players';
+        if ($this->playerRepo->countInPool() < $cfg->getPlayerPoolTarget()) {
+            $this->generatePlayers($cfg->getPlayerPoolTarget());
+            $generated[] = $cfg->getPlayerPoolTarget() . ' players';
         }
 
-        if ($this->staffRepo->countInPool() < self::COACH_THRESHOLD) {
-            $this->generateCoaches(self::COACH_THRESHOLD);
-            $generated[] = self::COACH_THRESHOLD . ' coaches';
+        if ($this->staffRepo->countInPool() < $cfg->getCoachPoolTarget()) {
+            $this->generateCoaches($cfg->getCoachPoolTarget());
+            $generated[] = $cfg->getCoachPoolTarget() . ' coaches';
         }
 
-        if ($this->scoutRepo->count([]) < self::SCOUT_THRESHOLD) {
-            $this->generateScouts(self::SCOUT_THRESHOLD);
-            $generated[] = self::SCOUT_THRESHOLD . ' scouts';
+        if ($this->scoutRepo->count([]) < $cfg->getScoutPoolTarget()) {
+            $this->generateScouts($cfg->getScoutPoolTarget());
+            $generated[] = $cfg->getScoutPoolTarget() . ' scouts';
         }
 
-        if ($this->sponsorRepo->countInPool() < self::SPONSOR_THRESHOLD) {
-            $this->generateSponsors(self::SPONSOR_THRESHOLD);
-            $generated[] = self::SPONSOR_THRESHOLD . ' sponsors';
+        if ($this->sponsorRepo->countInPool() < $cfg->getSponsorPoolTarget()) {
+            $this->generateSponsors($cfg->getSponsorPoolTarget());
+            $generated[] = $cfg->getSponsorPoolTarget() . ' sponsors';
         }
 
-        if ($this->investorRepo->countInPool() < self::INVESTOR_THRESHOLD) {
-            $this->generateInvestors(self::INVESTOR_THRESHOLD);
-            $generated[] = self::INVESTOR_THRESHOLD . ' investors';
+        if ($this->investorRepo->countInPool() < $cfg->getInvestorPoolTarget()) {
+            $this->generateInvestors($cfg->getInvestorPoolTarget());
+            $generated[] = $cfg->getInvestorPoolTarget() . ' investors';
         }
+
+        return $generated;
+    }
+
+    /**
+     * Unconditionally generates the target batch count for each entity type,
+     * regardless of current pool size.
+     *
+     * @return string[] Human-readable summary of what was generated.
+     */
+    public function forceGeneratePool(): array
+    {
+        $cfg       = $this->poolConfigRepo->getConfig();
+        $generated = [];
+
+        $this->generatePlayers($cfg->getPlayerPoolTarget());
+        $generated[] = $cfg->getPlayerPoolTarget() . ' players';
+
+        $this->generateCoaches($cfg->getCoachPoolTarget());
+        $generated[] = $cfg->getCoachPoolTarget() . ' coaches';
+
+        $this->generateScouts($cfg->getScoutPoolTarget());
+        $generated[] = $cfg->getScoutPoolTarget() . ' scouts';
+
+        $this->generateSponsors($cfg->getSponsorPoolTarget());
+        $generated[] = $cfg->getSponsorPoolTarget() . ' sponsors';
+
+        $this->generateInvestors($cfg->getInvestorPoolTarget());
+        $generated[] = $cfg->getInvestorPoolTarget() . ' investors';
 
         return $generated;
     }
@@ -687,15 +725,19 @@ class MarketPoolService
         return (int) round(($raw + $mean) / 2);
     }
 
-    /** GK 8% / DEF 30% / MID 38% / ATT 24% */
-    private function weightedPosition(): PlayerPosition
+    private function weightedPosition(PoolConfig $cfg): PlayerPosition
     {
-        $r = random_int(1, 100);
+        $total = $cfg->getPositionWeightGk() + $cfg->getPositionWeightDef()
+               + $cfg->getPositionWeightMid() + $cfg->getPositionWeightAtt();
+        $r   = random_int(1, max(1, $total));
+        $gk  = $cfg->getPositionWeightGk();
+        $def = $gk  + $cfg->getPositionWeightDef();
+        $mid = $def + $cfg->getPositionWeightMid();
         return match (true) {
-            $r <= 8  => PlayerPosition::GOALKEEPER,
-            $r <= 38 => PlayerPosition::DEFENDER,
-            $r <= 76 => PlayerPosition::MIDFIELDER,
-            default  => PlayerPosition::ATTACKER,
+            $r <= $gk  => PlayerPosition::GOALKEEPER,
+            $r <= $def => PlayerPosition::DEFENDER,
+            $r <= $mid => PlayerPosition::MIDFIELDER,
+            default    => PlayerPosition::ATTACKER,
         };
     }
 

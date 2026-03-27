@@ -3,7 +3,6 @@
 namespace App\Repository;
 
 use App\Entity\Admin;
-use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -14,8 +13,8 @@ class AdminRepository extends ServiceEntityRepository
         parent::__construct($registry, Admin::class);
     }
 
-    public function findByUser(User $user): ?Admin
+    public function findByEmail(string $email): ?Admin
     {
-        return $this->findOneBy(['user' => $user]);
+        return $this->findOneBy(['email' => $email]);
     }
 }

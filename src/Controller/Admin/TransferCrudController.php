@@ -36,8 +36,12 @@ class TransferCrudController extends AbstractCrudController
         yield AssociationField::new('player');
         yield AssociationField::new('academy');
         yield TextField::new('typeValue', 'Type');
-        yield IntegerField::new('fee');
-        yield IntegerField::new('agentCommission');
+        yield IntegerField::new('fee')
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—');
+        yield IntegerField::new('agentCommission')
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—');
+        yield IntegerField::new('netProceeds')
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—');
         yield TextField::new('destinationClubName');
         yield DateTimeField::new('occurredAt')->setFormat('yyyy-MM-dd HH:mm');
     }

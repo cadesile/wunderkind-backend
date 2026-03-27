@@ -7,11 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All PHP commands must run inside the Lando container:
 
 ```bash
-lando start                          # spin up PHP 8.4 + MySQL 8.0
+lando start                          # spin up PHP 8.4 + PostgreSQL 16
 lando php bin/console <command>      # Symfony console
 lando composer <command>             # Composer
-lando mysql                          # MySQL shell (db: wunderkind, user/pass: wunderkind)
+lando psql                           # PostgreSQL shell (db: wunderkind, user/pass: wunderkind)
 ```
+
+**Database**: PostgreSQL 16 (migrated from MySQL 8.0). Connection string:
+`postgresql://wunderkind:wunderkind@postgres:5432/wunderkind?serverVersion=16&charset=utf8`
 
 ## Common Commands
 
@@ -75,6 +78,20 @@ JWT firewall → SyncController::sync()
 
 ### Security / Firewall Order
 Symfony's `RouterListener` runs at **priority 32**, the security `FirewallListener` at **priority 8** — the router runs first. This means `json_login`'s `check_path` **must** be a real registered route or the router returns 404 before the authenticator can intercept. The stub route in `SyncController::login()` exists for this reason.
+
+### EasyAdmin Custom Routes
+
+Custom admin routes (defined with `#[Route]` inside `DashboardController`) must **always** redirect back through EasyAdmin's entry point — never use `$this->redirectToRoute()` directly:
+
+```php
+// CORRECT — EasyAdmin initialises the `ea` context before forwarding
+return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_my_route']));
+
+// WRONG — bypasses EasyAdmin context setup; `ea.i18n` will be null in the template
+return $this->redirectToRoute('admin_my_route');
+```
+
+EasyAdmin's `layout.html.twig` requires the `ea` Twig global (set by `AdminRequestProcessor`) which is only populated when the request flows through the main `admin` route. Redirecting directly to a sub-route skips this, causing `Impossible to access an attribute ("i18n") on a null variable`.
 
 ### Key Gotchas
 - **UUID columns** are `BINARY(16)` (Doctrine's `uuid` type for MySQL) — not `VARCHAR(36)`. The migration reflects this.

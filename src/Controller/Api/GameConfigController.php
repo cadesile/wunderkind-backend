@@ -32,6 +32,13 @@ class GameConfigController extends AbstractController
             'injuryMinorWeight'                 => $config->getInjuryMinorWeight(),
             'injuryModerateWeight'              => $config->getInjuryModerateWeight(),
             'injurySeriousWeight'               => $config->getInjurySeriousWeight(),
+
+            // Scouting
+            'scoutMoraleThreshold'              => $config->getScoutMoraleThreshold(),
+            'scoutRevealWeeks'                  => $config->getScoutRevealWeeks(),
+            'scoutAbilityErrorRange'            => $config->getScoutAbilityErrorRange(),
+            'scoutMaxAssignments'               => $config->getScoutMaxAssignments(),
+            'missionGemRollThresholds'          => $config->getMissionGemRollThresholds(),
         ]);
     }
 }

@@ -84,6 +84,47 @@ class GameConfig
     #[ORM\Column(type: 'integer')]
     private int $injurySeriousWeight = 10;
 
+    // ── Scouting System ───────────────────────────────────────────────────
+
+    /**
+     * Morale value below which a scout makes no weekly scouting progress.
+     * Default: 40
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $scoutMoraleThreshold = 40;
+
+    /**
+     * Number of weekly ticks required before an assigned player is revealed.
+     * Default: 2
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $scoutRevealWeeks = 2;
+
+    /**
+     * Maximum ±variance applied to perceived ability, scaled by successRate.
+     * errorMargin = (100 - successRate) / 100; actual error = randomInt(-range, +range) * errorMargin
+     * Default: 30
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $scoutAbilityErrorRange = 30;
+
+    /**
+     * Maximum number of market players a single scout can be assigned to simultaneously.
+     * Default: 5
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $scoutMaxAssignments = 5;
+
+    /**
+     * Ascending probability breakpoints [p0, p1, p2, p3] for the weekly mission gem roll.
+     * roll < p0 → 0 players; roll < p1 → 1; roll < p2 → 2; roll < p3 → 3; else → 4
+     * Default: [0.25, 0.75, 0.85, 0.94]
+     *
+     * @var float[]
+     */
+    #[ORM\Column(type: 'json')]
+    private array $missionGemRollThresholds = [0.25, 0.75, 0.85, 0.94];
+
     // ── Getters / Setters ─────────────────────────────────────────────────
 
     public function getId(): ?int { return $this->id; }
@@ -123,4 +164,21 @@ class GameConfig
 
     public function getInjurySeriousWeight(): int { return $this->injurySeriousWeight; }
     public function setInjurySeriousWeight(int $v): static { $this->injurySeriousWeight = $v; return $this; }
+
+    public function getScoutMoraleThreshold(): int { return $this->scoutMoraleThreshold; }
+    public function setScoutMoraleThreshold(int $v): static { $this->scoutMoraleThreshold = $v; return $this; }
+
+    public function getScoutRevealWeeks(): int { return $this->scoutRevealWeeks; }
+    public function setScoutRevealWeeks(int $v): static { $this->scoutRevealWeeks = $v; return $this; }
+
+    public function getScoutAbilityErrorRange(): int { return $this->scoutAbilityErrorRange; }
+    public function setScoutAbilityErrorRange(int $v): static { $this->scoutAbilityErrorRange = $v; return $this; }
+
+    public function getScoutMaxAssignments(): int { return $this->scoutMaxAssignments; }
+    public function setScoutMaxAssignments(int $v): static { $this->scoutMaxAssignments = $v; return $this; }
+
+    /** @return float[] */
+    public function getMissionGemRollThresholds(): array { return $this->missionGemRollThresholds; }
+    /** @param float[] $v */
+    public function setMissionGemRollThresholds(array $v): static { $this->missionGemRollThresholds = $v; return $this; }
 }

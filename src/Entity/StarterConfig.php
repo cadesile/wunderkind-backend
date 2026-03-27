@@ -52,6 +52,10 @@ class StarterConfig
     public function getStartingBalance(): int { return $this->startingBalance; }
     public function setStartingBalance(int $v): static { $this->startingBalance = $v; return $this; }
 
+    /** Virtual property for the admin form — accepts/returns pounds; storage remains pence. */
+    public function getStartingBalancePounds(): int { return (int) round($this->startingBalance / 100); }
+    public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
+
     public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
     public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }
 
