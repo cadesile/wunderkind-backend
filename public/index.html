@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Build My Club — Youth Football Academy Manager</title>
+    <meta name="description" content="Scout talent. Secure funding. Build a dynasty. Build My Club is a deep football academy management game for mobile.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            border-radius: 0 !important;
+        }
+
+        :root {
+            --bg:        #1a5c2a;
+            --card:      #1a4a4a;
+            --dark:      #0d2e28;
+            --gold:      #f5c842;
+            --gold-dim:  #e8b820;
+            --mint:      #8ecfbe;
+            --mint-dim:  #3db89a;
+            --text:      #e8f4e8;
+            --text-muted:#8ecfbe;
+            --grid: repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 42px),
+                    repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 42px);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background-color: var(--bg);
+            background-image: var(--grid);
+            color: var(--text);
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ── Utilities ─────────────────────────────────────────────────── */
+        .pixel-shadow { box-shadow: 6px 6px 0 rgba(0,0,0,0.4); }
+        .pixel-border { border: 4px solid var(--dark); }
+        .section { padding: 5rem 1.5rem; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .label {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        /* ── Nav ───────────────────────────────────────────────────────── */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 50;
+            background: var(--dark);
+            border-bottom: 4px solid rgba(0,0,0,0.4);
+            padding: 0.875rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+        }
+
+        .nav-logo img {
+            width: 36px;
+            height: 36px;
+            image-rendering: pixelated;
+        }
+
+        .nav-logo span {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--gold);
+            letter-spacing: 1px;
+        }
+
+        .nav-cta {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            background: var(--gold);
+            color: #3a2000;
+            border: 3px solid var(--dark);
+            padding: 8px 14px;
+            cursor: pointer;
+            text-decoration: none;
+            letter-spacing: 1px;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.4);
+            transition: transform 0.05s, box-shadow 0.05s;
+            display: inline-block;
+        }
+
+        .nav-cta:hover { background: var(--gold-dim); }
+        .nav-cta:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.4); }
+
+        /* ── Hero ──────────────────────────────────────────────────────── */
+        #hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8rem 1.5rem 5rem;
+            position: relative;
+        }
+
+        .hero-inner { max-width: 700px; margin: 0 auto; }
+
+        .hero-logo {
+            width: 120px;
+            height: 120px;
+            image-rendering: pixelated;
+            margin: 0 auto 2rem;
+            display: block;
+            filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.5));
+        }
+
+        .hero-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(1.1rem, 4vw, 2rem);
+            color: var(--gold);
+            line-height: 1.6;
+            letter-spacing: 1px;
+            margin-bottom: 1.5rem;
+            text-shadow: 4px 4px 0 rgba(0,0,0,0.4);
+        }
+
+        .hero-sub {
+            font-size: 15px;
+            color: var(--text-muted);
+            max-width: 520px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.8;
+        }
+
+        .hero-cta {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            background: var(--gold);
+            color: #3a2000;
+            border: 4px solid var(--dark);
+            padding: 16px 28px;
+            cursor: pointer;
+            text-decoration: none;
+            letter-spacing: 1px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            transition: transform 0.05s, box-shadow 0.05s;
+        }
+
+        .hero-cta:hover { background: var(--gold-dim); }
+        .hero-cta:active { transform: translate(3px,3px); box-shadow: 3px 3px 0 rgba(0,0,0,0.4); }
+
+        .hero-cta svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+        .hero-platform {
+            margin-top: 1rem;
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        /* ── Divider ───────────────────────────────────────────────────── */
+        .divider {
+            border: none;
+            border-top: 4px solid var(--dark);
+            margin: 0;
+        }
+
+        /* ── About ─────────────────────────────────────────────────────── */
+        #about { background: var(--card); }
+
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2.5rem;
+        }
+
+        @media (min-width: 640px) {
+            .about-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        .about-stat {
+            background: var(--dark);
+            border: 3px solid rgba(0,0,0,0.3);
+            padding: 1.5rem;
+            box-shadow: inset 2px 2px 0 rgba(255,255,255,0.04), 4px 4px 0 rgba(0,0,0,0.3);
+        }
+
+        .about-stat-number {
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(1.2rem, 3vw, 1.6rem);
+            color: var(--gold);
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .about-stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .about-body {
+            font-size: 14px;
+            color: var(--text);
+            line-height: 1.9;
+        }
+
+        .about-body p + p { margin-top: 1rem; }
+
+        /* ── Features ──────────────────────────────────────────────────── */
+        #features {}
+
+        .section-heading {
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(0.75rem, 2.5vw, 1.1rem);
+            color: var(--gold);
+            line-height: 1.8;
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 480px) {
+            .features-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (min-width: 768px) {
+            .features-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        .feature-card {
+            background: var(--card);
+            border: 4px solid var(--dark);
+            padding: 1.75rem 1.25rem;
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            text-align: center;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .feature-card:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 8px 8px 0 rgba(0,0,0,0.4);
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            color: var(--mint);
+            margin: 0 auto 1.25rem;
+            display: block;
+        }
+
+        .feature-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--gold);
+            letter-spacing: 1px;
+            line-height: 1.8;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        /* ── Pillars ───────────────────────────────────────────────────── */
+        #pillars { background: var(--card); }
+
+        .pillars-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            border: 4px solid var(--dark);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        .pillar {
+            background: var(--dark);
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            border-bottom: 3px solid rgba(255,255,255,0.04);
+        }
+
+        .pillar:last-child { border-bottom: none; }
+
+        .pillar-num {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            color: var(--gold);
+            opacity: 0.5;
+            flex-shrink: 0;
+            min-width: 2rem;
+            padding-top: 2px;
+        }
+
+        .pillar-content h3 {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--mint);
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+            line-height: 1.8;
+        }
+
+        .pillar-content p {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        /* ── Download ──────────────────────────────────────────────────── */
+        #download {
+            text-align: center;
+        }
+
+        .download-card {
+            background: var(--card);
+            border: 4px solid var(--dark);
+            padding: 3rem 2rem;
+            max-width: 560px;
+            margin: 0 auto;
+            box-shadow: 8px 8px 0 rgba(0,0,0,0.4);
+        }
+
+        .download-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(0.7rem, 2.5vw, 1rem);
+            color: var(--gold);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .download-sub {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            line-height: 1.8;
+        }
+
+        .download-btn {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            background: var(--gold);
+            color: #3a2000;
+            border: 4px solid var(--dark);
+            padding: 16px 28px;
+            cursor: pointer;
+            text-decoration: none;
+            letter-spacing: 1px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            transition: transform 0.05s, box-shadow 0.05s;
+        }
+
+        .download-btn:hover { background: var(--gold-dim); }
+        .download-btn:active { transform: translate(3px,3px); box-shadow: 3px 3px 0 rgba(0,0,0,0.4); }
+        .download-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+        .download-note {
+            margin-top: 1.25rem;
+            font-size: 10px;
+            color: var(--text-muted);
+            opacity: 0.6;
+            line-height: 1.9;
+        }
+
+        /* ── Footer ────────────────────────────────────────────────────── */
+        footer {
+            background: var(--dark);
+            border-top: 4px solid rgba(0,0,0,0.4);
+            padding: 2rem 1.5rem;
+            text-align: center;
+        }
+
+        .footer-logo {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            opacity: 0.6;
+        }
+
+        .footer-links {
+            margin-top: 0.75rem;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .footer-links a {
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.5;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .footer-links a:hover { opacity: 1; }
+
+        /* ── Cursor blink ──────────────────────────────────────────────── */
+        .cursor::after {
+            content: '█';
+            animation: blink 1s step-end infinite;
+            color: var(--gold);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .cursor::after { animation: none; }
+            html { scroll-behavior: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Nav -->
+    <nav>
+        <a href="#hero" class="nav-logo">
+            <img src="/images/logo.webp" alt="Build My Club logo">
+            <span>BUILD MY CLUB</span>
+        </a>
+        <a href="#download" class="nav-cta">DOWNLOAD</a>
+    </nav>
+
+    <!-- Hero -->
+    <section id="hero">
+        <div class="hero-inner">
+            <img src="/images/logo.webp" alt="Build My Club" class="hero-logo">
+            <h1 class="hero-title">SCOUT. SIGN.<br>BUILD A DYNASTY<span class="cursor"></span></h1>
+            <p class="hero-sub">
+                A deep football academy management game. Build your club from the ground up —
+                sign raw talent, secure investment, manage wages, and climb the global leaderboard.
+            </p>
+            <a href="https://expo.dev/artifacts/eas/dXntAvgmq4Ard2Z69dJuPS.apk" class="hero-cta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
+                    <path d="M12 3v13M5 14l7 7 7-7"/>
+                    <path d="M3 21h18"/>
+                </svg>
+                GET THE APP
+            </a>
+            <p class="hero-platform">Android — Free to download</p>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- About -->
+    <section id="about" class="section">
+        <div class="container">
+            <p class="label">// WHAT IS BUILD MY CLUB</p>
+            <div style="display:grid; grid-template-columns: 1fr; gap: 3rem;">
+                <div class="about-body">
+                    <p>
+                        Build My Club puts you in charge of a youth football academy. Every decision is yours —
+                        which players to recruit, which coaches to hire, which sponsors to take on, and how to
+                        balance the books while building a squad capable of producing world-class talent.
+                    </p>
+                    <p>
+                        The game runs offline on your device. Your academy evolves week by week through training,
+                        aging, and the ever-present pressure of the transfer market. Sync to the global server
+                        to submit your score and see where you stand against every other manager in the world.
+                    </p>
+                </div>
+                <div class="about-grid">
+                    <div class="about-stat">
+                        <span class="about-stat-number">52</span>
+                        <span class="about-stat-label">Weeks per season, every decision counts</span>
+                    </div>
+                    <div class="about-stat">
+                        <span class="about-stat-number">∞</span>
+                        <span class="about-stat-label">Unique academy builds — no two runs alike</span>
+                    </div>
+                    <div class="about-stat">
+                        <span class="about-stat-number">3</span>
+                        <span class="about-stat-label">Global leaderboard categories to conquer</span>
+                    </div>
+                    <div class="about-stat">
+                        <span class="about-stat-number">0</span>
+                        <span class="about-stat-label">Pay-to-win mechanics. Pure management.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Features -->
+    <section id="features" class="section">
+        <div class="container">
+            <h2 class="section-heading">// WHAT YOU'LL MANAGE</h2>
+            <div class="features-grid">
+
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                        <path d="M11 8v6M8 11h6"/>
+                    </svg>
+                    <p class="feature-title">SCOUT &amp; SIGN</p>
+                    <p class="feature-desc">Unearth raw talent from a global pool. Negotiate with agents and beat rival clubs to the best young prospects.</p>
+                </div>
+
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    <p class="feature-title">TRAIN &amp; DEVELOP</p>
+                    <p class="feature-desc">Shape each player's personality and ability week by week. The best academies don't just sign talent — they build it.</p>
+                </div>
+
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="7" width="20" height="14"/><path d="M16 7V5a2 2 0 0 0-4 0v2M12 12v4M8 14h8"/>
+                    </svg>
+                    <p class="feature-title">MANAGE FINANCES</p>
+                    <p class="feature-desc">Balance wages, secure sponsors, attract investors, and negotiate transfers. Revenue mismanagement ends dynasties.</p>
+                </div>
+
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M18 20V10M12 20V4M6 20v-6"/>
+                    </svg>
+                    <p class="feature-title">CLIMB THE BOARD</p>
+                    <p class="feature-desc">Sync your academy stats to the global leaderboard. Compete across reputation, career earnings, and hall of fame.</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Pillars -->
+    <section id="pillars" class="section">
+        <div class="container">
+            <p class="label">// THE PHILOSOPHY</p>
+            <div class="pillars-list">
+                <div class="pillar">
+                    <span class="pillar-num">01</span>
+                    <div class="pillar-content">
+                        <h3>OFFLINE FIRST</h3>
+                        <p>Your academy runs entirely on your device. No internet required to play — the full simulation happens locally, week by week, at your pace.</p>
+                    </div>
+                </div>
+                <div class="pillar">
+                    <span class="pillar-num">02</span>
+                    <div class="pillar-content">
+                        <h3>NO PAY TO WIN</h3>
+                        <p>Every manager starts equal. Success comes from decision-making, not spending. There are no premium players, no loot boxes, no shortcuts.</p>
+                    </div>
+                </div>
+                <div class="pillar">
+                    <span class="pillar-num">03</span>
+                    <div class="pillar-content">
+                        <h3>REAL DEPTH</h3>
+                        <p>Player personalities, guardian relationships, agent commissions, financial year cycles — the systems are deep because football management is deep.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Download -->
+    <section id="download" class="section">
+        <div class="container">
+            <div class="download-card">
+                <p class="label">// GET THE GAME</p>
+                <h2 class="download-title">READY TO BUILD<br>YOUR CLUB?</h2>
+                <p class="download-sub">
+                    Download the APK and install on any Android device.
+                    Free. No account required to start playing.
+                </p>
+                <a href="https://expo.dev/artifacts/eas/dXntAvgmq4Ard2Z69dJuPS.apk" class="download-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
+                        <path d="M12 3v13M5 14l7 7 7-7"/>
+                        <path d="M3 21h18"/>
+                    </svg>
+                    DOWNLOAD APK
+                </a>
+                <p class="download-note">
+                    Android only &nbsp;·&nbsp; Enable "Install unknown apps" in device settings<br>
+                    Built with Expo &nbsp;·&nbsp; No Google Play account required
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p class="footer-logo">© 2026 WUNDERKIND FACTORY</p>
+        <div class="footer-links">
+            <a href="/admin">Admin</a>
+            <a href="mailto:courtney@adesile.com">Contact</a>
+        </div>
+    </footer>
+
+</body>
+</html>
