@@ -579,6 +579,11 @@ class MarketPoolService
             $generated[] = $cfg->getInvestorPoolTarget() . ' investors';
         }
 
+        if ($this->agentRepo->count([]) < $cfg->getAgentPoolTarget()) {
+            $this->generateAgents($cfg->getAgentPoolTarget());
+            $generated[] = $cfg->getAgentPoolTarget() . ' agents';
+        }
+
         return $generated;
     }
 
@@ -607,6 +612,9 @@ class MarketPoolService
 
         $this->generateInvestors($cfg->getInvestorPoolTarget());
         $generated[] = $cfg->getInvestorPoolTarget() . ' investors';
+
+        $this->generateAgents($cfg->getAgentPoolTarget());
+        $generated[] = $cfg->getAgentPoolTarget() . ' agents';
 
         return $generated;
     }

@@ -23,9 +23,10 @@
 
                 <div class="row g-3 mb-4">
                     {% set poolItems = [
-                        { label: 'Players',   icon: 'person-running', count: poolCounts.players,   target: config.playerPoolTarget },
+                        { label: 'Players',   icon: 'person-running',  count: poolCounts.players,   target: config.playerPoolTarget },
                         { label: 'Coaches',   icon: 'chalkboard-user', count: poolCounts.coaches,   target: config.coachPoolTarget },
                         { label: 'Scouts',    icon: 'binoculars',      count: poolCounts.scouts,    target: config.scoutPoolTarget },
+                        { label: 'Agents',    icon: 'handshake',       count: poolCounts.agents,    target: config.agentPoolTarget },
                         { label: 'Sponsors',  icon: 'star',            count: poolCounts.sponsors,  target: config.sponsorPoolTarget },
                         { label: 'Investors', icon: 'chart-line',      count: poolCounts.investors, target: config.investorPoolTarget },
                     ] %}
@@ -107,6 +108,12 @@
                             <input type="number" id="sponsorPoolTarget" name="sponsorPoolTarget"
                                    value="{{ config.sponsorPoolTarget }}" min="1" class="form-control">
                             <div class="form-text">Default: 10</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="agentPoolTarget" class="form-label fw-semibold small">Agents</label>
+                            <input type="number" id="agentPoolTarget" name="agentPoolTarget"
+                                   value="{{ config.agentPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 20</div>
                         </div>
                         <div class="col-md-2">
                             <label for="investorPoolTarget" class="form-label fw-semibold small">Investors</label>

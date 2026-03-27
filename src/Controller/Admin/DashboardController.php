@@ -178,6 +178,7 @@ class DashboardController extends AbstractDashboardController
             'scouts'    => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
             'sponsors'  => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE academy_id IS NULL'),
             'investors' => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE academy_id IS NULL'),
+            'agents'    => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
         ];
 
         return $this->render('admin/pool_config.html.twig', [
@@ -247,6 +248,7 @@ class DashboardController extends AbstractDashboardController
         $config->setScoutPoolTarget((int) $request->request->get('scoutPoolTarget', 5));
         $config->setSponsorPoolTarget((int) $request->request->get('sponsorPoolTarget', 10));
         $config->setInvestorPoolTarget((int) $request->request->get('investorPoolTarget', 5));
+        $config->setAgentPoolTarget((int) $request->request->get('agentPoolTarget', 20));
 
         $this->em->flush();
 

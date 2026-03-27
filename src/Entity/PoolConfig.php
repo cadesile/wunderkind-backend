@@ -199,6 +199,10 @@ class PoolConfig
     #[ORM\Column(type: 'integer')]
     private int $investorPoolTarget = 5;
 
+    /** Minimum agents before auto-replenishment. Batch size for manual generate. Default: 20 */
+    #[ORM\Column(type: 'integer')]
+    private int $agentPoolTarget = 20;
+
     // ── Getters / Setters ──────────────────────────────────────────────────
 
     public function getId(): ?int { return $this->id; }
@@ -319,4 +323,7 @@ class PoolConfig
 
     public function getInvestorPoolTarget(): int { return $this->investorPoolTarget; }
     public function setInvestorPoolTarget(int $v): static { $this->investorPoolTarget = $v; return $this; }
+
+    public function getAgentPoolTarget(): int { return $this->agentPoolTarget; }
+    public function setAgentPoolTarget(int $v): static { $this->agentPoolTarget = $v; return $this; }
 }
