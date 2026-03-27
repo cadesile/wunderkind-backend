@@ -54,8 +54,8 @@ jobs:
             APP_SECRET=${{ secrets.PROD_APP_SECRET }}
             CORS_ALLOW_ORIGIN=${{ secrets.PROD_CORS_ALLOW_ORIGIN }}
             ACADEMY_STARTING_BALANCE=${{ secrets.PROD_ACADEMY_STARTING_BALANCE }}
-            JWT_SECRET_KEY=${{ secrets.PROD_JWT_SECRET_KEY }}
-            JWT_PUBLIC_KEY=${{ secrets.PROD_JWT_PUBLIC_KEY }}
+            JWT_SECRET_KEY="${{ secrets.PROD_JWT_SECRET_KEY }}"
+            JWT_PUBLIC_KEY="${{ secrets.PROD_JWT_PUBLIC_KEY }}"
             EOF
 
             docker compose -f docker-compose.prod.yml pull
