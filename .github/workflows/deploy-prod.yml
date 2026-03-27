@@ -63,4 +63,6 @@ jobs:
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console doctrine:migrations:migrate --no-interaction
             docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console assets:install --symlink
+            docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console cache:clear
