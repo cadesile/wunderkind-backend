@@ -7,6 +7,17 @@ config:
   xdebug: false
   database: postgres:16
 
+events:
+  post-start:
+    - appserver: |
+        if ! grep -q "JWT_SECRET_KEY" /app/.env.local 2>/dev/null; then
+          openssl genrsa -out /tmp/jwt_priv.pem 4096 2>/dev/null
+          openssl rsa -in /tmp/jwt_priv.pem -pubout -out /tmp/jwt_pub.pem 2>/dev/null
+          printf 'JWT_SECRET_KEY="%s"\n' "$(cat /tmp/jwt_priv.pem)" >> /app/.env.local
+          printf 'JWT_PUBLIC_KEY="%s"\n' "$(cat /tmp/jwt_pub.pem)" >> /app/.env.local
+          echo "JWT keys generated and written to .env.local"
+        fi
+
 services:
   appserver_nginx:
     overrides:
