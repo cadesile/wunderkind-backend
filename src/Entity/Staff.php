@@ -46,6 +46,9 @@ class Staff
     #[ORM\Column(type: 'integer')]
     private int $morale = 50;
 
+    #[ORM\Column(length: 60, nullable: true)]
+    private ?string $nationality = null;
+
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $specialty = null;
 
@@ -93,6 +96,9 @@ class Staff
     public function setLastName(string $lastName): void { $this->lastName = $lastName; }
 
     public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
+
+    public function getNationality(): ?string { return $this->nationality; }
+    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
 
     public function getRole(): StaffRole { return $this->role; }
     public function setRole(StaffRole $role): void { $this->role = $role; }

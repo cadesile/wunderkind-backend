@@ -280,6 +280,7 @@ class MarketPoolService
                 academy:   null,
             );
 
+            $staff->setNationality($coachNat);
             $staff->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
             $staff->setCoachingAbility($ability);
             $staff->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));

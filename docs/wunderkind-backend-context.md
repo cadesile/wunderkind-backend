@@ -1,12 +1,12 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-03-26 23:32:38 | Stack: symfony 80 · PHP 8.4 · wunderkind | Dev: lando
+> Generated: 2026-03-29 18:48:21 | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young talent. The backend follows a client-authoritative hybrid sync model — all gameplay (weekly ticks, training, aging) runs offline on-device, while this API handles legacy metric syncing, anti-cheat validation, and global leaderboards. Built with Symfony 8.0, PHP 8.4, PostgreSQL 16, and JWT authentication, it exposes a RESTful API consumed by the React Native mobile client alongside an EasyAdmin v5 panel for operational oversight.
+Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where gameplay runs client-side and the backend handles sync validation, global leaderboards, and market data. Built on Symfony 8.0 with PHP 8.4 and PostgreSQL 16, it uses a client-authoritative hybrid sync model — the device is the game engine, and the API enforces anti-cheat rules, aggregates academy metrics, and serves dynamic market pools. An EasyAdmin v5 panel provides administrative oversight of all game entities, while JWT authentication secures the mobile API layer.
 
 ---
 
@@ -14,11 +14,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Category | Count |
 |---|---|
-| PHP files         | 155 |
+| PHP files         | 160 |
 | Entities/Models   | 21 |
-| Controllers       | 33 |
+| Controllers       | 34 |
 | Services          | 9 |
-| Migrations        | 32 |
+| Migrations        | 36 |
 
 ---
 
@@ -29,7 +29,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 | **Language**      | php |
 | **Framework**     | symfony 80 |
 | **PHP**           | 8.4 |
-| **Database**      | wunderkind |
+| **Database**      | postgres:16 |
 | **Dev env**       | lando (symfony) |
 
 ### Dependencies
@@ -95,6 +95,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── reference.php
 │   ├── routes.yaml
 │   └── services.yaml
+├── docker
+│   ├── jwt-entrypoint.sh
+│   ├── nginx-http-only.conf
+│   ├── nginx.conf
+│   └── supervisord.conf
 ├── docs
 │   ├── event-guide.md
 │   ├── frontend-integration.md
@@ -134,7 +139,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   └── Version20260325234056.php
 │   ├── Version20260326000000_baseline_postgres.php
 │   ├── Version20260326222629.php
-│   └── Version20260327000001.php
+│   ├── Version20260326234223.php
+│   ├── Version20260327000001.php
+│   ├── Version20260327000002.php
+│   ├── Version20260329000001.php
+│   └── Version20260329173338.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -142,6 +151,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── images
 │   │   └── logo.webp
 │   ├── admin-login.css
+│   ├── index.html
 │   └── index.php
 ├── scripts
 │   ├── generate_project_context_push.sh
@@ -162,6 +172,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── Admin
 │   │   ├── Api
 │   │   ├── AdminSecurityController.php
+│   │   ├── HomeController.php
 │   │   ├── LeaderboardController.php
 │   │   └── SyncController.php
 │   ├── Dto
@@ -267,12 +278,15 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ├── compose.yaml
 ├── composer.json
 ├── composer.lock
+├── docker-compose.prod.yml
+├── docker-compose.staging.yml
+├── Dockerfile
 ├── project_plan.md
 ├── README.md
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-35 directories, 174 files
+36 directories, 187 files
 ```
 
 ---
@@ -593,13 +607,13 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $scoutingRange = 50;
     private int $weeklySalary = 0;
     private int $morale = 50;
+    private ?string $nationality = null;
     private ?string $specialty = null;
     private ?array $specialisms = null;
     private ?Academy $academy = null;
     private ?\DateTimeImmutable $assignedAt = null;
     private ?\DateTimeImmutable $dob = null;
     private \DateTimeImmutable $hiredAt;
-    public function __construct(
 ```
 
 #### StarterConfig
@@ -1025,6 +1039,12 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function mostValuable(Request $request): JsonResponse
 ```
 
+#### HomeController
+```php
+    #[Route('/', name: 'home', methods: ['GET'])]
+    public function index(): BinaryFileResponse
+```
+
 #### LeaderboardController
 ```php
 #[Route('/api')]
@@ -1139,17 +1159,17 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Migration | Date |
 |---|---|
-| `Version20260322000001` | 20260322 |
-| `Version20260322184350` | 20260322 |
-| `Version20260323000001` | 20260323 |
-| `Version20260324092239` | 20260324 |
 | `Version20260324114203` | 20260324 |
 | `Version20260325234055` | 20260325 |
 | `Version20260325234056` | 20260325 |
 | `Version20260326000000_baseline_postgres` | 20260326 |
 | `Version20260326222629` | 20260326 |
+| `Version20260326234223` | 20260326 |
 | `Version20260327000001` | 20260327 |
-_Showing latest 10 of 32 total._
+| `Version20260327000002` | 20260327 |
+| `Version20260329000001` | 20260329 |
+| `Version20260329173338` | 20260329 |
+_Showing latest 10 of 36 total._
 
 ---
 
@@ -1164,7 +1184,6 @@ DATABASE_URL=***
 CORS_ALLOW_ORIGIN=***
 JWT_SECRET_KEY=***
 JWT_PUBLIC_KEY=***
-JWT_PASSPHRASE=***
 ACADEMY_STARTING_BALANCE=***
 ```
 
@@ -1184,39 +1203,39 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
+7bf56cb added new assets
+232c24c added index page
+180aa0c domain attach + tls
+4c1d21c alter pool config
+4842550 install assests on deploy
+4cf3bca fix: remove premature pool_config ALTER from migration   20260326234223
+1b1dbb4 update docker
+3386550 update docker
+399f252 update docker
+e0558b4 postgres move, first deploy
+c90a2ec postgres move, first deploy
 466b273 latest admin
 8a5ff03 latest
 2715bcd latest code
 fa4ac61 updated context
-1ce30f0 latest
-b16643f update context
-cbe4328 feat: Phase 3 & 4 — NPC interaction system + GameConfig API
-9e730a5 feat: configurable starting balance + SyncRecord payload viewer in admin
-4f9e314 docs: add event guide
-f01a3ba docs: update frontend integration guide — sync managerShifts, archetypes, events, transfer leaderboards, corrected starter bundle
-fb3092c feat: editable specialisms field on staff edit form via virtual JSON string property
-c0388cc fix: hide specialisms JSON field on staff index to avoid TextareaField type error
-39fd43b feat: editable impacts field on event template admin form via virtual JSON string property
-4db8b9c fix: editable traitMapping in archetype admin form via virtual JSON string property
-584cad3 fix: hide traitMapping JSON field on archetype index to avoid TextareaField type error
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Repository Pattern** — dedicated `*Repository` classes per entity encapsulate all query logic, keeping persistence concerns out of services and controllers
-- **Service Layer** — domain logic is centralized in `*Service` classes (e.g. `SyncService`, `EconomicService`, `MarketPoolService`), with controllers acting as thin HTTP adapters that delegate immediately to services
-- **DTO (Data Transfer Object)** — `src/Dto/` separates validated input contracts from entities, used for deserializing and validating API payloads before they reach the service layer
-- **CQRS-lite via API Platform resources** — `src/ApiResource/` suggests read-side resource definitions are decoupled from write-side controller/service flows, approximating command/query separation without a full CQRS bus
-- **Domain Event / Observer** — `src/EventSubscriber/` (e.g. `DomainSeparationSubscriber`) wires cross-cutting concerns (auth, domain routing) to Symfony's event dispatcher rather than embedding them in controllers or services
+- **Repository Pattern** — dedicated `Repository/` classes per entity (e.g. `AcademyRepository`, `LeaderboardEntryRepository`) encapsulate all query logic, keeping entities and controllers free of raw Doctrine queries
+- **Service Layer** — business logic is delegated to focused services (`SyncService`, `EconomicService`, `MarketPoolService`, `FacilityService`) rather than living in controllers, which act as thin HTTP adapters
+- **DTO (Data Transfer Object)** — `src/Dto/` holds validated input objects (e.g. `SyncRequest`) decoupled from entities, used with Symfony's `#[MapRequestPayload]` to enforce input contracts at the boundary
+- **Pool/Config-driven Entity Generation** — `PoolConfig`, `StarterConfig`, and `GameConfig` entities combined with `MarketPoolService` suggest a data-driven spawning pattern where game entity parameters (wages, archetypes, quantities) are configurable at runtime rather than hardcoded
+- **API Platform Resource layer** — `src/ApiResource/` separates API Platform v4 resource definitions from Doctrine entities, allowing the HTTP interface shape to evolve independently of the persistence model
 
 ---
 
 ## Current Development Focus
 
-- **GameConfig / StarterConfig / PoolConfig system** — new `PoolConfig` entity, deleted old CRUD controllers, and active changes to `GameConfig` suggest a configuration layer being rebuilt; AI can help design a clean, extensible config schema and admin UI for it.
-- **Admin panel consolidation** — multiple CRUD controllers deleted/replaced, new Twig templates added (`game_config`, `pool_config`, `starter_config`, `_macros`), and `DashboardController` actively modified; AI can accelerate template generation and enforce consistent EasyAdmin patterns.
-- **NPC interaction system (Phase 3 & 4)** — recent commit explicitly adds NPC interactions alongside `GameConfigController` changes; this domain (state machines, offer/response flows, event triggers) is complex enough to benefit from AI-generated scaffolding and edge-case reasoning.
-- **Migration hygiene** — 30+ migrations deleted and archived with a new Postgres baseline; as new entities (`PoolConfig`) are added, AI can help generate correct Doctrine Schema API migrations and flag reserved-word or type-compatibility issues early.
-- **MarketPoolService / SyncService business logic** — both files actively modified alongside economic and narrative systems; AI can help audit side-effect ordering, identify missing rollback paths, and surface invariant violations in the sync pipeline.
+- **Deployment pipeline hardening** — Active Docker + nginx + GitHub Actions churn (multiple "update docker" commits, TLS setup, nginx config variants) suggests the CI/CD and container config is still being shaped; AI can help audit the deploy workflow for secrets handling, rollback strategy, and health-check gaps.
+- **Market pool configuration system** — `PoolConfig` entity + `MarketPoolService` + admin template are all in flux, with a migration fix reverting a premature ALTER; AI can help model the config schema cleanly, validate the admin UI logic, and write safe idempotent migrations.
+- **Admin dashboard extensibility** — `DashboardController` is being actively modified; as new game systems land, AI can help scaffold EasyAdmin CRUD controllers, custom actions, and stats widgets consistently with the existing patterns.
+- **Landing page / public frontend** — A new `index.html` and `HomeController` were just added with fresh assets, indicating a public-facing layer is starting; AI can help with SEO structure, asset pipeline integration, and keeping the static content decoupled from the Symfony backend.
+- **Migration reliability** — The revert commit (`fix: remove premature pool_config ALTER`) signals migration sequencing is a pain point; AI can help enforce a review checklist (idempotency, rollback stubs, correct ordering) before migrations are committed.

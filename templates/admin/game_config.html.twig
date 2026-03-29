@@ -232,6 +232,25 @@
                 </div>
             </div>
 
+            {# ── Transfer Market ────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-money-bill-transfer text-muted"></i>
+                    <span class="fw-semibold small">Transfer Market</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="playerFeeMultiplier" class="form-label fw-semibold small">Player Fee Multiplier</label>
+                            <input type="number" id="playerFeeMultiplier" name="playerFeeMultiplier"
+                                   value="{{ config.playerFeeMultiplier }}"
+                                   step="1" min="1" class="form-control">
+                            <div class="form-text">Controls player transfer fee scale. Default 1000. Higher = larger fees.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>{# /gap wrapper #}
 
         <div class="mt-4">

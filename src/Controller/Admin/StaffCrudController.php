@@ -60,6 +60,7 @@ class StaffCrudController extends AbstractCrudController
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('firstName');
         yield TextField::new('lastName');
+        yield TextField::new('nationality');
 
         yield ChoiceField::new('role')
             ->setChoices([

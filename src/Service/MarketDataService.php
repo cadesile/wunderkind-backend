@@ -86,6 +86,7 @@ class MarketDataService
             'firstName'       => $s->getFirstName(),
             'lastName'        => $s->getLastName(),
             'dateOfBirth'     => $s->getDob()?->format('Y-m-d'),
+            'nationality'     => $s->getNationality(),
             'role'            => $s->getRole()->value,
             'coachingAbility' => $s->getCoachingAbility(),
             'scoutingRange'   => $s->getScoutingRange(),

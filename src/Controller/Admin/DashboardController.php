@@ -125,6 +125,7 @@ class DashboardController extends AbstractDashboardController
             (float) $request->request->get('gemThreshold2', 0.85),
             (float) $request->request->get('gemThreshold3', 0.94),
         ]);
+        $config->setPlayerFeeMultiplier((float) $request->request->get('playerFeeMultiplier', 1000.0));
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');
@@ -361,7 +362,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');
         yield MenuItem::section('Roster');
         yield MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running');
-        yield MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-chalkboard-user');
+        yield MenuItem::linkTo(StaffCrudController::class, 'Coaches', 'fa fa-chalkboard-user');
+        yield MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars');
         yield MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake');
         yield MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users');
         yield MenuItem::section('Narrative');
@@ -374,7 +376,6 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::section('Market');
-        yield MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars');
         yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
         yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
     }

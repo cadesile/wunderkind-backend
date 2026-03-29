@@ -39,6 +39,7 @@ class GameConfigController extends AbstractController
             'scoutAbilityErrorRange'            => $config->getScoutAbilityErrorRange(),
             'scoutMaxAssignments'               => $config->getScoutMaxAssignments(),
             'missionGemRollThresholds'          => $config->getMissionGemRollThresholds(),
+            'playerFeeMultiplier'               => $config->getPlayerFeeMultiplier(),
         ]);
     }
 }

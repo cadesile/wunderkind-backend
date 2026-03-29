@@ -125,6 +125,16 @@ class GameConfig
     #[ORM\Column(type: 'json')]
     private array $missionGemRollThresholds = [0.25, 0.75, 0.85, 0.94];
 
+    // ── Transfer Market ───────────────────────────────────────────────────
+
+    /**
+     * Global multiplier applied to player transfer fee calculations.
+     * Replaces the hardcoded × 100 in the agent offer formula on the frontend.
+     * Default: 1000.0
+     */
+    #[ORM\Column(type: 'float')]
+    private float $playerFeeMultiplier = 1000.0;
+
     // ── Getters / Setters ─────────────────────────────────────────────────
 
     public function getId(): ?int { return $this->id; }
@@ -181,4 +191,7 @@ class GameConfig
     public function getMissionGemRollThresholds(): array { return $this->missionGemRollThresholds; }
     /** @param float[] $v */
     public function setMissionGemRollThresholds(array $v): static { $this->missionGemRollThresholds = $v; return $this; }
+
+    public function getPlayerFeeMultiplier(): float { return $this->playerFeeMultiplier; }
+    public function setPlayerFeeMultiplier(float $v): static { $this->playerFeeMultiplier = $v; return $this; }
 }
