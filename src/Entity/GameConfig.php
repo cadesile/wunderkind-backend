@@ -125,6 +125,22 @@ class GameConfig
     #[ORM\Column(type: 'json')]
     private array $missionGemRollThresholds = [0.25, 0.75, 0.85, 0.94];
 
+    // ── Morale ────────────────────────────────────────────────────────────
+
+    /**
+     * Minimum morale assigned to a newly created/recruited entity.
+     * Default: 50
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $defaultMoraleMin = 50;
+
+    /**
+     * Maximum morale assigned to a newly created/recruited entity.
+     * Default: 80
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $defaultMoraleMax = 80;
+
     // ── Transfer Market ───────────────────────────────────────────────────
 
     /**
@@ -194,4 +210,10 @@ class GameConfig
 
     public function getPlayerFeeMultiplier(): float { return $this->playerFeeMultiplier; }
     public function setPlayerFeeMultiplier(float $v): static { $this->playerFeeMultiplier = $v; return $this; }
+
+    public function getDefaultMoraleMin(): int { return $this->defaultMoraleMin; }
+    public function setDefaultMoraleMin(int $v): static { $this->defaultMoraleMin = $v; return $this; }
+
+    public function getDefaultMoraleMax(): int { return $this->defaultMoraleMax; }
+    public function setDefaultMoraleMax(int $v): static { $this->defaultMoraleMax = $v; return $this; }
 }

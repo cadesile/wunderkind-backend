@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Entity\User;
+use App\Enum\Tier;
 use App\Repository\PlayerRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -19,7 +21,7 @@ class SquadController extends AbstractController
     public function __construct(private readonly PlayerRepository $playerRepository) {}
 
     #[Route('', name: 'api_squad_index', methods: ['GET'])]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         /** @var User $user */
         $user    = $this->getUser();
@@ -29,7 +31,18 @@ class SquadController extends AbstractController
             return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
         }
 
+        $tierParam = $request->query->get('tier');
+        $tier      = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+
         $activePlayers = $this->playerRepository->findActiveByAcademy($academy);
+
+        if ($tier !== null) {
+            [$min, $max] = $tier->scoreRange();
+            $activePlayers = array_filter(
+                $activePlayers,
+                fn($p) => $p->getCurrentAbility() >= $min && $p->getCurrentAbility() <= $max
+            );
+        }
 
         $players = array_map(function ($player): array {
             $p = $player->getPersonality();

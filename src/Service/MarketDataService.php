@@ -11,6 +11,7 @@ use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Sponsor;
 use App\Entity\Staff;
+use App\Enum\Tier;
 
 class MarketDataService
 {
@@ -20,16 +21,22 @@ class MarketDataService
      * @param string|null $nationality Optional nationality filter (e.g. 'English').
      *   When provided, the player list is pre-filtered to that nationality.
      *   Coaches, scouts, agents, sponsors and investors are never nationality-filtered.
+     * @param Tier|null $tier Optional tier filter applied to players, coaches, scouts and agents.
+     *   Investors and sponsors are unaffected (no tier).
      */
-    public function getMarketSnapshot(?string $nationality = null): MarketDataResponse
+    public function getMarketSnapshot(?string $nationality = null, ?Tier $tier = null): MarketDataResponse
     {
+        $filterTier = fn(array $items): array => $tier === null
+            ? $items
+            : array_values(array_filter($items, fn($item) => $item['tier'] === $tier->value));
+
         return new MarketDataResponse(
-            agents:    array_map($this->serializeAgent(...),    $this->pool->getAgents()),
-            scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10)),
+            agents:    $filterTier(array_map($this->serializeAgent(...),    $this->pool->getAgents())),
+            scouts:    $filterTier(array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10))),
             investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(10)),
             sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(20)),
-            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100, $nationality)),
-            coaches:   array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(20)),
+            players:   $filterTier(array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100, $nationality))),
+            coaches:   $filterTier(array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(20))),
         );
     }
 
@@ -51,6 +58,7 @@ class MarketDataService
             'potential'         => $p->getPotential(),
             'currentAbility'    => $p->getCurrentAbility(),
             'contractValue'     => $p->getContractValue(),
+            'tier'              => Tier::fromScore($p->getCurrentAbility())->value,
             'recruitmentSource' => $p->getRecruitmentSource()->value,
             'pace'              => $p->getPace(),
             'technical'         => $p->getTechnical(),
@@ -88,6 +96,7 @@ class MarketDataService
             'dateOfBirth'     => $s->getDob()?->format('Y-m-d'),
             'nationality'     => $s->getNationality(),
             'role'            => $s->getRole()->value,
+            'tier'            => Tier::fromScore($s->getCoachingAbility())->value,
             'coachingAbility' => $s->getCoachingAbility(),
             'scoutingRange'   => $s->getScoutingRange(),
             'weeklySalary'    => $s->getWeeklySalary(),
@@ -104,6 +113,7 @@ class MarketDataService
             'nationality'    => $a->getNationality(),
             'experience'     => $a->getExperience(),
             'rating'         => $a->getRating(),
+            'tier'           => Tier::fromScore($a->getRating())->value,
             'commissionRate' => $a->getCommissionRate(),
         ];
     }
@@ -116,6 +126,7 @@ class MarketDataService
             'dateOfBirth' => $s->getDob()?->format('Y-m-d'),
             'nationality' => $s->getNationality(),
             'experience'  => $s->getExperience(),
+            'tier'        => Tier::fromScore($s->getExperience())->value,
             'judgements'  => $s->getJudgements(),
         ];
     }

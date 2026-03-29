@@ -126,6 +126,8 @@ class DashboardController extends AbstractDashboardController
             (float) $request->request->get('gemThreshold3', 0.94),
         ]);
         $config->setPlayerFeeMultiplier((float) $request->request->get('playerFeeMultiplier', 1000.0));
+        $config->setDefaultMoraleMin((int) $request->request->get('defaultMoraleMin', 50));
+        $config->setDefaultMoraleMax((int) $request->request->get('defaultMoraleMax', 80));
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');

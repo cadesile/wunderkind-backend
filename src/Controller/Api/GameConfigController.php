@@ -40,6 +40,8 @@ class GameConfigController extends AbstractController
             'scoutMaxAssignments'               => $config->getScoutMaxAssignments(),
             'missionGemRollThresholds'          => $config->getMissionGemRollThresholds(),
             'playerFeeMultiplier'               => $config->getPlayerFeeMultiplier(),
+            'defaultMoraleMin'                  => $config->getDefaultMoraleMin(),
+            'defaultMoraleMax'                  => $config->getDefaultMoraleMax(),
         ]);
     }
 }

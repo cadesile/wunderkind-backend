@@ -41,6 +41,12 @@ class StarterConfig
     #[ORM\Column(type: 'string', length: 20)]
     private string $starterSponsorTier = 'SMALL';
 
+    /**
+     * Starting tier of the academy. Matches Tier enum value. Default: 'local'
+     */
+    #[ORM\Column(type: 'string', length: 20)]
+    private string $starterAcademyTier = 'local';
+
     /** Returns a new instance pre-populated with all defaults. */
     public static function defaults(): self
     {
@@ -67,4 +73,7 @@ class StarterConfig
 
     public function getStarterSponsorTier(): string { return $this->starterSponsorTier; }
     public function setStarterSponsorTier(string $v): static { $this->starterSponsorTier = $v; return $this; }
+
+    public function getStarterAcademyTier(): string { return $this->starterAcademyTier; }
+    public function setStarterAcademyTier(string $v): static { $this->starterAcademyTier = $v; return $this; }
 }

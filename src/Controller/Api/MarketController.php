@@ -10,6 +10,7 @@ use App\Entity\Sponsor;
 use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\MarketEntityType;
+use App\Enum\Tier;
 use App\Repository\AcademyRepository;
 use App\Repository\AgentRepository;
 use App\Repository\InvestorRepository;
@@ -55,7 +56,10 @@ class MarketController extends AbstractController
             ? (self::COUNTRY_TO_NATIONALITY[$countryCode] ?? null)
             : null;
 
-        $response = $this->json($service->getMarketSnapshot($nationality));
+        $tierParam = $request->query->get('tier');
+        $tier      = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+
+        $response = $this->json($service->getMarketSnapshot($nationality, $tier));
         $response->setMaxAge(300); // 5-minute cache hint for client
         return $response;
     }

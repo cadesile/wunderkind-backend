@@ -140,13 +140,13 @@ class PoolConfig
     #[ORM\Column(type: 'integer')]
     private int $scoutAgeMax = 40;
 
-    /** Minimum experience (years) for generated scouts. Default: 0 */
+    /** Minimum experience score (0–100) for generated scouts. Default: 10 */
     #[ORM\Column(type: 'integer')]
-    private int $scoutExperienceMin = 0;
+    private int $scoutExperienceMin = 10;
 
-    /** Maximum experience (years) for generated scouts. Default: 10 */
+    /** Maximum experience score (0–100) for generated scouts. Default: 80 */
     #[ORM\Column(type: 'integer')]
-    private int $scoutExperienceMax = 10;
+    private int $scoutExperienceMax = 80;
 
     /** Min value for all 5 scout judgement categories. Default: 40 */
     #[ORM\Column(type: 'integer')]
