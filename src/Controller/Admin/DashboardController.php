@@ -296,17 +296,16 @@ class DashboardController extends AbstractDashboardController
 
         $conn = $this->em->getConnection();
 
+        // Delete guardians referencing unassigned players first (FK constraint)
+        $conn->executeStatement('DELETE FROM guardian WHERE player_id IN (SELECT id FROM player WHERE academy_id IS NULL)');
+
         $players   = $conn->executeStatement('DELETE FROM player WHERE academy_id IS NULL');
         $staff     = $conn->executeStatement('DELETE FROM staff WHERE academy_id IS NULL');
-        $scouts    = $conn->executeStatement('DELETE FROM scout WHERE assigned_at IS NULL');
+        $scouts    = $conn->executeStatement('DELETE FROM scout');
         $investors = $conn->executeStatement('DELETE FROM investor WHERE assigned_at IS NULL');
         $sponsors  = $conn->executeStatement('DELETE FROM sponsor WHERE assigned_at IS NULL');
-        $agents    = $conn->executeStatement(
-            'DELETE FROM agent WHERE id NOT IN (
-                SELECT DISTINCT agent_id FROM player
-                WHERE academy_id IS NOT NULL AND agent_id IS NOT NULL
-            )'
-        );
+        $conn->executeStatement('UPDATE player SET agent_id = NULL WHERE agent_id IS NOT NULL');
+        $agents    = $conn->executeStatement('DELETE FROM agent');
 
         $total = $players + $staff + $scouts + $investors + $sponsors + $agents;
         $this->addFlash('success', "Pool cleared — {$total} entities removed ({$players} players, {$staff} staff, {$scouts} scouts, {$investors} investors, {$sponsors} sponsors, {$agents} agents).");
