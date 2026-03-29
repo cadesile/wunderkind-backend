@@ -285,6 +285,35 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
     }
 
+    #[Route('/admin/pool-config/clear', name: 'admin_pool_clear', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function clearPool(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('clear_pool', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
+        }
+
+        $conn = $this->em->getConnection();
+
+        $players   = $conn->executeStatement('DELETE FROM player WHERE academy_id IS NULL');
+        $staff     = $conn->executeStatement('DELETE FROM staff WHERE academy_id IS NULL');
+        $scouts    = $conn->executeStatement('DELETE FROM scout WHERE assigned_at IS NULL');
+        $investors = $conn->executeStatement('DELETE FROM investor WHERE assigned_at IS NULL');
+        $sponsors  = $conn->executeStatement('DELETE FROM sponsor WHERE assigned_at IS NULL');
+        $agents    = $conn->executeStatement(
+            'DELETE FROM agent WHERE id NOT IN (
+                SELECT DISTINCT agent_id FROM player
+                WHERE academy_id IS NOT NULL AND agent_id IS NOT NULL
+            )'
+        );
+
+        $total = $players + $staff + $scouts + $investors + $sponsors + $agents;
+        $this->addFlash('success', "Pool cleared — {$total} entities removed ({$players} players, {$staff} staff, {$scouts} scouts, {$investors} investors, {$sponsors} sponsors, {$agents} agents).");
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
+    }
+
     // ── Developer Tools ───────────────────────────────────────────────────
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
