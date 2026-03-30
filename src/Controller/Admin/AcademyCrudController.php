@@ -68,9 +68,7 @@ class AcademyCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud
-            ->setDefaultSort(['createdAt' => 'DESC'])
-            ->setEntityLinkInList(Crud::PAGE_DETAIL);
+        return $crud->setDefaultSort(['createdAt' => 'DESC']);
     }
 
     public function configureFields(string $pageName): iterable
