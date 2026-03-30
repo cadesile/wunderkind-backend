@@ -370,6 +370,41 @@ class DashboardController extends AbstractDashboardController
         return $this->redirectToRoute('admin_settings');
     }
 
+    #[Route('/admin/developer-tools/nuclear-reset', name: 'admin_nuclear_reset', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function nuclearReset(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('nuclear_reset', $request->request->get('_csrf_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirectToRoute('admin_settings');
+        }
+
+        $conn = $this->em->getConnection();
+
+        // Delete in FK-safe order. Settings tables (game_config, starter_config,
+        // pool_config, game_event_template, player_archetype) and the admin table
+        // are intentionally left untouched.
+        $conn->executeStatement('DELETE FROM guardian');
+        $conn->executeStatement('DELETE FROM transfer');
+        $conn->executeStatement('DELETE FROM inbox_message');
+        $conn->executeStatement('DELETE FROM sync_record');
+        $conn->executeStatement('DELETE FROM leaderboard_entry');
+        $conn->executeStatement('UPDATE player SET agent_id = NULL');
+        $conn->executeStatement('DELETE FROM player');
+        $conn->executeStatement('DELETE FROM staff');
+        $conn->executeStatement('DELETE FROM scout');
+        $conn->executeStatement('DELETE FROM agent');
+        $conn->executeStatement('DELETE FROM investor');
+        $conn->executeStatement('DELETE FROM sponsor');
+        $conn->executeStatement('DELETE FROM facility');
+        $conn->executeStatement('DELETE FROM academy');
+        $conn->executeStatement('DELETE FROM refresh_tokens');
+        $conn->executeStatement('DELETE FROM "user"');
+
+        $this->addFlash('success', 'Nuclear reset complete — all player, academy, sync, and leaderboard data has been wiped. Settings and admin accounts are untouched.');
+        return $this->redirectToRoute('admin_settings');
+    }
+
     // ── EasyAdmin configuration ───────────────────────────────────────────
 
     public function configureDashboard(): Dashboard

@@ -53,6 +53,29 @@
         </div>
     </div>
 
+    {# Nuclear Reset #}
+    <div class="col-md-4">
+        <div class="card h-100 border-danger">
+            <div class="card-body">
+                <h6 class="card-title fw-semibold small text-danger">
+                    <i class="fa fa-skull-crossbones me-1"></i> Nuclear Reset
+                </h6>
+                <p class="card-text text-muted small">
+                    Wipes <strong>all</strong> player, staff, academy, sync, leaderboard, and inbox data.
+                    App users are deleted. Admin accounts and all settings (game config, starter config, pool config, archetypes) are <strong>preserved</strong>.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                <form method="POST" action="{{ path('admin_nuclear_reset') }}" class="d-inline" onsubmit="return nuclearConfirm(this)">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('nuclear_reset') }}">
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fa fa-skull-crossbones me-1"></i> Nuclear Reset
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     {# Reset & Seed — CLI only, visually de-emphasised #}
     <div class="col-md-4">
         <div class="card h-100" style="opacity:.65;">
@@ -79,6 +102,13 @@
 <script>
 function confirmAction(form, message) {
     if (!confirm(message)) return false;
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Running…'; }
+    return true;
+}
+function nuclearConfirm(form) {
+    if (!confirm('NUCLEAR RESET\n\nThis will permanently delete ALL players, staff, academies, sync records, leaderboard entries, and app users.\n\nAdmin accounts and all config settings will be preserved.\n\nAre you absolutely sure?')) return false;
+    if (!confirm('Second confirmation required.\n\nThis cannot be undone. Proceed?')) return false;
     const btn = form.querySelector('button[type="submit"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Running…'; }
     return true;
