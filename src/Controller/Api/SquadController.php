@@ -7,6 +7,7 @@ namespace App\Controller\Api;
 use App\Entity\User;
 use App\Enum\Tier;
 use App\Repository\PlayerRepository;
+use App\Service\AcademyInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -31,8 +32,10 @@ class SquadController extends AbstractController
             return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
         }
 
-        $tierParam = $request->query->get('tier');
-        $tier      = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+        $tierParam    = $request->query->get('tier');
+        $tier         = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+        $countryParam = $request->query->get('country');
+        $nationality  = $countryParam !== null ? AcademyInitializationService::countryToNationality($countryParam) : null;
 
         $activePlayers = $this->playerRepository->findActiveByAcademy($academy);
 
@@ -41,6 +44,13 @@ class SquadController extends AbstractController
             $activePlayers = array_filter(
                 $activePlayers,
                 fn($p) => $p->getCurrentAbility() >= $min && $p->getCurrentAbility() <= $max
+            );
+        }
+
+        if ($nationality !== null) {
+            $activePlayers = array_filter(
+                $activePlayers,
+                fn($p) => $p->getNationality() === $nationality
             );
         }
 

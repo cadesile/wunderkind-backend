@@ -42,8 +42,6 @@ class AcademyController extends AbstractController
             'id'            => $academy->getId()->toRfc4122(),
             'name'          => $academy->getName(),
             'starterBundle' => $service->getStarterBundle(),
-            'players'       => $academy->getPlayers()->count(),
-            'staff'         => $academy->getStaff()->count(),
         ], Response::HTTP_CREATED);
     }
 

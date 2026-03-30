@@ -1,12 +1,12 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-03-29 18:48:21 | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
+> Generated: 2026-03-30 22:17:37 | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where gameplay runs client-side and the backend handles sync validation, global leaderboards, and market data. Built on Symfony 8.0 with PHP 8.4 and PostgreSQL 16, it uses a client-authoritative hybrid sync model — the device is the game engine, and the API enforces anti-cheat rules, aggregates academy metrics, and serves dynamic market pools. An EasyAdmin v5 panel provides administrative oversight of all game entities, while JWT authentication secures the mobile API layer.
+Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young talent. The backend follows a client-authoritative hybrid sync model — all gameplay logic runs offline on-device, while this Symfony 8 API handles JWT authentication, periodic sync validation with anti-cheat checks, global leaderboards, and an economic simulation layer covering sponsors, investors, and player market dynamics. Built on PHP 8.4 with PostgreSQL 16 and deployed via Lando, it exposes a RESTful JSON API consumed by the React Native mobile client alongside an EasyAdmin v5 panel for content and market data management.
 
 ---
 
@@ -14,11 +14,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Category | Count |
 |---|---|
-| PHP files         | 160 |
-| Entities/Models   | 21 |
+| PHP files         | 165 |
+| Entities/Models   | 22 |
 | Controllers       | 34 |
 | Services          | 9 |
-| Migrations        | 36 |
+| Migrations        | 39 |
 
 ---
 
@@ -43,6 +43,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 - `doctrine/doctrine-migrations-bundle`: ^4.0
 - `doctrine/orm`: ^3.6
 - `easycorp/easyadmin-bundle`: ^5.0
+- `gesdinet/jwt-refresh-token-bundle`: ^2.0
 - `lexik/jwt-authentication-bundle`: ^3.2
 - `nelmio/cors-bundle`: ^2.6
 - `symfony/console`: 8.0.*
@@ -76,6 +77,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── doctrine_migrations.yaml
 │   │   ├── doctrine.yaml
 │   │   ├── framework.yaml
+│   │   ├── gesdinet_jwt_refresh_token.yaml
 │   │   ├── lexik_jwt_authentication.yaml
 │   │   ├── nelmio_cors.yaml
 │   │   ├── property_info.yaml
@@ -143,7 +145,10 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── Version20260327000001.php
 │   ├── Version20260327000002.php
 │   ├── Version20260329000001.php
-│   └── Version20260329173338.php
+│   ├── Version20260329173338.php
+│   ├── Version20260329193805.php
+│   ├── Version20260329214559.php
+│   └── Version20260330174208.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
@@ -197,6 +202,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── Player.php
 │   │   ├── PlayerArchetype.php
 │   │   ├── PoolConfig.php
+│   │   ├── RefreshToken.php
 │   │   ├── Scout.php
 │   │   ├── Sponsor.php
 │   │   ├── Staff.php
@@ -218,6 +224,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── RecruitmentSource.php
 │   │   ├── SponsorStatus.php
 │   │   ├── StaffRole.php
+│   │   ├── Tier.php
 │   │   └── TransferType.php
 │   ├── EventSubscriber
 │   │   └── DomainSeparationSubscriber.php
@@ -286,7 +293,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-36 directories, 187 files
+36 directories, 193 files
 ```
 
 ---
@@ -559,6 +566,10 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $playerWeightMax = 55;
 ```
 
+#### RefreshToken
+```php
+```
+
 #### Scout
 ```php
     private UuidV7 $id;
@@ -624,6 +635,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $starterCoachCount = 1;
     private int $starterScoutCount = 1;
     private string $starterSponsorTier = 'SMALL';
+    private string $starterAcademyTier = 'local';
     public static function defaults(): self
     public function getId(): int { return $this->id; }
     public function getStartingBalance(): int { return $this->startingBalance; }
@@ -632,7 +644,6 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
     public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
     public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }
-    public function getStarterCoachCount(): int { return $this->starterCoachCount; }
 ```
 
 #### SyncRecord
@@ -807,8 +818,8 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function savePoolConfig(Request $request): Response
     #[Route('/admin/pool-config/generate', name: 'admin_pool_generate', methods: ['POST'])]
     public function generatePool(Request $request): Response
-    #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
-    public function triggerAge21Deletion(Request $request, EconomicService $economicService): Response
+    #[Route('/admin/pool-config/clear', name: 'admin_pool_clear', methods: ['POST'])]
+    public function clearPool(Request $request): Response
 ```
 
 #### GameEventTemplateCrudController
@@ -1011,14 +1022,14 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #[Route('/api/squad')]
     public function __construct(private readonly PlayerRepository $playerRepository) {}
     #[Route('', name: 'api_squad_index', methods: ['GET'])]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
 ```
 
 #### StaffController
 ```php
 #[Route('/api/staff')]
     #[Route('', name: 'api_staff_index', methods: ['GET'])]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
 ```
 
 #### StarterConfigController
@@ -1110,7 +1121,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #### MarketDataService
 ```php
     public function __construct(private readonly MarketPoolService $pool) {}
-    public function getMarketSnapshot(?string $nationality = null): MarketDataResponse
+    public function getMarketSnapshot(?string $nationality = null, ?Tier $tier = null): MarketDataResponse
     public function getProspectSnapshot(): array
 ```
 
@@ -1159,9 +1170,6 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Migration | Date |
 |---|---|
-| `Version20260324114203` | 20260324 |
-| `Version20260325234055` | 20260325 |
-| `Version20260325234056` | 20260325 |
 | `Version20260326000000_baseline_postgres` | 20260326 |
 | `Version20260326222629` | 20260326 |
 | `Version20260326234223` | 20260326 |
@@ -1169,7 +1177,10 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 | `Version20260327000002` | 20260327 |
 | `Version20260329000001` | 20260329 |
 | `Version20260329173338` | 20260329 |
-_Showing latest 10 of 36 total._
+| `Version20260329193805` | 20260329 |
+| `Version20260329214559` | 20260329 |
+| `Version20260330174208` | 20260330 |
+_Showing latest 10 of 39 total._
 
 ---
 
@@ -1203,39 +1214,39 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
+f8a16a8 latest push
+1462d8e controller tweak
+ef5f31a feat: add JWT refresh token support via gesdinet/jwt-refresh-token-bundle
+2bd3e75 link academy list rows to academy profile detail page
+f30a9ef updated APK download link on landing page
+61295b8 added clear fix and new APK link
+cd65d32 added clear all feature
+34cff0d tier system framework
+4d684ce general bug fixing
 7bf56cb added new assets
 232c24c added index page
 180aa0c domain attach + tls
 4c1d21c alter pool config
 4842550 install assests on deploy
 4cf3bca fix: remove premature pool_config ALTER from migration   20260326234223
-1b1dbb4 update docker
-3386550 update docker
-399f252 update docker
-e0558b4 postgres move, first deploy
-c90a2ec postgres move, first deploy
-466b273 latest admin
-8a5ff03 latest
-2715bcd latest code
-fa4ac61 updated context
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Repository Pattern** — dedicated `Repository/` classes per entity (e.g. `AcademyRepository`, `LeaderboardEntryRepository`) encapsulate all query logic, keeping entities and controllers free of raw Doctrine queries
-- **Service Layer** — business logic is delegated to focused services (`SyncService`, `EconomicService`, `MarketPoolService`, `FacilityService`) rather than living in controllers, which act as thin HTTP adapters
-- **DTO (Data Transfer Object)** — `src/Dto/` holds validated input objects (e.g. `SyncRequest`) decoupled from entities, used with Symfony's `#[MapRequestPayload]` to enforce input contracts at the boundary
-- **Pool/Config-driven Entity Generation** — `PoolConfig`, `StarterConfig`, and `GameConfig` entities combined with `MarketPoolService` suggest a data-driven spawning pattern where game entity parameters (wages, archetypes, quantities) are configurable at runtime rather than hardcoded
-- **API Platform Resource layer** — `src/ApiResource/` separates API Platform v4 resource definitions from Doctrine entities, allowing the HTTP interface shape to evolve independently of the persistence model
+- **Repository Pattern** — dedicated `Repository/` classes per entity (e.g. `AcademyRepository`, `LeaderboardEntryRepository`) encapsulate all data-access queries behind domain-specific methods, keeping Doctrine out of controllers and services
+- **Service Layer** — business logic isolated in `Service/` (e.g. `SyncService`, `EconomicService`, `MarketPoolService`); controllers are thin HTTP adapters that delegate to services
+- **DTO (Data Transfer Object)** — `src/Dto/` holds validated input objects deserialized via Symfony's `#[MapRequestPayload]`, separating HTTP input shape from domain entities
+- **Domain-Driven Entity Model** — rich entities with behaviour (`getWeeksUntil21()`, `calculateAnnualPayout()`, `markAsRead/accept/reject()`) rather than anemic data bags; Embeddable (`PersonalityProfile`) and value-object patterns (`PlayerArchetype`, `StarterConfig`, `PoolConfig`) reinforce domain modelling
+- **Command Pattern (CQRS-lite)** — `src/Command/` Symfony console commands (`SeedGameEventsCommand`, `CleanupAssignedEntitiesCommand`) handle write-side operations separate from the HTTP read/write API, with `ApiResource/` hinting at a future read-side API Platform layer
 
 ---
 
 ## Current Development Focus
 
-- **Deployment pipeline hardening** — Active Docker + nginx + GitHub Actions churn (multiple "update docker" commits, TLS setup, nginx config variants) suggests the CI/CD and container config is still being shaped; AI can help audit the deploy workflow for secrets handling, rollback strategy, and health-check gaps.
-- **Market pool configuration system** — `PoolConfig` entity + `MarketPoolService` + admin template are all in flux, with a migration fix reverting a premature ALTER; AI can help model the config schema cleanly, validate the admin UI logic, and write safe idempotent migrations.
-- **Admin dashboard extensibility** — `DashboardController` is being actively modified; as new game systems land, AI can help scaffold EasyAdmin CRUD controllers, custom actions, and stats widgets consistently with the existing patterns.
-- **Landing page / public frontend** — A new `index.html` and `HomeController` were just added with fresh assets, indicating a public-facing layer is starting; AI can help with SEO structure, asset pipeline integration, and keeping the static content decoupled from the Symfony backend.
-- **Migration reliability** — The revert commit (`fix: remove premature pool_config ALTER`) signals migration sequencing is a pain point; AI can help enforce a review checklist (idempotency, rollback stubs, correct ordering) before migrations are committed.
+- **JWT refresh token integration** — `gesdinet/jwt-refresh-token-bundle` was just added with a new `RefreshToken` entity and config changes across security, routes, and lexik packages; token rotation strategy, expiry policies, and revocation handling likely need fleshing out
+- **Academy tier/progression system** — the "tier system framework" commit and `AcademyCrudController` changes suggest a reputation/tier model in progress; balancing tier thresholds, unlocks, and admin visibility rules is complex and error-prone
+- **Security firewall configuration** — `security.yaml` was modified alongside the new refresh token bundle; the stateless JWT firewall now coexists with session-based admin auth and a new refresh route, making firewall ordering and access control rules a high-risk area
+- **Admin CRUD panel evolution** — `AcademyCrudController` is being actively changed alongside new entity fields; keeping EasyAdmin field definitions, filters, and custom actions in sync with entity changes is tedious and benefits from automated review
+- **Database migration consistency** — a new migration (`Version20260330174208`) was generated for the refresh token table; with PostgreSQL-specific syntax requirements and prior migration complexity (UUIDs, cascades, new columns), migration correctness and rollback safety are ongoing concerns

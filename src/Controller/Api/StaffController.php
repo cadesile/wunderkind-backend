@@ -8,6 +8,7 @@ use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\StaffRole;
 use App\Enum\Tier;
+use App\Service\AcademyInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,13 +31,19 @@ class StaffController extends AbstractController
             return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
         }
 
-        $tierParam = $request->query->get('tier');
-        $tier      = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+        $tierParam    = $request->query->get('tier');
+        $tier         = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+        $countryParam = $request->query->get('country');
+        $nationality  = $countryParam !== null ? AcademyInitializationService::countryToNationality($countryParam) : null;
 
         $coaches = [];
         $scouts  = [];
 
         foreach ($academy->getStaff() as $member) {
+            if ($nationality !== null && $member->getNationality() !== $nationality) {
+                continue;
+            }
+
             if ($member->getRole() === StaffRole::SCOUT) {
                 if ($tier === null || Tier::fromScore($member->getScoutingRange()) === $tier) {
                     $scouts[] = $this->serializeScout($member);
