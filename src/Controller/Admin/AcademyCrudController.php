@@ -29,7 +29,9 @@ class AcademyCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        return $actions
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL);
     }
 
     /**
@@ -66,7 +68,9 @@ class AcademyCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['createdAt' => 'DESC']);
+        return $crud
+            ->setDefaultSort(['createdAt' => 'DESC'])
+            ->setEntityLinkInList(Crud::PAGE_DETAIL);
     }
 
     public function configureFields(string $pageName): iterable
