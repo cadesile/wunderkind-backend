@@ -9,3 +9,7 @@
 
 controllers:
     resource: routing.controllers
+
+api_refresh_token:
+    path: /api/token/refresh
+    methods: [POST]

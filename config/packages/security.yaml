@@ -38,6 +38,13 @@ security:
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
+        refresh_token:
+            pattern: ^/api/token/refresh
+            stateless: true
+            provider: app_user_provider
+            refresh_jwt:
+                check_path: /api/token/refresh
+
         api:
             pattern: ^/api
             stateless: true
@@ -48,9 +55,10 @@ security:
         # Allow CORS preflight requests through without JWT authentication.
         # NelmioCorsBundle handles OPTIONS and returns the correct headers.
         - { path: ^/api, roles: PUBLIC_ACCESS, methods: [OPTIONS] }
-        - { path: ^/admin/login,  roles: PUBLIC_ACCESS }
-        - { path: ^/admin,        roles: ROLE_ADMIN }
-        - { path: ^/api/login,    roles: PUBLIC_ACCESS }
+        - { path: ^/admin/login,       roles: PUBLIC_ACCESS }
+        - { path: ^/admin,             roles: ROLE_ADMIN }
+        - { path: ^/api/login,         roles: PUBLIC_ACCESS }
+        - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,           roles: PUBLIC_ACCESS }
