@@ -55,7 +55,8 @@
       "Bash(lando:*)",
       "Bash(docker ps:*)",
       "Bash(docker exec:*)",
-      "Bash(docker build:*)"
+      "Bash(docker build:*)",
+      "Bash(gh run:*)"
     ]
   }
 }
