@@ -376,7 +376,7 @@ class DashboardController extends AbstractDashboardController
     {
         if (!$this->isCsrfTokenValid('nuclear_reset', $request->request->get('_csrf_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirectToRoute('admin_settings');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
         }
 
         $conn = $this->em->getConnection();
@@ -402,7 +402,7 @@ class DashboardController extends AbstractDashboardController
         $conn->executeStatement('DELETE FROM "user"');
 
         $this->addFlash('success', 'Nuclear reset complete — all player, academy, sync, and leaderboard data has been wiped. Settings and admin accounts are untouched.');
-        return $this->redirectToRoute('admin_settings');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
     }
 
     // ── EasyAdmin configuration ───────────────────────────────────────────
