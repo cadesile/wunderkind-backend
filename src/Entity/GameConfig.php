@@ -141,6 +141,36 @@ class GameConfig
     #[ORM\Column(type: 'integer')]
     private int $defaultMoraleMax = 80;
 
+    // ── Incidents ─────────────────────────────────────────────────────────
+
+    /** Professionalism trait value below which late-training incidents can fire. Default: 6 */
+    #[ORM\Column(type: 'integer')]
+    private int $incidentLowProfessionalismThreshold = 6;
+
+    /** Weekly probability of a late-training incident when professionalism is below threshold. Default: 0.3 */
+    #[ORM\Column(type: 'float')]
+    private float $incidentLowProfessionalismChance = 0.3;
+
+    /** Determination trait value above which extra-effort incidents can fire. Default: 15 */
+    #[ORM\Column(type: 'integer')]
+    private int $incidentHighDeterminationThreshold = 15;
+
+    /** Weekly probability of an extra-effort incident when determination is above threshold. Default: 0.25 */
+    #[ORM\Column(type: 'float')]
+    private float $incidentHighDeterminationChance = 0.25;
+
+    /** Base weekly probability that any player pair produces an altercation incident. Default: 0.10 */
+    #[ORM\Column(type: 'float')]
+    private float $incidentAltercationBaseChance = 0.10;
+
+    /** Floor probability for a serious escalation on an altercation. Default: 0.2 */
+    #[ORM\Column(type: 'float')]
+    private float $incidentAltercationSeriousBase = 0.2;
+
+    /** How much temperament amplifies the serious escalation probability. Default: 0.5 */
+    #[ORM\Column(type: 'float')]
+    private float $incidentAltercationSeriousTemperamentScale = 0.5;
+
     // ── Transfer Market ───────────────────────────────────────────────────
 
     /**
@@ -150,6 +180,44 @@ class GameConfig
      */
     #[ORM\Column(type: 'float')]
     private float $playerFeeMultiplier = 1000.0;
+
+    // ── Guardian Complaints ───────────────────────────────────────────────
+
+    /** Player morale boost when manager convinces a guardian. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianConvinceMoraleBoost = 5;
+
+    /** Guardian loyalty increase when manager convinces. Default: 8 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianConvinceGuardianLoyaltyBoost = 8;
+
+    /** Guardian demand level increase when manager convinces. Default: 1 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianConvinceGuardianDemandIncrease = 1;
+
+    /** Player morale penalty when manager ignores a guardian complaint. Default: 8 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianIgnoreMoralePenalty = 8;
+
+    /** Player loyalty trait penalty when manager ignores. Default: 3 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianIgnoreLoyaltyTraitPenalty = 3;
+
+    /** Guardian loyalty decrease when manager ignores. Default: 12 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianIgnoreGuardianLoyaltyPenalty = 12;
+
+    /** Guardian demand level increase when manager ignores. Default: 2 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianIgnoreGuardianDemandIncrease = 2;
+
+    /** Morale penalty applied to surname-matching siblings when manager ignores. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianIgnoreSiblingMoralePenalty = 5;
+
+    /** Loyalty trait penalty applied to siblings when manager ignores. Default: 2 */
+    #[ORM\Column(type: 'integer')]
+    private int $guardianIgnoreSiblingLoyaltyTraitPenalty = 2;
 
     // ── Getters / Setters ─────────────────────────────────────────────────
 
@@ -208,6 +276,27 @@ class GameConfig
     /** @param float[] $v */
     public function setMissionGemRollThresholds(array $v): static { $this->missionGemRollThresholds = $v; return $this; }
 
+    public function getIncidentLowProfessionalismThreshold(): int { return $this->incidentLowProfessionalismThreshold; }
+    public function setIncidentLowProfessionalismThreshold(int $v): static { $this->incidentLowProfessionalismThreshold = $v; return $this; }
+
+    public function getIncidentLowProfessionalismChance(): float { return $this->incidentLowProfessionalismChance; }
+    public function setIncidentLowProfessionalismChance(float $v): static { $this->incidentLowProfessionalismChance = $v; return $this; }
+
+    public function getIncidentHighDeterminationThreshold(): int { return $this->incidentHighDeterminationThreshold; }
+    public function setIncidentHighDeterminationThreshold(int $v): static { $this->incidentHighDeterminationThreshold = $v; return $this; }
+
+    public function getIncidentHighDeterminationChance(): float { return $this->incidentHighDeterminationChance; }
+    public function setIncidentHighDeterminationChance(float $v): static { $this->incidentHighDeterminationChance = $v; return $this; }
+
+    public function getIncidentAltercationBaseChance(): float { return $this->incidentAltercationBaseChance; }
+    public function setIncidentAltercationBaseChance(float $v): static { $this->incidentAltercationBaseChance = $v; return $this; }
+
+    public function getIncidentAltercationSeriousBase(): float { return $this->incidentAltercationSeriousBase; }
+    public function setIncidentAltercationSeriousBase(float $v): static { $this->incidentAltercationSeriousBase = $v; return $this; }
+
+    public function getIncidentAltercationSeriousTemperamentScale(): float { return $this->incidentAltercationSeriousTemperamentScale; }
+    public function setIncidentAltercationSeriousTemperamentScale(float $v): static { $this->incidentAltercationSeriousTemperamentScale = $v; return $this; }
+
     public function getPlayerFeeMultiplier(): float { return $this->playerFeeMultiplier; }
     public function setPlayerFeeMultiplier(float $v): static { $this->playerFeeMultiplier = $v; return $this; }
 
@@ -216,4 +305,31 @@ class GameConfig
 
     public function getDefaultMoraleMax(): int { return $this->defaultMoraleMax; }
     public function setDefaultMoraleMax(int $v): static { $this->defaultMoraleMax = $v; return $this; }
+
+    public function getGuardianConvinceMoraleBoost(): int { return $this->guardianConvinceMoraleBoost; }
+    public function setGuardianConvinceMoraleBoost(int $v): static { $this->guardianConvinceMoraleBoost = $v; return $this; }
+
+    public function getGuardianConvinceGuardianLoyaltyBoost(): int { return $this->guardianConvinceGuardianLoyaltyBoost; }
+    public function setGuardianConvinceGuardianLoyaltyBoost(int $v): static { $this->guardianConvinceGuardianLoyaltyBoost = $v; return $this; }
+
+    public function getGuardianConvinceGuardianDemandIncrease(): int { return $this->guardianConvinceGuardianDemandIncrease; }
+    public function setGuardianConvinceGuardianDemandIncrease(int $v): static { $this->guardianConvinceGuardianDemandIncrease = $v; return $this; }
+
+    public function getGuardianIgnoreMoralePenalty(): int { return $this->guardianIgnoreMoralePenalty; }
+    public function setGuardianIgnoreMoralePenalty(int $v): static { $this->guardianIgnoreMoralePenalty = $v; return $this; }
+
+    public function getGuardianIgnoreLoyaltyTraitPenalty(): int { return $this->guardianIgnoreLoyaltyTraitPenalty; }
+    public function setGuardianIgnoreLoyaltyTraitPenalty(int $v): static { $this->guardianIgnoreLoyaltyTraitPenalty = $v; return $this; }
+
+    public function getGuardianIgnoreGuardianLoyaltyPenalty(): int { return $this->guardianIgnoreGuardianLoyaltyPenalty; }
+    public function setGuardianIgnoreGuardianLoyaltyPenalty(int $v): static { $this->guardianIgnoreGuardianLoyaltyPenalty = $v; return $this; }
+
+    public function getGuardianIgnoreGuardianDemandIncrease(): int { return $this->guardianIgnoreGuardianDemandIncrease; }
+    public function setGuardianIgnoreGuardianDemandIncrease(int $v): static { $this->guardianIgnoreGuardianDemandIncrease = $v; return $this; }
+
+    public function getGuardianIgnoreSiblingMoralePenalty(): int { return $this->guardianIgnoreSiblingMoralePenalty; }
+    public function setGuardianIgnoreSiblingMoralePenalty(int $v): static { $this->guardianIgnoreSiblingMoralePenalty = $v; return $this; }
+
+    public function getGuardianIgnoreSiblingLoyaltyTraitPenalty(): int { return $this->guardianIgnoreSiblingLoyaltyTraitPenalty; }
+    public function setGuardianIgnoreSiblingLoyaltyTraitPenalty(int $v): static { $this->guardianIgnoreSiblingLoyaltyTraitPenalty = $v; return $this; }
 }

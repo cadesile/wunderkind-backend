@@ -42,6 +42,26 @@ class GameConfigController extends AbstractController
             'playerFeeMultiplier'               => $config->getPlayerFeeMultiplier(),
             'defaultMoraleMin'                  => $config->getDefaultMoraleMin(),
             'defaultMoraleMax'                  => $config->getDefaultMoraleMax(),
+
+            // Incidents
+            'incidentLowProfessionalismThreshold'        => $config->getIncidentLowProfessionalismThreshold(),
+            'incidentLowProfessionalismChance'           => $config->getIncidentLowProfessionalismChance(),
+            'incidentHighDeterminationThreshold'         => $config->getIncidentHighDeterminationThreshold(),
+            'incidentHighDeterminationChance'            => $config->getIncidentHighDeterminationChance(),
+            'incidentAltercationBaseChance'              => $config->getIncidentAltercationBaseChance(),
+            'incidentAltercationSeriousBase'             => $config->getIncidentAltercationSeriousBase(),
+            'incidentAltercationSeriousTemperamentScale' => $config->getIncidentAltercationSeriousTemperamentScale(),
+
+            // Guardian complaints
+            'guardianConvinceMoraleBoost'                  => $config->getGuardianConvinceMoraleBoost(),
+            'guardianConvinceGuardianLoyaltyBoost'         => $config->getGuardianConvinceGuardianLoyaltyBoost(),
+            'guardianConvinceGuardianDemandIncrease'       => $config->getGuardianConvinceGuardianDemandIncrease(),
+            'guardianIgnoreMoralePenalty'                  => $config->getGuardianIgnoreMoralePenalty(),
+            'guardianIgnoreLoyaltyTraitPenalty'            => $config->getGuardianIgnoreLoyaltyTraitPenalty(),
+            'guardianIgnoreGuardianLoyaltyPenalty'         => $config->getGuardianIgnoreGuardianLoyaltyPenalty(),
+            'guardianIgnoreGuardianDemandIncrease'         => $config->getGuardianIgnoreGuardianDemandIncrease(),
+            'guardianIgnoreSiblingMoralePenalty'           => $config->getGuardianIgnoreSiblingMoralePenalty(),
+            'guardianIgnoreSiblingLoyaltyTraitPenalty'     => $config->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
         ]);
     }
 }

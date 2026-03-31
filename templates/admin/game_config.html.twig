@@ -262,6 +262,72 @@
                 </div>
             </div>
 
+            {# ── Incidents ──────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-bolt text-muted"></i>
+                    <span class="fw-semibold small">Incidents</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls the frequency and escalation of personality-driven incidents during the weekly tick.
+                        Professionalism and determination thresholds use the trait's 1–20 scale.
+                        Chances are weekly probabilities (0–1).
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="incidentLowProfessionalismThreshold" class="form-label fw-semibold small">Low Professionalism Threshold</label>
+                            <input type="number" id="incidentLowProfessionalismThreshold" name="incidentLowProfessionalismThreshold"
+                                   value="{{ config.incidentLowProfessionalismThreshold }}"
+                                   min="1" max="20" class="form-control">
+                            <div class="form-text">Trait value below which late-training incidents can fire. Default: 6</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="incidentLowProfessionalismChance" class="form-label fw-semibold small">Low Professionalism Chance</label>
+                            <input type="number" id="incidentLowProfessionalismChance" name="incidentLowProfessionalismChance"
+                                   value="{{ config.incidentLowProfessionalismChance }}"
+                                   step="0.01" min="0" max="1" class="form-control">
+                            <div class="form-text">Weekly probability of firing. Default: 0.3</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="incidentHighDeterminationThreshold" class="form-label fw-semibold small">High Determination Threshold</label>
+                            <input type="number" id="incidentHighDeterminationThreshold" name="incidentHighDeterminationThreshold"
+                                   value="{{ config.incidentHighDeterminationThreshold }}"
+                                   min="1" max="20" class="form-control">
+                            <div class="form-text">Trait value above which extra-effort incidents can fire. Default: 15</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="incidentHighDeterminationChance" class="form-label fw-semibold small">High Determination Chance</label>
+                            <input type="number" id="incidentHighDeterminationChance" name="incidentHighDeterminationChance"
+                                   value="{{ config.incidentHighDeterminationChance }}"
+                                   step="0.01" min="0" max="1" class="form-control">
+                            <div class="form-text">Weekly probability of firing. Default: 0.25</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="incidentAltercationBaseChance" class="form-label fw-semibold small">Altercation Base Chance</label>
+                            <input type="number" id="incidentAltercationBaseChance" name="incidentAltercationBaseChance"
+                                   value="{{ config.incidentAltercationBaseChance }}"
+                                   step="0.01" min="0" max="1" class="form-control">
+                            <div class="form-text">Base weekly chance any player pair clashes. Default: 0.10</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="incidentAltercationSeriousBase" class="form-label fw-semibold small">Altercation Serious Base</label>
+                            <input type="number" id="incidentAltercationSeriousBase" name="incidentAltercationSeriousBase"
+                                   value="{{ config.incidentAltercationSeriousBase }}"
+                                   step="0.01" min="0" max="1" class="form-control">
+                            <div class="form-text">Floor probability for serious escalation. Default: 0.2</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="incidentAltercationSeriousTemperamentScale" class="form-label fw-semibold small">Altercation Temperament Scale</label>
+                            <input type="number" id="incidentAltercationSeriousTemperamentScale" name="incidentAltercationSeriousTemperamentScale"
+                                   value="{{ config.incidentAltercationSeriousTemperamentScale }}"
+                                   step="0.01" min="0" class="form-control">
+                            <div class="form-text">How much temperament amplifies escalation. Default: 0.5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Transfer Market ────────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
@@ -276,6 +342,89 @@
                                    value="{{ config.playerFeeMultiplier }}"
                                    step="1" min="1" class="form-control">
                             <div class="form-text">Controls player transfer fee scale. Default 1000. Higher = larger fees.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Guardian Complaints ─────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-family text-muted"></i>
+                    <span class="fw-semibold small">Guardian Complaints</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Effects applied to the player and their guardian when the manager responds to a complaint.
+                        <strong>Convince</strong> costs money but boosts morale and loyalty.
+                        <strong>Ignore</strong> damages morale, loyalty trait, and guardian relationship — siblings with the same surname are also affected.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-12"><p class="fw-semibold small mb-0 text-success">✓ Convince</p></div>
+                        <div class="col-md-4">
+                            <label for="guardianConvinceMoraleBoost" class="form-label fw-semibold small">Player Morale Boost</label>
+                            <input type="number" id="guardianConvinceMoraleBoost" name="guardianConvinceMoraleBoost"
+                                   value="{{ config.guardianConvinceMoraleBoost }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Morale added to the player. Default: 5</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianConvinceGuardianLoyaltyBoost" class="form-label fw-semibold small">Guardian Loyalty Boost</label>
+                            <input type="number" id="guardianConvinceGuardianLoyaltyBoost" name="guardianConvinceGuardianLoyaltyBoost"
+                                   value="{{ config.guardianConvinceGuardianLoyaltyBoost }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Loyalty added to the worst guardian. Default: 8</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianConvinceGuardianDemandIncrease" class="form-label fw-semibold small">Guardian Demand Increase</label>
+                            <input type="number" id="guardianConvinceGuardianDemandIncrease" name="guardianConvinceGuardianDemandIncrease"
+                                   value="{{ config.guardianConvinceGuardianDemandIncrease }}"
+                                   min="0" max="10" class="form-control">
+                            <div class="form-text">Demand level added to the worst guardian (capped at 10). Default: 1</div>
+                        </div>
+
+                        <div class="col-12 mt-2"><p class="fw-semibold small mb-0 text-danger">✗ Ignore</p></div>
+                        <div class="col-md-4">
+                            <label for="guardianIgnoreMoralePenalty" class="form-label fw-semibold small">Player Morale Penalty</label>
+                            <input type="number" id="guardianIgnoreMoralePenalty" name="guardianIgnoreMoralePenalty"
+                                   value="{{ config.guardianIgnoreMoralePenalty }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Morale deducted from the player. Default: 8</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianIgnoreLoyaltyTraitPenalty" class="form-label fw-semibold small">Player Loyalty Trait Penalty</label>
+                            <input type="number" id="guardianIgnoreLoyaltyTraitPenalty" name="guardianIgnoreLoyaltyTraitPenalty"
+                                   value="{{ config.guardianIgnoreLoyaltyTraitPenalty }}"
+                                   min="0" max="20" class="form-control">
+                            <div class="form-text">Loyalty trait deducted from the player. Default: 3</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianIgnoreGuardianLoyaltyPenalty" class="form-label fw-semibold small">Guardian Loyalty Penalty</label>
+                            <input type="number" id="guardianIgnoreGuardianLoyaltyPenalty" name="guardianIgnoreGuardianLoyaltyPenalty"
+                                   value="{{ config.guardianIgnoreGuardianLoyaltyPenalty }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Loyalty deducted from the worst guardian. Default: 12</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianIgnoreGuardianDemandIncrease" class="form-label fw-semibold small">Guardian Demand Increase</label>
+                            <input type="number" id="guardianIgnoreGuardianDemandIncrease" name="guardianIgnoreGuardianDemandIncrease"
+                                   value="{{ config.guardianIgnoreGuardianDemandIncrease }}"
+                                   min="0" max="10" class="form-control">
+                            <div class="form-text">Demand level added to the worst guardian (capped at 10). Default: 2</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianIgnoreSiblingMoralePenalty" class="form-label fw-semibold small">Sibling Morale Penalty</label>
+                            <input type="number" id="guardianIgnoreSiblingMoralePenalty" name="guardianIgnoreSiblingMoralePenalty"
+                                   value="{{ config.guardianIgnoreSiblingMoralePenalty }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Morale deducted from surname-matching siblings. Default: 5</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="guardianIgnoreSiblingLoyaltyTraitPenalty" class="form-label fw-semibold small">Sibling Loyalty Trait Penalty</label>
+                            <input type="number" id="guardianIgnoreSiblingLoyaltyTraitPenalty" name="guardianIgnoreSiblingLoyaltyTraitPenalty"
+                                   value="{{ config.guardianIgnoreSiblingLoyaltyTraitPenalty }}"
+                                   min="0" max="20" class="form-control">
+                            <div class="form-text">Loyalty trait deducted from siblings. Default: 2</div>
                         </div>
                     </div>
                 </div>

@@ -3,9 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\LeaderboardEntry;
-use App\Entity\User;
 use App\Enum\LeaderboardCategory;
-use App\Repository\AcademyRepository;
 use App\Repository\LeaderboardEntryRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -21,7 +19,6 @@ class LeaderboardController extends AbstractController
         string $category,
         Request $request,
         LeaderboardEntryRepository $repo,
-        AcademyRepository $academyRepo,
     ): JsonResponse {
         $categoryEnum = LeaderboardCategory::tryFrom($category);
         if ($categoryEnum === null) {
@@ -32,40 +29,36 @@ class LeaderboardController extends AbstractController
             );
         }
 
-        $period  = $request->query->getString('period', 'all-time');
-        $entries = $repo->findTopByPeriod($categoryEnum, $period);
+        $period   = $request->query->getString('period', 'all-time');
+        $page     = max(1, (int) $request->query->get('page', 1));
+        $pageSize = min(100, max(1, (int) $request->query->get('pageSize', 20)));
+
+        $all     = $repo->findTopByPeriod($categoryEnum, $period, 1000);
+        $total   = count($all);
+        $offset  = ($page - 1) * $pageSize;
+        $paged   = array_slice($all, $offset, $pageSize);
 
         $entriesData = array_map(
-            static fn(LeaderboardEntry $e, int $i) => [
-                'rank'        => $i + 1,
-                'academyName' => $e->getAcademy()->getName(),
-                'score'       => $e->getScore(),
-            ],
-            $entries,
-            array_keys($entries),
+            static function (LeaderboardEntry $e, int $i) use ($offset): array {
+                $academy = $e->getAcademy();
+                return [
+                    'rank'                => $offset + $i + 1,
+                    'academyName'         => $academy->getName(),
+                    'reputation'          => $academy->getReputation(),
+                    'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
+                    'weekNumber'          => $academy->getLastSyncedWeek(),
+                ];
+            },
+            $paged,
+            array_keys($paged),
         );
 
-        /** @var User $user */
-        $user    = $this->getUser();
-        $academy = $academyRepo->findByUser($user);
-        $you     = null;
-
-        if ($academy !== null) {
-            $myData = $repo->findWithRankForAcademy($academy, $categoryEnum, $period);
-            if ($myData !== null) {
-                $you = [
-                    'rank'        => $myData['rank'],
-                    'academyName' => $myData['entry']->getAcademy()->getName(),
-                    'score'       => $myData['entry']->getScore(),
-                ];
-            }
-        }
-
         return $this->json([
-            'category' => $categoryEnum->value,
-            'period'   => $period,
-            'entries'  => $entriesData,
-            'you'      => $you,
+            'entries'     => array_values($entriesData),
+            'total'       => $total,
+            'page'        => $page,
+            'pageSize'    => $pageSize,
+            'hasNextPage' => ($offset + $pageSize) < $total,
         ]);
     }
 }

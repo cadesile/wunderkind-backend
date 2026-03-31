@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Enum\Tier;
 use App\Repository\PlayerRepository;
 use App\Service\AcademyInitializationService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -19,7 +20,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ACADEMY')]
 class SquadController extends AbstractController
 {
-    public function __construct(private readonly PlayerRepository $playerRepository) {}
+    public function __construct(
+        private readonly PlayerRepository $playerRepository,
+        private readonly EntityManagerInterface $em,
+    ) {}
 
     #[Route('', name: 'api_squad_index', methods: ['GET'])]
     public function index(Request $request): JsonResponse
@@ -96,5 +100,39 @@ class SquadController extends AbstractController
         }, $activePlayers);
 
         return $this->json(['players' => array_values($players)]);
+    }
+
+    #[Route('/release/{id}', name: 'api_squad_release', methods: ['POST'])]
+    public function release(string $id): JsonResponse
+    {
+        /** @var User $user */
+        $user    = $this->getUser();
+        $academy = $user->getAcademy();
+
+        if ($academy === null) {
+            return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $player = $this->playerRepository->find($id);
+
+        if ($player === null) {
+            return $this->json(['error' => 'Player not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($player->getAcademy()?->getId() !== $academy->getId()) {
+            return $this->json(['error' => 'Player does not belong to your academy.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $playerName = $player->getFirstName() . ' ' . $player->getLastName();
+
+        $player->setAcademy(null);
+        $this->em->flush();
+
+        return $this->json([
+            'success'    => true,
+            'playerId'   => $id,
+            'playerName' => $playerName,
+            'message'    => "{$playerName} has been released.",
+        ]);
     }
 }

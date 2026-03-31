@@ -128,6 +128,24 @@ class DashboardController extends AbstractDashboardController
         $config->setPlayerFeeMultiplier((float) $request->request->get('playerFeeMultiplier', 1000.0));
         $config->setDefaultMoraleMin((int) $request->request->get('defaultMoraleMin', 50));
         $config->setDefaultMoraleMax((int) $request->request->get('defaultMoraleMax', 80));
+        $config->setIncidentLowProfessionalismThreshold((int) $request->request->get('incidentLowProfessionalismThreshold', 6));
+        $config->setIncidentLowProfessionalismChance((float) $request->request->get('incidentLowProfessionalismChance', 0.3));
+        $config->setIncidentHighDeterminationThreshold((int) $request->request->get('incidentHighDeterminationThreshold', 15));
+        $config->setIncidentHighDeterminationChance((float) $request->request->get('incidentHighDeterminationChance', 0.25));
+        $config->setIncidentAltercationBaseChance((float) $request->request->get('incidentAltercationBaseChance', 0.10));
+        $config->setIncidentAltercationSeriousBase((float) $request->request->get('incidentAltercationSeriousBase', 0.2));
+        $config->setIncidentAltercationSeriousTemperamentScale((float) $request->request->get('incidentAltercationSeriousTemperamentScale', 0.5));
+
+        $config->setGuardianConvinceMoraleBoost((int) $request->request->get('guardianConvinceMoraleBoost', 5));
+        $config->setGuardianConvinceGuardianLoyaltyBoost((int) $request->request->get('guardianConvinceGuardianLoyaltyBoost', 8));
+        $config->setGuardianConvinceGuardianDemandIncrease((int) $request->request->get('guardianConvinceGuardianDemandIncrease', 1));
+        $config->setGuardianIgnoreMoralePenalty((int) $request->request->get('guardianIgnoreMoralePenalty', 8));
+        $config->setGuardianIgnoreLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreLoyaltyTraitPenalty', 3));
+        $config->setGuardianIgnoreGuardianLoyaltyPenalty((int) $request->request->get('guardianIgnoreGuardianLoyaltyPenalty', 12));
+        $config->setGuardianIgnoreGuardianDemandIncrease((int) $request->request->get('guardianIgnoreGuardianDemandIncrease', 2));
+        $config->setGuardianIgnoreSiblingMoralePenalty((int) $request->request->get('guardianIgnoreSiblingMoralePenalty', 5));
+        $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');
