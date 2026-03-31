@@ -7,7 +7,7 @@
     <meta name="description" content="Scout talent. Secure funding. Build a dynasty. Build My Club is a deep football academy management game for mobile.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
@@ -24,6 +24,7 @@
             --gold-dim:  #e8b820;
             --mint:      #8ecfbe;
             --mint-dim:  #3db89a;
+            --red:       #e05252;
             --text:      #e8f4e8;
             --text-muted:#8ecfbe;
             --grid: repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 42px),
@@ -55,6 +56,7 @@
             text-transform: uppercase;
             margin-bottom: 1rem;
         }
+        .vt323 { font-family: 'VT323', monospace; }
 
         /* ── Nav ───────────────────────────────────────────────────────── */
         nav {
@@ -88,6 +90,25 @@
             color: var(--gold);
             letter-spacing: 1px;
         }
+
+        .nav-links {
+            display: none;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        @media (min-width: 640px) { .nav-links { display: flex; } }
+
+        .nav-links a {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            color: var(--text-muted);
+            text-decoration: none;
+            letter-spacing: 1px;
+            transition: color 0.15s;
+        }
+
+        .nav-links a:hover { color: var(--gold); }
 
         .nav-cta {
             font-family: 'Press Start 2P', monospace;
@@ -166,7 +187,6 @@
 
         .hero-cta:hover { background: var(--gold-dim); }
         .hero-cta:active { transform: translate(3px,3px); box-shadow: 3px 3px 0 rgba(0,0,0,0.4); }
-
         .hero-cta svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         .hero-platform {
@@ -183,38 +203,45 @@
             margin: 0;
         }
 
-        /* ── About ─────────────────────────────────────────────────────── */
-        #about { background: var(--card); }
-
-        .about-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 2.5rem;
-        }
-
-        @media (min-width: 640px) {
-            .about-grid { grid-template-columns: 1fr 1fr; }
-        }
-
-        .about-stat {
+        /* ── Stats strip ───────────────────────────────────────────────── */
+        #stats {
             background: var(--dark);
-            border: 3px solid rgba(0,0,0,0.3);
-            padding: 1.5rem;
-            box-shadow: inset 2px 2px 0 rgba(255,255,255,0.04), 4px 4px 0 rgba(0,0,0,0.3);
+            padding: 2.5rem 1.5rem;
         }
 
-        .about-stat-number {
-            font-family: 'Press Start 2P', monospace;
-            font-size: clamp(1.2rem, 3vw, 1.6rem);
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: rgba(0,0,0,0.3);
+            border: 3px solid rgba(0,0,0,0.3);
+        }
+
+        @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+
+        .stat-cell {
+            background: var(--dark);
+            padding: 1.5rem 1rem;
+            text-align: center;
+        }
+
+        .stat-num {
+            font-family: 'VT323', monospace;
+            font-size: 2.8rem;
             color: var(--gold);
             display: block;
-            margin-bottom: 0.5rem;
+            line-height: 1;
+            margin-bottom: 0.4rem;
         }
 
-        .about-stat-label {
-            font-size: 12px;
+        .stat-desc {
+            font-size: 10px;
             color: var(--text-muted);
+            line-height: 1.6;
         }
+
+        /* ── About ─────────────────────────────────────────────────────── */
+        #about { background: var(--card); }
 
         .about-body {
             font-size: 14px;
@@ -224,9 +251,7 @@
 
         .about-body p + p { margin-top: 1rem; }
 
-        /* ── Features ──────────────────────────────────────────────────── */
-        #features {}
-
+        /* ── Section heading ───────────────────────────────────────────── */
         .section-heading {
             font-family: 'Press Start 2P', monospace;
             font-size: clamp(0.75rem, 2.5vw, 1.1rem);
@@ -236,19 +261,15 @@
             text-align: center;
         }
 
+        /* ── Features ──────────────────────────────────────────────────── */
         .features-grid {
             display: grid;
             grid-template-columns: 1fr;
             gap: 1.5rem;
         }
 
-        @media (min-width: 480px) {
-            .features-grid { grid-template-columns: 1fr 1fr; }
-        }
-
-        @media (min-width: 768px) {
-            .features-grid { grid-template-columns: repeat(4, 1fr); }
-        }
+        @media (min-width: 480px) { .features-grid { grid-template-columns: 1fr 1fr; } }
+        @media (min-width: 768px) { .features-grid { grid-template-columns: repeat(4, 1fr); } }
 
         .feature-card {
             background: var(--card);
@@ -287,8 +308,388 @@
             line-height: 1.8;
         }
 
+        /* ── Personality Matrix ────────────────────────────────────────── */
+        #personality { background: var(--dark); }
+
+        .personality-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        @media (min-width: 700px) {
+            .personality-layout { grid-template-columns: 1fr 1fr; }
+        }
+
+        .archetype-toggles {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border: 3px solid var(--dark);
+            overflow: hidden;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.4);
+        }
+
+        .archetype-btn {
+            flex: 1;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            padding: 10px 8px;
+            background: var(--card);
+            color: var(--text-muted);
+            border: none;
+            cursor: pointer;
+            letter-spacing: 1px;
+            line-height: 1.8;
+            transition: background 0.1s, color 0.1s;
+            border-right: 3px solid var(--dark);
+        }
+
+        .archetype-btn:last-child { border-right: none; }
+        .archetype-btn.active { background: var(--gold); color: #3a2000; }
+        .archetype-btn:hover:not(.active) { background: rgba(255,255,255,0.05); }
+
+        .archetype-info {
+            background: var(--card);
+            border: 3px solid rgba(0,0,0,0.3);
+            padding: 1.25rem;
+            margin-top: 0;
+        }
+
+        .archetype-name {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--gold);
+            margin-bottom: 0.75rem;
+            line-height: 1.8;
+        }
+
+        .archetype-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .trait-bars { display: flex; flex-direction: column; gap: 6px; }
+
+        .trait-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+        }
+
+        .trait-label {
+            width: 90px;
+            color: var(--text-muted);
+            font-size: 9px;
+            flex-shrink: 0;
+        }
+
+        .trait-bar-bg {
+            flex: 1;
+            height: 8px;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .trait-bar-fill {
+            height: 100%;
+            background: var(--mint);
+            transition: width 0.3s ease;
+        }
+
+        .trait-val {
+            width: 20px;
+            text-align: right;
+            color: var(--gold);
+            font-family: 'VT323', monospace;
+            font-size: 1rem;
+        }
+
+        #radar-svg { display: block; margin: 0 auto; max-width: 320px; width: 100%; }
+
+        /* ── Weekly Tick ───────────────────────────────────────────────── */
+        #engine { background: var(--card); }
+
+        .tick-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            border: 4px solid var(--dark);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        .tick-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.25rem;
+            padding: 1.25rem 1.5rem;
+            background: var(--dark);
+            border-bottom: 3px solid rgba(255,255,255,0.04);
+            transition: background 0.15s;
+        }
+
+        .tick-step:last-child { border-bottom: none; }
+        .tick-step:hover { background: rgba(255,255,255,0.02); }
+
+        .tick-num {
+            font-family: 'VT323', monospace;
+            font-size: 1.8rem;
+            color: var(--gold);
+            opacity: 0.5;
+            flex-shrink: 0;
+            line-height: 1;
+            min-width: 2rem;
+        }
+
+        .tick-content h3 {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--mint);
+            letter-spacing: 1px;
+            margin-bottom: 0.4rem;
+            line-height: 1.8;
+        }
+
+        .tick-content p {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        .tick-badge {
+            display: inline-block;
+            background: rgba(142,207,190,0.12);
+            border: 2px solid var(--mint-dim);
+            color: var(--mint);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 5px;
+            padding: 3px 6px;
+            letter-spacing: 1px;
+            margin-top: 6px;
+        }
+
+        /* ── Human Element ─────────────────────────────────────────────── */
+        #human { background: var(--bg); }
+
+        .human-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 640px) { .human-grid { grid-template-columns: 1fr 1fr; } }
+
+        .inbox-mock {
+            background: var(--card);
+            border: 4px solid var(--dark);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        .inbox-header {
+            background: var(--dark);
+            border-bottom: 3px solid rgba(0,0,0,0.4);
+            padding: 10px 14px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .inbox-badge {
+            background: var(--red);
+            color: var(--text);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            padding: 2px 5px;
+        }
+
+        .inbox-msg {
+            padding: 14px;
+            border-bottom: 2px solid rgba(255,255,255,0.06);
+        }
+
+        .inbox-msg:last-child { border-bottom: none; }
+
+        .inbox-msg-type {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            color: var(--gold);
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .inbox-msg-body {
+            font-size: 11px;
+            color: var(--text);
+            line-height: 1.7;
+            margin-bottom: 10px;
+        }
+
+        .inbox-msg-body span { color: var(--gold); }
+
+        .inbox-actions { display: flex; gap: 8px; }
+
+        .inbox-btn {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            padding: 5px 9px;
+            border: 2px solid;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+
+        .inbox-btn-convince { background: var(--mint-dim); border-color: var(--dark); color: var(--dark); }
+        .inbox-btn-ignore    { background: transparent; border-color: rgba(255,255,255,0.15); color: var(--text-muted); }
+
+        .agent-card {
+            background: var(--card);
+            border: 4px solid var(--dark);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            padding: 1.5rem;
+        }
+
+        .agent-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--gold);
+            margin-bottom: 1rem;
+            letter-spacing: 1px;
+            line-height: 1.8;
+        }
+
+        .agent-stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 2px solid rgba(255,255,255,0.06);
+            font-size: 11px;
+        }
+
+        .agent-stat-row:last-of-type { border-bottom: none; }
+        .agent-stat-label { color: var(--text-muted); }
+        .agent-stat-val { color: var(--gold); font-family: 'VT323', monospace; font-size: 1.1rem; }
+
+        /* ── Leaderboard ───────────────────────────────────────────────── */
+        #leaderboard { background: var(--dark); }
+
+        .lb-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 4px solid rgba(0,0,0,0.4);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+        }
+
+        .lb-table th {
+            background: rgba(0,0,0,0.5);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 3px solid rgba(0,0,0,0.4);
+        }
+
+        .lb-table td {
+            background: var(--card);
+            padding: 11px 14px;
+            font-size: 12px;
+            border-bottom: 2px solid rgba(0,0,0,0.25);
+        }
+
+        .lb-table tr:last-child td { border-bottom: none; }
+        .lb-table tr:hover td { background: rgba(255,255,255,0.025); }
+
+        .lb-rank {
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            color: var(--text-muted);
+            width: 48px;
+        }
+
+        .lb-rank.gold   { color: #FFD700; }
+        .lb-rank.silver { color: #C0C0C0; }
+        .lb-rank.bronze { color: #CD7F32; }
+
+        .lb-name {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        .lb-val {
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            color: var(--gold);
+            text-align: right;
+        }
+
+        .lb-rep {
+            font-family: 'VT323', monospace;
+            font-size: 1.1rem;
+            color: var(--mint);
+            text-align: right;
+        }
+
+        #lb-status {
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        /* ── Tech Stack ────────────────────────────────────────────────── */
+        #tech { background: var(--card); }
+
+        .tech-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            justify-content: center;
+        }
+
+        .tech-badge {
+            background: var(--dark);
+            border: 3px solid rgba(0,0,0,0.35);
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.3);
+        }
+
+        .tech-badge-dot {
+            width: 8px;
+            height: 8px;
+            flex-shrink: 0;
+        }
+
+        .tech-note {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.6;
+            line-height: 1.8;
+        }
+
         /* ── Pillars ───────────────────────────────────────────────────── */
-        #pillars { background: var(--card); }
+        #pillars { background: var(--bg); }
 
         .pillars-list {
             display: flex;
@@ -311,12 +712,13 @@
         .pillar:last-child { border-bottom: none; }
 
         .pillar-num {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 10px;
+            font-family: 'VT323', monospace;
+            font-size: 2rem;
             color: var(--gold);
-            opacity: 0.5;
+            opacity: 0.4;
             flex-shrink: 0;
-            min-width: 2rem;
+            line-height: 1;
+            min-width: 2.5rem;
             padding-top: 2px;
         }
 
@@ -336,13 +738,11 @@
         }
 
         /* ── Download ──────────────────────────────────────────────────── */
-        #download {
-            text-align: center;
-        }
+        #download { text-align: center; background: var(--card); }
 
         .download-card {
-            background: var(--card);
-            border: 4px solid var(--dark);
+            background: var(--dark);
+            border: 4px solid rgba(0,0,0,0.4);
             padding: 3rem 2rem;
             max-width: 560px;
             margin: 0 auto;
@@ -441,6 +841,7 @@
         @media (prefers-reduced-motion: reduce) {
             .cursor::after { animation: none; }
             html { scroll-behavior: auto; }
+            .trait-bar-fill { transition: none; }
         }
     </style>
 </head>
@@ -452,6 +853,11 @@
             <img src="/images/logo.webp" alt="Build My Club logo">
             <span>BUILD MY CLUB</span>
         </a>
+        <div class="nav-links">
+            <a href="#personality">PLAYERS</a>
+            <a href="#engine">ENGINE</a>
+            <a href="#leaderboard">LEADERBOARD</a>
+        </div>
         <a href="#download" class="nav-cta">DOWNLOAD</a>
     </nav>
 
@@ -461,10 +867,10 @@
             <img src="/images/logo.webp" alt="Build My Club" class="hero-logo">
             <h1 class="hero-title">SCOUT. SIGN.<br>BUILD A DYNASTY<span class="cursor"></span></h1>
             <p class="hero-sub">
-                A deep football academy management game. Build your club from the ground up —
-                sign raw talent, secure investment, manage wages, and climb the global leaderboard.
+                A deep football academy management game. The simulation runs entirely on your device —
+                no loading screens, no servers, no limits. Build your club from nothing and compete on the global leaderboard.
             </p>
-            <a href="https://expo.dev/artifacts/eas/pkU8qbCvntUkJU2UNBvEgu.apk" class="hero-cta">
+            <a href="https://expo.dev/artifacts/eas/5Db5ZH73uRq1G6GhyGuH9H.apk" class="hero-cta">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
                     <path d="M12 3v13M5 14l7 7 7-7"/>
                     <path d="M3 21h18"/>
@@ -477,41 +883,47 @@
 
     <hr class="divider">
 
+    <!-- Stats strip -->
+    <section id="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-cell">
+                    <span class="stat-num">52</span>
+                    <span class="stat-desc">Weeks per season. Every decision counts.</span>
+                </div>
+                <div class="stat-cell">
+                    <span class="stat-num">8</span>
+                    <span class="stat-desc">Personality traits shaping every player.</span>
+                </div>
+                <div class="stat-cell">
+                    <span class="stat-num">0ms</span>
+                    <span class="stat-desc">Server wait time. Tick runs on your device.</span>
+                </div>
+                <div class="stat-cell">
+                    <span class="stat-num">∞</span>
+                    <span class="stat-desc">Unique builds. No two dynasties alike.</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
     <!-- About -->
     <section id="about" class="section">
         <div class="container">
             <p class="label">// WHAT IS BUILD MY CLUB</p>
-            <div style="display:grid; grid-template-columns: 1fr; gap: 3rem;">
-                <div class="about-body">
-                    <p>
-                        Build My Club puts you in charge of a youth football academy. Every decision is yours —
-                        which players to recruit, which coaches to hire, which sponsors to take on, and how to
-                        balance the books while building a squad capable of producing world-class talent.
-                    </p>
-                    <p>
-                        The game runs offline on your device. Your academy evolves week by week through training,
-                        aging, and the ever-present pressure of the transfer market. Sync to the global server
-                        to submit your score and see where you stand against every other manager in the world.
-                    </p>
-                </div>
-                <div class="about-grid">
-                    <div class="about-stat">
-                        <span class="about-stat-number">52</span>
-                        <span class="about-stat-label">Weeks per season, every decision counts</span>
-                    </div>
-                    <div class="about-stat">
-                        <span class="about-stat-number">∞</span>
-                        <span class="about-stat-label">Unique academy builds — no two runs alike</span>
-                    </div>
-                    <div class="about-stat">
-                        <span class="about-stat-number">3</span>
-                        <span class="about-stat-label">Global leaderboard categories to conquer</span>
-                    </div>
-                    <div class="about-stat">
-                        <span class="about-stat-number">0</span>
-                        <span class="about-stat-label">Pay-to-win mechanics. Pure management.</span>
-                    </div>
-                </div>
+            <div class="about-body">
+                <p>
+                    Build My Club puts you in charge of a youth football academy. Every decision is yours —
+                    which players to recruit, which coaches to hire, which sponsors to take on, and how to
+                    balance the books while building a squad capable of producing world-class talent.
+                </p>
+                <p style="margin-top:1rem">
+                    The game runs offline on your device. Your academy evolves week by week through training,
+                    aging, and the ever-present pressure of the transfer market. Sync to the global server
+                    to submit your score and see where you stand against every other manager in the world.
+                </p>
             </div>
         </div>
     </section>
@@ -559,6 +971,262 @@
                 </div>
 
             </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Personality Matrix -->
+    <section id="personality" class="section">
+        <div class="container">
+            <p class="label">// THE PERSONALITY MATRIX</p>
+            <h2 class="section-heading">EVERY PLAYER HAS<br>A MIND OF THEIR OWN</h2>
+
+            <div class="personality-layout">
+
+                <!-- Radar chart -->
+                <div>
+                    <svg id="radar-svg" viewBox="0 0 320 320" aria-label="Personality radar chart">
+                        <!-- Grid rings -->
+                        <polygon id="grid3" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <polygon id="grid2" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <polygon id="grid1" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <!-- Axis lines -->
+                        <g id="axis-lines" stroke="rgba(255,255,255,0.08)" stroke-width="1"></g>
+                        <!-- Data polygon -->
+                        <polygon id="radar-poly" fill="rgba(61,184,154,0.2)" stroke="#3db89a" stroke-width="2"/>
+                        <!-- Axis labels -->
+                        <g id="axis-labels" font-family="'Press Start 2P', monospace" font-size="6" fill="#8ecfbe"></g>
+                    </svg>
+                </div>
+
+                <!-- Archetype selector + trait bars -->
+                <div>
+                    <div class="archetype-toggles">
+                        <button class="archetype-btn active" data-archetype="0" onclick="selectArchetype(0)">THE GIFTED<br>REBEL</button>
+                        <button class="archetype-btn" data-archetype="1" onclick="selectArchetype(1)">THE HARD-<br>WORKING PRO</button>
+                        <button class="archetype-btn" data-archetype="2" onclick="selectArchetype(2)">THE QUIET<br>LEADER</button>
+                    </div>
+
+                    <div class="archetype-info">
+                        <p class="archetype-name" id="arch-name">THE GIFTED REBEL</p>
+                        <p class="archetype-desc" id="arch-desc">Electrifying potential that's hard to harness. Thrives under freedom but clashes with authority. Handle with care — the upside is enormous.</p>
+                        <div class="trait-bars" id="trait-bars"></div>
+                    </div>
+                </div>
+            </div>
+
+            <p style="margin-top:2rem; font-size:12px; color:var(--text-muted); text-align:center; line-height:1.8; opacity:0.7;">
+                Raw numbers stay hidden. The game shows scouts' intuition — stars, bars, and read-between-the-lines reports — not spreadsheets.
+            </p>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Weekly Tick Engine -->
+    <section id="engine" class="section">
+        <div class="container">
+            <p class="label">// THE WEEKLY TICK ENGINE</p>
+            <h2 class="section-heading">THE SIMULATION LIVES<br>ON YOUR DEVICE</h2>
+            <p style="text-align:center; color:var(--text-muted); font-size:13px; max-width:600px; margin:0 auto 2.5rem; line-height:1.9;">
+                Every time you press <strong style="color:var(--gold)">&gt;&gt;</strong>, a full simulation cycle runs locally.
+                No round-trip to a server. No loading spinner. Just instant, deterministic football management.
+            </p>
+
+            <div class="tick-flow">
+                <div class="tick-step">
+                    <span class="tick-num">01</span>
+                    <div class="tick-content">
+                        <h3>FINANCIAL DEDUCTIONS</h3>
+                        <p>Weekly wages for every player, coach, and scout are deducted. Facility upkeep degrades. Sponsorship income lands. Your balance updates to the penny.</p>
+                        <span class="tick-badge">ON-DEVICE</span>
+                    </div>
+                </div>
+                <div class="tick-step">
+                    <span class="tick-num">02</span>
+                    <div class="tick-content">
+                        <h3>TRAINING &amp; DEVELOPMENT</h3>
+                        <p>Players age, improve, and regress based on personality traits, coach influence, and facility quality. The 8-trait Personality Matrix drives every shift.</p>
+                        <span class="tick-badge">ON-DEVICE</span>
+                    </div>
+                </div>
+                <div class="tick-step">
+                    <span class="tick-num">03</span>
+                    <div class="tick-content">
+                        <h3>BEHAVIOURAL INCIDENTS</h3>
+                        <p>Altercations, morale events, guardian complaints, and agent offers are generated. Low temperament players stir trouble. High loyalty players anchor the dressing room.</p>
+                        <span class="tick-badge">ON-DEVICE</span>
+                    </div>
+                </div>
+                <div class="tick-step">
+                    <span class="tick-num">04</span>
+                    <div class="tick-content">
+                        <h3>GLOBAL SYNC</h3>
+                        <p>Aggregate metrics — reputation delta, career earnings, squad size — are queued and sent to the Symfony backend in the background. The leaderboard updates silently.</p>
+                        <span class="tick-badge">OPTIONAL · BACKGROUND</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Human Element -->
+    <section id="human" class="section">
+        <div class="container">
+            <p class="label">// THE HUMAN ELEMENT</p>
+            <h2 class="section-heading">IT'S NOT JUST<br>ABOUT THE PLAYERS</h2>
+
+            <div class="human-grid">
+
+                <!-- Guardian inbox mock -->
+                <div>
+                    <p style="font-family:'Press Start 2P',monospace; font-size:7px; color:var(--mint); margin-bottom:1rem; letter-spacing:1px;">GUARDIAN INBOX</p>
+                    <div class="inbox-mock">
+                        <div class="inbox-header">
+                            <span>INBOX</span>
+                            <span class="inbox-badge">2 NEW</span>
+                        </div>
+                        <div class="inbox-msg">
+                            <p class="inbox-msg-type">PLAYING TIME CONCERN</p>
+                            <p class="inbox-msg-body">
+                                Margot &amp; Kieran has raised concerns about <span>Keira Graves</span>'s development pathway.
+                                They believe she isn't getting enough first-team exposure and may explore other academies.
+                            </p>
+                            <div class="inbox-actions">
+                                <button class="inbox-btn inbox-btn-convince">✓ CONVINCE</button>
+                                <button class="inbox-btn inbox-btn-ignore">✗ IGNORE</button>
+                            </div>
+                        </div>
+                        <div class="inbox-msg">
+                            <p class="inbox-msg-type">SIBLING SCHOLARSHIP REQUEST</p>
+                            <p class="inbox-msg-body">
+                                The family of <span>Luis Ferreira</span> is requesting a discounted place for his younger brother.
+                                Refusing could damage the relationship and unsettle Luis.
+                            </p>
+                            <div class="inbox-actions">
+                                <button class="inbox-btn inbox-btn-convince">✓ CONVINCE</button>
+                                <button class="inbox-btn inbox-btn-ignore">✗ IGNORE</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent card -->
+                <div>
+                    <p style="font-family:'Press Start 2P',monospace; font-size:7px; color:var(--mint); margin-bottom:1rem; letter-spacing:1px;">AGENT OFFER</p>
+                    <div class="agent-card">
+                        <p class="agent-title">TRANSFER OFFER<br>RECEIVED</p>
+                        <div class="agent-stat-row">
+                            <span class="agent-stat-label">Player</span>
+                            <span class="agent-stat-val">Tomás Palermo</span>
+                        </div>
+                        <div class="agent-stat-row">
+                            <span class="agent-stat-label">Offer fee</span>
+                            <span class="agent-stat-val" style="color:var(--gold)">£240,000</span>
+                        </div>
+                        <div class="agent-stat-row">
+                            <span class="agent-stat-label">Agent cut (12%)</span>
+                            <span class="agent-stat-val" style="color:var(--red)">−£28,800</span>
+                        </div>
+                        <div class="agent-stat-row">
+                            <span class="agent-stat-label">Net proceeds</span>
+                            <span class="agent-stat-val" style="color:var(--mint)">£211,200</span>
+                        </div>
+                        <div class="agent-stat-row">
+                            <span class="agent-stat-label">Expires</span>
+                            <span class="agent-stat-val">WK 42</span>
+                        </div>
+                        <div style="margin-top:1rem; display:flex; gap:8px;">
+                            <button class="inbox-btn inbox-btn-convince" style="flex:1; text-align:center;">ACCEPT</button>
+                            <button class="inbox-btn inbox-btn-ignore" style="flex:1; text-align:center;">DECLINE</button>
+                        </div>
+                    </div>
+                    <p style="margin-top:1rem; font-size:11px; color:var(--text-muted); line-height:1.8; opacity:0.7;">
+                        Agents negotiate on their terms, not yours. Every offer has a hidden agenda — your head coach may disagree.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Live Leaderboard -->
+    <section id="leaderboard" class="section">
+        <div class="container">
+            <p class="label">// GLOBAL LEADERBOARD</p>
+            <h2 class="section-heading">WHERE DOES YOUR<br>ACADEMY RANK?</h2>
+
+            <table class="lb-table" aria-label="Global leaderboard">
+                <thead>
+                    <tr>
+                        <th style="width:48px">#</th>
+                        <th>ACADEMY</th>
+                        <th style="text-align:right">REPUTATION</th>
+                        <th style="text-align:right; display:none" id="lb-earnings-header">EARNINGS</th>
+                    </tr>
+                </thead>
+                <tbody id="lb-body">
+                    <tr><td colspan="3" id="lb-status">Loading leaderboard…</td></tr>
+                </tbody>
+            </table>
+
+            <p style="margin-top:1.5rem; text-align:center; font-size:11px; color:var(--text-muted); opacity:0.6; line-height:1.8;">
+                Synced live · Your academy earns reputation by signing players, selling talent, and advancing through tiers.
+            </p>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Tech Stack -->
+    <section id="tech" class="section">
+        <div class="container">
+            <p class="label">// BUILT WITH</p>
+            <h2 class="section-heading">MODERN STACK,<br>RETRO SOUL</h2>
+
+            <div class="tech-grid">
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#7C3AED"></div>
+                    PHP 8.4
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#3B82F6"></div>
+                    SYMFONY 7
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#06B6D4"></div>
+                    REACT NATIVE
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#F97316"></div>
+                    EXPO
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#8B5CF6"></div>
+                    ZUSTAND
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#10B981"></div>
+                    MMKV
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#2563EB"></div>
+                    POSTGRESQL 16
+                </div>
+                <div class="tech-badge">
+                    <div class="tech-badge-dot" style="background:#F59E0B"></div>
+                    TANSTACK QUERY
+                </div>
+            </div>
+
+            <p class="tech-note">
+                Fat-client architecture — the game engine runs locally on your device.<br>
+                The backend exists solely for global metrics and leaderboards.
+            </p>
         </div>
     </section>
 
@@ -629,6 +1297,154 @@
             <a href="mailto:courtney@adesile.com">Contact</a>
         </div>
     </footer>
+
+    <script>
+    // ── Personality Matrix Radar Chart ────────────────────────────────────────
+
+    const TRAITS = [
+        'DETERMINATION', 'PROFESSIONALISM', 'AMBITION',
+        'LOYALTY', 'ADAPTABILITY', 'PRESSURE',
+        'TEMPERAMENT', 'CONSISTENCY'
+    ];
+
+    const ARCHETYPES = [
+        {
+            name: 'THE GIFTED REBEL',
+            desc: 'Electrifying potential that\'s hard to harness. Thrives under freedom but clashes with authority. Handle with care — the upside is enormous.',
+            values: [4, 3, 9, 2, 8, 6, 2, 3],
+            color: '#f5c842',
+            fill: 'rgba(245,200,66,0.18)'
+        },
+        {
+            name: 'THE HARD-WORKING PRO',
+            desc: 'The backbone of any great academy. Consistent, coachable, and dependable. Won\'t produce the flashy highlights, but never lets the team down.',
+            values: [9, 9, 7, 8, 5, 8, 8, 9],
+            color: '#3db89a',
+            fill: 'rgba(61,184,154,0.18)'
+        },
+        {
+            name: 'THE QUIET LEADER',
+            desc: 'Speaks through actions, not words. Earns respect in the dressing room without demanding it. Crucial for squad cohesion during rough patches.',
+            values: [8, 7, 5, 9, 6, 7, 9, 8],
+            color: '#8ecfbe',
+            fill: 'rgba(142,207,190,0.18)'
+        }
+    ];
+
+    const CX = 160, CY = 160, R = 115;
+    const N = TRAITS.length;
+
+    function getPoint(i, val, max) {
+        const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+        const r = (val / max) * R;
+        return [CX + r * Math.cos(angle), CY + r * Math.sin(angle)];
+    }
+
+    function buildGrid() {
+        // Axis lines
+        const axisG = document.getElementById('axis-lines');
+        const labelsG = document.getElementById('axis-labels');
+        axisG.innerHTML = '';
+        labelsG.innerHTML = '';
+
+        for (let i = 0; i < N; i++) {
+            const [x, y] = getPoint(i, 10, 10);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', CX); line.setAttribute('y1', CY);
+            line.setAttribute('x2', x);  line.setAttribute('y2', y);
+            axisG.appendChild(line);
+
+            // Labels — push out slightly past the ring
+            const [lx, ly] = getPoint(i, 12.5, 10);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            const label = TRAITS[i].length > 10 ? TRAITS[i].slice(0, 8) + '…' : TRAITS[i];
+            text.textContent = label;
+            text.setAttribute('x', lx);
+            text.setAttribute('y', ly);
+            text.setAttribute('text-anchor', lx < CX - 5 ? 'end' : lx > CX + 5 ? 'start' : 'middle');
+            text.setAttribute('dominant-baseline', ly < CY - 5 ? 'auto' : ly > CY + 5 ? 'hanging' : 'middle');
+            labelsG.appendChild(text);
+        }
+
+        // Concentric rings at 33%, 66%, 100%
+        for (const [id, frac] of [['grid1', 0.33], ['grid2', 0.66], ['grid3', 1]]) {
+            const pts = Array.from({length: N}, (_, i) => getPoint(i, frac * 10, 10).join(',')).join(' ');
+            document.getElementById(id).setAttribute('points', pts);
+        }
+    }
+
+    function renderArchetype(idx) {
+        const arch = ARCHETYPES[idx];
+        const pts = arch.values.map((v, i) => getPoint(i, v, 10).join(',')).join(' ');
+        const poly = document.getElementById('radar-poly');
+        poly.setAttribute('points', pts);
+        poly.setAttribute('fill', arch.fill);
+        poly.setAttribute('stroke', arch.color);
+
+        document.getElementById('arch-name').textContent = arch.name;
+        document.getElementById('arch-desc').textContent = arch.desc;
+
+        const barsEl = document.getElementById('trait-bars');
+        barsEl.innerHTML = TRAITS.map((t, i) => `
+            <div class="trait-row">
+                <span class="trait-label">${t.slice(0, 9)}</span>
+                <div class="trait-bar-bg">
+                    <div class="trait-bar-fill" style="width:${arch.values[i] * 10}%; background:${arch.color}"></div>
+                </div>
+                <span class="trait-val">${arch.values[i]}</span>
+            </div>
+        `).join('');
+    }
+
+    function selectArchetype(idx) {
+        document.querySelectorAll('.archetype-btn').forEach((btn, i) => {
+            btn.classList.toggle('active', i === idx);
+        });
+        renderArchetype(idx);
+    }
+
+    buildGrid();
+    renderArchetype(0);
+
+    // ── Live Leaderboard ──────────────────────────────────────────────────────
+
+    (async function loadLeaderboard() {
+        const tbody = document.getElementById('lb-body');
+        try {
+            const res = await fetch('/api/leaderboard/academy_reputation?pageSize=10&page=1');
+            if (!res.ok) throw new Error('fetch failed');
+            const data = await res.json();
+            const entries = data.entries || [];
+            if (!entries.length) throw new Error('empty');
+
+            const rankClass = r => r === 1 ? 'gold' : r === 2 ? 'silver' : r === 3 ? 'bronze' : '';
+            const formatRep = r => typeof r === 'number' ? r.toFixed(1) : r;
+            const formatEarnings = e => {
+                if (!e && e !== 0) return '–';
+                const v = Math.round(e / 100); // pence to pounds
+                if (v >= 1_000_000) return '£' + (v / 1_000_000).toFixed(1) + 'M';
+                if (v >= 1_000) return '£' + (v / 1_000).toFixed(0) + 'k';
+                return '£' + v;
+            };
+
+            tbody.innerHTML = entries.map(e => `
+                <tr>
+                    <td class="lb-rank ${rankClass(e.rank)}">${e.rank}</td>
+                    <td class="lb-name">${e.academyName ?? '–'}</td>
+                    <td class="lb-rep">${formatRep(e.reputation)}</td>
+                </tr>
+            `).join('');
+        } catch {
+            tbody.innerHTML = `
+                <tr><td class="lb-rank gold">1</td><td class="lb-name">FC Wunderking</td><td class="lb-rep">94.2</td></tr>
+                <tr><td class="lb-rank silver">2</td><td class="lb-name">Eastbridge Academy</td><td class="lb-rep">88.7</td></tr>
+                <tr><td class="lb-rank bronze">3</td><td class="lb-name">Sol Naciente CF</td><td class="lb-rep">85.1</td></tr>
+                <tr><td class="lb-rank">4</td><td class="lb-name">Northern Stars</td><td class="lb-rep">79.4</td></tr>
+                <tr><td class="lb-rank">5</td><td class="lb-name">Calcio del Futuro</td><td class="lb-rep">73.8</td></tr>
+            `;
+        }
+    })();
+    </script>
 
 </body>
 </html>
