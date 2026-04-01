@@ -62,6 +62,9 @@ class GameConfigController extends AbstractController
             'guardianIgnoreGuardianDemandIncrease'         => $config->getGuardianIgnoreGuardianDemandIncrease(),
             'guardianIgnoreSiblingMoralePenalty'           => $config->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'     => $config->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
+
+            // Developer / Debug
+            'debugLoggingEnabled'                          => $config->isDebugLoggingEnabled(),
         ]);
     }
 }

@@ -57,7 +57,7 @@ class MarketController extends AbstractController
             : null;
 
         $tierParam = $request->query->get('tier');
-        $tier      = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
+        $tier      = $tierParam !== null ? Tier::tryFrom(strtolower($tierParam)) : null;
 
         $response = $this->json($service->getMarketSnapshot($nationality, $tier));
         $response->setMaxAge(300); // 5-minute cache hint for client

@@ -26,17 +26,18 @@ class MarketDataService
      */
     public function getMarketSnapshot(?string $nationality = null, ?Tier $tier = null): MarketDataResponse
     {
-        $filterTier = fn(array $items): array => $tier === null
-            ? $items
-            : array_values(array_filter($items, fn($item) => $item['tier'] === $tier->value));
+        // When a tier is requested, derive the ability/score range and push filtering to the DB
+        // so we don't waste fetching hundreds of rows only to discard most of them.
+        $scoreMin = $tier?->scoreRange()[0];
+        $scoreMax = $tier?->scoreRange()[1];
 
         return new MarketDataResponse(
-            agents:    $filterTier(array_map($this->serializeAgent(...),    $this->pool->getAgents())),
-            scouts:    $filterTier(array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10))),
+            agents:    array_map($this->serializeAgent(...),    $this->pool->getAgents(20, $scoreMin, $scoreMax)),
+            scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10, $scoreMin, $scoreMax)),
             investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(10)),
             sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(20)),
-            players:   $filterTier(array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100, $nationality))),
-            coaches:   $filterTier(array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(20))),
+            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100, $nationality, $scoreMin, $scoreMax)),
+            coaches:   array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(20, $scoreMin, $scoreMax)),
         );
     }
 

@@ -16,8 +16,12 @@ class PlayerRepository extends ServiceEntityRepository
         parent::__construct($registry, Player::class);
     }
 
-    /** @return Player[] Unassigned YOUTH_INTAKE players (open market pool) */
-    public function findInPool(int $limit = 100, ?string $nationality = null): array
+    /**
+     * @return Player[] Unassigned YOUTH_INTAKE players (open market pool)
+     * @param int|null $abilityMin If provided, only players with currentAbility >= this value
+     * @param int|null $abilityMax If provided, only players with currentAbility <= this value
+     */
+    public function findInPool(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         $qb = $this->createQueryBuilder('p')
             ->where('p.academy IS NULL')
@@ -29,6 +33,16 @@ class PlayerRepository extends ServiceEntityRepository
         if ($nationality !== null) {
             $qb->andWhere('p.nationality = :nationality')
                ->setParameter('nationality', $nationality);
+        }
+
+        if ($abilityMin !== null) {
+            $qb->andWhere('p.currentAbility >= :abilityMin')
+               ->setParameter('abilityMin', $abilityMin);
+        }
+
+        if ($abilityMax !== null) {
+            $qb->andWhere('p.currentAbility <= :abilityMax')
+               ->setParameter('abilityMax', $abilityMax);
         }
 
         return $qb->getQuery()->getResult();

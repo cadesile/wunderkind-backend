@@ -145,6 +145,7 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreGuardianDemandIncrease((int) $request->request->get('guardianIgnoreGuardianDemandIncrease', 2));
         $config->setGuardianIgnoreSiblingMoralePenalty((int) $request->request->get('guardianIgnoreSiblingMoralePenalty', 5));
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
+        $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
         $this->em->flush();
 

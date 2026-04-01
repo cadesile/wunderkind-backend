@@ -332,4 +332,13 @@ class GameConfig
 
     public function getGuardianIgnoreSiblingLoyaltyTraitPenalty(): int { return $this->guardianIgnoreSiblingLoyaltyTraitPenalty; }
     public function setGuardianIgnoreSiblingLoyaltyTraitPenalty(int $v): static { $this->guardianIgnoreSiblingLoyaltyTraitPenalty = $v; return $this; }
+
+    // ── Developer / Debug ─────────────────────────────────────────────────
+
+    /** When true, the in-app debug log panel is visible to users. Default: false */
+    #[ORM\Column(type: 'boolean')]
+    private bool $debugLoggingEnabled = false;
+
+    public function isDebugLoggingEnabled(): bool { return $this->debugLoggingEnabled; }
+    public function setDebugLoggingEnabled(bool $v): static { $this->debugLoggingEnabled = $v; return $this; }
 }

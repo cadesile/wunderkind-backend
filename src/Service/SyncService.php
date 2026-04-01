@@ -142,9 +142,9 @@ class SyncService
         $syncedAt = $academy->getLastSyncedAt();
 
         // Fetch runtime config to embed in response. Read-only: if no row exists
-        // yet (fresh install before seeder runs) fall back to hardcoded defaults
-        // without persisting anything.
-        $gameConfig = $this->gameConfigRepository->find(1);
+        // getConfig() always returns the singleton row (creating with defaults if absent),
+        // so the ternary fallback below is now only a safety net for truly unexpected nulls.
+        $gameConfig = $this->gameConfigRepository->getConfig();
 
         $gameConfigData = $gameConfig !== null ? [
             'cliqueRelationshipThreshold'                => $gameConfig->getCliqueRelationshipThreshold(),
@@ -183,6 +183,7 @@ class SyncService
             'guardianIgnoreGuardianDemandIncrease'       => $gameConfig->getGuardianIgnoreGuardianDemandIncrease(),
             'guardianIgnoreSiblingMoralePenalty'         => $gameConfig->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => $gameConfig->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
+            'debugLoggingEnabled'                        => $gameConfig->isDebugLoggingEnabled(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -220,6 +221,7 @@ class SyncService
             'guardianIgnoreGuardianDemandIncrease'       => 2,
             'guardianIgnoreSiblingMoralePenalty'         => 5,
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => 2,
+            'debugLoggingEnabled'                        => false,
         ];
 
         return [

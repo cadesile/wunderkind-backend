@@ -16,10 +16,10 @@ class StaffRepository extends ServiceEntityRepository
     }
 
     /**
-     * Staff with no academy (market pool), optionally filtered by role.
+     * Staff with no academy (market pool), optionally filtered by role and coaching ability range.
      * @return Staff[]
      */
-    public function findInPool(?StaffRole $role = null, int $limit = 20): array
+    public function findInPool(?StaffRole $role = null, int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         $qb = $this->createQueryBuilder('s')
             ->where('s.academy IS NULL')
@@ -28,6 +28,16 @@ class StaffRepository extends ServiceEntityRepository
 
         if ($role !== null) {
             $qb->andWhere('s.role = :role')->setParameter('role', $role);
+        }
+
+        if ($abilityMin !== null) {
+            $qb->andWhere('s.coachingAbility >= :abilityMin')
+               ->setParameter('abilityMin', $abilityMin);
+        }
+
+        if ($abilityMax !== null) {
+            $qb->andWhere('s.coachingAbility <= :abilityMax')
+               ->setParameter('abilityMax', $abilityMax);
         }
 
         return $qb->getQuery()->getResult();

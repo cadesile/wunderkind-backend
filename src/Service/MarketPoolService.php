@@ -429,9 +429,9 @@ class MarketPoolService
     // ── Fetch ─────────────────────────────────────────────────────────────────
 
     /** @return Player[] Unassigned YOUTH_INTAKE players for the open market */
-    public function getAvailablePlayers(int $limit = 100, ?string $nationality = null): array
+    public function getAvailablePlayers(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
-        return $this->playerRepo->findInPool($limit, $nationality);
+        return $this->playerRepo->findInPool($limit, $nationality, $abilityMin, $abilityMax);
     }
 
     /** @return Player[] Unassigned SCOUTING_NETWORK players for the scout prospect pool */
@@ -441,21 +441,21 @@ class MarketPoolService
     }
 
     /** @return Staff[] */
-    public function getAvailableCoaches(int $limit = 20): array
+    public function getAvailableCoaches(int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
-        return $this->staffRepo->findInPool(null, $limit);
+        return $this->staffRepo->findInPool(null, $limit, $abilityMin, $abilityMax);
     }
 
     /** @return Scout[] */
-    public function getAvailableScouts(int $limit = 10): array
+    public function getAvailableScouts(int $limit = 10, ?int $experienceMin = null, ?int $experienceMax = null): array
     {
-        return $this->scoutRepo->findAll();
+        return $this->scoutRepo->findInPool($limit, $experienceMin, $experienceMax);
     }
 
     /** @return Agent[] */
-    public function getAgents(): array
+    public function getAgents(int $limit = 20, ?int $ratingMin = null, ?int $ratingMax = null): array
     {
-        return $this->agentRepo->findAll();
+        return $this->agentRepo->findInPool($limit, $ratingMin, $ratingMax);
     }
 
     /** @return Sponsor[] */
