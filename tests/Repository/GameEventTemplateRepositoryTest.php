@@ -53,4 +53,67 @@ class GameEventTemplateRepositoryTest extends TestCase
 
         $this->assertSame(1, $template->getWeight());
     }
+
+    public function testChainedEventsDefaultsToNull(): void
+    {
+        $template = new GameEventTemplate(
+            'test_event',
+            EventCategory::PLAYER,
+            'Test',
+            'Body.',
+        );
+
+        $this->assertNull($template->getChainedEvents());
+        $this->assertSame([], $template->getChainedEventsArray());
+    }
+
+    public function testSetChainedEventsArray(): void
+    {
+        $template = new GameEventTemplate(
+            'player-argument',
+            EventCategory::NPC_INTERACTION,
+            'Argument',
+            'Two players argue.',
+        );
+
+        $links = [
+            [
+                'nextEventSlug' => 'player-fight',
+                'boostMultiplier' => 4.0,
+                'windowWeeks' => 4,
+                'note' => 'Escalates to fight',
+            ],
+        ];
+
+        $template->setChainedEventsArray($links);
+
+        $this->assertSame($links, $template->getChainedEvents());
+        $this->assertSame($links, $template->getChainedEventsArray());
+    }
+
+    public function testSetChainedEventsArrayEmptyResetsToNull(): void
+    {
+        $template = new GameEventTemplate(
+            'test_event',
+            EventCategory::PLAYER,
+            'Test',
+            'Body.',
+        );
+        $template->setChainedEventsArray([['nextEventSlug' => 'other', 'boostMultiplier' => 2.0, 'windowWeeks' => 2, 'note' => null]]);
+        $template->setChainedEventsArray([]);
+
+        $this->assertNull($template->getChainedEvents());
+    }
+
+    public function testGetChainedEventsJsonReturnsEmptyArrayStringWhenNull(): void
+    {
+        $template = new GameEventTemplate(
+            'test_event',
+            EventCategory::PLAYER,
+            'Test',
+            'Body.',
+        );
+
+        $this->assertSame('[]', $template->getChainedEventsJson());
+    }
 }
