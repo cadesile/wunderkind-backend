@@ -62,6 +62,17 @@ class EventImpactsType extends AbstractType
 
     public function configureOptions(OptionsResolver $resolver): void
     {
-        $resolver->setDefaults(['data_class' => null]);
+        $resolver->setDefaults([
+            'data_class'    => null,
+            // EasyAdmin injects CollectionType options when the bound property is a PHP array.
+            // Declare them as accepted (and ignored) so Symfony doesn't throw.
+            'allow_add'     => false,
+            'allow_delete'  => false,
+            'delete_empty'  => false,
+            'entry_options' => [],
+            'entry_type'    => null,
+        ]);
+        $resolver->setAllowedTypes('entry_type', ['null', 'string']);
+        $resolver->setAllowedTypes('entry_options', 'array');
     }
 }
