@@ -4,9 +4,11 @@ namespace App\Controller\Admin;
 
 use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
+use App\Form\Type\ChainLinkType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -33,7 +35,7 @@ class GameEventTemplateCrudController extends AbstractCrudController
         yield ChoiceField::new('category')
             ->setChoices(array_combine(
                 array_map(fn (EventCategory $c) => ucfirst($c->value), EventCategory::cases()),
-                EventCategory::cases(),  // pass enum cases so EasyAdmin compares correctly
+                EventCategory::cases(),
             ))
             ->formatValue(fn ($v) => $v instanceof EventCategory ? ucfirst($v->value) : ucfirst((string) $v));
         yield IntegerField::new('weight')
@@ -44,8 +46,8 @@ class GameEventTemplateCrudController extends AbstractCrudController
             ->hideOnIndex();
         yield TextareaField::new('impactsJson', 'Impacts (JSON)')
             ->setHelp(
-                'Array of impact descriptors. Example: [{"target":"player.morale","delta":-10},{"target":"academy.reputation","delta":5}]. ' .
-                'target can be: player.morale, player.confidence, player.energy, academy.reputation, academy.finances, staff.morale.'
+                'Array of impact descriptors. Example: [{"target":"player.morale","delta":-10}]. ' .
+                'target: player.morale, player.confidence, player.energy, academy.reputation, academy.finances, staff.morale.'
             )
             ->hideOnIndex()
             ->setNumOfRows(6)
@@ -58,6 +60,13 @@ class GameEventTemplateCrudController extends AbstractCrudController
             ->setRequired(false)
             ->setHelp('JSON: maxSquadMorale, maxPairRelationship, requiresCoLocation, actorTraitRequirements, subjectTraitRequirements')
             ->hideOnIndex();
+        yield CollectionField::new('chainedEventsArray', 'Chained Events')
+            ->setEntryType(ChainLinkType::class)
+            ->allowAdd()
+            ->allowDelete()
+            ->setRequired(false)
+            ->hideOnIndex()
+            ->setHelp('Each entry boosts a follow-up event\'s weight for the same player pair after this event fires.');
         yield DateTimeField::new('createdAt')->hideOnForm();
     }
 }
