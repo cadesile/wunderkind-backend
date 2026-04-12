@@ -27,16 +27,19 @@ class TraitRequirementType extends AbstractType
             ->add('trait', ChoiceType::class, [
                 'label'   => 'Trait',
                 'choices' => self::TRAITS,
+                'help'    => 'The personality trait the player must satisfy for this event to be eligible.',
             ])
             ->add('min', NumberType::class, [
                 'label'    => 'Min (1–20)',
                 'required' => false,
                 'attr'     => ['min' => 1, 'max' => 20],
+                'help'     => 'Player\'s trait value must be at or above this. Leave blank for no lower bound.',
             ])
             ->add('max', NumberType::class, [
                 'label'    => 'Max (1–20)',
                 'required' => false,
                 'attr'     => ['min' => 1, 'max' => 20],
+                'help'     => 'Player\'s trait value must be at or below this. Leave blank for no upper bound.',
             ]);
     }
 

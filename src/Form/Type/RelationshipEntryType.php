@@ -17,18 +17,22 @@ class RelationshipEntryType extends AbstractType
             ->add('type', ChoiceType::class, [
                 'label'   => 'Type',
                 'choices' => ['Rivalry' => 'rivalry', 'Friendship' => 'friendship'],
+                'help'    => 'rivalry creates a negative dynamic between the players; friendship creates a positive one.',
             ])
             ->add('player_1_ref', TextType::class, [
-                'label' => 'Player 1 Ref (e.g. player_1)',
+                'label' => 'Player 1 Ref',
                 'attr'  => ['placeholder' => 'player_1'],
+                'help'  => 'Reference token for the first player. Use player_1 or player_2 (the actors selected by selection logic).',
             ])
             ->add('player_2_ref', TextType::class, [
-                'label' => 'Player 2 Ref (e.g. player_2)',
+                'label' => 'Player 2 Ref',
                 'attr'  => ['placeholder' => 'player_2'],
+                'help'  => 'Reference token for the second player. Use player_1 or player_2.',
             ])
             ->add('intensity', NumberType::class, [
                 'label' => 'Intensity',
                 'scale' => 0,
+                'help'  => 'Relationship strength on a 1–100 scale. Higher values produce stronger in-game behavioural effects.',
             ]);
     }
 

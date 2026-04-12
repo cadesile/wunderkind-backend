@@ -27,16 +27,19 @@ class DurationConfigType extends AbstractType
             ->add('ticks', IntegerType::class, [
                 'label' => 'Duration (ticks)',
                 'attr'  => ['min' => 1],
+                'help'  => 'Number of weekly ticks this event\'s effect persists. 1 tick = 1 in-game week.',
             ])
             ->add('completion_event_slug', ChoiceType::class, [
                 'label'       => 'Completion Event',
                 'choices'     => $slugChoices,
-                'placeholder' => '— select event —',
+                'placeholder' => '— none —',
                 'required'    => false,
+                'help'        => 'Optional event that fires automatically when the duration expires.',
             ])
             ->add('tick_effect', StatChangeType::class, [
-                'label'    => 'Tick Effect (optional stat change each tick)',
+                'label'    => 'Tick Effect',
                 'required' => false,
+                'help'     => 'Optional stat change applied once per tick for the duration of this event.',
             ]);
     }
 

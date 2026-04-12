@@ -13,9 +13,18 @@ class EventChoiceType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
-            ->add('emoji', TextType::class, ['label' => 'Emoji'])
-            ->add('label', TextType::class, ['label' => 'Label'])
-            ->add('manager_shift', ManagerShiftType::class, ['label' => 'Manager Shift'])
+            ->add('emoji', TextType::class, [
+                'label' => 'Emoji',
+                'help'  => 'Single emoji character displayed on the choice button in the app.',
+            ])
+            ->add('label', TextType::class, [
+                'label' => 'Label',
+                'help'  => 'Short button text shown to the manager, e.g. "Intervene" or "Ignore".',
+            ])
+            ->add('manager_shift', ManagerShiftType::class, [
+                'label' => 'Manager Shift',
+                'help'  => 'How selecting this choice adjusts the manager\'s personality ratings (positive or negative integers).',
+            ])
             ->add('stat_changes', TextareaType::class, [
                 'label'    => 'Stat Changes (JSON array)',
                 'required' => false,

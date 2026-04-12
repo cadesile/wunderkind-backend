@@ -15,20 +15,24 @@ class StatChangeType extends AbstractType
     {
         $builder
             ->add('target', TextType::class, [
-                'label' => 'Target (e.g. player_1, squad_wide)',
+                'label' => 'Target',
                 'attr'  => ['placeholder' => 'player_1'],
+                'help'  => 'Who is affected. Use player_1, player_2, or squad_wide. For pair events the actor is player_1.',
             ])
             ->add('field', TextType::class, [
-                'label' => 'Field (e.g. morale, overallRating)',
+                'label' => 'Field',
                 'attr'  => ['placeholder' => 'morale'],
+                'help'  => 'The stat property to modify, e.g. morale, overallRating, condition.',
             ])
             ->add('operator', ChoiceType::class, [
                 'label'   => 'Operator',
                 'choices' => ['Add' => 'add', 'Subtract' => 'subtract', 'Set' => 'set'],
+                'help'    => 'add / subtract adjusts relative to the current value. set forces an absolute value.',
             ])
             ->add('value', NumberType::class, [
                 'label' => 'Value',
                 'scale' => 0,
+                'help'  => 'Integer amount to add, subtract, or assign.',
             ]);
     }
 

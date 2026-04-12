@@ -17,22 +17,27 @@ class FiringConditionsType extends AbstractType
             ->add('minSquadMorale', NumberType::class, [
                 'label'    => 'Min Squad Morale',
                 'required' => false,
+                'help'     => 'Overall squad morale must be at or above this for the event to be eligible (0–100). Leave blank for no lower bound.',
             ])
             ->add('maxSquadMorale', NumberType::class, [
                 'label'    => 'Max Squad Morale',
                 'required' => false,
+                'help'     => 'Overall squad morale must be at or below this for the event to be eligible (0–100). Leave blank for no upper bound.',
             ])
             ->add('minPairRelationship', NumberType::class, [
                 'label'    => 'Min Pair Relationship',
                 'required' => false,
+                'help'     => 'Current relationship score between the two selected players must be at or above this (-100–100). Leave blank for no lower bound.',
             ])
             ->add('maxPairRelationship', NumberType::class, [
                 'label'    => 'Max Pair Relationship',
                 'required' => false,
+                'help'     => 'Current relationship score between the two selected players must be at or below this (-100–100). Leave blank for no upper bound.',
             ])
             ->add('requiresCoLocation', CheckboxType::class, [
-                'label'    => 'Requires Co-Location (same coach)',
+                'label'    => 'Requires Co-Location',
                 'required' => false,
+                'help'     => 'When checked, both players must share the same training coach for this event to fire.',
             ])
             ->add('actorTraitRequirements', CollectionType::class, [
                 'label'        => 'Actor Trait Requirements',
@@ -41,6 +46,7 @@ class FiringConditionsType extends AbstractType
                 'allow_delete' => true,
                 'required'     => false,
                 'by_reference' => false,
+                'help'         => 'Personality trait conditions the primary actor (player_1) must satisfy.',
             ])
             ->add('subjectTraitRequirements', CollectionType::class, [
                 'label'        => 'Subject Trait Requirements',
@@ -49,6 +55,7 @@ class FiringConditionsType extends AbstractType
                 'allow_delete' => true,
                 'required'     => false,
                 'by_reference' => false,
+                'help'         => 'Personality trait conditions the secondary actor (player_2) must satisfy.',
             ]);
     }
 
