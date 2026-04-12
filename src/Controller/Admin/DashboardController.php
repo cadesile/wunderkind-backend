@@ -11,6 +11,7 @@ use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\EconomicService;
 use App\Service\MarketPoolService;
+use App\Service\NarrativeImportExportService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
@@ -19,8 +20,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -332,6 +335,84 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
     }
 
+    // ── Narrative Content ─────────────────────────────────────────────────
+
+    #[Route('/admin/narrative/content', name: 'admin_narrative_content')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function narrativeContent(): Response
+    {
+        return $this->render('admin/narrative_content.html.twig');
+    }
+
+    #[Route('/admin/narrative/export', name: 'admin_narrative_export', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function narrativeExport(NarrativeImportExportService $service): StreamedResponse
+    {
+        $data     = $service->export();
+        $filename = 'wunderkind-narrative-' . date('Y-m-d') . '.json';
+        $json     = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $response = new StreamedResponse(function () use ($json) {
+            echo $json;
+        });
+
+        $disposition = HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename);
+        $response->headers->set('Content-Type', 'application/json');
+        $response->headers->set('Content-Disposition', $disposition);
+
+        return $response;
+    }
+
+    #[Route('/admin/narrative/import', name: 'admin_narrative_import', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function narrativeImport(Request $request, NarrativeImportExportService $service): Response
+    {
+        if (!$this->isCsrfTokenValid('narrative_import', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_narrative_content']));
+        }
+
+        $file = $request->files->get('narrative_file');
+        if ($file === null || !$file->isValid()) {
+            $this->addFlash('danger', 'No valid file uploaded.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_narrative_content']));
+        }
+
+        $raw = file_get_contents($file->getPathname());
+        if ($raw === false) {
+            $this->addFlash('danger', 'Could not read uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_narrative_content']));
+        }
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $this->addFlash('danger', 'Invalid JSON — could not parse the uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_narrative_content']));
+        }
+
+        $clearFirst = $request->request->has('clear_before_import');
+        if ($clearFirst) {
+            $service->clearAll();
+            $this->addFlash('warning', 'Existing narrative data cleared before import.');
+        }
+
+        $result = $service->import($data);
+
+        if (!empty($result['errors'])) {
+            foreach ($result['errors'] as $error) {
+                $this->addFlash('warning', $error);
+            }
+        }
+
+        $this->addFlash('success', sprintf(
+            'Import complete — %d created, %d updated.',
+            $result['created'],
+            $result['updated'],
+        ));
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_narrative_content']));
+    }
+
     // ── Developer Tools ───────────────────────────────────────────────────
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
@@ -415,7 +496,7 @@ class DashboardController extends AbstractDashboardController
         $conn->executeStatement('DELETE FROM agent');
         $conn->executeStatement('DELETE FROM investor');
         $conn->executeStatement('DELETE FROM sponsor');
-        $conn->executeStatement('DELETE FROM facility');
+        // facility table removed — facility_template is config, intentionally preserved
         $conn->executeStatement('DELETE FROM academy');
         $conn->executeStatement('DELETE FROM refresh_tokens');
         $conn->executeStatement('DELETE FROM "user"');
@@ -452,7 +533,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users');
         yield MenuItem::section('Narrative');
         yield MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll');
+        yield MenuItem::linkTo(FacilityTemplateCrudController::class, 'Facility Templates', 'fa fa-building');
         yield MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater');
+        yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content');
         yield MenuItem::section('Configuration');
         yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
         yield MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config');

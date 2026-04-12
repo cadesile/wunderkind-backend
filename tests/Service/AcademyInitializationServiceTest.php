@@ -6,33 +6,10 @@ namespace App\Tests\Service;
 
 use App\Entity\Academy;
 use App\Entity\User;
-use App\Service\AcademyInitializationService;
-use App\Service\FacilityService;
-use App\Service\MarketPoolService;
-use Doctrine\ORM\EntityManagerInterface;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 class AcademyInitializationServiceTest extends TestCase
 {
-    private MarketPoolService&MockObject $pool;
-    private FacilityService&MockObject $facilityService;
-    private EntityManagerInterface&MockObject $em;
-    private AcademyInitializationService $service;
-
-    protected function setUp(): void
-    {
-        $this->pool            = $this->createMock(MarketPoolService::class);
-        $this->facilityService = $this->createMock(FacilityService::class);
-        $this->em              = $this->createMock(EntityManagerInterface::class);
-
-        $this->service = new AcademyInitializationService(
-            $this->pool,
-            $this->facilityService,
-            $this->em,
-        );
-    }
-
     public function testNewAcademyReceivesPaName(): void
     {
         $user    = $this->createMock(User::class);
