@@ -48,7 +48,7 @@ class EventImpactsType extends AbstractType
             ]);
 
         // Strip null/empty sub-objects so the entity stays clean
-        $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
+        $builder->addEventListener(FormEvents::SUBMIT, static function (FormEvent $event): void {
             $data = $event->getData();
             if (!is_array($data)) return;
             foreach (['selection_logic', 'duration_config'] as $key) {
