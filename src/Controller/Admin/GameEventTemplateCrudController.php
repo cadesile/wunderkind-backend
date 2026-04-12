@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
 use App\Form\Type\ChainLinkType;
+use App\Form\Type\EventImpactsType;
 use App\Form\Type\FiringConditionsType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
@@ -46,14 +47,11 @@ class GameEventTemplateCrudController extends AbstractCrudController
         yield TextareaField::new('bodyTemplate')
             ->setHelp('Use {player}, {staff}, {facility}, {amount} as placeholders.')
             ->hideOnIndex();
-        yield TextareaField::new('impactsJson', 'Impacts (JSON)')
-            ->setHelp(
-                'Array of impact descriptors. Example: [{"target":"player.morale","delta":-10}]. ' .
-                'target: player.morale, player.confidence, player.energy, academy.reputation, academy.finances, staff.morale.'
-            )
+        yield Field::new('impacts', 'Impacts')
+            ->setFormType(EventImpactsType::class)
+            ->setRequired(false)
             ->hideOnIndex()
-            ->setNumOfRows(6)
-            ->setRequired(false);
+            ->setHelp('Configure all stat changes, relationships, choices, and duration for this event.');
         yield ChoiceField::new('severity')
             ->setChoices(['Minor' => 'minor', 'Major' => 'major'])
             ->setRequired(false)
