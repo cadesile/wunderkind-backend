@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace App\Tests\Repository;
+namespace App\Tests\Entity;
 
 use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
 use PHPUnit\Framework\TestCase;
 
-class GameEventTemplateRepositoryTest extends TestCase
+class GameEventTemplateTest extends TestCase
 {
     public function testGameEventTemplateConstructor(): void
     {
@@ -115,5 +115,45 @@ class GameEventTemplateRepositoryTest extends TestCase
         );
 
         $this->assertSame('[]', $template->getChainedEventsJson());
+    }
+
+    public function testGetChainedEventsWithoutNotesReturnsNullWhenChainedEventsIsNull(): void
+    {
+        $template = new GameEventTemplate(
+            'test_event',
+            EventCategory::PLAYER,
+            'Test',
+            'Body.',
+        );
+
+        $this->assertNull($template->getChainedEventsWithoutNotes());
+    }
+
+    public function testGetChainedEventsWithoutNotesStripsNoteField(): void
+    {
+        $template = new GameEventTemplate(
+            'player-argument',
+            EventCategory::NPC_INTERACTION,
+            'Argument',
+            'Two players argue.',
+        );
+
+        $template->setChainedEventsArray([
+            [
+                'nextEventSlug'   => 'player-fight',
+                'boostMultiplier' => 4.0,
+                'windowWeeks'     => 4,
+                'note'            => 'Admin note here',
+            ],
+        ]);
+
+        $result = $template->getChainedEventsWithoutNotes();
+
+        $this->assertIsArray($result);
+        $this->assertCount(1, $result);
+        $this->assertSame('player-fight', $result[0]['nextEventSlug']);
+        $this->assertSame(4.0, $result[0]['boostMultiplier']);
+        $this->assertSame(4, $result[0]['windowWeeks']);
+        $this->assertArrayNotHasKey('note', $result[0]);
     }
 }
