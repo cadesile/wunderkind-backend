@@ -5,12 +5,14 @@ namespace App\Controller\Admin;
 use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
 use App\Form\Type\ChainLinkType;
+use App\Form\Type\FiringConditionsType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
@@ -56,10 +58,11 @@ class GameEventTemplateCrudController extends AbstractCrudController
             ->setChoices(['Minor' => 'minor', 'Major' => 'major'])
             ->setRequired(false)
             ->setHelp('minor = read-only inbox report. major = AMP must respond.');
-        yield TextareaField::new('firingConditionsJson', 'Firing Conditions (JSON)')
+        yield Field::new('firingConditions', 'Firing Conditions')
+            ->setFormType(FiringConditionsType::class)
             ->setRequired(false)
-            ->setHelp('JSON: maxSquadMorale, maxPairRelationship, requiresCoLocation, actorTraitRequirements, subjectTraitRequirements')
-            ->hideOnIndex();
+            ->hideOnIndex()
+            ->setHelp('Leave blank for events with no firing conditions.');
         yield CollectionField::new('chainedEventsArray', 'Chained Events')
             ->setEntryType(ChainLinkType::class)
             ->allowAdd()
