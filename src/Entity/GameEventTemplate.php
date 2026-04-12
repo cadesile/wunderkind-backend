@@ -52,6 +52,13 @@ class GameEventTemplate
     #[ORM\Column(length: 10, nullable: true)]
     private ?string $severity = null;
 
+    /**
+     * Optional chain links — each entry boosts the weight of another event for the same
+     * player pair within a configurable time window.
+     * Shape: [{ nextEventSlug: string, boostMultiplier: float, windowWeeks: int, note: string|null }]
+     *
+     * @var array<int, array<string, mixed>>|null
+     */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $chainedEvents = null;
 
@@ -154,6 +161,7 @@ class GameEventTemplate
     public function setChainedEventsJson(?string $json): void
     {
         $trimmed = trim($json ?? '');
+        // Both empty string and '[]' mean "no chains configured"
         if ($trimmed === '' || $trimmed === '[]') {
             $this->chainedEvents = null;
             return;
@@ -164,18 +172,19 @@ class GameEventTemplate
 
     /**
      * Returns chainedEvents stripped of the admin-only 'note' field.
-     * This is what the frontend API receives.
+     * This is what the frontend API receives. Keys are present but may be null
+     * if a stored link is missing expected fields.
      *
-     * @return array<int, array{nextEventSlug: string, boostMultiplier: float, windowWeeks: int}>|null
+     * @return array<int, array{nextEventSlug: string|null, boostMultiplier: float|null, windowWeeks: int|null}>|null
      */
     public function getChainedEventsWithoutNotes(): ?array
     {
         if ($this->chainedEvents === null) return null;
 
         return array_map(static fn (array $link) => [
-            'nextEventSlug'   => $link['nextEventSlug'],
-            'boostMultiplier' => $link['boostMultiplier'],
-            'windowWeeks'     => $link['windowWeeks'],
+            'nextEventSlug'   => $link['nextEventSlug'] ?? null,
+            'boostMultiplier' => $link['boostMultiplier'] ?? null,
+            'windowWeeks'     => $link['windowWeeks'] ?? null,
         ], $this->chainedEvents);
     }
 
