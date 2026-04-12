@@ -12,6 +12,7 @@ use App\Enum\PlayerStatus;
 use App\Enum\TransferType;
 use App\Entity\Academy;
 use App\Repository\AcademyRepository;
+use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -25,6 +26,7 @@ class SyncService
         private readonly EconomicService            $economicService,
         private readonly InboxService               $inboxService,
         private readonly GameConfigRepository       $gameConfigRepository,
+        private readonly FacilityTemplateRepository $facilityTemplateRepository,
     ) {}
 
     /**
@@ -224,11 +226,17 @@ class SyncService
             'debugLoggingEnabled'                        => false,
         ];
 
+        $facilityTemplates = array_map(
+            fn ($t) => $t->toArray(),
+            $this->facilityTemplateRepository->getActiveTemplates(),
+        );
+
         return [
-            'accepted'   => true,
-            'weekNumber' => $request->weekNumber,
-            'syncedAt'   => $syncedAt->format(\DateTimeInterface::ATOM),
-            'academy'    => [
+            'accepted'          => true,
+            'weekNumber'        => $request->weekNumber,
+            'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
+            'facilityTemplates' => $facilityTemplates,
+            'academy'           => [
                 'reputation'          => $academy->getReputation(),
                 'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
                 'hallOfFamePoints'    => $academy->getHallOfFamePoints(),

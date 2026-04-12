@@ -52,6 +52,16 @@ class GameEventTemplate
     #[ORM\Column(length: 10, nullable: true)]
     private ?string $severity = null;
 
+    /**
+     * Optional chain links — each entry boosts the weight of another event for the same
+     * player pair within a configurable time window.
+     * Shape: [{ nextEventSlug: string, boostMultiplier: float, windowWeeks: int, note: string|null }]
+     *
+     * @var array<int, array<string, mixed>>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $chainedEvents = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -119,9 +129,9 @@ class GameEventTemplate
             : '';
     }
 
-    public function setFiringConditionsJson(string $json): void
+    public function setFiringConditionsJson(?string $json): void
     {
-        $trimmed = trim($json);
+        $trimmed = trim($json ?? '');
         if ($trimmed === '') {
             $this->firingConditions = null;
             return;
@@ -132,6 +142,51 @@ class GameEventTemplate
 
     public function getSeverity(): ?string { return $this->severity; }
     public function setSeverity(?string $severity): void { $this->severity = $severity; }
+
+    public function getChainedEvents(): ?array { return $this->chainedEvents; }
+    public function setChainedEvents(?array $chainedEvents): void { $this->chainedEvents = $chainedEvents; }
+
+    /** Returns the chainedEvents array, defaulting to [] for form binding. */
+    public function getChainedEventsArray(): array { return $this->chainedEvents ?? []; }
+    public function setChainedEventsArray(array $links): void { $this->chainedEvents = empty($links) ? null : $links; }
+
+    /** Virtual accessor for raw-JSON admin textarea (kept for import/export). */
+    public function getChainedEventsJson(): string
+    {
+        return $this->chainedEvents !== null
+            ? (json_encode($this->chainedEvents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]')
+            : '[]';
+    }
+
+    public function setChainedEventsJson(?string $json): void
+    {
+        $trimmed = trim($json ?? '');
+        // Both empty string and '[]' mean "no chains configured"
+        if ($trimmed === '' || $trimmed === '[]') {
+            $this->chainedEvents = null;
+            return;
+        }
+        $decoded = json_decode($trimmed, true);
+        $this->chainedEvents = is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Returns chainedEvents stripped of the admin-only 'note' field.
+     * This is what the frontend API receives. Keys are present but may be null
+     * if a stored link is missing expected fields.
+     *
+     * @return array<int, array{nextEventSlug: string|null, boostMultiplier: float|null, windowWeeks: int|null}>|null
+     */
+    public function getChainedEventsWithoutNotes(): ?array
+    {
+        if ($this->chainedEvents === null) return null;
+
+        return array_map(static fn (array $link) => [
+            'nextEventSlug'   => $link['nextEventSlug'] ?? null,
+            'boostMultiplier' => $link['boostMultiplier'] ?? null,
+            'windowWeeks'     => $link['windowWeeks'] ?? null,
+        ], $this->chainedEvents);
+    }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }
