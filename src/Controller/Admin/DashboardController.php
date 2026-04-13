@@ -11,6 +11,7 @@ use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\EconomicService;
 use App\Service\MarketPoolService;
+use App\Service\ConfigImportExportService;
 use App\Service\NarrativeImportExportService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
@@ -413,6 +414,76 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_narrative_content']));
     }
 
+    // ── Config Import / Export ────────────────────────────────────────────
+
+    #[Route('/admin/config/content', name: 'admin_config_content')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function configContent(): Response
+    {
+        return $this->render('admin/config_content.html.twig');
+    }
+
+    #[Route('/admin/config/export', name: 'admin_config_export', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function configExport(ConfigImportExportService $service): StreamedResponse
+    {
+        $data     = $service->export();
+        $filename = 'wunderkind-config-' . date('Y-m-d') . '.json';
+        $json     = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $response = new StreamedResponse(function () use ($json) {
+            echo $json;
+        });
+
+        $disposition = HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename);
+        $response->headers->set('Content-Type', 'application/json');
+        $response->headers->set('Content-Disposition', $disposition);
+
+        return $response;
+    }
+
+    #[Route('/admin/config/import', name: 'admin_config_import', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function configImport(Request $request, ConfigImportExportService $service): Response
+    {
+        if (!$this->isCsrfTokenValid('config_import', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
+        }
+
+        $file = $request->files->get('config_file');
+        if ($file === null || !$file->isValid()) {
+            $this->addFlash('danger', 'No valid file uploaded.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
+        }
+
+        $raw = file_get_contents($file->getPathname());
+        if ($raw === false) {
+            $this->addFlash('danger', 'Could not read uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
+        }
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $this->addFlash('danger', 'Invalid JSON — could not parse the uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
+        }
+
+        $result = $service->import($data);
+
+        if (!empty($result['errors'])) {
+            foreach ($result['errors'] as $error) {
+                $this->addFlash('warning', $error);
+            }
+        }
+
+        if ($result['applied']) {
+            $this->addFlash('success', 'Config imported successfully.');
+        }
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
+    }
+
     // ── Developer Tools ───────────────────────────────────────────────────
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
@@ -540,6 +611,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
         yield MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config');
         yield MenuItem::linkToRoute('Pool Config', 'fa fa-layer-group', 'admin_pool_config');
+        yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::section('Market');
