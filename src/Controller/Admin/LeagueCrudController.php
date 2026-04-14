@@ -11,6 +11,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
@@ -46,15 +47,12 @@ class LeagueCrudController extends AbstractCrudController
             ->setHelp('Default "League {tier}", overridable e.g. "Premier League"');
 
         yield ChoiceField::new('leagueReputationTier')
-            ->setChoices([
-                'Local'    => ReputationTier::LOCAL->value,
-                'Regional' => ReputationTier::REGIONAL->value,
-                'National' => ReputationTier::NATIONAL->value,
-                'Elite'    => ReputationTier::ELITE->value,
+            ->setFormType(EnumType::class)
+            ->setFormTypeOptions([
+                'class'       => ReputationTier::class,
+                'required'    => false,
+                'placeholder' => '-- Not set --',
             ])
-            ->allowMultipleChoices(false)
-            ->renderAsBadges(false)
-            ->setRequired(false)
             ->hideOnIndex()
             ->setHelp('Determines which sponsor sizes are available (Local=Small, Regional=Small+Medium, National=Medium+Large, Elite=Large)');
 
