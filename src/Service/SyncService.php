@@ -196,6 +196,14 @@ class SyncService
             'guardianIgnoreSiblingMoralePenalty'         => $gameConfig->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => $gameConfig->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
             'debugLoggingEnabled'                        => $gameConfig->isDebugLoggingEnabled(),
+            // League finances
+            'smallSponsorMin'               => $gameConfig->getSmallSponsorMin(),
+            'smallSponsorMax'               => $gameConfig->getSmallSponsorMax(),
+            'mediumSponsorMin'              => $gameConfig->getMediumSponsorMin(),
+            'mediumSponsorMax'              => $gameConfig->getMediumSponsorMax(),
+            'largeSponsorMin'               => $gameConfig->getLargeSponsorMin(),
+            'largeSponsorMax'               => $gameConfig->getLargeSponsorMax(),
+            'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -234,6 +242,14 @@ class SyncService
             'guardianIgnoreSiblingMoralePenalty'         => 5,
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => 2,
             'debugLoggingEnabled'                        => false,
+            // League finances
+            'smallSponsorMin'               => 0,
+            'smallSponsorMax'               => 0,
+            'mediumSponsorMin'              => 0,
+            'mediumSponsorMax'              => 0,
+            'largeSponsorMin'               => 0,
+            'largeSponsorMax'               => 0,
+            'leaguePositionDecreasePercent' => 5,
         ];
 
         $facilityTemplates = array_map(
@@ -340,8 +356,6 @@ class SyncService
     /**
      * Builds the league snapshot array for the sync response.
      * Returns null if the academy has no current league.
-     *
-     * @return array{id: string, tier: int, name: string, country: string, season: int, clubs: array<int, array>}|null
      */
     private function buildLeagueSnapshot(Academy $academy): ?array
     {
@@ -349,14 +363,29 @@ class SyncService
         if ($league === null) {
             return null;
         }
-        $clubs = $this->npcClubRepository->findByLeague($league);
+
+        $gameConfig = $this->gameConfigRepository->getConfig();
+        $clubs      = $this->npcClubRepository->findByLeague($league);
+
+        $sponsorPot = 0;
+        foreach ($league->getLeagueSponsors() as $ls) {
+            $sponsorPot += $ls->getRolledValue();
+        }
+
         return [
-            'id'      => (string) $league->getId(),
-            'tier'    => $league->getTier(),
-            'name'    => $league->getName(),
-            'country' => $league->getCountry(),
-            'season'  => $academy->getCurrentSeason(),
-            'clubs'   => array_map(fn(NpcClub $c) => [
+            'id'                            => (string) $league->getId(),
+            'tier'                          => $league->getTier(),
+            'name'                          => $league->getName(),
+            'country'                       => $league->getCountry(),
+            'season'                        => $academy->getCurrentSeason(),
+            'promotionSpots'                => $league->getPromotionSpots(),
+            'reputationTier'                => $league->getLeagueReputationTier()?->value,
+            'tvDeal'                        => $league->getTvDeal(),
+            'sponsorPot'                    => $sponsorPot,
+            'prizeMoney'                    => $league->getPrizeMoney(),
+            'leaguePositionPot'             => $league->getLeaguePositionPot(),
+            'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+            'clubs'                         => array_map(fn(NpcClub $c) => [
                 'id'             => (string) $c->getId(),
                 'name'           => $c->getName(),
                 'reputation'     => $c->getReputation(),

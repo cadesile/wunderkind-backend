@@ -65,6 +65,15 @@ class GameConfigController extends AbstractController
 
             // Developer / Debug
             'debugLoggingEnabled'                          => $config->isDebugLoggingEnabled(),
+
+            // League finances
+            'smallSponsorMin'               => $config->getSmallSponsorMin(),
+            'smallSponsorMax'               => $config->getSmallSponsorMax(),
+            'mediumSponsorMin'              => $config->getMediumSponsorMin(),
+            'mediumSponsorMax'              => $config->getMediumSponsorMax(),
+            'largeSponsorMin'               => $config->getLargeSponsorMin(),
+            'largeSponsorMax'               => $config->getLargeSponsorMax(),
+            'leaguePositionDecreasePercent' => $config->getLeaguePositionDecreasePercent(),
         ]);
     }
 }
