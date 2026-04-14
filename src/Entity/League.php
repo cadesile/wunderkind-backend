@@ -115,7 +115,7 @@ class League
     {
         $this->sponsors->removeElement($sponsor);
         foreach ($this->leagueSponsors as $ls) {
-            if ($ls->getSponsor() === $sponsor) {
+            if ((string) $ls->getSponsor()->getId() === (string) $sponsor->getId()) {
                 $this->leagueSponsors->removeElement($ls);
                 break;
             }

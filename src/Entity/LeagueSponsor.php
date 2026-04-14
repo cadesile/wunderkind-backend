@@ -5,7 +5,7 @@ namespace App\Entity;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
-#[ORM\Table(name: 'league_sponsor')]
+#[ORM\Table(name: 'league_sponsor_income')]
 class LeagueSponsor
 {
     #[ORM\Id]
