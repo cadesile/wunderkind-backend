@@ -101,6 +101,31 @@ class SyncRequest
     }
 
     /**
+     * @var MatchResultDto[]
+     */
+    #[Assert\Valid]
+    #[Assert\All([new Assert\Type(MatchResultDto::class)])]
+    public array $matchResults = [];
+
+    /**
+     * @param array<array{opponentClubId?: string, goalsFor?: int, goalsAgainst?: int, week?: int}|MatchResultDto> $matchResults
+     */
+    public function setMatchResults(array $matchResults): void
+    {
+        $this->matchResults = array_map(static function (array|MatchResultDto $item): MatchResultDto {
+            if ($item instanceof MatchResultDto) {
+                return $item;
+            }
+            $dto                 = new MatchResultDto();
+            $dto->opponentClubId = $item['opponentClubId'] ?? '';
+            $dto->goalsFor       = (int) ($item['goalsFor'] ?? 0);
+            $dto->goalsAgainst   = (int) ($item['goalsAgainst'] ?? 0);
+            $dto->week           = (int) ($item['week'] ?? 1);
+            return $dto;
+        }, $matchResults);
+    }
+
+    /**
      * Manager personality shift deltas sent by the client each week.
      * Keys: 'temperament', 'discipline', 'ambition'. Values: signed int deltas.
      *
