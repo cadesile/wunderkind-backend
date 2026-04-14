@@ -35,7 +35,7 @@ class NpcClub
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $stadiumName = null;
 
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'bigint')]
     private int $balance;
 
     #[ORM\Column(type: 'json')]
