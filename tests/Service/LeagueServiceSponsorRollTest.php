@@ -101,4 +101,24 @@ class LeagueServiceSponsorRollTest extends TestCase
 
         $this->assertSame(25000, $total);
     }
+
+    public function testRollUsesLargeSponsorRange(): void
+    {
+        $league  = new League('EN', 1, 'League 1');
+        $sponsor = new Sponsor('Big Corp');
+        $sponsor->setSize(CompanySize::LARGE);
+        $league->addSponsor($sponsor);
+
+        $config = new GameConfig();
+        $config->setLargeSponsorMin(200000);
+        $config->setLargeSponsorMax(1000000);
+
+        $service = $this->makeService();
+        $total   = $service->rollLeagueSponsors($league, $config);
+
+        $ls = $league->getLeagueSponsors()->first();
+        $this->assertGreaterThanOrEqual(200000, $ls->getRolledValue());
+        $this->assertLessThanOrEqual(1000000, $ls->getRolledValue());
+        $this->assertSame($ls->getRolledValue(), $total);
+    }
 }
