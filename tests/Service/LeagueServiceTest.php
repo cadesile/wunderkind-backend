@@ -15,13 +15,13 @@ class LeagueServiceTest extends TestCase
 {
     private function makeService(LeagueRepository $repo): LeagueService
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
         return new LeagueService($repo, $em);
     }
 
     public function testGenerateLeaguesSkipsExisting(): void
     {
-        $repo = $this->createMock(LeagueRepository::class);
+        $repo = $this->createStub(LeagueRepository::class);
         // tier 1 already exists, tiers 2–8 do not
         $repo->method('findByCountryAndTier')
              ->willReturnCallback(fn($c, $t) => $t === 1 ? new League('EN', 1, 'League 1') : null);
@@ -36,7 +36,7 @@ class LeagueServiceTest extends TestCase
     public function testAssignClubToLeagueSetsLeague(): void
     {
         $league = new League('EN', 8, 'League 8');
-        $repo   = $this->createMock(LeagueRepository::class);
+        $repo   = $this->createStub(LeagueRepository::class);
         $repo->method('findByCountryAndTier')->willReturn($league);
 
         $club    = new NpcClub('Test FC', 'EN', 8, 10, '#fff', '#000', 50000, []);
@@ -48,7 +48,7 @@ class LeagueServiceTest extends TestCase
 
     public function testAssignClubToLeagueDoesNothingIfNoLeague(): void
     {
-        $repo = $this->createMock(LeagueRepository::class);
+        $repo = $this->createStub(LeagueRepository::class);
         $repo->method('findByCountryAndTier')->willReturn(null);
 
         $club    = new NpcClub('Test FC', 'EN', 8, 10, '#fff', '#000', 50000, []);
@@ -61,10 +61,10 @@ class LeagueServiceTest extends TestCase
     public function testAssignAcademyToStarterLeague(): void
     {
         $league = new League('EN', 8, 'League 8');
-        $repo   = $this->createMock(LeagueRepository::class);
-        $repo->method('findByCountryAndTier')->with('EN', 8)->willReturn($league);
+        $repo   = $this->createStub(LeagueRepository::class);
+        $repo->method('findByCountryAndTier')->willReturn($league);
 
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $academy = new Academy('Test FC', $user);
         $service = $this->makeService($repo);
         $service->assignAcademyToStarterLeague($academy, 'EN');

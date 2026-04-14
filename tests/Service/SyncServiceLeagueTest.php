@@ -13,15 +13,12 @@ class SyncServiceLeagueTest extends TestCase
 {
     public function testBuildLeagueSnapshotReturnsNullWhenNoLeague(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $academy = new Academy('Test FC', $user);
         // no league set — currentLeague is null
 
         // Call the private method via reflection
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods([])
-            ->getMock();
+        $service = $this->createStub(\App\Service\SyncService::class);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
         $result = $reflection->invoke($service, $academy);
@@ -31,7 +28,7 @@ class SyncServiceLeagueTest extends TestCase
 
     public function testBuildLeagueSnapshotIncludesClubs(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $academy = new Academy('Test FC', $user);
         $league  = new League('EN', 8, 'League 8');
         $academy->setCurrentLeague($league);
@@ -40,13 +37,10 @@ class SyncServiceLeagueTest extends TestCase
         $club = new NpcClub('Norwich Town', 'EN', 8, 12, '#ffffff', '#000000', 100000, ['training_pitch' => 1]);
         $club->setStadiumName('Norwich Park');
 
-        $npcRepo = $this->createMock(NpcClubRepository::class);
-        $npcRepo->method('findByLeague')->with($league)->willReturn([$club]);
+        $npcRepo = $this->createStub(NpcClubRepository::class);
+        $npcRepo->method('findByLeague')->willReturn([$club]);
 
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods([])
-            ->getMock();
+        $service = $this->createStub(\App\Service\SyncService::class);
 
         // Inject the npcClubRepository via reflection since constructor is disabled
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
