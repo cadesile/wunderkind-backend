@@ -6,6 +6,7 @@ use App\Entity\FacilityTemplate;
 use App\Entity\NpcClub;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\NpcClubRepository;
+use App\Service\LeagueService;
 use App\Service\NpcClubGenerationService;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
@@ -26,7 +27,7 @@ class NpcClubGenerationServiceTest extends TestCase
 
         $repo->method('findBy')->willReturn($templates);
 
-        return new NpcClubGenerationService($em, $repo, $clubRepo);
+        return new NpcClubGenerationService($em, $repo, $clubRepo, $this->createStub(LeagueService::class));
     }
 
     public function testGeneratesCorrectCount(): void

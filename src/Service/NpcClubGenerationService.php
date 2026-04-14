@@ -8,6 +8,7 @@ use App\Entity\FacilityTemplate;
 use App\Entity\NpcClub;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\NpcClubRepository;
+use App\Service\LeagueService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class NpcClubGenerationService
@@ -62,9 +63,10 @@ class NpcClubGenerationService
     private const STANDS_SLUGS   = ['north_stand', 'south_stand', 'east_stand', 'west_stand'];
 
     public function __construct(
-        private readonly EntityManagerInterface $em,
-        private readonly FacilityTemplateRepository $facilityTemplateRepo,
-        private readonly NpcClubRepository $npcClubRepo,
+        private readonly EntityManagerInterface      $em,
+        private readonly FacilityTemplateRepository  $facilityTemplateRepo,
+        private readonly NpcClubRepository           $npcClubRepo,
+        private readonly LeagueService               $leagueService,
     ) {}
 
     /** @return NpcClub[] */
@@ -103,6 +105,7 @@ class NpcClubGenerationService
             $club->setStadiumName($stadiumName);
 
             $this->em->persist($club);
+            $this->leagueService->assignClubToLeague($club);
             $clubs[] = $club;
         }
 
