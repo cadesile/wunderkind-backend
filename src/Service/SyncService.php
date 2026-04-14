@@ -2,7 +2,11 @@
 
 namespace App\Service;
 
+use App\Dto\MatchResultDto;
 use App\Dto\SyncRequest;
+use App\Entity\Academy;
+use App\Entity\MatchResult;
+use App\Entity\NpcClub;
 use App\Entity\Player;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
@@ -10,11 +14,12 @@ use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\PlayerStatus;
 use App\Enum\TransferType;
-use App\Entity\Academy;
 use App\Repository\AcademyRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
+use App\Repository\MatchResultRepository;
+use App\Repository\NpcClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class SyncService
@@ -27,6 +32,8 @@ class SyncService
         private readonly InboxService               $inboxService,
         private readonly GameConfigRepository       $gameConfigRepository,
         private readonly FacilityTemplateRepository $facilityTemplateRepository,
+        private readonly NpcClubRepository          $npcClubRepository,
+        private readonly MatchResultRepository      $matchResultRepository,
     ) {}
 
     /**
@@ -139,6 +146,11 @@ class SyncService
             $this->processPlayerUpdates($academy, $request->players);
         }
 
+        // ── Match result persistence ──────────────────────────────────────────
+        if (!empty($request->matchResults)) {
+            $this->processMatchResults($academy, $request->matchResults);
+        }
+
         $this->em->flush();
 
         $syncedAt = $academy->getLastSyncedAt();
@@ -249,6 +261,7 @@ class SyncService
                 ],
             ],
             'gameConfig' => $gameConfigData,
+            'league'     => $this->buildLeagueSnapshot($academy),
         ];
     }
 
@@ -297,6 +310,66 @@ class SyncService
             if (isset($data['weight']))    { $player->setWeight((int) $data['weight']); }
             if (isset($data['morale']))    { $player->setMorale((int) $data['morale']); }
         }
+    }
+
+    /**
+     * Persists MatchResult entities from sync payload.
+     *
+     * @param MatchResultDto[] $results
+     */
+    private function processMatchResults(Academy $academy, array $results): void
+    {
+        foreach ($results as $dto) {
+            if (empty($dto->opponentClubId)) {
+                continue;
+            }
+            $opponent = $this->npcClubRepository->find($dto->opponentClubId);
+            if ($opponent === null) {
+                continue; // silently skip unknown clubs
+            }
+            $matchResult = new MatchResult(
+                academy:      $academy,
+                opponentClub: $opponent,
+                goalsFor:     $dto->goalsFor,
+                goalsAgainst: $dto->goalsAgainst,
+                week:         $dto->week,
+                season:       $academy->getCurrentSeason(),
+            );
+            $this->em->persist($matchResult);
+        }
+    }
+
+    /**
+     * Builds the league snapshot array for the sync response.
+     * Returns null if the academy has no current league.
+     *
+     * @return array{id: string, tier: int, name: string, country: string, season: int, clubs: array<int, array>}|null
+     */
+    private function buildLeagueSnapshot(Academy $academy, ?NpcClubRepository $npcRepo = null): ?array
+    {
+        $league = $academy->getCurrentLeague();
+        if ($league === null) {
+            return null;
+        }
+        $repo  = $npcRepo ?? $this->npcClubRepository;
+        $clubs = $repo->findByLeague($league);
+        return [
+            'id'      => (string) $league->getId(),
+            'tier'    => $league->getTier(),
+            'name'    => $league->getName(),
+            'country' => $league->getCountry(),
+            'season'  => $academy->getCurrentSeason(),
+            'clubs'   => array_map(fn(NpcClub $c) => [
+                'id'             => (string) $c->getId(),
+                'name'           => $c->getName(),
+                'reputation'     => $c->getReputation(),
+                'tier'           => $c->getTier(),
+                'primaryColor'   => $c->getPrimaryColor(),
+                'secondaryColor' => $c->getSecondaryColor(),
+                'stadiumName'    => $c->getStadiumName(),
+                'facilities'     => $c->getFacilities(),
+            ], $clubs),
+        ];
     }
 
     private function processTransfers(Academy $academy, array $transfers, \DateTimeImmutable $syncedAt): void
