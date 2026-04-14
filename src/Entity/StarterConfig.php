@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\ReputationTier;
 use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -47,6 +48,12 @@ class StarterConfig
     #[ORM\Column(type: 'string', length: 20)]
     private string $starterAcademyTier = 'local';
 
+    #[ORM\Column(type: 'json')]
+    private array $defaultFacilities = [];
+
+    #[ORM\Column(type: 'string', length: 20, enumType: ReputationTier::class)]
+    private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
+
     /** Returns a new instance pre-populated with all defaults. */
     public static function defaults(): self
     {
@@ -76,4 +83,24 @@ class StarterConfig
 
     public function getStarterAcademyTier(): string { return $this->starterAcademyTier; }
     public function setStarterAcademyTier(string $v): static { $this->starterAcademyTier = $v; return $this; }
+
+    public function getDefaultFacilities(): array { return $this->defaultFacilities; }
+    public function setDefaultFacilities(array $v): static { $this->defaultFacilities = $v; return $this; }
+
+    public function getDefaultFacilitiesJson(): string
+    {
+        if (empty($this->defaultFacilities)) {
+            return '{}';
+        }
+        return json_encode($this->defaultFacilities, JSON_PRETTY_PRINT) ?: '{}';
+    }
+
+    public function setDefaultFacilitiesJson(string $v): static
+    {
+        $this->defaultFacilities = json_decode($v, true) ?? [];
+        return $this;
+    }
+
+    public function getStarterReputationTier(): ReputationTier { return $this->starterReputationTier; }
+    public function setStarterReputationTier(ReputationTier $v): static { $this->starterReputationTier = $v; return $this; }
 }
