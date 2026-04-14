@@ -57,6 +57,24 @@ class LeagueConfigFieldsTest extends TestCase
         $this->assertCount(0, $league->getLeagueSponsors());
     }
 
+    public function testGetSponsorsReturnsFlatSponsorCollection(): void
+    {
+        $league   = new League('EN', 5, 'League 5');
+        $sponsor1 = new Sponsor('Corp A');
+        $sponsor2 = new Sponsor('Corp B');
+
+        $league->addSponsor($sponsor1);
+        $league->addSponsor($sponsor2);
+
+        $sponsors = $league->getSponsors();
+
+        $this->assertCount(2, $sponsors);
+        $this->assertTrue($sponsors->contains($sponsor1));
+        $this->assertTrue($sponsors->contains($sponsor2));
+        // Verify the collection contains Sponsor objects, not LeagueSponsor objects
+        $this->assertInstanceOf(\App\Entity\Sponsor::class, $sponsors->first());
+    }
+
     public function testLeagueSponsorRolledValue(): void
     {
         $league  = new League('EN', 5, 'League 5');
