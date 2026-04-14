@@ -41,12 +41,9 @@ class NpcClubCrudController extends AbstractCrudController
         yield TextField::new('stadiumName')
             ->setHelp('Optional stadium name, e.g. Estadio El Cid')
             ->hideOnIndex();
-        yield TextareaField::new('facilities')
+        yield TextareaField::new('facilitiesJson', 'Facilities')
             ->setHelp('JSON: {"training_pitch": 6, "north_stand": 4, ...}')
-            ->hideOnIndex()
-            ->formatValue(function ($value) {
-                return is_array($value) ? json_encode($value, JSON_PRETTY_PRINT) : $value;
-            });
+            ->hideOnIndex();
         yield DateTimeField::new('createdAt')->hideOnForm();
     }
 }

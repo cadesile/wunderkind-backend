@@ -514,8 +514,9 @@ class DashboardController extends AbstractDashboardController
     {
         $config = $this->poolConfigRepository->getConfig();
         return $this->render('admin/npc_clubs_content.html.twig', [
-            'config'    => $config,
-            'clubCount' => $this->npcClubRepository->count([]),
+            'config'         => $config,
+            'clubCount'      => $this->npcClubRepository->count([]),
+            'clubsByCountry' => $this->npcClubRepository->getCountsByCountryAndTier(),
         ]);
     }
 
@@ -528,17 +529,19 @@ class DashboardController extends AbstractDashboardController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
         }
 
-        $country = strtoupper(trim($request->request->get('country', '')));
-        $tier    = (int) $request->request->get('tier', 4);
-        $count   = (int) $request->request->get('count', 8);
+        $country        = strtoupper(trim($request->request->get('country', '')));
+        $tier           = (int) $request->request->get('tier', 4);
+        $count          = (int) $request->request->get('count', 8);
+        $deleteExisting = (bool) $request->request->get('delete_existing', false);
 
         if ($country === '' || $tier < 1 || $tier > 8 || $count < 1) {
             $this->addFlash('danger', 'Invalid parameters — country, tier (1–8) and count are required.');
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
         }
 
-        $clubs = $this->npcClubGenerationService->generateClubs($count, $tier, $country);
-        $this->addFlash('success', sprintf('Generated %d clubs for %s — Tier %d.', count($clubs), $country, $tier));
+        $clubs  = $this->npcClubGenerationService->generateClubs($count, $tier, $country, $deleteExisting);
+        $suffix = $deleteExisting ? ' (existing deleted first)' : '';
+        $this->addFlash('success', sprintf('Generated %d clubs for %s — Tier %d%s.', count($clubs), $country, $tier, $suffix));
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }

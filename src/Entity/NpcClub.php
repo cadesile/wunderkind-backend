@@ -95,5 +95,16 @@ class NpcClub
     public function getFacilities(): array { return $this->facilities; }
     public function setFacilities(array $v): static { $this->facilities = $v; return $this; }
 
+    public function getFacilitiesJson(): string
+    {
+        return json_encode($this->facilities, JSON_PRETTY_PRINT) ?: '{}';
+    }
+
+    public function setFacilitiesJson(string $v): static
+    {
+        $this->facilities = json_decode($v, true) ?? [];
+        return $this;
+    }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

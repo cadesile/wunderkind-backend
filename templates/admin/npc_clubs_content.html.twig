@@ -12,15 +12,48 @@
     </div>
 
     {# ── Status ─────────────────────────────────────────────────────────── #}
-    <div class="col-12 col-md-3">
-        <div class="card h-100">
+    <div class="col-12">
+        <div class="card">
             <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-shield-halved text-muted"></i>
                 <span class="fw-semibold small">Club Pool</span>
+                <span class="ms-auto badge bg-secondary">{{ clubCount }} total</span>
             </div>
-            <div class="card-body text-center">
-                <div class="display-6 fw-bold">{{ clubCount }}</div>
-                <div class="text-muted small">NPC clubs stored</div>
+            <div class="card-body p-0">
+                {% if clubsByCountry is empty %}
+                    <p class="text-muted small p-3 mb-0">No clubs generated yet.</p>
+                {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Country</th>
+                                    {% for tier in 1..8 %}
+                                        <th class="text-center">T{{ tier }}</th>
+                                    {% endfor %}
+                                    <th class="text-end pe-3">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for country, tiers in clubsByCountry %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold">{{ country }}</td>
+                                        {% for tier in 1..8 %}
+                                            <td class="text-center">
+                                                {% if tiers[tier] is defined %}
+                                                    <span class="badge bg-primary bg-opacity-75">{{ tiers[tier] }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                        <td class="text-end pe-3 fw-semibold">{{ tiers|reduce((carry, v) => carry + v, 0) }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -65,9 +98,17 @@
                                    min="1" max="50" class="form-control form-control-sm">
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        <i class="fa fa-plus me-1"></i>Generate Clubs
-                    </button>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-plus me-1"></i>Generate Clubs
+                        </button>
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="delete_existing" name="delete_existing" value="1">
+                            <label class="form-check-label small text-danger fw-semibold" for="delete_existing">
+                                Delete existing first
+                            </label>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>

@@ -27,6 +27,18 @@ class NpcClubGenerationService
 
     private const SUFFIXES = ['FC', 'CF', 'Athletic', 'United', 'City', 'Rovers', 'Town', 'SC', 'Deportivo', 'Wanderers'];
 
+    private const STADIUM_FORMATS_BY_COUNTRY = [
+        'ES' => ['Estadio %s', 'Estadio de %s', 'Campo de %s'],
+        'EN' => ['%s Park', '%s Ground', 'The %s Stadium', '%s Arena'],
+        'DE' => ['%s Arena', '%s Stadion', 'Arena %s'],
+        'IT' => ['Stadio %s', 'Stadio Comunale %s', 'Arena %s'],
+        'FR' => ['Stade %s', 'Stade Municipal de %s', 'Stade de %s'],
+        'BR' => ['Estádio %s', 'Arena %s', 'Estádio Municipal de %s'],
+        'AR' => ['Estadio %s', 'Estadio Municipal %s', 'Cancha %s'],
+        'NL' => ['%s Stadion', 'Stadion %s', '%s Arena'],
+        'PT' => ['Estádio %s', 'Estádio Municipal de %s', 'Estádio do %s'],
+    ];
+
     private const COLORS = [
         '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#f39c12',
         '#16a085', '#d35400', '#2c3e50', '#e74c3c', '#1abc9c',
@@ -56,7 +68,7 @@ class NpcClubGenerationService
     ) {}
 
     /** @return NpcClub[] */
-    public function generateClubs(int $count, int $tier, string $country): array
+    public function generateClubs(int $count, int $tier, string $country, bool $deleteExisting = false): array
     {
         $tier       = max(1, min(8, $tier));
         $slugs      = $this->getActiveFacilitySlugs();
@@ -65,13 +77,18 @@ class NpcClubGenerationService
         $usedNames  = [];
         $clubs      = [];
 
+        if ($deleteExisting) {
+            $this->npcClubRepo->deleteByCountryAndTier($country, $tier);
+        }
+
         for ($i = 0; $i < $count; $i++) {
-            $name       = $this->generateName($placeNames, $usedNames);
-            $usedNames[] = $name;
-            $reputation = $this->reputationForTier($tier);
-            $balance    = $this->balanceForTier($tier);
-            $facilities = $this->buildFacilities($slugs, $levelBand);
-            $colors     = $this->pickColorPair();
+            [$name, $place] = $this->generateName($placeNames, $usedNames);
+            $usedNames[]    = $name;
+            $reputation     = $this->reputationForTier($tier);
+            $balance        = $this->balanceForTier($tier);
+            $facilities     = $this->buildFacilities($slugs, $levelBand);
+            $colors         = $this->pickColorPair();
+            $stadiumName    = $this->generateStadiumName($place, $country);
 
             $club = new NpcClub(
                 name:           $name,
@@ -83,6 +100,7 @@ class NpcClubGenerationService
                 balance:        $balance,
                 facilities:     $facilities,
             );
+            $club->setStadiumName($stadiumName);
 
             $this->em->persist($club);
             $clubs[] = $club;
@@ -127,7 +145,8 @@ class NpcClubGenerationService
         return $facilities;
     }
 
-    private function generateName(array $placeNames, array $usedNames): string
+    /** @return array{string, string} [name, place] */
+    private function generateName(array $placeNames, array $usedNames): array
     {
         $attempts = 0;
         do {
@@ -137,7 +156,14 @@ class NpcClubGenerationService
             $attempts++;
         } while (in_array($name, $usedNames, true) && $attempts < 50);
 
-        return $name;
+        return [$name, $place];
+    }
+
+    private function generateStadiumName(string $place, string $country): string
+    {
+        $formats = self::STADIUM_FORMATS_BY_COUNTRY[$country] ?? ['%s Stadium', '%s Ground', 'The %s Arena'];
+        $format  = $formats[array_rand($formats)];
+        return sprintf($format, $place);
     }
 
     private function reputationForTier(int $tier): int
