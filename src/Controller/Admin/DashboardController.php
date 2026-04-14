@@ -6,13 +6,15 @@ use App\Entity\Academy;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Repository\GameConfigRepository;
+use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
+use App\Service\ConfigImportExportService;
 use App\Service\EconomicService;
 use App\Service\MarketPoolService;
-use App\Service\ConfigImportExportService;
 use App\Service\NarrativeImportExportService;
+use App\Service\NpcClubGenerationService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
@@ -39,6 +41,8 @@ class DashboardController extends AbstractDashboardController
         private PoolConfigRepository $poolConfigRepository,
         private MarketPoolService $marketPoolService,
         private PlayerRepository $playerRepository,
+        private NpcClubGenerationService $npcClubGenerationService,
+        private NpcClubRepository $npcClubRepository,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -199,12 +203,13 @@ class DashboardController extends AbstractDashboardController
         $conn = $this->em->getConnection();
 
         $poolCounts = [
-            'players'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE academy_id IS NULL'),
-            'coaches'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NULL'),
-            'scouts'    => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
-            'sponsors'  => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE academy_id IS NULL'),
-            'investors' => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE academy_id IS NULL'),
-            'agents'    => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
+            'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'"),
+            'seniorPlayers' => $this->playerRepository->countSeniorInPool(),
+            'coaches'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NULL'),
+            'scouts'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
+            'sponsors'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE academy_id IS NULL'),
+            'investors'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE academy_id IS NULL'),
+            'agents'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
         ];
 
         return $this->render('admin/pool_config.html.twig', [
@@ -275,6 +280,23 @@ class DashboardController extends AbstractDashboardController
         $config->setSponsorPoolTarget((int) $request->request->get('sponsorPoolTarget', 10));
         $config->setInvestorPoolTarget((int) $request->request->get('investorPoolTarget', 5));
         $config->setAgentPoolTarget((int) $request->request->get('agentPoolTarget', 20));
+
+        // Senior player fields
+        if ($request->request->has('seniorPlayerAgeMin')) {
+            $config->setSeniorPlayerAgeMin((int) $request->request->get('seniorPlayerAgeMin'));
+        }
+        if ($request->request->has('seniorPlayerAgeMax')) {
+            $config->setSeniorPlayerAgeMax((int) $request->request->get('seniorPlayerAgeMax'));
+        }
+        if ($request->request->has('seniorPlayerAbilityMin')) {
+            $config->setSeniorPlayerAbilityMin((int) $request->request->get('seniorPlayerAbilityMin'));
+        }
+        if ($request->request->has('seniorPlayerAbilityMax')) {
+            $config->setSeniorPlayerAbilityMax((int) $request->request->get('seniorPlayerAbilityMax'));
+        }
+        if ($request->request->has('seniorPlayerPoolTarget')) {
+            $config->setSeniorPlayerPoolTarget((int) $request->request->get('seniorPlayerPoolTarget'));
+        }
 
         $this->em->flush();
 
@@ -484,6 +506,68 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
     }
 
+    // ── NPC Clubs ─────────────────────────────────────────────────────────
+
+    #[Route('/admin/npc-clubs/content', name: 'admin_npc_clubs_content')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function npcClubsContent(): Response
+    {
+        $config = $this->poolConfigRepository->getConfig();
+        return $this->render('admin/npc_clubs_content.html.twig', [
+            'config'    => $config,
+            'clubCount' => $this->npcClubRepository->count([]),
+        ]);
+    }
+
+    #[Route('/admin/npc-clubs/generate', name: 'admin_npc_clubs_generate', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function generateNpcClubs(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('generate_npc_clubs', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $country = strtoupper(trim($request->request->get('country', '')));
+        $tier    = (int) $request->request->get('tier', 4);
+        $count   = (int) $request->request->get('count', 8);
+
+        if ($country === '' || $tier < 1 || $tier > 8 || $count < 1) {
+            $this->addFlash('danger', 'Invalid parameters — country, tier (1–8) and count are required.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $clubs = $this->npcClubGenerationService->generateClubs($count, $tier, $country);
+        $this->addFlash('success', sprintf('Generated %d clubs for %s — Tier %d.', count($clubs), $country, $tier));
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+    }
+
+    #[Route('/admin/npc-clubs/replenish-senior', name: 'admin_npc_clubs_replenish_senior', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function replenishSeniorPool(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('replenish_senior_pool', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $cfg     = $this->poolConfigRepository->getConfig();
+        $current = $this->playerRepository->countSeniorInPool();
+        $target  = $cfg->getSeniorPlayerPoolTarget();
+
+        if ($current >= $target) {
+            $this->addFlash('info', "Senior pool already at target — {$current} / {$target}.");
+        } else {
+            $needed = $target - $current;
+            $this->marketPoolService->generateSeniorPlayers($needed);
+            $newCount = $this->playerRepository->countSeniorInPool();
+            $this->addFlash('success', "Generated {$needed} senior players — pool now at {$newCount}.");
+        }
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+    }
+
     // ── Developer Tools ───────────────────────────────────────────────────
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
@@ -617,5 +701,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Market');
         yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
         yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
+        yield MenuItem::section('Clubs & Leagues');
+        yield MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved');
+        yield MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content');
     }
 }
