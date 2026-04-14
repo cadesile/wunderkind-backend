@@ -45,6 +45,14 @@ class League
     #[ORM\OneToMany(mappedBy: 'league', targetEntity: LeagueSponsor::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $leagueSponsors;
 
+    #[ORM\ManyToMany(targetEntity: Sponsor::class)]
+    #[ORM\JoinTable(
+        name: 'league_sponsor',
+        joinColumns: [new ORM\JoinColumn(name: 'league_id', referencedColumnName: 'id', onDelete: 'CASCADE')],
+        inverseJoinColumns: [new ORM\JoinColumn(name: 'sponsor_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    )]
+    private Collection $sponsors;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -55,6 +63,7 @@ class League
         $this->tier           = $tier;
         $this->name           = $name;
         $this->leagueSponsors = new ArrayCollection();
+        $this->sponsors       = new ArrayCollection();
         $this->createdAt      = new \DateTimeImmutable();
     }
 
@@ -87,33 +96,28 @@ class League
     /** @return Collection<int, LeagueSponsor> */
     public function getLeagueSponsors(): Collection { return $this->leagueSponsors; }
 
-    /**
-     * Returns a flat collection of Sponsor objects for EasyAdmin's AssociationField.
-     */
+    /** @return Collection<int, Sponsor> */
     public function getSponsors(): Collection
     {
-        return new ArrayCollection(
-            $this->leagueSponsors->map(fn(LeagueSponsor $ls) => $ls->getSponsor())->getValues()
-        );
+        return $this->sponsors;
     }
 
     public function addSponsor(Sponsor $sponsor): static
     {
-        foreach ($this->leagueSponsors as $ls) {
-            if ((string) $ls->getSponsor()->getId() === (string) $sponsor->getId()) {
-                return $this;
-            }
+        if (!$this->sponsors->contains($sponsor)) {
+            $this->sponsors->add($sponsor);
+            $this->leagueSponsors->add(new LeagueSponsor($this, $sponsor));
         }
-        $this->leagueSponsors->add(new LeagueSponsor($this, $sponsor));
         return $this;
     }
 
     public function removeSponsor(Sponsor $sponsor): static
     {
+        $this->sponsors->removeElement($sponsor);
         foreach ($this->leagueSponsors as $ls) {
-            if ((string) $ls->getSponsor()->getId() === (string) $sponsor->getId()) {
+            if ($ls->getSponsor() === $sponsor) {
                 $this->leagueSponsors->removeElement($ls);
-                return $this;
+                break;
             }
         }
         return $this;

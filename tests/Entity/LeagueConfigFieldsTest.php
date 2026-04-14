@@ -46,15 +46,15 @@ class LeagueConfigFieldsTest extends TestCase
         $sponsor->setSize(CompanySize::MEDIUM);
 
         $league->addSponsor($sponsor);
-        $this->assertCount(1, $league->getLeagueSponsors());
-        $this->assertSame($sponsor, $league->getLeagueSponsors()->first()->getSponsor());
+        $this->assertCount(1, $league->getSponsors());
+        $this->assertSame($sponsor, $league->getSponsors()->first());
 
         // Adding same sponsor twice is a no-op
         $league->addSponsor($sponsor);
-        $this->assertCount(1, $league->getLeagueSponsors());
+        $this->assertCount(1, $league->getSponsors());
 
         $league->removeSponsor($sponsor);
-        $this->assertCount(0, $league->getLeagueSponsors());
+        $this->assertCount(0, $league->getSponsors());
     }
 
     public function testGetSponsorsReturnsFlatSponsorCollection(): void
@@ -79,10 +79,11 @@ class LeagueConfigFieldsTest extends TestCase
     {
         $league  = new League('EN', 5, 'League 5');
         $sponsor = new Sponsor('Test Corp');
-        $league->addSponsor($sponsor);
 
-        $ls = $league->getLeagueSponsors()->first();
-        $this->assertInstanceOf(LeagueSponsor::class, $ls);
+        // LeagueSponsor is the pivot entity that stores rolledValue; it is
+        // populated by the persistent layer (not by addSponsor() which now
+        // manages the ManyToMany $sponsors collection instead).
+        $ls = new LeagueSponsor($league, $sponsor);
         $this->assertSame(0, $ls->getRolledValue());
 
         $ls->setRolledValue(75000);
