@@ -333,6 +333,57 @@ class GameConfig
     public function getGuardianIgnoreSiblingLoyaltyTraitPenalty(): int { return $this->guardianIgnoreSiblingLoyaltyTraitPenalty; }
     public function setGuardianIgnoreSiblingLoyaltyTraitPenalty(int $v): static { $this->guardianIgnoreSiblingLoyaltyTraitPenalty = $v; return $this; }
 
+    // ── League Finances ───────────────────────────────────────────────────
+
+    /** Per-season income range for SMALL company sponsors (pence). Default: 0 */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $smallSponsorMin = 0;
+
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $smallSponsorMax = 0;
+
+    /** Per-season income range for MEDIUM company sponsors (pence). Default: 0 */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $mediumSponsorMin = 0;
+
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $mediumSponsorMax = 0;
+
+    /** Per-season income range for LARGE company sponsors (pence). Default: 0 */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $largeSponsorMin = 0;
+
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $largeSponsorMax = 0;
+
+    /**
+     * % reduction per finishing position for leaguePositionPot distribution.
+     * e.g. 5 = each position gets 5% less than the one above. Default: 5
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 5])]
+    private int $leaguePositionDecreasePercent = 5;
+
+    public function getSmallSponsorMin(): int { return $this->smallSponsorMin; }
+    public function setSmallSponsorMin(int $v): static { $this->smallSponsorMin = $v; return $this; }
+
+    public function getSmallSponsorMax(): int { return $this->smallSponsorMax; }
+    public function setSmallSponsorMax(int $v): static { $this->smallSponsorMax = $v; return $this; }
+
+    public function getMediumSponsorMin(): int { return $this->mediumSponsorMin; }
+    public function setMediumSponsorMin(int $v): static { $this->mediumSponsorMin = $v; return $this; }
+
+    public function getMediumSponsorMax(): int { return $this->mediumSponsorMax; }
+    public function setMediumSponsorMax(int $v): static { $this->mediumSponsorMax = $v; return $this; }
+
+    public function getLargeSponsorMin(): int { return $this->largeSponsorMin; }
+    public function setLargeSponsorMin(int $v): static { $this->largeSponsorMin = $v; return $this; }
+
+    public function getLargeSponsorMax(): int { return $this->largeSponsorMax; }
+    public function setLargeSponsorMax(int $v): static { $this->largeSponsorMax = $v; return $this; }
+
+    public function getLeaguePositionDecreasePercent(): int { return $this->leaguePositionDecreasePercent; }
+    public function setLeaguePositionDecreasePercent(int $v): static { $this->leaguePositionDecreasePercent = $v; return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */
