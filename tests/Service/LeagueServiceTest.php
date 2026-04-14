@@ -15,8 +15,10 @@ class LeagueServiceTest extends TestCase
 {
     private function makeService(LeagueRepository $repo): LeagueService
     {
-        $em = $this->createStub(EntityManagerInterface::class);
-        return new LeagueService($repo, $em);
+        $em         = $this->createStub(EntityManagerInterface::class);
+        $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
+        $configRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
+        return new LeagueService($repo, $em, $configRepo);
     }
 
     public function testGenerateLeaguesSkipsExisting(): void
