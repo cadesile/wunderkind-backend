@@ -107,6 +107,12 @@ class Academy
     #[ORM\OneToMany(mappedBy: 'academy', targetEntity: InboxMessage::class, cascade: ['persist', 'remove'])]
     private Collection $inboxMessages;
 
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?League $currentLeague = null;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 1])]
+    private int $currentSeason = 1;
 
     public function __construct(string $name, User $user)
     {
@@ -232,4 +238,10 @@ class Academy
     {
         return $currentWeek % 52 === 0;
     }
+
+    public function getCurrentLeague(): ?League { return $this->currentLeague; }
+    public function setCurrentLeague(?League $v): static { $this->currentLeague = $v; return $this; }
+
+    public function getCurrentSeason(): int { return $this->currentSeason; }
+    public function setCurrentSeason(int $v): static { $this->currentSeason = $v; return $this; }
 }
