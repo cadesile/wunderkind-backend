@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Dto\ConcludeSeasonRequest;
 use App\Entity\User;
 use App\Repository\AcademyRepository;
+use App\Repository\SeasonRecordRepository;
 use App\Repository\SeasonSnapshotRepository;
 use App\Service\LeagueService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,6 +22,7 @@ class LeagueController extends AbstractController
         private readonly AcademyRepository        $academyRepository,
         private readonly LeagueService            $leagueService,
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
+        private readonly SeasonRecordRepository   $seasonRecordRepository,
     ) {}
 
     #[Route('/conclude-season', name: 'api_league_conclude_season', methods: ['POST'])]
@@ -58,19 +60,19 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Academy not found.'], 404);
         }
 
-        $snapshots = $this->seasonSnapshotRepository->findByAcademy($academy);
+        $records = $this->seasonRecordRepository->findByAcademy($academy);
 
         return $this->json([
-            'seasons' => array_map(fn($s) => [
-                'id'            => (string) $s->getId(),
-                'season'        => $s->getSeason(),
-                'leagueTier'    => $s->getSnapshotData()['amp']['leagueTier'] ?? null,
-                'leagueName'    => $s->getSnapshotData()['amp']['leagueName'] ?? null,
-                'finalPosition' => $s->getSnapshotData()['amp']['finalPosition'] ?? null,
-                'points'        => $s->getSnapshotData()['amp']['points'] ?? null,
-                'promoted'      => $s->getSnapshotData()['amp']['promoted'] ?? null,
-                'relegated'     => $s->getSnapshotData()['amp']['relegated'] ?? null,
-            ], $snapshots),
+            'seasons' => array_map(fn($r) => [
+                'id'            => (string) $r->getId(),
+                'season'        => $r->getSeason(),
+                'leagueTier'    => $r->getLeague()->getTier(),
+                'leagueName'    => $r->getLeague()->getName(),
+                'finalPosition' => $r->getFinalPosition(),
+                'points'        => $r->getPoints(),
+                'promoted'      => $r->isPromoted(),
+                'relegated'     => $r->isRelegated(),
+            ], $records),
         ]);
     }
 

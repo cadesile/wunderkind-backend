@@ -74,6 +74,17 @@
                         <div class="form-text">Club reputation band at creation. Default: Local</div>
                     </div>
 
+                    <div class="col-md-6">
+                        <label for="starterAcademyTier" class="form-label fw-semibold small">Starter Academy Tier</label>
+                        <select id="starterAcademyTier" name="starterAcademyTier" class="form-select">
+                            <option value="local"      {% if config.starterAcademyTier == 'local'      %}selected{% endif %}>Local</option>
+                            <option value="regional"   {% if config.starterAcademyTier == 'regional'   %}selected{% endif %}>Regional</option>
+                            <option value="national"   {% if config.starterAcademyTier == 'national'   %}selected{% endif %}>National</option>
+                            <option value="elite"      {% if config.starterAcademyTier == 'elite'      %}selected{% endif %}>Elite</option>
+                        </select>
+                        <div class="form-text">Academy tier assigned at creation. Default: Local</div>
+                    </div>
+
                     <div class="col-12">
                         <label for="defaultFacilities" class="form-label fw-semibold small">Default Facilities (JSON)</label>
                         <textarea id="defaultFacilities" name="defaultFacilities"

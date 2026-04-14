@@ -193,6 +193,7 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
         $config->setStarterSponsorTier($request->request->get('starterSponsorTier', 'SMALL'));
+        $config->setStarterAcademyTier($request->request->get('starterAcademyTier', 'local'));
 
         $config->setDefaultFacilitiesJson($request->request->get('defaultFacilities', '{}'));
 
