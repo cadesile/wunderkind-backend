@@ -2,7 +2,10 @@
 
 namespace App\Entity;
 
+use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
@@ -24,16 +27,35 @@ class League
     #[ORM\Column(length: 100)]
     private string $name;
 
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $promotionSpots = null;
+
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $tvDeal = null;
+
+    #[ORM\Column(type: 'string', enumType: ReputationTier::class, nullable: true)]
+    private ?ReputationTier $leagueReputationTier = null;
+
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $prizeMoney = null;
+
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $leaguePositionPot = null;
+
+    #[ORM\OneToMany(mappedBy: 'league', targetEntity: LeagueSponsor::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $leagueSponsors;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
     public function __construct(string $country, int $tier, string $name)
     {
-        $this->id        = new UuidV7();
-        $this->country   = $country;
-        $this->tier      = $tier;
-        $this->name      = $name;
-        $this->createdAt = new \DateTimeImmutable();
+        $this->id             = new UuidV7();
+        $this->country        = $country;
+        $this->tier           = $tier;
+        $this->name           = $name;
+        $this->leagueSponsors = new ArrayCollection();
+        $this->createdAt      = new \DateTimeImmutable();
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -46,6 +68,56 @@ class League
 
     public function getName(): string { return $this->name; }
     public function setName(string $v): static { $this->name = $v; return $this; }
+
+    public function getPromotionSpots(): ?int { return $this->promotionSpots; }
+    public function setPromotionSpots(?int $v): static { $this->promotionSpots = $v; return $this; }
+
+    public function getTvDeal(): ?int { return $this->tvDeal; }
+    public function setTvDeal(?int $v): static { $this->tvDeal = $v; return $this; }
+
+    public function getLeagueReputationTier(): ?ReputationTier { return $this->leagueReputationTier; }
+    public function setLeagueReputationTier(?ReputationTier $v): static { $this->leagueReputationTier = $v; return $this; }
+
+    public function getPrizeMoney(): ?int { return $this->prizeMoney; }
+    public function setPrizeMoney(?int $v): static { $this->prizeMoney = $v; return $this; }
+
+    public function getLeaguePositionPot(): ?int { return $this->leaguePositionPot; }
+    public function setLeaguePositionPot(?int $v): static { $this->leaguePositionPot = $v; return $this; }
+
+    /** @return Collection<int, LeagueSponsor> */
+    public function getLeagueSponsors(): Collection { return $this->leagueSponsors; }
+
+    /**
+     * Returns a flat collection of Sponsor objects for EasyAdmin's AssociationField.
+     */
+    public function getSponsors(): Collection
+    {
+        return new ArrayCollection(
+            $this->leagueSponsors->map(fn(LeagueSponsor $ls) => $ls->getSponsor())->getValues()
+        );
+    }
+
+    public function addSponsor(Sponsor $sponsor): static
+    {
+        foreach ($this->leagueSponsors as $ls) {
+            if ($ls->getSponsor() === $sponsor) {
+                return $this;
+            }
+        }
+        $this->leagueSponsors->add(new LeagueSponsor($this, $sponsor));
+        return $this;
+    }
+
+    public function removeSponsor(Sponsor $sponsor): static
+    {
+        foreach ($this->leagueSponsors as $ls) {
+            if ($ls->getSponsor() === $sponsor) {
+                $this->leagueSponsors->removeElement($ls);
+                return $this;
+            }
+        }
+        return $this;
+    }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }
