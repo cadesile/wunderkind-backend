@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Dto\MatchResultDto;
 use App\Dto\SyncRequest;
 use App\Entity\Academy;
+use App\Entity\GameConfig;
 use App\Entity\MatchResult;
 use App\Entity\NpcClub;
 use App\Entity\Player;
@@ -275,7 +276,7 @@ class SyncService
                 ],
             ],
             'gameConfig' => $gameConfigData,
-            'league'     => $this->buildLeagueSnapshot($academy),
+            'league'     => $this->buildLeagueSnapshot($academy, $gameConfig),
         ];
     }
 
@@ -357,19 +358,18 @@ class SyncService
      * Builds the league snapshot array for the sync response.
      * Returns null if the academy has no current league.
      */
-    private function buildLeagueSnapshot(Academy $academy): ?array
+    private function buildLeagueSnapshot(Academy $academy, GameConfig $gameConfig): ?array
     {
         $league = $academy->getCurrentLeague();
         if ($league === null) {
             return null;
         }
 
-        $gameConfig = $this->gameConfigRepository->getConfig();
-        $clubs      = $this->npcClubRepository->findByLeague($league);
+        $clubs = $this->npcClubRepository->findByLeague($league);
 
         $sponsorPot = 0;
         foreach ($league->getLeagueSponsors() as $ls) {
-            $sponsorPot += $ls->getRolledValue();
+            $sponsorPot += (int) $ls->getRolledValue();
         }
 
         return [
@@ -380,10 +380,10 @@ class SyncService
             'season'                        => $academy->getCurrentSeason(),
             'promotionSpots'                => $league->getPromotionSpots(),
             'reputationTier'                => $league->getLeagueReputationTier()?->value,
-            'tvDeal'                        => $league->getTvDeal(),
-            'sponsorPot'                    => $sponsorPot,
-            'prizeMoney'                    => $league->getPrizeMoney(),
-            'leaguePositionPot'             => $league->getLeaguePositionPot(),
+            'tvDeal'                        => $league->getTvDeal() !== null ? (int) $league->getTvDeal() : null,
+            'sponsorPot'                    => (int) $sponsorPot,
+            'prizeMoney'                    => $league->getPrizeMoney() !== null ? (int) $league->getPrizeMoney() : null,
+            'leaguePositionPot'             => $league->getLeaguePositionPot() !== null ? (int) $league->getLeaguePositionPot() : null,
             'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
             'clubs'                         => array_map(fn(NpcClub $c) => [
                 'id'             => (string) $c->getId(),

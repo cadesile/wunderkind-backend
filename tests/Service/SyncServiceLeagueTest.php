@@ -25,8 +25,10 @@ class SyncServiceLeagueTest extends TestCase
             ->onlyMethods([])
             ->getMock();
 
+        $gameConfig = new GameConfig();
+
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result = $reflection->invoke($service, $academy);
+        $result = $reflection->invoke($service, $academy, $gameConfig);
 
         $this->assertNull($result);
     }
@@ -46,8 +48,6 @@ class SyncServiceLeagueTest extends TestCase
         $npcRepo->method('findByLeague')->willReturn([$club]);
 
         $gameConfig = new GameConfig();
-        $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
-        $configRepo->method('getConfig')->willReturn($gameConfig);
 
         $service = $this->getMockBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
@@ -58,11 +58,8 @@ class SyncServiceLeagueTest extends TestCase
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $npcRepo);
 
-        $configProp = new \ReflectionProperty(\App\Service\SyncService::class, 'gameConfigRepository');
-        $configProp->setValue($service, $configRepo);
-
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result = $reflection->invoke($service, $academy);
+        $result = $reflection->invoke($service, $academy, $gameConfig);
 
         $this->assertNotNull($result);
         $this->assertSame(8,          $result['tier']);
@@ -86,8 +83,9 @@ class SyncServiceLeagueTest extends TestCase
 
         $sponsor = new \App\Entity\Sponsor('Corp A');
         $sponsor->setSize(\App\Enum\CompanySize::SMALL);
-        $league->addSponsor($sponsor);
-        $league->getLeagueSponsors()->first()->setRolledValue(75000);
+        $leagueSponsor = new \App\Entity\LeagueSponsor($league, $sponsor);
+        $leagueSponsor->setRolledValue(75000);
+        $league->getLeagueSponsors()->add($leagueSponsor);
 
         $academy->setCurrentLeague($league);
         $academy->setCurrentSeason(3);
@@ -97,8 +95,6 @@ class SyncServiceLeagueTest extends TestCase
 
         $gameConfig = new \App\Entity\GameConfig();
         $gameConfig->setLeaguePositionDecreasePercent(8);
-        $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
-        $configRepo->method('getConfig')->willReturn($gameConfig);
 
         $service = $this->getMockBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
@@ -108,11 +104,8 @@ class SyncServiceLeagueTest extends TestCase
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $npcRepo);
 
-        $configProp = new \ReflectionProperty(\App\Service\SyncService::class, 'gameConfigRepository');
-        $configProp->setValue($service, $configRepo);
-
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result     = $reflection->invoke($service, $academy);
+        $result     = $reflection->invoke($service, $academy, $gameConfig);
 
         $this->assertNotNull($result);
         $this->assertSame(3,          $result['promotionSpots']);
