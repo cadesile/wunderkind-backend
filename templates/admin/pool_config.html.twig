@@ -23,12 +23,13 @@
 
                 <div class="row g-3 mb-4">
                     {% set poolItems = [
-                        { label: 'Players',   icon: 'person-running',  count: poolCounts.players,   target: config.playerPoolTarget },
-                        { label: 'Coaches',   icon: 'chalkboard-user', count: poolCounts.coaches,   target: config.coachPoolTarget },
-                        { label: 'Scouts',    icon: 'binoculars',      count: poolCounts.scouts,    target: config.scoutPoolTarget },
-                        { label: 'Agents',    icon: 'handshake',       count: poolCounts.agents,    target: config.agentPoolTarget },
-                        { label: 'Sponsors',  icon: 'star',            count: poolCounts.sponsors,  target: config.sponsorPoolTarget },
-                        { label: 'Investors', icon: 'chart-line',      count: poolCounts.investors, target: config.investorPoolTarget },
+                        { label: 'Players',      icon: 'person-running',  count: poolCounts.players,       target: config.playerPoolTarget },
+                        { label: 'Sr. Players',  icon: 'user',            count: poolCounts.seniorPlayers, target: config.seniorPlayerPoolTarget },
+                        { label: 'Coaches',      icon: 'chalkboard-user', count: poolCounts.coaches,       target: config.coachPoolTarget },
+                        { label: 'Scouts',       icon: 'binoculars',      count: poolCounts.scouts,        target: config.scoutPoolTarget },
+                        { label: 'Agents',       icon: 'handshake',       count: poolCounts.agents,        target: config.agentPoolTarget },
+                        { label: 'Sponsors',     icon: 'star',            count: poolCounts.sponsors,      target: config.sponsorPoolTarget },
+                        { label: 'Investors',    icon: 'chart-line',      count: poolCounts.investors,     target: config.investorPoolTarget },
                     ] %}
                     {% for item in poolItems %}
                     <div class="col-6 col-md-2">
@@ -127,6 +128,50 @@
                             <input type="number" id="investorPoolTarget" name="investorPoolTarget"
                                    value="{{ config.investorPoolTarget }}" min="1" class="form-control">
                             <div class="form-text">Default: 5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Senior Players ───────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-user text-muted"></i>
+                    <span class="fw-semibold small">Senior Players</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Configuration for senior player generation (age 17–35, no guardians).
+                        Senior players share the same pool as youth players.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="seniorPlayerPoolTarget" class="form-label fw-semibold small">Pool Target</label>
+                            <input type="number" id="seniorPlayerPoolTarget" name="seniorPlayerPoolTarget"
+                                   value="{{ config.seniorPlayerPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 200</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="seniorPlayerAgeMin" value="{{ config.seniorPlayerAgeMin }}"
+                                       min="16" max="50" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="seniorPlayerAgeMax" value="{{ config.seniorPlayerAgeMax }}"
+                                       min="16" max="50" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 17–35</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Ability Range</label>
+                            <div class="input-group">
+                                <input type="number" name="seniorPlayerAbilityMin" value="{{ config.seniorPlayerAbilityMin }}"
+                                       min="1" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="seniorPlayerAbilityMax" value="{{ config.seniorPlayerAbilityMax }}"
+                                       min="1" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Current ability. Default: 20–90</div>
                         </div>
                     </div>
                 </div>
