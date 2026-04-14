@@ -18,7 +18,6 @@ use App\Repository\AcademyRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
-use App\Repository\MatchResultRepository;
 use App\Repository\NpcClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -33,7 +32,6 @@ class SyncService
         private readonly GameConfigRepository       $gameConfigRepository,
         private readonly FacilityTemplateRepository $facilityTemplateRepository,
         private readonly NpcClubRepository          $npcClubRepository,
-        private readonly MatchResultRepository      $matchResultRepository,
     ) {}
 
     /**
@@ -345,14 +343,13 @@ class SyncService
      *
      * @return array{id: string, tier: int, name: string, country: string, season: int, clubs: array<int, array>}|null
      */
-    private function buildLeagueSnapshot(Academy $academy, ?NpcClubRepository $npcRepo = null): ?array
+    private function buildLeagueSnapshot(Academy $academy): ?array
     {
         $league = $academy->getCurrentLeague();
         if ($league === null) {
             return null;
         }
-        $repo  = $npcRepo ?? $this->npcClubRepository;
-        $clubs = $repo->findByLeague($league);
+        $clubs = $this->npcClubRepository->findByLeague($league);
         return [
             'id'      => (string) $league->getId(),
             'tier'    => $league->getTier(),

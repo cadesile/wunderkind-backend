@@ -64,12 +64,12 @@ class LeagueController extends AbstractController
             'seasons' => array_map(fn($s) => [
                 'id'            => (string) $s->getId(),
                 'season'        => $s->getSeason(),
-                'leagueTier'    => $s->getSnapshotData()['amp']['leagueTier'],
-                'leagueName'    => $s->getSnapshotData()['amp']['leagueName'],
-                'finalPosition' => $s->getSnapshotData()['amp']['finalPosition'],
-                'points'        => $s->getSnapshotData()['amp']['points'],
-                'promoted'      => $s->getSnapshotData()['amp']['promoted'],
-                'relegated'     => $s->getSnapshotData()['amp']['relegated'],
+                'leagueTier'    => $s->getSnapshotData()['amp']['leagueTier'] ?? null,
+                'leagueName'    => $s->getSnapshotData()['amp']['leagueName'] ?? null,
+                'finalPosition' => $s->getSnapshotData()['amp']['finalPosition'] ?? null,
+                'points'        => $s->getSnapshotData()['amp']['points'] ?? null,
+                'promoted'      => $s->getSnapshotData()['amp']['promoted'] ?? null,
+                'relegated'     => $s->getSnapshotData()['amp']['relegated'] ?? null,
             ], $snapshots),
         ]);
     }

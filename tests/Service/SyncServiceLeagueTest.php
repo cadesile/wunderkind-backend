@@ -17,9 +17,6 @@ class SyncServiceLeagueTest extends TestCase
         $academy = new Academy('Test FC', $user);
         // no league set — currentLeague is null
 
-        $npcRepo = $this->createMock(NpcClubRepository::class);
-        $npcRepo->expects($this->never())->method('findByLeague');
-
         // Call the private method via reflection
         $service = $this->getMockBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
@@ -27,7 +24,7 @@ class SyncServiceLeagueTest extends TestCase
             ->getMock();
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result = $reflection->invoke($service, $academy, $npcRepo);
+        $result = $reflection->invoke($service, $academy);
 
         $this->assertNull($result);
     }
@@ -51,8 +48,12 @@ class SyncServiceLeagueTest extends TestCase
             ->onlyMethods([])
             ->getMock();
 
+        // Inject the npcClubRepository via reflection since constructor is disabled
+        $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
+        $repoProp->setValue($service, $npcRepo);
+
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result = $reflection->invoke($service, $academy, $npcRepo);
+        $result = $reflection->invoke($service, $academy);
 
         $this->assertNotNull($result);
         $this->assertSame(8,          $result['tier']);
