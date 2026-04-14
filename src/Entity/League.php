@@ -100,7 +100,7 @@ class League
     public function addSponsor(Sponsor $sponsor): static
     {
         foreach ($this->leagueSponsors as $ls) {
-            if ($ls->getSponsor() === $sponsor) {
+            if ((string) $ls->getSponsor()->getId() === (string) $sponsor->getId()) {
                 return $this;
             }
         }
@@ -111,7 +111,7 @@ class League
     public function removeSponsor(Sponsor $sponsor): static
     {
         foreach ($this->leagueSponsors as $ls) {
-            if ($ls->getSponsor() === $sponsor) {
+            if ((string) $ls->getSponsor()->getId() === (string) $sponsor->getId()) {
                 $this->leagueSponsors->removeElement($ls);
                 return $this;
             }
