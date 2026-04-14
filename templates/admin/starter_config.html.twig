@@ -62,6 +62,28 @@
                         <div class="form-text">Scouts assigned at academy creation. Default: 1</div>
                     </div>
 
+
+                    <div class="col-md-6">
+                        <label for="starterReputationTier" class="form-label fw-semibold small">Starter Reputation Tier</label>
+                        <select id="starterReputationTier" name="starterReputationTier" class="form-select">
+                            <option value="local"    {% if config.starterReputationTier.value == 'local'    %}selected{% endif %}>Local</option>
+                            <option value="regional" {% if config.starterReputationTier.value == 'regional' %}selected{% endif %}>Regional</option>
+                            <option value="national" {% if config.starterReputationTier.value == 'national' %}selected{% endif %}>National</option>
+                            <option value="elite"    {% if config.starterReputationTier.value == 'elite'    %}selected{% endif %}>Elite</option>
+                        </select>
+                        <div class="form-text">Club reputation band at creation. Default: Local</div>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="defaultFacilities" class="form-label fw-semibold small">Default Facilities (JSON)</label>
+                        <textarea id="defaultFacilities" name="defaultFacilities"
+                                  class="form-control font-monospace" rows="6">{{ config.defaultFacilitiesJson }}</textarea>
+                        <div class="form-text">
+                            Flat slug → level map, e.g. <code>{"training_pitch": 1, "north_stand": 0}</code>.
+                            Leave as <code>{}</code> for no default facilities.
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
