@@ -44,6 +44,10 @@ class NpcClub
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?League $league = null;
+
     public function __construct(
         string $name,
         string $country,
@@ -107,4 +111,7 @@ class NpcClub
     }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public function getLeague(): ?League { return $this->league; }
+    public function setLeague(?League $v): static { $this->league = $v; return $this; }
 }

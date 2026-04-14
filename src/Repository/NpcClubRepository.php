@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\League;
 use App\Entity\NpcClub;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -49,5 +50,11 @@ class NpcClubRepository extends ServiceEntityRepository
             ->setParameter('tier', $tier)
             ->getQuery()
             ->execute();
+    }
+
+    /** @return NpcClub[] */
+    public function findByLeague(League $league): array
+    {
+        return $this->findBy(['league' => $league]);
     }
 }
