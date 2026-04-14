@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Dto\ConsumeRequest;
 use App\Dto\MarketAssignRequest;
 use App\Entity\Investor;
 use App\Entity\Player;
@@ -21,6 +22,7 @@ use App\Repository\StaffRepository;
 use App\Service\MarketDataService;
 use App\Service\MarketPoolService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -132,6 +134,58 @@ class MarketController extends AbstractController
         }
 
         return $this->json(['success' => true, 'entityId' => $dto->entityId]);
+    }
+
+    #[Route('/consume', name: 'api_market_consume', methods: ['POST'])]
+    #[IsGranted('ROLE_ACADEMY')]
+    public function consume(
+        #[MapRequestPayload] ConsumeRequest $dto,
+        PlayerRepository $playerRepo,
+        StaffRepository  $staffRepo,
+        ScoutRepository  $scoutRepo,
+        EntityManagerInterface $em,
+    ): JsonResponse {
+        $deleted = ['players' => 0, 'staff' => 0, 'scouts' => 0];
+
+        foreach ($dto->playerIds as $id) {
+            try {
+                $entity = $playerRepo->find(Uuid::fromString($id));
+                if ($entity !== null) {
+                    $em->remove($entity);
+                    $deleted['players']++;
+                }
+            } catch (\Throwable) {
+                // Silently ignore invalid/unknown IDs — idempotent
+            }
+        }
+
+        foreach ($dto->staffIds as $id) {
+            try {
+                $entity = $staffRepo->find(Uuid::fromString($id));
+                if ($entity !== null) {
+                    $em->remove($entity);
+                    $deleted['staff']++;
+                }
+            } catch (\Throwable) {
+                // Silently ignore invalid/unknown IDs — idempotent
+            }
+        }
+
+        foreach ($dto->scoutIds as $id) {
+            try {
+                $entity = $scoutRepo->find(Uuid::fromString($id));
+                if ($entity !== null) {
+                    $em->remove($entity);
+                    $deleted['scouts']++;
+                }
+            } catch (\Throwable) {
+                // Silently ignore invalid/unknown IDs — idempotent
+            }
+        }
+
+        $em->flush();
+
+        return $this->json(['deleted' => $deleted]);
     }
 
     // -------------------------------------------------------------------------
