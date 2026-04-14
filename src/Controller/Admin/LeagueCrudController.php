@@ -3,7 +3,6 @@
 namespace App\Controller\Admin;
 
 use App\Entity\League;
-use App\Entity\Sponsor;
 use App\Enum\CompanySize;
 use App\Enum\ReputationTier;
 use Doctrine\ORM\QueryBuilder;
@@ -48,10 +47,10 @@ class LeagueCrudController extends AbstractCrudController
 
         yield ChoiceField::new('leagueReputationTier')
             ->setChoices([
-                'Local'    => ReputationTier::LOCAL,
-                'Regional' => ReputationTier::REGIONAL,
-                'National' => ReputationTier::NATIONAL,
-                'Elite'    => ReputationTier::ELITE,
+                'Local'    => ReputationTier::LOCAL->value,
+                'Regional' => ReputationTier::REGIONAL->value,
+                'National' => ReputationTier::NATIONAL->value,
+                'Elite'    => ReputationTier::ELITE->value,
             ])
             ->allowMultipleChoices(false)
             ->renderAsBadges(false)
