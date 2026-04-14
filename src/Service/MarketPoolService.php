@@ -252,6 +252,79 @@ class MarketPoolService
         return $players;
     }
 
+    /** @return Player[] Senior players (age 17–35, no guardians) for the shared pool */
+    public function generateSeniorPlayers(int $count): array
+    {
+        $cfg    = $this->poolConfigRepo->getConfig();
+        $agents = $this->agentRepo->findAll();
+        $players = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            $currentAbility = random_int($cfg->getSeniorPlayerAbilityMin(), $cfg->getSeniorPlayerAbilityMax());
+            $age            = random_int($cfg->getSeniorPlayerAgeMin(), $cfg->getSeniorPlayerAgeMax());
+            $nat            = $this->nameGenerator->getRandomNationality();
+
+            ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
+
+            $player = new Player(
+                firstName:         $firstName,
+                lastName:          $lastName,
+                dateOfBirth:       $this->dobFromAge($age),
+                nationality:       $nat,
+                position:          $this->weightedPosition($cfg),
+                recruitmentSource: RecruitmentSource::SENIOR_INTAKE,
+                potential:         $currentAbility,
+                currentAbility:    $currentAbility,
+                academy:           null,
+            );
+
+            $player->setStatus(PlayerStatus::ACTIVE);
+            $player->setContractValue($currentAbility * random_int(50, 200));
+
+            $attrBudget = (int) round($currentAbility * 1.2);
+            $attrs      = $this->distributeAttributes($player->getPosition(), $attrBudget);
+            $player->setPace($attrs['pace']);
+            $player->setTechnical($attrs['technical']);
+            $player->setVision($attrs['vision']);
+            $player->setPower($attrs['power']);
+            $player->setStamina($attrs['stamina']);
+            $player->setHeart($attrs['heart']);
+
+            $player->setHeight(random_int(165, 195));
+            $player->setWeight(random_int(65, 90));
+
+            if (!empty($agents) && random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
+                $player->setAgent($agents[array_rand($agents)]);
+            }
+
+            $pMin = $cfg->getPersonalityTraitMin();
+            $pMax = $cfg->getPersonalityTraitMax();
+            $p    = $player->getPersonality();
+            $p->setConfidence(random_int($pMin, $pMax));
+            $p->setMaturity(random_int($pMin, $pMax));
+            $p->setTeamwork(random_int($pMin, $pMax));
+            $p->setLeadership(random_int($pMin, $pMax));
+            $p->setEgo(random_int($pMin, $pMax));
+            $p->setBravery(random_int($pMin, $pMax));
+            $p->setGreed(random_int($pMin, $pMax));
+            $p->setLoyalty(random_int($pMin, $pMax));
+
+            // No guardians for senior players.
+
+            $this->em->persist($player);
+            $players[] = $player;
+
+            if ($i > 0 && $i % 50 === 0) {
+                $this->em->flush();
+                $this->em->clear(Player::class);
+                $agents = $this->agentRepo->findAll();
+            }
+        }
+
+        $this->em->flush();
+        return $players;
+    }
+
     /** @return Staff[] */
     public function generateCoaches(int $count, ?int $academyReputation = null): array
     {
@@ -585,6 +658,13 @@ class MarketPoolService
             $generated[] = $cfg->getAgentPoolTarget() . ' agents';
         }
 
+        $seniorCurrent = $this->playerRepo->countSeniorInPool();
+        if ($seniorCurrent < $cfg->getSeniorPlayerPoolTarget()) {
+            $need = $cfg->getSeniorPlayerPoolTarget() - $seniorCurrent;
+            $this->generateSeniorPlayers($need);
+            $generated[] = $need . ' senior players';
+        }
+
         return $generated;
     }
 
@@ -616,6 +696,9 @@ class MarketPoolService
 
         $this->generateAgents($cfg->getAgentPoolTarget());
         $generated[] = $cfg->getAgentPoolTarget() . ' agents';
+
+        $this->generateSeniorPlayers($cfg->getSeniorPlayerPoolTarget());
+        $generated[] = $cfg->getSeniorPlayerPoolTarget() . ' senior players';
 
         return $generated;
     }
