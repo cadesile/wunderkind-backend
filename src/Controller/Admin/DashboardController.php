@@ -161,6 +161,15 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
+        // League finances
+        $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0));
+        $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0));
+        $config->setMediumSponsorMin((int) $request->request->get('mediumSponsorMin', 0));
+        $config->setMediumSponsorMax((int) $request->request->get('mediumSponsorMax', 0));
+        $config->setLargeSponsorMin((int) $request->request->get('largeSponsorMin', 0));
+        $config->setLargeSponsorMax((int) $request->request->get('largeSponsorMax', 0));
+        $config->setLeaguePositionDecreasePercent((int) $request->request->get('leaguePositionDecreasePercent', 5));
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');
