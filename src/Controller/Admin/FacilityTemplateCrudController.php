@@ -37,7 +37,12 @@ class FacilityTemplateCrudController extends AbstractCrudController
             ->setHelp('Flavour text shown on the facility card')
             ->hideOnIndex();
         yield ChoiceField::new('category')
-            ->setChoices(['Training' => 'TRAINING', 'Medical' => 'MEDICAL', 'Scouting' => 'SCOUTING']);
+            ->setChoices([
+                'Training' => 'TRAINING',
+                'Medical'  => 'MEDICAL',
+                'Scouting' => 'SCOUTING',
+                'Stadium'  => 'STADIUM',
+            ]);
         yield IntegerField::new('baseCost')
             ->setHelp('Upgrade cost base in pence. App formula: (currentLevel + 1) × baseCost');
         yield IntegerField::new('weeklyUpkeepBase')
