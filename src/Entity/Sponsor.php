@@ -72,6 +72,8 @@ class Sponsor
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    public function __toString(): string { return $this->company; }
+
     public function getId(): UuidV7 { return $this->id; }
 
     public function getCompany(): string { return $this->company; }
