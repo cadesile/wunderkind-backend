@@ -14,6 +14,10 @@ use App\Service\ConfigImportExportService;
 use App\Service\EconomicService;
 use App\Service\MarketPoolService;
 use App\Service\NarrativeImportExportService;
+use App\Controller\Admin\LeagueCrudController;
+use App\Enum\ReputationTier;
+use App\Repository\LeagueRepository;
+use App\Service\LeagueService;
 use App\Service\NpcClubGenerationService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
@@ -43,6 +47,8 @@ class DashboardController extends AbstractDashboardController
         private PlayerRepository $playerRepository,
         private NpcClubGenerationService $npcClubGenerationService,
         private NpcClubRepository $npcClubRepository,
+        private LeagueRepository            $leagueRepository,
+        private LeagueService               $leagueService,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -187,6 +193,13 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
         $config->setStarterSponsorTier($request->request->get('starterSponsorTier', 'SMALL'));
+
+        $config->setDefaultFacilitiesJson($request->request->get('defaultFacilities', '{}'));
+
+        $reputationTierValue = $request->request->get('starterReputationTier', 'local');
+        $reputationTier      = ReputationTier::tryFrom($reputationTierValue) ?? ReputationTier::LOCAL;
+        $config->setStarterReputationTier($reputationTier);
+
         $this->em->persist($config);
         $this->em->flush();
 
@@ -571,6 +584,32 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
 
+    #[Route('/admin/leagues/generate', name: 'admin_leagues_generate', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function generateLeagues(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('generate_leagues', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $country = strtoupper(trim($request->request->get('country', '')));
+        if ($country === '') {
+            $this->addFlash('danger', 'Country is required.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $created  = $this->leagueService->generateLeaguesForCountry($country);
+        $skipped  = 8 - count($created);
+        $msg      = sprintf('Created %d leagues for %s', count($created), $country);
+        if ($skipped > 0) {
+            $msg .= sprintf(', %d already existed', $skipped);
+        }
+        $this->addFlash('success', $msg . '.');
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+    }
+
     // ── Developer Tools ───────────────────────────────────────────────────
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
@@ -706,6 +745,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
         yield MenuItem::section('Clubs & Leagues');
         yield MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved');
+        yield MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy');
         yield MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content');
     }
 }
