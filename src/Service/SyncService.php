@@ -19,6 +19,7 @@ use App\Repository\AcademyRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
+use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -33,6 +34,7 @@ class SyncService
         private readonly GameConfigRepository       $gameConfigRepository,
         private readonly FacilityTemplateRepository $facilityTemplateRepository,
         private readonly NpcClubRepository          $npcClubRepository,
+        private readonly LeagueRepository           $leagueRepository,
     ) {}
 
     /**
@@ -152,6 +154,12 @@ class SyncService
 
         $this->em->flush();
 
+        // Auto-assign league on first sync if academy has a country but no league.
+        $this->maybeAutoAssignLeague($academy);
+        if ($academy->getCurrentLeague() !== null) {
+            $this->em->flush();
+        }
+
         $syncedAt = $academy->getLastSyncedAt();
 
         // Fetch runtime config to embed in response. Read-only: if no row exists
@@ -264,6 +272,7 @@ class SyncService
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,
             'academy'           => [
+                'id'                  => (string) $academy->getId(),
                 'reputation'          => $academy->getReputation(),
                 'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
                 'hallOfFamePoints'    => $academy->getHallOfFamePoints(),
@@ -352,6 +361,30 @@ class SyncService
             );
             $this->em->persist($matchResult);
         }
+    }
+
+    /**
+     * One-time auto-assignment: if the academy has no current league and has a country set,
+     * assign the lowest-tier league for that country.
+     * No-op on all subsequent syncs once league is assigned.
+     */
+    private function maybeAutoAssignLeague(Academy $academy): void
+    {
+        if ($academy->getCurrentLeague() !== null) {
+            return;
+        }
+
+        if ($academy->getCountry() === null) {
+            return;
+        }
+
+        $league = $this->leagueRepository->findLowestTierForCountry($academy->getCountry());
+        if ($league === null) {
+            return;
+        }
+
+        $academy->setCurrentLeague($league);
+        $this->em->persist($academy);
     }
 
     /**
