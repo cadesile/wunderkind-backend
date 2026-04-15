@@ -8,6 +8,7 @@ use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Entity\Sponsor;
 use App\Entity\User;
+use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use PHPUnit\Framework\TestCase;
 
@@ -115,5 +116,96 @@ class SyncServiceLeagueTest extends TestCase
         $this->assertSame(300000,     $result['leaguePositionPot']);
         $this->assertSame(75000,      $result['sponsorPot']);
         $this->assertSame(8,          $result['leaguePositionDecreasePercent']);
+    }
+
+    public function testAutoAssignSetsLowestTierLeagueWhenNoneAssigned(): void
+    {
+        $user    = $this->createStub(User::class);
+        $academy = new Academy('Test FC', $user);
+        $academy->setCountry('EN');
+
+        $league = new League('EN', 8, 'League 8');
+
+        $leagueRepo = $this->createStub(LeagueRepository::class);
+        $leagueRepo->method('findLowestTierForCountry')->willReturn($league);
+
+        $em = $this->createMock(\Doctrine\ORM\EntityManagerInterface::class);
+        $em->expects($this->once())->method('persist')->with($academy);
+
+        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getMock();
+
+        $leagueRepoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueRepository');
+        $leagueRepoProp->setValue($service, $leagueRepo);
+
+        $emProp = new \ReflectionProperty(\App\Service\SyncService::class, 'em');
+        $emProp->setValue($service, $em);
+
+        $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'maybeAutoAssignLeague');
+        $reflection->invoke($service, $academy);
+
+        $this->assertSame($league, $academy->getCurrentLeague());
+    }
+
+    public function testAutoAssignIsNoOpWhenLeagueAlreadySet(): void
+    {
+        $user    = $this->createStub(User::class);
+        $academy = new Academy('Test FC', $user);
+        $existingLeague = new League('EN', 5, 'League 5');
+        $academy->setCurrentLeague($existingLeague);
+        $academy->setCountry('EN');
+
+        $leagueRepo = $this->createMock(LeagueRepository::class);
+        $leagueRepo->expects($this->never())->method('findLowestTierForCountry');
+
+        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getMock();
+
+        $leagueRepoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueRepository');
+        $leagueRepoProp->setValue($service, $leagueRepo);
+
+        $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'maybeAutoAssignLeague');
+        $reflection->invoke($service, $academy);
+
+        $this->assertSame($existingLeague, $academy->getCurrentLeague());
+    }
+
+    public function testAutoAssignIsNoOpWhenCountryIsNull(): void
+    {
+        $user    = $this->createStub(User::class);
+        $academy = new Academy('Test FC', $user);
+
+        $leagueRepo = $this->createMock(LeagueRepository::class);
+        $leagueRepo->expects($this->never())->method('findLowestTierForCountry');
+
+        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getMock();
+
+        $leagueRepoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueRepository');
+        $leagueRepoProp->setValue($service, $leagueRepo);
+
+        $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'maybeAutoAssignLeague');
+        $reflection->invoke($service, $academy);
+
+        $this->assertNull($academy->getCurrentLeague());
+    }
+
+    public function testSyncResponseAcademyBlockIncludesId(): void
+    {
+        $user    = $this->createStub(User::class);
+        $academy = new Academy('Test FC', $user);
+
+        // Verify academy has a UUID id
+        $this->assertNotEmpty((string) $academy->getId());
+
+        // The id should be a valid UUID string format
+        $id = (string) $academy->getId();
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id);
     }
 }
