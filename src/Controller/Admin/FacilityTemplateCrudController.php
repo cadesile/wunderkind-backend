@@ -48,6 +48,14 @@ class FacilityTemplateCrudController extends AbstractCrudController
         yield IntegerField::new('weeklyUpkeepBase')
             ->setHelp('Weekly upkeep in pence at level 1. App formula: base × 1.5^level')
             ->hideOnIndex();
+        yield IntegerField::new('matchdayIncome')
+            ->setHelp('Base income per home game in pence. Leave blank for no matchday income.')
+            ->hideOnIndex();
+        yield NumberField::new('matchdayIncomeMultiplier')
+            ->setHelp('Income multiplier per effective level. Only used when matchday income > 0. Formula: income × effectiveLevel × multiplier')
+            ->setNumDecimals(2)
+            ->hideOnIndex()
+            ->setFormTypeOption('attr', ['data-controller' => 'conditional-field']);
         yield NumberField::new('reputationBonus')
             ->setHelp('Reputation awarded to the academy per upgrade level')
             ->setNumDecimals(2)
