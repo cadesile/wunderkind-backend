@@ -36,6 +36,17 @@ class FacilityTemplate
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $weeklyUpkeepBase = 0;
 
+    /** Base income per home game in pence. null = this facility has no matchday income. */
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $matchdayIncome = null;
+
+    /**
+     * Per-level income multiplier. Formula: matchdayIncome × effectiveLevel × multiplier.
+     * Only meaningful when matchdayIncome is non-null.
+     */
+    #[ORM\Column(type: 'float', nullable: true)]
+    private ?float $matchdayIncomeMultiplier = null;
+
     /** Reputation awarded to the academy per upgrade level */
     #[ORM\Column(type: 'float', options: ['default' => 0.0])]
     private float $reputationBonus = 0.0;
@@ -93,6 +104,20 @@ class FacilityTemplate
     public function getWeeklyUpkeepBase(): int { return $this->weeklyUpkeepBase; }
     public function setWeeklyUpkeepBase(int $weeklyUpkeepBase): void { $this->weeklyUpkeepBase = max(0, $weeklyUpkeepBase); }
 
+    public function getMatchdayIncome(): ?int { return $this->matchdayIncome; }
+    public function setMatchdayIncome(?int $matchdayIncome): void
+    {
+        $this->matchdayIncome = $matchdayIncome !== null ? max(0, $matchdayIncome) : null;
+    }
+
+    public function getMatchdayIncomeMultiplier(): ?float { return $this->matchdayIncomeMultiplier; }
+    public function setMatchdayIncomeMultiplier(?float $matchdayIncomeMultiplier): void
+    {
+        $this->matchdayIncomeMultiplier = $matchdayIncomeMultiplier !== null
+            ? max(0.0, $matchdayIncomeMultiplier)
+            : null;
+    }
+
     public function getReputationBonus(): float { return $this->reputationBonus; }
     public function setReputationBonus(float $reputationBonus): void { $this->reputationBonus = $reputationBonus; }
 
@@ -116,16 +141,18 @@ class FacilityTemplate
     public function toArray(): array
     {
         return [
-            'slug'             => $this->slug,
-            'label'            => $this->label,
-            'description'      => $this->description,
-            'category'         => $this->category,
-            'baseCost'         => $this->baseCost,
-            'weeklyUpkeepBase' => $this->weeklyUpkeepBase,
-            'reputationBonus'  => $this->reputationBonus,
-            'maxLevel'         => $this->maxLevel,
-            'decayBase'        => $this->decayBase,
-            'sortOrder'        => $this->sortOrder,
+            'slug'                     => $this->slug,
+            'label'                    => $this->label,
+            'description'              => $this->description,
+            'category'                 => $this->category,
+            'baseCost'                 => $this->baseCost,
+            'weeklyUpkeepBase'         => $this->weeklyUpkeepBase,
+            'matchdayIncome'           => $this->matchdayIncome,
+            'matchdayIncomeMultiplier' => $this->matchdayIncomeMultiplier,
+            'reputationBonus'          => $this->reputationBonus,
+            'maxLevel'                 => $this->maxLevel,
+            'decayBase'                => $this->decayBase,
+            'sortOrder'                => $this->sortOrder,
         ];
     }
 }
