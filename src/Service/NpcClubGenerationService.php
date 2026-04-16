@@ -204,7 +204,7 @@ class NpcClubGenerationService
 
     private function financialApproachForTier(int $tier): string
     {
-        // Higher tiers lean SPECULATIVE, lower tiers lean CONSERVATIVE
+        // Lower tier numbers (elite) lean SPECULATIVE; higher tier numbers (lower league) lean CONSERVATIVE
         if ($tier <= 2) {
             $options = ['SPECULATIVE', 'SPECULATIVE', 'SPECULATIVE', 'BALANCED', 'BALANCED', 'CONSERVATIVE'];
         } elseif ($tier <= 5) {
