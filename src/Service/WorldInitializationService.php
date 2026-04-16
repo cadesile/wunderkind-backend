@@ -77,7 +77,7 @@ class WorldInitializationService
                 if (count($domestic) < $domesticCount) {
                     $deficit = $domesticCount - count($domestic);
                     $extra   = $this->playerRepository->findForeignForWorldInit(
-                        $abilityRange['min'], $abilityRange['max'], '__none__', $deficit
+                        $abilityRange['min'], $abilityRange['max'], '__none__', $deficit // '__none__' is an impossible nationality value used to draw from any nationality (no exclusion)
                     );
                     $domestic = array_merge($domestic, $extra);
                 }
@@ -118,7 +118,7 @@ class WorldInitializationService
         if (count($ampPlayers) < $starterConfig->getStarterPlayerCount()) {
             $deficit = $starterConfig->getStarterPlayerCount() - count($ampPlayers);
             $extra   = $this->playerRepository->findForeignForWorldInit(
-                $ampRange['min'], $ampRange['max'], '__none__', $deficit
+                $ampRange['min'], $ampRange['max'], '__none__', $deficit // '__none__' is an impossible nationality value used to draw from any nationality (no exclusion)
             );
             $ampPlayers = array_merge($ampPlayers, $extra);
         }
@@ -133,6 +133,8 @@ class WorldInitializationService
         $this->playerRepository->deleteByIds($npcPlayerIds);
         $this->staffRepository->deleteByIds($npcStaffIds);
 
+        // Note: Doctrine wraps flush() in an implicit DB transaction on PostgreSQL.
+        // All DML (AMP FK assignments + NPC deletes) is atomically committed here.
         $academy->setWorldInitializedAt(new \DateTimeImmutable());
         $this->em->flush();
 
