@@ -38,6 +38,15 @@ class NpcClub
     #[ORM\Column(type: 'bigint')]
     private int $balance;
 
+    #[ORM\Column(length: 20, options: ['default' => 'DIRECT'])]
+    private string $playingStyle = 'DIRECT';
+
+    #[ORM\Column(length: 20, options: ['default' => 'BALANCED'])]
+    private string $financialApproach = 'BALANCED';
+
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
+    private int $managerTemperament = 50;
+
     #[ORM\Column(type: 'json')]
     private array $facilities;
 
@@ -95,6 +104,15 @@ class NpcClub
 
     public function getBalance(): int { return $this->balance; }
     public function setBalance(int $v): static { $this->balance = $v; return $this; }
+
+    public function getPlayingStyle(): string { return $this->playingStyle; }
+    public function setPlayingStyle(string $v): static { $this->playingStyle = $v; return $this; }
+
+    public function getFinancialApproach(): string { return $this->financialApproach; }
+    public function setFinancialApproach(string $v): static { $this->financialApproach = $v; return $this; }
+
+    public function getManagerTemperament(): int { return $this->managerTemperament; }
+    public function setManagerTemperament(int $v): static { $this->managerTemperament = max(0, min(100, $v)); return $this; }
 
     public function getFacilities(): array { return $this->facilities; }
     public function setFacilities(array $v): static { $this->facilities = $v; return $this; }
