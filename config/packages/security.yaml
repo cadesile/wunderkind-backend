@@ -76,6 +76,7 @@ security:
         - { path: ^/api/squad,           roles: ROLE_ACADEMY }
         - { path: ^/api/staff,           roles: ROLE_ACADEMY }
         - { path: ^/api/facilities,      roles: ROLE_ACADEMY }
+        - { path: ^/api/initialize,      roles: ROLE_ACADEMY }
         - { path: ^/api,                 roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
