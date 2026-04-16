@@ -119,4 +119,62 @@ class PlayerRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Random pool draw filtered by ability range and exact nationality.
+     * Uses RANDOM() ordering via Doctrine DQL. For PostgreSQL only.
+     * @return Player[]
+     */
+    public function findForWorldInit(int $abilityMin, int $abilityMax, string $nationality, int $limit): array
+    {
+        return $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.academy IS NULL')
+            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->andWhere('p.nationality = :nationality')
+            ->setParameter('min', $abilityMin)
+            ->setParameter('max', $abilityMax)
+            ->setParameter('nationality', $nationality)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Random pool draw filtered by ability range, excluding a nationality (for foreign players).
+     * @return Player[]
+     */
+    public function findForeignForWorldInit(int $abilityMin, int $abilityMax, string $excludeNationality, int $limit): array
+    {
+        return $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.academy IS NULL')
+            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->andWhere('p.nationality != :nationality')
+            ->setParameter('min', $abilityMin)
+            ->setParameter('max', $abilityMax)
+            ->setParameter('nationality', $excludeNationality)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Bulk-delete players by UUID array. Used after world-init dispatch.
+     * @param string[] $ids
+     */
+    public function deleteByIds(array $ids): void
+    {
+        if (empty($ids)) {
+            return;
+        }
+        $this->createQueryBuilder('p')
+            ->delete()
+            ->where('p.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->execute();
+    }
 }

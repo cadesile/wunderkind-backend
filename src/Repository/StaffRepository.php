@@ -61,4 +61,38 @@ class StaffRepository extends ServiceEntityRepository
     {
         return $this->findBy(['academy' => $academy]);
     }
+
+    /**
+     * Random pool draw filtered by exact role. Used by WorldInitializationService.
+     * @return Staff[]
+     */
+    public function findInPoolByRoleRandom(StaffRole $role, int $limit): array
+    {
+        return $this->createQueryBuilder('s')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('s.academy IS NULL')
+            ->andWhere('s.role = :role')
+            ->setParameter('role', $role)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Bulk-delete staff by UUID array. Used after world-init dispatch.
+     * @param string[] $ids
+     */
+    public function deleteByIds(array $ids): void
+    {
+        if (empty($ids)) {
+            return;
+        }
+        $this->createQueryBuilder('s')
+            ->delete()
+            ->where('s.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->execute();
+    }
 }
