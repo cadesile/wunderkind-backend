@@ -49,6 +49,10 @@ class Academy
     #[ORM\Column(length: 2, nullable: true)]
     private ?string $country = null;
 
+    /** Set once when POST /api/initialize succeeds. Guards re-initialization (409). */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $worldInitializedAt = null;
+
     /** Player Agent / PA name assigned at academy creation */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $paName = null;
@@ -160,6 +164,10 @@ class Academy
 
     public function getCountry(): ?string { return $this->country; }
     public function setCountry(?string $country): void { $this->country = $country; }
+
+    public function getWorldInitializedAt(): ?\DateTimeImmutable { return $this->worldInitializedAt; }
+    public function setWorldInitializedAt(?\DateTimeImmutable $v): static { $this->worldInitializedAt = $v; return $this; }
+    public function isWorldInitialized(): bool { return $this->worldInitializedAt !== null; }
 
     public function getPaName(): ?string { return $this->paName; }
     public function setPaName(?string $paName): void { $this->paName = $paName; }
