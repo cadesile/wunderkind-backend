@@ -205,6 +205,7 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterAcademyTier($request->request->get('starterAcademyTier', 'local'));
 
         $config->setDefaultFacilitiesJson($request->request->get('defaultFacilities', '{}'));
+        $config->setNpcSquadConfigJson($request->request->get('npcSquadConfig', '{}'));
 
         $reputationTierValue = $request->request->get('starterReputationTier', 'local');
         $reputationTier      = ReputationTier::tryFrom($reputationTierValue) ?? ReputationTier::LOCAL;

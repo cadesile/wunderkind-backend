@@ -54,6 +54,22 @@ class StarterConfig
     #[ORM\Column(type: 'string', length: 20, enumType: ReputationTier::class)]
     private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
 
+    /**
+     * Per-tier NPC squad and staff config. Keyed by tier number (1–8).
+     * Each entry: playerMin, playerMax, managerCount, coachCount, chairmanCount, foreignPercent
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcSquadConfig = [
+        '1' => ['playerMin' => 20, 'playerMax' => 24, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 60],
+        '2' => ['playerMin' => 18, 'playerMax' => 22, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 45],
+        '3' => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 30],
+        '4' => ['playerMin' => 15, 'playerMax' => 18, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 20],
+        '5' => ['playerMin' => 14, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 15],
+        '6' => ['playerMin' => 13, 'playerMax' => 16, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 10],
+        '7' => ['playerMin' => 12, 'playerMax' => 15, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 5],
+        '8' => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 3],
+    ];
+
     /** Returns a new instance pre-populated with all defaults. */
     public static function defaults(): self
     {
@@ -103,4 +119,18 @@ class StarterConfig
 
     public function getStarterReputationTier(): ReputationTier { return $this->starterReputationTier; }
     public function setStarterReputationTier(ReputationTier $v): static { $this->starterReputationTier = $v; return $this; }
+
+    public function getNpcSquadConfig(): array { return $this->npcSquadConfig; }
+    public function setNpcSquadConfig(array $v): static { $this->npcSquadConfig = $v; return $this; }
+
+    public function getNpcSquadConfigJson(): string
+    {
+        return json_encode($this->npcSquadConfig, JSON_PRETTY_PRINT) ?: '{}';
+    }
+
+    public function setNpcSquadConfigJson(string $v): static
+    {
+        $this->npcSquadConfig = json_decode($v, true) ?? [];
+        return $this;
+    }
 }
