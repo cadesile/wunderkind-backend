@@ -103,6 +103,9 @@ class NpcClubGenerationService
                 facilities:     $facilities,
             );
             $club->setStadiumName($stadiumName);
+            $club->setPlayingStyle($this->playingStyleForTier($tier));
+            $club->setFinancialApproach($this->financialApproachForTier($tier));
+            $club->setManagerTemperament(random_int(30, 80));
 
             $this->em->persist($club);
             $this->leagueService->assignClubToLeague($club);
@@ -191,5 +194,24 @@ class NpcClubGenerationService
         $primary   = self::COLORS[array_rand(self::COLORS)];
         $secondary = self::COLORS[array_rand(self::COLORS)];
         return [$primary, $secondary];
+    }
+
+    private function playingStyleForTier(int $tier): string
+    {
+        $styles = ['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'];
+        return $styles[array_rand($styles)];
+    }
+
+    private function financialApproachForTier(int $tier): string
+    {
+        // Higher tiers lean SPECULATIVE, lower tiers lean CONSERVATIVE
+        if ($tier <= 2) {
+            $options = ['SPECULATIVE', 'SPECULATIVE', 'SPECULATIVE', 'BALANCED', 'BALANCED', 'CONSERVATIVE'];
+        } elseif ($tier <= 5) {
+            $options = ['SPECULATIVE', 'BALANCED', 'BALANCED', 'BALANCED', 'CONSERVATIVE', 'CONSERVATIVE'];
+        } else {
+            $options = ['SPECULATIVE', 'BALANCED', 'CONSERVATIVE', 'CONSERVATIVE', 'CONSERVATIVE', 'CONSERVATIVE'];
+        }
+        return $options[array_rand($options)];
     }
 }
