@@ -9,7 +9,6 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: StaffRepository::class)]
 #[ORM\Index(columns: ['academy_id'], name: 'idx_staff_academy')]
-#[ORM\Index(columns: ['assigned_at'], name: 'idx_staff_assigned_at')]
 class Staff
 {
     #[ORM\Id]
@@ -62,10 +61,6 @@ class Staff
     #[ORM\ManyToOne(inversedBy: 'staff')]
     #[ORM\JoinColumn(nullable: true)]
     private ?Academy $academy = null;
-
-    /** Set when the staff member is assigned from the market pool to an academy. Used for 52-week lifecycle cleanup. */
-    #[ORM\Column(nullable: true)]
-    private ?\DateTimeImmutable $assignedAt = null;
 
     #[ORM\Column(type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $dob = null;
@@ -139,9 +134,7 @@ class Staff
     public function getAcademy(): ?Academy { return $this->academy; }
     public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
 
-    public function getAssignedAt(): ?\DateTimeImmutable { return $this->assignedAt; }
-    public function setAssignedAt(?\DateTimeImmutable $at): void { $this->assignedAt = $at; }
-    public function isAssigned(): bool { return $this->assignedAt !== null; }
+    public function isAssigned(): bool { return $this->academy !== null; }
 
     public function getDob(): ?\DateTimeImmutable { return $this->dob; }
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }

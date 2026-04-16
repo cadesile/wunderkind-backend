@@ -563,7 +563,6 @@ class MarketPoolService
                 throw new \RuntimeException('Player is already assigned to an academy.');
             }
             $entity->setAcademy($academy);
-            $entity->setAssignedAt($now);
             $this->em->flush();
             return;
         }
@@ -573,7 +572,6 @@ class MarketPoolService
                 throw new \RuntimeException('Staff member is already assigned to an academy.');
             }
             $entity->setAcademy($academy);
-            $entity->setAssignedAt($now);
             $this->em->flush();
             return;
         }
