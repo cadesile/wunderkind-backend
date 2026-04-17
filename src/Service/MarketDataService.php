@@ -82,7 +82,7 @@ class MarketDataService
                 'dateOfBirth'      => $g->getDateOfBirth()?->format('Y-m-d'),
                 'gender'           => $g->getGender(),
                 'demandLevel'      => $g->getDemandLevel(),
-                'loyaltyToAcademy' => $g->getLoyaltyToAcademy(),
+                'loyaltyToClub' => $g->getLoyaltyToClub(),
                 'contactEmail'     => $g->getContactEmail(),
             ], $p->getGuardians()->toArray()),
         ];

@@ -12,7 +12,7 @@ use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\MarketEntityType;
 use App\Enum\Tier;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use App\Repository\AgentRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\PlayerRepository;
@@ -38,7 +38,7 @@ class MarketController extends AbstractController
     // New endpoints
     // -------------------------------------------------------------------------
 
-    /** Maps the 2-letter academy country code to its player nationality string. */
+    /** Maps the 2-letter club country code to its player nationality string. */
     private const COUNTRY_TO_NATIONALITY = [
         'EN' => 'English',
         'IT' => 'Italian',
@@ -50,7 +50,7 @@ class MarketController extends AbstractController
     ];
 
     #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
-    #[IsGranted('ROLE_ACADEMY')]
+    #[IsGranted('ROLE_CLUB')]
     public function data(Request $request, MarketDataService $service): JsonResponse
     {
         $countryCode = $request->query->get('country');
@@ -67,7 +67,7 @@ class MarketController extends AbstractController
     }
 
     #[Route('/prospects', name: 'api_market_prospects', methods: ['GET'])]
-    #[IsGranted('ROLE_ACADEMY')]
+    #[IsGranted('ROLE_CLUB')]
     public function prospects(MarketDataService $service): JsonResponse
     {
         $players  = $service->getProspectSnapshot();
@@ -77,11 +77,11 @@ class MarketController extends AbstractController
     }
 
     #[Route('/assign', name: 'api_market_assign', methods: ['POST'])]
-    #[IsGranted('ROLE_ACADEMY')]
+    #[IsGranted('ROLE_CLUB')]
     public function assign(
         #[MapRequestPayload] MarketAssignRequest $dto,
         MarketPoolService  $pool,
-        AcademyRepository  $academyRepo,
+        ClubRepository  $clubRepo,
         PlayerRepository   $playerRepo,
         StaffRepository    $staffRepo,
         ScoutRepository    $scoutRepo,
@@ -90,10 +90,10 @@ class MarketController extends AbstractController
     ): JsonResponse {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $academyRepo->findByUser($user);
+        $club = $clubRepo->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'No academy found for this user.'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'No club found for this user.'], Response::HTTP_NOT_FOUND);
         }
 
         try {
@@ -128,7 +128,7 @@ class MarketController extends AbstractController
         }
 
         try {
-            $pool->assignToAcademy($entity, $academy);
+            $pool->assignToClub($entity, $club);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
         }
@@ -137,7 +137,7 @@ class MarketController extends AbstractController
     }
 
     #[Route('/consume', name: 'api_market_consume', methods: ['POST'])]
-    #[IsGranted('ROLE_ACADEMY')]
+    #[IsGranted('ROLE_CLUB')]
     public function consume(
         #[MapRequestPayload] ConsumeRequest $dto,
         PlayerRepository $playerRepo,

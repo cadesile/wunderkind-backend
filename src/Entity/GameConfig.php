@@ -31,7 +31,7 @@ class GameConfig
     private int $cliqueSquadCapPercent = 30;
 
     /**
-     * Minimum weeks a player must have been at the academy
+     * Minimum weeks a player must have been at the club
      * before they can form or join a clique. Default: 3
      */
     #[ORM\Column(type: 'integer')]

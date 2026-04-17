@@ -4,7 +4,7 @@ namespace App\Controller\Api;
 
 use App\Dto\ConcludeSeasonRequest;
 use App\Entity\User;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SeasonSnapshotRepository;
 use App\Service\LeagueService;
@@ -15,11 +15,11 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/league')]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class LeagueController extends AbstractController
 {
     public function __construct(
-        private readonly AcademyRepository        $academyRepository,
+        private readonly ClubRepository        $clubRepository,
         private readonly LeagueService            $leagueService,
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
         private readonly SeasonRecordRepository   $seasonRecordRepository,
@@ -33,13 +33,13 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Unauthorized.'], 401);
         }
 
-        $academy = $this->academyRepository->findByUser($user);
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found.'], 404);
+        $club = $this->clubRepository->findByUser($user);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found.'], 404);
         }
 
         try {
-            $result = $this->leagueService->concludeSeason($academy, $dto);
+            $result = $this->leagueService->concludeSeason($club, $dto);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], 422);
         }
@@ -55,12 +55,12 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Unauthorized.'], 401);
         }
 
-        $academy = $this->academyRepository->findByUser($user);
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found.'], 404);
+        $club = $this->clubRepository->findByUser($user);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found.'], 404);
         }
 
-        $records = $this->seasonRecordRepository->findByAcademy($academy);
+        $records = $this->seasonRecordRepository->findByClub($club);
 
         return $this->json([
             'seasons' => array_map(fn($r) => [
@@ -84,12 +84,12 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Unauthorized.'], 401);
         }
 
-        $academy = $this->academyRepository->findByUser($user);
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found.'], 404);
+        $club = $this->clubRepository->findByUser($user);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found.'], 404);
         }
 
-        $snapshot = $this->seasonSnapshotRepository->findByAcademyAndSeason($academy, $season);
+        $snapshot = $this->seasonSnapshotRepository->findByClubAndSeason($club, $season);
         if ($snapshot === null) {
             return $this->json(['error' => 'Season not found.'], 404);
         }

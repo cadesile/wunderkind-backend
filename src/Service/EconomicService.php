@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\Player;
 use App\Entity\Transfer;
 use App\Enum\InvestorTier;
@@ -29,9 +29,9 @@ class EconomicService
     // Offer generation
     // -------------------------------------------------------------------------
 
-    public function generateSponsorOffer(Academy $academy): array
+    public function generateSponsorOffer(Club $club): array
     {
-        $reputation = $academy->getReputation();
+        $reputation = $club->getReputation();
 
         [$tier, $baseMonthly, $durationMonths] = match (true) {
             $reputation >= 500 => ['large',  50_000_00,  24],
@@ -53,9 +53,9 @@ class EconomicService
         ];
     }
 
-    public function generateInvestorOffer(Academy $academy): array
+    public function generateInvestorOffer(Club $club): array
     {
-        $reputation = $academy->getReputation();
+        $reputation = $club->getReputation();
 
         [$tier, $minAmount, $maxAmount, $minPct, $maxPct] = match (true) {
             $reputation >= 500 => [InvestorTier::PRIVATE_EQUITY, 200_000_00, 500_000_00, 5.0, 15.0],
@@ -66,7 +66,7 @@ class EconomicService
         $investmentAmount = random_int($minAmount, $maxAmount);
         $percentageOwned  = round($minPct + (random_int(0, 100) / 100) * ($maxPct - $minPct), 2);
 
-        if (!$academy->canAcceptInvestor($percentageOwned)) {
+        if (!$club->canAcceptInvestor($percentageOwned)) {
             return [];
         }
 
@@ -104,7 +104,7 @@ class EconomicService
         $p = $player->getPersonality();
         $personalityFactor = 1 + (($p->getLoyalty() + $p->getTeamwork() + $p->getLeadership()) / 300 - 0.5) * 0.2;
 
-        $reputationFactor = 1 + $player->getAcademy()?->getReputation() / 1000 ?? 0;
+        $reputationFactor = 1 + $player->getClub()?->getReputation() / 1000 ?? 0;
 
         return (int) round($baseValue * $abilityFactor * $potentialFactor * $ageFactor * $personalityFactor * $reputationFactor);
     }
@@ -113,22 +113,22 @@ class EconomicService
     // Financial year-end processing
     // -------------------------------------------------------------------------
 
-    public function processFinancialYearEnd(Academy $academy): void
+    public function processFinancialYearEnd(Club $club): void
     {
-        $annualProfit = $academy->calculateAnnualProfit();
+        $annualProfit = $club->calculateAnnualProfit();
         $now          = new \DateTimeImmutable();
 
-        foreach ($academy->getInvestors() as $investor) {
+        foreach ($club->getInvestors() as $investor) {
             if (!$investor->isActive()) {
                 continue;
             }
 
             $payout = $investor->calculateAnnualPayout($annualProfit);
             $investor->setLastPayoutAt($now);
-            $academy->addFunds(-$payout);
+            $club->addFunds(-$payout);
 
             $this->inboxService->sendSystemNotification(
-                $academy,
+                $club,
                 "Annual investor payout: {$investor->getCompany()}",
                 "Annual profit-sharing payout of £" . number_format($payout / 100, 2) . " due to {$investor->getCompany()} ({$investor->getPercentageOwned()}% equity).",
                 ['type' => 'investor_payout', 'investorId' => (string) $investor->getId(), 'amount' => $payout],
@@ -142,11 +142,11 @@ class EconomicService
     // Sponsor contract health check
     // -------------------------------------------------------------------------
 
-    public function checkSponsorContracts(Academy $academy, int $currentReputation): void
+    public function checkSponsorContracts(Club $club, int $currentReputation): void
     {
         $now = new \DateTimeImmutable();
 
-        foreach ($academy->getSponsors() as $sponsor) {
+        foreach ($club->getSponsors() as $sponsor) {
             if ($sponsor->getStatus() !== SponsorStatus::ACTIVE) {
                 continue;
             }
@@ -164,11 +164,11 @@ class EconomicService
     // Age-out checks
     // -------------------------------------------------------------------------
 
-    public function checkAgeOutPlayers(Academy $academy, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
+    public function checkAgeOutPlayers(Club $club, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
     {
         $playersToDelete = [];
 
-        foreach ($academy->getPlayers() as $player) {
+        foreach ($club->getPlayers() as $player) {
             if ($player->getStatus() !== PlayerStatus::ACTIVE) {
                 continue;
             }
@@ -187,10 +187,10 @@ class EconomicService
             // Hard delete at age 21 — collect for removal after iteration
             if ($age >= 21 && !$player->isForcedSaleExecuted()) {
                 $this->inboxService->sendSystemNotification(
-                    $academy,
+                    $club,
                     'Player Aged Out: ' . $player->getFullName(),
                     sprintf(
-                        '%s has turned 21 and left the academy. All records have been removed.',
+                        '%s has turned 21 and left the club. All records have been removed.',
                         $player->getFullName()
                     ),
                     ['type' => 'age_out', 'player_id' => $player->getId()->toRfc4122()],
@@ -214,7 +214,7 @@ class EconomicService
 
             $this->logger->info('Player aged out and permanently deleted', [
                 'player_id'  => $player->getId()->toRfc4122(),
-                'academy_id' => $academy->getId()->toRfc4122(),
+                'club_id' => $club->getId()->toRfc4122(),
                 'week'       => $currentWeek,
             ]);
         }

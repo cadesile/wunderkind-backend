@@ -13,12 +13,12 @@ class SponsorRepository extends ServiceEntityRepository
         parent::__construct($registry, Sponsor::class);
     }
 
-    /** @return Sponsor[] Active sponsors not yet assigned to an academy */
+    /** @return Sponsor[] Active sponsors not yet assigned to an club */
     public function findInPool(int $limit = 20): array
     {
         return $this->createQueryBuilder('s')
             ->where('s.isActive = true')
-            ->andWhere('s.academy IS NULL')
+            ->andWhere('s.club IS NULL')
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
@@ -29,7 +29,7 @@ class SponsorRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('s')
             ->select('COUNT(s.id)')
             ->where('s.isActive = true')
-            ->andWhere('s.academy IS NULL')
+            ->andWhere('s.club IS NULL')
             ->getQuery()
             ->getSingleScalarResult();
     }

@@ -9,7 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: InboxMessageRepository::class)]
-#[ORM\Index(columns: ['academy_id'], name: 'IDX_inbox_academy')]
+#[ORM\Index(columns: ['club_id'], name: 'IDX_inbox_club')]
 class InboxMessage
 {
     #[ORM\Id]
@@ -18,7 +18,7 @@ class InboxMessage
 
     #[ORM\ManyToOne(inversedBy: 'inboxMessages')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
-    private Academy $academy;
+    private Club $club;
 
     #[ORM\Column(type: 'string', enumType: MessageSenderType::class)]
     private MessageSenderType $senderType;
@@ -51,14 +51,14 @@ class InboxMessage
     private ?\DateTimeImmutable $respondedAt = null;
 
     public function __construct(
-        Academy $academy,
+        Club $club,
         MessageSenderType $senderType,
         string $senderName,
         string $subject,
         string $body,
     ) {
         $this->id         = new UuidV7();
-        $this->academy    = $academy;
+        $this->club    = $club;
         $this->senderType = $senderType;
         $this->senderName = $senderName;
         $this->subject    = $subject;
@@ -68,7 +68,7 @@ class InboxMessage
 
     public function getId(): UuidV7 { return $this->id; }
 
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
 
     public function getSenderType(): MessageSenderType { return $this->senderType; }
 

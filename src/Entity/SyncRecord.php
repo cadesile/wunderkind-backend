@@ -19,7 +19,7 @@ class SyncRecord
 
     #[ORM\ManyToOne(inversedBy: 'syncRecords')]
     #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    private Club $club;
 
     /** Week number as reported by the client */
     #[ORM\Column(type: 'integer', options: ['unsigned' => true])]
@@ -51,13 +51,13 @@ class SyncRecord
     private ?string $invalidReason = null;
 
     public function __construct(
-        Academy $academy,
+        Club $club,
         int $clientWeekNumber,
         \DateTimeImmutable $clientTimestamp,
         array $payload,
     ) {
         $this->id               = new UuidV7();
-        $this->academy          = $academy;
+        $this->club          = $club;
         $this->clientWeekNumber = $clientWeekNumber;
         $this->clientTimestamp  = $clientTimestamp;
         $this->serverTimestamp  = new \DateTimeImmutable();
@@ -65,7 +65,7 @@ class SyncRecord
     }
 
     public function getId(): UuidV7 { return $this->id; }
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
 
     public function getClientWeekNumber(): int { return $this->clientWeekNumber; }
     public function getClientTimestamp(): \DateTimeImmutable { return $this->clientTimestamp; }

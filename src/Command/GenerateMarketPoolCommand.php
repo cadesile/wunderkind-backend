@@ -69,7 +69,7 @@ class GenerateMarketPoolCommand extends Command
             }
 
             if ($playerCount > 0) {
-                $io->text(sprintf('Generating %d market players (YOUTH_INTAKE, academy = null)...', $playerCount));
+                $io->text(sprintf('Generating %d market players (YOUTH_INTAKE, club = null)...', $playerCount));
                 $bar = $io->createProgressBar($playerCount);
                 $bar->start();
                 $this->pool->generatePlayers($playerCount, null, RecruitmentSource::YOUTH_INTAKE);
@@ -78,7 +78,7 @@ class GenerateMarketPoolCommand extends Command
             }
 
             if ($prospectCount > 0) {
-                $io->text(sprintf('Generating %d prospect players (SCOUTING_NETWORK, academy = null)...', $prospectCount));
+                $io->text(sprintf('Generating %d prospect players (SCOUTING_NETWORK, club = null)...', $prospectCount));
                 $bar = $io->createProgressBar($prospectCount);
                 $bar->start();
                 $this->pool->generatePlayers($prospectCount, null, RecruitmentSource::SCOUTING_NETWORK);
@@ -87,7 +87,7 @@ class GenerateMarketPoolCommand extends Command
             }
 
             if ($coachCount > 0) {
-                $io->text(sprintf('Generating %d pool coaches (academy = null)...', $coachCount));
+                $io->text(sprintf('Generating %d pool coaches (club = null)...', $coachCount));
                 $bar = $io->createProgressBar($coachCount);
                 $bar->start();
                 $this->pool->generateCoaches($coachCount);

@@ -7,7 +7,7 @@ namespace App\Controller\Api;
 use App\Entity\User;
 use App\Enum\Tier;
 use App\Repository\PlayerRepository;
-use App\Service\AcademyInitializationService;
+use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -17,7 +17,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/squad')]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class SquadController extends AbstractController
 {
     public function __construct(
@@ -30,18 +30,18 @@ class SquadController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $user->getAcademy();
+        $club = $user->getClub();
 
-        if ($academy === null) {
-            return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);
         }
 
         $tierParam    = $request->query->get('tier');
         $tier         = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
         $countryParam = $request->query->get('country');
-        $nationality  = $countryParam !== null ? AcademyInitializationService::countryToNationality($countryParam) : null;
+        $nationality  = $countryParam !== null ? ClubInitializationService::countryToNationality($countryParam) : null;
 
-        $activePlayers = $this->playerRepository->findActiveByAcademy($academy);
+        $activePlayers = $this->playerRepository->findActiveByClub($club);
 
         if ($tier !== null) {
             [$min, $max] = $tier->scoreRange();
@@ -107,10 +107,10 @@ class SquadController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $user->getAcademy();
+        $club = $user->getClub();
 
-        if ($academy === null) {
-            return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);
         }
 
         $player = $this->playerRepository->find($id);
@@ -119,13 +119,13 @@ class SquadController extends AbstractController
             return $this->json(['error' => 'Player not found.'], Response::HTTP_NOT_FOUND);
         }
 
-        if ($player->getAcademy()?->getId() !== $academy->getId()) {
-            return $this->json(['error' => 'Player does not belong to your academy.'], Response::HTTP_FORBIDDEN);
+        if ($player->getClub()?->getId() !== $club->getId()) {
+            return $this->json(['error' => 'Player does not belong to your club.'], Response::HTTP_FORBIDDEN);
         }
 
         $playerName = $player->getFirstName() . ' ' . $player->getLastName();
 
-        $player->setAcademy(null);
+        $player->setClub(null);
         $this->em->flush();
 
         return $this->json([

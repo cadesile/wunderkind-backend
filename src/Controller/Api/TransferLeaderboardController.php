@@ -32,7 +32,7 @@ class TransferLeaderboardController extends AbstractController
         return $this->json([
             'period'     => $period,
             'topSellers' => array_map(fn($s) => [
-                'academyName'   => $s['academyName'],
+                'clubName'   => $s['clubName'],
                 'totalSales'    => (int) $s['totalSales'],
                 'transferCount' => (int) $s['transferCount'],
                 'averageSale'   => (int) $s['transferCount'] > 0

@@ -16,7 +16,7 @@ class SeasonRecord
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    private Club $club;
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
@@ -59,7 +59,7 @@ class SeasonRecord
     private \DateTimeImmutable $createdAt;
 
     public function __construct(
-        Academy $academy,
+        Club $club,
         League $league,
         int $season,
         int $finalPosition,
@@ -74,7 +74,7 @@ class SeasonRecord
         bool $relegated,
     ) {
         $this->id            = new UuidV7();
-        $this->academy       = $academy;
+        $this->club       = $club;
         $this->league        = $league;
         $this->season        = $season;
         $this->finalPosition = $finalPosition;
@@ -91,7 +91,7 @@ class SeasonRecord
     }
 
     public function getId(): UuidV7 { return $this->id; }
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
     public function getLeague(): League { return $this->league; }
     public function getSeason(): int { return $this->season; }
     public function getFinalPosition(): int { return $this->finalPosition; }

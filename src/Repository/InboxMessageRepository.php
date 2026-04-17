@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\InboxMessage;
 use App\Enum\MessageStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -19,35 +19,35 @@ class InboxMessageRepository extends ServiceEntityRepository
     }
 
     /** @return InboxMessage[] */
-    public function findByAcademy(Academy $academy, int $limit = 50): array
+    public function findByClub(Club $club, int $limit = 50): array
     {
         return $this->createQueryBuilder('m')
-            ->andWhere('m.academy = :academy')
-            ->setParameter('academy', $academy)
+            ->andWhere('m.club = :club')
+            ->setParameter('club', $club)
             ->orderBy('m.createdAt', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
     }
 
-    public function countUnread(Academy $academy): int
+    public function countUnread(Club $club): int
     {
         return (int) $this->createQueryBuilder('m')
             ->select('COUNT(m.id)')
-            ->andWhere('m.academy = :academy')
+            ->andWhere('m.club = :club')
             ->andWhere('m.status = :status')
-            ->setParameter('academy', $academy)
+            ->setParameter('club', $club)
             ->setParameter('status', MessageStatus::UNREAD)
             ->getQuery()
             ->getSingleScalarResult();
     }
 
-    public function findOneByAcademyAndId(Academy $academy, string $id): ?InboxMessage
+    public function findOneByClubAndId(Club $club, string $id): ?InboxMessage
     {
         return $this->createQueryBuilder('m')
-            ->andWhere('m.academy = :academy')
+            ->andWhere('m.club = :club')
             ->andWhere('m.id = :id')
-            ->setParameter('academy', $academy)
+            ->setParameter('club', $club)
             ->setParameter('id', $id)
             ->getQuery()
             ->getOneOrNullResult();

@@ -2,7 +2,7 @@
 
 namespace App\Controller\Admin;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Repository\GameConfigRepository;
@@ -58,25 +58,25 @@ class DashboardController extends AbstractDashboardController
         $conn = $this->em->getConnection();
 
         $byNationality = $conn->fetchAllAssociative(
-            'SELECT nationality, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY nationality ORDER BY cnt DESC LIMIT 15'
+            'SELECT nationality, COUNT(*) AS cnt FROM player WHERE club_id IS NULL GROUP BY nationality ORDER BY cnt DESC LIMIT 15'
         );
         $byPosition = $conn->fetchAllAssociative(
-            'SELECT position, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY position ORDER BY cnt DESC'
+            'SELECT position, COUNT(*) AS cnt FROM player WHERE club_id IS NULL GROUP BY position ORDER BY cnt DESC'
         );
         $byAge = $conn->fetchAllAssociative(
-            'SELECT (EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM date_of_birth)) AS age, COUNT(*) AS cnt FROM player WHERE academy_id IS NULL GROUP BY age ORDER BY age'
+            'SELECT (EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM date_of_birth)) AS age, COUNT(*) AS cnt FROM player WHERE club_id IS NULL GROUP BY age ORDER BY age'
         );
 
         return $this->render('admin/dashboard.html.twig', [
             'stats' => [
                 'users'           => $this->em->getRepository(User::class)->count([]),
-                'academies'       => $this->em->getRepository(Academy::class)->count([]),
+                'academies'       => $this->em->getRepository(Club::class)->count([]),
                 'syncs'           => $this->em->getRepository(SyncRecord::class)->count([]),
                 'invalidSyncs'    => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
-                'poolPlayers'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE academy_id IS NULL'),
-                'assignedPlayers' => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE academy_id IS NOT NULL'),
-                'poolStaff'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NULL'),
-                'assignedStaff'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NOT NULL'),
+                'poolPlayers'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE club_id IS NULL'),
+                'assignedPlayers' => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE club_id IS NOT NULL'),
+                'poolStaff'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NULL'),
+                'assignedStaff'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NOT NULL'),
             ],
             'charts' => [
                 'byNationality' => $byNationality,
@@ -202,7 +202,7 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
         $config->setStarterSponsorTier($request->request->get('starterSponsorTier', 'SMALL'));
-        $config->setStarterAcademyTier($request->request->get('starterAcademyTier', 'local'));
+        $config->setStarterClubTier($request->request->get('starterClubTier', 'local'));
 
         $config->setDefaultFacilitiesJson($request->request->get('defaultFacilities', '{}'));
         $config->setNpcSquadConfigJson($request->request->get('npcSquadConfig', '{}'));
@@ -227,12 +227,12 @@ class DashboardController extends AbstractDashboardController
         $conn = $this->em->getConnection();
 
         $poolCounts = [
-            'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'"),
+            'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
             'seniorPlayers' => $this->playerRepository->countSeniorInPool(),
-            'coaches'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE academy_id IS NULL'),
+            'coaches'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NULL'),
             'scouts'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
-            'sponsors'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE academy_id IS NULL'),
-            'investors'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE academy_id IS NULL'),
+            'sponsors'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
+            'investors'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
             'agents'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
         ];
 
@@ -366,10 +366,10 @@ class DashboardController extends AbstractDashboardController
         $conn = $this->em->getConnection();
 
         // Delete guardians referencing unassigned players first (FK constraint)
-        $conn->executeStatement('DELETE FROM guardian WHERE player_id IN (SELECT id FROM player WHERE academy_id IS NULL)');
+        $conn->executeStatement('DELETE FROM guardian WHERE player_id IN (SELECT id FROM player WHERE club_id IS NULL)');
 
-        $players   = $conn->executeStatement('DELETE FROM player WHERE academy_id IS NULL');
-        $staff     = $conn->executeStatement('DELETE FROM staff WHERE academy_id IS NULL');
+        $players   = $conn->executeStatement('DELETE FROM player WHERE club_id IS NULL');
+        $staff     = $conn->executeStatement('DELETE FROM staff WHERE club_id IS NULL');
         $scouts    = $conn->executeStatement('DELETE FROM scout');
         $investors = $conn->executeStatement('DELETE FROM investor WHERE assigned_at IS NULL');
         $sponsors  = $conn->executeStatement('DELETE FROM sponsor WHERE assigned_at IS NULL');
@@ -632,14 +632,14 @@ class DashboardController extends AbstractDashboardController
             return $this->redirectToRoute('admin_settings');
         }
 
-        $academies      = $this->em->getRepository(Academy::class)->findAll();
+        $academies      = $this->em->getRepository(Club::class)->findAll();
         $processedCount = 0;
         $deletedCount   = 0;
 
-        foreach ($academies as $academy) {
-            $playersBefore = $academy->getPlayers()->count();
-            $economicService->checkAgeOutPlayers($academy, $academy->getLastSyncedWeek(), new \DateTimeImmutable());
-            $deletedCount  += max(0, $playersBefore - $academy->getPlayers()->count());
+        foreach ($academies as $club) {
+            $playersBefore = $club->getPlayers()->count();
+            $economicService->checkAgeOutPlayers($club, $club->getLastSyncedWeek(), new \DateTimeImmutable());
+            $deletedCount  += max(0, $playersBefore - $club->getPlayers()->count());
             $processedCount++;
         }
 
@@ -705,11 +705,11 @@ class DashboardController extends AbstractDashboardController
         $conn->executeStatement('DELETE FROM investor');
         $conn->executeStatement('DELETE FROM sponsor');
         // facility table removed — facility_template is config, intentionally preserved
-        $conn->executeStatement('DELETE FROM academy');
+        $conn->executeStatement('DELETE FROM club');
         $conn->executeStatement('DELETE FROM refresh_tokens');
         $conn->executeStatement('DELETE FROM "user"');
 
-        $this->addFlash('success', 'Nuclear reset complete — all player, academy, sync, and leaderboard data has been wiped. Settings and admin accounts are untouched.');
+        $this->addFlash('success', 'Nuclear reset complete — all player, club, sync, and leaderboard data has been wiped. Settings and admin accounts are untouched.');
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
     }
 
@@ -728,7 +728,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         yield MenuItem::section('Users & Academies');
         yield MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users');
-        yield MenuItem::linkTo(AcademyCrudController::class, 'Academies', 'fa fa-school');
+        yield MenuItem::linkTo(ClubCrudController::class, 'Academies', 'fa fa-school');
         yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
@@ -757,6 +757,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Clubs & Leagues');
         yield MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved');
         yield MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy');
+        yield MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board');
         yield MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content');
     }
 }

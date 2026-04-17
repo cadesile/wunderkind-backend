@@ -11,7 +11,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/archetypes', name: 'api_archetypes', methods: ['GET'])]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class ArchetypeController extends AbstractController
 {
     public function __construct(

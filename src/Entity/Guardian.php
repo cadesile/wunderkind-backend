@@ -36,11 +36,11 @@ class Guardian
     private int $demandLevel = 5;
 
     /**
-     * Guardian's loyalty to the academy (0–100).
+     * Guardian's loyalty to the club (0–100).
      * Drops when you ignore their concerns; rises with praise and progress.
      */
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
-    private int $loyaltyToAcademy = 50;
+    private int $loyaltyToClub = 50;
 
     #[ORM\ManyToOne(inversedBy: 'guardians')]
     #[ORM\JoinColumn(nullable: false)]
@@ -79,8 +79,8 @@ class Guardian
     public function getDemandLevel(): int { return $this->demandLevel; }
     public function setDemandLevel(int $level): void { $this->demandLevel = max(1, min(10, $level)); }
 
-    public function getLoyaltyToAcademy(): int { return $this->loyaltyToAcademy; }
-    public function setLoyaltyToAcademy(int $loyalty): void { $this->loyaltyToAcademy = max(0, min(100, $loyalty)); }
+    public function getLoyaltyToClub(): int { return $this->loyaltyToClub; }
+    public function setLoyaltyToClub(int $loyalty): void { $this->loyaltyToClub = max(0, min(100, $loyalty)); }
 
     public function getPlayer(): Player { return $this->player; }
     public function setPlayer(Player $player): void { $this->player = $player; }

@@ -13,12 +13,12 @@ class InvestorRepository extends ServiceEntityRepository
         parent::__construct($registry, Investor::class);
     }
 
-    /** @return Investor[] Active investors not yet assigned to an academy */
+    /** @return Investor[] Active investors not yet assigned to an club */
     public function findInPool(int $limit = 10): array
     {
         return $this->createQueryBuilder('i')
             ->where('i.isActive = true')
-            ->andWhere('i.academy IS NULL')
+            ->andWhere('i.club IS NULL')
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
@@ -29,7 +29,7 @@ class InvestorRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('i')
             ->select('COUNT(i.id)')
             ->where('i.isActive = true')
-            ->andWhere('i.academy IS NULL')
+            ->andWhere('i.club IS NULL')
             ->getQuery()
             ->getSingleScalarResult();
     }

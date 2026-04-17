@@ -2,7 +2,7 @@
 
 namespace App\EventSubscriber;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Events;
 use Doctrine\Persistence\Event\LifecycleEventArgs;
@@ -14,11 +14,11 @@ class DomainSeparationSubscriber
     {
         $entity = $args->getObject();
 
-        if ($entity instanceof Academy) {
+        if ($entity instanceof Club) {
             $user = $entity->getUser();
-            if ($user->getAcademy() !== null) {
+            if ($user->getClub() !== null) {
                 throw new \DomainException(sprintf(
-                    'User "%s" already owns an Academy.',
+                    'User "%s" already owns an Club.',
                     $user->getEmail(),
                 ));
             }

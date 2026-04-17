@@ -6,7 +6,7 @@ use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -21,7 +21,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class PlayerCrudController extends AbstractCrudController
 {
-    public function __construct(private readonly AcademyRepository $academyRepository) {}
+    public function __construct(private readonly ClubRepository $clubRepository) {}
 
     public static function getEntityFqcn(): string
     {
@@ -47,10 +47,10 @@ class PlayerCrudController extends AbstractCrudController
      */
     public function createEntity(string $entityFqcn): Player
     {
-        $academy = $this->academyRepository->findOneBy([]);
+        $club = $this->clubRepository->findOneBy([]);
 
-        if ($academy === null) {
-            throw new \RuntimeException('No Academy exists yet. Register a user first.');
+        if ($club === null) {
+            throw new \RuntimeException('No Club exists yet. Register a user first.');
         }
 
         return new Player(
@@ -62,7 +62,7 @@ class PlayerCrudController extends AbstractCrudController
             recruitmentSource: RecruitmentSource::SCOUTING_NETWORK,
             potential: 50,
             currentAbility: 50,
-            academy: $academy,
+            club: $club,
         );
     }
 
@@ -136,7 +136,7 @@ class PlayerCrudController extends AbstractCrudController
             ->setHelp('Weekly value in pence — £1,000 = 100,000')
             ->hideOnIndex();
 
-        yield AssociationField::new('academy');
+        yield AssociationField::new('club');
         yield AssociationField::new('agent')->setRequired(false)->hideOnIndex();
         yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
 

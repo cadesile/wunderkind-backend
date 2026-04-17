@@ -141,7 +141,7 @@ class SeedArchetypesCommand extends Command
             ],
             [
                 'name'        => 'The Model Professional',
-                'description' => 'Immaculate timekeeping, immaculate diet, immaculate attitude. His professionalism is a daily reminder of what it means to take the craft seriously. Every academy needs one of him.',
+                'description' => 'Immaculate timekeeping, immaculate diet, immaculate attitude. His professionalism is a daily reminder of what it means to take the craft seriously. Every club needs one of him.',
                 'traitMapping' => ['formula' => ['professionalism' => 0.50, 'consistency' => 0.30, 'loyalty' => 0.20], 'threshold' => 74],
             ],
             [
@@ -150,7 +150,7 @@ class SeedArchetypesCommand extends Command
                 'traitMapping' => ['formula' => ['consistency' => 0.50, 'pressure' => 0.30, 'professionalism' => 0.20], 'threshold' => 72],
             ],
             [
-                'name'        => 'The Academy Graduate',
+                'name'        => 'The Club Graduate',
                 'description' => 'Every touch carries the weight of years in the system. He knows every corner of this club and the ambition to repay the faith shown in him burns quietly but permanently.',
                 'traitMapping' => ['formula' => ['loyalty' => 0.45, 'professionalism' => 0.30, 'ambition' => 0.25], 'threshold' => 70],
             ],
@@ -192,7 +192,7 @@ class SeedArchetypesCommand extends Command
 
             [
                 'name'        => 'The Late Starter',
-                'description' => 'Arrived at the academy later than most but with a work ethic that leaves the early starters behind. His professionalism and consistency suggest the ceiling is higher than his current level implies.',
+                'description' => 'Arrived at the club later than most but with a work ethic that leaves the early starters behind. His professionalism and consistency suggest the ceiling is higher than his current level implies.',
                 'traitMapping' => ['formula' => ['professionalism' => 0.45, 'consistency' => 0.30, 'loyalty' => 0.25], 'threshold' => 62],
             ],
             [
@@ -217,7 +217,7 @@ class SeedArchetypesCommand extends Command
             ],
             [
                 'name'        => 'The Quiet Worker',
-                'description' => 'Never the loudest voice, never the first name on any teamsheet — not yet. But his professionalism, loyalty, and willingness to improve quietly suggest the rewards will come for both player and academy.',
+                'description' => 'Never the loudest voice, never the first name on any teamsheet — not yet. But his professionalism, loyalty, and willingness to improve quietly suggest the rewards will come for both player and club.',
                 'traitMapping' => ['formula' => ['professionalism' => 0.45, 'loyalty' => 0.35, 'bravery' => 0.20], 'threshold' => 65],
             ],
         ];

@@ -2,7 +2,7 @@
 
 namespace App\Tests\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Entity\User;
@@ -60,17 +60,17 @@ class LeagueServiceTest extends TestCase
         $this->assertNull($club->getLeague());
     }
 
-    public function testAssignAcademyToStarterLeague(): void
+    public function testAssignClubToStarterLeague(): void
     {
         $league = new League('EN', 8, 'League 8');
         $repo   = $this->createStub(LeagueRepository::class);
         $repo->method('findByCountryAndTier')->willReturn($league);
 
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
+        $club = new Club('Test FC', $user);
         $service = $this->makeService($repo);
-        $service->assignAcademyToStarterLeague($academy, 'EN');
+        $service->assignClubToStarterLeague($club, 'EN');
 
-        $this->assertSame($league, $academy->getCurrentLeague());
+        $this->assertSame($league, $club->getCurrentLeague());
     }
 }

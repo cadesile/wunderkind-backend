@@ -16,7 +16,7 @@ class SeasonSnapshot
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    private Club $club;
 
     #[ORM\Column(type: 'smallint')]
     private int $season;
@@ -31,13 +31,13 @@ class SeasonSnapshot
     private \DateTimeImmutable $createdAt;
 
     public function __construct(
-        Academy $academy,
+        Club $club,
         int $season,
         string $country,
         array $snapshotData,
     ) {
         $this->id           = new UuidV7();
-        $this->academy      = $academy;
+        $this->club      = $club;
         $this->season       = $season;
         $this->country      = $country;
         $this->snapshotData = $snapshotData;
@@ -45,7 +45,7 @@ class SeasonSnapshot
     }
 
     public function getId(): UuidV7 { return $this->id; }
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
     public function getSeason(): int { return $this->season; }
     public function getCountry(): string { return $this->country; }
     public function getSnapshotData(): array { return $this->snapshotData; }

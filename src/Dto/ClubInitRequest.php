@@ -18,11 +18,11 @@ class ManagerProfileInput
     public ?string $nationality = null;
 }
 
-class AcademyInitRequest
+class ClubInitRequest
 {
     #[Assert\NotBlank]
     #[Assert\Length(min: 3, max: 50)]
-    public string $academyName = '';
+    public string $clubName = '';
 
     #[Assert\Length(max: 2)]
     public ?string $country = null;

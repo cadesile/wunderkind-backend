@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Dto\ConcludeSeasonRequest;
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\GameConfig;
 use App\Entity\League;
 use App\Entity\NpcClub;
@@ -50,14 +50,14 @@ class LeagueService
     }
 
     /**
-     * Assigns a new Academy to the tier-8 league for its country.
-     * Call this from AcademyInitService after academy creation.
+     * Assigns a new Club to the tier-8 league for its country.
+     * Call this from ClubInitService after club creation.
      */
-    public function assignAcademyToStarterLeague(Academy $academy, string $country): void
+    public function assignClubToStarterLeague(Club $club, string $country): void
     {
         $league = $this->leagueRepository->findByCountryAndTier($country, 8);
         if ($league !== null) {
-            $academy->setCurrentLeague($league);
+            $club->setCurrentLeague($league);
         }
     }
 
@@ -85,25 +85,25 @@ class LeagueService
     }
 
     /**
-     * Concludes the current season for an academy:
+     * Concludes the current season for an club:
      * - Persists SeasonRecord + SeasonSnapshot
-     * - Moves academy to new league if promoted/relegated
+     * - Moves club to new league if promoted/relegated
      * - Re-rolls sponsor income for the next league
-     * - Increments academy.currentSeason
+     * - Increments club.currentSeason
      *
      * @return array{seasonRecordId: string, newLeague: array{id: string, tier: int, name: string}|null, nextSeasonFinancials: array}
      */
-    public function concludeSeason(Academy $academy, ConcludeSeasonRequest $dto): array
+    public function concludeSeason(Club $club, ConcludeSeasonRequest $dto): array
     {
-        $currentLeague = $academy->getCurrentLeague();
+        $currentLeague = $club->getCurrentLeague();
         if ($currentLeague === null) {
-            throw new \RuntimeException('Academy has no current league assigned.');
+            throw new \RuntimeException('Club has no current league assigned.');
         }
 
         $record = new SeasonRecord(
-            academy:       $academy,
+            club:       $club,
             league:        $currentLeague,
-            season:        $academy->getCurrentSeason(),
+            season:        $club->getCurrentSeason(),
             finalPosition: $dto->finalPosition,
             gamesPlayed:   $dto->gamesPlayed,
             wins:          $dto->wins,
@@ -118,8 +118,8 @@ class LeagueService
         $this->em->persist($record);
 
         $snapshot = new SeasonSnapshot(
-            academy:      $academy,
-            season:       $academy->getCurrentSeason(),
+            club:      $club,
+            season:       $club->getCurrentSeason(),
             country:      $currentLeague->getCountry(),
             snapshotData: [
                 'amp' => [
@@ -155,10 +155,10 @@ class LeagueService
         }
 
         if ($newLeague !== null) {
-            $academy->setCurrentLeague($newLeague);
+            $club->setCurrentLeague($newLeague);
         }
 
-        $academy->setCurrentSeason($academy->getCurrentSeason() + 1);
+        $club->setCurrentSeason($club->getCurrentSeason() + 1);
 
         // Re-roll sponsor income for next season's league
         $nextLeague = $newLeague ?? $currentLeague;

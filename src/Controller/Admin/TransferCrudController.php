@@ -34,7 +34,7 @@ class TransferCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->hideOnForm();
         yield AssociationField::new('player');
-        yield AssociationField::new('academy');
+        yield AssociationField::new('club');
         yield TextField::new('typeValue', 'Type');
         yield IntegerField::new('fee')
             ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—');

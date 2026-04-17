@@ -8,7 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: StaffRepository::class)]
-#[ORM\Index(columns: ['academy_id'], name: 'idx_staff_academy')]
+#[ORM\Index(columns: ['club_id'], name: 'idx_staff_club')]
 class Staff
 {
     #[ORM\Id]
@@ -60,7 +60,7 @@ class Staff
 
     #[ORM\ManyToOne(inversedBy: 'staff')]
     #[ORM\JoinColumn(nullable: true)]
-    private ?Academy $academy = null;
+    private ?Club $club = null;
 
     #[ORM\Column(type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $dob = null;
@@ -72,13 +72,13 @@ class Staff
         string $firstName = '',
         string $lastName = '',
         StaffRole $role = StaffRole::HEAD_COACH,
-        ?Academy $academy = null,
+        ?Club $club = null,
     ) {
         $this->id        = new UuidV7();
         $this->firstName = $firstName;
         $this->lastName  = $lastName;
         $this->role      = $role;
-        $this->academy   = $academy;
+        $this->club   = $club;
         $this->hiredAt   = new \DateTimeImmutable();
     }
 
@@ -129,12 +129,12 @@ class Staff
         $this->specialisms = is_array($decoded) && !empty($decoded) ? $decoded : null;
     }
 
-    public function isInMarketPool(): bool { return $this->academy === null; }
+    public function isInMarketPool(): bool { return $this->club === null; }
 
-    public function getAcademy(): ?Academy { return $this->academy; }
-    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
+    public function getClub(): ?Club { return $this->club; }
+    public function setClub(?Club $club): void { $this->club = $club; }
 
-    public function isAssigned(): bool { return $this->academy !== null; }
+    public function isAssigned(): bool { return $this->club !== null; }
 
     public function getDob(): ?\DateTimeImmutable { return $this->dob; }
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\InboxMessage;
 use App\Entity\Player;
 use App\Entity\User;
@@ -24,17 +24,17 @@ class InboxService
         private readonly InvestorRepository     $investorRepository,
     ) {}
 
-    public function sendSponsorOffer(Academy $academy, array $offerData): InboxMessage
+    public function sendSponsorOffer(Club $club, array $offerData): InboxMessage
     {
         $company = $offerData['company'] ?? 'Unknown Sponsor';
         $monthly = number_format(($offerData['monthlyPayment'] ?? 0) / 100, 2);
 
         $message = new InboxMessage(
-            academy:    $academy,
+            club:    $club,
             senderType: MessageSenderType::SPONSOR,
             senderName: $company,
             subject:    "Sponsorship offer from {$company}",
-            body:       "We are interested in sponsoring your academy. Monthly payment: £{$monthly}. Please review the offer details.",
+            body:       "We are interested in sponsoring your club. Monthly payment: £{$monthly}. Please review the offer details.",
         );
         $message->setOfferData($offerData);
 
@@ -44,18 +44,18 @@ class InboxService
         return $message;
     }
 
-    public function sendInvestorOffer(Academy $academy, array $offerData): InboxMessage
+    public function sendInvestorOffer(Club $club, array $offerData): InboxMessage
     {
         $company    = $offerData['company'] ?? 'Unknown Investor';
         $amount     = number_format(($offerData['investmentAmount'] ?? 0) / 100, 2);
         $percentage = $offerData['percentageOwned'] ?? 0;
 
         $message = new InboxMessage(
-            academy:    $academy,
+            club:    $club,
             senderType: MessageSenderType::INVESTOR,
             senderName: $company,
             subject:    "Investment offer from {$company}",
-            body:       "{$company} wishes to invest £{$amount} in your academy for {$percentage}% equity. Review the full terms below.",
+            body:       "{$company} wishes to invest £{$amount} in your club for {$percentage}% equity. Review the full terms below.",
         );
         $message->setOfferData($offerData);
 
@@ -67,13 +67,13 @@ class InboxService
 
     public function sendAgentSaleOffer(Player $player, array $offerData): InboxMessage
     {
-        $academy     = $player->getAcademy();
+        $club     = $player->getClub();
         $agentName   = $offerData['agentName'] ?? 'Unknown Agent';
         $playerName  = $player->getFullName();
         $offerAmount = number_format(($offerData['offerAmount'] ?? 0) / 100, 2);
 
         $message = new InboxMessage(
-            academy:    $academy,
+            club:    $club,
             senderType: MessageSenderType::AGENT,
             senderName: $agentName,
             subject:    "Transfer offer for {$playerName}",
@@ -91,13 +91,13 @@ class InboxService
 
     public function sendAgeOutWarning(Player $player, int $weeksRemaining): InboxMessage
     {
-        $academy    = $player->getAcademy();
+        $club    = $player->getClub();
         $playerName = $player->getFullName();
 
         $message = new InboxMessage(
-            academy:    $academy,
+            club:    $club,
             senderType: MessageSenderType::SYSTEM,
-            senderName: 'Academy System',
+            senderName: 'Club System',
             subject:    "Age-out warning: {$playerName}",
             body:       "{$playerName} will be automatically transferred in {$weeksRemaining} week(s) when they turn 21. Consider negotiating a transfer now to maximise value.",
         );
@@ -112,14 +112,14 @@ class InboxService
 
     public function sendForcedSaleNotification(Player $player, int $salePrice): InboxMessage
     {
-        $academy    = $player->getAcademy();
+        $club    = $player->getClub();
         $playerName = $player->getFullName();
         $formatted  = number_format($salePrice / 100, 2);
 
         $message = new InboxMessage(
-            academy:    $academy,
+            club:    $club,
             senderType: MessageSenderType::SYSTEM,
-            senderName: 'Academy System',
+            senderName: 'Club System',
             subject:    "Forced sale completed: {$playerName}",
             body:       "{$playerName} has been automatically transferred for £{$formatted} after reaching age 21.",
         );
@@ -132,12 +132,12 @@ class InboxService
         return $message;
     }
 
-    public function sendSystemNotification(Academy $academy, string $subject, string $body, array $details = []): InboxMessage
+    public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
     {
         $message = new InboxMessage(
-            academy:    $academy,
+            club:    $club,
             senderType: MessageSenderType::SYSTEM,
-            senderName: 'Academy System',
+            senderName: 'Club System',
             subject:    $subject,
             body:       $body,
         );
@@ -163,8 +163,8 @@ class InboxService
 
         if ($offerData !== null) {
             match ($message->getSenderType()) {
-                MessageSenderType::SPONSOR  => $this->acceptSponsorOffer($message->getAcademy(), $offerData),
-                MessageSenderType::INVESTOR => $this->acceptInvestorOffer($message->getAcademy(), $offerData),
+                MessageSenderType::SPONSOR  => $this->acceptSponsorOffer($message->getClub(), $offerData),
+                MessageSenderType::INVESTOR => $this->acceptInvestorOffer($message->getClub(), $offerData),
                 default                     => null,
             };
         }
@@ -178,7 +178,7 @@ class InboxService
         $this->em->flush();
     }
 
-    private function acceptSponsorOffer(Academy $academy, array $offerData): void
+    private function acceptSponsorOffer(Club $club, array $offerData): void
     {
         $sponsor = $this->sponsorRepository->find($offerData['sponsorId'] ?? null);
         if ($sponsor === null) {
@@ -189,7 +189,7 @@ class InboxService
         $now            = new \DateTimeImmutable();
         $signingBonus   = $offerData['signingBonus'] ?? 0;
 
-        $sponsor->setAcademy($academy);
+        $sponsor->setClub($club);
         $sponsor->setStatus(SponsorStatus::ACTIVE);
         $sponsor->setMonthlyPayment($offerData['monthlyPayment'] ?? 0);
         $sponsor->setContractStartDate($now);
@@ -198,29 +198,29 @@ class InboxService
         $sponsor->setReputationBonusThreshold($offerData['reputationBonusThreshold'] ?? null);
 
         if ($signingBonus > 0) {
-            $academy->addFunds($signingBonus);
+            $club->addFunds($signingBonus);
         }
     }
 
-    private function acceptInvestorOffer(Academy $academy, array $offerData): void
+    private function acceptInvestorOffer(Club $club, array $offerData): void
     {
         $investor = $this->investorRepository->find($offerData['investorId'] ?? null);
         if ($investor === null) {
             return;
         }
 
-        if (!$academy->canAcceptInvestor($offerData['percentageOwned'] ?? 0)) {
+        if (!$club->canAcceptInvestor($offerData['percentageOwned'] ?? 0)) {
             return;
         }
 
-        $investor->setAcademy($academy);
+        $investor->setClub($club);
         $investor->setTier(InvestorTier::from($offerData['tier'] ?? 'angel'));
         $investor->setInvestmentAmount($offerData['investmentAmount'] ?? 0);
         $investor->setPercentageOwned($offerData['percentageOwned'] ?? 5.0);
         $investor->setInvestedAt(new \DateTimeImmutable());
         $investor->setIsActive(true);
 
-        // Capital injection — add investment to academy balance
-        $academy->addFunds($offerData['investmentAmount'] ?? 0);
+        // Capital injection — add investment to club balance
+        $club->addFunds($offerData['investmentAmount'] ?? 0);
     }
 }

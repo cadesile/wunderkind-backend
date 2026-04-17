@@ -2,19 +2,22 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-class AcademyRepository extends ServiceEntityRepository
+/**
+ * @extends ServiceEntityRepository<Club>
+ */
+class ClubRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {
-        parent::__construct($registry, Academy::class);
+        parent::__construct($registry, Club::class);
     }
 
-    public function findByUser(User $user): ?Academy
+    public function findByUser(User $user): ?Club
     {
         return $this->findOneBy(['user' => $user]);
     }

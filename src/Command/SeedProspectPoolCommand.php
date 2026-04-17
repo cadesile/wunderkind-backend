@@ -19,8 +19,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * Seeds the scout prospect pool — players with RecruitmentSource::SCOUTING_NETWORK
- * and no academy assignment. These are surfaced exclusively by the in-game scouting
- * system and must never appear in the open market or new-academy starter bundles.
+ * and no club assignment. These are surfaced exclusively by the in-game scouting
+ * system and must never appear in the open market or new-club starter bundles.
  *
  * Usage:
  *   php bin/console app:seed-prospect-pool            # 200 prospects (default)
@@ -29,7 +29,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 #[AsCommand(
     name: 'app:seed-prospect-pool',
-    description: 'Seed the scout prospect pool (SCOUTING_NETWORK players with no academy)',
+    description: 'Seed the scout prospect pool (SCOUTING_NETWORK players with no club)',
 )]
 class SeedProspectPoolCommand extends Command
 {
@@ -105,7 +105,7 @@ class SeedProspectPoolCommand extends Command
         if ($clear) {
             $deleted = $this->em->createQuery(
                 'DELETE FROM App\Entity\Player p
-                 WHERE p.academy IS NULL
+                 WHERE p.club IS NULL
                    AND p.recruitmentSource = :source'
             )
                 ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
@@ -140,7 +140,7 @@ class SeedProspectPoolCommand extends Command
                 recruitmentSource: RecruitmentSource::SCOUTING_NETWORK,
                 potential:         $potential,
                 currentAbility:    $currentAbility,
-                academy:           null, // Deliberately unassigned — never on open market
+                club:           null, // Deliberately unassigned — never on open market
             );
 
             $player->setStatus(PlayerStatus::ACTIVE);
@@ -179,7 +179,7 @@ class SeedProspectPoolCommand extends Command
         $progressBar->finish();
         $io->newLine(2);
 
-        $io->success(sprintf('Seeded %d scout prospects (SCOUTING_NETWORK, no academy).', $count));
+        $io->success(sprintf('Seeded %d scout prospects (SCOUTING_NETWORK, no club).', $count));
 
         return Command::SUCCESS;
     }

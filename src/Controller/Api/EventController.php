@@ -9,7 +9,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/events')]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class EventController extends AbstractController
 {
     public function __construct(

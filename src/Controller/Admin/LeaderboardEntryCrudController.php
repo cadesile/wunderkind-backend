@@ -34,7 +34,7 @@ class LeaderboardEntryCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->hideOnForm();
-        yield AssociationField::new('academy');
+        yield AssociationField::new('club');
         yield TextField::new('categoryValue', 'Category');
         yield TextField::new('period');
         yield IntegerField::new('score')

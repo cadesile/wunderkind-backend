@@ -7,7 +7,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: \App\Repository\TransferRepository::class)]
-#[ORM\Index(columns: ['academy_id', 'occurred_at'], name: 'idx_transfer_academy_occurred')]
+#[ORM\Index(columns: ['club_id', 'occurred_at'], name: 'idx_transfer_club_occurred')]
 #[ORM\Index(columns: ['net_proceeds'], name: 'idx_transfer_net_proceeds')]
 #[ORM\HasLifecycleCallbacks]
 class Transfer
@@ -22,9 +22,9 @@ class Transfer
 
     #[ORM\ManyToOne(inversedBy: 'transfers')]
     #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    private Club $club;
 
-    /** Name of the buying club (external, not another academy in our system) */
+    /** Name of the buying club (external, not another club in our system) */
     #[ORM\Column(length: 100)]
     private string $destinationClubName;
 
@@ -43,11 +43,11 @@ class Transfer
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $netProceeds = 0;
 
-    /** CA points gained at this academy (currentCA - joiningCA) */
+    /** CA points gained at this club (currentCA - joiningCA) */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $developmentPoints = 0;
 
-    /** Reputation awarded to the academy for this sale */
+    /** Reputation awarded to the club for this sale */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $reputationGained = 0;
 
@@ -65,14 +65,14 @@ class Transfer
 
     public function __construct(
         ?Player $player,
-        Academy $academy,
+        Club $club,
         string $destinationClubName,
         TransferType $type,
         \DateTimeImmutable $occurredAt,
     ) {
         $this->id                  = new UuidV7();
         $this->player              = $player;
-        $this->academy             = $academy;
+        $this->club             = $club;
         $this->destinationClubName = $destinationClubName;
         $this->type                = $type;
         $this->occurredAt          = $occurredAt;
@@ -81,7 +81,7 @@ class Transfer
     public function getId(): UuidV7 { return $this->id; }
 
     public function getPlayer(): ?Player { return $this->player; }
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
 
     public function getDestinationClubName(): string { return $this->destinationClubName; }
     public function setDestinationClubName(string $name): void { $this->destinationClubName = $name; }

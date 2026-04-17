@@ -92,7 +92,7 @@ Response `200`:
 
 ---
 
-### `POST /api/academy/initialize` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/academy/initialize` — JWT required (`ROLE_CLUB`)
 Called once after registration to set up the academy with a starter bundle of players, staff, and a sponsor. Do not call if the academy is already initialized.
 
 Request body:
@@ -126,7 +126,7 @@ Starting balance is £5,000 (500,000 pence). Four facilities are created at leve
 
 ---
 
-### `GET /api/academy/status` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/academy/status` — JWT required (`ROLE_CLUB`)
 Snapshot of the academy's current state. Poll after each sync to refresh UI totals.
 
 Response `200`:
@@ -155,7 +155,7 @@ Errors:
 
 ---
 
-### `GET /api/squad` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/squad` — JWT required (`ROLE_CLUB`)
 Full player roster for the authenticated academy, including morale and personality traits. Personality traits are hidden from the player in-game but available for server-side processing.
 
 Response `200`:
@@ -197,7 +197,7 @@ Errors:
 
 ---
 
-### `GET /api/staff` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/staff` — JWT required (`ROLE_CLUB`)
 Full staff roster for the authenticated academy.
 
 Response `200`:
@@ -230,7 +230,7 @@ Errors:
 
 ---
 
-### `POST /api/sync` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/sync` — JWT required (`ROLE_CLUB`)
 Called once per Weekly Tick. Sends aggregate deltas from the current week; server updates leaderboards, persists academy state, processes finances, and checks economic events.
 
 After each accepted sync the server automatically:
@@ -380,7 +380,7 @@ Response `200`:
 
 ---
 
-### `GET /api/market/data` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/market/data` — JWT required (`ROLE_CLUB`)
 Fetch the current market pool snapshot. Returns all entities available to recruit/sign. The server sets a `Cache-Control: max-age=300` header — clients should honour this and avoid polling more frequently than every 5 minutes.
 
 Response `200`:
@@ -469,7 +469,7 @@ Pool sizes returned per request:
 
 ---
 
-### `POST /api/market/assign` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/market/assign` — JWT required (`ROLE_CLUB`)
 Assign a market entity to the authenticated user's academy. Use the `id` values returned by `GET /api/market/data`.
 
 Request body:
@@ -496,7 +496,7 @@ Errors:
 
 ---
 
-### `GET /api/events/templates` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/events/templates` — JWT required (`ROLE_CLUB`)
 Returns all active (weight > 0) game event templates for client-side narrative simulation. Response is cached server-side for 1 hour (`Cache-Control: max-age=3600`).
 
 The client uses these templates to randomly trigger narrative events during the Weekly Tick. Events with higher `weight` are selected more frequently. The `impacts` array is consumed by the client engine to apply effects to player/academy state.
@@ -526,7 +526,7 @@ Response `200`:
 
 ---
 
-### `GET /api/archetypes` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/archetypes` — JWT required (`ROLE_CLUB`)
 Returns all 30 player archetypes with their weighted trait formulas. The client uses these to classify players based on their personality profile. Use `versionHash` to detect seed data changes and invalidate your local cache.
 
 Response `200`:
@@ -558,7 +558,7 @@ Available trait keys: `bravery`, `consistency`, `loyalty`, `professionalism`, `a
 
 ---
 
-### `GET /api/inbox` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/inbox` — JWT required (`ROLE_CLUB`)
 List the 50 most recent inbox messages for the academy, ordered newest first.
 
 Response `200`:
@@ -585,7 +585,7 @@ Response `200`:
 
 ---
 
-### `GET /api/inbox/{id}` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/inbox/{id}` — JWT required (`ROLE_CLUB`)
 Fetch a single message. Automatically transitions status from `unread` → `read`.
 
 Response `200`: same shape as a single entry in `messages` above.
@@ -595,7 +595,7 @@ Errors:
 
 ---
 
-### `POST /api/inbox/{id}/accept` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/inbox/{id}/accept` — JWT required (`ROLE_CLUB`)
 Accept an offer message. Business logic applied server-side based on `senderType`:
 
 - **Sponsor** — sets sponsor to `active`, populates contract dates, payment amount, reputation thresholds; if `offerData.signingBonus > 0`, that amount is immediately credited to the academy's balance
@@ -613,7 +613,7 @@ Errors:
 
 ---
 
-### `POST /api/inbox/{id}/reject` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/inbox/{id}/reject` — JWT required (`ROLE_CLUB`)
 Reject an offer. Sets `status` to `rejected` and records `respondedAt`.
 
 Response `200`:
@@ -623,7 +623,7 @@ Response `200`:
 
 ---
 
-### `POST /api/inbox/{id}/read` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/inbox/{id}/read` — JWT required (`ROLE_CLUB`)
 Mark a message as read without accepting or rejecting it. No-op if already read/accepted/rejected.
 
 Response `200`:
@@ -633,7 +633,7 @@ Response `200`:
 
 ---
 
-### `GET /api/finance/overview` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/finance/overview` — JWT required (`ROLE_CLUB`)
 Snapshot of the academy's current financial position.
 
 Response `200`:
@@ -662,7 +662,7 @@ Response `200`:
 
 ---
 
-### `GET /api/finance/investors` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/finance/investors` — JWT required (`ROLE_CLUB`)
 Full investor list with ownership breakdown.
 
 Response `200`:
@@ -685,7 +685,7 @@ Response `200`:
 
 ---
 
-### `GET /api/finance/sponsors` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/finance/sponsors` — JWT required (`ROLE_CLUB`)
 Full sponsor list with contract details and remaining value.
 
 Response `200`:
@@ -715,7 +715,7 @@ Response `200`:
 
 ---
 
-### `POST /api/finance/sponsors/{id}/terminate` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/finance/sponsors/{id}/terminate` — JWT required (`ROLE_CLUB`)
 Early-terminate an active sponsor contract. The server computes 50 % of remaining contract value as the fee, caches it on the record, and sets status to `early_terminated`.
 
 Response `200`:
@@ -731,7 +731,7 @@ Errors:
 
 ---
 
-### `GET /api/facilities` — JWT required (`ROLE_ACADEMY`)
+### `GET /api/facilities` — JWT required (`ROLE_CLUB`)
 List all four academy facilities and their current state. Facilities are created at level 0 when the academy is initialized.
 
 Response `200`:
@@ -789,7 +789,7 @@ Errors:
 
 ---
 
-### `POST /api/facilities/{type}/upgrade` — JWT required (`ROLE_ACADEMY`)
+### `POST /api/facilities/{type}/upgrade` — JWT required (`ROLE_CLUB`)
 Upgrade a facility by one level. The upgrade cost is deducted from the academy's balance immediately.
 
 `{type}` — one of: `training_pitch` · `medical_centre` · `medical_network` · `scouting_network`

@@ -128,7 +128,7 @@ class SeedGameEventsCommand extends Command
                 'bodyTemplate' => 'Players have voiced concerns about the state of the {facility}. Squad morale has dipped.',
                 'impacts'      => [
                     ['target' => 'squad.morale', 'delta' => -6],
-                    ['target' => 'academy.reputation', 'delta' => -1],
+                    ['target' => 'club.reputation', 'delta' => -1],
                 ],
             ],
             [
@@ -487,7 +487,7 @@ class SeedGameEventsCommand extends Command
                 'category'     => EventCategory::GUARDIAN,
                 'weight'       => 3,
                 'title'        => 'Guardian Gift Request',
-                'bodyTemplate' => '{guardian_name} has been in touch. They feel {player_name} deserves a little recognition for their hard work and are asking the academy to show some goodwill — a small financial gesture would go a long way.',
+                'bodyTemplate' => '{guardian_name} has been in touch. They feel {player_name} deserves a little recognition for their hard work and are asking the club to show some goodwill — a small financial gesture would go a long way.',
                 'impacts'      => [],
             ],
             [
@@ -521,7 +521,7 @@ class SeedGameEventsCommand extends Command
                 'category'     => EventCategory::GUARDIAN,
                 'weight'       => 1,
                 'title'        => 'Withdrawal Threat',
-                'bodyTemplate' => '{guardian_name} has contacted the academy in a formal capacity. They are seriously considering withdrawing {player_name} from the programme if the situation does not improve immediately.',
+                'bodyTemplate' => '{guardian_name} has contacted the club in a formal capacity. They are seriously considering withdrawing {player_name} from the programme if the situation does not improve immediately.',
                 'impacts'      => [],
             ],
             [
@@ -529,7 +529,7 @@ class SeedGameEventsCommand extends Command
                 'category'     => EventCategory::GUARDIAN,
                 'weight'       => 1,
                 'title'        => 'Guardian Morale Concern',
-                'bodyTemplate' => '{guardian_name} reached out after noticing a change in {player_name}\'s mood at home. They want to know what\'s going on and whether the academy is doing enough to support him.',
+                'bodyTemplate' => '{guardian_name} reached out after noticing a change in {player_name}\'s mood at home. They want to know what\'s going on and whether the club is doing enough to support him.',
                 'impacts'      => [],
             ],
             [
@@ -537,7 +537,7 @@ class SeedGameEventsCommand extends Command
                 'category'     => EventCategory::GUARDIAN,
                 'weight'       => 1,
                 'title'        => 'Agent Approach Concern',
-                'bodyTemplate' => '{guardian_name} has informed us that {player_name} has been approached by an agent. They want to understand what this means for his future at the academy before making any decisions.',
+                'bodyTemplate' => '{guardian_name} has informed us that {player_name} has been approached by an agent. They want to understand what this means for his future at the club before making any decisions.',
                 'impacts'      => [],
             ],
 

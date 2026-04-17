@@ -686,7 +686,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 #### User
 ```php
-    public const ROLE_ACADEMY = 'ROLE_ACADEMY';
+    public const ROLE_CLUB = 'ROLE_CLUB';
     private UuidV7 $id;
     private string $email;
     private string $password;

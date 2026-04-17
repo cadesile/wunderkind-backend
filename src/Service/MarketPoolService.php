@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\Agent;
 use App\Entity\Guardian;
 use App\Entity\Investor;
@@ -149,11 +149,11 @@ class MarketPoolService
     // ── Generate ─────────────────────────────────────────────────────────────
 
     /** @return Player[] */
-    public function generatePlayers(int $count, ?int $academyReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
+    public function generatePlayers(int $count, ?int $clubReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
     {
         $cfg         = $this->poolConfigRepo->getConfig();
         $agents      = $this->agentRepo->findAll();
-        $multipliers = $this->getWageMultiplier($academyReputation);
+        $multipliers = $this->getWageMultiplier($clubReputation);
         $players     = [];
 
         for ($i = 0; $i < $count; $i++) {
@@ -174,7 +174,7 @@ class MarketPoolService
                 recruitmentSource: $source,
                 potential:         $potential,
                 currentAbility:    $currentAbility,
-                academy:           null,
+                club:           null,
             );
 
             $player->setStatus(PlayerStatus::ACTIVE);
@@ -234,7 +234,7 @@ class MarketPoolService
                 $guardian          = new Guardian($guardianFirstName, $guardianLastName, $player, $guardianGender);
                 $guardian->setDateOfBirth($this->dobFromAge(random_int(30, 55)));
                 $guardian->setDemandLevel(random_int(1, 10));
-                $guardian->setLoyaltyToAcademy(random_int(30, 80));
+                $guardian->setLoyaltyToClub(random_int(30, 80));
                 $this->em->persist($guardian);
             }
 
@@ -275,7 +275,7 @@ class MarketPoolService
                 recruitmentSource: RecruitmentSource::SENIOR_INTAKE,
                 potential:         $currentAbility,
                 currentAbility:    $currentAbility,
-                academy:           null,
+                club:           null,
             );
 
             $player->setStatus(PlayerStatus::ACTIVE);
@@ -326,7 +326,7 @@ class MarketPoolService
     }
 
     /** @return Staff[] */
-    public function generateCoaches(int $count, ?int $academyReputation = null): array
+    public function generateCoaches(int $count, ?int $clubReputation = null): array
     {
         $cfg        = $this->poolConfigRepo->getConfig();
         $coachRoles = [
@@ -336,7 +336,7 @@ class MarketPoolService
             StaffRole::ANALYST,
         ];
 
-        $multipliers = $this->getWageMultiplier($academyReputation);
+        $multipliers = $this->getWageMultiplier($clubReputation);
         $coaches     = [];
 
         for ($i = 0; $i < $count; $i++) {
@@ -350,7 +350,7 @@ class MarketPoolService
                 firstName: $coachFirst,
                 lastName:  $coachLast,
                 role:      $role,
-                academy:   null,
+                club:   null,
             );
 
             $staff->setNationality($coachNat);
@@ -546,32 +546,32 @@ class MarketPoolService
     // ── Assign ────────────────────────────────────────────────────────────────
 
     /**
-     * Assign a pool entity to an academy.
+     * Assign a pool entity to an club.
      *
      * For Scout entities, a corresponding Staff(SCOUT) member is created on
-     * the academy rather than modifying the Scout entity itself (scouts are
+     * the club rather than modifying the Scout entity itself (scouts are
      * always globally available as a reference pool).
      *
      * @throws \RuntimeException if a Player/Staff/Investor/Sponsor is already assigned
      */
-    public function assignToAcademy(mixed $entity, Academy $academy): void
+    public function assignToClub(mixed $entity, Club $club): void
     {
         $now = new \DateTimeImmutable();
 
         if ($entity instanceof Player) {
             if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Player is already assigned to an academy.');
+                throw new \RuntimeException('Player is already assigned to an club.');
             }
-            $entity->setAcademy($academy);
+            $entity->setClub($club);
             $this->em->flush();
             return;
         }
 
         if ($entity instanceof Staff) {
             if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Staff member is already assigned to an academy.');
+                throw new \RuntimeException('Staff member is already assigned to an club.');
             }
-            $entity->setAcademy($academy);
+            $entity->setClub($club);
             $this->em->flush();
             return;
         }
@@ -582,7 +582,7 @@ class MarketPoolService
                 firstName: $nameParts[0],
                 lastName:  $nameParts[1] ?? $nameParts[0],
                 role:      StaffRole::SCOUT,
-                academy:   $academy,
+                club:   $club,
             );
             $staff->setScoutingRange(min(100, (int) ($entity->getExperience() * 4) + 30));
             $this->em->persist($staff);
@@ -592,9 +592,9 @@ class MarketPoolService
 
         if ($entity instanceof Sponsor) {
             if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Sponsor is already assigned to an academy.');
+                throw new \RuntimeException('Sponsor is already assigned to an club.');
             }
-            $entity->setAcademy($academy);
+            $entity->setClub($club);
             $entity->setAssignedAt($now);
             $this->em->flush();
             return;
@@ -602,9 +602,9 @@ class MarketPoolService
 
         if ($entity instanceof Investor) {
             if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Investor is already assigned to an academy.');
+                throw new \RuntimeException('Investor is already assigned to an club.');
             }
-            $entity->setAcademy($academy);
+            $entity->setClub($club);
             $entity->setAssignedAt($now);
             $this->em->flush();
             return;
@@ -777,16 +777,16 @@ class MarketPoolService
     /**
      * @return array{player: float, staff: float}
      */
-    private function getWageMultiplier(?int $academyReputation): array
+    private function getWageMultiplier(?int $clubReputation): array
     {
-        if ($academyReputation === null) {
+        if ($clubReputation === null) {
             return ['player' => 1.0, 'staff' => 1.0];
         }
 
         return match (true) {
-            $academyReputation < 100 => ['player' => 0.5, 'staff' => 0.6],
-            $academyReputation < 300 => ['player' => 1.0, 'staff' => 1.0],
-            $academyReputation < 600 => ['player' => 2.5, 'staff' => 2.0],
+            $clubReputation < 100 => ['player' => 0.5, 'staff' => 0.6],
+            $clubReputation < 300 => ['player' => 1.0, 'staff' => 1.0],
+            $clubReputation < 600 => ['player' => 2.5, 'staff' => 2.0],
             default                  => ['player' => 5.0, 'staff' => 4.0],
         };
     }

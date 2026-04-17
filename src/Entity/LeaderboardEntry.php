@@ -8,7 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: LeaderboardEntryRepository::class)]
-#[ORM\UniqueConstraint(name: 'uq_leaderboard_academy_category_period', columns: ['academy_id', 'category', 'period'])]
+#[ORM\UniqueConstraint(name: 'uq_leaderboard_club_category_period', columns: ['club_id', 'category', 'period'])]
 class LeaderboardEntry
 {
     #[ORM\Id]
@@ -17,7 +17,7 @@ class LeaderboardEntry
 
     #[ORM\ManyToOne(inversedBy: 'leaderboardEntries')]
     #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    private Club $club;
 
     #[ORM\Column(enumType: LeaderboardCategory::class)]
     private LeaderboardCategory $category;
@@ -40,17 +40,17 @@ class LeaderboardEntry
     #[ORM\Column]
     private \DateTimeImmutable $updatedAt;
 
-    public function __construct(Academy $academy, LeaderboardCategory $category, string $period)
+    public function __construct(Club $club, LeaderboardCategory $category, string $period)
     {
         $this->id        = new UuidV7();
-        $this->academy   = $academy;
+        $this->club   = $club;
         $this->category  = $category;
         $this->period    = $period;
         $this->updatedAt = new \DateTimeImmutable();
     }
 
     public function getId(): UuidV7 { return $this->id; }
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
     public function getCategory(): LeaderboardCategory { return $this->category; }
     public function getCategoryValue(): string { return $this->category->value; }
     public function getPeriod(): string { return $this->period; }

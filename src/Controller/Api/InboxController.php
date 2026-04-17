@@ -3,7 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Entity\User;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use App\Repository\InboxMessageRepository;
 use App\Service\InboxService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -13,11 +13,11 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/inbox')]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class InboxController extends AbstractController
 {
     public function __construct(
-        private readonly AcademyRepository     $academyRepository,
+        private readonly ClubRepository     $clubRepository,
         private readonly InboxMessageRepository $inboxMessageRepository,
         private readonly InboxService          $inboxService,
     ) {}
@@ -27,14 +27,14 @@ class InboxController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
-        $messages    = $this->inboxMessageRepository->findByAcademy($academy);
-        $unreadCount = $this->inboxMessageRepository->countUnread($academy);
+        $messages    = $this->inboxMessageRepository->findByClub($club);
+        $unreadCount = $this->inboxMessageRepository->countUnread($club);
 
         return $this->json([
             'unreadCount' => $unreadCount,
@@ -47,13 +47,13 @@ class InboxController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
-        $message = $this->inboxMessageRepository->findOneByAcademyAndId($academy, $id);
+        $message = $this->inboxMessageRepository->findOneByClubAndId($club, $id);
 
         if ($message === null) {
             return $this->json(['error' => 'Message not found'], Response::HTTP_NOT_FOUND);
@@ -70,13 +70,13 @@ class InboxController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
-        $message = $this->inboxMessageRepository->findOneByAcademyAndId($academy, $id);
+        $message = $this->inboxMessageRepository->findOneByClubAndId($club, $id);
 
         if ($message === null) {
             return $this->json(['error' => 'Message not found'], Response::HTTP_NOT_FOUND);
@@ -92,13 +92,13 @@ class InboxController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
-        $message = $this->inboxMessageRepository->findOneByAcademyAndId($academy, $id);
+        $message = $this->inboxMessageRepository->findOneByClubAndId($club, $id);
 
         if ($message === null) {
             return $this->json(['error' => 'Message not found'], Response::HTTP_NOT_FOUND);
@@ -114,13 +114,13 @@ class InboxController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
-        $message = $this->inboxMessageRepository->findOneByAcademyAndId($academy, $id);
+        $message = $this->inboxMessageRepository->findOneByClubAndId($club, $id);
 
         if ($message === null) {
             return $this->json(['error' => 'Message not found'], Response::HTTP_NOT_FOUND);

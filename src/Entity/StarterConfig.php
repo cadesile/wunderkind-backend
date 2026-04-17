@@ -7,7 +7,7 @@ use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Single-row configuration entity for new academy initialisation.
+ * Single-row configuration entity for new club initialisation.
  * The primary key is fixed at 1 — only one row ever exists.
  * Edit via EasyAdmin or the seeder migration; never create a second row.
  */
@@ -23,30 +23,30 @@ class StarterConfig
     #[ORM\Column(type: 'integer')]
     private int $startingBalance = 5_000_000;
 
-    /** Number of players assigned to a starter academy. Default: 5 */
+    /** Number of players assigned to a starter club. Default: 5 */
     #[ORM\Column(type: 'integer')]
     private int $starterPlayerCount = 5;
 
-    /** Number of coaches assigned to a starter academy. Default: 1 */
+    /** Number of coaches assigned to a starter club. Default: 1 */
     #[ORM\Column(type: 'integer')]
     private int $starterCoachCount = 1;
 
-    /** Number of scouts assigned to a starter academy. Default: 1 */
+    /** Number of scouts assigned to a starter club. Default: 1 */
     #[ORM\Column(type: 'integer')]
     private int $starterScoutCount = 1;
 
     /**
-     * Sponsor company-size tier assigned at academy creation.
+     * Sponsor company-size tier assigned at club creation.
      * Matches CompanySize enum value. Default: 'SMALL'
      */
     #[ORM\Column(type: 'string', length: 20)]
     private string $starterSponsorTier = 'SMALL';
 
     /**
-     * Starting tier of the academy. Matches Tier enum value. Default: 'local'
+     * Starting tier of the club. Matches Tier enum value. Default: 'local'
      */
     #[ORM\Column(type: 'string', length: 20)]
-    private string $starterAcademyTier = 'local';
+    private string $starterClubTier = 'local';
 
     #[ORM\Column(type: 'json')]
     private array $defaultFacilities = [];
@@ -97,8 +97,8 @@ class StarterConfig
     public function getStarterSponsorTier(): string { return $this->starterSponsorTier; }
     public function setStarterSponsorTier(string $v): static { $this->starterSponsorTier = $v; return $this; }
 
-    public function getStarterAcademyTier(): string { return $this->starterAcademyTier; }
-    public function setStarterAcademyTier(string $v): static { $this->starterAcademyTier = $v; return $this; }
+    public function getStarterClubTier(): string { return $this->starterClubTier; }
+    public function setStarterClubTier(string $v): static { $this->starterClubTier = $v; return $this; }
 
     public function getDefaultFacilities(): array { return $this->defaultFacilities; }
     public function setDefaultFacilities(array $v): static { $this->defaultFacilities = $v; return $this; }

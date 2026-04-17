@@ -1247,7 +1247,7 @@ Add repository constructor injection or use method-level injection (following ex
 
 ```php
     #[Route('/consume', name: 'api_market_consume', methods: ['POST'])]
-    #[IsGranted('ROLE_ACADEMY')]
+    #[IsGranted('ROLE_CLUB')]
     public function consume(
         #[MapRequestPayload] ConsumeRequest $dto,
         PlayerRepository $playerRepo,

@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\Player;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
@@ -24,7 +24,7 @@ class PlayerRepository extends ServiceEntityRepository
     public function findInPool(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         $qb = $this->createQueryBuilder('p')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.recruitmentSource = :source')
             ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
             ->orderBy('p.createdAt', 'DESC')
@@ -52,7 +52,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.recruitmentSource = :source')
             ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
             ->getQuery()
@@ -63,7 +63,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.recruitmentSource = :source')
             ->setParameter('source', RecruitmentSource::SENIOR_INTAKE)
             ->getQuery()
@@ -74,7 +74,7 @@ class PlayerRepository extends ServiceEntityRepository
     public function findProspects(int $limit = 150): array
     {
         return $this->createQueryBuilder('p')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.recruitmentSource = :source')
             ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
             ->orderBy('p.createdAt', 'DESC')
@@ -87,7 +87,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.recruitmentSource = :source')
             ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
             ->getQuery()
@@ -95,9 +95,9 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /** @return Player[] */
-    public function findByAcademy(Academy $academy): array
+    public function findByClub(Club $club): array
     {
-        return $this->findBy(['academy' => $academy]);
+        return $this->findBy(['club' => $club]);
     }
 
     /**
@@ -105,12 +105,12 @@ class PlayerRepository extends ServiceEntityRepository
      *
      * @return Player[]
      */
-    public function findActiveByAcademy(Academy $academy): array
+    public function findActiveByClub(Club $club): array
     {
         return $this->createQueryBuilder('p')
-            ->where('p.academy = :academy')
+            ->where('p.club = :club')
             ->andWhere('p.status NOT IN (:excluded)')
-            ->setParameter('academy', $academy)
+            ->setParameter('club', $club)
             ->setParameter('excluded', [
                 PlayerStatus::TRANSFERRED->value,
                 PlayerStatus::TRANSFERRED_VIA_AGENT->value,
@@ -129,7 +129,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.nationality = :nationality')
             ->setParameter('min', $abilityMin)
@@ -149,7 +149,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.academy IS NULL')
+            ->where('p.club IS NULL')
             ->andWhere('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.nationality != :nationality')
             ->setParameter('min', $abilityMin)

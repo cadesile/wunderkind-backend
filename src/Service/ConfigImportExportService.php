@@ -76,7 +76,7 @@ class ConfigImportExportService
                 'starterCoachCount'  => $starter->getStarterCoachCount(),
                 'starterScoutCount'  => $starter->getStarterScoutCount(),
                 'starterSponsorTier' => $starter->getStarterSponsorTier(),
-                'starterAcademyTier' => $starter->getStarterAcademyTier(),
+                'starterClubTier' => $starter->getStarterClubTier(),
             ],
             'poolConfig' => [
                 'playerAgeMin'              => $pool->getPlayerAgeMin(),
@@ -208,7 +208,7 @@ class ConfigImportExportService
         if (isset($row['starterCoachCount']))  $config->setStarterCoachCount((int) $row['starterCoachCount']);
         if (isset($row['starterScoutCount']))  $config->setStarterScoutCount((int) $row['starterScoutCount']);
         if (isset($row['starterSponsorTier'])) $config->setStarterSponsorTier((string) $row['starterSponsorTier']);
-        if (isset($row['starterAcademyTier'])) $config->setStarterAcademyTier((string) $row['starterAcademyTier']);
+        if (isset($row['starterClubTier'])) $config->setStarterClubTier((string) $row['starterClubTier']);
     }
 
     private function applyPoolConfig(array $row): void

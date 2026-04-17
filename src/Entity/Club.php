@@ -2,14 +2,15 @@
 
 namespace App\Entity;
 
-use App\Repository\AcademyRepository;
+use App\Enum\Formation;
+use App\Repository\ClubRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
-#[ORM\Entity(repositoryClass: AcademyRepository::class)]
-class Academy
+#[ORM\Entity(repositoryClass: ClubRepository::class)]
+class Club
 {
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
@@ -18,7 +19,7 @@ class Academy
     #[ORM\Column(length: 100)]
     private string $name;
 
-    /** Academy Reputation score — drives Youth Requests recruitment pipeline */
+    /** Club Reputation score — drives Youth Requests recruitment pipeline */
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $reputation = 0;
 
@@ -45,7 +46,7 @@ class Academy
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 4])]
     private int $financialYearStart = 4;
 
-    /** ISO 3166-1 alpha-2 style country code for the academy's home nation (e.g. 'EN', 'IT') */
+    /** ISO 3166-1 alpha-2 style country code for the club's home nation (e.g. 'EN', 'IT') */
     #[ORM\Column(length: 2, nullable: true)]
     private ?string $country = null;
 
@@ -53,7 +54,7 @@ class Academy
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $worldInitializedAt = null;
 
-    /** Player Agent / PA name assigned at academy creation */
+    /** Player Agent / PA name assigned at club creation */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $paName = null;
 
@@ -69,12 +70,12 @@ class Academy
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
     private int $managerAmbition = 50;
 
-    /** Academy cash balance in pence/cents */
+    /** Club cash balance in pence/cents */
     #[ORM\Column(type: 'integer')]
     private int $balance = 0;
 
     /**
-     * Academy manager profile: { name, dateOfBirth, gender, nationality }
+     * Club manager profile: { name, dateOfBirth, gender, nationality }
      * Stored as JSON for schema flexibility.
      */
     #[ORM\Column(type: 'json', nullable: true)]
@@ -83,32 +84,32 @@ class Academy
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
-    #[ORM\OneToOne(inversedBy: 'academy')]
+    #[ORM\OneToOne(inversedBy: 'club')]
     #[ORM\JoinColumn(nullable: false)]
     private User $user;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Player::class, cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Player::class, cascade: ['persist', 'remove'])]
     private Collection $players;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Staff::class, cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Staff::class, cascade: ['persist', 'remove'])]
     private Collection $staff;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Transfer::class)]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Transfer::class)]
     private Collection $transfers;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: SyncRecord::class, cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: SyncRecord::class, cascade: ['persist', 'remove'])]
     private Collection $syncRecords;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: LeaderboardEntry::class, cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: LeaderboardEntry::class, cascade: ['persist', 'remove'])]
     private Collection $leaderboardEntries;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Investor::class)]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Investor::class)]
     private Collection $investors;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: Sponsor::class)]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Sponsor::class)]
     private Collection $sponsors;
 
-    #[ORM\OneToMany(mappedBy: 'academy', targetEntity: InboxMessage::class, cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(mappedBy: 'club', targetEntity: InboxMessage::class, cascade: ['persist', 'remove'])]
     private Collection $inboxMessages;
 
     #[ORM\ManyToOne]
@@ -117,6 +118,9 @@ class Academy
 
     #[ORM\Column(type: 'smallint', options: ['default' => 1])]
     private int $currentSeason = 1;
+
+    #[ORM\Column(enumType: Formation::class, options: ['default' => '4-4-2'])]
+    private Formation $formation = Formation::F_442;
 
     public function __construct(string $name, User $user)
     {
@@ -252,4 +256,7 @@ class Academy
 
     public function getCurrentSeason(): int { return $this->currentSeason; }
     public function setCurrentSeason(int $v): static { $this->currentSeason = $v; return $this; }
+
+    public function getFormation(): Formation { return $this->formation; }
+    public function setFormation(Formation $v): static { $this->formation = $v; return $this; }
 }

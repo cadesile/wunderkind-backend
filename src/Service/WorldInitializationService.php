@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\NpcClub;
 use App\Entity\League;
 use App\Entity\Player;
@@ -44,12 +44,13 @@ class WorldInitializationService
         private readonly PlayerRepository        $playerRepository,
         private readonly StaffRepository         $staffRepository,
         private readonly StarterConfigRepository $starterConfigRepository,
+        private readonly FixtureGenerationService $fixtureGenerationService,
         private readonly EntityManagerInterface  $em,
     ) {}
 
-    public function initialize(Academy $academy): array
+    public function initialize(Club $club): array
     {
-        $country       = $academy->getCountry();
+        $country       = $club->getCountry();
         $starterConfig = $this->starterConfigRepository->getConfig();
         $npcConfig     = $starterConfig->getNpcSquadConfig();
 
@@ -63,10 +64,17 @@ class WorldInitializationService
             $tierKey      = (string) $tier;
             $tierConf     = $npcConfig[$tierKey] ?? $this->defaultTierConfig($tier);
             $abilityRange = self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
-            $clubs        = $this->npcClubRepository->findByLeague($league);
+            $npcClubs     = $this->npcClubRepository->findByLeague($league);
             $clubsData    = [];
+            $allClubIds   = [];
 
-            foreach ($clubs as $club) {
+            // Add the player's club to the fixture list if it belongs to this league
+            if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
+                $allClubIds[] = (string) $club->getId();
+            }
+
+            foreach ($npcClubs as $npcClub) {
+                $allClubIds[] = (string) $npcClub->getId();
                 $totalPlayers  = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
                 $foreignCount  = (int) round($totalPlayers * (int) $tierConf['foreignPercent'] / 100);
                 $domesticCount = $totalPlayers - $foreignCount;
@@ -102,14 +110,15 @@ class WorldInitializationService
                 foreach ($players as $p) { $npcPlayerIds[] = (string) $p->getId(); }
                 foreach ($staff   as $s) { $npcStaffIds[]  = (string) $s->getId(); }
 
-                $clubsData[] = $this->buildClubSnapshot($club, $players, $staff);
+                $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff);
             }
 
-            $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData);
+            $fixtures = $this->fixtureGenerationService->generate($allClubIds);
+            $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures);
         }
 
         // AMP starter pack
-        $tierStr  = $starterConfig->getStarterAcademyTier();
+        $tierStr  = $starterConfig->getStarterClubTier();
         $ampRange = self::STARTER_ABILITY_RANGES[$tierStr] ?? ['min' => 5, 'max' => 30];
 
         $ampPlayers = $this->playerRepository->findForWorldInit(
@@ -127,15 +136,15 @@ class WorldInitializationService
         $ampScouts  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::SCOUT,      $starterConfig->getStarterScoutCount());
         $ampStaff   = array_merge($ampCoaches, $ampScouts);
 
-        foreach ($ampPlayers as $p) { $p->setAcademy($academy); }
-        foreach ($ampStaff   as $s) { $s->setAcademy($academy); }
+        foreach ($ampPlayers as $p) { $p->setClub($club); }
+        foreach ($ampStaff   as $s) { $s->setClub($club); }
 
         $this->playerRepository->deleteByIds($npcPlayerIds);
         $this->staffRepository->deleteByIds($npcStaffIds);
 
         // Note: Doctrine wraps flush() in an implicit DB transaction on PostgreSQL.
         // All DML (AMP FK assignments + NPC deletes) is atomically committed here.
-        $academy->setWorldInitializedAt(new \DateTimeImmutable());
+        $club->setWorldInitializedAt(new \DateTimeImmutable());
         $this->em->flush();
 
         return [
@@ -147,7 +156,7 @@ class WorldInitializationService
         ];
     }
 
-    private function buildLeagueSnapshot(League $league, array $clubsData): array
+    private function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures): array
     {
         // getLeagueReputationTier() returns ?ReputationTier (backed enum: string)
         return [
@@ -158,6 +167,7 @@ class WorldInitializationService
             'promotionSpots' => $league->getPromotionSpots(),
             'reputationTier' => $league->getLeagueReputationTier()?->value,
             'clubs'          => $clubsData,
+            'fixtures'       => $fixtures,
         ];
     }
 

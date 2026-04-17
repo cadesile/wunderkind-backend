@@ -114,7 +114,7 @@ JWT_PASSPHRASE=
 |---|---|---|---|
 | `POST` | `/api/register` | Public | Create user + academy |
 | `POST` | `/api/login` | Public | JWT login → returns token |
-| `POST` | `/api/sync` | `ROLE_ACADEMY` | Anti-cheat sync + leaderboard upsert |
+| `POST` | `/api/sync` | `ROLE_CLUB` | Anti-cheat sync + leaderboard upsert |
 | `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
 | `GET` | `/api/market-data` | JWT | Returns agents, scouts, investors, sponsors |
 
@@ -143,7 +143,7 @@ Admin UI is available at `/admin` (session-based, `ROLE_ADMIN`).
 
 | Entity | Key Fields |
 |---|---|
-| `User` | email, roles (`ROLE_ACADEMY` / `ROLE_ADMIN`), OneToOne Academy |
+| `User` | email, roles (`ROLE_CLUB` / `ROLE_ADMIN`), OneToOne Academy |
 | `Academy` | name, reputation, totalCareerEarnings, hallOfFamePoints, lastSyncedWeek |
 | `Player` | position, status, recruitmentSource, potential, currentAbility, PersonalityProfile |
 | `PersonalityProfile` | confidence, maturity, teamwork, leadership, ego, bravery, greed, loyalty (0–100) |
@@ -168,7 +168,7 @@ Two separate firewalls:
 - **`api`** — stateless JWT, covers `/api/*`
 - **`admin`** — session form_login, covers `/admin`
 
-Role separation: `ROLE_ACADEMY` for game clients, `ROLE_ADMIN` for the admin panel. See `config/packages/security.yaml` for full access control rules.
+Role separation: `ROLE_CLUB` for game clients, `ROLE_ADMIN` for the admin panel. See `config/packages/security.yaml` for full access control rules.
 
 **Grant admin access:**
 ```bash

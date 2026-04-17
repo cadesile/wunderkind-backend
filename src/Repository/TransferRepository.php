@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\Transfer;
 use App\Enum\TransferType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -19,11 +19,11 @@ class TransferRepository extends ServiceEntityRepository
     }
 
     /** @return Transfer[] */
-    public function findByAcademy(Academy $academy, ?int $limit = null): array
+    public function findByClub(Club $club, ?int $limit = null): array
     {
         $qb = $this->createQueryBuilder('t')
-            ->where('t.academy = :academy')
-            ->setParameter('academy', $academy)
+            ->where('t.club = :club')
+            ->setParameter('club', $club)
             ->orderBy('t.occurredAt', 'DESC');
 
         if ($limit !== null) {
@@ -33,24 +33,24 @@ class TransferRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
-    public function getTotalAgentAssistedCount(Academy $academy): int
+    public function getTotalAgentAssistedCount(Club $club): int
     {
         return (int) $this->createQueryBuilder('t')
             ->select('COUNT(t.id)')
-            ->where('t.academy = :academy')
+            ->where('t.club = :club')
             ->andWhere('t.type = :type')
-            ->setParameter('academy', $academy)
+            ->setParameter('club', $club)
             ->setParameter('type', TransferType::AGENT_ASSISTED->value)
             ->getQuery()
             ->getSingleScalarResult();
     }
 
-    public function getTotalTransferRevenue(Academy $academy): int
+    public function getTotalTransferRevenue(Club $club): int
     {
         return (int) ($this->createQueryBuilder('t')
             ->select('SUM(t.netProceeds)')
-            ->where('t.academy = :academy')
-            ->setParameter('academy', $academy)
+            ->where('t.club = :club')
+            ->setParameter('club', $club)
             ->getQuery()
             ->getSingleScalarResult() ?? 0);
     }

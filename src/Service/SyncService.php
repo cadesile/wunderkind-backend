@@ -4,54 +4,57 @@ namespace App\Service;
 
 use App\Dto\MatchResultDto;
 use App\Dto\SyncRequest;
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\GameConfig;
 use App\Entity\MatchResult;
 use App\Entity\NpcClub;
 use App\Entity\Player;
 use App\Entity\SyncRecord;
+use App\Entity\TacticalAdvantage;
 use App\Entity\Transfer;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\PlayerStatus;
 use App\Enum\TransferType;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
+use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class SyncService
 {
     public function __construct(
-        private readonly AcademyRepository          $academyRepository,
-        private readonly LeaderboardEntryRepository $leaderboardEntryRepository,
-        private readonly EntityManagerInterface     $em,
-        private readonly EconomicService            $economicService,
-        private readonly InboxService               $inboxService,
-        private readonly GameConfigRepository       $gameConfigRepository,
-        private readonly FacilityTemplateRepository $facilityTemplateRepository,
-        private readonly NpcClubRepository          $npcClubRepository,
-        private readonly LeagueRepository           $leagueRepository,
+        private readonly ClubRepository              $clubRepository,
+        private readonly LeaderboardEntryRepository     $leaderboardEntryRepository,
+        private readonly EntityManagerInterface         $em,
+        private readonly EconomicService                $economicService,
+        private readonly InboxService                   $inboxService,
+        private readonly GameConfigRepository           $gameConfigRepository,
+        private readonly FacilityTemplateRepository     $facilityTemplateRepository,
+        private readonly NpcClubRepository              $npcClubRepository,
+        private readonly LeagueRepository               $leagueRepository,
+        private readonly TacticalAdvantageRepository    $tacticalAdvantageRepository,
     ) {}
 
     /**
-     * @return array{accepted: bool, weekNumber?: int, syncedAt?: string, academy?: array, reason?: string, currentWeek?: int}
+     * @return array{accepted: bool, weekNumber?: int, syncedAt?: string, club?: array, reason?: string, currentWeek?: int}
      */
     public function process(User $user, SyncRequest $request): array
     {
-        $academy = $this->academyRepository->findByUser($user);
-        if ($academy === null) {
-            throw new \RuntimeException('Academy not found for user.');
+        $club = $this->clubRepository->findByUser($user);
+        if ($club === null) {
+            throw new \RuntimeException('Club not found for user.');
         }
 
         $clientTimestamp = new \DateTimeImmutable($request->clientTimestamp);
 
         // Record every sync attempt for audit and anti-cheat review.
         $syncRecord = new SyncRecord(
-            $academy,
+            $club,
             $request->weekNumber,
             $clientTimestamp,
             [
@@ -84,38 +87,38 @@ class SyncService
         $this->em->persist($syncRecord);
 
         // Anti-cheat: reject week rollbacks.
-        if ($request->weekNumber < $academy->getLastSyncedWeek()) {
+        if ($request->weekNumber < $club->getLastSyncedWeek()) {
             $syncRecord->markInvalid('week_rollback');
             $this->em->flush();
 
             return [
                 'accepted'    => false,
                 'reason'      => 'week_rollback',
-                'currentWeek' => $academy->getLastSyncedWeek(),
+                'currentWeek' => $club->getLastSyncedWeek(),
             ];
         }
 
-        // ── Academy state update (fat-client authoritative) ───────────────────
+        // ── Club state update (fat-client authoritative) ───────────────────
         // The client is the game engine. balance, totalCareerEarnings, and
         // reputation are accepted as authoritative snapshots from the device.
         // The server does NOT recalculate wages or sponsor payments — those
         // already run on-device and are reflected in the incoming balance.
 
-        $academy->setBalance($request->balance);
-        $academy->setTotalCareerEarnings($request->totalCareerEarnings);
-        $academy->setReputation(max(0, (int) round($request->reputation)));
+        $club->setBalance($request->balance);
+        $club->setTotalCareerEarnings($request->totalCareerEarnings);
+        $club->setReputation(max(0, (int) round($request->reputation)));
 
         // hallOfFamePoints never decreases — server keeps the high-water mark.
-        $academy->setHallOfFamePoints(
-            max($academy->getHallOfFamePoints(), (int) round($request->hallOfFamePoints))
+        $club->setHallOfFamePoints(
+            max($club->getHallOfFamePoints(), (int) round($request->hallOfFamePoints))
         );
 
-        $academy->setLastSyncedWeek($request->weekNumber);
-        $academy->setLastSyncedAt(new \DateTimeImmutable());
+        $club->setLastSyncedWeek($request->weekNumber);
+        $club->setLastSyncedAt(new \DateTimeImmutable());
 
         // Apply optional manager personality shifts (field may be absent in newer clients).
         if (!empty($request->managerShifts)) {
-            $this->applyManagerShifts($academy, $request->managerShifts);
+            $this->applyManagerShifts($club, $request->managerShifts);
         }
 
         // ── Leaderboard upserts ───────────────────────────────────────────────
@@ -123,44 +126,44 @@ class SyncService
 
         foreach ([LeaderboardCategory::CAREER_EARNINGS, LeaderboardCategory::ACADEMY_REPUTATION, LeaderboardCategory::HALL_OF_FAME] as $category) {
             $score = match ($category) {
-                LeaderboardCategory::CAREER_EARNINGS    => $academy->getTotalCareerEarnings(),
-                LeaderboardCategory::ACADEMY_REPUTATION => $academy->getReputation(),
-                LeaderboardCategory::HALL_OF_FAME       => $academy->getHallOfFamePoints(),
+                LeaderboardCategory::CAREER_EARNINGS    => $club->getTotalCareerEarnings(),
+                LeaderboardCategory::ACADEMY_REPUTATION => $club->getReputation(),
+                LeaderboardCategory::HALL_OF_FAME       => $club->getHallOfFamePoints(),
             };
 
             foreach (['all-time', $isoWeek] as $period) {
-                $entry = $this->leaderboardEntryRepository->findOrCreate($academy, $category, $period);
+                $entry = $this->leaderboardEntryRepository->findOrCreate($club, $category, $period);
                 $entry->setScore($score);
             }
         }
 
         // ── Economic lifecycle checks ─────────────────────────────────────────
-        if ($academy->isFinancialYearEnd($request->weekNumber)) {
-            $this->economicService->processFinancialYearEnd($academy);
+        if ($club->isFinancialYearEnd($request->weekNumber)) {
+            $this->economicService->processFinancialYearEnd($club);
         }
 
-        $this->economicService->checkSponsorContracts($academy, $academy->getReputation());
-        $this->economicService->checkAgeOutPlayers($academy, $request->weekNumber, $clientTimestamp);
+        $this->economicService->checkSponsorContracts($club, $club->getReputation());
+        $this->economicService->checkAgeOutPlayers($club, $request->weekNumber, $clientTimestamp);
 
         // ── Player attribute snapshots ────────────────────────────────────────
         if (!empty($request->players)) {
-            $this->processPlayerUpdates($academy, $request->players);
+            $this->processPlayerUpdates($club, $request->players);
         }
 
         // ── Match result persistence ──────────────────────────────────────────
         if (!empty($request->matchResults)) {
-            $this->processMatchResults($academy, $request->matchResults);
+            $this->processMatchResults($club, $request->matchResults);
         }
 
         $this->em->flush();
 
-        // Auto-assign league on first sync if academy has a country but no league.
-        $this->maybeAutoAssignLeague($academy);
-        if ($academy->getCurrentLeague() !== null) {
+        // Auto-assign league on first sync if club has a country but no league.
+        $this->maybeAutoAssignLeague($club);
+        if ($club->getCurrentLeague() !== null) {
             $this->em->flush();
         }
 
-        $syncedAt = $academy->getLastSyncedAt();
+        $syncedAt = $club->getLastSyncedAt();
 
         // Fetch runtime config to embed in response. Read-only: if no row exists
         // getConfig() always returns the singleton row (creating with defaults if absent),
@@ -266,53 +269,62 @@ class SyncService
             $this->facilityTemplateRepository->getActiveTemplates(),
         );
 
+        $tacticalMatrix = array_map(fn (TacticalAdvantage $ta) => [
+            'style'         => $ta->getStyle()->value,
+            'opponentStyle' => $ta->getOpponentStyle()->value,
+            'multiplier'    => $ta->getMultiplier(),
+        ], $this->tacticalAdvantageRepository->findAll());
+
+        $gameConfigData['tacticalMatrix'] = $tacticalMatrix;
+
         return [
             'accepted'          => true,
             'weekNumber'        => $request->weekNumber,
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,
-            'academy'           => [
-                'id'                  => (string) $academy->getId(),
-                'reputation'          => $academy->getReputation(),
-                'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
-                'hallOfFamePoints'    => $academy->getHallOfFamePoints(),
-                'balance'             => $academy->getBalance(),
-                'hasDebt'             => $academy->hasDebt(),
+            'club'           => [
+                'id'                  => (string) $club->getId(),
+                'reputation'          => $club->getReputation(),
+                'totalCareerEarnings' => $club->getTotalCareerEarnings(),
+                'hallOfFamePoints'    => $club->getHallOfFamePoints(),
+                'balance'             => $club->getBalance(),
+                'hasDebt'             => $club->hasDebt(),
+                'formation'           => $club->getFormation()->value,
                 'manager'             => [
-                    'temperament' => $academy->getManagerTemperament(),
-                    'discipline'  => $academy->getManagerDiscipline(),
-                    'ambition'    => $academy->getManagerAmbition(),
+                    'temperament' => $club->getManagerTemperament(),
+                    'discipline'  => $club->getManagerDiscipline(),
+                    'ambition'    => $club->getManagerAmbition(),
                 ],
             ],
             'gameConfig' => $gameConfigData,
-            'league'     => $this->buildLeagueSnapshot($academy, $gameConfig),
+            'league'     => $this->buildLeagueSnapshot($club, $gameConfig),
         ];
     }
 
     /**
      * Applies incremental manager personality trait shifts sent by the client.
-     * Each trait is clamped to [0, 100] by the Academy setters.
+     * Each trait is clamped to [0, 100] by the Club setters.
      *
      * @param array<string, int> $shifts  e.g. ['temperament' => 2, 'discipline' => -1]
      */
-    private function applyManagerShifts(Academy $academy, array $shifts): void
+    private function applyManagerShifts(Club $club, array $shifts): void
     {
         if (isset($shifts['temperament'])) {
-            $academy->setManagerTemperament($academy->getManagerTemperament() + (int) $shifts['temperament']);
+            $club->setManagerTemperament($club->getManagerTemperament() + (int) $shifts['temperament']);
         }
         if (isset($shifts['discipline'])) {
-            $academy->setManagerDiscipline($academy->getManagerDiscipline() + (int) $shifts['discipline']);
+            $club->setManagerDiscipline($club->getManagerDiscipline() + (int) $shifts['discipline']);
         }
         if (isset($shifts['ambition'])) {
-            $academy->setManagerAmbition($academy->getManagerAmbition() + (int) $shifts['ambition']);
+            $club->setManagerAmbition($club->getManagerAmbition() + (int) $shifts['ambition']);
         }
     }
 
     /**
      * Apply player attribute snapshots from the client (fat-client authoritative).
-     * Only updates players that belong to the syncing academy.
+     * Only updates players that belong to the syncing club.
      */
-    private function processPlayerUpdates(Academy $academy, array $players): void
+    private function processPlayerUpdates(Club $club, array $players): void
     {
         foreach ($players as $data) {
             if (empty($data['playerId'])) {
@@ -320,7 +332,7 @@ class SyncService
             }
 
             $player = $this->em->getRepository(Player::class)->find($data['playerId']);
-            if ($player === null || $player->getAcademy() !== $academy) {
+            if ($player === null || $player->getClub() !== $club) {
                 continue;
             }
 
@@ -341,7 +353,7 @@ class SyncService
      *
      * @param MatchResultDto[] $results
      */
-    private function processMatchResults(Academy $academy, array $results): void
+    private function processMatchResults(Club $club, array $results): void
     {
         foreach ($results as $dto) {
             if (empty($dto->opponentClubId)) {
@@ -352,48 +364,48 @@ class SyncService
                 continue; // silently skip unknown clubs
             }
             $matchResult = new MatchResult(
-                academy:      $academy,
+                club:         $club,
                 opponentClub: $opponent,
                 goalsFor:     $dto->goalsFor,
                 goalsAgainst: $dto->goalsAgainst,
                 week:         $dto->week,
-                season:       $academy->getCurrentSeason(),
+                season:       $club->getCurrentSeason(),
             );
             $this->em->persist($matchResult);
         }
     }
 
     /**
-     * One-time auto-assignment: if the academy has no current league and has a country set,
+     * One-time auto-assignment: if the club has no current league and has a country set,
      * assign the lowest-tier league for that country.
      * No-op on all subsequent syncs once league is assigned.
      */
-    private function maybeAutoAssignLeague(Academy $academy): void
+    private function maybeAutoAssignLeague(Club $club): void
     {
-        if ($academy->getCurrentLeague() !== null) {
+        if ($club->getCurrentLeague() !== null) {
             return;
         }
 
-        if ($academy->getCountry() === null) {
+        if ($club->getCountry() === null) {
             return;
         }
 
-        $league = $this->leagueRepository->findLowestTierForCountry($academy->getCountry());
+        $league = $this->leagueRepository->findLowestTierForCountry($club->getCountry());
         if ($league === null) {
             return;
         }
 
-        $academy->setCurrentLeague($league);
-        $this->em->persist($academy);
+        $club->setCurrentLeague($league);
+        $this->em->persist($club);
     }
 
     /**
      * Builds the league snapshot array for the sync response.
-     * Returns null if the academy has no current league.
+     * Returns null if the club has no current league.
      */
-    private function buildLeagueSnapshot(Academy $academy, GameConfig $gameConfig): ?array
+    private function buildLeagueSnapshot(Club $club, GameConfig $gameConfig): ?array
     {
-        $league = $academy->getCurrentLeague();
+        $league = $club->getCurrentLeague();
         if ($league === null) {
             return null;
         }
@@ -410,7 +422,7 @@ class SyncService
             'tier'                          => $league->getTier(),
             'name'                          => $league->getName(),
             'country'                       => $league->getCountry(),
-            'season'                        => $academy->getCurrentSeason(),
+            'season'                        => $club->getCurrentSeason(),
             'promotionSpots'                => $league->getPromotionSpots(),
             'reputationTier'                => $league->getLeagueReputationTier()?->value,
             'tvDeal'                        => $league->getTvDeal() !== null ? (int) $league->getTvDeal() : null,
@@ -427,11 +439,17 @@ class SyncService
                 'secondaryColor' => $c->getSecondaryColor(),
                 'stadiumName'    => $c->getStadiumName(),
                 'facilities'     => $c->getFacilities(),
+                'formation'      => $c->getFormation()->value,
+                'personality'    => [
+                    'playingStyle'       => $c->getPlayingStyle(),
+                    'financialApproach'  => $c->getFinancialApproach(),
+                    'managerTemperament' => $c->getManagerTemperament(),
+                ],
             ], $clubs),
         ];
     }
 
-    private function processTransfers(Academy $academy, array $transfers, \DateTimeImmutable $syncedAt): void
+    private function processTransfers(Club $club, array $transfers, \DateTimeImmutable $syncedAt): void
     {
         foreach ($transfers as $data) {
             $player = null;
@@ -449,7 +467,7 @@ class SyncService
 
             $transfer = new Transfer(
                 $player,
-                $academy,
+                $club,
                 $data['buyingClub'] ?? 'Unknown Club',
                 $type,
                 $occurredAt,
@@ -463,7 +481,7 @@ class SyncService
             $transfer->setBuyingClub($data['buyingClub'] ?? null);
             $transfer->setSyncedAt($syncedAt);
 
-            if ($player !== null && $player->getAcademy() === $academy) {
+            if ($player !== null && $player->getClub() === $club) {
                 $player->setStatus(
                     $type === TransferType::AGENT_ASSISTED
                         ? PlayerStatus::TRANSFERRED_VIA_AGENT

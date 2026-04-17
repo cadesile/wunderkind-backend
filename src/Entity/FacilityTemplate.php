@@ -47,7 +47,7 @@ class FacilityTemplate
     #[ORM\Column(type: 'float', nullable: true)]
     private ?float $matchdayIncomeMultiplier = null;
 
-    /** Reputation awarded to the academy per upgrade level */
+    /** Reputation awarded to the club per upgrade level */
     #[ORM\Column(type: 'float', options: ['default' => 0.0])]
     private float $reputationBonus = 0.0;
 

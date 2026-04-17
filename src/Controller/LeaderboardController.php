@@ -40,13 +40,13 @@ class LeaderboardController extends AbstractController
 
         $entriesData = array_map(
             static function (LeaderboardEntry $e, int $i) use ($offset): array {
-                $academy = $e->getAcademy();
+                $club = $e->getClub();
                 return [
                     'rank'                => $offset + $i + 1,
-                    'academyName'         => $academy->getName(),
-                    'reputation'          => $academy->getReputation(),
-                    'totalCareerEarnings' => $academy->getTotalCareerEarnings(),
-                    'weekNumber'          => $academy->getLastSyncedWeek(),
+                    'clubName'         => $club->getName(),
+                    'reputation'          => $club->getReputation(),
+                    'totalCareerEarnings' => $club->getTotalCareerEarnings(),
+                    'weekNumber'          => $club->getLastSyncedWeek(),
                 ];
             },
             $paged,

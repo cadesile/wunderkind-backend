@@ -6,7 +6,7 @@ namespace App\Controller\Api;
 
 use App\Enum\RecruitmentSource;
 use App\Repository\PlayerRepository;
-use App\Service\AcademyInitializationService;
+use App\Service\ClubInitializationService;
 use App\Service\MarketPoolService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -41,7 +41,7 @@ class PoolController extends AbstractController
             return $this->json(['error' => 'countryCode is required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $nationality = AcademyInitializationService::countryToNationality($countryCode);
+        $nationality = ClubInitializationService::countryToNationality($countryCode);
 
         if ($nationality === null) {
             return $this->json(

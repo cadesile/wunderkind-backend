@@ -11,7 +11,7 @@ final class Version20260302000001 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Add admin table; backfill ROLE_ACADEMY on existing game users';
+        return 'Add admin table; backfill ROLE_CLUB on existing game users';
     }
 
     public function up(Schema $schema): void
@@ -32,10 +32,10 @@ final class Version20260302000001 extends AbstractMigration
             'ALTER TABLE admin ADD CONSTRAINT FK_ADMIN_USER FOREIGN KEY (user_id) REFERENCES `user` (id)'
         );
 
-        // All users without ROLE_ADMIN are game users — assign ROLE_ACADEMY.
+        // All users without ROLE_ADMIN are game users — assign ROLE_CLUB.
         // JSON_CONTAINS returns 0 for empty arrays, so [] rows are correctly updated.
         $this->addSql(
-            "UPDATE `user` SET roles = '[\"ROLE_ACADEMY\"]' WHERE NOT JSON_CONTAINS(roles, '\"ROLE_ADMIN\"', '\$')"
+            "UPDATE `user` SET roles = '[\"ROLE_CLUB\"]' WHERE NOT JSON_CONTAINS(roles, '\"ROLE_ADMIN\"', '\$')"
         );
     }
 

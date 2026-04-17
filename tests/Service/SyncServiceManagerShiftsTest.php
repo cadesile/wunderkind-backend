@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\User;
 use PHPUnit\Framework\TestCase;
 
@@ -13,56 +13,56 @@ class SyncServiceManagerShiftsTest extends TestCase
     public function testManagerShiftIncreasesTemperament(): void
     {
         $user    = $this->createMock(User::class);
-        $academy = new Academy('Test', $user);
-        $academy->setManagerTemperament(50);
+        $club = new Club('Test', $user);
+        $club->setManagerTemperament(50);
 
-        $academy->setManagerTemperament($academy->getManagerTemperament() + 5);
+        $club->setManagerTemperament($club->getManagerTemperament() + 5);
 
-        $this->assertSame(55, $academy->getManagerTemperament());
+        $this->assertSame(55, $club->getManagerTemperament());
     }
 
     public function testManagerShiftClampsAtMaximum(): void
     {
         $user    = $this->createMock(User::class);
-        $academy = new Academy('Test', $user);
-        $academy->setManagerTemperament(98);
+        $club = new Club('Test', $user);
+        $club->setManagerTemperament(98);
 
-        $academy->setManagerTemperament($academy->getManagerTemperament() + 10);
+        $club->setManagerTemperament($club->getManagerTemperament() + 10);
 
-        $this->assertSame(100, $academy->getManagerTemperament());
+        $this->assertSame(100, $club->getManagerTemperament());
     }
 
     public function testManagerShiftClampsAtMinimum(): void
     {
         $user    = $this->createMock(User::class);
-        $academy = new Academy('Test', $user);
-        $academy->setManagerDiscipline(3);
+        $club = new Club('Test', $user);
+        $club->setManagerDiscipline(3);
 
-        $academy->setManagerDiscipline($academy->getManagerDiscipline() - 10);
+        $club->setManagerDiscipline($club->getManagerDiscipline() - 10);
 
-        $this->assertSame(0, $academy->getManagerDiscipline());
+        $this->assertSame(0, $club->getManagerDiscipline());
     }
 
     public function testEmptyShiftsDoNotChangeTraits(): void
     {
         $user    = $this->createMock(User::class);
-        $academy = new Academy('Test', $user);
+        $club = new Club('Test', $user);
 
         $before = [
-            $academy->getManagerTemperament(),
-            $academy->getManagerDiscipline(),
-            $academy->getManagerAmbition(),
+            $club->getManagerTemperament(),
+            $club->getManagerDiscipline(),
+            $club->getManagerAmbition(),
         ];
 
         // Empty shifts — no changes
         $shifts = [];
         // applyManagerShifts logic inline for unit test
         if (isset($shifts['temperament'])) {
-            $academy->setManagerTemperament($academy->getManagerTemperament() + $shifts['temperament']);
+            $club->setManagerTemperament($club->getManagerTemperament() + $shifts['temperament']);
         }
 
-        $this->assertSame($before[0], $academy->getManagerTemperament());
-        $this->assertSame($before[1], $academy->getManagerDiscipline());
-        $this->assertSame($before[2], $academy->getManagerAmbition());
+        $this->assertSame($before[0], $club->getManagerTemperament());
+        $this->assertSame($before[1], $club->getManagerDiscipline());
+        $this->assertSame($before[2], $club->getManagerAmbition());
     }
 }

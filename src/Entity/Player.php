@@ -13,7 +13,7 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: PlayerRepository::class)]
 #[ORM\HasLifecycleCallbacks]
-#[ORM\Index(columns: ['academy_id'], name: 'idx_player_academy')]
+#[ORM\Index(columns: ['club_id'], name: 'idx_player_club')]
 class Player
 {
     #[ORM\Id]
@@ -57,7 +57,7 @@ class Player
 
     #[ORM\ManyToOne(inversedBy: 'players')]
     #[ORM\JoinColumn(nullable: true)]
-    private ?Academy $academy = null;
+    private ?Club $club = null;
 
     #[ORM\OneToMany(mappedBy: 'player', targetEntity: Guardian::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $guardians;
@@ -66,7 +66,7 @@ class Player
     private ?Agent $agent = null;
 
     /**
-     * Siblings within the same academy — losing one sibling triggers
+     * Siblings within the same club — losing one sibling triggers
      * loyalty penalties for the remaining sibling(s).
      */
     #[ORM\ManyToMany(targetEntity: self::class)]
@@ -129,7 +129,7 @@ class Player
         RecruitmentSource $recruitmentSource = RecruitmentSource::SCOUTING_NETWORK,
         int $potential = 0,
         int $currentAbility = 0,
-        ?Academy $academy = null,
+        ?Club $club = null,
     ) {
         $this->id                = new UuidV7();
         $this->firstName         = $firstName;
@@ -140,7 +140,7 @@ class Player
         $this->recruitmentSource = $recruitmentSource;
         $this->potential         = $potential;
         $this->currentAbility    = $currentAbility;
-        $this->academy           = $academy;
+        $this->club           = $club;
         $this->personality       = new PersonalityProfile();
         $this->guardians         = new ArrayCollection();
         $this->siblings          = new ArrayCollection();
@@ -226,10 +226,10 @@ class Player
 
     public function getPersonality(): PersonalityProfile { return $this->personality; }
 
-    public function isInMarketPool(): bool { return $this->academy === null; }
+    public function isInMarketPool(): bool { return $this->club === null; }
 
-    public function getAcademy(): ?Academy { return $this->academy; }
-    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
+    public function getClub(): ?Club { return $this->club; }
+    public function setClub(?Club $club): void { $this->club = $club; }
 
     public function getGuardians(): Collection { return $this->guardians; }
 
@@ -276,7 +276,7 @@ class Player
         return max(0, $this->forcedSaleWeek - $currentWeek);
     }
 
-    public function isAssigned(): bool { return $this->academy !== null; }
+    public function isAssigned(): bool { return $this->club !== null; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }

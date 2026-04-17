@@ -46,7 +46,7 @@ class SyncController extends AbstractController
 
         $user = new User($data['email']);
         $user->setPassword($hasher->hashPassword($user, $data['password']));
-        $user->setRoles([User::ROLE_ACADEMY]);
+        $user->setRoles([User::ROLE_CLUB]);
 
         // Store optional manager profile (name, dateOfBirth, gender, nationality)
         if (!empty($data['manager']) && is_array($data['manager'])) {

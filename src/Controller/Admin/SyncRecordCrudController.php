@@ -37,7 +37,7 @@ class SyncRecordCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->hideOnForm();
-        yield AssociationField::new('academy');
+        yield AssociationField::new('club');
         yield IntegerField::new('clientWeekNumber');
         yield BooleanField::new('isValid');
         yield TextField::new('invalidReason')->setRequired(false);

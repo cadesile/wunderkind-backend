@@ -2,7 +2,7 @@
 
 namespace App\Controller\Admin;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\LeaderboardEntry;
 use App\Entity\SyncRecord;
 use Doctrine\ORM\EntityManagerInterface;
@@ -18,13 +18,13 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\HttpFoundation\Response;
 
-class AcademyCrudController extends AbstractCrudController
+class ClubCrudController extends AbstractCrudController
 {
     public function __construct(private EntityManagerInterface $em) {}
 
     public static function getEntityFqcn(): string
     {
-        return Academy::class;
+        return Club::class;
     }
 
     public function configureActions(Actions $actions): Actions
@@ -35,17 +35,17 @@ class AcademyCrudController extends AbstractCrudController
     }
 
     /**
-     * Override EasyAdmin's detail action to render the custom academy profile.
+     * Override EasyAdmin's detail action to render the custom club profile.
      * Runs inside EasyAdmin's context, so @EasyAdmin/layout.html.twig works correctly.
-     * The URL stays /admin/academy/{uuid} — no separate controller or route needed.
+     * The URL stays /admin/club/{uuid} — no separate controller or route needed.
      */
     public function detail(AdminContext $context): Response
     {
-        /** @var Academy $academy */
-        $academy = $context->getEntity()->getInstance();
+        /** @var Club $club */
+        $club = $context->getEntity()->getInstance();
 
         $syncRecords = $this->em->getRepository(SyncRecord::class)
-            ->findBy(['academy' => $academy], ['serverTimestamp' => 'DESC'], 25);
+            ->findBy(['club' => $club], ['serverTimestamp' => 'DESC'], 25);
 
         $latestValidSync = null;
         foreach ($syncRecords as $record) {
@@ -56,10 +56,10 @@ class AcademyCrudController extends AbstractCrudController
         }
 
         $leaderboardEntries = $this->em->getRepository(LeaderboardEntry::class)
-            ->findBy(['academy' => $academy], ['updatedAt' => 'DESC']);
+            ->findBy(['club' => $club], ['updatedAt' => 'DESC']);
 
-        return $this->render('admin/academy_profile.html.twig', [
-            'academy'            => $academy,
+        return $this->render('admin/club_profile.html.twig', [
+            'club'            => $club,
             'syncRecords'        => $syncRecords,
             'latestValidSync'    => $latestValidSync,
             'leaderboardEntries' => $leaderboardEntries,

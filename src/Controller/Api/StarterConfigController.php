@@ -10,7 +10,7 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * Public endpoint — no JWT required.
  * Called by the client before the user has credentials,
- * to know how to initialise a fresh academy.
+ * to know how to initialise a fresh club.
  */
 #[Route('/api')]
 class StarterConfigController extends AbstractController
@@ -30,7 +30,7 @@ class StarterConfigController extends AbstractController
             'starterCoachCount'  => $config->getStarterCoachCount(),
             'starterScoutCount'  => $config->getStarterScoutCount(),
             'starterSponsorTier'  => $config->getStarterSponsorTier(),
-            'starterAcademyTier'  => $config->getStarterAcademyTier(),
+            'starterClubTier'  => $config->getStarterClubTier(),
         ]);
     }
 }

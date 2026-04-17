@@ -15,7 +15,7 @@ use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -172,7 +172,7 @@ class GenerateMarketDataCommand extends Command
 
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly AcademyRepository      $academyRepository,
+        private readonly ClubRepository      $clubRepository,
     ) {
         parent::__construct();
     }
@@ -213,7 +213,7 @@ class GenerateMarketDataCommand extends Command
             $this->generateInvestors($io, $investorCount);
             $this->generateSponsors($io, $sponsorCount);
 
-            $academies = $this->academyRepository->findAll();
+            $academies = $this->clubRepository->findAll();
             if (empty($academies)) {
                 $io->warning('No academies found — skipping Player and Staff generation. Register at least one user first.');
             } else {
@@ -413,7 +413,7 @@ class GenerateMarketDataCommand extends Command
     // Players
     // ---------------------------------------------------------------------------
 
-    /** @param \App\Entity\Academy[] $academies */
+    /** @param \App\Entity\Club[] $academies */
     private function generatePlayers(SymfonyStyle $io, int $count, array $academies): void
     {
         $io->text(sprintf('Generating %d Players...', $count));
@@ -425,7 +425,7 @@ class GenerateMarketDataCommand extends Command
         // Load all agents for optional assignment
         $agents = $this->em->getRepository(\App\Entity\Agent::class)->findAll();
 
-        $academyCount = count($academies);
+        $clubCount = count($academies);
 
         for ($i = 0; $i < $count; $i++) {
             $potential      = random_int(50, 99);
@@ -444,7 +444,7 @@ class GenerateMarketDataCommand extends Command
                 recruitmentSource: $sources[array_rand($sources)],
                 potential:         $potential,
                 currentAbility:    $currentAbility,
-                academy:           $academies[$i % $academyCount],
+                club:           $academies[$i % $clubCount],
             );
 
             $player->setStatus($this->weightedPlayerStatus());
@@ -487,7 +487,7 @@ class GenerateMarketDataCommand extends Command
     // Staff
     // ---------------------------------------------------------------------------
 
-    /** @param \App\Entity\Academy[] $academies */
+    /** @param \App\Entity\Club[] $academies */
     private function generateStaff(SymfonyStyle $io, int $count, array $academies): void
     {
         $io->text(sprintf('Generating %d Staff...', $count));
@@ -495,7 +495,7 @@ class GenerateMarketDataCommand extends Command
         $progressBar->start();
 
         $roles = StaffRole::cases();
-        $academyCount = count($academies);
+        $clubCount = count($academies);
 
         $weeklySalaryRanges = [
             StaffRole::HEAD_COACH->value      => [8000, 20000],
@@ -515,7 +515,7 @@ class GenerateMarketDataCommand extends Command
                 firstName: $this->pick(self::STAFF_FIRST_NAMES),
                 lastName:  $this->pick(self::STAFF_LAST_NAMES),
                 role:      $role,
-                academy:   $academies[$i % $academyCount],
+                club:   $academies[$i % $clubCount],
             );
 
             $staff->setCoachingAbility($coachingAbility);

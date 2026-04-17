@@ -2,7 +2,7 @@
 
 namespace App\Tests\Entity;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\League;
 use App\Entity\SeasonRecord;
 use App\Entity\User;
@@ -13,11 +13,11 @@ class SeasonRecordTest extends TestCase
     public function testConstructorAndGetters(): void
     {
         $user    = $this->createMock(User::class);
-        $academy = new Academy('Test FC', $user);
+        $club = new Club('Test FC', $user);
         $league  = new League('EN', 8, 'League 8');
 
         $record = new SeasonRecord(
-            academy:       $academy,
+            club:       $club,
             league:        $league,
             season:        1,
             finalPosition: 2,
@@ -32,7 +32,7 @@ class SeasonRecordTest extends TestCase
             relegated:     false,
         );
 
-        $this->assertSame($academy, $record->getAcademy());
+        $this->assertSame($club, $record->getClub());
         $this->assertSame($league,  $record->getLeague());
         $this->assertSame(1,        $record->getSeason());
         $this->assertSame(2,        $record->getFinalPosition());

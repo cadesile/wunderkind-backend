@@ -8,7 +8,7 @@ use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\StaffRole;
 use App\Enum\Tier;
-use App\Service\AcademyInitializationService;
+use App\Service\ClubInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,7 +17,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/staff')]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class StaffController extends AbstractController
 {
     #[Route('', name: 'api_staff_index', methods: ['GET'])]
@@ -25,21 +25,21 @@ class StaffController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $user->getAcademy();
+        $club = $user->getClub();
 
-        if ($academy === null) {
-            return $this->json(['error' => 'No academy found.'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);
         }
 
         $tierParam    = $request->query->get('tier');
         $tier         = $tierParam !== null ? Tier::tryFrom($tierParam) : null;
         $countryParam = $request->query->get('country');
-        $nationality  = $countryParam !== null ? AcademyInitializationService::countryToNationality($countryParam) : null;
+        $nationality  = $countryParam !== null ? ClubInitializationService::countryToNationality($countryParam) : null;
 
         $coaches = [];
         $scouts  = [];
 
-        foreach ($academy->getStaff() as $member) {
+        foreach ($club->getStaff() as $member) {
             if ($nationality !== null && $member->getNationality() !== $nationality) {
                 continue;
             }

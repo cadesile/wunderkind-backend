@@ -57,7 +57,7 @@ class FacilityTemplateCrudController extends AbstractCrudController
             ->hideOnIndex()
             ->setFormTypeOption('attr', ['data-controller' => 'conditional-field']);
         yield NumberField::new('reputationBonus')
-            ->setHelp('Reputation awarded to the academy per upgrade level')
+            ->setHelp('Reputation awarded to the club per upgrade level')
             ->setNumDecimals(2)
             ->hideOnIndex();
         yield IntegerField::new('maxLevel')

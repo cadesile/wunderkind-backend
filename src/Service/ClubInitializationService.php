@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\User;
 use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
-class AcademyInitializationService
+class ClubInitializationService
 {
 
     /** Maps the frontend country code to the nationality string used in the player pool. */
@@ -55,39 +55,39 @@ class AcademyInitializationService
     ) {}
 
     /**
-     * Enrich an existing academy with starter entities from the market pool.
+     * Enrich an existing club with starter entities from the market pool.
      *
      * Pulls entities from the pool. Throws \OverflowException if any pool is
      * insufficient — run app:generate-market-data to replenish before retrying.
      *
-     * @throws \RuntimeException   if the user already has an initialized academy (has players)
+     * @throws \RuntimeException   if the user already has an initialized club (has players)
      * @throws \OverflowException  if any entity pool has too few entries
      */
-    public function initializeAcademy(User $user, string $academyName, ?string $country = null, ?array $managerProfile = null): Academy
+    public function initializeClub(User $user, string $clubName, ?string $country = null, ?array $managerProfile = null): Club
     {
-        if ($user->getAcademy() !== null) {
-            throw new \RuntimeException('Academy is already initialized.');
+        if ($user->getClub() !== null) {
+            throw new \RuntimeException('Club is already initialized.');
         }
 
         $config  = $this->starterConfigRepository->getConfig();
-        $academy = new Academy($academyName, $user);
-        $academy->setBalance($config->getStartingBalance());
-        $academy->setPaName($this->generatePaName());
-        $academy->setManagerTemperament(rand(40, 60));
-        $academy->setManagerDiscipline(rand(40, 60));
-        $academy->setManagerAmbition(rand(40, 60));
+        $club = new Club($clubName, $user);
+        $club->setBalance($config->getStartingBalance());
+        $club->setPaName($this->generatePaName());
+        $club->setManagerTemperament(rand(40, 60));
+        $club->setManagerDiscipline(rand(40, 60));
+        $club->setManagerAmbition(rand(40, 60));
 
         if ($country !== null) {
-            $academy->setCountry($country);
+            $club->setCountry($country);
         }
         if ($managerProfile !== null) {
-            $academy->setManagerProfile($managerProfile);
+            $club->setManagerProfile($managerProfile);
         }
 
-        $this->em->persist($academy);
+        $this->em->persist($club);
         $this->em->flush();
 
-        return $academy;
+        return $club;
     }
 
     public static function countryToNationality(string $countryCode): ?string

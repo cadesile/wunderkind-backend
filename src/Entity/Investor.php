@@ -30,7 +30,7 @@ class Investor
 
     #[ORM\ManyToOne(inversedBy: 'investors')]
     #[ORM\JoinColumn(nullable: true)]
-    private ?Academy $academy = null;
+    private ?Club $club = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
@@ -44,7 +44,7 @@ class Investor
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, options: ['default' => '5.00'])]
     private string $percentageOwned = '5.00';
 
-    /** Set when the investor is assigned from the market pool to an academy. Used for 52-week lifecycle cleanup. */
+    /** Set when the investor is assigned from the market pool to an club. Used for 52-week lifecycle cleanup. */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $assignedAt = null;
 
@@ -75,10 +75,10 @@ class Investor
     public function isActive(): bool { return $this->isActive; }
     public function setIsActive(bool $isActive): void { $this->isActive = $isActive; }
 
-    public function isInMarketPool(): bool { return $this->academy === null; }
+    public function isInMarketPool(): bool { return $this->club === null; }
 
-    public function getAcademy(): ?Academy { return $this->academy; }
-    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
+    public function getClub(): ?Club { return $this->club; }
+    public function setClub(?Club $club): void { $this->club = $club; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

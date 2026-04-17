@@ -42,7 +42,7 @@ class GuardianCrudController extends AbstractCrudController
             ->setChoices(['Male' => 'male', 'Female' => 'female']);
         yield IntegerField::new('demandLevel', 'Demand Level')
             ->setHelp('1 (relaxed) to 10 (very demanding)');
-        yield IntegerField::new('loyaltyToAcademy', 'Loyalty to Academy')
+        yield IntegerField::new('loyaltyToClub', 'Loyalty to Club')
             ->setHelp('0–100');
         yield AssociationField::new('player', 'Player')->hideOnForm();
         yield TextField::new('contactEmail', 'Contact Email')->onlyOnForms();

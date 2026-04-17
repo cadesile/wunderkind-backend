@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\Formation;
 use App\Repository\NpcClubRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
@@ -56,6 +57,9 @@ class NpcClub
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true)]
     private ?League $league = null;
+
+    #[ORM\Column(enumType: Formation::class, options: ['default' => '4-4-2'])]
+    private Formation $formation = Formation::F_442;
 
     public function __construct(
         string $name,
@@ -132,4 +136,7 @@ class NpcClub
 
     public function getLeague(): ?League { return $this->league; }
     public function setLeague(?League $v): static { $this->league = $v; return $this; }
+
+    public function getFormation(): Formation { return $this->formation; }
+    public function setFormation(Formation $v): static { $this->formation = $v; return $this; }
 }

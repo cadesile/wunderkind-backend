@@ -3,6 +3,7 @@
 namespace App\Tests\Entity;
 
 use App\Entity\NpcClub;
+use App\Enum\Formation;
 use PHPUnit\Framework\TestCase;
 
 class NpcClubTest extends TestCase
@@ -28,6 +29,7 @@ class NpcClubTest extends TestCase
         $this->assertSame('#ffffff', $club->getSecondaryColor());
         $this->assertSame(5000000, $club->getBalance());
         $this->assertSame(['training_pitch' => 7, 'north_stand' => 4], $club->getFacilities());
+        $this->assertSame(Formation::F_442, $club->getFormation());
         $this->assertNull($club->getStadiumName());
         $this->assertNotNull($club->getId());
         $this->assertInstanceOf(\DateTimeImmutable::class, $club->getCreatedAt());
@@ -38,5 +40,12 @@ class NpcClubTest extends TestCase
         $club = new NpcClub('Test FC', 'EN', 1, 80, '#000', '#fff', 1000000, []);
         $club->setStadiumName('The Test Arena');
         $this->assertSame('The Test Arena', $club->getStadiumName());
+    }
+
+    public function testFormationSetter(): void
+    {
+        $club = new NpcClub('Test FC', 'EN', 1, 80, '#000', '#fff', 1000000, []);
+        $club->setFormation(Formation::F_433);
+        $this->assertSame(Formation::F_433, $club->getFormation());
     }
 }

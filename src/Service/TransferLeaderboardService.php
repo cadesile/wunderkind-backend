@@ -17,15 +17,15 @@ class TransferLeaderboardService
      *
      * @param string $period 'week' | 'month' | 'all-time'
      * @param int    $limit  1–50
-     * @return array<array{academyName: string, totalSales: int, transferCount: int}>
+     * @return array<array{clubName: string, totalSales: int, transferCount: int}>
      */
     public function getTopSellers(string $period = 'week', int $limit = 10): array
     {
         $qb = $this->transferRepo->createQueryBuilder('t')
-            ->select('a.name as academyName')
+            ->select('a.name as clubName')
             ->addSelect('SUM(t.netProceeds) as totalSales')
             ->addSelect('COUNT(t.id) as transferCount')
-            ->join('t.academy', 'a')
+            ->join('t.club', 'a')
             ->groupBy('a.id')
             ->orderBy('totalSales', 'DESC')
             ->setMaxResults(min($limit, 50));
@@ -38,14 +38,14 @@ class TransferLeaderboardService
     /**
      * Get the single highest-value transfer for a period.
      *
-     * @return array{playerName: string, academyName: string, netProceeds: int, buyingClub: string}|null
+     * @return array{playerName: string, clubName: string, netProceeds: int, buyingClub: string}|null
      */
     public function getMostValuableSale(string $period = 'week'): ?array
     {
         $qb = $this->transferRepo->createQueryBuilder('t')
-            ->select('a.name as academyName', 't.netProceeds', 't.buyingClub')
+            ->select('a.name as clubName', 't.netProceeds', 't.buyingClub')
             ->addSelect("CASE WHEN p.id IS NOT NULL THEN CONCAT(p.firstName, ' ', p.lastName) ELSE 'Unknown Player' END as playerName")
-            ->join('t.academy', 'a')
+            ->join('t.club', 'a')
             ->leftJoin('t.player', 'p')
             ->orderBy('t.netProceeds', 'DESC')
             ->setMaxResults(1);
@@ -59,7 +59,7 @@ class TransferLeaderboardService
 
         return [
             'playerName'  => $result['playerName'],
-            'academyName' => $result['academyName'],
+            'clubName' => $result['clubName'],
             'netProceeds' => (int) $result['netProceeds'],
             'buyingClub'  => $result['buyingClub'],
         ];

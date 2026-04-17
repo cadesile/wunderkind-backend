@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\LeaderboardEntry;
 use App\Enum\LeaderboardCategory;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -19,7 +19,7 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
     public function findTopByPeriod(LeaderboardCategory $category, string $period, int $limit = 50): array
     {
         return $this->createQueryBuilder('e')
-            ->join('e.academy', 'a')
+            ->join('e.club', 'a')
             ->addSelect('a')
             ->where('e.category = :category')
             ->andWhere('e.period = :period')
@@ -32,13 +32,13 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns ['entry' => LeaderboardEntry, 'rank' => int] or null if the academy
+     * Returns ['entry' => LeaderboardEntry, 'rank' => int] or null if the club
      * has no entry for this category/period.
      */
-    public function findWithRankForAcademy(Academy $academy, LeaderboardCategory $category, string $period): ?array
+    public function findWithRankForClub(Club $club, LeaderboardCategory $category, string $period): ?array
     {
         $entry = $this->findOneBy([
-            'academy'  => $academy,
+            'club'  => $club,
             'category' => $category,
             'period'   => $period,
         ]);
@@ -64,16 +64,16 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
         ];
     }
 
-    public function findOrCreate(Academy $academy, LeaderboardCategory $category, string $period): LeaderboardEntry
+    public function findOrCreate(Club $club, LeaderboardCategory $category, string $period): LeaderboardEntry
     {
         $entry = $this->findOneBy([
-            'academy'  => $academy,
+            'club'  => $club,
             'category' => $category,
             'period'   => $period,
         ]);
 
         if ($entry === null) {
-            $entry = new LeaderboardEntry($academy, $category, $period);
+            $entry = new LeaderboardEntry($club, $category, $period);
             $this->getEntityManager()->persist($entry);
         }
 

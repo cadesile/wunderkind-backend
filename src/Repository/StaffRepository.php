@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\Staff;
 use App\Enum\StaffRole;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -16,13 +16,13 @@ class StaffRepository extends ServiceEntityRepository
     }
 
     /**
-     * Staff with no academy (market pool), optionally filtered by role and coaching ability range.
+     * Staff with no club (market pool), optionally filtered by role and coaching ability range.
      * @return Staff[]
      */
     public function findInPool(?StaffRole $role = null, int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         $qb = $this->createQueryBuilder('s')
-            ->where('s.academy IS NULL')
+            ->where('s.club IS NULL')
             ->orderBy('s.hiredAt', 'DESC')
             ->setMaxResults($limit);
 
@@ -47,7 +47,7 @@ class StaffRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('s')
             ->select('COUNT(s.id)')
-            ->where('s.academy IS NULL');
+            ->where('s.club IS NULL');
 
         if ($role !== null) {
             $qb->andWhere('s.role = :role')->setParameter('role', $role);
@@ -57,9 +57,9 @@ class StaffRepository extends ServiceEntityRepository
     }
 
     /** @return Staff[] */
-    public function findByAcademy(Academy $academy): array
+    public function findByClub(Club $club): array
     {
-        return $this->findBy(['academy' => $academy]);
+        return $this->findBy(['club' => $club]);
     }
 
     /**
@@ -70,7 +70,7 @@ class StaffRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('s')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('s.academy IS NULL')
+            ->where('s.club IS NULL')
             ->andWhere('s.role = :role')
             ->setParameter('role', $role)
             ->setMaxResults($limit)

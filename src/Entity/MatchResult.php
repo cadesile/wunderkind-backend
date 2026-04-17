@@ -16,7 +16,7 @@ class MatchResult
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
-    private Academy $academy;
+    private Club $club;
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
@@ -38,7 +38,7 @@ class MatchResult
     private \DateTimeImmutable $createdAt;
 
     public function __construct(
-        Academy $academy,
+        Club $club,
         NpcClub $opponentClub,
         int $goalsFor,
         int $goalsAgainst,
@@ -46,7 +46,7 @@ class MatchResult
         int $season,
     ) {
         $this->id           = new UuidV7();
-        $this->academy      = $academy;
+        $this->club      = $club;
         $this->opponentClub = $opponentClub;
         $this->goalsFor     = $goalsFor;
         $this->goalsAgainst = $goalsAgainst;
@@ -56,7 +56,7 @@ class MatchResult
     }
 
     public function getId(): UuidV7 { return $this->id; }
-    public function getAcademy(): Academy { return $this->academy; }
+    public function getClub(): Club { return $this->club; }
     public function getOpponentClub(): NpcClub { return $this->opponentClub; }
     public function getGoalsFor(): int { return $this->goalsFor; }
     public function getGoalsAgainst(): int { return $this->goalsAgainst; }

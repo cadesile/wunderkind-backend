@@ -6,7 +6,7 @@ use App\Entity\Investor;
 use App\Entity\Sponsor;
 use App\Entity\User;
 use App\Enum\SponsorStatus;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\SponsorRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -16,11 +16,11 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/finance')]
-#[IsGranted('ROLE_ACADEMY')]
+#[IsGranted('ROLE_CLUB')]
 class FinanceController extends AbstractController
 {
     public function __construct(
-        private readonly AcademyRepository  $academyRepository,
+        private readonly ClubRepository  $clubRepository,
         private readonly InvestorRepository $investorRepository,
         private readonly SponsorRepository  $sponsorRepository,
     ) {}
@@ -30,19 +30,19 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
-        $investors     = $academy->getInvestors()->toArray();
-        $activeSponsors = $academy->getActiveSponsors()->toArray();
+        $investors     = $club->getInvestors()->toArray();
+        $activeSponsors = $club->getActiveSponsors()->toArray();
 
         $totalOwnership = array_sum(array_map(fn (Investor $i) => $i->getPercentageOwned(), $investors));
 
         return $this->json([
-            'monthlyRevenue'     => $academy->getMonthlyRevenue(),
+            'monthlyRevenue'     => $club->getMonthlyRevenue(),
             'activeSponsors'     => count($activeSponsors),
             'totalOwnershipGiven' => round($totalOwnership, 2),
             'investors'          => array_map($this->serializeInvestor(...), $investors),
@@ -54,16 +54,16 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
         return $this->json([
             'investors' => array_map(
                 $this->serializeInvestor(...),
-                $academy->getInvestors()->toArray()
+                $club->getInvestors()->toArray()
             ),
         ]);
     }
@@ -73,16 +73,16 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
         return $this->json([
             'sponsors' => array_map(
                 $this->serializeSponsor(...),
-                $academy->getSponsors()->toArray()
+                $club->getSponsors()->toArray()
             ),
         ]);
     }
@@ -92,15 +92,15 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $academy = $this->academyRepository->findByUser($user);
+        $club = $this->clubRepository->findByUser($user);
 
-        if ($academy === null) {
-            return $this->json(['error' => 'Academy not found'], Response::HTTP_NOT_FOUND);
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
         }
 
         $sponsor = $this->sponsorRepository->find($id);
 
-        if ($sponsor === null || $sponsor->getAcademy()?->getId() !== $academy->getId()) {
+        if ($sponsor === null || $sponsor->getClub()?->getId() !== $club->getId()) {
             return $this->json(['error' => 'Sponsor not found'], Response::HTTP_NOT_FOUND);
         }
 

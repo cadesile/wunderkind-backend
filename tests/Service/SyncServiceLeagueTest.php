@@ -2,7 +2,7 @@
 
 namespace App\Tests\Service;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\GameConfig;
 use App\Entity\League;
 use App\Entity\NpcClub;
@@ -17,7 +17,7 @@ class SyncServiceLeagueTest extends TestCase
     public function testBuildLeagueSnapshotReturnsNullWhenNoLeague(): void
     {
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
+        $userClub = new Club('Test FC', $user);
         // no league set — currentLeague is null
 
         // Call the private method via reflection
@@ -29,7 +29,7 @@ class SyncServiceLeagueTest extends TestCase
         $gameConfig = new GameConfig();
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result = $reflection->invoke($service, $academy, $gameConfig);
+        $result = $reflection->invoke($service, $userClub, $gameConfig);
 
         $this->assertNull($result);
     }
@@ -37,16 +37,16 @@ class SyncServiceLeagueTest extends TestCase
     public function testBuildLeagueSnapshotIncludesClubs(): void
     {
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
+        $userClub = new Club('Test FC', $user);
         $league  = new League('EN', 8, 'League 8');
-        $academy->setCurrentLeague($league);
-        $academy->setCurrentSeason(2);
+        $userClub->setCurrentLeague($league);
+        $userClub->setCurrentSeason(2);
 
-        $club = new NpcClub('Norwich Town', 'EN', 8, 12, '#ffffff', '#000000', 100000, ['training_pitch' => 1]);
-        $club->setStadiumName('Norwich Park');
+        $npcClub = new NpcClub('Norwich Town', 'EN', 8, 12, '#ffffff', '#000000', 100000, ['training_pitch' => 1]);
+        $npcClub->setStadiumName('Norwich Park');
 
         $npcRepo = $this->createStub(NpcClubRepository::class);
-        $npcRepo->method('findByLeague')->willReturn([$club]);
+        $npcRepo->method('findByLeague')->willReturn([$npcClub]);
 
         $gameConfig = new GameConfig();
 
@@ -60,7 +60,7 @@ class SyncServiceLeagueTest extends TestCase
         $repoProp->setValue($service, $npcRepo);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result = $reflection->invoke($service, $academy, $gameConfig);
+        $result = $reflection->invoke($service, $userClub, $gameConfig);
 
         $this->assertNotNull($result);
         $this->assertSame(8,          $result['tier']);
@@ -74,7 +74,7 @@ class SyncServiceLeagueTest extends TestCase
     public function testBuildLeagueSnapshotIncludesNewConfigFields(): void
     {
         $user    = $this->createStub(\App\Entity\User::class);
-        $academy = new Academy('Test FC', $user);
+        $userClub = new Club('Test FC', $user);
         $league  = new League('EN', 5, 'League 5');
         $league->setPromotionSpots(3);
         $league->setTvDeal(500000);
@@ -88,8 +88,8 @@ class SyncServiceLeagueTest extends TestCase
         $leagueSponsor->setRolledValue(75000);
         $league->getLeagueSponsors()->add($leagueSponsor);
 
-        $academy->setCurrentLeague($league);
-        $academy->setCurrentSeason(3);
+        $userClub->setCurrentLeague($league);
+        $userClub->setCurrentSeason(3);
 
         $npcRepo = $this->createStub(NpcClubRepository::class);
         $npcRepo->method('findByLeague')->willReturn([]);
@@ -106,7 +106,7 @@ class SyncServiceLeagueTest extends TestCase
         $repoProp->setValue($service, $npcRepo);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
-        $result     = $reflection->invoke($service, $academy, $gameConfig);
+        $result     = $reflection->invoke($service, $userClub, $gameConfig);
 
         $this->assertNotNull($result);
         $this->assertSame(3,          $result['promotionSpots']);
@@ -121,8 +121,8 @@ class SyncServiceLeagueTest extends TestCase
     public function testAutoAssignSetsLowestTierLeagueWhenNoneAssigned(): void
     {
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
-        $academy->setCountry('EN');
+        $userClub = new Club('Test FC', $user);
+        $userClub->setCountry('EN');
 
         $league = new League('EN', 8, 'League 8');
 
@@ -130,7 +130,7 @@ class SyncServiceLeagueTest extends TestCase
         $leagueRepo->method('findLowestTierForCountry')->willReturn($league);
 
         $em = $this->createMock(\Doctrine\ORM\EntityManagerInterface::class);
-        $em->expects($this->once())->method('persist')->with($academy);
+        $em->expects($this->once())->method('persist')->with($userClub);
 
         $service = $this->getMockBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
@@ -144,18 +144,18 @@ class SyncServiceLeagueTest extends TestCase
         $emProp->setValue($service, $em);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'maybeAutoAssignLeague');
-        $reflection->invoke($service, $academy);
+        $reflection->invoke($service, $userClub);
 
-        $this->assertSame($league, $academy->getCurrentLeague());
+        $this->assertSame($league, $userClub->getCurrentLeague());
     }
 
     public function testAutoAssignIsNoOpWhenLeagueAlreadySet(): void
     {
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
+        $userClub = new Club('Test FC', $user);
         $existingLeague = new League('EN', 5, 'League 5');
-        $academy->setCurrentLeague($existingLeague);
-        $academy->setCountry('EN');
+        $userClub->setCurrentLeague($existingLeague);
+        $userClub->setCountry('EN');
 
         $leagueRepo = $this->createMock(LeagueRepository::class);
         $leagueRepo->expects($this->never())->method('findLowestTierForCountry');
@@ -169,15 +169,15 @@ class SyncServiceLeagueTest extends TestCase
         $leagueRepoProp->setValue($service, $leagueRepo);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'maybeAutoAssignLeague');
-        $reflection->invoke($service, $academy);
+        $reflection->invoke($service, $userClub);
 
-        $this->assertSame($existingLeague, $academy->getCurrentLeague());
+        $this->assertSame($existingLeague, $userClub->getCurrentLeague());
     }
 
     public function testAutoAssignIsNoOpWhenCountryIsNull(): void
     {
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
+        $userClub = new Club('Test FC', $user);
 
         $leagueRepo = $this->createMock(LeagueRepository::class);
         $leagueRepo->expects($this->never())->method('findLowestTierForCountry');
@@ -191,21 +191,21 @@ class SyncServiceLeagueTest extends TestCase
         $leagueRepoProp->setValue($service, $leagueRepo);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'maybeAutoAssignLeague');
-        $reflection->invoke($service, $academy);
+        $reflection->invoke($service, $userClub);
 
-        $this->assertNull($academy->getCurrentLeague());
+        $this->assertNull($userClub->getCurrentLeague());
     }
 
-    public function testSyncResponseAcademyBlockIncludesId(): void
+    public function testSyncResponseClubBlockIncludesId(): void
     {
         $user    = $this->createStub(User::class);
-        $academy = new Academy('Test FC', $user);
+        $userClub = new Club('Test FC', $user);
 
-        // Verify academy has a UUID id
-        $this->assertNotEmpty((string) $academy->getId());
+        // Verify club has a UUID id
+        $this->assertNotEmpty((string) $userClub->getId());
 
         // The id should be a valid UUID string format
-        $id = (string) $academy->getId();
+        $id = (string) $userClub->getId();
         $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id);
     }
 }

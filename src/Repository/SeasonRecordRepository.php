@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Entity\Academy;
+use App\Entity\Club;
 use App\Entity\SeasonRecord;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -18,8 +18,8 @@ class SeasonRecordRepository extends ServiceEntityRepository
     }
 
     /** @return SeasonRecord[] ordered by season ASC */
-    public function findByAcademy(Academy $academy): array
+    public function findByClub(Club $club): array
     {
-        return $this->findBy(['academy' => $academy], ['season' => 'ASC']);
+        return $this->findBy(['club' => $club], ['season' => 'ASC']);
     }
 }

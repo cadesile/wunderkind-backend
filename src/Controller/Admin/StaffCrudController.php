@@ -4,7 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Staff;
 use App\Enum\StaffRole;
-use App\Repository\AcademyRepository;
+use App\Repository\ClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -18,7 +18,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class StaffCrudController extends AbstractCrudController
 {
-    public function __construct(private readonly AcademyRepository $academyRepository) {}
+    public function __construct(private readonly ClubRepository $clubRepository) {}
 
     public static function getEntityFqcn(): string
     {
@@ -36,22 +36,22 @@ class StaffCrudController extends AbstractCrudController
     }
 
     /**
-     * Staff constructor requires role + academy — supply defaults so EasyAdmin
+     * Staff constructor requires role + club — supply defaults so EasyAdmin
      * can instantiate the form before the user fills in the real values.
      */
     public function createEntity(string $entityFqcn): Staff
     {
-        $academy = $this->academyRepository->findOneBy([]);
+        $club = $this->clubRepository->findOneBy([]);
 
-        if ($academy === null) {
-            throw new \RuntimeException('No Academy exists yet. Register a user first.');
+        if ($club === null) {
+            throw new \RuntimeException('No Club exists yet. Register a user first.');
         }
 
         return new Staff(
             firstName: '',
             lastName: '',
             role: StaffRole::ASSISTANT_COACH,
-            academy: $academy,
+            club: $club,
         );
     }
 
@@ -111,7 +111,7 @@ class StaffCrudController extends AbstractCrudController
             ->setHelp('Weekly salary in pence — £1,000 = 100,000')
             ->hideOnIndex();
 
-        yield AssociationField::new('academy');
+        yield AssociationField::new('club');
 
         yield DateTimeField::new('hiredAt')->hideOnForm();
     }

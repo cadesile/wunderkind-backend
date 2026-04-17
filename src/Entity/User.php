@@ -11,7 +11,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: '`user`')]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
-    public const ROLE_ACADEMY = 'ROLE_ACADEMY';
+    public const ROLE_CLUB = 'ROLE_CLUB';
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
@@ -27,7 +27,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private array $roles = [];
 
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
-    private ?Academy $academy = null;
+    private ?Club $club = null;
 
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $managerProfile = null;
@@ -58,8 +58,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function eraseCredentials(): void {}
 
-    public function getAcademy(): ?Academy { return $this->academy; }
-    public function setAcademy(?Academy $academy): void { $this->academy = $academy; }
+    public function getClub(): ?Club { return $this->club; }
+    public function setClub(?Club $club): void { $this->club = $club; }
 
     public function getManagerProfile(): ?array { return $this->managerProfile; }
     public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
