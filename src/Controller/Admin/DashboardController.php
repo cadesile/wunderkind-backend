@@ -228,7 +228,6 @@ class DashboardController extends AbstractDashboardController
 
         $poolCounts = [
             'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
-            'seniorPlayers' => $this->playerRepository->countSeniorInPool(),
             'coaches'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NULL'),
             'scouts'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
             'sponsors'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
@@ -305,23 +304,6 @@ class DashboardController extends AbstractDashboardController
         $config->setInvestorPoolTarget((int) $request->request->get('investorPoolTarget', 5));
         $config->setAgentPoolTarget((int) $request->request->get('agentPoolTarget', 20));
 
-        // Senior player fields
-        if ($request->request->has('seniorPlayerAgeMin')) {
-            $config->setSeniorPlayerAgeMin((int) $request->request->get('seniorPlayerAgeMin'));
-        }
-        if ($request->request->has('seniorPlayerAgeMax')) {
-            $config->setSeniorPlayerAgeMax((int) $request->request->get('seniorPlayerAgeMax'));
-        }
-        if ($request->request->has('seniorPlayerAbilityMin')) {
-            $config->setSeniorPlayerAbilityMin((int) $request->request->get('seniorPlayerAbilityMin'));
-        }
-        if ($request->request->has('seniorPlayerAbilityMax')) {
-            $config->setSeniorPlayerAbilityMax((int) $request->request->get('seniorPlayerAbilityMax'));
-        }
-        if ($request->request->has('seniorPlayerPoolTarget')) {
-            $config->setSeniorPlayerPoolTarget((int) $request->request->get('seniorPlayerPoolTarget'));
-        }
-
         $this->em->flush();
 
         $this->addFlash('success', 'Pool config saved.');
@@ -340,7 +322,8 @@ class DashboardController extends AbstractDashboardController
         $mode = $request->request->get('mode', 'replenish');
 
         if ($mode === 'force') {
-            $generated = $this->marketPoolService->forceGeneratePool();
+            $nationality = $request->request->getString('nationality') ?: null;
+            $generated = $this->marketPoolService->forceGeneratePool($nationality);
             $this->addFlash('success', 'Force generated: ' . implode(', ', $generated) . '.');
         } else {
             $generated = $this->marketPoolService->replenishPool();

@@ -24,7 +24,6 @@
                 <div class="row g-3 mb-4">
                     {% set poolItems = [
                         { label: 'Players',      icon: 'person-running',  count: poolCounts.players,       target: config.playerPoolTarget },
-                        { label: 'Sr. Players',  icon: 'user',            count: poolCounts.seniorPlayers, target: config.seniorPlayerPoolTarget },
                         { label: 'Coaches',      icon: 'chalkboard-user', count: poolCounts.coaches,       target: config.coachPoolTarget },
                         { label: 'Scouts',       icon: 'binoculars',      count: poolCounts.scouts,        target: config.scoutPoolTarget },
                         { label: 'Agents',       icon: 'handshake',       count: poolCounts.agents,        target: config.agentPoolTarget },
@@ -59,6 +58,39 @@
                     <form method="POST" action="{{ path('admin_pool_generate') }}" class="d-inline">
                         <input type="hidden" name="_token" value="{{ csrf_token('generate_pool') }}">
                         <input type="hidden" name="mode" value="force">
+                        <div class="mb-2">
+                            <label for="poolNationality" class="form-label form-label-sm">Nationality</label>
+                            <select id="poolNationality" name="nationality" class="form-select form-select-sm">
+                                <option value="">Random (mixed)</option>
+                                <option value="American">American</option>
+                                <option value="Argentine">Argentine</option>
+                                <option value="Austrian">Austrian</option>
+                                <option value="Belgian">Belgian</option>
+                                <option value="Brazilian">Brazilian</option>
+                                <option value="Canadian">Canadian</option>
+                                <option value="Colombian">Colombian</option>
+                                <option value="Croatian">Croatian</option>
+                                <option value="Danish">Danish</option>
+                                <option value="Dutch">Dutch</option>
+                                <option value="Emirati">Emirati</option>
+                                <option value="English">English</option>
+                                <option value="French">French</option>
+                                <option value="German">German</option>
+                                <option value="Italian">Italian</option>
+                                <option value="Japanese">Japanese</option>
+                                <option value="Mexican">Mexican</option>
+                                <option value="Norwegian">Norwegian</option>
+                                <option value="Portuguese">Portuguese</option>
+                                <option value="Saudi">Saudi</option>
+                                <option value="South Korean">South Korean</option>
+                                <option value="Spanish">Spanish</option>
+                                <option value="Swedish">Swedish</option>
+                                <option value="Swiss">Swiss</option>
+                                <option value="Turkish">Turkish</option>
+                                <option value="Uruguayan">Uruguayan</option>
+                            </select>
+                            <div class="form-text">Leave as "Random" to generate mixed nationalities.</div>
+                        </div>
                         <button type="submit" class="btn btn-sm btn-outline-warning"
                                 onclick="return confirm('Force-add the full target batch for ALL entity types regardless of current counts?')">
                             <i class="fa fa-bolt me-1"></i>Force Add Batch
@@ -128,50 +160,6 @@
                             <input type="number" id="investorPoolTarget" name="investorPoolTarget"
                                    value="{{ config.investorPoolTarget }}" min="1" class="form-control">
                             <div class="form-text">Default: 5</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Senior Players ───────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-user text-muted"></i>
-                    <span class="fw-semibold small">Senior Players</span>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">
-                        Configuration for senior player generation (age 17–35, no guardians).
-                        Senior players share the same pool as youth players.
-                    </p>
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label for="seniorPlayerPoolTarget" class="form-label fw-semibold small">Pool Target</label>
-                            <input type="number" id="seniorPlayerPoolTarget" name="seniorPlayerPoolTarget"
-                                   value="{{ config.seniorPlayerPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 200</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Age Range</label>
-                            <div class="input-group">
-                                <input type="number" name="seniorPlayerAgeMin" value="{{ config.seniorPlayerAgeMin }}"
-                                       min="16" max="50" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="seniorPlayerAgeMax" value="{{ config.seniorPlayerAgeMax }}"
-                                       min="16" max="50" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 17–35</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Ability Range</label>
-                            <div class="input-group">
-                                <input type="number" name="seniorPlayerAbilityMin" value="{{ config.seniorPlayerAbilityMin }}"
-                                       min="1" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="seniorPlayerAbilityMax" value="{{ config.seniorPlayerAbilityMax }}"
-                                       min="1" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Current ability. Default: 20–90</div>
                         </div>
                     </div>
                 </div>

@@ -61,17 +61,6 @@ class PlayerRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
-    public function countSeniorInPool(): int
-    {
-        return (int) $this->createQueryBuilder('p')
-            ->select('COUNT(p.id)')
-            ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :source')
-            ->setParameter('source', RecruitmentSource::SENIOR_INTAKE)
-            ->getQuery()
-            ->getSingleScalarResult();
-    }
-
     /** @return Player[] Unassigned SCOUTING_NETWORK players (scout prospect pool) */
     public function findProspects(int $limit = 150): array
     {
