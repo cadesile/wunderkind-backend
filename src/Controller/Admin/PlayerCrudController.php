@@ -7,10 +7,14 @@ use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use App\Repository\ClubRepository;
+use App\Repository\PlayerRepository;
+use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use Symfony\Component\HttpFoundation\Response;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
@@ -21,7 +25,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class PlayerCrudController extends AbstractCrudController
 {
-    public function __construct(private readonly ClubRepository $clubRepository) {}
+    public function __construct(
+        private readonly ClubRepository $clubRepository,
+        private readonly PlayerRepository $playerRepository,
+    ) {}
 
     public static function getEntityFqcn(): string
     {
@@ -38,7 +45,18 @@ class PlayerCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['lastName' => 'ASC']);
+        return parent::configureCrud($crud)
+            ->setDefaultSort(['lastName' => 'ASC'])
+            ->overrideTemplate('crud/index', 'admin/player_index.html.twig');
+    }
+
+    public function index(AdminContext $context): KeyValueStore|Response
+    {
+        $responseParameters = parent::index($context);
+        if ($responseParameters instanceof KeyValueStore) {
+            $responseParameters->set('playerSummary', $this->playerRepository->getAdminSummary());
+        }
+        return $responseParameters;
     }
 
     /**
