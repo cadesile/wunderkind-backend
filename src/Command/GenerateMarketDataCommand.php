@@ -250,6 +250,8 @@ class GenerateMarketDataCommand extends Command
         $this->em->createQuery('DELETE FROM App\Entity\Scout')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Investor')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Sponsor')->execute();
+        // Delete guardians before players — DQL bulk DELETE bypasses Doctrine cascade
+        $this->em->createQuery('DELETE FROM App\Entity\Guardian')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Player')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Staff')->execute();
 

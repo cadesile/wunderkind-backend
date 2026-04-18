@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Repository\ClubRepository;
+use App\Repository\PlayerRepository;
 use App\Service\WorldInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,8 +16,11 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api')]
 class InitializeController extends AbstractController
 {
+    private const MIN_POOL_SIZE = 500;
+
     public function __construct(
-        private readonly ClubRepository          $clubRepository,
+        private readonly ClubRepository             $clubRepository,
+        private readonly PlayerRepository           $playerRepository,
         private readonly WorldInitializationService $worldInitializationService,
     ) {}
 
@@ -27,6 +31,7 @@ class InitializeController extends AbstractController
      * country and returns it to the client. Guards:
      *   - 422 if club has no country set
      *   - 409 if already initialized (worldInitializedAt is set)
+     *   - 412 if player pool has fewer than MIN_POOL_SIZE players
      */
     #[Route('/initialize', name: 'api_initialize', methods: ['POST'])]
     public function initialize(): JsonResponse
@@ -50,6 +55,14 @@ class InitializeController extends AbstractController
             return $this->json(
                 ['error' => 'World already initialized for this club.'],
                 Response::HTTP_CONFLICT,
+            );
+        }
+
+        $poolCount = $this->playerRepository->countInPool();
+        if ($poolCount < self::MIN_POOL_SIZE) {
+            return $this->json(
+                ['error' => "Player pool too small ({$poolCount} players). Run GenerateMarketDataCommand first."],
+                Response::HTTP_PRECONDITION_FAILED,
             );
         }
 
