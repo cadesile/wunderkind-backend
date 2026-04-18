@@ -55,42 +55,9 @@
                             <i class="fa fa-arrow-up me-1"></i>Replenish to Targets
                         </button>
                     </form>
-                    <form method="POST" action="{{ path('admin_pool_generate') }}" class="d-inline">
+                    <form id="form-force-generate" method="POST" action="{{ path('admin_pool_generate') }}" class="d-inline">
                         <input type="hidden" name="_token" value="{{ csrf_token('generate_pool') }}">
                         <input type="hidden" name="mode" value="force">
-                        <div class="mb-2">
-                            <label for="poolNationality" class="form-label form-label-sm">Nationality</label>
-                            <select id="poolNationality" name="nationality" class="form-select form-select-sm">
-                                <option value="">Random (mixed)</option>
-                                <option value="American">American</option>
-                                <option value="Argentine">Argentine</option>
-                                <option value="Austrian">Austrian</option>
-                                <option value="Belgian">Belgian</option>
-                                <option value="Brazilian">Brazilian</option>
-                                <option value="Canadian">Canadian</option>
-                                <option value="Colombian">Colombian</option>
-                                <option value="Croatian">Croatian</option>
-                                <option value="Danish">Danish</option>
-                                <option value="Dutch">Dutch</option>
-                                <option value="Emirati">Emirati</option>
-                                <option value="English">English</option>
-                                <option value="French">French</option>
-                                <option value="German">German</option>
-                                <option value="Italian">Italian</option>
-                                <option value="Japanese">Japanese</option>
-                                <option value="Mexican">Mexican</option>
-                                <option value="Norwegian">Norwegian</option>
-                                <option value="Portuguese">Portuguese</option>
-                                <option value="Saudi">Saudi</option>
-                                <option value="South Korean">South Korean</option>
-                                <option value="Spanish">Spanish</option>
-                                <option value="Swedish">Swedish</option>
-                                <option value="Swiss">Swiss</option>
-                                <option value="Turkish">Turkish</option>
-                                <option value="Uruguayan">Uruguayan</option>
-                            </select>
-                            <div class="form-text">Leave as "Random" to generate mixed nationalities.</div>
-                        </div>
                         <button type="submit" class="btn btn-sm btn-outline-warning"
                                 onclick="return confirm('Force-add the full target batch for ALL entity types regardless of current counts?')">
                             <i class="fa fa-bolt me-1"></i>Force Add Batch
@@ -231,6 +198,39 @@
                             <input type="number" id="playerAgentChancePercent" name="playerAgentChancePercent"
                                    value="{{ config.playerAgentChancePercent }}" min="0" max="100" class="form-control">
                             <div class="form-text">Probability a player has an agent on generation. Default: 40</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="poolNationality" class="form-label fw-semibold small">Nationality <span class="text-muted fw-normal">(Force Add only)</span></label>
+                            <select id="poolNationality" name="nationality" form="form-force-generate" class="form-select">
+                                <option value="">Random (mixed)</option>
+                                <option value="American">American</option>
+                                <option value="Argentine">Argentine</option>
+                                <option value="Austrian">Austrian</option>
+                                <option value="Belgian">Belgian</option>
+                                <option value="Brazilian">Brazilian</option>
+                                <option value="Canadian">Canadian</option>
+                                <option value="Colombian">Colombian</option>
+                                <option value="Croatian">Croatian</option>
+                                <option value="Danish">Danish</option>
+                                <option value="Dutch">Dutch</option>
+                                <option value="Emirati">Emirati</option>
+                                <option value="English">English</option>
+                                <option value="French">French</option>
+                                <option value="German">German</option>
+                                <option value="Italian">Italian</option>
+                                <option value="Japanese">Japanese</option>
+                                <option value="Mexican">Mexican</option>
+                                <option value="Norwegian">Norwegian</option>
+                                <option value="Portuguese">Portuguese</option>
+                                <option value="Saudi">Saudi</option>
+                                <option value="South Korean">South Korean</option>
+                                <option value="Spanish">Spanish</option>
+                                <option value="Swedish">Swedish</option>
+                                <option value="Swiss">Swiss</option>
+                                <option value="Turkish">Turkish</option>
+                                <option value="Uruguayan">Uruguayan</option>
+                            </select>
+                            <div class="form-text">Applies to players only. Leave as "Random" for mixed nationalities.</div>
                         </div>
                     </div>
                 </div>
