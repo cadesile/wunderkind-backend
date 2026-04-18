@@ -107,6 +107,37 @@
             </div>
         </div>
 
+        <div class="card mt-3">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-globe text-muted"></i>
+                <span class="fw-semibold small">Country Config</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Controls which countries are available when a player creates a new club. Only enable countries with complete league and club data.</p>
+                {% set allCountries = [
+                    {code: 'EN', label: 'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿'},
+                    {code: 'IT', label: 'Italy 🇮🇹'},
+                    {code: 'DE', label: 'Germany 🇩🇪'},
+                    {code: 'ES', label: 'Spain 🇪🇸'},
+                    {code: 'BR', label: 'Brazil 🇧🇷'},
+                    {code: 'AR', label: 'Argentina 🇦🇷'},
+                    {code: 'NL', label: 'Netherlands 🇳🇱'}
+                ] %}
+                {% for country in allCountries %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="enabledCountries[]"
+                               value="{{ country.code }}"
+                               id="country_{{ country.code }}"
+                               {% if country.code in config.enabledCountries %}checked{% endif %}>
+                        <label class="form-check-label" for="country_{{ country.code }}">
+                            {{ country.label }}
+                        </label>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
         <div class="mt-4">
             <button type="submit" class="btn btn-primary btn-sm">Save Starter Config</button>
         </div>

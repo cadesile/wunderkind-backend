@@ -211,6 +211,9 @@ class DashboardController extends AbstractDashboardController
         $reputationTier      = ReputationTier::tryFrom($reputationTierValue) ?? ReputationTier::LOCAL;
         $config->setStarterReputationTier($reputationTier);
 
+        $enabledCountries = $request->request->all('enabledCountries') ?: ['EN'];
+        $config->setEnabledCountries($enabledCountries);
+
         $this->em->persist($config);
         $this->em->flush();
 
