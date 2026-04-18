@@ -29,8 +29,9 @@ class StarterConfigController extends AbstractController
             'starterPlayerCount' => $config->getStarterPlayerCount(),
             'starterCoachCount'  => $config->getStarterCoachCount(),
             'starterScoutCount'  => $config->getStarterScoutCount(),
-            'starterSponsorTier'  => $config->getStarterSponsorTier(),
-            'starterClubTier'  => $config->getStarterClubTier(),
+            'starterSponsorTier' => $config->getStarterSponsorTier(),
+            'starterClubTier'    => $config->getStarterClubTier(),
+            'enabledCountries'   => $config->getEnabledCountries(),
         ]);
     }
 }
