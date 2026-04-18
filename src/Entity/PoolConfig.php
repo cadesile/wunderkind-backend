@@ -203,28 +203,6 @@ class PoolConfig
     #[ORM\Column(type: 'integer')]
     private int $agentPoolTarget = 20;
 
-    // ── Senior Player Generation ───────────────────────────────────────────
-
-    /** Minimum age for generated senior players. Default: 17 */
-    #[ORM\Column(type: 'integer')]
-    private int $seniorPlayerAgeMin = 17;
-
-    /** Maximum age for generated senior players. Default: 35 */
-    #[ORM\Column(type: 'integer')]
-    private int $seniorPlayerAgeMax = 35;
-
-    /** Minimum current ability for generated senior players. Default: 20 */
-    #[ORM\Column(type: 'integer')]
-    private int $seniorPlayerAbilityMin = 20;
-
-    /** Maximum current ability for generated senior players. Default: 90 */
-    #[ORM\Column(type: 'integer')]
-    private int $seniorPlayerAbilityMax = 90;
-
-    /** Senior player replenishment target. Default: 200 */
-    #[ORM\Column(type: 'integer')]
-    private int $seniorPlayerPoolTarget = 200;
-
     // ── Getters / Setters ──────────────────────────────────────────────────
 
     public function getId(): ?int { return $this->id; }
@@ -349,18 +327,4 @@ class PoolConfig
     public function getAgentPoolTarget(): int { return $this->agentPoolTarget; }
     public function setAgentPoolTarget(int $v): static { $this->agentPoolTarget = $v; return $this; }
 
-    public function getSeniorPlayerAgeMin(): int { return $this->seniorPlayerAgeMin; }
-    public function setSeniorPlayerAgeMin(int $v): static { $this->seniorPlayerAgeMin = $v; return $this; }
-
-    public function getSeniorPlayerAgeMax(): int { return $this->seniorPlayerAgeMax; }
-    public function setSeniorPlayerAgeMax(int $v): static { $this->seniorPlayerAgeMax = $v; return $this; }
-
-    public function getSeniorPlayerAbilityMin(): int { return $this->seniorPlayerAbilityMin; }
-    public function setSeniorPlayerAbilityMin(int $v): static { $this->seniorPlayerAbilityMin = $v; return $this; }
-
-    public function getSeniorPlayerAbilityMax(): int { return $this->seniorPlayerAbilityMax; }
-    public function setSeniorPlayerAbilityMax(int $v): static { $this->seniorPlayerAbilityMax = $v; return $this; }
-
-    public function getSeniorPlayerPoolTarget(): int { return $this->seniorPlayerPoolTarget; }
-    public function setSeniorPlayerPoolTarget(int $v): static { $this->seniorPlayerPoolTarget = $v; return $this; }
 }
