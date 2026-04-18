@@ -553,20 +553,6 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
 
-    #[Route('/admin/npc-clubs/replenish-senior', name: 'admin_npc_clubs_replenish_senior', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function replenishSeniorPool(Request $request): Response
-    {
-        if (!$this->isCsrfTokenValid('replenish_senior_pool', $request->request->get('_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
-        }
-
-        $this->addFlash('info', 'Senior player generation has been retired.');
-
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
-    }
-
     #[Route('/admin/leagues/generate', name: 'admin_leagues_generate', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
     public function generateLeagues(Request $request): Response

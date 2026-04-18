@@ -45,7 +45,6 @@ class MarketPoolService
         'Argentine'    => 'south_america',
         'Swedish'      => 'scandinavia',
         'Danish'       => 'scandinavia',
-        'Irish'        => 'british_isles',
         'Senegalese'   => 'west_africa',
         'Nigerian'     => 'west_africa',
         'Ghanaian'     => 'west_africa',
