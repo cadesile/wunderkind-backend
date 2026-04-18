@@ -190,4 +190,69 @@ class PlayerRepository extends ServiceEntityRepository
             ->getQuery()
             ->execute();
     }
+
+    /**
+     * Returns three summary maps for the player admin panel.
+     * Age buckets are computed in PHP from dateOfBirth to avoid PostgreSQL-specific DQL.
+     *
+     * @return array{byNationality: array<string,int>, byPosition: array<string,int>, byAge: array<string,int>}
+     */
+    public function getAdminSummary(): array
+    {
+        // ── By nationality ────────────────────────────────────────────────────
+        $natRows = $this->createQueryBuilder('p')
+            ->select('p.nationality AS nationality, COUNT(p.id) AS cnt')
+            ->groupBy('p.nationality')
+            ->orderBy('cnt', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        $byNationality = [];
+        foreach ($natRows as $row) {
+            $byNationality[(string) $row['nationality']] = (int) $row['cnt'];
+        }
+
+        // ── By position ───────────────────────────────────────────────────────
+        $posRows = $this->createQueryBuilder('p')
+            ->select('p.position AS position, COUNT(p.id) AS cnt')
+            ->groupBy('p.position')
+            ->getQuery()
+            ->getResult();
+
+        $byPosition = [];
+        foreach ($posRows as $row) {
+            $pos = $row['position'] instanceof \App\Enum\PlayerPosition
+                ? $row['position']->value
+                : (string) $row['position'];
+            $byPosition[$pos] = (int) $row['cnt'];
+        }
+
+        // ── By age range (computed in PHP) ────────────────────────────────────
+        $dobRows = $this->createQueryBuilder('p')
+            ->select('p.dateOfBirth AS dob')
+            ->getQuery()
+            ->getArrayResult();
+
+        $byAge = ['U16' => 0, '16-18' => 0, '19-21' => 0, '22-25' => 0, '26-30' => 0, '30+' => 0];
+        $now   = new \DateTimeImmutable();
+
+        foreach ($dobRows as $row) {
+            $dob = $row['dob'];
+            if (!$dob instanceof \DateTimeInterface) {
+                continue;
+            }
+            $age    = (int) $dob->diff($now)->y;
+            $bucket = match (true) {
+                $age < 16   => 'U16',
+                $age <= 18  => '16-18',
+                $age <= 21  => '19-21',
+                $age <= 25  => '22-25',
+                $age <= 30  => '26-30',
+                default     => '30+',
+            };
+            $byAge[$bucket]++;
+        }
+
+        return compact('byNationality', 'byPosition', 'byAge');
+    }
 }
