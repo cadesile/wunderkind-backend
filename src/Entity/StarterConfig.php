@@ -55,6 +55,13 @@ class StarterConfig
     private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
 
     /**
+     * Country codes (ClubCountryCode values) available to players at club creation.
+     * Default: ['EN'] — England only.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $enabledCountries = ['EN'];
+
+    /**
      * Per-tier NPC squad and staff config. Keyed by tier number (1–8).
      * Each entry: playerMin, playerMax, managerCount, coachCount, chairmanCount, foreignPercent
      */
@@ -133,4 +140,7 @@ class StarterConfig
         $this->npcSquadConfig = json_decode($v, true) ?? [];
         return $this;
     }
+
+    public function getEnabledCountries(): array { return $this->enabledCountries; }
+    public function setEnabledCountries(array $v): static { $this->enabledCountries = $v; return $this; }
 }
