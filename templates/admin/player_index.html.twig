@@ -1,0 +1,60 @@
+{% extends '@EasyAdmin/crud/index.html.twig' %}
+
+{% block content_header_wrapper %}
+    <div class="row g-3 mb-4">
+
+        {# ── By Nationality ── #}
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">Players by Nationality</div>
+                <div class="card-body p-0" style="max-height: 260px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <tbody>
+                            {% for nationality, count in playerSummary.byNationality %}
+                                <tr>
+                                    <td>{{ nationality }}</td>
+                                    <td class="text-end fw-bold">{{ count }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="2" class="text-muted text-center">No players</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# ── By Position ── #}
+        <div class="col-lg-3">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">By Position</div>
+                <div class="card-body">
+                    {% set posOrder = ['GK', 'DEF', 'MID', 'ATT'] %}
+                    {% for pos in posOrder %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">{{ pos }}</span>
+                            <strong>{{ playerSummary.byPosition[pos] ?? 0 }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# ── By Age Range ── #}
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">By Age Range</div>
+                <div class="card-body">
+                    {% for range, count in playerSummary.byAge %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">{{ range }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+    {{ parent() }}
+{% endblock %}
