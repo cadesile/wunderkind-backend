@@ -579,18 +579,7 @@ class DashboardController extends AbstractDashboardController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
         }
 
-        $cfg     = $this->poolConfigRepository->getConfig();
-        $current = $this->playerRepository->countSeniorInPool();
-        $target  = $cfg->getSeniorPlayerPoolTarget();
-
-        if ($current >= $target) {
-            $this->addFlash('info', "Senior pool already at target — {$current} / {$target}.");
-        } else {
-            $needed = $target - $current;
-            $this->marketPoolService->generateSeniorPlayers($needed);
-            $newCount = $this->playerRepository->countSeniorInPool();
-            $this->addFlash('success', "Generated {$needed} senior players — pool now at {$newCount}.");
-        }
+        $this->addFlash('info', 'Senior player generation has been retired.');
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
