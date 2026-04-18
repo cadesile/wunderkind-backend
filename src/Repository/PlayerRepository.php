@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Club;
 use App\Entity\Guardian;
 use App\Entity\Player;
+use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -221,7 +222,7 @@ class PlayerRepository extends ServiceEntityRepository
 
         $byPosition = [];
         foreach ($posRows as $row) {
-            $pos = $row['position'] instanceof \App\Enum\PlayerPosition
+            $pos = $row['position'] instanceof PlayerPosition
                 ? $row['position']->value
                 : (string) $row['position'];
             $byPosition[$pos] = (int) $row['cnt'];
@@ -247,7 +248,7 @@ class PlayerRepository extends ServiceEntityRepository
                 $age <= 18  => '16-18',
                 $age <= 21  => '19-21',
                 $age <= 25  => '22-25',
-                $age <= 30  => '26-30',
+                $age < 30   => '26-30',
                 default     => '30+',
             };
             $byAge[$bucket]++;
