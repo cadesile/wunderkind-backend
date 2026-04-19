@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Enum\ReputationTier;
 use App\Repository\GameConfigRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
@@ -68,15 +69,27 @@ class ConfigImportExportService
                 'guardianIgnoreGuardianDemandIncrease'     => $game->getGuardianIgnoreGuardianDemandIncrease(),
                 'guardianIgnoreSiblingMoralePenalty'       => $game->getGuardianIgnoreSiblingMoralePenalty(),
                 'guardianIgnoreSiblingLoyaltyTraitPenalty' => $game->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
+                'smallSponsorMin'                          => $game->getSmallSponsorMin(),
+                'smallSponsorMax'                          => $game->getSmallSponsorMax(),
+                'mediumSponsorMin'                         => $game->getMediumSponsorMin(),
+                'mediumSponsorMax'                         => $game->getMediumSponsorMax(),
+                'largeSponsorMin'                          => $game->getLargeSponsorMin(),
+                'largeSponsorMax'                          => $game->getLargeSponsorMax(),
+                'leaguePositionDecreasePercent'            => $game->getLeaguePositionDecreasePercent(),
                 'debugLoggingEnabled'                      => $game->isDebugLoggingEnabled(),
             ],
             'starterConfig' => [
-                'startingBalance'    => $starter->getStartingBalance(),
-                'starterPlayerCount' => $starter->getStarterPlayerCount(),
-                'starterCoachCount'  => $starter->getStarterCoachCount(),
-                'starterScoutCount'  => $starter->getStarterScoutCount(),
-                'starterSponsorTier' => $starter->getStarterSponsorTier(),
-                'starterClubTier' => $starter->getStarterClubTier(),
+                'startingBalance'       => $starter->getStartingBalance(),
+                'starterPlayerCount'    => $starter->getStarterPlayerCount(),
+                'starterCoachCount'     => $starter->getStarterCoachCount(),
+                'starterScoutCount'     => $starter->getStarterScoutCount(),
+                'starterSponsorTier'    => $starter->getStarterSponsorTier(),
+                'starterClubTier'       => $starter->getStarterClubTier(),
+                'defaultFacilities'     => $starter->getDefaultFacilities(),
+                'starterReputationTier' => $starter->getStarterReputationTier()->value,
+                'enabledCountries'      => $starter->getEnabledCountries(),
+                'leagueAbilityRanges'   => $starter->getLeagueAbilityRanges(),
+                'npcSquadConfig'        => $starter->getNpcSquadConfig(),
             ],
             'poolConfig' => [
                 'playerAgeMin'              => $pool->getPlayerAgeMin(),
@@ -196,6 +209,13 @@ class ConfigImportExportService
         if (isset($row['guardianIgnoreGuardianDemandIncrease']))     $config->setGuardianIgnoreGuardianDemandIncrease((int) $row['guardianIgnoreGuardianDemandIncrease']);
         if (isset($row['guardianIgnoreSiblingMoralePenalty']))       $config->setGuardianIgnoreSiblingMoralePenalty((int) $row['guardianIgnoreSiblingMoralePenalty']);
         if (isset($row['guardianIgnoreSiblingLoyaltyTraitPenalty'])) $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $row['guardianIgnoreSiblingLoyaltyTraitPenalty']);
+        if (isset($row['smallSponsorMin']))                          $config->setSmallSponsorMin((int) $row['smallSponsorMin']);
+        if (isset($row['smallSponsorMax']))                          $config->setSmallSponsorMax((int) $row['smallSponsorMax']);
+        if (isset($row['mediumSponsorMin']))                         $config->setMediumSponsorMin((int) $row['mediumSponsorMin']);
+        if (isset($row['mediumSponsorMax']))                         $config->setMediumSponsorMax((int) $row['mediumSponsorMax']);
+        if (isset($row['largeSponsorMin']))                          $config->setLargeSponsorMin((int) $row['largeSponsorMin']);
+        if (isset($row['largeSponsorMax']))                          $config->setLargeSponsorMax((int) $row['largeSponsorMax']);
+        if (isset($row['leaguePositionDecreasePercent']))           $config->setLeaguePositionDecreasePercent((int) $row['leaguePositionDecreasePercent']);
         if (array_key_exists('debugLoggingEnabled', $row))          $config->setDebugLoggingEnabled((bool) $row['debugLoggingEnabled']);
     }
 
@@ -208,7 +228,12 @@ class ConfigImportExportService
         if (isset($row['starterCoachCount']))  $config->setStarterCoachCount((int) $row['starterCoachCount']);
         if (isset($row['starterScoutCount']))  $config->setStarterScoutCount((int) $row['starterScoutCount']);
         if (isset($row['starterSponsorTier'])) $config->setStarterSponsorTier((string) $row['starterSponsorTier']);
-        if (isset($row['starterClubTier'])) $config->setStarterClubTier((string) $row['starterClubTier']);
+        if (isset($row['starterClubTier']))    $config->setStarterClubTier((string) $row['starterClubTier']);
+        if (isset($row['defaultFacilities']))  $config->setDefaultFacilities((array) $row['defaultFacilities']);
+        if (isset($row['starterReputationTier'])) $config->setStarterReputationTier(ReputationTier::from((string) $row['starterReputationTier']));
+        if (isset($row['enabledCountries']))      $config->setEnabledCountries((array) $row['enabledCountries']);
+        if (isset($row['leagueAbilityRanges']))   $config->setLeagueAbilityRanges((array) $row['leagueAbilityRanges']);
+        if (isset($row['npcSquadConfig']))        $config->setNpcSquadConfig((array) $row['npcSquadConfig']);
     }
 
     private function applyPoolConfig(array $row): void
