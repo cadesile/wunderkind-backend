@@ -99,8 +99,8 @@ class ConfigImportExportService
                 'playerPotentialMean'       => $pool->getPlayerPotentialMean(),
                 'playerAbilityMin'          => $pool->getPlayerAbilityMin(),
                 'playerAbilityMax'          => $pool->getPlayerAbilityMax(),
-                'playerAttributeBudgetMin'  => $pool->getPlayerAttributeBudgetMin(),
-                'playerAttributeBudgetMax'  => $pool->getPlayerAttributeBudgetMax(),
+                'playerAttributeBudgetMin'  => $pool->getPlayerAttributeBudgetMin(),  // no longer used for attribute generation (budget now derived from currentAbility)
+                'playerAttributeBudgetMax'  => $pool->getPlayerAttributeBudgetMax(),  // no longer used for attribute generation (budget now derived from currentAbility)
                 'playerAgentChancePercent'  => $pool->getPlayerAgentChancePercent(),
                 'playerHeightMin'           => $pool->getPlayerHeightMin(),
                 'playerHeightMax'           => $pool->getPlayerHeightMax(),
@@ -247,8 +247,8 @@ class ConfigImportExportService
         if (isset($row['playerPotentialMean']))      $config->setPlayerPotentialMean((int) $row['playerPotentialMean']);
         if (isset($row['playerAbilityMin']))         $config->setPlayerAbilityMin((int) $row['playerAbilityMin']);
         if (isset($row['playerAbilityMax']))         $config->setPlayerAbilityMax((int) $row['playerAbilityMax']);
-        if (isset($row['playerAttributeBudgetMin'])) $config->setPlayerAttributeBudgetMin((int) $row['playerAttributeBudgetMin']);
-        if (isset($row['playerAttributeBudgetMax'])) $config->setPlayerAttributeBudgetMax((int) $row['playerAttributeBudgetMax']);
+        if (isset($row['playerAttributeBudgetMin'])) $config->setPlayerAttributeBudgetMin((int) $row['playerAttributeBudgetMin']); // no longer used for attribute generation (budget now derived from currentAbility)
+        if (isset($row['playerAttributeBudgetMax'])) $config->setPlayerAttributeBudgetMax((int) $row['playerAttributeBudgetMax']); // no longer used for attribute generation (budget now derived from currentAbility)
         if (isset($row['playerAgentChancePercent'])) $config->setPlayerAgentChancePercent((int) $row['playerAgentChancePercent']);
         if (isset($row['playerHeightMin']))          $config->setPlayerHeightMin((int) $row['playerHeightMin']);
         if (isset($row['playerHeightMax']))          $config->setPlayerHeightMax((int) $row['playerHeightMax']);

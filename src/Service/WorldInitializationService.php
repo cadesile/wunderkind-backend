@@ -31,13 +31,6 @@ class WorldInitializationService
         8 => ['min' => 10,  'max' => 25],
     ];
 
-    private const STARTER_ABILITY_RANGES = [
-        'local'    => ['min' => 5,  'max' => 30],
-        'regional' => ['min' => 20, 'max' => 45],
-        'national' => ['min' => 40, 'max' => 65],
-        'elite'    => ['min' => 60, 'max' => 85],
-    ];
-
     public function __construct(
         private readonly LeagueRepository        $leagueRepository,
         private readonly NpcClubRepository       $npcClubRepository,
@@ -121,9 +114,9 @@ class WorldInitializationService
             $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures);
         }
 
-        // AMP starter pack
-        $tierStr  = $starterConfig->getStarterClubTier();
-        $ampRange = self::STARTER_ABILITY_RANGES[$tierStr] ?? ['min' => 5, 'max' => 30];
+        // AMP starter pack — use the same leagueAbilityRanges config as NPC clubs
+        $ampLeagueTier = $club->getCurrentLeague()?->getTier() ?? 8;
+        $ampRange      = $leagueRanges[$country][(string) $ampLeagueTier] ?? self::ABILITY_RANGES[$ampLeagueTier] ?? ['min' => 5, 'max' => 35];
 
         $ampPlayers = $this->playerRepository->findForWorldInit(
             $ampRange['min'], $ampRange['max'], $country, $starterConfig->getStarterPlayerCount()
