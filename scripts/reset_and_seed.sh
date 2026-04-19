@@ -1,8 +1,8 @@
 #!/bin/bash
 #
 # reset_and_seed.sh
-# Resets the Wunderkind database, re-seeds market data,
-# and clears clubs and users. Preserves admin, configs, and narratives.
+# Resets the Wunderkind database and re-seeds market data.
+# game_config, starter_config, and narrative data are preserved.
 #
 # The "admin" table is NEVER touched — admin users are always preserved.
 #
@@ -66,7 +66,7 @@ fi
 # ─── Safety confirmation ─────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}⚠️  WARNING${NC}"
-echo "   This will DELETE all clubs, players, staff, and user data."
+echo "   This will DELETE all clubs, players, staff, and game data."
 echo "   The admin table is untouched — admin users are always preserved."
 echo "   game_config, starter_config, and narrative data are untouched."
 echo ""
@@ -210,7 +210,7 @@ echo ""
 
 # ─── Phase 1: Truncate game tables (admin table is intentionally excluded) ────
 echo -e "${BLUE}🗑️  Phase 1: Truncating game tables (config & narrative untouched)...${NC}"
-echo "   (admin, game_config, starter_config, and templates are skipped)"
+echo "   (admin table is skipped — admin users are always preserved)"
 
 # Write SQL to a file inside the project dir (lando mounts project at /app).
 # The admin table is intentionally absent from this list.
@@ -276,7 +276,9 @@ UNION ALL SELECT 'Investors',        COUNT(*)::text FROM investor
 UNION ALL SELECT 'Sponsors',         COUNT(*)::text FROM sponsor
 UNION ALL SELECT 'Event templates',  COUNT(*)::text FROM game_event_template
 UNION ALL SELECT 'Archetypes',       COUNT(*)::text FROM player_archetype
-UNION ALL SELECT 'Admin users',      COUNT(*)::text FROM admin;
+UNION ALL SELECT 'Admin users',      COUNT(*)::text FROM admin
+UNION ALL SELECT 'game_config',      clique_relationship_threshold||'/'||clique_squad_cap_percent||'/'||clique_min_tenure_weeks||' · baseXP='||base_xp||' · injury='||base_injury_probability FROM game_config LIMIT 1
+UNION ALL SELECT 'starter_config',   'balance='||starting_balance||' · players='||starter_player_count||' · sponsor='||starter_sponsor_tier FROM starter_config WHERE id = 1;
 SQL
 
 psql_file
@@ -289,5 +291,6 @@ echo ""
 echo "   Cleared    : clubs, players, guardians, staff, scouts, agents, sponsors,"
 echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
-echo "   Preserved  : game_config, starter_config, narratives, admin"
+echo "   Config     : game_config, starter_config, and narrative data preserved"
+echo "   Admin      : untouched"
 echo ""
