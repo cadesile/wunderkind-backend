@@ -12,6 +12,7 @@ use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ConfigImportExportService;
 use App\Service\EconomicService;
+use App\Service\LeagueImportExportService;
 use App\Service\MarketPoolService;
 use App\Service\NarrativeImportExportService;
 use App\Controller\Admin\LeagueCrudController;
@@ -623,6 +624,82 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
 
+    // ── World Data Import / Export ────────────────────────────────────────
+
+    #[Route('/admin/world/content', name: 'admin_world_content')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function worldContent(): Response
+    {
+        return $this->render('admin/world_content.html.twig');
+    }
+
+    #[Route('/admin/world/export', name: 'admin_world_export', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function worldExport(LeagueImportExportService $service): StreamedResponse
+    {
+        $data     = $service->export();
+        $filename = 'wunderkind-world-' . date('Y-m-d') . '.json';
+        $json     = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $response = new StreamedResponse(function () use ($json) {
+            echo $json;
+        });
+
+        $disposition = HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename);
+        $response->headers->set('Content-Type', 'application/json');
+        $response->headers->set('Content-Disposition', $disposition);
+
+        return $response;
+    }
+
+    #[Route('/admin/world/import', name: 'admin_world_import', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function worldImport(Request $request, LeagueImportExportService $service): Response
+    {
+        if (!$this->isCsrfTokenValid('world_import', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+        }
+
+        $file = $request->files->get('world_file');
+        if ($file === null || !$file->isValid()) {
+            $this->addFlash('danger', 'No valid file uploaded.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+        }
+
+        $raw = file_get_contents($file->getPathname());
+        if ($raw === false) {
+            $this->addFlash('danger', 'Could not read uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+        }
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $this->addFlash('danger', 'Invalid JSON — could not parse the uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+        }
+
+        $clearFirst = $request->request->has('clear_before_import');
+        if ($clearFirst) {
+            $service->clearAll();
+            $this->addFlash('warning', 'Existing world data (leagues & clubs) cleared before import.');
+        }
+
+        $result = $service->import($data);
+
+        if (!empty($result['errors'])) {
+            foreach ($result['errors'] as $error) {
+                $this->addFlash('warning', $error);
+            }
+        }
+
+        if ($result['applied']) {
+            $this->addFlash('success', 'World data imported successfully.');
+        }
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+    }
+
     // ── Developer Tools ───────────────────────────────────────────────────
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
@@ -760,6 +837,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved');
         yield MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy');
         yield MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board');
+        yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content');
         yield MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content');
     }
 }

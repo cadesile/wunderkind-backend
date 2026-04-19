@@ -6,7 +6,7 @@
     <div class="col-12">
         <h5 class="fw-semibold mb-0">Narrative Content — Import / Export</h5>
         <p class="text-muted small mb-0">
-            Export all narrative content (event templates, facility templates, player archetypes) to a single JSON file.
+            Export all narrative content (event templates, facility templates, player archetypes, tactical advantages) to a single JSON file.
             Import a file to upsert content by slug or name — existing records are updated, new ones are created.
             Use this to develop and test locally, then import to the external API.
         </p>
@@ -28,6 +28,7 @@
                     <li>Event templates (all categories)</li>
                     <li>Facility templates (active and inactive)</li>
                     <li>Player archetypes</li>
+                    <li>Tactical advantages (matrix)</li>
                 </ul>
                 <div class="mt-auto">
                     <a href="{{ path('admin_narrative_export') }}" class="btn btn-primary btn-sm">

@@ -4,11 +4,11 @@
 <div class="row g-4 mt-1">
 
     <div class="col-12">
-        <h5 class="fw-semibold mb-0">Configuration — Import / Export</h5>
+        <h5 class="fw-semibold mb-0">World Data — Import / Export</h5>
         <p class="text-muted small mb-0">
-            Export all global configuration (Game, Starter, and Pool settings) to a single JSON file.
-            Import a file to overwrite the current configuration — all three sections are updated in one operation.
-            Use this to copy configuration between environments.
+            Export all world data (Leagues & NPC Clubs) to a single JSON file.
+            Import a file to update or create world data — this handles country/tier mappings automatically.
+            Use this to sync the world structure between environments.
         </p>
     </div>
 
@@ -21,16 +21,14 @@
             </div>
             <div class="card-body d-flex flex-column gap-3">
                 <p class="text-muted small mb-0">
-                    Downloads a <code>.json</code> snapshot of all configuration in this environment.
-                    The file is safe to commit to version control for local development workflows.
+                    Downloads a <code>.json</code> snapshot of all world data in this environment.
                 </p>
                 <ul class="small text-muted mb-0 ps-3">
-                    <li>Game config (engine, scouting, morale, guardian, incidents)</li>
-                    <li>Starter config (starting balance, initial staff counts, tiers)</li>
-                    <li>Pool config (generation ranges, position weights, pool targets)</li>
+                    <li>Leagues (country, tier, name, prize money, promotion spots)</li>
+                    <li>NPC Clubs (name, colors, stadium, balance, playing style, formation)</li>
                 </ul>
                 <div class="mt-auto">
-                    <a href="{{ path('admin_config_export') }}" class="btn btn-primary btn-sm">
+                    <a href="{{ path('admin_world_export') }}" class="btn btn-primary btn-sm">
                         <i class="fa fa-download me-1"></i> Download JSON
                     </a>
                 </div>
@@ -47,21 +45,22 @@
             </div>
             <div class="card-body d-flex flex-column gap-3">
                 <p class="text-muted small mb-0">
-                    Upload a previously exported <code>.json</code> file. All configuration values in the
-                    file will overwrite the current settings — only keys present in the file are applied,
-                    so partial exports are safe.
+                    Upload a previously exported <code>.json</code> file.
+                    Existing leagues and clubs will be updated based on their country/tier (leagues) or name/country/tier (clubs).
+                    New entities will be created if they do not exist.
                 </p>
-                <div class="alert alert-warning py-2 small mb-0">
-                    <i class="fa fa-triangle-exclamation me-1"></i>
-                    <strong>This overwrites live configuration immediately.</strong>
-                    Export the current config first if you want a backup.
-                </div>
-                <form method="POST" action="{{ path('admin_config_import') }}" enctype="multipart/form-data" class="mt-auto">
-                    <input type="hidden" name="_token" value="{{ csrf_token('config_import') }}">
+                <form method="POST" action="{{ path('admin_world_import') }}" enctype="multipart/form-data" class="mt-auto">
+                    <input type="hidden" name="_token" value="{{ csrf_token('world_import') }}">
                     <div class="mb-3">
-                        <label for="config_file" class="form-label small fw-semibold">JSON file</label>
-                        <input class="form-control form-control-sm" type="file" id="config_file"
-                               name="config_file" accept=".json,application/json" required>
+                        <label for="world_file" class="form-label small fw-semibold">JSON file</label>
+                        <input class="form-control form-control-sm" type="file" id="world_file"
+                               name="world_file" accept=".json,application/json" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="clear_before_import" name="clear_before_import">
+                        <label class="form-check-label small fw-semibold text-danger" for="clear_before_import">
+                            Clear all existing leagues and clubs before importing
+                        </label>
                     </div>
                     <button type="submit" class="btn btn-warning btn-sm">
                         <i class="fa fa-upload me-1"></i> Import
