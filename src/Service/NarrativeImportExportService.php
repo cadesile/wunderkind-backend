@@ -7,10 +7,13 @@ namespace App\Service;
 use App\Entity\FacilityTemplate;
 use App\Entity\GameEventTemplate;
 use App\Entity\PlayerArchetype;
+use App\Entity\TacticalAdvantage;
 use App\Enum\EventCategory;
+use App\Enum\PlayingStyle;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameEventTemplateRepository;
 use App\Repository\PlayerArchetypeRepository;
+use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\UuidV7;
 
@@ -22,6 +25,7 @@ class NarrativeImportExportService
         private readonly GameEventTemplateRepository $eventTemplateRepository,
         private readonly FacilityTemplateRepository  $facilityTemplateRepository,
         private readonly PlayerArchetypeRepository   $archetypeRepository,
+        private readonly TacticalAdvantageRepository $tacticalAdvantageRepository,
         private readonly EntityManagerInterface      $em,
     ) {}
 
@@ -30,11 +34,12 @@ class NarrativeImportExportService
     public function export(): array
     {
         return [
-            'version'           => self::EXPORT_VERSION,
-            'exportedAt'        => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'eventTemplates'    => $this->exportEventTemplates(),
-            'facilityTemplates' => $this->exportFacilityTemplates(),
-            'playerArchetypes'  => $this->exportPlayerArchetypes(),
+            'version'            => self::EXPORT_VERSION,
+            'exportedAt'         => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'eventTemplates'     => $this->exportEventTemplates(),
+            'facilityTemplates'  => $this->exportFacilityTemplates(),
+            'playerArchetypes'   => $this->exportPlayerArchetypes(),
+            'tacticalAdvantages' => $this->exportTacticalAdvantages(),
         ];
     }
 
@@ -68,6 +73,15 @@ class NarrativeImportExportService
         ], $this->archetypeRepository->findBy([], ['name' => 'ASC']));
     }
 
+    private function exportTacticalAdvantages(): array
+    {
+        return array_map(fn (TacticalAdvantage $t) => [
+            'style'         => $t->getStyle()->value,
+            'opponentStyle' => $t->getOpponentStyle()->value,
+            'multiplier'    => $t->getMultiplier(),
+        ], $this->tacticalAdvantageRepository->findBy([], ['style' => 'ASC', 'opponentStyle' => 'ASC']));
+    }
+
     // ── Import ────────────────────────────────────────────────────────────────
 
     public function clearAll(): void
@@ -80,6 +94,9 @@ class NarrativeImportExportService
         }
         foreach ($this->archetypeRepository->findAll() as $a) {
             $this->em->remove($a);
+        }
+        foreach ($this->tacticalAdvantageRepository->findAll() as $t) {
+            $this->em->remove($t);
         }
         $this->em->flush();
     }
@@ -123,6 +140,16 @@ class NarrativeImportExportService
                     : $result['updated']++;
             } catch (\Throwable $e) {
                 $result['errors'][] = 'playerArchetype[' . ($row['name'] ?? '?') . ']: ' . $e->getMessage();
+            }
+        }
+
+        foreach ($data['tacticalAdvantages'] ?? [] as $row) {
+            try {
+                $this->upsertTacticalAdvantage($row)
+                    ? $result['created']++
+                    : $result['updated']++;
+            } catch (\Throwable $e) {
+                $result['errors'][] = 'tacticalAdvantage[' . ($row['style'] ?? '?') . ' vs ' . ($row['opponentStyle'] ?? '?') . ']: ' . $e->getMessage();
             }
         }
 
@@ -181,6 +208,8 @@ class NarrativeImportExportService
         $template->setCategory($row['category'] ?? 'TRAINING');
         $template->setBaseCost((int) ($row['baseCost'] ?? 0));
         $template->setWeeklyUpkeepBase((int) ($row['weeklyUpkeepBase'] ?? 0));
+        $template->setMatchdayIncome(isset($row['matchdayIncome']) ? (int) $row['matchdayIncome'] : null);
+        $template->setMatchdayIncomeMultiplier(isset($row['matchdayIncomeMultiplier']) ? (float) $row['matchdayIncomeMultiplier'] : null);
         $template->setReputationBonus((float) ($row['reputationBonus'] ?? 0));
         $template->setMaxLevel((int) ($row['maxLevel'] ?? 5));
         $template->setDecayBase((float) ($row['decayBase'] ?? 2.0));
@@ -207,6 +236,32 @@ class NarrativeImportExportService
         $archetype->setName($name);
         $archetype->setDescription($row['description'] ?? '');
         $archetype->setTraitMapping($row['traitMapping'] ?? []);
+
+        return $created;
+    }
+
+    /** @return bool true = created, false = updated */
+    private function upsertTacticalAdvantage(array $row): bool
+    {
+        $style         = PlayingStyle::tryFrom($row['style'] ?? '');
+        $opponentStyle = PlayingStyle::tryFrom($row['opponentStyle'] ?? '');
+
+        if ($style === null || $opponentStyle === null) {
+            throw new \InvalidArgumentException('Invalid style or opponentStyle.');
+        }
+
+        $advantage = $this->tacticalAdvantageRepository->findOneBy([
+            'style'         => $style,
+            'opponentStyle' => $opponentStyle,
+        ]);
+        $created = $advantage === null;
+
+        if ($created) {
+            $advantage = new TacticalAdvantage($style, $opponentStyle);
+            $this->em->persist($advantage);
+        }
+
+        $advantage->setMultiplier((float) ($row['multiplier'] ?? 1.0));
 
         return $created;
     }
