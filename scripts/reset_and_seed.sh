@@ -66,7 +66,7 @@ fi
 # ─── Safety confirmation ─────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}⚠️  WARNING${NC}"
-echo "   This will DELETE all academies, players, staff, and game data."
+echo "   This will DELETE all clubs, players, staff, and game data."
 echo "   The admin table is untouched — admin users are always preserved."
 echo "   game_config, starter_config, and narrative data are untouched."
 echo ""
@@ -231,7 +231,7 @@ TRUNCATE TABLE
     sponsor,
     scout,
     agent,
-    academy,
+    club,
     "user"
 CASCADE;
 SQL
@@ -267,9 +267,9 @@ echo ""
 # All counts in one file-based query — avoids lando TTY issues with subshells.
 cat > "$RESET_SQL_HOST" << 'SQL'
 SELECT
-    'Market players'   AS label, COUNT(*)::text AS value FROM player WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'
-UNION ALL SELECT 'Prospect players', COUNT(*)::text FROM player WHERE academy_id IS NULL AND recruitment_source = 'scouting_network'
-UNION ALL SELECT 'Pool coaches',     COUNT(*)::text FROM staff   WHERE academy_id IS NULL
+    'Market players'   AS label, COUNT(*)::text AS value FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'
+UNION ALL SELECT 'Prospect players', COUNT(*)::text FROM player WHERE club_id IS NULL AND recruitment_source = 'scouting_network'
+UNION ALL SELECT 'Pool coaches',     COUNT(*)::text FROM staff   WHERE club_id IS NULL
 UNION ALL SELECT 'Scouts',           COUNT(*)::text FROM scout
 UNION ALL SELECT 'Agents',           COUNT(*)::text FROM agent
 UNION ALL SELECT 'Investors',        COUNT(*)::text FROM investor
@@ -288,7 +288,7 @@ rm -f "$RESET_SQL_HOST"
 echo ""
 echo -e "${GREEN}✓ Reset complete!${NC}"
 echo ""
-echo "   Cleared    : academies, players, guardians, staff, scouts, agents, sponsors,"
+echo "   Cleared    : clubs, players, guardians, staff, scouts, agents, sponsors,"
 echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
 echo "   Config     : game_config, starter_config, and narrative data preserved"
