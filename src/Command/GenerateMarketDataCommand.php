@@ -457,16 +457,16 @@ class GenerateMarketDataCommand extends Command
                 $player->setAgent($agents[array_rand($agents)]);
             }
 
-            // Randomise personality matrix
+            // Randomise personality matrix - Unified 1-20 scale
             $p = $player->getPersonality();
-            $p->setConfidence(random_int(30, 90));
-            $p->setMaturity(random_int(30, 90));
-            $p->setTeamwork(random_int(30, 90));
-            $p->setLeadership(random_int(20, 85));
-            $p->setEgo(random_int(20, 85));
-            $p->setBravery(random_int(30, 90));
-            $p->setGreed(random_int(20, 80));
-            $p->setLoyalty(random_int(30, 90));
+            $p->setDetermination(random_int(6, 18));
+            $p->setProfessionalism(random_int(6, 18));
+            $p->setAmbition(random_int(4, 17));
+            $p->setLoyalty(random_int(6, 18));
+            $p->setAdaptability(random_int(5, 17));
+            $p->setPressure(random_int(4, 16));
+            $p->setTemperament(random_int(5, 17));
+            $p->setConsistency(random_int(6, 18));
 
             $this->em->persist($player);
 

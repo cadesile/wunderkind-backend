@@ -196,17 +196,16 @@ class MarketPoolService
                 $player->setAgent($agents[array_rand($agents)]);
             }
 
-            $pMin = $cfg->getPersonalityTraitMin();
-            $pMax = $cfg->getPersonalityTraitMax();
-            $p    = $player->getPersonality();
-            $p->setConfidence(random_int($pMin, $pMax));
-            $p->setMaturity(random_int($pMin, $pMax));
-            $p->setTeamwork(random_int($pMin, $pMax));
-            $p->setLeadership(random_int($pMin, $pMax));
-            $p->setEgo(random_int($pMin, $pMax));
-            $p->setBravery(random_int($pMin, $pMax));
-            $p->setGreed(random_int($pMin, $pMax));
-            $p->setLoyalty(random_int($pMin, $pMax));
+            // Personality matrix - Unified 1-20 scale
+            $p = $player->getPersonality();
+            $p->setDetermination(random_int(6, 18));
+            $p->setProfessionalism(random_int(6, 18));
+            $p->setAmbition(random_int(4, 17));
+            $p->setLoyalty(random_int(6, 18));
+            $p->setAdaptability(random_int(5, 17));
+            $p->setPressure(random_int(4, 16));
+            $p->setTemperament(random_int(5, 17));
+            $p->setConsistency(random_int(6, 18));
 
             // Guardian generation:
             // 80% → two parents, male + female

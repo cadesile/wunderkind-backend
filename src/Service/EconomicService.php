@@ -100,9 +100,9 @@ class EconomicService
             default    => 0.3,
         };
 
-        // Personality factor: weighted average of loyalty, teamwork, leadership
+        // Personality factor: weighted average of loyalty, professionalism, determination (Unified 1-20 scale)
         $p = $player->getPersonality();
-        $personalityFactor = 1 + (($p->getLoyalty() + $p->getTeamwork() + $p->getLeadership()) / 300 - 0.5) * 0.2;
+        $personalityFactor = 1 + (($p->getLoyalty() + $p->getProfessionalism() + $p->getDetermination()) / 60 - 0.5) * 0.2;
 
         $reputationFactor = 1 + $player->getClub()?->getReputation() / 1000 ?? 0;
 
