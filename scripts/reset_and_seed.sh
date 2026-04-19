@@ -213,8 +213,8 @@ INSERT INTO game_config (
 
 -- Reset starter_config
 TRUNCATE TABLE starter_config RESTART IDENTITY CASCADE;
-INSERT INTO starter_config (id, starting_balance, starter_player_count, starter_coach_count, starter_scout_count, starter_sponsor_tier)
-VALUES (1, 5000000, 5, 1, 1, 'SMALL');
+INSERT INTO starter_config (id, starting_balance, starter_player_count, starter_coach_count, starter_scout_count, starter_sponsor_tier, npc_squad_config)
+VALUES (1, 5000000, 5, 1, 1, 'SMALL', '{"1": {"playerMin": 20, "playerMax": 24, "managerCount": 1, "coachCount": 5, "chairmanCount": 1, "foreignPercent": 60}, "2": {"playerMin": 18, "playerMax": 22, "managerCount": 1, "coachCount": 4, "chairmanCount": 1, "foreignPercent": 45}, "3": {"playerMin": 16, "playerMax": 20, "managerCount": 1, "coachCount": 3, "chairmanCount": 1, "foreignPercent": 30}, "4": {"playerMin": 15, "playerMax": 18, "managerCount": 1, "coachCount": 2, "chairmanCount": 1, "foreignPercent": 20}, "5": {"playerMin": 14, "playerMax": 17, "managerCount": 1, "coachCount": 2, "chairmanCount": 1, "foreignPercent": 15}, "6": {"playerMin": 13, "playerMax": 16, "managerCount": 1, "coachCount": 1, "chairmanCount": 1, "foreignPercent": 10}, "7": {"playerMin": 12, "playerMax": 15, "managerCount": 1, "coachCount": 1, "chairmanCount": 1, "foreignPercent": 5}, "8": {"playerMin": 11, "playerMax": 14, "managerCount": 1, "coachCount": 1, "chairmanCount": 1, "foreignPercent": 3}}');
 SQL
 
 psql_file
