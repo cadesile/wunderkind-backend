@@ -214,14 +214,16 @@ class WorldInitializationService
             'power'       => $player->getPower(),
             'stamina'     => $player->getStamina(),
             'heart'       => $player->getHeart(),
-            'confidence'  => $p->getConfidence(),
-            'maturity'    => $p->getMaturity(),
-            'teamwork'    => $p->getTeamwork(),
-            'leadership'  => $p->getLeadership(),
-            'ego'         => $p->getEgo(),
-            'bravery'     => $p->getBravery(),
-            'greed'       => $p->getGreed(),
-            'loyalty'     => $p->getLoyalty(),
+            'personality' => [
+                'determination'   => $p->getDetermination(),
+                'professionalism' => $p->getProfessionalism(),
+                'ambition'        => $p->getAmbition(),
+                'loyalty'         => $p->getLoyalty(),
+                'adaptability'    => $p->getAdaptability(),
+                'pressure'        => $p->getPressure(),
+                'temperament'     => $p->getTemperament(),
+                'consistency'     => $p->getConsistency(),
+            ],
         ];
     }
 
