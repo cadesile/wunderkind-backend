@@ -113,7 +113,7 @@
                 <span class="fw-semibold small">League Player Ability Ranges</span>
             </div>
             <div class="card-body">
-                <p class="text-muted small mb-3">Define the min/max ability for players generated for NPC clubs in each league tier. If missing, defaults to 10-50.</p>
+                <p class="text-muted small mb-3">Define the min/max ability for players generated for NPC clubs in each league tier. If missing, sensible tier-based defaults are used (e.g. Tier 1: 75-95, Tier 8: 10-25).</p>
                 
                 {% for country, tiers in dynamicLeagueTiers %}
                     <h6 class="mt-3 small fw-bold text-uppercase text-muted">{{ country }} Leagues</h6>

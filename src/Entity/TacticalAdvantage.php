@@ -23,8 +23,11 @@ class TacticalAdvantage
     #[ORM\Column(type: 'float')]
     private float $multiplier;
 
-    public function __construct(PlayingStyle $style, PlayingStyle $opponentStyle, float $multiplier)
-    {
+    public function __construct(
+        PlayingStyle $style = PlayingStyle::POSSESSION,
+        PlayingStyle $opponentStyle = PlayingStyle::DIRECT,
+        float $multiplier = 1.0
+    ) {
         $this->id            = new UuidV7();
         $this->style         = $style;
         $this->opponentStyle = $opponentStyle;

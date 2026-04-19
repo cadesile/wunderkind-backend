@@ -21,14 +21,14 @@ class WorldInitializationService
 {
     /** Ability range by tier — indexes 1-8 */
     private const ABILITY_RANGES = [
-        1 => ['min' => 70, 'max' => 100],
-        2 => ['min' => 70, 'max' => 100],
-        3 => ['min' => 50, 'max' => 75],
-        4 => ['min' => 50, 'max' => 75],
-        5 => ['min' => 30, 'max' => 55],
-        6 => ['min' => 30, 'max' => 55],
-        7 => ['min' => 5,  'max' => 35],
-        8 => ['min' => 5,  'max' => 35],
+        1 => ['min' => 75, 'max' => 95],
+        2 => ['min' => 65, 'max' => 85],
+        3 => ['min' => 55, 'max' => 75],
+        4 => ['min' => 45, 'max' => 65],
+        5 => ['min' => 35, 'max' => 55],
+        6 => ['min' => 25, 'max' => 45],
+        7 => ['min' => 15,  'max' => 35],
+        8 => ['min' => 10,  'max' => 25],
     ];
 
     private const STARTER_ABILITY_RANGES = [
