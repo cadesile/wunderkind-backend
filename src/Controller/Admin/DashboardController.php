@@ -222,8 +222,8 @@ class DashboardController extends AbstractDashboardController
         $npcSquadConfig = [];
         foreach ($npcConfigInput as $tier => $fields) {
             $npcSquadConfig[$tier] = [
-                'playerMin'      => (int) ($fields['playerMin'] ?? 10),
-                'playerMax'      => (int) ($fields['playerMax'] ?? 20),
+                'playerMin'      => (int) ($fields['playerMin'] ?? 15),
+                'playerMax'      => (int) ($fields['playerMax'] ?? 25),
                 'managerCount'   => (int) ($fields['managerCount'] ?? 1),
                 'coachCount'     => (int) ($fields['coachCount'] ?? 1),
                 'chairmanCount'  => (int) ($fields['chairmanCount'] ?? 1),
