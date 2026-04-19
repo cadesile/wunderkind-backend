@@ -100,7 +100,7 @@ class WorldInitializationService
 
                 $players  = array_unique(array_merge($domestic, $foreign), SORT_REGULAR);
                 $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,    (int) $tierConf['managerCount']);
-                $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::HEAD_COACH,  (int) $tierConf['coachCount']);
+                $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,  (int) $tierConf['coachCount']);
                 $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,    (int) $tierConf['chairmanCount']);
                 $staff    = array_merge($managers, $coaches, $chairmen);
 
@@ -129,7 +129,7 @@ class WorldInitializationService
             $ampPlayers = array_merge($ampPlayers, $extra);
         }
 
-        $ampCoaches = $this->staffRepository->findInPoolByRoleRandom(StaffRole::HEAD_COACH, $starterConfig->getStarterCoachCount());
+        $ampCoaches = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH, $starterConfig->getStarterCoachCount());
         $ampScouts  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::SCOUT,      $starterConfig->getStarterScoutCount());
         $ampStaff   = array_merge($ampCoaches, $ampScouts);
 

@@ -17,11 +17,11 @@
                     <i class="fa fa-user-clock text-warning me-1"></i> Age-21 Deletion
                 </h6>
                 <p class="card-text text-muted small">
-                    Runs the age-out check across every academy. Players who have turned 21 are permanently deleted (with Guardian and Transfer cascade).
+                    Runs the age-out check across every club. Players who have turned 21 are permanently deleted (with Guardian and Transfer cascade).
                 </p>
             </div>
             <div class="card-footer bg-transparent">
-                <form method="POST" action="{{ path('admin_trigger_age21') }}" class="d-inline" onsubmit="return confirmAction(this, 'Permanently delete all players aged 21+ from every academy?')">
+                <form method="POST" action="{{ path('admin_trigger_age21') }}" class="d-inline" onsubmit="return confirmAction(this, 'Permanently delete all players aged 21+ from every club?')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('trigger_age21') }}">
                     <button type="submit" class="btn btn-warning btn-sm">
                         <i class="fa fa-play me-1"></i> Run Age-21 Check
@@ -39,7 +39,7 @@
                     <i class="fa fa-broom text-secondary me-1"></i> Cleanup Old Assigned Entities
                 </h6>
                 <p class="card-text text-muted small">
-                    Permanently deletes players, staff, sponsors, and investors that were assigned to academies more than 52 weeks ago.
+                    Permanently deletes players, staff, sponsors, and investors that were assigned to clubs more than 52 weeks ago.
                 </p>
             </div>
             <div class="card-footer bg-transparent">
@@ -61,7 +61,7 @@
                     <i class="fa fa-skull-crossbones me-1"></i> Nuclear Reset
                 </h6>
                 <p class="card-text text-muted small">
-                    Wipes <strong>all</strong> player, staff, academy, sync, leaderboard, and inbox data.
+                    Wipes <strong>all</strong> player, staff, club, sync, leaderboard, and inbox data.
                     App users are deleted. Admin accounts and all settings (game config, starter config, pool config, archetypes) are <strong>preserved</strong>.
                 </p>
             </div>
@@ -84,7 +84,7 @@
                     <i class="fa fa-database me-1"></i> Reset &amp; Seed Database
                 </h6>
                 <p class="card-text text-muted small">
-                    Wipes all academy and game data, preserves admin users, and re-seeds the market pool.
+                    Wipes all club and game data, preserves admin users, and re-seeds the market pool.
                     <strong>CLI only</strong> — cannot be executed from the browser.
                 </p>
                 <code class="d-block mt-2 p-2 rounded small" style="background:var(--bs-tertiary-bg,#f1f3f5);">bash scripts/reset_and_seed.sh</code>
@@ -107,7 +107,7 @@ function confirmAction(form, message) {
     return true;
 }
 function nuclearConfirm(form) {
-    if (!confirm('NUCLEAR RESET\n\nThis will permanently delete ALL players, staff, academies, sync records, leaderboard entries, and app users.\n\nAdmin accounts and all config settings will be preserved.\n\nAre you absolutely sure?')) return false;
+    if (!confirm('NUCLEAR RESET\n\nThis will permanently delete ALL players, staff, clubs, sync records, leaderboard entries, and app users.\n\nAdmin accounts and all config settings will be preserved.\n\nAre you absolutely sure?')) return false;
     if (!confirm('Second confirmation required.\n\nThis cannot be undone. Proceed?')) return false;
     const btn = form.querySelector('button[type="submit"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Running…'; }

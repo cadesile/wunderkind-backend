@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Build My Club — Youth Football Academy Manager</title>
-    <meta name="description" content="Scout talent. Secure funding. Build a dynasty. Build My Club is a deep football academy management game for mobile.">
+    <title>Build My Club — Youth Football Club Manager</title>
+    <meta name="description" content="Scout talent. Secure funding. Build a dynasty. Build My Club is a deep football club management game for mobile.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -944,7 +944,7 @@
             <img src="/images/logo.webp" alt="Build My Club" class="hero-logo">
             <h1 class="hero-title">SCOUT. SIGN.<br>BUILD A DYNASTY<span class="cursor"></span></h1>
             <p class="hero-sub">
-                A deep football academy management game. The simulation runs entirely on your device —
+                A deep football club management game. The simulation runs entirely on your device —
                 no loading screens, no servers, no limits. Build your club from nothing and compete on the global leaderboard.
             </p>
             <a href="https://expo.dev/artifacts/eas/kJHqPQBYvpjuiWeMzLzuJJ.apk" class="hero-cta">
@@ -992,12 +992,12 @@
             <p class="label">// WHAT IS BUILD MY CLUB</p>
             <div class="about-body">
                 <p>
-                    Build My Club puts you in charge of a youth football academy. Every decision is yours —
+                    Build My Club puts you in charge of a youth football club. Every decision is yours —
                     which players to recruit, which coaches to hire, which sponsors to take on, and how to
                     balance the books while building a squad capable of producing world-class talent.
                 </p>
                 <p style="margin-top:1rem">
-                    The game runs offline on your device. Your academy evolves week by week through training,
+                    The game runs offline on your device. Your club evolves week by week through training,
                     aging, and the ever-present pressure of the transfer market. Sync to the global server
                     to submit your score and see where you stand against every other manager in the world.
                 </p>
@@ -1028,7 +1028,7 @@
                         <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
                     </svg>
                     <p class="feature-title">TRAIN &amp; DEVELOP</p>
-                    <p class="feature-desc">Shape each player's personality and ability week by week. The best academies don't just sign talent — they build it.</p>
+                    <p class="feature-desc">Shape each player's personality and ability week by week. The best clubs don't just sign talent — they build it.</p>
                 </div>
 
                 <div class="feature-card">
@@ -1044,7 +1044,7 @@
                         <path d="M18 20V10M12 20V4M6 20v-6"/>
                     </svg>
                     <p class="feature-title">CLIMB THE BOARD</p>
-                    <p class="feature-desc">Sync your academy stats to the global leaderboard. Compete across reputation, career earnings, and hall of fame.</p>
+                    <p class="feature-desc">Sync your club stats to the global leaderboard. Compete across reputation, career earnings, and hall of fame.</p>
                 </div>
 
             </div>
@@ -1170,7 +1170,7 @@
                             <p class="inbox-msg-type">PLAYING TIME CONCERN</p>
                             <p class="inbox-msg-body">
                                 Margot &amp; Kieran has raised concerns about <span>Keira Graves</span>'s development pathway.
-                                They believe she isn't getting enough first-team exposure and may explore other academies.
+                                They believe she isn't getting enough first-team exposure and may explore other clubs.
                             </p>
                             <div class="inbox-actions">
                                 <button class="inbox-btn inbox-btn-convince">✓ CONVINCE</button>
@@ -1235,13 +1235,13 @@
     <section id="leaderboard" class="section">
         <div class="container">
             <p class="label">// GLOBAL LEADERBOARD</p>
-            <h2 class="section-heading">WHERE DOES YOUR<br>ACADEMY RANK?</h2>
+            <h2 class="section-heading">WHERE DOES YOUR<br>CLUB RANK?</h2>
 
             <table class="lb-table" aria-label="Global leaderboard">
                 <thead>
                     <tr>
                         <th style="width:48px">#</th>
-                        <th>ACADEMY</th>
+                        <th>CLUB</th>
                         <th style="text-align:right">REPUTATION</th>
                         <th style="text-align:right; display:none" id="lb-earnings-header">EARNINGS</th>
                     </tr>
@@ -1252,7 +1252,7 @@
             </table>
 
             <p style="margin-top:1.5rem; text-align:center; font-size:11px; color:var(--text-muted); opacity:0.6; line-height:1.8;">
-                Synced live · Your academy earns reputation by signing players, selling talent, and advancing through tiers.
+                Synced live · Your club earns reputation by signing players, selling talent, and advancing through tiers.
             </p>
         </div>
     </section>
@@ -1318,7 +1318,7 @@
                     <span class="pillar-num">01</span>
                     <div class="pillar-content">
                         <h3>OFFLINE FIRST</h3>
-                        <p>Your academy runs entirely on your device. No internet required to play — the full simulation happens locally, week by week, at your pace.</p>
+                        <p>Your club runs entirely on your device. No internet required to play — the full simulation happens locally, week by week, at your pace.</p>
                     </div>
                 </div>
                 <div class="pillar">
@@ -1394,7 +1394,7 @@
         },
         {
             name: 'THE HARD-WORKING PRO',
-            desc: 'The backbone of any great academy. Consistent, coachable, and dependable. Won\'t produce the flashy highlights, but never lets the team down.',
+            desc: 'The backbone of any great club. Consistent, coachable, and dependable. Won\'t produce the flashy highlights, but never lets the team down.',
             values: [9, 9, 7, 8, 5, 8, 8, 9],
             color: '#3db89a',
             fill: 'rgba(61,184,154,0.18)'
@@ -1488,7 +1488,7 @@
     (async function loadLeaderboard() {
         const tbody = document.getElementById('lb-body');
         try {
-            const res = await fetch('/api/leaderboard/academy_reputation?pageSize=10&page=1');
+            const res = await fetch('/api/leaderboard/club_reputation?pageSize=10&page=1');
             if (!res.ok) throw new Error('fetch failed');
             const data = await res.json();
             const entries = data.entries || [];
@@ -1507,14 +1507,14 @@
             tbody.innerHTML = entries.map(e => `
                 <tr>
                     <td class="lb-rank ${rankClass(e.rank)}">${e.rank}</td>
-                    <td class="lb-name">${e.academyName ?? '–'}</td>
+                    <td class="lb-name">${e.clubName ?? '–'}</td>
                     <td class="lb-rep">${formatRep(e.reputation)}</td>
                 </tr>
             `).join('');
         } catch {
             tbody.innerHTML = `
                 <tr><td class="lb-rank gold">1</td><td class="lb-name">FC Wunderking</td><td class="lb-rep">94.2</td></tr>
-                <tr><td class="lb-rank silver">2</td><td class="lb-name">Eastbridge Academy</td><td class="lb-rep">88.7</td></tr>
+                <tr><td class="lb-rank silver">2</td><td class="lb-name">Eastbridge Club</td><td class="lb-rep">88.7</td></tr>
                 <tr><td class="lb-rank bronze">3</td><td class="lb-name">Sol Naciente CF</td><td class="lb-rep">85.1</td></tr>
                 <tr><td class="lb-rank">4</td><td class="lb-name">Northern Stars</td><td class="lb-rep">79.4</td></tr>
                 <tr><td class="lb-rank">5</td><td class="lb-name">Calcio del Futuro</td><td class="lb-rep">73.8</td></tr>

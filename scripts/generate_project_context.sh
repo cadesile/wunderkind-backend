@@ -1,18 +1,19 @@
 #!/bin/bash
 #
 # generate_project_context.sh
-# Drop into any project root — auto-detects stack, uses Claude to generate context.
+# Drop into any project root — auto-detects stack, uses Claude or Gemini to generate context.
 #
 # Usage:
-#   bash scripts/generate_project_context.sh [--no-ai] [--output-dir <dir>] [--depth <n>] [--debug-detection]
+#   bash scripts/generate_project_context.sh [--no-ai] [--ai <claude|gemini>] [--output-dir <dir>] [--depth <n>] [--debug-detection]
 #
 # Requirements: jq
-# Optional:     Claude Code CLI (claude) — enables AI-generated summaries
+# Optional:     Claude Code CLI (claude) or Gemini CLI (gemini) — enables AI-generated summaries
 
 set -e
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 USE_AI=true
+AI_CLI="claude"
 OUTPUT_DIR="docs"
 TREE_DEPTH=3
 DEBUG_DETECTION=false
@@ -20,6 +21,7 @@ DEBUG_DETECTION=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-ai)            USE_AI=false ;;
+        --ai)               AI_CLI="$2"; shift ;;
         --output-dir)       OUTPUT_DIR="$2"; shift ;;
         --depth)            TREE_DEPTH="$2"; shift ;;
         --debug-detection)  DEBUG_DETECTION=true ;;
@@ -27,6 +29,8 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+START_TIME=$(date +%s)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 REPO_NAME=$(basename "$PWD")
@@ -39,8 +43,8 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-info()    { echo -e "${BLUE}▸ $1${NC}"; }
-success() { echo -e "${GREEN}✓ $1${NC}"; }
+info()    { echo -e "${BLUE}▸ $1${NC}" >&2; }
+success() { echo -e "${GREEN}✓ $1${NC}" >&2; }
 warn()    { echo -e "${YELLOW}⚠ $1${NC}" >&2; }
 
 # ── Dependency checks ─────────────────────────────────────────────────────────
@@ -51,27 +55,31 @@ else
     HAS_JQ=true
 fi
 
-# ── Claude Code CLI check ─────────────────────────────────────────────────────
+# ── AI CLI check ──────────────────────────────────────────────────────────────
 if [ "$USE_AI" = true ]; then
-    if [ -n "$CLAUDECODE" ]; then
+    if [ -n "$CLAUDECODE" ] && [ "$AI_CLI" = "claude" ]; then
         info "Running inside a Claude Code session — AI summaries skipped (nested sessions not supported)."
         USE_AI=false
-    elif command -v claude &>/dev/null; then
-        info "Claude Code CLI detected — AI summaries enabled."
+    elif command -v "$AI_CLI" &>/dev/null; then
+        info "${AI_CLI} CLI detected — AI summaries enabled."
     else
-        info "Claude Code CLI not found — AI summaries skipped. Install claude to enable."
+        info "${AI_CLI} CLI not found — AI summaries skipped. Install ${AI_CLI} to enable."
         USE_AI=false
     fi
 fi
 
-# ── Claude Code CLI helper ────────────────────────────────────────────────────
-# Uses `claude -p` (print mode) — non-interactive, exits after one response.
-call_claude() {
+# ── AI CLI helper ─────────────────────────────────────────────────────────────
+# Uses either `claude -p` or `gemini -p` (print mode).
+call_ai() {
     local prompt="$1"
     [ "$USE_AI" = false ] && echo "" && return 0
     local result
-    result=$(claude -p "$prompt" 2>/dev/null)
-    [ -z "$result" ] && warn "Claude returned empty for: ${prompt:0:60}..."
+    if [ "$AI_CLI" = "gemini" ]; then
+        result=$(gemini -p "$prompt" 2>/dev/null)
+    else
+        result=$(claude -p "$prompt" 2>/dev/null)
+    fi
+    [ -z "$result" ] && warn "$AI_CLI returned empty for: ${prompt:0:60}..."
     echo "$result"
 }
 
@@ -87,71 +95,100 @@ PRIMARY_LANG="unknown"; PRIMARY_FRAMEWORK="unknown"
 SOURCE_DIR="src"; MODELS_DIR=""; CONTROLLERS_DIR=""; SERVICES_DIR=""
 PRIMARY_EXT="txt"
 
-if [ -f "composer.json" ]; then
-    STACK_PHP=true; PRIMARY_LANG="php"; PRIMARY_EXT="php"; SOURCE_DIR="src"; SERVICES_DIR="src/Service"
-    if [ "$HAS_JQ" = true ]; then
-        if jq -e '.require | has("symfony/framework-bundle")' composer.json &>/dev/null; then
-            STACK_SYMFONY=true; PRIMARY_FRAMEWORK="symfony"
-            MODELS_DIR="src/Entity"; CONTROLLERS_DIR="src/Controller"
-        elif jq -e '.require | has("laravel/framework")' composer.json &>/dev/null; then
-            STACK_LARAVEL=true; PRIMARY_FRAMEWORK="laravel"
-            MODELS_DIR="app/Models"; CONTROLLERS_DIR="app/Http/Controllers"; SERVICES_DIR="app/Services"
+# Runs detection in whatever directory is current (repo root or a subdir).
+detect_stack() {
+    local dir="${1:-.}"
+
+    if [ -f "${dir}/composer.json" ]; then
+        STACK_PHP=true; PRIMARY_LANG="php"; PRIMARY_EXT="php"
+        SOURCE_DIR="${dir}/src"; SERVICES_DIR="${dir}/src/Service"
+        if [ "$HAS_JQ" = true ]; then
+            if jq -e '.require | has("symfony/framework-bundle")' "${dir}/composer.json" &>/dev/null; then
+                STACK_SYMFONY=true; PRIMARY_FRAMEWORK="symfony"
+                MODELS_DIR="${dir}/src/Entity"; CONTROLLERS_DIR="${dir}/src/Controller"
+            elif jq -e '.require | has("laravel/framework")' "${dir}/composer.json" &>/dev/null; then
+                STACK_LARAVEL=true; PRIMARY_FRAMEWORK="laravel"
+                MODELS_DIR="${dir}/app/Models"; CONTROLLERS_DIR="${dir}/app/Http/Controllers"; SERVICES_DIR="${dir}/app/Services"
+            else
+                PRIMARY_FRAMEWORK="php"; MODELS_DIR="${dir}/src"; CONTROLLERS_DIR="${dir}/src"
+            fi
+        fi
+    fi
+
+    if [ -f "${dir}/package.json" ]; then
+        STACK_NODE=true
+        [ "$PRIMARY_LANG" = "unknown" ] && PRIMARY_LANG="node"
+        PRIMARY_EXT="ts"
+        [ ! -d "${dir}/src" ] && SOURCE_DIR="${dir}/app"
+        if [ "$HAS_JQ" = true ]; then
+            if jq -e '.dependencies | has("next")' "${dir}/package.json" &>/dev/null; then
+                STACK_NEXT=true; PRIMARY_FRAMEWORK="nextjs"
+                MODELS_DIR="${dir}/app/models"; CONTROLLERS_DIR="${dir}/app/api"; SERVICES_DIR="${dir}/app/services"
+            elif jq -e '.dependencies | has("express")' "${dir}/package.json" &>/dev/null; then
+                STACK_EXPRESS=true; PRIMARY_FRAMEWORK="express"
+                MODELS_DIR="${dir}/src/models"; CONTROLLERS_DIR="${dir}/src/controllers"; SERVICES_DIR="${dir}/src/services"
+            fi
+        fi
+    fi
+
+    for pyfile in requirements.txt pyproject.toml setup.py; do
+        if [ -f "${dir}/${pyfile}" ]; then
+            STACK_PYTHON=true
+            [ "$PRIMARY_LANG" = "unknown" ] && PRIMARY_LANG="python"
+            PRIMARY_EXT="py"; SOURCE_DIR="${dir}"
+            if grep -qi "django" "${dir}/${pyfile}" 2>/dev/null; then
+                STACK_DJANGO=true; PRIMARY_FRAMEWORK="django"
+                MODELS_DIR="${dir}/*/models.py"; CONTROLLERS_DIR="${dir}/*/views.py"; SERVICES_DIR="${dir}/*/services"
+            elif grep -qi "fastapi" "${dir}/${pyfile}" 2>/dev/null; then
+                STACK_FASTAPI=true; PRIMARY_FRAMEWORK="fastapi"
+                MODELS_DIR="${dir}/app/models"; CONTROLLERS_DIR="${dir}/app/routers"; SERVICES_DIR="${dir}/app/services"
+            elif grep -qi "flask" "${dir}/${pyfile}" 2>/dev/null; then
+                STACK_FLASK=true; PRIMARY_FRAMEWORK="flask"
+                MODELS_DIR="${dir}/app/models"; CONTROLLERS_DIR="${dir}/app/routes"; SERVICES_DIR="${dir}/app/services"
+            fi
+            break
+        fi
+    done
+
+    if [ -f "${dir}/go.mod" ]; then
+        STACK_GO=true; PRIMARY_LANG="go"; PRIMARY_FRAMEWORK="go"; PRIMARY_EXT="go"
+        SOURCE_DIR="${dir}"; MODELS_DIR="${dir}/internal/model"; CONTROLLERS_DIR="${dir}/internal/handler"; SERVICES_DIR="${dir}/internal/service"
+    fi
+
+    if [ -f "${dir}/Cargo.toml" ]; then
+        STACK_RUST=true; PRIMARY_LANG="rust"; PRIMARY_FRAMEWORK="rust"; PRIMARY_EXT="rs"
+        SOURCE_DIR="${dir}/src"; MODELS_DIR="${dir}/src/models"; CONTROLLERS_DIR="${dir}/src/handlers"; SERVICES_DIR="${dir}/src/services"
+    fi
+
+    if [ -f "${dir}/Gemfile" ]; then
+        STACK_RUBY=true; PRIMARY_LANG="ruby"; PRIMARY_EXT="rb"
+        if grep -qi "rails" "${dir}/Gemfile" 2>/dev/null; then
+            STACK_RAILS=true; PRIMARY_FRAMEWORK="rails"
+            MODELS_DIR="${dir}/app/models"; CONTROLLERS_DIR="${dir}/app/controllers"; SERVICES_DIR="${dir}/app/services"
+        fi
+    fi
+}
+
+# First pass: try repo root
+detect_stack "."
+
+# If stack still unknown, prompt user for the app subdirectory
+if [ "$PRIMARY_LANG" = "unknown" ]; then
+    warn "Could not detect a recognised stack in the repo root (no composer.json, package.json, go.mod, etc.)."
+    echo ""
+    printf "  Is the app code in a subdirectory? Enter the path (e.g. 'deploy', 'app', 'backend')\n"
+    printf "  or press Enter to continue without stack detection: "
+    read -r APP_SUBDIR
+    if [ -n "$APP_SUBDIR" ] && [ -d "$APP_SUBDIR" ]; then
+        info "Retrying detection in '${APP_SUBDIR}'..."
+        detect_stack "$APP_SUBDIR"
+        if [ "$PRIMARY_LANG" = "unknown" ]; then
+            warn "Still could not detect a stack in '${APP_SUBDIR}'. Continuing with limited context."
         else
-            PRIMARY_FRAMEWORK="php"; MODELS_DIR="src"; CONTROLLERS_DIR="src"
+            success "Stack detected in '${APP_SUBDIR}': ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG})"
         fi
-    fi
-fi
-
-if [ -f "package.json" ]; then
-    STACK_NODE=true
-    [ "$PRIMARY_LANG" = "unknown" ] && PRIMARY_LANG="node"
-    PRIMARY_EXT="ts"
-    [ ! -d "src" ] && SOURCE_DIR="app"
-    if [ "$HAS_JQ" = true ]; then
-        if jq -e '.dependencies | has("next")' package.json &>/dev/null; then
-            STACK_NEXT=true; PRIMARY_FRAMEWORK="nextjs"
-            MODELS_DIR="app/models"; CONTROLLERS_DIR="app/api"; SERVICES_DIR="app/services"
-        elif jq -e '.dependencies | has("express")' package.json &>/dev/null; then
-            STACK_EXPRESS=true; PRIMARY_FRAMEWORK="express"
-            MODELS_DIR="src/models"; CONTROLLERS_DIR="src/controllers"; SERVICES_DIR="src/services"
-        fi
-    fi
-fi
-
-for pyfile in requirements.txt pyproject.toml setup.py; do
-    if [ -f "$pyfile" ]; then
-        STACK_PYTHON=true
-        [ "$PRIMARY_LANG" = "unknown" ] && PRIMARY_LANG="python"
-        PRIMARY_EXT="py"; SOURCE_DIR="."
-        if grep -qi "django" "$pyfile" 2>/dev/null; then
-            STACK_DJANGO=true; PRIMARY_FRAMEWORK="django"
-            MODELS_DIR="*/models.py"; CONTROLLERS_DIR="*/views.py"; SERVICES_DIR="*/services"
-        elif grep -qi "fastapi" "$pyfile" 2>/dev/null; then
-            STACK_FASTAPI=true; PRIMARY_FRAMEWORK="fastapi"
-            MODELS_DIR="app/models"; CONTROLLERS_DIR="app/routers"; SERVICES_DIR="app/services"
-        elif grep -qi "flask" "$pyfile" 2>/dev/null; then
-            STACK_FLASK=true; PRIMARY_FRAMEWORK="flask"
-            MODELS_DIR="app/models"; CONTROLLERS_DIR="app/routes"; SERVICES_DIR="app/services"
-        fi
-        break
-    fi
-done
-
-if [ -f "go.mod" ]; then
-    STACK_GO=true; PRIMARY_LANG="go"; PRIMARY_FRAMEWORK="go"; PRIMARY_EXT="go"
-    SOURCE_DIR="."; MODELS_DIR="internal/model"; CONTROLLERS_DIR="internal/handler"; SERVICES_DIR="internal/service"
-fi
-
-if [ -f "Cargo.toml" ]; then
-    STACK_RUST=true; PRIMARY_LANG="rust"; PRIMARY_FRAMEWORK="rust"; PRIMARY_EXT="rs"
-    SOURCE_DIR="src"; MODELS_DIR="src/models"; CONTROLLERS_DIR="src/handlers"; SERVICES_DIR="src/services"
-fi
-
-if [ -f "Gemfile" ]; then
-    STACK_RUBY=true; PRIMARY_LANG="ruby"; PRIMARY_EXT="rb"
-    if grep -qi "rails" Gemfile 2>/dev/null; then
-        STACK_RAILS=true; PRIMARY_FRAMEWORK="rails"
-        MODELS_DIR="app/models"; CONTROLLERS_DIR="app/controllers"; SERVICES_DIR="app/services"
+    elif [ -n "$APP_SUBDIR" ]; then
+        warn "Directory '${APP_SUBDIR}' not found. Continuing with limited context."
     fi
 fi
 
@@ -190,6 +227,8 @@ esac
 # ── Database detection ────────────────────────────────────────────────────────
 DB_HINTS=""
 for file in composer.json package.json requirements.txt pyproject.toml .env .lando.yml; do
+    # Prefer APP_SUBDIR if set and the file exists there, otherwise fall back to repo root
+    [ -n "$APP_SUBDIR" ] && [ -f "${APP_SUBDIR}/${file}" ] && file="${APP_SUBDIR}/${file}"
     [ -f "$file" ] || continue
     grep -qi "mysql"    "$file" 2>/dev/null && DB_HINTS="${DB_HINTS}MySQL "
     grep -qi "postgres" "$file" 2>/dev/null && DB_HINTS="${DB_HINTS}PostgreSQL "
@@ -200,19 +239,23 @@ done
 DB_HINTS=$(echo "$DB_HINTS" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' | xargs)
 
 # ── Version extraction ────────────────────────────────────────────────────────
+# APP_DIR: the directory where the stack was found (may differ from repo root)
+APP_DIR="."
+[ -n "$APP_SUBDIR" ] && [ -d "$APP_SUBDIR" ] && [ "$PRIMARY_LANG" != "unknown" ] && APP_DIR="$APP_SUBDIR"
+
 FRAMEWORK_VERSION=""; PHP_VERSION=""; NODE_VERSION=""
 if [ "$HAS_JQ" = true ]; then
-    if [ -f "composer.json" ]; then
-        PHP_VERSION=$(jq -r '.require.php // ""' composer.json 2>/dev/null | tr -d '>=^~< ')
+    if [ -f "${APP_DIR}/composer.json" ]; then
+        PHP_VERSION=$(jq -r '.require.php // ""' "${APP_DIR}/composer.json" 2>/dev/null | tr -d '>=^~< ')
         [ "$PRIMARY_FRAMEWORK" = "symfony" ] && \
-            FRAMEWORK_VERSION=$(jq -r '.require["symfony/framework-bundle"] // ""' composer.json 2>/dev/null | tr -d '>=^~<*. ')
+            FRAMEWORK_VERSION=$(jq -r '.require["symfony/framework-bundle"] // ""' "${APP_DIR}/composer.json" 2>/dev/null | tr -d '>=^~<*. ')
         [ "$PRIMARY_FRAMEWORK" = "laravel" ] && \
-            FRAMEWORK_VERSION=$(jq -r '.require["laravel/framework"] // ""' composer.json 2>/dev/null | tr -d '>=^~< ')
+            FRAMEWORK_VERSION=$(jq -r '.require["laravel/framework"] // ""' "${APP_DIR}/composer.json" 2>/dev/null | tr -d '>=^~< ')
     fi
-    if [ -f "package.json" ]; then
-        NODE_VERSION=$(jq -r '.engines.node // ""' package.json 2>/dev/null | tr -d '>=^~< ')
+    if [ -f "${APP_DIR}/package.json" ]; then
+        NODE_VERSION=$(jq -r '.engines.node // ""' "${APP_DIR}/package.json" 2>/dev/null | tr -d '>=^~< ')
         [ "$PRIMARY_FRAMEWORK" = "nextjs" ] && \
-            FRAMEWORK_VERSION=$(jq -r '.dependencies.next // ""' package.json 2>/dev/null | tr -d '>=^~< ')
+            FRAMEWORK_VERSION=$(jq -r '.dependencies.next // ""' "${APP_DIR}/package.json" 2>/dev/null | tr -d '>=^~< ')
     fi
 fi
 
@@ -221,6 +264,7 @@ if [ "$DEBUG_DETECTION" = true ]; then
     echo ""
     echo "=== Detection Results ==="
     echo "REPO_NAME         : $REPO_NAME"
+    echo "AI_CLI            : $AI_CLI"
     echo "PRIMARY_LANG      : $PRIMARY_LANG"
     echo "PRIMARY_FRAMEWORK : $PRIMARY_FRAMEWORK"
     echo "FRAMEWORK_VERSION : $FRAMEWORK_VERSION"
@@ -262,7 +306,7 @@ ENTITY_COUNT=0; CONTROLLER_COUNT=0; SERVICE_COUNT=0; MIGRATION_COUNT=0
 [ -n "$MODELS_DIR" ]     && [ -d "$MODELS_DIR" ]     && ENTITY_COUNT=$(find "$MODELS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | wc -l | xargs)
 [ -n "$CONTROLLERS_DIR" ] && [ -d "$CONTROLLERS_DIR" ] && CONTROLLER_COUNT=$(find "$CONTROLLERS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | wc -l | xargs)
 [ -n "$SERVICES_DIR" ]   && [ -d "$SERVICES_DIR" ]   && SERVICE_COUNT=$(find "$SERVICES_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | wc -l | xargs)
-[ -d "migrations" ] && MIGRATION_COUNT=$(find migrations -name "*.$PRIMARY_EXT" -type f 2>/dev/null | wc -l | xargs)
+[ -d "${APP_DIR}/migrations" ] && MIGRATION_COUNT=$(find "${APP_DIR}/migrations" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | wc -l | xargs)
 
 # ── Collect key files for AI context ─────────────────────────────────────────
 info "Collecting source samples..."
@@ -279,13 +323,13 @@ add_file_to_context() {
 }
 
 for f in composer.json package.json go.mod Cargo.toml Gemfile requirements.txt pyproject.toml; do
-    add_file_to_context "$f"
+    add_file_to_context "${APP_DIR}/${f}"
 done
-add_file_to_context "config/packages/security.yaml"
+add_file_to_context "${APP_DIR}/config/packages/security.yaml"
 add_file_to_context "README.md"
-[ -f ".env" ] && {
-    masked=$(grep -v '^#' .env | grep -v '^$' | sed 's/=.*/=***/' 2>/dev/null)
-    AI_CONTEXT_FILES+="### .env (masked)\n\`\`\`\n${masked}\n\`\`\`\n\n"
+[ -f "${APP_DIR}/.env" ] && {
+    masked=$(grep -v '^#' "${APP_DIR}/.env" | grep -v '^$' | sed 's/=.*/=***/' 2>/dev/null)
+    AI_CONTEXT_FILES+="### ${APP_DIR}/.env (masked)\n\`\`\`\n${masked}\n\`\`\`\n\n"
 }
 if [ -n "$MODELS_DIR" ] && [ -d "$MODELS_DIR" ]; then
     while IFS= read -r f; do add_file_to_context "$f"; done < <(find "$MODELS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | head -6)
@@ -322,8 +366,8 @@ if [ -z "$OPENAPI_FILE" ]; then
 fi
 
 if [ "$USE_AI" = true ]; then
-    info "Calling Claude — project overview..."
-    AI_OVERVIEW=$(call_claude "You are generating documentation for a software project.
+    info "Calling ${AI_CLI} — project overview..."
+    AI_OVERVIEW=$(call_ai "You are generating documentation for a software project.
 
 Project name: ${REPO_NAME}
 Detected framework: ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG})
@@ -337,7 +381,7 @@ $(echo -e "$AI_CONTEXT_FILES" | head -c 3000)
 
 Write a concise 2-3 sentence project overview describing what it does, its purpose, and primary architectural approach. Output only the overview text — no preamble, no heading." 512)
 
-    info "Calling Claude — architecture notes..."
+    info "Calling ${AI_CLI} — architecture notes..."
     ENTITY_LIST=$([ -n "$MODELS_DIR" ] && [ -d "$MODELS_DIR" ] && \
         find "$MODELS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | xargs -I{} basename {} ".$PRIMARY_EXT" | sort | tr '\n' ', ' || echo "none")
     SERVICE_LIST=$([ -n "$SERVICES_DIR" ] && [ -d "$SERVICES_DIR" ] && \
@@ -345,7 +389,7 @@ Write a concise 2-3 sentence project overview describing what it does, its purpo
     DIR_LIST=$(find "${SOURCE_DIR}" -type d -not -path '*/vendor/*' -not -path '*/var/*' \
         -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | sort | head -30)
 
-    AI_ARCHITECTURE=$(call_claude "Analyse this ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG}) codebase.
+    AI_ARCHITECTURE=$(call_ai "Analyse this ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG}) codebase.
 
 Entities/models: ${ENTITY_LIST}
 Services: ${SERVICE_LIST}
@@ -354,8 +398,8 @@ ${DIR_LIST}
 
 Identify 3-5 key architectural patterns (e.g. repository pattern, service layer, DTO, CQRS). Base this only on the directory structure and class names provided. Return a markdown bullet list only — no preamble, no heading." 512)
 
-    info "Calling Claude — development focus areas..."
-    AI_FOCUS=$(call_claude "Analyse recent development activity on a ${PRIMARY_FRAMEWORK} project.
+    info "Calling ${AI_CLI} — development focus areas..."
+    AI_FOCUS=$(call_ai "Analyse recent development activity on a ${PRIMARY_FRAMEWORK} project.
 
 Recent commits:
 ${GIT_LOG}
@@ -366,9 +410,9 @@ ${GIT_RECENT}
 Based solely on the above, identify 3-5 areas of active development that would benefit from AI assistance. Return a markdown bullet list only — no preamble, no heading." 512)
 
     if [ -n "$OPENAPI_FILE" ]; then
-        info "Calling Claude — analysing OpenAPI spec (${OPENAPI_FILE})..."
+        info "Calling ${AI_CLI} — analysing OpenAPI spec (${OPENAPI_FILE})..."
         OPENAPI_CONTENT=$(head -c 8000 "$OPENAPI_FILE")
-        AI_OPENAPI=$(call_claude "You are documenting a REST API from its OpenAPI/Swagger specification.
+        AI_OPENAPI=$(call_ai "You are documenting a REST API from its OpenAPI/Swagger specification.
 
 Spec file: ${OPENAPI_FILE}
 Contents (truncated to 8000 chars):
@@ -395,19 +439,19 @@ fi
 
 # ── Dependency block ──────────────────────────────────────────────────────────
 DEPS_BLOCK=""
-if [ "$HAS_JQ" = true ] && [ -f "composer.json" ]; then
+if [ "$HAS_JQ" = true ] && [ -f "${APP_DIR}/composer.json" ]; then
     DEPS_BLOCK=$(jq -r '
         (if .require then "**require:**\n" + (.require | to_entries | map("- `\(.key)`: \(.value)") | join("\n")) else "" end),
         (if ."require-dev" then "\n**require-dev:**\n" + (."require-dev" | to_entries | map("- `\(.key)`: \(.value)") | join("\n")) else "" end)
-    ' composer.json 2>/dev/null)
-elif [ "$HAS_JQ" = true ] && [ -f "package.json" ]; then
+    ' "${APP_DIR}/composer.json" 2>/dev/null)
+elif [ "$HAS_JQ" = true ] && [ -f "${APP_DIR}/package.json" ]; then
     DEPS_BLOCK=$(jq -r '
         (if .dependencies then "**dependencies:**\n" + (.dependencies | to_entries | map("- `\(.key)`: \(.value)") | join("\n")) else "" end),
         (if .devDependencies then "\n**devDependencies:**\n" + (.devDependencies | to_entries | map("- `\(.key)`: \(.value)") | join("\n")) else "" end)
-    ' package.json 2>/dev/null)
-elif [ -f "requirements.txt" ]; then DEPS_BLOCK=$(cat requirements.txt)
-elif [ -f "go.mod" ];           then DEPS_BLOCK=$(cat go.mod)
-elif [ -f "Gemfile" ];          then DEPS_BLOCK=$(cat Gemfile)
+    ' "${APP_DIR}/package.json" 2>/dev/null)
+elif [ -f "${APP_DIR}/requirements.txt" ]; then DEPS_BLOCK=$(cat "${APP_DIR}/requirements.txt")
+elif [ -f "${APP_DIR}/go.mod" ];           then DEPS_BLOCK=$(cat "${APP_DIR}/go.mod")
+elif [ -f "${APP_DIR}/Gemfile" ];          then DEPS_BLOCK=$(cat "${APP_DIR}/Gemfile")
 fi
 
 # ── Route extraction ──────────────────────────────────────────────────────────
@@ -427,6 +471,42 @@ elif [ "$PRIMARY_FRAMEWORK" = "rails" ] && [ -f "config/routes.rb" ]; then
 fi
 
 # ── Scan functions ────────────────────────────────────────────────────────────
+summarize_markdown_files() {
+    [ "$USE_AI" = false ] && return
+    
+    info "Discovering and summarizing markdown files..."
+    
+    # Exclude common vendor/build directories
+    local EXCLUDE_PATTERNS='node_modules|vendor|.git|dist|build|__pycache__'
+    local md_files
+    md_files=$(find . -name "*.md" -not -path "*/.*" | grep -vE "$EXCLUDE_PATTERNS" | sort)
+    local count
+    count=$(echo "$md_files" | grep -c ".md" || echo 0)
+    
+    info "Found $count markdown files."
+    
+    echo "$md_files" | while read -r f; do
+        [ -z "$f" ] && continue
+        local rel_path=${f#./}
+        local content
+        content=$(head -c 2000 "$f")
+        
+        local prompt
+        if [[ "$rel_path" == docs/* ]]; then
+            prompt="Summarize the following documentation file in detail (3-4 sentences), focusing on its core purpose and any architectural decisions it documents. File: $rel_path\n\nContent:\n$content"
+        else
+            prompt="Provide a brief 1-sentence summary of this markdown file. File: $rel_path\n\nContent:\n$content"
+        fi
+        
+        local summary
+        summary=$(call_ai "$prompt" < /dev/null)
+        
+        echo "### [$rel_path]($rel_path)"
+        echo "> AI Summary: $summary"
+        echo ""
+    done
+}
+
 scan_models() {
     [ -z "$MODELS_DIR" ] || [ ! -d "$MODELS_DIR" ] && return
     find "$MODELS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | sort | while read -r f; do
@@ -507,7 +587,11 @@ DEVEOF
 }
 
 env_block() {
-    if [ -f ".env.example" ]; then
+    if [ -f "${APP_DIR}/.env.example" ]; then
+        grep -v '^#' "${APP_DIR}/.env.example" | grep -v '^$'
+    elif [ -f "${APP_DIR}/.env" ]; then
+        grep -v '^#' "${APP_DIR}/.env" | grep -v '^$' | sed 's/=.*/=***/'
+    elif [ -f ".env.example" ]; then
         grep -v '^#' .env.example | grep -v '^$'
     elif [ -f ".env" ]; then
         grep -v '^#' .env | grep -v '^$' | sed 's/=.*/=***/'
@@ -517,10 +601,11 @@ env_block() {
 }
 
 migrations_block() {
-    if [ -d "migrations" ] && [ "$MIGRATION_COUNT" -gt 0 ]; then
+    local mdir="${APP_DIR}/migrations"
+    if [ -d "$mdir" ] && [ "$MIGRATION_COUNT" -gt 0 ]; then
         echo "| Migration | Date |"
         echo "|---|---|"
-        find migrations -name "*.$PRIMARY_EXT" -type f 2>/dev/null | sort | tail -10 | while read -r f; do
+        find "$mdir" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | sort | tail -10 | while read -r f; do
             name=$(basename "$f" ".$PRIMARY_EXT")
             mdate=$(echo "$name" | grep -oE '[0-9]{8}' | head -1 || echo "—")
             echo "| \`$name\` | $mdate |"
@@ -545,11 +630,14 @@ mkdir -p "$OUTPUT_DIR"
 
 {
 
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
 # Header — uses unquoted heredoc so variables expand
 cat << EOF
 # ${REPO_NAME} — Project Context
 
-> Generated: $(date +"%Y-%m-%d %H:%M:%S") | Stack: ${STACK_LABEL} | Dev: ${DEV_ENV}
+> Generated: $(date +"%Y-%m-%d %H:%M:%S") | Duration: ${DURATION}s | Stack: ${STACK_LABEL} | Dev: ${DEV_ENV}
 
 ---
 
@@ -562,6 +650,17 @@ if [ -n "$AI_OVERVIEW" ]; then
 else
     echo "Auto-detected **${PRIMARY_FRAMEWORK}** (${PRIMARY_LANG}) project."
     [ -n "$DB_HINTS" ] && echo "Database: ${DB_HINTS}."
+fi
+
+if [ "$USE_AI" = true ]; then
+cat << EOF
+
+---
+
+## Document Context
+
+$(summarize_markdown_files)
+EOF
 fi
 
 # All subsequent heredocs are single-quoted — no variable expansion needed
@@ -768,6 +867,15 @@ else
     head -c 4000 "$OPENAPI_FILE"
     echo '```'
 fi
+fi
+
+if [ "$USE_AI" = true ]; then
+cat << EOF
+
+---
+
+> _AI summaries generated using **${AI_CLI}**._
+EOF
 fi
 
 } > "$TEMP_FILE"

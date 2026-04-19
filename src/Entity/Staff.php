@@ -71,7 +71,7 @@ class Staff
     public function __construct(
         string $firstName = '',
         string $lastName = '',
-        StaffRole $role = StaffRole::HEAD_COACH,
+        StaffRole $role = StaffRole::COACH,
         ?Club $club = null,
     ) {
         $this->id        = new UuidV7();

@@ -59,7 +59,7 @@ Branch naming: `feat/`, `fix/`, `chore/` prefixes. Base branch is `master`.
 
 ### Sync Model
 The server is **not** the game engine. All gameplay (Weekly Tick, training, aging, personality changes) runs on-device. This API handles three things only:
-1. **Legacy metrics** — receives aggregate deltas from the client and updates `Academy` totals
+1. **Legacy metrics** — receives aggregate deltas from the client and updates `Club` totals
 2. **Anti-cheat** — rejects `weekNumber` rollbacks; every sync is recorded in `SyncRecord` even if invalid
 3. **Leaderboards** — upserts `LeaderboardEntry` rows for `all-time` and current ISO week on every valid sync
 
@@ -68,10 +68,10 @@ The server is **not** the game engine. All gameplay (Weekly Tick, training, agin
 JWT firewall → SyncController::sync()
   → #[MapRequestPayload] deserializes + validates SyncRequest DTO
   → SyncService::process()
-      → AcademyRepository::findByUser()
+      → ClubRepository::findByUser()
       → persist SyncRecord (always)
       → anti-cheat check → 409 if week < lastSyncedWeek
-      → update Academy aggregates
+      → update Club aggregates
       → LeaderboardEntryRepository::findOrCreate() × 6 (3 categories × 2 periods)
       → flush → return JSON
 ```
@@ -97,7 +97,7 @@ EasyAdmin's `layout.html.twig` requires the `ea` Twig global (set by `AdminReque
 - **UUID columns** are `BINARY(16)` (Doctrine's `uuid` type for MySQL) — not `VARCHAR(36)`. The migration reflects this.
 - **`rank`** is a reserved word in MySQL 8.0. `LeaderboardEntry` uses the column name `rank_position`.
 - **`hallOfFamePoints`** is `max(current, incoming)` — it never decreases. **`reputation`** floors at 0. **`totalCareerEarnings`** adds the delta.
-- **Leaderboard scores** are absolute values derived from Academy state at sync time, not running sums of deltas.
+- **Leaderboard scores** are absolute values derived from Club state at sync time, not running sums of deltas.
 
 ### Source Layout
 | Path | Purpose |

@@ -4,7 +4,7 @@
     <div class="row g-3 mb-4">
 
         {# ── By Nationality ── #}
-        <div class="col-lg-5">
+        <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header fw-semibold">Players by Nationality</div>
                 <div class="card-body p-0" style="max-height: 260px; overflow-y: auto;">
@@ -25,7 +25,7 @@
         </div>
 
         {# ── By Position ── #}
-        <div class="col-lg-3">
+        <div class="col-lg-2">
             <div class="card h-100">
                 <div class="card-header fw-semibold">By Position</div>
                 <div class="card-body">
@@ -41,11 +41,26 @@
         </div>
 
         {# ── By Age Range ── #}
-        <div class="col-lg-4">
+        <div class="col-lg-3">
             <div class="card h-100">
                 <div class="card-header fw-semibold">By Age Range</div>
                 <div class="card-body">
                     {% for range, count in playerSummary.byAge %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">{{ range }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# ── By Ability ── #}
+        <div class="col-lg-3">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">By Overall Ability</div>
+                <div class="card-body">
+                    {% for range, count in playerSummary.byAbility %}
                         <div class="d-flex justify-content-between py-1 border-bottom">
                             <span class="text-muted">{{ range }}</span>
                             <strong>{{ count }}</strong>

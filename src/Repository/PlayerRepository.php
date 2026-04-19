@@ -217,32 +217,43 @@ class PlayerRepository extends ServiceEntityRepository
             $byPosition[$pos] = (int) $row['cnt'];
         }
 
-        // ── By age range (computed in PHP) ────────────────────────────────────
-        $dobRows = $this->createQueryBuilder('p')
-            ->select('p.dateOfBirth AS dob')
+        $byAge = ['U16' => 0, '16-18' => 0, '19-21' => 0, '22-25' => 0, '26-30' => 0, '30+' => 0];
+        $byAbility = ['1-20' => 0, '21-40' => 0, '41-60' => 0, '61-80' => 0, '81-100' => 0];
+        $now   = new \DateTimeImmutable();
+
+        $playerData = $this->createQueryBuilder('p')
+            ->select('p.dateOfBirth AS dob, p.currentAbility AS ability')
             ->getQuery()
             ->getArrayResult();
 
-        $byAge = ['U16' => 0, '16-18' => 0, '19-21' => 0, '22-25' => 0, '26-30' => 0, '30+' => 0];
-        $now   = new \DateTimeImmutable();
-
-        foreach ($dobRows as $row) {
+        foreach ($playerData as $row) {
+            // Age breakdown
             $dob = $row['dob'];
-            if (!$dob instanceof \DateTimeInterface) {
-                continue;
+            if ($dob instanceof \DateTimeInterface) {
+                $age    = (int) $dob->diff($now)->y;
+                $ageBucket = match (true) {
+                    $age < 16   => 'U16',
+                    $age <= 18  => '16-18',
+                    $age <= 21  => '19-21',
+                    $age <= 25  => '22-25',
+                    $age < 30   => '26-30',
+                    default     => '30+',
+                };
+                $byAge[$ageBucket]++;
             }
-            $age    = (int) $dob->diff($now)->y;
-            $bucket = match (true) {
-                $age < 16   => 'U16',
-                $age <= 18  => '16-18',
-                $age <= 21  => '19-21',
-                $age <= 25  => '22-25',
-                $age < 30   => '26-30',
-                default     => '30+',
+
+            // Ability breakdown
+            $a = (int) $row['ability'];
+            $abilityBucket = match (true) {
+                $a <= 20 => '1-20',
+                $a <= 40 => '21-40',
+                $a <= 60 => '41-60',
+                $a <= 80 => '61-80',
+                default  => '81-100',
             };
-            $byAge[$bucket]++;
+            $byAbility[$abilityBucket]++;
         }
 
-        return compact('byNationality', 'byPosition', 'byAge');
+        return compact('byNationality', 'byPosition', 'byAge', 'byAbility');
     }
 }

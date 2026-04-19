@@ -12,7 +12,7 @@ services:
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
-      ACADEMY_STARTING_BALANCE: ${ACADEMY_STARTING_BALANCE}
+      CLUB_STARTING_BALANCE: ${CLUB_STARTING_BALANCE}
     depends_on:
       postgres-stage:
         condition: service_healthy

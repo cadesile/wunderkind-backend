@@ -124,10 +124,10 @@ class SyncService
         // ── Leaderboard upserts ───────────────────────────────────────────────
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
-        foreach ([LeaderboardCategory::CAREER_EARNINGS, LeaderboardCategory::ACADEMY_REPUTATION, LeaderboardCategory::HALL_OF_FAME] as $category) {
+        foreach ([LeaderboardCategory::CAREER_EARNINGS, LeaderboardCategory::CLUB_REPUTATION, LeaderboardCategory::HALL_OF_FAME] as $category) {
             $score = match ($category) {
                 LeaderboardCategory::CAREER_EARNINGS    => $club->getTotalCareerEarnings(),
-                LeaderboardCategory::ACADEMY_REPUTATION => $club->getReputation(),
+                LeaderboardCategory::CLUB_REPUTATION => $club->getReputation(),
                 LeaderboardCategory::HALL_OF_FAME       => $club->getHallOfFamePoints(),
             };
 

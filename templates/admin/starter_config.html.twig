@@ -5,7 +5,7 @@
 
     <div class="col-12">
         <h5 class="fw-semibold mb-0">Starter Config</h5>
-        <p class="text-muted small mb-0">These values define the starting conditions for every new academy. Changes take effect on the next new registration.</p>
+        <p class="text-muted small mb-0">These values define the starting conditions for every new club. Changes take effect on the next new registration.</p>
     </div>
 
     <div class="col-12">
@@ -15,7 +15,7 @@
         <div class="card">
             <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-flag text-muted"></i>
-                <span class="fw-semibold small">New Academy Defaults</span>
+                <span class="fw-semibold small">New Club Defaults</span>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -35,7 +35,7 @@
                             <option value="MEDIUM" {% if config.starterSponsorTier == 'MEDIUM' %}selected{% endif %}>MEDIUM</option>
                             <option value="LARGE"  {% if config.starterSponsorTier == 'LARGE'  %}selected{% endif %}>LARGE</option>
                         </select>
-                        <div class="form-text">Sponsor company-size tier assigned at academy creation. Default: SMALL</div>
+                        <div class="form-text">Sponsor company-size tier assigned at club creation. Default: SMALL</div>
                     </div>
 
                     <div class="col-md-4">
@@ -43,7 +43,7 @@
                         <input type="number" id="starterPlayerCount" name="starterPlayerCount"
                                value="{{ config.starterPlayerCount }}"
                                min="0" class="form-control">
-                        <div class="form-text">Players assigned at academy creation. Default: 5</div>
+                        <div class="form-text">Players assigned at club creation. Default: 5</div>
                     </div>
 
                     <div class="col-md-4">
@@ -51,7 +51,7 @@
                         <input type="number" id="starterCoachCount" name="starterCoachCount"
                                value="{{ config.starterCoachCount }}"
                                min="0" class="form-control">
-                        <div class="form-text">Coaches assigned at academy creation. Default: 1</div>
+                        <div class="form-text">Coaches assigned at club creation. Default: 1</div>
                     </div>
 
                     <div class="col-md-4">
@@ -59,7 +59,7 @@
                         <input type="number" id="starterScoutCount" name="starterScoutCount"
                                value="{{ config.starterScoutCount }}"
                                min="0" class="form-control">
-                        <div class="form-text">Scouts assigned at academy creation. Default: 1</div>
+                        <div class="form-text">Scouts assigned at club creation. Default: 1</div>
                     </div>
 
 

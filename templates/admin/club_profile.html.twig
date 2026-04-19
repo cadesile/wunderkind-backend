@@ -9,37 +9,37 @@
 
     {# ── Breadcrumb / back link ───────────────────────────────────────── #}
     <div class="col-12 mb-1">
-        <a href="{{ ea_url().setController('App\\Controller\\Admin\\AcademyCrudController') }}"
+        <a href="{{ ea_url().setController('App\\Controller\\Admin\\ClubCrudController') }}"
            class="text-muted text-decoration-none small">
             <i class="fa fa-arrow-left me-1"></i> Back to Academies
         </a>
     </div>
 
-    {# ── Academy header card ──────────────────────────────────────────── #}
+    {# ── Club header card ──────────────────────────────────────────── #}
     <div class="col-12">
         <div class="card">
             <div class="card-body py-3">
                 <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
                     <div>
                         <h4 class="fw-bold mb-1">
-                            {% if academy.country %}
-                                <span class="text-muted small me-1">{{ academy.country }}</span>
+                            {% if club.country %}
+                                <span class="text-muted small me-1">{{ club.country }}</span>
                             {% endif %}
-                            {{ academy.name }}
+                            {{ club.name }}
                         </h4>
                         <div class="text-muted small d-flex flex-wrap gap-3">
-                            <span><i class="fa fa-envelope me-1"></i>{{ academy.user.email }}</span>
-                            {% if academy.paName %}
-                                <span><i class="fa fa-id-badge me-1"></i>PA: {{ academy.paName }}</span>
+                            <span><i class="fa fa-envelope me-1"></i>{{ club.user.email }}</span>
+                            {% if club.paName %}
+                                <span><i class="fa fa-id-badge me-1"></i>PA: {{ club.paName }}</span>
                             {% endif %}
-                            <span><i class="fa fa-calendar me-1"></i>Joined {{ academy.createdAt|date('d M Y') }}</span>
+                            <span><i class="fa fa-calendar me-1"></i>Joined {{ club.createdAt|date('d M Y') }}</span>
                         </div>
                     </div>
                     <div class="text-end">
-                        {% if academy.lastSyncedAt %}
+                        {% if club.lastSyncedAt %}
                             <span class="badge bg-success-subtle text-success border border-success-subtle">
                                 <i class="fa fa-circle-check me-1"></i>
-                                Last sync: Week {{ academy.lastSyncedWeek }} &middot; {{ academy.lastSyncedAt|date('d M Y H:i') }}
+                                Last sync: Week {{ club.lastSyncedWeek }} &middot; {{ club.lastSyncedAt|date('d M Y H:i') }}
                             </span>
                         {% else %}
                             <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
@@ -65,7 +65,7 @@
             <div class="card-body py-3">
                 <div class="text-muted mb-2"><i class="fa fa-star fa-lg"></i></div>
                 <div class="text-muted small mb-1">Reputation</div>
-                <div class="fs-3 fw-bold">{{ academy.reputation|number_format }}</div>
+                <div class="fs-3 fw-bold">{{ club.reputation|number_format }}</div>
             </div>
         </div>
     </div>
@@ -74,9 +74,9 @@
             <div class="card-body py-3">
                 <div class="text-muted mb-2"><i class="fa fa-sterling-sign fa-lg"></i></div>
                 <div class="text-muted small mb-1">Balance</div>
-                <div class="fs-3 fw-bold {{ academy.balance < 0 ? 'text-danger' : '' }}"
-                     title="£{{ (academy.balance / 100)|number_format(0, '.', ',') }}">
-                    {{ fmt_currency(academy.balance) }}
+                <div class="fs-3 fw-bold {{ club.balance < 0 ? 'text-danger' : '' }}"
+                     title="£{{ (club.balance / 100)|number_format(0, '.', ',') }}">
+                    {{ fmt_currency(club.balance) }}
                 </div>
             </div>
         </div>
@@ -87,8 +87,8 @@
                 <div class="text-muted mb-2"><i class="fa fa-chart-line fa-lg"></i></div>
                 <div class="text-muted small mb-1">Career Earnings</div>
                 <div class="fs-3 fw-bold"
-                     title="£{{ (academy.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
-                    {{ fmt_currency(academy.totalCareerEarnings) }}
+                     title="£{{ (club.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
+                    {{ fmt_currency(club.totalCareerEarnings) }}
                 </div>
             </div>
         </div>
@@ -98,7 +98,7 @@
             <div class="card-body py-3">
                 <div class="text-muted mb-2"><i class="fa fa-trophy fa-lg"></i></div>
                 <div class="text-muted small mb-1">Hall of Fame</div>
-                <div class="fs-3 fw-bold text-warning">{{ academy.hallOfFamePoints|number_format }}</div>
+                <div class="fs-3 fw-bold text-warning">{{ club.hallOfFamePoints|number_format }}</div>
             </div>
         </div>
     </div>
@@ -114,7 +114,7 @@
     <div class="col-lg-7">
         <div class="card h-100">
             <div class="card-header py-2 d-flex align-items-center justify-content-between">
-                <span class="fw-semibold small"><i class="fa fa-sync me-1 text-muted"></i> Week {{ payload.weekNumber ?? academy.lastSyncedWeek }} snapshot</span>
+                <span class="fw-semibold small"><i class="fa fa-sync me-1 text-muted"></i> Week {{ payload.weekNumber ?? club.lastSyncedWeek }} snapshot</span>
                 {% if latestValidSync %}
                     <span class="text-muted" style="font-size:.7rem;">
                         received {{ latestValidSync.serverTimestamp|date('d M Y H:i') }}
@@ -191,15 +191,15 @@
                 <span class="fw-semibold small"><i class="fa fa-user-tie me-1 text-muted"></i> Manager Profile</span>
             </div>
             <div class="card-body">
-                {% if academy.managerProfile %}
+                {% if club.managerProfile %}
                     <div class="mb-3">
-                        <div class="fw-semibold">{{ academy.managerProfile.name ?? '—' }}</div>
+                        <div class="fw-semibold">{{ club.managerProfile.name ?? '—' }}</div>
                         <div class="text-muted small">
-                            {% if academy.managerProfile.nationality is defined %}
-                                {{ academy.managerProfile.nationality }}
+                            {% if club.managerProfile.nationality is defined %}
+                                {{ club.managerProfile.nationality }}
                             {% endif %}
-                            {% if academy.managerProfile.dateOfBirth is defined %}
-                                &middot; b. {{ academy.managerProfile.dateOfBirth }}
+                            {% if club.managerProfile.dateOfBirth is defined %}
+                                &middot; b. {{ club.managerProfile.dateOfBirth }}
                             {% endif %}
                         </div>
                     </div>
@@ -209,28 +209,28 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between small mb-1">
                         <span><i class="fa fa-fire text-warning me-1"></i> Temperament</span>
-                        <span class="fw-semibold">{{ academy.managerTemperament }}</span>
+                        <span class="fw-semibold">{{ club.managerTemperament }}</span>
                     </div>
                     <div class="progress" style="height:6px;">
-                        <div class="progress-bar bg-warning" style="width:{{ academy.managerTemperament }}%"></div>
+                        <div class="progress-bar bg-warning" style="width:{{ club.managerTemperament }}%"></div>
                     </div>
                 </div>
                 <div class="mb-3">
                     <div class="d-flex justify-content-between small mb-1">
                         <span><i class="fa fa-gavel text-danger me-1"></i> Discipline</span>
-                        <span class="fw-semibold">{{ academy.managerDiscipline }}</span>
+                        <span class="fw-semibold">{{ club.managerDiscipline }}</span>
                     </div>
                     <div class="progress" style="height:6px;">
-                        <div class="progress-bar bg-danger" style="width:{{ academy.managerDiscipline }}%"></div>
+                        <div class="progress-bar bg-danger" style="width:{{ club.managerDiscipline }}%"></div>
                     </div>
                 </div>
                 <div class="mb-0">
                     <div class="d-flex justify-content-between small mb-1">
                         <span><i class="fa fa-bolt text-primary me-1"></i> Ambition</span>
-                        <span class="fw-semibold">{{ academy.managerAmbition }}</span>
+                        <span class="fw-semibold">{{ club.managerAmbition }}</span>
                     </div>
                     <div class="progress" style="height:6px;">
-                        <div class="progress-bar bg-primary" style="width:{{ academy.managerAmbition }}%"></div>
+                        <div class="progress-bar bg-primary" style="width:{{ club.managerAmbition }}%"></div>
                     </div>
                 </div>
             </div>
@@ -265,7 +265,7 @@
                             <td class="small">
                                 {% if entry.categoryValue == 'career_earnings' %}
                                     <i class="fa fa-chart-line text-success me-1"></i> Career Earnings
-                                {% elseif entry.categoryValue == 'academy_reputation' %}
+                                {% elseif entry.categoryValue == 'club_reputation' %}
                                     <i class="fa fa-star text-warning me-1"></i> Reputation
                                 {% else %}
                                     <i class="fa fa-trophy text-warning me-1"></i> Hall of Fame

@@ -51,7 +51,7 @@ jobs:
             DB_PASSWORD=${{ secrets.STAGE_DB_PASSWORD }}
             APP_SECRET=${{ secrets.STAGE_APP_SECRET }}
             CORS_ALLOW_ORIGIN=${{ secrets.STAGE_CORS_ALLOW_ORIGIN }}
-            ACADEMY_STARTING_BALANCE=${{ secrets.STAGE_ACADEMY_STARTING_BALANCE }}
+            CLUB_STARTING_BALANCE=${{ secrets.STAGE_CLUB_STARTING_BALANCE }}
             JWT_SECRET_KEY="${{ secrets.STAGE_JWT_SECRET_KEY }}"
             JWT_PUBLIC_KEY="${{ secrets.STAGE_JWT_PUBLIC_KEY }}"
             EOF

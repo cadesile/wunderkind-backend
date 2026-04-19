@@ -306,7 +306,7 @@ Response `409` (anti-cheat rejection — week rolled back):
 ### `GET /api/leaderboard/{category}?period={period}` — JWT required
 Fetch a ranked leaderboard including the caller's own rank.
 
-`{category}` — one of: `career_earnings` · `academy_reputation` · `hall_of_fame`
+`{category}` — one of: `career_earnings` · `club_reputation` · `hall_of_fame`
 
 `?period` — `all-time` (default) or ISO week string e.g. `2026-W09`
 
@@ -846,7 +846,7 @@ Player `contractValue` is `currentAbility × rand(10, 40)` pence/week.
 | `role` (staff) | `head_coach`, `assistant_coach`, `scout`, `fitness_coach`, `analyst` |
 | `size` (company) | `SMALL`, `MEDIUM`, `LARGE` |
 | `entityType` (market assign) | `player`, `coach`, `scout`, `sponsor`, `investor` |
-| `category` (leaderboard) | `career_earnings`, `academy_reputation`, `hall_of_fame` |
+| `category` (leaderboard) | `career_earnings`, `club_reputation`, `hall_of_fame` |
 | `transferType` | `sale`, `loan`, `free_release` |
 | `tier` (investor) | `angel`, `vc`, `private_equity` |
 | `status` (sponsor) | `active`, `completed`, `voided`, `early_terminated` |

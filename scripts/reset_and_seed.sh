@@ -39,8 +39,8 @@ RESET_SQL_CONTAINER="/app/.reset_tmp.sql"
 
 if command -v lando &>/dev/null && [[ -f ".lando.yml" ]]; then
     CONNECTION_MODE="lando"
-    psql_cmd()  { lando psql -tAc "$1"; }
-    psql_file() { lando psql -f "$RESET_SQL_CONTAINER"; }
+    psql_cmd()  { lando psql -tAc "$1" < /dev/null; }
+    psql_file() { lando psql -f "$RESET_SQL_CONTAINER" < /dev/null; }
     console_cmd() { lando php bin/console "$@"; }
     echo -e "${BLUE}ℹ  Connection mode: Lando (PostgreSQL)${NC}"
 else
@@ -57,8 +57,8 @@ else
         echo -e "${RED}Error: DATABASE_URL is not set. Export it or ensure .env is present.${NC}"
         exit 1
     fi
-    psql_cmd()  { psql "$DATABASE_URL" -tAc "$1"; }
-    psql_file() { psql "$DATABASE_URL" -f "$RESET_SQL_HOST"; }
+    psql_cmd()  { psql "$DATABASE_URL" -tAc "$1" < /dev/null; }
+    psql_file() { psql "$DATABASE_URL" -f "$RESET_SQL_HOST" < /dev/null; }
     console_cmd() { php bin/console "$@"; }
     echo -e "${BLUE}ℹ  Connection mode: native (PostgreSQL — ${DATABASE_URL%%@*}@...)${NC}"
 fi
