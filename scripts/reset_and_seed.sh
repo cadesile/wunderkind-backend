@@ -2,7 +2,7 @@
 #
 # reset_and_seed.sh
 # Resets the Wunderkind database, re-seeds market data,
-# and restores game_config + starter_config to hardcoded defaults.
+# and clears clubs and users. Preserves admin, configs, and narratives.
 #
 # The "admin" table is NEVER touched — admin users are always preserved.
 #
@@ -66,9 +66,9 @@ fi
 # ─── Safety confirmation ─────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}⚠️  WARNING${NC}"
-echo "   This will DELETE all academies, players, staff, and game data."
+echo "   This will DELETE all clubs, players, staff, and user data."
 echo "   The admin table is untouched — admin users are always preserved."
-echo "   game_config and starter_config will be reset to defaults."
+echo "   game_config, starter_config, and narrative data are untouched."
 echo ""
 
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
@@ -209,8 +209,8 @@ echo -e "   ${GREEN}✓ Configuration locked in. Starting reset...${NC}"
 echo ""
 
 # ─── Phase 1: Truncate game tables (admin table is intentionally excluded) ────
-echo -e "${BLUE}🗑️  Phase 1: Truncating game tables + resetting config to defaults...${NC}"
-echo "   (admin table is skipped — admin users are always preserved)"
+echo -e "${BLUE}🗑️  Phase 1: Truncating game tables (config & narrative untouched)...${NC}"
+echo "   (admin, game_config, starter_config, and templates are skipped)"
 
 # Write SQL to a file inside the project dir (lando mounts project at /app).
 # The admin table is intentionally absent from this list.
@@ -231,41 +231,15 @@ TRUNCATE TABLE
     sponsor,
     scout,
     agent,
-    academy,
+    club,
     "user"
 CASCADE;
-
--- Reset game_config (RESTART IDENTITY resets the PK sequence)
-TRUNCATE TABLE game_config RESTART IDENTITY CASCADE;
-INSERT INTO game_config (
-    clique_relationship_threshold, clique_squad_cap_percent, clique_min_tenure_weeks,
-    base_xp, base_injury_probability,
-    regression_upper_threshold, regression_lower_threshold,
-    reputation_delta_base, reputation_delta_facility_multiplier,
-    injury_minor_weight, injury_moderate_weight, injury_serious_weight
-) VALUES (20, 30, 3, 10, 0.05, 14, 7, 0.5, 1.2, 60, 30, 10);
-
--- Reset starter_config
-TRUNCATE TABLE starter_config RESTART IDENTITY CASCADE;
-INSERT INTO starter_config (
-    id, starting_balance, starter_player_count, starter_coach_count, starter_scout_count, starter_sponsor_tier,
-    starter_club_tier, starter_reputation_tier, enabled_countries,
-    league_ability_ranges, npc_squad_config, default_facilities
-) VALUES (
-    1, 5000000, 5, 1, 1, 'SMALL',
-    'local', 'local', '["EN"]',
-    '{"EN": {"1": {"min": 75, "max": 95}, "2": {"min": 65, "max": 85}, "3": {"min": 55, "max": 75}, "4": {"min": 45, "max": 65}, "5": {"min": 35, "max": 55}, "6": {"min": 25, "max": 45}, "7": {"min": 15, "max": 35}, "8": {"min": 10, "max": 25}}}',
-    '{"1": {"playerMin": 20, "playerMax": 24, "managerCount": 1, "coachCount": 5, "chairmanCount": 1, "foreignPercent": 60}, "2": {"playerMin": 18, "playerMax": 22, "managerCount": 1, "coachCount": 4, "chairmanCount": 1, "foreignPercent": 45}, "3": {"playerMin": 16, "playerMax": 20, "managerCount": 1, "coachCount": 3, "chairmanCount": 1, "foreignPercent": 30}, "4": {"playerMin": 15, "playerMax": 18, "managerCount": 1, "coachCount": 2, "chairmanCount": 1, "foreignPercent": 20}, "5": {"playerMin": 14, "playerMax": 17, "managerCount": 1, "coachCount": 2, "chairmanCount": 1, "foreignPercent": 15}, "6": {"playerMin": 13, "playerMax": 16, "managerCount": 1, "coachCount": 1, "chairmanCount": 1, "foreignPercent": 10}, "7": {"playerMin": 12, "playerMax": 15, "managerCount": 1, "coachCount": 1, "chairmanCount": 1, "foreignPercent": 5}, "8": {"playerMin": 11, "playerMax": 14, "managerCount": 1, "coachCount": 1, "chairmanCount": 1, "foreignPercent": 3}}',
-    '{}'
-);
 SQL
 
 psql_file
 rm -f "$RESET_SQL_HOST"
 
 echo -e "${GREEN}  ✓ All game tables cleared${NC}"
-echo -e "${GREEN}  ✓ game_config  — reset to defaults (clique 20/30/3, baseXP 10, injury 0.05, weights 60/30/10)${NC}"
-echo -e "${GREEN}  ✓ starter_config — reset to defaults (balance £5m, 5 players, 1 coach, 1 scout, SMALL sponsor)${NC}"
 
 # ─── Phase 2: Re-seed market data ────────────────────────────────────────────
 echo ""
@@ -285,14 +259,6 @@ console_cmd app:market:generate \
     --coaches="$SEED_COACHES" \
     --scouts="$SEED_POOL_SCOUTS"
 
-echo ""
-echo -e "${BLUE}🌱 Phase 2c: Seeding game event templates (idempotent)...${NC}"
-console_cmd app:seed-game-events
-
-echo ""
-echo -e "${BLUE}🌱 Phase 2d: Seeding player archetypes...${NC}"
-console_cmd app:seed-archetypes
-
 # ─── Verification ────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"
@@ -301,18 +267,16 @@ echo ""
 # All counts in one file-based query — avoids lando TTY issues with subshells.
 cat > "$RESET_SQL_HOST" << 'SQL'
 SELECT
-    'Market players'   AS label, COUNT(*)::text AS value FROM player WHERE academy_id IS NULL AND recruitment_source = 'youth_intake'
-UNION ALL SELECT 'Prospect players', COUNT(*)::text FROM player WHERE academy_id IS NULL AND recruitment_source = 'scouting_network'
-UNION ALL SELECT 'Pool coaches',     COUNT(*)::text FROM staff   WHERE academy_id IS NULL
+    'Market players'   AS label, COUNT(*)::text AS value FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'
+UNION ALL SELECT 'Prospect players', COUNT(*)::text FROM player WHERE club_id IS NULL AND recruitment_source = 'scouting_network'
+UNION ALL SELECT 'Pool coaches',     COUNT(*)::text FROM staff   WHERE club_id IS NULL
 UNION ALL SELECT 'Scouts',           COUNT(*)::text FROM scout
 UNION ALL SELECT 'Agents',           COUNT(*)::text FROM agent
 UNION ALL SELECT 'Investors',        COUNT(*)::text FROM investor
 UNION ALL SELECT 'Sponsors',         COUNT(*)::text FROM sponsor
 UNION ALL SELECT 'Event templates',  COUNT(*)::text FROM game_event_template
 UNION ALL SELECT 'Archetypes',       COUNT(*)::text FROM player_archetype
-UNION ALL SELECT 'Admin users',      COUNT(*)::text FROM admin
-UNION ALL SELECT 'game_config',      clique_relationship_threshold||'/'||clique_squad_cap_percent||'/'||clique_min_tenure_weeks||' · baseXP='||base_xp||' · injury='||base_injury_probability FROM game_config LIMIT 1
-UNION ALL SELECT 'starter_config',   'balance='||starting_balance||' · players='||starter_player_count||' · sponsor='||starter_sponsor_tier FROM starter_config WHERE id = 1;
+UNION ALL SELECT 'Admin users',      COUNT(*)::text FROM admin;
 SQL
 
 psql_file
@@ -322,9 +286,8 @@ rm -f "$RESET_SQL_HOST"
 echo ""
 echo -e "${GREEN}✓ Reset complete!${NC}"
 echo ""
-echo "   Cleared    : academies, players, guardians, staff, scouts, agents, sponsors,"
+echo "   Cleared    : clubs, players, guardians, staff, scouts, agents, sponsors,"
 echo "                investors, transfers, leaderboard entries, sync records,"
 echo "                inbox messages, facilities"
-echo "   Config     : game_config + starter_config reset to defaults"
-echo "   Admin      : untouched"
+echo "   Preserved  : game_config, starter_config, narratives, admin"
 echo ""
