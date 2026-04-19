@@ -180,7 +180,7 @@ class MarketPoolService
             $baseWage = $currentAbility * random_int(10, 40);
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
-            $attrBudget = random_int($cfg->getPlayerAttributeBudgetMin(), $cfg->getPlayerAttributeBudgetMax());
+            $attrBudget = $currentAbility * 6;
             $attrs      = $this->distributeAttributes($player->getPosition(), $attrBudget);
             $player->setPace($attrs['pace']);
             $player->setTechnical($attrs['technical']);
@@ -285,11 +285,15 @@ class MarketPoolService
             $staff->setSpecialisms($this->generateSpecialisms());
 
             $baseSalary = match ($role) {
-                StaffRole::HEAD_COACH      => random_int(8000, 20000),
-                StaffRole::ASSISTANT_COACH => random_int(4000, 10000),
-                StaffRole::SCOUT           => random_int(2500, 7000),
-                StaffRole::FITNESS_COACH   => random_int(3000, 8000),
-                StaffRole::ANALYST         => random_int(3000, 7500),
+                StaffRole::HEAD_COACH            => random_int(8000, 20000),
+                StaffRole::ASSISTANT_COACH       => random_int(4000, 10000),
+                StaffRole::SCOUT                 => random_int(2500, 7000),
+                StaffRole::FITNESS_COACH         => random_int(3000, 8000),
+                StaffRole::ANALYST               => random_int(3000, 7500),
+                StaffRole::MANAGER               => random_int(10000, 30000),
+                StaffRole::DIRECTOR_OF_FOOTBALL  => random_int(12000, 35000),
+                StaffRole::FACILITY_MANAGER      => random_int(3000, 8500),
+                StaffRole::CHAIRMAN              => random_int(20000, 60000),
             };
             $staff->setWeeklySalary((int) ($baseSalary * $multipliers['staff']));
 
