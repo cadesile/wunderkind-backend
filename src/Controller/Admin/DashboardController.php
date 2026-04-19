@@ -217,7 +217,26 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterClubTier($request->request->get('starterClubTier', 'local'));
 
         $config->setDefaultFacilitiesJson($request->request->get('defaultFacilities', '{}'));
-        $config->setNpcSquadConfigJson($request->request->get('npcSquadConfig', '{}'));
+
+        $npcConfigInput = $request->request->all('npcConfig') ?: [];
+        $npcSquadConfig = [];
+        foreach ($npcConfigInput as $tier => $fields) {
+            $npcSquadConfig[$tier] = [
+                'playerMin'      => (int) ($fields['playerMin'] ?? 15),
+                'playerMax'      => (int) ($fields['playerMax'] ?? 25),
+                'managerCount'   => (int) ($fields['managerCount'] ?? 1),
+                'coachCount'     => (int) ($fields['coachCount'] ?? 1),
+                'chairmanCount'  => (int) ($fields['chairmanCount'] ?? 1),
+                'foreignPercent' => (int) ($fields['foreignPercent'] ?? 0),
+            ];
+            // Ensure min <= max
+            if ($npcSquadConfig[$tier]['playerMin'] > $npcSquadConfig[$tier]['playerMax']) {
+                $npcSquadConfig[$tier]['playerMax'] = $npcSquadConfig[$tier]['playerMin'];
+            }
+        }
+        if (!empty($npcSquadConfig)) {
+            $config->setNpcSquadConfig($npcSquadConfig);
+        }
 
         $reputationTierValue = $request->request->get('starterReputationTier', 'local');
         $reputationTier      = ReputationTier::tryFrom($reputationTierValue) ?? ReputationTier::LOCAL;

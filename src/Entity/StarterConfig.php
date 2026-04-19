@@ -85,11 +85,11 @@ class StarterConfig
      */
     #[ORM\Column(type: 'json')]
     private array $npcSquadConfig = [
-        '1' => ['playerMin' => 20, 'playerMax' => 24, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 60],
-        '2' => ['playerMin' => 18, 'playerMax' => 22, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 45],
-        '3' => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 30],
-        '4' => ['playerMin' => 15, 'playerMax' => 18, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 20],
-        '5' => ['playerMin' => 14, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 15],
+        '1' => ['playerMin' => 20, 'playerMax' => 24, 'managerCount' => 1, 'coachCount' => 5, 'chairmanCount' => 1, 'foreignPercent' => 60],
+        '2' => ['playerMin' => 18, 'playerMax' => 22, 'managerCount' => 1, 'coachCount' => 4, 'chairmanCount' => 1, 'foreignPercent' => 45],
+        '3' => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 3, 'chairmanCount' => 1, 'foreignPercent' => 30],
+        '4' => ['playerMin' => 15, 'playerMax' => 18, 'managerCount' => 1, 'coachCount' => 2, 'chairmanCount' => 1, 'foreignPercent' => 20],
+        '5' => ['playerMin' => 14, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 2, 'chairmanCount' => 1, 'foreignPercent' => 15],
         '6' => ['playerMin' => 13, 'playerMax' => 16, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 10],
         '7' => ['playerMin' => 12, 'playerMax' => 15, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 5],
         '8' => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 3],
