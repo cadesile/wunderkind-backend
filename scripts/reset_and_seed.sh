@@ -85,6 +85,40 @@ else
 fi
 
 # ─── Seed configuration ───────────────────────────────────────────────────────
+# Hardcoded fallbacks (used if DB discovery fails)
+DEF_AGENTS=100
+DEF_SCOUTS=100
+DEF_INVESTORS=100
+DEF_SPONSORS=100
+DEF_PLAYERS=5000
+DEF_PROSPECTS=2000
+DEF_COACHES=100
+DEF_POOL_SCOUTS=100
+
+# ─── Discovery ────────────────────────────────────────────────────────────────
+# Attempt to fetch defaults from pool_config table (ID=1)
+# We check if the table exists first to avoid errors on fresh installs.
+TABLE_EXISTS=$(psql_cmd "SELECT count(*) FROM information_schema.tables WHERE table_name = 'pool_config';")
+
+if [[ "$TABLE_EXISTS" == "1" ]]; then
+    # Fetch row as pipe-separated string
+    # Columns: agent_pool_target | scout_pool_target | investor_pool_target | sponsor_pool_target | player_pool_target | coach_pool_target
+    DB_CONF=$(psql_cmd "SELECT agent_pool_target, scout_pool_target, investor_pool_target, sponsor_pool_target, player_pool_target, coach_pool_target FROM pool_config WHERE id = 1 LIMIT 1;")
+    
+    if [[ -n "$DB_CONF" ]]; then
+        IFS='|' read -r db_agents db_scouts db_investors db_sponsors db_players db_coaches <<< "$DB_CONF"
+        
+        [[ -n "$db_agents" ]]    && DEF_AGENTS=$db_agents
+        [[ -n "$db_scouts" ]]    && DEF_SCOUTS=$db_scouts
+        [[ -n "$db_scouts" ]]    && DEF_POOL_SCOUTS=$db_scouts
+        [[ -n "$db_investors" ]] && DEF_INVESTORS=$db_investors
+        [[ -n "$db_sponsors" ]]  && DEF_SPONSORS=$db_sponsors
+        [[ -n "$db_players" ]]   && DEF_PLAYERS=$db_players
+        [[ -n "$db_players" ]]   && DEF_PROSPECTS=$(( db_players * 40 / 100 ))
+        [[ -n "$db_coaches" ]]   && DEF_COACHES=$db_coaches
+    fi
+fi
+
 prompt_int() {
     local label="$1" default="$2" varname="$3"
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
@@ -110,20 +144,20 @@ if [[ "$NON_INTERACTIVE" == "false" ]]; then
     echo "   — Market entities (agents, scouts, investors, sponsors) —"
 fi
 
-prompt_int "Agents"    100  SEED_AGENTS
-prompt_int "Scouts"    100  SEED_SCOUTS
-prompt_int "Investors" 100  SEED_INVESTORS
-prompt_int "Sponsors"  100  SEED_SPONSORS
+prompt_int "Agents"    "$DEF_AGENTS"    SEED_AGENTS
+prompt_int "Scouts"    "$DEF_SCOUTS"    SEED_SCOUTS
+prompt_int "Investors" "$DEF_INVESTORS" SEED_INVESTORS
+prompt_int "Sponsors"  "$DEF_SPONSORS"  SEED_SPONSORS
 
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
     echo ""
     echo "   — Market pool (unassigned players & coaches) —"
 fi
 
-prompt_int "Pool players"     5000 SEED_PLAYERS
-prompt_int "Prospect players" 2000 SEED_PROSPECTS
-prompt_int "Pool coaches"      100 SEED_COACHES
-prompt_int "Pool scouts"       100 SEED_POOL_SCOUTS
+prompt_int "Pool players"     "$DEF_PLAYERS"     SEED_PLAYERS
+prompt_int "Prospect players" "$DEF_PROSPECTS"   SEED_PROSPECTS
+prompt_int "Pool coaches"      "$DEF_COACHES"     SEED_COACHES
+prompt_int "Pool scouts"       "$DEF_POOL_SCOUTS" SEED_POOL_SCOUTS
 
 # ─── Review / summary ─────────────────────────────────────────────────────────
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
