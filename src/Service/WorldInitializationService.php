@@ -53,6 +53,7 @@ class WorldInitializationService
         $country       = $club->getCountry();
         $starterConfig = $this->starterConfigRepository->getConfig();
         $npcConfig     = $starterConfig->getNpcSquadConfig();
+        $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
 
         $leagues      = $this->leagueRepository->findByCountry($country);
         $leaguesData  = [];
@@ -63,7 +64,10 @@ class WorldInitializationService
             $tier         = $league->getTier();
             $tierKey      = (string) $tier;
             $tierConf     = $npcConfig[$tierKey] ?? $this->defaultTierConfig($tier);
-            $abilityRange = self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
+            
+            // Use configured ranges if available, otherwise fallback to hardcoded defaults
+            $abilityRange = $leagueRanges[$country][$tierKey] ?? self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
+            
             $npcClubs     = $this->npcClubRepository->findByLeague($league);
             $clubsData    = [];
             $allClubIds   = [];

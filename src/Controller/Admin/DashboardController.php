@@ -182,8 +182,20 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function starterConfig(): Response
     {
+        $leagues = $this->leagueRepository->findAll();
+        $dynamicLeagueTiers = [];
+        foreach ($leagues as $league) {
+            $dynamicLeagueTiers[$league->getCountry()][] = $league->getTier();
+        }
+        // Ensure tiers are unique and sorted
+        foreach ($dynamicLeagueTiers as &$tiers) {
+            $tiers = array_unique($tiers);
+            sort($tiers);
+        }
+
         return $this->render('admin/starter_config.html.twig', [
             'config' => $this->starterConfigRepository->getConfig(),
+            'dynamicLeagueTiers' => $dynamicLeagueTiers,
         ]);
     }
 
@@ -213,6 +225,16 @@ class DashboardController extends AbstractDashboardController
 
         $enabledCountries = $request->request->all('enabledCountries') ?: ['EN'];
         $config->setEnabledCountries($enabledCountries);
+
+        $ranges = $request->request->all('leagueRanges') ?: [];
+        // Basic validation: ensure values are numeric
+        foreach ($ranges as $country => &$countryTiers) {
+            foreach ($countryTiers as $tier => &$bounds) {
+                $bounds['min'] = (int) ($bounds['min'] ?? 1);
+                $bounds['max'] = (int) ($bounds['max'] ?? 100);
+            }
+        }
+        $config->setLeagueAbilityRanges($ranges);
 
         $this->em->persist($config);
         $this->em->flush();

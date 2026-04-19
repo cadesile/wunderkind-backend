@@ -62,6 +62,13 @@ class StarterConfig
     private array $enabledCountries = ['EN'];
 
     /**
+     * Global ability ranges per country and league tier.
+     * Format: { "EN": { "1": { "min": 75, "max": 100 } } }
+     */
+    #[ORM\Column(type: 'json')]
+    private array $leagueAbilityRanges = [];
+
+    /**
      * Per-tier NPC squad and staff config. Keyed by tier number (1–8).
      * Each entry: playerMin, playerMax, managerCount, coachCount, chairmanCount, foreignPercent
      */
@@ -143,4 +150,7 @@ class StarterConfig
 
     public function getEnabledCountries(): array { return $this->enabledCountries; }
     public function setEnabledCountries(array $v): static { $this->enabledCountries = $v; return $this; }
+
+    public function getLeagueAbilityRanges(): array { return $this->leagueAbilityRanges; }
+    public function setLeagueAbilityRanges(array $v): static { $this->leagueAbilityRanges = $v; return $this; }
 }

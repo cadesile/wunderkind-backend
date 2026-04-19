@@ -33,4 +33,23 @@ class StarterConfigLeagueFieldsTest extends TestCase
 
         $this->assertSame(ReputationTier::NATIONAL, $config->getStarterReputationTier());
     }
+
+    public function testLeagueAbilityRanges(): void
+    {
+        $config = StarterConfig::defaults();
+        $this->assertSame([], $config->getLeagueAbilityRanges());
+
+        $ranges = [
+            'EN' => [
+                '1' => ['min' => 75, 'max' => 100],
+                '2' => ['min' => 70, 'max' => 95],
+            ],
+            'IT' => [
+                '1' => ['min' => 80, 'max' => 100],
+            ]
+        ];
+        $config->setLeagueAbilityRanges($ranges);
+
+        $this->assertSame($ranges, $config->getLeagueAbilityRanges());
+    }
 }

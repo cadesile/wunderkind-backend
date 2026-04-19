@@ -32,6 +32,7 @@ class StarterConfigController extends AbstractController
             'starterSponsorTier' => $config->getStarterSponsorTier(),
             'starterClubTier'    => $config->getStarterClubTier(),
             'enabledCountries'   => $config->getEnabledCountries(),
+            'leagueAbilityRanges' => $config->getLeagueAbilityRanges(),
         ]);
     }
 }
