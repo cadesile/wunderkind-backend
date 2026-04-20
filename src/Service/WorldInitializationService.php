@@ -98,7 +98,7 @@ class WorldInitializationService
                     $foreign = array_merge($foreign, $extra);
                 }
 
-                $players  = array_unique(array_merge($domestic, $foreign), SORT_REGULAR);
+                $players  = array_values(array_unique(array_merge($domestic, $foreign), SORT_REGULAR));
                 $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,    (int) $tierConf['managerCount']);
                 $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,  (int) $tierConf['coachCount']);
                 $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,    (int) $tierConf['chairmanCount']);
