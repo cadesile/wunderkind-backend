@@ -814,7 +814,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');
         yield MenuItem::section('Roster');
         yield MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running');
-        yield MenuItem::linkTo(StaffCrudController::class, 'Coaches', 'fa fa-chalkboard-user');
+        yield MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-users');
         yield MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars');
         yield MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake');
         yield MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users');
