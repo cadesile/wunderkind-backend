@@ -15,6 +15,7 @@ use App\Entity\Transfer;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\PlayerStatus;
+use App\Enum\StaffRole;
 use App\Enum\TransferType;
 use App\Repository\ClubRepository;
 use App\Repository\FacilityTemplateRepository;
@@ -276,6 +277,7 @@ class SyncService
         ], $this->tacticalAdvantageRepository->findAll());
 
         $gameConfigData['tacticalMatrix'] = $tacticalMatrix;
+        $gameConfigData['staffRoles'] = array_column(StaffRole::cases(), 'value');
 
         return [
             'accepted'          => true,
