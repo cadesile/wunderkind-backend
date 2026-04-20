@@ -35,10 +35,6 @@ class StaffCrudController extends AbstractCrudController
         return $crud->setDefaultSort(['lastName' => 'ASC']);
     }
 
-    /**
-     * Staff constructor requires role + club — supply defaults so EasyAdmin
-     * can instantiate the form before the user fills in the real values.
-     */
     public function createEntity(string $entityFqcn): Staff
     {
         $club = $this->clubRepository->findOneBy([]);
@@ -50,7 +46,7 @@ class StaffCrudController extends AbstractCrudController
         return new Staff(
             firstName: '',
             lastName: '',
-            role: StaffRole::ASSISTANT_COACH,
+            role: StaffRole::COACH,
             club: $club,
         );
     }
@@ -64,22 +60,32 @@ class StaffCrudController extends AbstractCrudController
 
         yield ChoiceField::new('role')
             ->setChoices([
-                'Assistant Coach'       => StaffRole::ASSISTANT_COACH,
-                'Scout'                 => StaffRole::SCOUT,
-                'Manager'               => StaffRole::MANAGER,
-                'Director of Football'  => StaffRole::DIRECTOR_OF_FOOTBALL,
-                'Facility Manager'      => StaffRole::FACILITY_MANAGER,
+                'Coach'                => StaffRole::COACH,
+                'Assistant Coach'      => StaffRole::ASSISTANT_COACH,
+                'Scout'                => StaffRole::SCOUT,
+                'Manager'              => StaffRole::MANAGER,
+                'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL,
+                'Facility Manager'     => StaffRole::FACILITY_MANAGER,
+                'Chairman'             => StaffRole::CHAIRMAN,
             ])
             ->renderAsBadges([
-                StaffRole::ASSISTANT_COACH->value       => 'warning',
-                StaffRole::SCOUT->value                 => 'info',
-                StaffRole::MANAGER->value               => 'dark',
-                StaffRole::DIRECTOR_OF_FOOTBALL->value  => 'secondary',
-                StaffRole::FACILITY_MANAGER->value      => 'light',
+                StaffRole::COACH->value                => 'warning',
+                StaffRole::ASSISTANT_COACH->value      => 'info',
+                StaffRole::SCOUT->value                => 'primary',
+                StaffRole::MANAGER->value              => 'dark',
+                StaffRole::DIRECTOR_OF_FOOTBALL->value => 'secondary',
+                StaffRole::FACILITY_MANAGER->value     => 'light',
+                StaffRole::CHAIRMAN->value             => 'danger',
             ]);
 
         yield IntegerField::new('coachingAbility')->setHelp('1–100');
         yield IntegerField::new('scoutingRange')->setHelp('1–100');
+        yield IntegerField::new('morale')->setHelp('0–100');
+
+        yield \EasyCorp\Bundle\EasyAdminBundle\Field\DateField::new('dob', 'Date of Birth')
+            ->hideOnForm();
+
+        yield TextField::new('specialty')->hideOnIndex();
 
         yield TextField::new('specialisms', 'Specialisms')
             ->formatValue(function ($v) {
@@ -100,6 +106,7 @@ class StaffCrudController extends AbstractCrudController
             ->hideOnIndex()
             ->setNumOfRows(4)
             ->onlyOnForms();
+
         yield IntegerField::new('weeklySalary', 'Weekly Salary')
             ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) . ' / wk' : '—')
             ->setHelp('Weekly salary in pence — £1,000 = 100,000')
