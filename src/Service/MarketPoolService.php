@@ -251,52 +251,44 @@ class MarketPoolService
     }
 
     /** @return Staff[] */
-    public function generateCoaches(int $count, ?int $clubReputation = null): array
+    public function generateStaffForRole(StaffRole $role, int $count, ?int $clubReputation = null): array
     {
-        $cfg        = $this->poolConfigRepo->getConfig();
-        $coachRoles = [
-            StaffRole::COACH,
-            StaffRole::FACILITY_MANAGER,
-            StaffRole::MANAGER,
-            StaffRole::ASSISTANT_COACH,
-        ];
-
+        $cfg         = $this->poolConfigRepo->getConfig();
         $multipliers = $this->getWageMultiplier($clubReputation);
-        $coaches     = [];
+        $staff       = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $role      = $coachRoles[array_rand($coachRoles)];
-            $ability   = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
-            $coachNat  = $this->nameGenerator->getRandomNationality();
-            $coachName = $this->nameGenerator->generateName($coachNat);
-            [$coachFirst, $coachLast] = array_pad(explode(' ', $coachName, 2), 2, '');
+            $ability        = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
+            $nat            = $this->nameGenerator->getRandomNationality();
+            $name           = $this->nameGenerator->generateName($nat);
+            [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
 
-            $staff = new Staff(
-                firstName: $coachFirst,
-                lastName:  $coachLast,
+            $member = new Staff(
+                firstName: $first,
+                lastName:  $last,
                 role:      $role,
-                club:   null,
+                club:      null,
             );
 
-            $staff->setNationality($coachNat);
-            $staff->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
-            $staff->setCoachingAbility($ability);
-            $staff->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
-            $staff->setSpecialisms($this->generateSpecialisms());
+            $member->setNationality($nat);
+            $member->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
+            $member->setCoachingAbility($ability);
+            $member->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
+            $member->setSpecialisms($this->generateSpecialisms());
 
             $baseSalary = match ($role) {
-                StaffRole::COACH       => random_int(2000, 8000),
-                StaffRole::ASSISTANT_COACH       => random_int(4000, 10000),
-                // StaffRole::SCOUT                 => random_int(2500, 7000),
-                StaffRole::MANAGER               => random_int(10000, 30000),
-                // StaffRole::DIRECTOR_OF_FOOTBALL  => random_int(12000, 35000),
-                StaffRole::FACILITY_MANAGER      => random_int(3000, 8500),
-                // StaffRole::CHAIRMAN              => random_int(20000, 60000),
+                StaffRole::COACH                => random_int(2000, 8000),
+                StaffRole::ASSISTANT_COACH      => random_int(4000, 10000),
+                StaffRole::MANAGER              => random_int(10000, 30000),
+                StaffRole::DIRECTOR_OF_FOOTBALL => random_int(12000, 35000),
+                StaffRole::FACILITY_MANAGER     => random_int(3000, 8500),
+                StaffRole::CHAIRMAN             => random_int(20000, 60000),
+                default                         => random_int(2000, 8000),
             };
-            $staff->setWeeklySalary((int) ($baseSalary * $multipliers['staff']));
+            $member->setWeeklySalary((int) ($baseSalary * $multipliers['staff']));
 
-            $this->em->persist($staff);
-            $coaches[] = $staff;
+            $this->em->persist($member);
+            $staff[] = $member;
 
             if ($i > 0 && $i % 50 === 0) {
                 $this->em->flush();
@@ -305,7 +297,7 @@ class MarketPoolService
         }
 
         $this->em->flush();
-        return $coaches;
+        return $staff;
     }
 
     /** @return Scout[] */
