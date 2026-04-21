@@ -273,7 +273,12 @@ class DashboardController extends AbstractDashboardController
 
         $poolCounts = [
             'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
-            'coaches'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NULL'),
+            'staffCoach'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
+            'staffAssistantCoach' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'assistant_coach'"),
+            'staffManager'        => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
+            'staffDirector'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
+            'staffFacilityMgr'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
+            'staffChairman'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'chairman'"),
             'scouts'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
             'sponsors'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
             'investors'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
@@ -344,6 +349,11 @@ class DashboardController extends AbstractDashboardController
         // Pool targets
         $config->setPlayerPoolTarget((int) $request->request->get('playerPoolTarget', 50));
         $config->setCoachPoolTarget((int) $request->request->get('coachPoolTarget', 10));
+        $config->setAssistantCoachPoolTarget((int) $request->request->get('assistantCoachPoolTarget', 5));
+        $config->setManagerPoolTarget((int) $request->request->get('managerPoolTarget', 5));
+        $config->setDirectorOfFootballPoolTarget((int) $request->request->get('directorOfFootballPoolTarget', 2));
+        $config->setFacilityManagerPoolTarget((int) $request->request->get('facilityManagerPoolTarget', 3));
+        $config->setChairmanPoolTarget((int) $request->request->get('chairmanPoolTarget', 2));
         $config->setScoutPoolTarget((int) $request->request->get('scoutPoolTarget', 5));
         $config->setSponsorPoolTarget((int) $request->request->get('sponsorPoolTarget', 10));
         $config->setInvestorPoolTarget((int) $request->request->get('investorPoolTarget', 5));
