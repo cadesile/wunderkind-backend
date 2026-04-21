@@ -550,9 +550,13 @@ class MarketPoolService
             $generated[] = $cfg->getPlayerPoolTarget() . ' players';
         }
 
-        if ($this->staffRepo->countInPool() < $cfg->getCoachPoolTarget()) {
-            $this->generateCoaches($cfg->getCoachPoolTarget());
-            $generated[] = $cfg->getCoachPoolTarget() . ' coaches';
+        foreach ($this->staffRoleTargetMap($cfg) as $role => $target) {
+            $current = $this->staffRepo->countInPool($role);
+            if ($current < $target) {
+                $needed = $target - $current;
+                $this->generateStaffForRole($role, $needed);
+                $generated[] = $needed . ' ' . $role->value . 's';
+            }
         }
 
         if ($this->scoutRepo->count([]) < $cfg->getScoutPoolTarget()) {
@@ -592,8 +596,10 @@ class MarketPoolService
         $this->generatePlayers($cfg->getPlayerPoolTarget(), null, RecruitmentSource::YOUTH_INTAKE, $nationality);
         $generated[] = $cfg->getPlayerPoolTarget() . ' players';
 
-        $this->generateCoaches($cfg->getCoachPoolTarget());
-        $generated[] = $cfg->getCoachPoolTarget() . ' coaches';
+        foreach ($this->staffRoleTargetMap($cfg) as $role => $target) {
+            $this->generateStaffForRole($role, $target);
+            $generated[] = $target . ' ' . $role->value . 's';
+        }
 
         $this->generateScouts($cfg->getScoutPoolTarget());
         $generated[] = $cfg->getScoutPoolTarget() . ' scouts';
@@ -608,6 +614,23 @@ class MarketPoolService
         $generated[] = $cfg->getAgentPoolTarget() . ' agents';
 
         return $generated;
+    }
+
+    /**
+     * Returns a map of StaffRole → configured pool target for all 6 non-Scout roles.
+     *
+     * @return array<StaffRole, int>
+     */
+    private function staffRoleTargetMap(PoolConfig $cfg): array
+    {
+        return [
+            StaffRole::COACH                => $cfg->getCoachPoolTarget(),
+            StaffRole::ASSISTANT_COACH      => $cfg->getAssistantCoachPoolTarget(),
+            StaffRole::MANAGER              => $cfg->getManagerPoolTarget(),
+            StaffRole::DIRECTOR_OF_FOOTBALL => $cfg->getDirectorOfFootballPoolTarget(),
+            StaffRole::FACILITY_MANAGER     => $cfg->getFacilityManagerPoolTarget(),
+            StaffRole::CHAIRMAN             => $cfg->getChairmanPoolTarget(),
+        ];
     }
 
     // ── Business name generation ──────────────────────────────────────────────
