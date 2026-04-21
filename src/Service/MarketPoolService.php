@@ -474,9 +474,8 @@ class MarketPoolService
     /**
      * Assign a pool entity to an club.
      *
-     * For Scout entities, a corresponding Staff(SCOUT) member is created on
-     * the club rather than modifying the Scout entity itself (scouts are
-     * always globally available as a reference pool).
+     * Scout entities are a global reference pool and have no club assignment;
+     * the call succeeds as a no-op and the Scout entity is left unchanged.
      *
      * @throws \RuntimeException if a Player/Staff/Investor/Sponsor is already assigned
      */
@@ -499,6 +498,12 @@ class MarketPoolService
             }
             $entity->setClub($club);
             $this->em->flush();
+            return;
+        }
+
+        if ($entity instanceof Scout) {
+            // Scout is a global reference pool entity with no club assignment.
+            // The frontend tracks hired scouts locally; no server-side state change needed.
             return;
         }
 
