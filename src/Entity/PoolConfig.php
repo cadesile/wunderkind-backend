@@ -187,6 +187,26 @@ class PoolConfig
     #[ORM\Column(type: 'integer')]
     private int $coachPoolTarget = 10;
 
+    /** Minimum unassigned assistant coaches before auto-replenishment. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $assistantCoachPoolTarget = 5;
+
+    /** Minimum unassigned managers before auto-replenishment. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $managerPoolTarget = 5;
+
+    /** Minimum unassigned directors of football before auto-replenishment. Default: 2 */
+    #[ORM\Column(type: 'integer')]
+    private int $directorOfFootballPoolTarget = 2;
+
+    /** Minimum unassigned facility managers before auto-replenishment. Default: 3 */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityManagerPoolTarget = 3;
+
+    /** Minimum unassigned chairmen before auto-replenishment. Default: 2 */
+    #[ORM\Column(type: 'integer')]
+    private int $chairmanPoolTarget = 2;
+
     /** Minimum scouts before auto-replenishment. Batch size for manual generate. Default: 5 */
     #[ORM\Column(type: 'integer')]
     private int $scoutPoolTarget = 5;
@@ -314,6 +334,21 @@ class PoolConfig
 
     public function getCoachPoolTarget(): int { return $this->coachPoolTarget; }
     public function setCoachPoolTarget(int $v): static { $this->coachPoolTarget = $v; return $this; }
+
+    public function getAssistantCoachPoolTarget(): int { return $this->assistantCoachPoolTarget; }
+    public function setAssistantCoachPoolTarget(int $v): static { $this->assistantCoachPoolTarget = $v; return $this; }
+
+    public function getManagerPoolTarget(): int { return $this->managerPoolTarget; }
+    public function setManagerPoolTarget(int $v): static { $this->managerPoolTarget = $v; return $this; }
+
+    public function getDirectorOfFootballPoolTarget(): int { return $this->directorOfFootballPoolTarget; }
+    public function setDirectorOfFootballPoolTarget(int $v): static { $this->directorOfFootballPoolTarget = $v; return $this; }
+
+    public function getFacilityManagerPoolTarget(): int { return $this->facilityManagerPoolTarget; }
+    public function setFacilityManagerPoolTarget(int $v): static { $this->facilityManagerPoolTarget = $v; return $this; }
+
+    public function getChairmanPoolTarget(): int { return $this->chairmanPoolTarget; }
+    public function setChairmanPoolTarget(int $v): static { $this->chairmanPoolTarget = $v; return $this; }
 
     public function getScoutPoolTarget(): int { return $this->scoutPoolTarget; }
     public function setScoutPoolTarget(int $v): static { $this->scoutPoolTarget = $v; return $this; }
