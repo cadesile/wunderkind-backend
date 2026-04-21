@@ -550,7 +550,7 @@ class MarketPoolService
             $generated[] = $cfg->getPlayerPoolTarget() . ' players';
         }
 
-        foreach ($this->staffRoleTargetMap($cfg) as $role => $target) {
+        foreach ($this->staffRoleTargetMap($cfg) as [$role, $target]) {
             $current = $this->staffRepo->countInPool($role);
             if ($current < $target) {
                 $needed = $target - $current;
@@ -596,7 +596,7 @@ class MarketPoolService
         $this->generatePlayers($cfg->getPlayerPoolTarget(), null, RecruitmentSource::YOUTH_INTAKE, $nationality);
         $generated[] = $cfg->getPlayerPoolTarget() . ' players';
 
-        foreach ($this->staffRoleTargetMap($cfg) as $role => $target) {
+        foreach ($this->staffRoleTargetMap($cfg) as [$role, $target]) {
             $this->generateStaffForRole($role, $target);
             $generated[] = $target . ' ' . $role->value . 's';
         }
@@ -617,19 +617,19 @@ class MarketPoolService
     }
 
     /**
-     * Returns a map of StaffRole → configured pool target for all 6 non-Scout roles.
+     * Returns a list of [StaffRole, target] pairs for all 6 non-Scout roles.
      *
-     * @return array<StaffRole, int>
+     * @return array<array{StaffRole, int}>
      */
     private function staffRoleTargetMap(PoolConfig $cfg): array
     {
         return [
-            StaffRole::COACH                => $cfg->getCoachPoolTarget(),
-            StaffRole::ASSISTANT_COACH      => $cfg->getAssistantCoachPoolTarget(),
-            StaffRole::MANAGER              => $cfg->getManagerPoolTarget(),
-            StaffRole::DIRECTOR_OF_FOOTBALL => $cfg->getDirectorOfFootballPoolTarget(),
-            StaffRole::FACILITY_MANAGER     => $cfg->getFacilityManagerPoolTarget(),
-            StaffRole::CHAIRMAN             => $cfg->getChairmanPoolTarget(),
+            [StaffRole::COACH,                $cfg->getCoachPoolTarget()],
+            [StaffRole::ASSISTANT_COACH,      $cfg->getAssistantCoachPoolTarget()],
+            [StaffRole::MANAGER,              $cfg->getManagerPoolTarget()],
+            [StaffRole::DIRECTOR_OF_FOOTBALL, $cfg->getDirectorOfFootballPoolTarget()],
+            [StaffRole::FACILITY_MANAGER,     $cfg->getFacilityManagerPoolTarget()],
+            [StaffRole::CHAIRMAN,             $cfg->getChairmanPoolTarget()],
         ];
     }
 
