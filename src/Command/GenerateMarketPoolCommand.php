@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Enum\RecruitmentSource;
+use App\Enum\StaffRole;
 use App\Service\MarketPoolService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -87,12 +88,23 @@ class GenerateMarketPoolCommand extends Command
             }
 
             if ($coachCount > 0) {
-                $io->text(sprintf('Generating %d pool coaches (club = null)...', $coachCount));
-                $bar = $io->createProgressBar($coachCount);
-                $bar->start();
-                $this->pool->generateCoaches($coachCount);
-                $bar->finish();
-                $io->newLine(2);
+                $roles = [
+                    StaffRole::COACH,
+                    StaffRole::ASSISTANT_COACH,
+                    StaffRole::MANAGER,
+                    StaffRole::DIRECTOR_OF_FOOTBALL,
+                    StaffRole::FACILITY_MANAGER,
+                    StaffRole::CHAIRMAN,
+                ];
+                $perRole = max(1, intdiv($coachCount, count($roles)));
+                foreach ($roles as $role) {
+                    $io->text(sprintf('Generating %d %ss (club = null)...', $perRole, $role->value));
+                    $bar = $io->createProgressBar($perRole);
+                    $bar->start();
+                    $this->pool->generateStaffForRole($role, $perRole);
+                    $bar->finish();
+                    $io->newLine(2);
+                }
             }
 
             if ($scoutCount > 0) {
