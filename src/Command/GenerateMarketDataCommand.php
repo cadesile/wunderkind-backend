@@ -502,7 +502,6 @@ class GenerateMarketDataCommand extends Command
         $weeklySalaryRanges = [
             StaffRole::HEAD_COACH->value            => [8000, 20000],
             StaffRole::ASSISTANT_COACH->value       => [4000, 10000],
-            StaffRole::SCOUT->value                 => [2500, 7000],
             StaffRole::FITNESS_COACH->value         => [3000, 8000],
             StaffRole::ANALYST->value               => [3000, 7500],
             StaffRole::MANAGER->value               => [10000, 30000],

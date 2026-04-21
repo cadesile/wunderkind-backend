@@ -37,25 +37,18 @@ class StaffController extends AbstractController
         $nationality  = $countryParam !== null ? ClubInitializationService::countryToNationality($countryParam) : null;
 
         $coaches = [];
-        $scouts  = [];
 
         foreach ($club->getStaff() as $member) {
             if ($nationality !== null && $member->getNationality() !== $nationality) {
                 continue;
             }
 
-            if ($member->getRole() === StaffRole::SCOUT) {
-                if ($tier === null || Tier::fromScore($member->getScoutingRange()) === $tier) {
-                    $scouts[] = $this->serializeScout($member);
-                }
-            } else {
-                if ($tier === null || Tier::fromScore($member->getCoachingAbility()) === $tier) {
-                    $coaches[] = $this->serializeCoach($member);
-                }
+            if ($tier === null || Tier::fromScore($member->getCoachingAbility()) === $tier) {
+                $coaches[] = $this->serializeCoach($member);
             }
         }
 
-        return $this->json(['coaches' => $coaches, 'scouts' => $scouts]);
+        return $this->json(['coaches' => $coaches]);
     }
 
     private function serializeCoach(Staff $s): array

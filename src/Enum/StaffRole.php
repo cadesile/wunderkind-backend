@@ -6,7 +6,6 @@ enum StaffRole: string
 {
     case ASSISTANT_COACH       = 'assistant_coach';
     case COACH                 = 'coach';
-    case SCOUT                 = 'scout';
     case MANAGER               = 'manager';
     case DIRECTOR_OF_FOOTBALL  = 'director_of_football';
     case FACILITY_MANAGER      = 'facility_manager';

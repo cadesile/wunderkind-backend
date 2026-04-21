@@ -129,9 +129,7 @@ class WorldInitializationService
             $ampPlayers = array_merge($ampPlayers, $extra);
         }
 
-        $ampCoaches = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH, $starterConfig->getStarterCoachCount());
-        $ampScouts  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::SCOUT,      $starterConfig->getStarterScoutCount());
-        $ampStaff   = array_merge($ampCoaches, $ampScouts);
+        $ampStaff = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH, $starterConfig->getStarterCoachCount());
 
         foreach ($ampPlayers as $p) { $p->setClub($club); }
         foreach ($ampStaff   as $s) { $s->setClub($club); }

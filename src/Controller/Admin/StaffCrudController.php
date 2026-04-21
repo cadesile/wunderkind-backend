@@ -62,7 +62,6 @@ class StaffCrudController extends AbstractCrudController
             ->setChoices([
                 'Coach'                => StaffRole::COACH,
                 'Assistant Coach'      => StaffRole::ASSISTANT_COACH,
-                'Scout'                => StaffRole::SCOUT,
                 'Manager'              => StaffRole::MANAGER,
                 'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL,
                 'Facility Manager'     => StaffRole::FACILITY_MANAGER,
@@ -71,7 +70,6 @@ class StaffCrudController extends AbstractCrudController
             ->renderAsBadges([
                 StaffRole::COACH->value                => 'warning',
                 StaffRole::ASSISTANT_COACH->value      => 'info',
-                StaffRole::SCOUT->value                => 'primary',
                 StaffRole::MANAGER->value              => 'dark',
                 StaffRole::DIRECTOR_OF_FOOTBALL->value => 'secondary',
                 StaffRole::FACILITY_MANAGER->value     => 'light',

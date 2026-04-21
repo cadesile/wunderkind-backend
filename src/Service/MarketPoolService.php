@@ -435,7 +435,14 @@ class MarketPoolService
     /** @return Staff[] */
     public function getAvailableCoaches(int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
-        return $this->staffRepo->findInPool(null, $limit, $abilityMin, $abilityMax);
+        return array_merge(
+            $this->staffRepo->findInPool(StaffRole::ASSISTANT_COACH, $limit, $abilityMin, $abilityMax),
+            $this->staffRepo->findInPool(StaffRole::COACH, $limit, $abilityMin, $abilityMax),
+            $this->staffRepo->findInPool(StaffRole::MANAGER, $limit, $abilityMin, $abilityMax),
+            $this->staffRepo->findInPool(StaffRole::CHAIRMAN, $limit, $abilityMin, $abilityMax),
+            $this->staffRepo->findInPool(StaffRole::FACILITY_MANAGER, $limit, $abilityMin, $abilityMax),
+            $this->staffRepo->findInPool(StaffRole::DIRECTOR_OF_FOOTBALL, $limit, $abilityMin, $abilityMax),
+        );
     }
 
     /** @return Scout[] */
@@ -491,20 +498,6 @@ class MarketPoolService
                 throw new \RuntimeException('Staff member is already assigned to an club.');
             }
             $entity->setClub($club);
-            $this->em->flush();
-            return;
-        }
-
-        if ($entity instanceof Scout) {
-            $nameParts = explode(' ', $entity->getName(), 2);
-            $staff = new Staff(
-                firstName: $nameParts[0],
-                lastName:  $nameParts[1] ?? $nameParts[0],
-                role:      StaffRole::SCOUT,
-                club:   $club,
-            );
-            $staff->setScoutingRange(min(100, (int) ($entity->getExperience() * 4) + 30));
-            $this->em->persist($staff);
             $this->em->flush();
             return;
         }
