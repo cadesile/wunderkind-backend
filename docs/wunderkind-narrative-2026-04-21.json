@@ -1,0 +1,1460 @@
+{
+    "version": 1,
+    "exportedAt": "2026-04-21T18:22:49+00:00",
+    "eventTemplates": [
+        {
+            "slug": "facility_complaint",
+            "category": "facility",
+            "weight": 2,
+            "title": "Facility Complaint",
+            "bodyTemplate": "Players have voiced concerns about the state of the {facility}. Squad morale has dipped.",
+            "impacts": [
+                {
+                    "target": "squad.morale",
+                    "delta": -6
+                },
+                {
+                    "target": "academy.reputation",
+                    "delta": -1
+                }
+            ],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "guardian_agent_approach_concern",
+            "category": "GUARDIAN",
+            "weight": 1,
+            "title": "Agent Approach Concern",
+            "bodyTemplate": "{guardian_name} has informed us that {player_name} has been approached by an agent. They want to understand what this means for his future at the academy before making any decisions.",
+            "impacts": [],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "guardian_complaint_coach",
+            "category": "GUARDIAN",
+            "weight": 3,
+            "title": "Coach Complaint",
+            "bodyTemplate": "{guardian_name} has filed a complaint regarding the coaching {player_name} is receiving. They feel the current approach isn't suited to their child's personality and are requesting a meeting.",
+            "impacts": [],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "guardian_low_morale_concern",
+            "category": "GUARDIAN",
+            "weight": 1,
+            "title": "Guardian Morale Concern",
+            "bodyTemplate": "{guardian_name} reached out after noticing a change in {player_name}'s mood at home. They want to know what's going on and whether the academy is doing enough to support him.",
+            "impacts": [],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "guardian_request_financial_gift",
+            "category": "GUARDIAN",
+            "weight": 2,
+            "title": "Guardian Gift Request",
+            "bodyTemplate": "{guardian_name} has been in touch. They feel {player_name} deserves a little recognition for their hard work and are asking the academy to show some goodwill — a small financial gesture would go a long way.",
+            "impacts": {
+                "selection_logic": {
+                    "target_type": "player",
+                    "count": null,
+                    "filter": {
+                        "position": null,
+                        "active_only": false,
+                        "min_age": null,
+                        "max_age": null,
+                        "max_level": null
+                    }
+                },
+                "stat_changes": [],
+                "relationships": [],
+                "duration_config": {
+                    "ticks": null,
+                    "completion_event_slug": null,
+                    "tick_effect": {
+                        "target": null,
+                        "field": null,
+                        "operator": "add",
+                        "value": null
+                    }
+                },
+                "choices": []
+            },
+            "firingConditions": {
+                "minSquadMorale": null,
+                "maxSquadMorale": null,
+                "minPairRelationship": null,
+                "maxPairRelationship": null,
+                "requiresCoLocation": false,
+                "actorTraitRequirements": [],
+                "subjectTraitRequirements": []
+            },
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "guardian_request_travel_upgrade",
+            "category": "GUARDIAN",
+            "weight": 3,
+            "title": "Travel Arrangement Request",
+            "bodyTemplate": "{guardian_name} has contacted us regarding travel arrangements for {player_name}. They feel the current setup isn't appropriate for a player of their child's standing and are requesting an upgrade.",
+            "impacts": [],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "guardian_threat_withdrawal",
+            "category": "GUARDIAN",
+            "weight": 1,
+            "title": "Withdrawal Threat",
+            "bodyTemplate": "{guardian_name} has contacted the academy in a formal capacity. They are seriously considering withdrawing {player_name} from the programme if the situation does not improve immediately.",
+            "impacts": [],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-coach-player-breakthrough",
+            "category": "NPC_INTERACTION",
+            "weight": 2,
+            "title": "Training Breakthrough",
+            "bodyTemplate": "Something clicked between {player_1} and {player_2} on the training pitch today. An unexpected moment of understanding has strengthened their bond.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 6
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 6
+                },
+                {
+                    "target": "player_1.personality.confidence",
+                    "delta": 3
+                },
+                {
+                    "target": "player_2.personality.confidence",
+                    "delta": 3
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 8
+                }
+            ],
+            "firingConditions": {
+                "minSquadMorale": 50,
+                "minPairRelationship": 10,
+                "requiresCoLocation": true
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-cultural-exchange",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Bridging the Gap",
+            "bodyTemplate": "{player_1} and {player_2} spent time after training swapping stories about where they're from. A connection formed that's hard to put into words.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "player_1.personality.adaptability",
+                    "delta": 2
+                },
+                {
+                    "target": "player_2.personality.adaptability",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 6
+                }
+            ],
+            "firingConditions": {
+                "maxPairRelationship": 30
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-dressing-room-positive-atmosphere",
+            "category": "NPC_INTERACTION",
+            "weight": 2,
+            "title": "Positive Dressing Room",
+            "bodyTemplate": "{player_1} and {player_2} were seen lifting spirits in the changing room. The energy around the squad has noticeably improved.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 3
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 3
+                },
+                {
+                    "target": "player_1.personality.teamwork",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 5
+                }
+            ],
+            "firingConditions": {
+                "minSquadMorale": 65,
+                "minPairRelationship": 25
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-ego-clash-two-players",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Ego Clash",
+            "bodyTemplate": "Both {player_1} and {player_2} want to lead — neither is willing to give ground. Their battle for dominance is starting to disrupt the group.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": -4
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": -4
+                },
+                {
+                    "target": "player_1.personality.ego",
+                    "delta": 3
+                },
+                {
+                    "target": "player_2.personality.ego",
+                    "delta": 3
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": -8
+                }
+            ],
+            "firingConditions": {
+                "actorTraitRequirements": [
+                    {
+                        "trait": "ego",
+                        "min": 65
+                    }
+                ],
+                "subjectTraitRequirements": [
+                    {
+                        "trait": "ego",
+                        "min": 65
+                    }
+                ]
+            },
+            "severity": "major",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-goal-celebration-chemistry",
+            "category": "NPC_INTERACTION",
+            "weight": 4,
+            "title": "Instant Chemistry",
+            "bodyTemplate": "{player_1} scored a peach and ran straight to {player_2}. No words — just the kind of instinctive bond that makes a team click.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 6
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 5
+                },
+                {
+                    "target": "player_1.personality.confidence",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 6
+                }
+            ],
+            "firingConditions": {
+                "minSquadMorale": 40
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-player-mentoring-leadership",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Experienced Hand",
+            "bodyTemplate": "{player_1} took {player_2} under their wing after training, sharing advice on positioning and focus. {player_2} responded well.",
+            "impacts": [
+                {
+                    "target": "player_1.personality.leadership",
+                    "delta": 2
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 5
+                },
+                {
+                    "target": "player_2.personality.confidence",
+                    "delta": 3
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 6
+                }
+            ],
+            "firingConditions": {
+                "minPairRelationship": 30,
+                "actorTraitRequirements": [
+                    {
+                        "trait": "leadership",
+                        "min": 60
+                    }
+                ],
+                "subjectTraitRequirements": [
+                    {
+                        "trait": "maturity",
+                        "max": 50
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-player-withdrawal-low-morale",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Withdrawn Attitude",
+            "bodyTemplate": "{player_1} has been distancing themselves from {player_2} and the rest of the group. The disconnect is becoming visible on the pitch.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": -5
+                },
+                {
+                    "target": "player_1.personality.teamwork",
+                    "delta": -3
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": -5
+                }
+            ],
+            "firingConditions": {
+                "maxSquadMorale": 45,
+                "actorTraitRequirements": [
+                    {
+                        "trait": "confidence",
+                        "max": 40
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-professionalism-incident",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Professionalism Issue",
+            "bodyTemplate": "{player_1} showed up late and poorly prepared, frustrating {player_2} who had been waiting to partner in drills. The coaching staff had to intervene.",
+            "impacts": {
+                "0": {
+                    "target": "player_1.morale",
+                    "delta": -4
+                },
+                "1": {
+                    "target": "player_1.personality.maturity",
+                    "delta": -3
+                },
+                "2": {
+                    "target": "player_2.morale",
+                    "delta": -3
+                },
+                "3": {
+                    "target": "pair.relationship",
+                    "delta": -6
+                },
+                "selection_logic": {
+                    "target_type": "player",
+                    "count": null,
+                    "filter": {
+                        "position": null,
+                        "active_only": false,
+                        "min_age": null,
+                        "max_age": null,
+                        "max_level": null
+                    }
+                },
+                "stat_changes": [],
+                "relationships": [],
+                "duration_config": {
+                    "ticks": null,
+                    "completion_event_slug": null,
+                    "tick_effect": {
+                        "target": null,
+                        "field": null,
+                        "operator": "add",
+                        "value": null
+                    }
+                },
+                "choices": []
+            },
+            "firingConditions": {
+                "actorTraitRequirements": [
+                    {
+                        "trait": "determination",
+                        "max": 40,
+                        "min": null
+                    },
+                    {
+                        "trait": "determination",
+                        "min": 55,
+                        "max": null
+                    }
+                ],
+                "requiresCoLocation": true,
+                "minSquadMorale": null,
+                "maxSquadMorale": null,
+                "minPairRelationship": null,
+                "maxPairRelationship": null,
+                "subjectTraitRequirements": []
+            },
+            "severity": "major",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-quiet-leader-emerges",
+            "category": "NPC_INTERACTION",
+            "weight": 2,
+            "title": "Quiet Leader",
+            "bodyTemplate": "{player_1} quietly guided {player_2} through a difficult session, saying little but meaning everything. A natural leader in the making.",
+            "impacts": [
+                {
+                    "target": "player_1.personality.leadership",
+                    "delta": 3
+                },
+                {
+                    "target": "player_1.personality.teamwork",
+                    "delta": 2
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 5
+                },
+                {
+                    "target": "player_2.personality.maturity",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 7
+                }
+            ],
+            "firingConditions": {
+                "minPairRelationship": 15,
+                "actorTraitRequirements": [
+                    {
+                        "trait": "leadership",
+                        "min": 55
+                    },
+                    {
+                        "trait": "ego",
+                        "max": 45
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-rivalry-raises-standards",
+            "category": "NPC_INTERACTION",
+            "weight": 2,
+            "title": "Healthy Rivalry",
+            "bodyTemplate": "A fiercely competitive exchange between {player_1} and {player_2} during drills pushed both players to new heights. The squad took notice.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "player_1.personality.bravery",
+                    "delta": 2
+                },
+                {
+                    "target": "player_2.personality.bravery",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 3
+                }
+            ],
+            "firingConditions": {
+                "minSquadMorale": 55,
+                "minPairRelationship": -10,
+                "maxPairRelationship": 20,
+                "requiresCoLocation": true
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-shared-laughter",
+            "category": "NPC_INTERACTION",
+            "weight": 4,
+            "title": "Good Spirits",
+            "bodyTemplate": "{player_1} had {player_2} in stitches between drills today. It was a small moment, but laughter goes a long way in a squad.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 4
+                }
+            ],
+            "firingConditions": [],
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-spontaneous-kickabout",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "After-Training Kickabout",
+            "bodyTemplate": "{player_1} organised an impromptu game after the session ended. {player_2} was first to join. The whole squad ended the day with smiles on their faces.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 5
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 5
+                },
+                {
+                    "target": "player_1.personality.teamwork",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 5
+                }
+            ],
+            "firingConditions": {
+                "minSquadMorale": 45,
+                "actorTraitRequirements": [
+                    {
+                        "trait": "teamwork",
+                        "min": 55
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-squad-banter",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Dressing Room Banter",
+            "bodyTemplate": "The ribbing between {player_1} and {player_2} had the whole room in stitches. Good-natured banter like this is the glue of a happy dressing room.",
+            "impacts": {
+                "0": {
+                    "target": "player_1.morale",
+                    "delta": 4
+                },
+                "1": {
+                    "target": "player_2.morale",
+                    "delta": 4
+                },
+                "2": {
+                    "target": "pair.relationship",
+                    "delta": 4
+                },
+                "3": {
+                    "target": "player_1.personality.ego",
+                    "delta": -1
+                },
+                "selection_logic": {
+                    "target_type": "player",
+                    "count": null,
+                    "filter": {
+                        "position": null,
+                        "active_only": false,
+                        "min_age": null,
+                        "max_age": null,
+                        "max_level": null
+                    }
+                },
+                "stat_changes": [],
+                "relationships": [],
+                "duration_config": {
+                    "ticks": null,
+                    "completion_event_slug": null,
+                    "tick_effect": {
+                        "target": null,
+                        "field": null,
+                        "operator": "add",
+                        "value": null
+                    }
+                },
+                "choices": []
+            },
+            "firingConditions": {
+                "minPairRelationship": 5,
+                "minSquadMorale": null,
+                "maxSquadMorale": null,
+                "maxPairRelationship": null,
+                "requiresCoLocation": false,
+                "actorTraitRequirements": [],
+                "subjectTraitRequirements": []
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-standing-up-for-teammate",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Stood Up for a Teammate",
+            "bodyTemplate": "When criticism came {player_2}'s way, {player_1} stepped in without hesitation. It was a show of character that didn't go unnoticed.",
+            "impacts": [
+                {
+                    "target": "player_1.personality.loyalty",
+                    "delta": 3
+                },
+                {
+                    "target": "player_1.personality.leadership",
+                    "delta": 2
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 7
+                },
+                {
+                    "target": "player_2.personality.loyalty",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 9
+                }
+            ],
+            "firingConditions": {
+                "actorTraitRequirements": [
+                    {
+                        "trait": "loyalty",
+                        "min": 55
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-training-high-five",
+            "category": "NPC_INTERACTION",
+            "weight": 4,
+            "title": "Great Moment in Training",
+            "bodyTemplate": "{player_1} pulled off something special in training and {player_2} was first to celebrate. The good energy spread quickly through the group.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": 5
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 4
+                },
+                {
+                    "target": "player_1.personality.confidence",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 5
+                }
+            ],
+            "firingConditions": {
+                "minSquadMorale": 40
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-verbal-confrontation-low-morale",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Verbal Confrontation",
+            "bodyTemplate": "Tensions boiled over as {player_1} directed sharp words at {player_2} during a drill. The atmosphere soured for the rest of the day.",
+            "impacts": [
+                {
+                    "target": "player_1.morale",
+                    "delta": -4
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": -5
+                },
+                {
+                    "target": "player_1.personality.ego",
+                    "delta": 2
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": -7
+                }
+            ],
+            "firingConditions": {
+                "maxSquadMorale": 55,
+                "maxPairRelationship": 30,
+                "actorTraitRequirements": [
+                    {
+                        "trait": "ego",
+                        "min": 60
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "npc-veteran-reassurance",
+            "category": "NPC_INTERACTION",
+            "weight": 3,
+            "title": "Words of Reassurance",
+            "bodyTemplate": "{player_1} pulled {player_2} aside after a rough session and reminded them why they're here. Sometimes that's all it takes.",
+            "impacts": [
+                {
+                    "target": "player_1.personality.leadership",
+                    "delta": 2
+                },
+                {
+                    "target": "player_2.morale",
+                    "delta": 8
+                },
+                {
+                    "target": "player_2.personality.confidence",
+                    "delta": 3
+                },
+                {
+                    "target": "pair.relationship",
+                    "delta": 6
+                }
+            ],
+            "firingConditions": {
+                "actorTraitRequirements": [
+                    {
+                        "trait": "maturity",
+                        "min": 55
+                    },
+                    {
+                        "trait": "teamwork",
+                        "min": 50
+                    }
+                ],
+                "subjectTraitRequirements": [
+                    {
+                        "trait": "confidence",
+                        "max": 45
+                    }
+                ]
+            },
+            "severity": "minor",
+            "chainedEvents": null
+        },
+        {
+            "slug": "injury_recovery",
+            "category": "player",
+            "weight": 0,
+            "title": "Injury Recovery",
+            "bodyTemplate": "{player} has made a full recovery and is ready to return to training.",
+            "impacts": [
+                {
+                    "target": "player.injuredWeeks",
+                    "delta": 0
+                },
+                {
+                    "target": "player.morale",
+                    "delta": 5
+                }
+            ],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "minor_injury",
+            "category": "player",
+            "weight": 4,
+            "title": "Minor Injury",
+            "bodyTemplate": "{player} picked up a minor knock during training and will miss the next session.",
+            "impacts": [
+                {
+                    "target": "player.injuredWeeks",
+                    "delta": 1
+                },
+                {
+                    "target": "player.morale",
+                    "delta": -4
+                }
+            ],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "player_homesick",
+            "category": "player",
+            "weight": 3,
+            "title": "Homesickness",
+            "bodyTemplate": "{player} has been struggling to settle and is showing signs of homesickness. Their morale has taken a hit.",
+            "impacts": [
+                {
+                    "target": "player.morale",
+                    "delta": -8
+                },
+                {
+                    "target": "player.personality.loyalty",
+                    "delta": -3
+                }
+            ],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "training_argument",
+            "category": "player",
+            "weight": 2,
+            "title": "Training Ground Dispute",
+            "bodyTemplate": "{staff} and {player} clashed on the training pitch today. Team cohesion has suffered slightly.",
+            "impacts": {
+                "0": {
+                    "target": "player.morale",
+                    "delta": -5
+                },
+                "1": {
+                    "target": "player.personality.teamwork",
+                    "delta": -4
+                },
+                "2": {
+                    "target": "staff.morale",
+                    "delta": -3
+                },
+                "selection_logic": {
+                    "target_type": "player",
+                    "count": null,
+                    "filter": {
+                        "position": null,
+                        "active_only": false,
+                        "min_age": null,
+                        "max_age": null,
+                        "max_level": null
+                    }
+                },
+                "stat_changes": [],
+                "relationships": [],
+                "duration_config": {
+                    "ticks": null,
+                    "completion_event_slug": null,
+                    "tick_effect": {
+                        "target": null,
+                        "field": null,
+                        "operator": "add",
+                        "value": null
+                    }
+                },
+                "choices": []
+            },
+            "firingConditions": {
+                "minSquadMorale": null,
+                "maxSquadMorale": null,
+                "minPairRelationship": null,
+                "maxPairRelationship": null,
+                "requiresCoLocation": false,
+                "actorTraitRequirements": [],
+                "subjectTraitRequirements": []
+            },
+            "severity": null,
+            "chainedEvents": null
+        },
+        {
+            "slug": "coach_weekly_report",
+            "category": "staff",
+            "weight": 0,
+            "title": "{coachName} Weekly Report",
+            "bodyTemplate": "{reportSummary}",
+            "impacts": [],
+            "firingConditions": null,
+            "severity": null,
+            "chainedEvents": null
+        }
+    ],
+    "facilityTemplates": [
+        {
+            "slug": "east_stand",
+            "label": "East Stands",
+            "description": "Increases match-day attendance capacity (Fixed revenue per week).\n\nFurther capacity increases; unlocks premium \"Executive Box\" logic at Level 5+.",
+            "category": "STADIUM",
+            "baseCost": 500000,
+            "weeklyUpkeepBase": 1,
+            "matchdayIncome": 100000,
+            "matchdayIncomeMultiplier": 0.2,
+            "reputationBonus": 0,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 0
+        },
+        {
+            "slug": "north_stand",
+            "label": "North Stands",
+            "description": "Increases match-day attendance capacity (Fixed revenue per week).\n\nFurther capacity increases; unlocks premium \"Executive Box\" logic at Level 5+.",
+            "category": "STADIUM",
+            "baseCost": 500000,
+            "weeklyUpkeepBase": 1,
+            "matchdayIncome": 100000,
+            "matchdayIncomeMultiplier": 0.2,
+            "reputationBonus": 0,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 0
+        },
+        {
+            "slug": "south_stand",
+            "label": "South Stands",
+            "description": "Increases match-day attendance capacity (Fixed revenue per week).\n\nFurther capacity increases; unlocks premium \"Executive Box\" logic at Level 5+.",
+            "category": "STADIUM",
+            "baseCost": 500000,
+            "weeklyUpkeepBase": 1,
+            "matchdayIncome": 100000,
+            "matchdayIncomeMultiplier": 0.2,
+            "reputationBonus": 0,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 0
+        },
+        {
+            "slug": "west_stand",
+            "label": "West Stands",
+            "description": "Increases match-day attendance capacity (Fixed revenue per week).\n\nFurther capacity increases; unlocks premium \"Executive Box\" logic at Level 5+.",
+            "category": "STADIUM",
+            "baseCost": 500000,
+            "weeklyUpkeepBase": 1,
+            "matchdayIncome": 100000,
+            "matchdayIncomeMultiplier": 0.2,
+            "reputationBonus": 0.2,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 0
+        },
+        {
+            "slug": "training_pitch",
+            "label": "Training Pitch",
+            "description": "Acts as the \"heartbeat\" of the academy, providing the physical environment necessary for attribute growth and trait refinement.",
+            "category": "TRAINING",
+            "baseCost": 200000,
+            "weeklyUpkeepBase": 200,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 0.7,
+            "maxLevel": 10,
+            "decayBase": 1,
+            "sortOrder": 1
+        },
+        {
+            "slug": "strength_suite",
+            "label": "Strength Suite",
+            "description": "Dedicated gym and conditioning equipment for physical development.",
+            "category": "TRAINING",
+            "baseCost": 600000,
+            "weeklyUpkeepBase": 400,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 0.8,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 2
+        },
+        {
+            "slug": "physio_clinic",
+            "label": "Physio Clinic",
+            "description": "State-of-the-art rehabilitation and injury prevention. Also expands squad capacity.",
+            "category": "MEDICAL",
+            "baseCost": 800000,
+            "weeklyUpkeepBase": 600,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 1,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 3
+        },
+        {
+            "slug": "technical_zone",
+            "label": "Technical Zone",
+            "description": "The heartbeat of your academy. Better facilities mean faster technical improvement.",
+            "category": "TRAINING",
+            "baseCost": 500000,
+            "weeklyUpkeepBase": 100,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 1,
+            "maxLevel": 5,
+            "decayBase": 1,
+            "sortOrder": 3
+        },
+        {
+            "slug": "hydro_pool",
+            "label": "Hydro Pool",
+            "description": "Hydrotherapy and recovery suite to get players back on their feet faster.",
+            "category": "MEDICAL",
+            "baseCost": 900000,
+            "weeklyUpkeepBase": 700,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 0.6,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 4
+        },
+        {
+            "slug": "tactical_room",
+            "label": "Tactical Room",
+            "description": "Video analysis and tactical boards to sharpen game intelligence.",
+            "category": "SCOUTING",
+            "baseCost": 700000,
+            "weeklyUpkeepBase": 350,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 1,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 5
+        },
+        {
+            "slug": "scouting_center",
+            "label": "Scouting Center",
+            "description": "Talent identification hub that drives scouting intelligence and academy reputation.",
+            "category": "SCOUTING",
+            "baseCost": 100000,
+            "weeklyUpkeepBase": 300,
+            "matchdayIncome": null,
+            "matchdayIncomeMultiplier": null,
+            "reputationBonus": 2,
+            "maxLevel": 5,
+            "decayBase": 2,
+            "sortOrder": 6
+        }
+    ],
+    "playerArchetypes": [
+        {
+            "name": "The Academy Graduate",
+            "description": "Every touch carries the weight of years in the system. He knows every corner of this club and the ambition to repay the faith shown in him burns quietly but permanently.",
+            "traitMapping": {
+                "formula": {
+                    "loyalty": 0.45,
+                    "professionalism": 0.3,
+                    "ambition": 0.25
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Big-Game Hunter",
+            "description": "Disappears in training, comes alive under the floodlights. His ambition to perform in the defining moments is extraordinary — and in those moments, he almost always delivers the goods.",
+            "traitMapping": {
+                "formula": {
+                    "ambition": 0.5,
+                    "bravery": 0.3,
+                    "confidence": 0.2
+                },
+                "threshold": 72
+            }
+        },
+        {
+            "name": "The Captain-in-Waiting",
+            "description": "This kid was born to wear the armband. His teammates gravitate towards him naturally and he leads by example in every session. Coaches rarely need to ask twice — he has already sorted it.",
+            "traitMapping": {
+                "formula": {
+                    "confidence": 0.4,
+                    "consistency": 0.35,
+                    "loyalty": 0.25
+                },
+                "threshold": 72
+            }
+        },
+        {
+            "name": "The Chess Master",
+            "description": "Reads the game three moves ahead. His tactical awareness is exceptional for his age and his ambition to prove himself at the highest level gives him a focused, purposeful edge in everything he does.",
+            "traitMapping": {
+                "formula": {
+                    "ambition": 0.4,
+                    "professionalism": 0.35,
+                    "pressure": 0.25
+                },
+                "threshold": 71
+            }
+        },
+        {
+            "name": "The Club Pillar",
+            "description": "Turned down three bigger academies to stay here. Loyalty runs through him like stitching in a club scarf. He will not win you individual trophies, but he will help you build something lasting.",
+            "traitMapping": {
+                "formula": {
+                    "loyalty": 0.5,
+                    "consistency": 0.3,
+                    "professionalism": 0.2
+                },
+                "threshold": 73
+            }
+        },
+        {
+            "name": "The Confidence Project",
+            "description": "The technical quality is already there. What is missing is the belief that it is good enough. He responds enormously well to encouragement and his consistency in training gives us reason to persevere.",
+            "traitMapping": {
+                "formula": {
+                    "consistency": 0.45,
+                    "loyalty": 0.35,
+                    "professionalism": 0.2
+                },
+                "threshold": 61
+            }
+        },
+        {
+            "name": "The Controversy Magnet",
+            "description": "Follows him everywhere he goes. The ego and bravery combine in ways that produce moments of genius and moments of madness in roughly equal proportions. Captivating and exhausting in the same breath.",
+            "traitMapping": {
+                "formula": {
+                    "ego": 0.45,
+                    "bravery": 0.3,
+                    "ambition": 0.25
+                },
+                "threshold": 71
+            }
+        },
+        {
+            "name": "The Diamond in the Rough",
+            "description": "Nobody else spotted him. The bravery to take on players twice his size and the ambition to keep trying after failure mark him out as someone worth investing serious time in.",
+            "traitMapping": {
+                "formula": {
+                    "bravery": 0.4,
+                    "ambition": 0.35,
+                    "consistency": 0.25
+                },
+                "threshold": 62
+            }
+        },
+        {
+            "name": "The Flair Player",
+            "description": "A natural entertainer with an instinct for the unexpected. His ambition pushes him to attempt the spectacular when the simple pass would do — infuriating and mesmerising in equal measure.",
+            "traitMapping": {
+                "formula": {
+                    "confidence": 0.4,
+                    "ego": 0.35,
+                    "ambition": 0.25
+                },
+                "threshold": 68
+            }
+        },
+        {
+            "name": "The Fragile Talent",
+            "description": "On a good day, he is the best player on the pitch by some distance. On a bad day, the bravery evaporates entirely. The task is helping him find the consistency to show the good-day version every week.",
+            "traitMapping": {
+                "formula": {
+                    "ambition": 0.4,
+                    "consistency": 0.35,
+                    "professionalism": 0.25
+                },
+                "threshold": 63
+            }
+        },
+        {
+            "name": "The Futsal Specialist",
+            "description": "Five-a-side has sharpened his first touch to a razor edge. He finds pockets of space instinctively and has the confidence to attempt audacious moves that most players would not consider.",
+            "traitMapping": {
+                "formula": {
+                    "confidence": 0.4,
+                    "bravery": 0.35,
+                    "ambition": 0.25
+                },
+                "threshold": 67
+            }
+        },
+        {
+            "name": "The Future Coach",
+            "description": "Already dissecting formations, challenging the coaching staff with intelligent questions, and keeping detailed mental notes on teammates. You sense his playing career is a stepping stone to a dugout.",
+            "traitMapping": {
+                "formula": {
+                    "professionalism": 0.45,
+                    "pressure": 0.3,
+                    "ambition": 0.25
+                },
+                "threshold": 72
+            }
+        },
+        {
+            "name": "The Hot Prospect",
+            "description": "Every scout in the region has his name on a clipboard. The confidence is sky-high, the ambition is unquestionable — the only risk is whether the ego lets the talent breathe.",
+            "traitMapping": {
+                "formula": {
+                    "confidence": 0.4,
+                    "ambition": 0.4,
+                    "ego": 0.2
+                },
+                "threshold": 68
+            }
+        },
+        {
+            "name": "The Late Starter",
+            "description": "Arrived at the academy later than most but with a work ethic that leaves the early starters behind. His professionalism and consistency suggest the ceiling is higher than his current level implies.",
+            "traitMapping": {
+                "formula": {
+                    "professionalism": 0.45,
+                    "consistency": 0.3,
+                    "loyalty": 0.25
+                },
+                "threshold": 62
+            }
+        },
+        {
+            "name": "The Mentor Figure",
+            "description": "An unusual level of emotional maturity for a youth player. Younger lads seek him out instinctively and the loyalty he shows to those around him earns him enormous respect in the dressing room.",
+            "traitMapping": {
+                "formula": {
+                    "loyalty": 0.4,
+                    "professionalism": 0.35,
+                    "consistency": 0.25
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Mercenary",
+            "description": "Loyal to the badge for precisely as long as it suits him. His ambition is matched only by his ego, and both will be redirected without a second thought the moment a better offer materialises.",
+            "traitMapping": {
+                "formula": {
+                    "ambition": 0.5,
+                    "ego": 0.3,
+                    "bravery": 0.2
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Metronome",
+            "description": "Rhythmic and relentless. He performs at a consistent tempo that rarely wavers whether the match is meaningless or the stakes are at their highest. A manager's dream: always available, always reliable.",
+            "traitMapping": {
+                "formula": {
+                    "consistency": 0.5,
+                    "pressure": 0.3,
+                    "professionalism": 0.2
+                },
+                "threshold": 72
+            }
+        },
+        {
+            "name": "The Model Professional",
+            "description": "Immaculate timekeeping, immaculate diet, immaculate attitude. His professionalism is a daily reminder of what it means to take the craft seriously. Every academy needs one of him.",
+            "traitMapping": {
+                "formula": {
+                    "professionalism": 0.5,
+                    "consistency": 0.3,
+                    "loyalty": 0.2
+                },
+                "threshold": 74
+            }
+        },
+        {
+            "name": "The Perfectionist",
+            "description": "Still out on the pitch long after the session has ended, working on the same routine until it is flawless. His standards are almost unrealistically high — for himself and everyone around him.",
+            "traitMapping": {
+                "formula": {
+                    "professionalism": 0.5,
+                    "consistency": 0.3,
+                    "pressure": 0.2
+                },
+                "threshold": 74
+            }
+        },
+        {
+            "name": "The Quiet Worker",
+            "description": "Never the loudest voice, never the first name on any teamsheet — not yet. But his professionalism, loyalty, and willingness to improve quietly suggest the rewards will come for both player and academy.",
+            "traitMapping": {
+                "formula": {
+                    "professionalism": 0.45,
+                    "loyalty": 0.35,
+                    "bravery": 0.2
+                },
+                "threshold": 65
+            }
+        },
+        {
+            "name": "The Safe Pair of Hands",
+            "description": "Quietly delivers week in, week out without drama or fanfare. His consistency is the backbone of any squad he plays in and his professionalism sets a standard younger players instinctively follow.",
+            "traitMapping": {
+                "formula": {
+                    "consistency": 0.45,
+                    "professionalism": 0.35,
+                    "loyalty": 0.2
+                },
+                "threshold": 72
+            }
+        },
+        {
+            "name": "The Showman",
+            "description": "Every training session is a performance. He plays better when there is an audience and absolutely thrives on the occasion. Whether that translates to a professional career remains the question.",
+            "traitMapping": {
+                "formula": {
+                    "ego": 0.45,
+                    "confidence": 0.35,
+                    "bravery": 0.2
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Shy Prodigy",
+            "description": "The talent is unmistakeable, but it takes patience to draw it out. He is loyal to those who persist and extraordinarily professional for his age — the confidence simply needs cultivating.",
+            "traitMapping": {
+                "formula": {
+                    "loyalty": 0.4,
+                    "professionalism": 0.4,
+                    "consistency": 0.2
+                },
+                "threshold": 60
+            }
+        },
+        {
+            "name": "The Social Media Darling",
+            "description": "More followers than most professional clubs at his age. The ego and confidence are stratospheric, and he plays as if every session is content. Whether that helps or hinders development is the constant debate.",
+            "traitMapping": {
+                "formula": {
+                    "ego": 0.5,
+                    "confidence": 0.3,
+                    "ambition": 0.2
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Street Footballer",
+            "description": "Learned the game in cages and car parks before anyone put a kit on him. The raw courage and inventiveness he brings to tight spaces cannot be coached — it has to be lived. Defenders hate him.",
+            "traitMapping": {
+                "formula": {
+                    "bravery": 0.4,
+                    "confidence": 0.35,
+                    "ego": 0.25
+                },
+                "threshold": 68
+            }
+        },
+        {
+            "name": "The Trickster",
+            "description": "Has a repertoire of skill moves that would embarrass professionals twice his age. Courageous enough to try them under pressure and with enough ego to dust himself off when they go wrong.",
+            "traitMapping": {
+                "formula": {
+                    "bravery": 0.45,
+                    "ego": 0.3,
+                    "confidence": 0.25
+                },
+                "threshold": 67
+            }
+        },
+        {
+            "name": "The Unsung Hero",
+            "description": "Never on the scoresheet, always on the winning team. He covers more ground than anyone, makes fewer mistakes than anyone, and never once asks for the credit he quietly deserves.",
+            "traitMapping": {
+                "formula": {
+                    "consistency": 0.4,
+                    "loyalty": 0.35,
+                    "professionalism": 0.25
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Vocal Leader",
+            "description": "Never short of an opinion and never afraid to voice it. He drives standards on the training pitch with relentless communication and genuine ambition to reach the very top. Polarising, but effective.",
+            "traitMapping": {
+                "formula": {
+                    "confidence": 0.45,
+                    "ambition": 0.3,
+                    "bravery": 0.25
+                },
+                "threshold": 70
+            }
+        },
+        {
+            "name": "The Volatile Maverick",
+            "description": "His ambition and ego make him a handful in any dressing room. Three moments of individual brilliance per game, one moment of rank stupidity. Managing him is the hardest and most rewarding job in football.",
+            "traitMapping": {
+                "formula": {
+                    "ego": 0.45,
+                    "bravery": 0.35,
+                    "ambition": 0.2
+                },
+                "threshold": 68
+            }
+        },
+        {
+            "name": "The YouTube Highlight Reel",
+            "description": "Compiles his best moments and knows exactly what goes viral. The ego is enormous — bigger than his discipline at times — but when the talent fires, you can see why the scouts keep coming back.",
+            "traitMapping": {
+                "formula": {
+                    "ego": 0.5,
+                    "bravery": 0.3,
+                    "confidence": 0.2
+                },
+                "threshold": 72
+            }
+        }
+    ],
+    "tacticalAdvantages": [
+        {
+            "style": "HIGH_PRESS",
+            "opponentStyle": "DIRECT",
+            "multiplier": 0.5
+        },
+        {
+            "style": "HIGH_PRESS",
+            "opponentStyle": "POSSESSION",
+            "multiplier": 0.5
+        },
+        {
+            "style": "POSSESSION",
+            "opponentStyle": "DIRECT",
+            "multiplier": 1
+        }
+    ]
+}

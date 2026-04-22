@@ -74,6 +74,8 @@ class GameConfigController extends AbstractController
             'largeSponsorMin'               => $config->getLargeSponsorMin(),
             'largeSponsorMax'               => $config->getLargeSponsorMax(),
             'leaguePositionDecreasePercent' => $config->getLeaguePositionDecreasePercent(),
+
+            'staffRoles' => array_column(\App\Enum\StaffRole::cases(), 'value'),
         ]);
     }
 }
