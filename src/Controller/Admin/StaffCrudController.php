@@ -61,7 +61,6 @@ class StaffCrudController extends AbstractCrudController
         yield ChoiceField::new('role')
             ->setChoices([
                 'Coach'                => StaffRole::COACH,
-                'Assistant Coach'      => StaffRole::ASSISTANT_COACH,
                 'Manager'              => StaffRole::MANAGER,
                 'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL,
                 'Facility Manager'     => StaffRole::FACILITY_MANAGER,
@@ -69,7 +68,6 @@ class StaffCrudController extends AbstractCrudController
             ])
             ->renderAsBadges([
                 StaffRole::COACH->value                => 'warning',
-                StaffRole::ASSISTANT_COACH->value      => 'info',
                 StaffRole::MANAGER->value              => 'dark',
                 StaffRole::DIRECTOR_OF_FOOTBALL->value => 'secondary',
                 StaffRole::FACILITY_MANAGER->value     => 'light',

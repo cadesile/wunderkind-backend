@@ -187,10 +187,6 @@ class PoolConfig
     #[ORM\Column(type: 'integer')]
     private int $coachPoolTarget = 10;
 
-    /** Minimum unassigned assistant coaches before auto-replenishment. Default: 5 */
-    #[ORM\Column(type: 'integer')]
-    private int $assistantCoachPoolTarget = 5;
-
     /** Minimum unassigned managers before auto-replenishment. Default: 5 */
     #[ORM\Column(type: 'integer')]
     private int $managerPoolTarget = 5;
@@ -335,8 +331,6 @@ class PoolConfig
     public function getCoachPoolTarget(): int { return $this->coachPoolTarget; }
     public function setCoachPoolTarget(int $v): static { $this->coachPoolTarget = $v; return $this; }
 
-    public function getAssistantCoachPoolTarget(): int { return $this->assistantCoachPoolTarget; }
-    public function setAssistantCoachPoolTarget(int $v): static { $this->assistantCoachPoolTarget = $v; return $this; }
 
     public function getManagerPoolTarget(): int { return $this->managerPoolTarget; }
     public function setManagerPoolTarget(int $v): static { $this->managerPoolTarget = $v; return $this; }

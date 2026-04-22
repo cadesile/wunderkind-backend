@@ -500,10 +500,7 @@ class GenerateMarketDataCommand extends Command
         $clubCount = count($academies);
 
         $weeklySalaryRanges = [
-            StaffRole::HEAD_COACH->value            => [8000, 20000],
-            StaffRole::ASSISTANT_COACH->value       => [4000, 10000],
-            StaffRole::FITNESS_COACH->value         => [3000, 8000],
-            StaffRole::ANALYST->value               => [3000, 7500],
+            StaffRole::COACH->value                 => [4000, 10000],
             StaffRole::MANAGER->value               => [10000, 30000],
             StaffRole::DIRECTOR_OF_FOOTBALL->value  => [12000, 35000],
             StaffRole::FACILITY_MANAGER->value      => [3000, 8500],

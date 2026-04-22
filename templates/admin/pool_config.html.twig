@@ -24,8 +24,7 @@
                 <div class="row g-3 mb-4">
                     {% set poolItems = [
                         { label: 'Players',       icon: 'person-running',    count: poolCounts.players,             target: config.playerPoolTarget },
-                        { label: 'Head Coaches',  icon: 'chalkboard-user',   count: poolCounts.staffCoach,          target: config.coachPoolTarget },
-                        { label: 'Asst. Coaches', icon: 'chalkboard',        count: poolCounts.staffAssistantCoach,  target: config.assistantCoachPoolTarget },
+                        { label: 'Coaches',       icon: 'chalkboard-user',   count: poolCounts.staffCoach,          target: config.coachPoolTarget },
                         { label: 'Managers',      icon: 'person-chalkboard', count: poolCounts.staffManager,        target: config.managerPoolTarget },
                         { label: 'Directors',     icon: 'user-tie',          count: poolCounts.staffDirector,       target: config.directorOfFootballPoolTarget },
                         { label: 'Facility Mgrs', icon: 'building',          count: poolCounts.staffFacilityMgr,    target: config.facilityManagerPoolTarget },
@@ -104,16 +103,10 @@
                             <div class="form-text">Default: 50</div>
                         </div>
                         <div class="col-md-2">
-                            <label for="coachPoolTarget" class="form-label fw-semibold small">Head Coaches</label>
+                            <label for="coachPoolTarget" class="form-label fw-semibold small">Coaches</label>
                             <input type="number" id="coachPoolTarget" name="coachPoolTarget"
                                    value="{{ config.coachPoolTarget }}" min="1" class="form-control">
                             <div class="form-text">Default: 10</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="assistantCoachPoolTarget" class="form-label fw-semibold small">Asst. Coaches</label>
-                            <input type="number" id="assistantCoachPoolTarget" name="assistantCoachPoolTarget"
-                                   value="{{ config.assistantCoachPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 5</div>
                         </div>
                         <div class="col-md-2">
                             <label for="managerPoolTarget" class="form-label fw-semibold small">Managers</label>

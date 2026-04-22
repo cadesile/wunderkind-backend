@@ -278,7 +278,6 @@ class MarketPoolService
 
             $baseSalary = match ($role) {
                 StaffRole::COACH                => random_int(2000, 8000),
-                StaffRole::ASSISTANT_COACH      => random_int(4000, 10000),
                 StaffRole::MANAGER              => random_int(10000, 30000),
                 StaffRole::DIRECTOR_OF_FOOTBALL => random_int(12000, 35000),
                 StaffRole::FACILITY_MANAGER     => random_int(3000, 8500),
@@ -436,7 +435,6 @@ class MarketPoolService
     public function getAvailableCoaches(int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         return array_merge(
-            $this->staffRepo->findInPool(StaffRole::ASSISTANT_COACH, $limit, $abilityMin, $abilityMax),
             $this->staffRepo->findInPool(StaffRole::COACH, $limit, $abilityMin, $abilityMax),
             $this->staffRepo->findInPool(StaffRole::MANAGER, $limit, $abilityMin, $abilityMax),
             $this->staffRepo->findInPool(StaffRole::CHAIRMAN, $limit, $abilityMin, $abilityMax),
@@ -623,7 +621,6 @@ class MarketPoolService
     {
         return [
             [StaffRole::COACH,                $cfg->getCoachPoolTarget()],
-            [StaffRole::ASSISTANT_COACH,      $cfg->getAssistantCoachPoolTarget()],
             [StaffRole::MANAGER,              $cfg->getManagerPoolTarget()],
             [StaffRole::DIRECTOR_OF_FOOTBALL, $cfg->getDirectorOfFootballPoolTarget()],
             [StaffRole::FACILITY_MANAGER,     $cfg->getFacilityManagerPoolTarget()],

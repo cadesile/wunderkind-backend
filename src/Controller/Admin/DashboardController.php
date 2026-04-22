@@ -217,7 +217,12 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterSponsorTier($request->request->get('starterSponsorTier', 'SMALL'));
         $config->setStarterClubTier($request->request->get('starterClubTier', 'local'));
 
-        $config->setDefaultFacilitiesJson($request->request->get('defaultFacilities', '{}'));
+        $facilitiesRaw = trim((string) $request->request->get('defaultFacilities', '{}'));
+        if (json_decode($facilitiesRaw) === null && $facilitiesRaw !== 'null') {
+            $this->addFlash('danger', 'Default Facilities contains invalid JSON and was not saved. Please fix it and try again.');
+        } else {
+            $config->setDefaultFacilitiesJson($facilitiesRaw);
+        }
 
         $npcConfigInput = $request->request->all('npcConfig') ?: [];
         $npcSquadConfig = [];
@@ -274,7 +279,6 @@ class DashboardController extends AbstractDashboardController
         $poolCounts = [
             'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
             'staffCoach'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
-            'staffAssistantCoach' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'assistant_coach'"),
             'staffManager'        => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
             'staffDirector'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
             'staffFacilityMgr'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
@@ -349,7 +353,6 @@ class DashboardController extends AbstractDashboardController
         // Pool targets
         $config->setPlayerPoolTarget((int) $request->request->get('playerPoolTarget', 50));
         $config->setCoachPoolTarget((int) $request->request->get('coachPoolTarget', 10));
-        $config->setAssistantCoachPoolTarget((int) $request->request->get('assistantCoachPoolTarget', 5));
         $config->setManagerPoolTarget((int) $request->request->get('managerPoolTarget', 5));
         $config->setDirectorOfFootballPoolTarget((int) $request->request->get('directorOfFootballPoolTarget', 2));
         $config->setFacilityManagerPoolTarget((int) $request->request->get('facilityManagerPoolTarget', 3));

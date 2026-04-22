@@ -1,5 +1,18 @@
 {% extends '@EasyAdmin/layout.html.twig' %}
 
+{% block head_stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.css">
+    <style>
+        .CodeMirror { height: 140px; font-size: 13px; border: 1px solid #ced4da; border-radius: 0.375rem; }
+        .CodeMirror-focused { border-color: #86b7fe; box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25); outline: 0; }
+        .cm-json-error .CodeMirror { border-color: #dc3545; }
+        #defaultFacilities-error { display: none; }
+        .cm-json-error #defaultFacilities-error { display: block; }
+    </style>
+{% endblock %}
+
 {% block content %}
 <div class="row g-4 mt-1">
 
@@ -85,10 +98,11 @@
                         <div class="form-text">Club tier assigned at creation. Default: Local</div>
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-12" id="defaultFacilities-wrap">
                         <label for="defaultFacilities" class="form-label fw-semibold small">Default Facilities (JSON)</label>
                         <textarea id="defaultFacilities" name="defaultFacilities"
-                                  class="form-control font-monospace" rows="6">{{ config.defaultFacilitiesJson }}</textarea>
+                                  class="font-monospace" rows="6">{{ config.defaultFacilitiesJson }}</textarea>
+                        <div id="defaultFacilities-error" class="text-danger small mt-1">Invalid JSON — please fix before saving.</div>
                         <div class="form-text">
                             Flat slug → level map, e.g. <code>{"training_pitch": 1, "north_stand": 0}</code>.
                             Leave as <code>{}</code> for no default facilities.
@@ -247,4 +261,54 @@
     </div>
 
 </div>
+{% endblock %}
+
+{% block body_javascript %}
+    {{ parent() }}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsonlint/1.6.0/jsonlint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/json-lint.min.js"></script>
+    <script>
+    (function () {
+        const ta = document.getElementById('defaultFacilities');
+        const wrap = document.getElementById('defaultFacilities-wrap');
+        const form = ta.closest('form');
+
+        const editor = CodeMirror.fromTextArea(ta, {
+            mode: { name: 'javascript', json: true },
+            lineNumbers: true,
+            lineWrapping: true,
+            gutters: ['CodeMirror-lint-markers'],
+            lint: true,
+            theme: 'default',
+        });
+
+        function isValidJson(str) {
+            try { JSON.parse(str); return true; } catch (e) { return false; }
+        }
+
+        function validate() {
+            const val = editor.getValue().trim();
+            if (isValidJson(val)) {
+                wrap.classList.remove('cm-json-error');
+            } else {
+                wrap.classList.add('cm-json-error');
+            }
+        }
+
+        editor.on('change', validate);
+        validate();
+
+        form.addEventListener('submit', function (e) {
+            editor.save(); // sync CodeMirror back to the hidden textarea
+            if (!isValidJson(editor.getValue().trim())) {
+                e.preventDefault();
+                wrap.classList.add('cm-json-error');
+                wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    })();
+    </script>
 {% endblock %}

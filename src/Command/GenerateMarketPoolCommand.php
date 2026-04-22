@@ -90,7 +90,6 @@ class GenerateMarketPoolCommand extends Command
             if ($coachCount > 0) {
                 $roles = [
                     StaffRole::COACH,
-                    StaffRole::ASSISTANT_COACH,
                     StaffRole::MANAGER,
                     StaffRole::DIRECTOR_OF_FOOTBALL,
                     StaffRole::FACILITY_MANAGER,
