@@ -181,6 +181,14 @@ class DashboardController extends AbstractDashboardController
         $config->setInvestorProbabilityNational((float) $request->request->get('investorProbabilityNational', 0.06));
         $config->setInvestorProbabilityElite((float) $request->request->get('investorProbabilityElite', 0.02));
 
+        // Staff limits per club
+        $config->setMaxCoachesPerClub((int) $request->request->get('maxCoachesPerClub', 15));
+        $config->setMaxManagersPerClub((int) $request->request->get('maxManagersPerClub', 1));
+        $config->setMaxDirectorsOfFootballPerClub((int) $request->request->get('maxDirectorsOfFootballPerClub', 1));
+        $config->setMaxFacilityManagersPerClub((int) $request->request->get('maxFacilityManagersPerClub', 1));
+        $config->setMaxChairmensPerClub((int) $request->request->get('maxChairmensPerClub', 1));
+        $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');

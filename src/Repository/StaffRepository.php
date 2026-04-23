@@ -16,15 +16,13 @@ class StaffRepository extends ServiceEntityRepository
     }
 
     /**
-     * Staff with no club (market pool), optionally filtered by role and coaching ability range.
+     * Random sample of staff from the market pool, optionally filtered by role and coaching ability range.
      * @return Staff[]
      */
     public function findInPool(?StaffRole $role = null, int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         $qb = $this->createQueryBuilder('s')
-            ->where('s.club IS NULL')
-            ->orderBy('s.hiredAt', 'DESC')
-            ->setMaxResults($limit);
+            ->where('s.club IS NULL');
 
         if ($role !== null) {
             $qb->andWhere('s.role = :role')->setParameter('role', $role);
@@ -40,7 +38,9 @@ class StaffRepository extends ServiceEntityRepository
                ->setParameter('abilityMax', $abilityMax);
         }
 
-        return $qb->getQuery()->getResult();
+        $results = $qb->getQuery()->getResult();
+        shuffle($results);
+        return array_slice($results, 0, $limit);
     }
 
     public function countInPool(?StaffRole $role = null): int
@@ -68,15 +68,14 @@ class StaffRepository extends ServiceEntityRepository
      */
     public function findInPoolByRoleRandom(StaffRole $role, int $limit): array
     {
-        return $this->createQueryBuilder('s')
-            ->addSelect('RAND() AS HIDDEN rand_order')
+        $results = $this->createQueryBuilder('s')
             ->where('s.club IS NULL')
             ->andWhere('s.role = :role')
             ->setParameter('role', $role)
-            ->setMaxResults($limit)
-            ->orderBy('rand_order')
             ->getQuery()
             ->getResult();
+        shuffle($results);
+        return array_slice($results, 0, $limit);
     }
 
     /**

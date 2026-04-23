@@ -442,6 +442,50 @@ class GameConfig
     public function getInvestorProbabilityElite(): float { return $this->investorProbabilityElite; }
     public function setInvestorProbabilityElite(float $v): static { $this->investorProbabilityElite = $v; return $this; }
 
+    // ── Staff Limits Per Club ─────────────────────────────────────────────
+
+    /** Maximum coaches (StaffRole::COACH) allowed at a single club. Default: 15 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 15])]
+    private int $maxCoachesPerClub = 15;
+
+    /** Maximum managers (StaffRole::MANAGER) allowed at a single club. Default: 1 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 1])]
+    private int $maxManagersPerClub = 1;
+
+    /** Maximum directors of football (StaffRole::DIRECTOR_OF_FOOTBALL) allowed at a single club. Default: 1 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 1])]
+    private int $maxDirectorsOfFootballPerClub = 1;
+
+    /** Maximum facility managers (StaffRole::FACILITY_MANAGER) allowed at a single club. Default: 1 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 1])]
+    private int $maxFacilityManagersPerClub = 1;
+
+    /** Maximum chairmen (StaffRole::CHAIRMAN) allowed at a single club. Default: 1 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 1])]
+    private int $maxChairmensPerClub = 1;
+
+    /** Maximum scouts (Scout entity) allowed at a single club. Default: 3 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 3])]
+    private int $maxScoutsPerClub = 3;
+
+    public function getMaxCoachesPerClub(): int { return $this->maxCoachesPerClub; }
+    public function setMaxCoachesPerClub(int $v): static { $this->maxCoachesPerClub = $v; return $this; }
+
+    public function getMaxManagersPerClub(): int { return $this->maxManagersPerClub; }
+    public function setMaxManagersPerClub(int $v): static { $this->maxManagersPerClub = $v; return $this; }
+
+    public function getMaxDirectorsOfFootballPerClub(): int { return $this->maxDirectorsOfFootballPerClub; }
+    public function setMaxDirectorsOfFootballPerClub(int $v): static { $this->maxDirectorsOfFootballPerClub = $v; return $this; }
+
+    public function getMaxFacilityManagersPerClub(): int { return $this->maxFacilityManagersPerClub; }
+    public function setMaxFacilityManagersPerClub(int $v): static { $this->maxFacilityManagersPerClub = $v; return $this; }
+
+    public function getMaxChairmensPerClub(): int { return $this->maxChairmensPerClub; }
+    public function setMaxChairmensPerClub(int $v): static { $this->maxChairmensPerClub = $v; return $this; }
+
+    public function getMaxScoutsPerClub(): int { return $this->maxScoutsPerClub; }
+    public function setMaxScoutsPerClub(int $v): static { $this->maxScoutsPerClub = $v; return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */

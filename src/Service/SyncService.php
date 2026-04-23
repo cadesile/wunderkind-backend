@@ -226,6 +226,13 @@ class SyncService
             'investorProbabilityRegional' => $gameConfig->getInvestorProbabilityRegional(),
             'investorProbabilityNational' => $gameConfig->getInvestorProbabilityNational(),
             'investorProbabilityElite'    => $gameConfig->getInvestorProbabilityElite(),
+            // Staff limits per club
+            'maxCoachesPerClub'             => $gameConfig->getMaxCoachesPerClub(),
+            'maxManagersPerClub'            => $gameConfig->getMaxManagersPerClub(),
+            'maxDirectorsOfFootballPerClub' => $gameConfig->getMaxDirectorsOfFootballPerClub(),
+            'maxFacilityManagersPerClub'    => $gameConfig->getMaxFacilityManagersPerClub(),
+            'maxChairmensPerClub'           => $gameConfig->getMaxChairmensPerClub(),
+            'maxScoutsPerClub'              => $gameConfig->getMaxScoutsPerClub(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -281,6 +288,13 @@ class SyncService
             'investorProbabilityRegional' => 0.12,
             'investorProbabilityNational' => 0.06,
             'investorProbabilityElite'    => 0.02,
+            // Staff limits per club
+            'maxCoachesPerClub'             => 15,
+            'maxManagersPerClub'            => 1,
+            'maxDirectorsOfFootballPerClub' => 1,
+            'maxFacilityManagersPerClub'    => 1,
+            'maxChairmensPerClub'           => 1,
+            'maxScoutsPerClub'              => 3,
         ];
 
         $facilityTemplates = array_map(

@@ -75,6 +75,14 @@ class GameConfigController extends AbstractController
             'largeSponsorMax'               => $config->getLargeSponsorMax(),
             'leaguePositionDecreasePercent' => $config->getLeaguePositionDecreasePercent(),
 
+            // Staff limits per club
+            'maxCoachesPerClub'             => $config->getMaxCoachesPerClub(),
+            'maxManagersPerClub'            => $config->getMaxManagersPerClub(),
+            'maxDirectorsOfFootballPerClub' => $config->getMaxDirectorsOfFootballPerClub(),
+            'maxFacilityManagersPerClub'    => $config->getMaxFacilityManagersPerClub(),
+            'maxChairmensPerClub'           => $config->getMaxChairmensPerClub(),
+            'maxScoutsPerClub'              => $config->getMaxScoutsPerClub(),
+
             // Sponsor & investor offer probabilities (by reputation tier)
             'sponsorProbabilityLocal'    => $config->getSponsorProbabilityLocal(),
             'sponsorProbabilityRegional' => $config->getSponsorProbabilityRegional(),
