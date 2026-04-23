@@ -75,6 +75,16 @@ class GameConfigController extends AbstractController
             'largeSponsorMax'               => $config->getLargeSponsorMax(),
             'leaguePositionDecreasePercent' => $config->getLeaguePositionDecreasePercent(),
 
+            // Sponsor & investor offer probabilities (by reputation tier)
+            'sponsorProbabilityLocal'    => $config->getSponsorProbabilityLocal(),
+            'sponsorProbabilityRegional' => $config->getSponsorProbabilityRegional(),
+            'sponsorProbabilityNational' => $config->getSponsorProbabilityNational(),
+            'sponsorProbabilityElite'    => $config->getSponsorProbabilityElite(),
+            'investorProbabilityLocal'   => $config->getInvestorProbabilityLocal(),
+            'investorProbabilityRegional'=> $config->getInvestorProbabilityRegional(),
+            'investorProbabilityNational'=> $config->getInvestorProbabilityNational(),
+            'investorProbabilityElite'   => $config->getInvestorProbabilityElite(),
+
             'staffRoles' => array_column(\App\Enum\StaffRole::cases(), 'value'),
         ]);
     }

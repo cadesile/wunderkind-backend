@@ -217,6 +217,15 @@ class SyncService
             'largeSponsorMin'               => $gameConfig->getLargeSponsorMin(),
             'largeSponsorMax'               => $gameConfig->getLargeSponsorMax(),
             'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+            // Sponsor & investor offer probabilities
+            'sponsorProbabilityLocal'     => $gameConfig->getSponsorProbabilityLocal(),
+            'sponsorProbabilityRegional'  => $gameConfig->getSponsorProbabilityRegional(),
+            'sponsorProbabilityNational'  => $gameConfig->getSponsorProbabilityNational(),
+            'sponsorProbabilityElite'     => $gameConfig->getSponsorProbabilityElite(),
+            'investorProbabilityLocal'    => $gameConfig->getInvestorProbabilityLocal(),
+            'investorProbabilityRegional' => $gameConfig->getInvestorProbabilityRegional(),
+            'investorProbabilityNational' => $gameConfig->getInvestorProbabilityNational(),
+            'investorProbabilityElite'    => $gameConfig->getInvestorProbabilityElite(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -263,6 +272,15 @@ class SyncService
             'largeSponsorMin'               => 0,
             'largeSponsorMax'               => 0,
             'leaguePositionDecreasePercent' => 5,
+            // Sponsor & investor offer probabilities
+            'sponsorProbabilityLocal'     => 0.30,
+            'sponsorProbabilityRegional'  => 0.20,
+            'sponsorProbabilityNational'  => 0.10,
+            'sponsorProbabilityElite'     => 0.05,
+            'investorProbabilityLocal'    => 0.20,
+            'investorProbabilityRegional' => 0.12,
+            'investorProbabilityNational' => 0.06,
+            'investorProbabilityElite'    => 0.02,
         ];
 
         $facilityTemplates = array_map(

@@ -384,6 +384,64 @@ class GameConfig
     public function getLeaguePositionDecreasePercent(): int { return $this->leaguePositionDecreasePercent; }
     public function setLeaguePositionDecreasePercent(int $v): static { $this->leaguePositionDecreasePercent = $v; return $this; }
 
+    // ── Sponsor & Investor Offer Probabilities ────────────────────────────
+
+    /** Weekly probability of receiving a LOCAL-tier sponsor offer. Default: 0.30 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.30])]
+    private float $sponsorProbabilityLocal = 0.30;
+
+    /** Weekly probability of receiving a REGIONAL-tier sponsor offer. Default: 0.20 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.20])]
+    private float $sponsorProbabilityRegional = 0.20;
+
+    /** Weekly probability of receiving a NATIONAL-tier sponsor offer. Default: 0.10 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.10])]
+    private float $sponsorProbabilityNational = 0.10;
+
+    /** Weekly probability of receiving an ELITE-tier sponsor offer. Default: 0.05 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.05])]
+    private float $sponsorProbabilityElite = 0.05;
+
+    /** Weekly probability of receiving a LOCAL-tier investor offer. Default: 0.20 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.20])]
+    private float $investorProbabilityLocal = 0.20;
+
+    /** Weekly probability of receiving a REGIONAL-tier investor offer. Default: 0.12 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.12])]
+    private float $investorProbabilityRegional = 0.12;
+
+    /** Weekly probability of receiving a NATIONAL-tier investor offer. Default: 0.06 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.06])]
+    private float $investorProbabilityNational = 0.06;
+
+    /** Weekly probability of receiving an ELITE-tier investor offer. Default: 0.02 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.02])]
+    private float $investorProbabilityElite = 0.02;
+
+    public function getSponsorProbabilityLocal(): float { return $this->sponsorProbabilityLocal; }
+    public function setSponsorProbabilityLocal(float $v): static { $this->sponsorProbabilityLocal = $v; return $this; }
+
+    public function getSponsorProbabilityRegional(): float { return $this->sponsorProbabilityRegional; }
+    public function setSponsorProbabilityRegional(float $v): static { $this->sponsorProbabilityRegional = $v; return $this; }
+
+    public function getSponsorProbabilityNational(): float { return $this->sponsorProbabilityNational; }
+    public function setSponsorProbabilityNational(float $v): static { $this->sponsorProbabilityNational = $v; return $this; }
+
+    public function getSponsorProbabilityElite(): float { return $this->sponsorProbabilityElite; }
+    public function setSponsorProbabilityElite(float $v): static { $this->sponsorProbabilityElite = $v; return $this; }
+
+    public function getInvestorProbabilityLocal(): float { return $this->investorProbabilityLocal; }
+    public function setInvestorProbabilityLocal(float $v): static { $this->investorProbabilityLocal = $v; return $this; }
+
+    public function getInvestorProbabilityRegional(): float { return $this->investorProbabilityRegional; }
+    public function setInvestorProbabilityRegional(float $v): static { $this->investorProbabilityRegional = $v; return $this; }
+
+    public function getInvestorProbabilityNational(): float { return $this->investorProbabilityNational; }
+    public function setInvestorProbabilityNational(float $v): static { $this->investorProbabilityNational = $v; return $this; }
+
+    public function getInvestorProbabilityElite(): float { return $this->investorProbabilityElite; }
+    public function setInvestorProbabilityElite(float $v): static { $this->investorProbabilityElite = $v; return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */

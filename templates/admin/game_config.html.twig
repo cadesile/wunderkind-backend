@@ -513,6 +513,82 @@
                 </div>
             </div>
 
+            {# ── Sponsor Offer Probabilities ──────────────────────────────────────── #}
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">Sponsor Offer Probabilities</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Weekly probability (0.0–1.0) that an academy receives a sponsor offer from each reputation tier.</p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="sponsorProbabilityLocal" class="form-label fw-semibold small">Local</label>
+                            <input type="number" id="sponsorProbabilityLocal" name="sponsorProbabilityLocal"
+                                   value="{{ config.sponsorProbabilityLocal }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.30</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="sponsorProbabilityRegional" class="form-label fw-semibold small">Regional</label>
+                            <input type="number" id="sponsorProbabilityRegional" name="sponsorProbabilityRegional"
+                                   value="{{ config.sponsorProbabilityRegional }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="sponsorProbabilityNational" class="form-label fw-semibold small">National</label>
+                            <input type="number" id="sponsorProbabilityNational" name="sponsorProbabilityNational"
+                                   value="{{ config.sponsorProbabilityNational }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.10</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="sponsorProbabilityElite" class="form-label fw-semibold small">Elite</label>
+                            <input type="number" id="sponsorProbabilityElite" name="sponsorProbabilityElite"
+                                   value="{{ config.sponsorProbabilityElite }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.05</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Investor Offer Probabilities ─────────────────────────────────────── #}
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">Investor Offer Probabilities</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Weekly probability (0.0–1.0) that an academy receives an investor offer from each reputation tier.</p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="investorProbabilityLocal" class="form-label fw-semibold small">Local</label>
+                            <input type="number" id="investorProbabilityLocal" name="investorProbabilityLocal"
+                                   value="{{ config.investorProbabilityLocal }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="investorProbabilityRegional" class="form-label fw-semibold small">Regional</label>
+                            <input type="number" id="investorProbabilityRegional" name="investorProbabilityRegional"
+                                   value="{{ config.investorProbabilityRegional }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.12</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="investorProbabilityNational" class="form-label fw-semibold small">National</label>
+                            <input type="number" id="investorProbabilityNational" name="investorProbabilityNational"
+                                   value="{{ config.investorProbabilityNational }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.06</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="investorProbabilityElite" class="form-label fw-semibold small">Elite</label>
+                            <input type="number" id="investorProbabilityElite" name="investorProbabilityElite"
+                                   value="{{ config.investorProbabilityElite }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Default: 0.02</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>{# /gap wrapper #}
 
         <div class="mt-4">

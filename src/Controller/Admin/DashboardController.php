@@ -171,6 +171,16 @@ class DashboardController extends AbstractDashboardController
         $config->setLargeSponsorMax((int) $request->request->get('largeSponsorMax', 0));
         $config->setLeaguePositionDecreasePercent((int) $request->request->get('leaguePositionDecreasePercent', 5));
 
+        // Sponsor & investor offer probabilities
+        $config->setSponsorProbabilityLocal((float) $request->request->get('sponsorProbabilityLocal', 0.30));
+        $config->setSponsorProbabilityRegional((float) $request->request->get('sponsorProbabilityRegional', 0.20));
+        $config->setSponsorProbabilityNational((float) $request->request->get('sponsorProbabilityNational', 0.10));
+        $config->setSponsorProbabilityElite((float) $request->request->get('sponsorProbabilityElite', 0.05));
+        $config->setInvestorProbabilityLocal((float) $request->request->get('investorProbabilityLocal', 0.20));
+        $config->setInvestorProbabilityRegional((float) $request->request->get('investorProbabilityRegional', 0.12));
+        $config->setInvestorProbabilityNational((float) $request->request->get('investorProbabilityNational', 0.06));
+        $config->setInvestorProbabilityElite((float) $request->request->get('investorProbabilityElite', 0.02));
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');
