@@ -25,6 +25,6 @@ class TransferSyncDto
     public int $netProceeds = 0;
 
     #[Assert\NotBlank]
-    #[Assert\Choice(choices: ['sale', 'loan', 'free_release', 'agent_assisted'])]
+    #[Assert\Choice(choices: ['sale', 'loan', 'free_release', 'agent_assisted', 'guardian_withdrawal'])]
     public string $type = '';
 }
