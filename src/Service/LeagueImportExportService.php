@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Entity\Club;
 use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Enum\Formation;
@@ -116,11 +117,22 @@ class LeagueImportExportService
             }
 
             $league->setName($row['name']);
-            if (isset($row['promotionSpots']))       $league->setPromotionSpots((int) $row['promotionSpots']);
-            if (isset($row['tvDeal']))               $league->setTvDeal((int) $row['tvDeal']);
-            if (isset($row['prizeMoney']))           $league->setPrizeMoney((int) $row['prizeMoney']);
-            if (isset($row['leaguePositionPot']))    $league->setLeaguePositionPot((int) $row['leaguePositionPot']);
-            if (isset($row['leagueReputationTier'])) $league->setLeagueReputationTier(ReputationTier::from((string) $row['leagueReputationTier']));
+
+            // Use array_key_exists (not isset) so explicit null values are applied correctly
+            if (array_key_exists('promotionSpots', $row))
+                $league->setPromotionSpots($row['promotionSpots'] !== null ? (int) $row['promotionSpots'] : null);
+            if (array_key_exists('tvDeal', $row))
+                $league->setTvDeal($row['tvDeal'] !== null ? (int) $row['tvDeal'] : null);
+            if (array_key_exists('prizeMoney', $row))
+                $league->setPrizeMoney($row['prizeMoney'] !== null ? (int) $row['prizeMoney'] : null);
+            if (array_key_exists('leaguePositionPot', $row))
+                $league->setLeaguePositionPot($row['leaguePositionPot'] !== null ? (int) $row['leaguePositionPot'] : null);
+            if (array_key_exists('leagueReputationTier', $row))
+                $league->setLeagueReputationTier(
+                    $row['leagueReputationTier'] !== null
+                        ? ReputationTier::from((string) $row['leagueReputationTier'])
+                        : null
+                );
         }
     }
 
@@ -178,6 +190,9 @@ class LeagueImportExportService
 
     public function clearAll(): void
     {
+        // Nullify Club.currentLeague references before deleting League rows,
+        // otherwise the FK constraint (Club → League, no ON DELETE rule) will reject the delete.
+        $this->em->createQuery('UPDATE ' . Club::class . ' c SET c.currentLeague = NULL')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\NpcClub')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\League')->execute();
         $this->em->flush();

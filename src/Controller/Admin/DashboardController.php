@@ -716,8 +716,13 @@ class DashboardController extends AbstractDashboardController
 
         $clearFirst = $request->request->has('clear_before_import');
         if ($clearFirst) {
-            $service->clearAll();
-            $this->addFlash('warning', 'Existing world data (leagues & clubs) cleared before import.');
+            try {
+                $service->clearAll();
+                $this->addFlash('warning', 'Existing world data (leagues & clubs) cleared before import.');
+            } catch (\Throwable $e) {
+                $this->addFlash('danger', 'Failed to clear existing world data: ' . $e->getMessage());
+                return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+            }
         }
 
         $result = $service->import($data);
