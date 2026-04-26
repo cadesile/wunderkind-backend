@@ -47,16 +47,18 @@ class FixtureGenerationService
             array_unshift($teams, $pivot);
         }
 
-        // Double round robin: append same rounds but with home/away swapped
-        $secondHalf = [];
+        // Double round robin: interleave home and away legs so teams alternate
+        // e.g. [MD1, MD1_swapped, MD2, MD2_swapped, ...] instead of all home then all away
+        $result = [];
         foreach ($schedule as $matchday) {
+            $result[] = $matchday;
             $swappedMatchday = [];
             foreach ($matchday as $match) {
                 $swappedMatchday[] = [$match[1], $match[0]];
             }
-            $secondHalf[] = $swappedMatchday;
+            $result[] = $swappedMatchday;
         }
 
-        return array_merge($schedule, $secondHalf);
+        return $result;
     }
 }
