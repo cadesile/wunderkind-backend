@@ -153,6 +153,7 @@ class FacilityTemplate
             'maxLevel'                 => $this->maxLevel,
             'decayBase'                => $this->decayBase,
             'sortOrder'                => $this->sortOrder,
+            'isActive'                 => $this->isActive,
         ];
     }
 }

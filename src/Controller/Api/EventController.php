@@ -35,6 +35,7 @@ class EventController extends AbstractController
             'firingConditions' => $t->getFiringConditions(),
             'severity'         => $t->getSeverity(),
             'chainedEvents'    => $t->getChainedEventsWithoutNotes(),
+            'noInteract'       => $t->isNoInteract(),
         ], $items);
 
         $response = new JsonResponse(['templates' => $data]);

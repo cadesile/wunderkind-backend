@@ -9,6 +9,7 @@ use App\Entity\NpcClub;
 use App\Entity\League;
 use App\Entity\Player;
 use App\Entity\Staff;
+use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
@@ -73,8 +74,15 @@ class WorldInitializationService
             foreach ($npcClubs as $npcClub) {
                 $allClubIds[] = (string) $npcClub->getId();
                 $totalPlayers  = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
-                $foreignCount  = (int) round($totalPlayers * (int) $tierConf['foreignPercent'] / 100);
-                $domesticCount = $totalPlayers - $foreignCount;
+
+                // Guarantee at least 2 goalkeepers per squad before the general draw
+                $gks = $this->playerRepository->findForWorldInitByPosition(
+                    $abilityRange['min'], $abilityRange['max'], PlayerPosition::GOALKEEPER, 2
+                );
+
+                $remainingCount = max(0, $totalPlayers - count($gks));
+                $foreignCount  = (int) round($remainingCount * (int) $tierConf['foreignPercent'] / 100);
+                $domesticCount = $remainingCount - $foreignCount;
 
                 $domestic = $this->playerRepository->findForWorldInit(
                     $abilityRange['min'], $abilityRange['max'], $country, $domesticCount
@@ -98,7 +106,9 @@ class WorldInitializationService
                     $foreign = array_merge($foreign, $extra);
                 }
 
-                $players  = array_values(array_unique(array_merge($domestic, $foreign), SORT_REGULAR));
+                // Doctrine identity map ensures same-player objects are identical references;
+                // array_unique with SORT_REGULAR safely deduplicates by object reference.
+                $players  = array_values(array_unique(array_merge($gks, $domestic, $foreign), SORT_REGULAR));
                 $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,    (int) $tierConf['managerCount']);
                 $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,  (int) $tierConf['coachCount']);
                 $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,    (int) $tierConf['chairmanCount']);
@@ -118,16 +128,23 @@ class WorldInitializationService
         $ampLeagueTier = $club->getCurrentLeague()?->getTier() ?? 8;
         $ampRange      = $leagueRanges[$country][(string) $ampLeagueTier] ?? self::ABILITY_RANGES[$ampLeagueTier] ?? ['min' => 5, 'max' => 35];
 
-        $ampPlayers = $this->playerRepository->findForWorldInit(
-            $ampRange['min'], $ampRange['max'], $country, $starterConfig->getStarterPlayerCount()
+        // Guarantee at least 2 goalkeepers for the AMP starter squad
+        $ampGks = $this->playerRepository->findForWorldInitByPosition(
+            $ampRange['min'], $ampRange['max'], PlayerPosition::GOALKEEPER, 2
         );
-        if (count($ampPlayers) < $starterConfig->getStarterPlayerCount()) {
-            $deficit = $starterConfig->getStarterPlayerCount() - count($ampPlayers);
+
+        $ampOutfieldCount = max(0, $starterConfig->getStarterPlayerCount() - count($ampGks));
+        $ampPlayers = $this->playerRepository->findForWorldInit(
+            $ampRange['min'], $ampRange['max'], $country, $ampOutfieldCount
+        );
+        if (count($ampPlayers) < $ampOutfieldCount) {
+            $deficit = $ampOutfieldCount - count($ampPlayers);
             $extra   = $this->playerRepository->findForeignForWorldInit(
                 $ampRange['min'], $ampRange['max'], '__none__', $deficit // '__none__' is an impossible nationality value used to draw from any nationality (no exclusion)
             );
             $ampPlayers = array_merge($ampPlayers, $extra);
         }
+        $ampPlayers = array_values(array_unique(array_merge($ampGks, $ampPlayers), SORT_REGULAR));
 
         $ampStaff = array_merge(
             $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,           $starterConfig->getStarterManagerCount()),

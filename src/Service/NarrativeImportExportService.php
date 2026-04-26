@@ -55,6 +55,7 @@ class NarrativeImportExportService
             'firingConditions' => $t->getFiringConditions(),
             'severity'         => $t->getSeverity(),
             'chainedEvents'    => $t->getChainedEvents(),
+            'noInteract'       => $t->isNoInteract(),
         ], $this->eventTemplateRepository->findBy([], ['category' => 'ASC', 'slug' => 'ASC']));
     }
 
@@ -184,6 +185,7 @@ class NarrativeImportExportService
         $template->setFiringConditions($row['firingConditions'] ?? null);
         $template->setSeverity($row['severity'] ?? null);
         $template->setChainedEvents($row['chainedEvents'] ?? null);
+        $template->setNoInteract((bool) ($row['noInteract'] ?? false));
 
         return $created;
     }
@@ -214,6 +216,7 @@ class NarrativeImportExportService
         $template->setMaxLevel((int) ($row['maxLevel'] ?? 5));
         $template->setDecayBase((float) ($row['decayBase'] ?? 2.0));
         $template->setSortOrder((int) ($row['sortOrder'] ?? 0));
+        $template->setIsActive((bool) ($row['isActive'] ?? true));
         $template->touch();
 
         return $created;

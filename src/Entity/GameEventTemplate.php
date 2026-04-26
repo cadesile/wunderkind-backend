@@ -53,6 +53,13 @@ class GameEventTemplate
     private ?string $severity = null;
 
     /**
+     * When true, the AMP player reads the event but does not need to respond.
+     * Effects are applied automatically by the client engine without player interaction.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $noInteract = false;
+
+    /**
      * Optional chain links — each entry boosts the weight of another event for the same
      * player pair within a configurable time window.
      * Shape: [{ nextEventSlug: string, boostMultiplier: float, windowWeeks: int, note: string|null }]
@@ -142,6 +149,9 @@ class GameEventTemplate
 
     public function getSeverity(): ?string { return $this->severity; }
     public function setSeverity(?string $severity): void { $this->severity = $severity; }
+
+    public function isNoInteract(): bool { return $this->noInteract; }
+    public function setNoInteract(bool $noInteract): void { $this->noInteract = $noInteract; }
 
     public function getChainedEvents(): ?array { return $this->chainedEvents; }
     public function setChainedEvents(?array $chainedEvents): void { $this->chainedEvents = $chainedEvents; }

@@ -112,6 +112,29 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Random pool draw filtered by ability range and position (any nationality).
+     * Used to guarantee minimum positional quotas before the general draw.
+     * @return Player[]
+     */
+    public function findForWorldInitByPosition(int $abilityMin, int $abilityMax, PlayerPosition $position, int $limit): array
+    {
+        if ($limit <= 0) return [];
+
+        return $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.club IS NULL')
+            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->andWhere('p.position = :position')
+            ->setParameter('min', $abilityMin)
+            ->setParameter('max', $abilityMax)
+            ->setParameter('position', $position)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Random pool draw filtered by ability range and exact nationality.
      * Uses RANDOM() ordering via Doctrine DQL. For PostgreSQL only.
      * @return Player[]

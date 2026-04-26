@@ -13,6 +13,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
@@ -56,6 +57,9 @@ class GameEventTemplateCrudController extends AbstractCrudController
             ->setChoices(['Minor' => 'minor', 'Major' => 'major'])
             ->setRequired(false)
             ->setHelp('minor = read-only inbox report. major = AMP must respond.');
+        yield BooleanField::new('noInteract')
+            ->setHelp('When enabled, effects apply automatically — the AMP player reads the event but does not need to respond.')
+            ->renderAsSwitch(true);
         yield Field::new('firingConditions', 'Firing Conditions')
             ->setFormType(FiringConditionsType::class)
             ->setRequired(false)
