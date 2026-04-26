@@ -35,6 +35,22 @@ class StarterConfig
     #[ORM\Column(type: 'integer')]
     private int $starterScoutCount = 1;
 
+    /** Number of managers assigned to a starter club. Default: 1 */
+    #[ORM\Column(type: 'integer')]
+    private int $starterManagerCount = 1;
+
+    /** Number of directors of football assigned to a starter club. Default: 0 */
+    #[ORM\Column(type: 'integer')]
+    private int $starterDirectorOfFootballCount = 0;
+
+    /** Number of facility managers assigned to a starter club. Default: 0 */
+    #[ORM\Column(type: 'integer')]
+    private int $starterFacilityManagerCount = 0;
+
+    /** Number of chairmen assigned to a starter club. Default: 1 */
+    #[ORM\Column(type: 'integer')]
+    private int $starterChairmanCount = 1;
+
     /**
      * Sponsor company-size tier assigned at club creation.
      * Matches CompanySize enum value. Default: 'SMALL'
@@ -118,6 +134,18 @@ class StarterConfig
 
     public function getStarterScoutCount(): int { return $this->starterScoutCount; }
     public function setStarterScoutCount(int $v): static { $this->starterScoutCount = $v; return $this; }
+
+    public function getStarterManagerCount(): int { return $this->starterManagerCount; }
+    public function setStarterManagerCount(int $v): static { $this->starterManagerCount = $v; return $this; }
+
+    public function getStarterDirectorOfFootballCount(): int { return $this->starterDirectorOfFootballCount; }
+    public function setStarterDirectorOfFootballCount(int $v): static { $this->starterDirectorOfFootballCount = $v; return $this; }
+
+    public function getStarterFacilityManagerCount(): int { return $this->starterFacilityManagerCount; }
+    public function setStarterFacilityManagerCount(int $v): static { $this->starterFacilityManagerCount = $v; return $this; }
+
+    public function getStarterChairmanCount(): int { return $this->starterChairmanCount; }
+    public function setStarterChairmanCount(int $v): static { $this->starterChairmanCount = $v; return $this; }
 
     public function getStarterSponsorTier(): string { return $this->starterSponsorTier; }
     public function setStarterSponsorTier(string $v): static { $this->starterSponsorTier = $v; return $this; }

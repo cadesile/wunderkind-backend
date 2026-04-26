@@ -232,6 +232,10 @@ class DashboardController extends AbstractDashboardController
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
+        $config->setStarterManagerCount((int) $request->request->get('starterManagerCount', 1));
+        $config->setStarterDirectorOfFootballCount((int) $request->request->get('starterDirectorOfFootballCount', 0));
+        $config->setStarterFacilityManagerCount((int) $request->request->get('starterFacilityManagerCount', 0));
+        $config->setStarterChairmanCount((int) $request->request->get('starterChairmanCount', 1));
         $config->setStarterSponsorTier($request->request->get('starterSponsorTier', 'SMALL'));
         $config->setStarterClubTier($request->request->get('starterClubTier', 'local'));
 
