@@ -56,7 +56,8 @@
       "Bash(docker ps:*)",
       "Bash(docker exec:*)",
       "Bash(docker build:*)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(mkdir:*)"
     ]
   }
 }
