@@ -8,14 +8,17 @@ use App\Entity\Club;
 use App\Entity\NpcClub;
 use App\Entity\League;
 use App\Entity\Player;
+use App\Entity\Scout;
 use App\Entity\Staff;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
+use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
+use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class WorldInitializationService
@@ -33,13 +36,14 @@ class WorldInitializationService
     ];
 
     public function __construct(
-        private readonly LeagueRepository        $leagueRepository,
-        private readonly NpcClubRepository       $npcClubRepository,
-        private readonly PlayerRepository        $playerRepository,
-        private readonly StaffRepository         $staffRepository,
-        private readonly StarterConfigRepository $starterConfigRepository,
+        private readonly LeagueRepository         $leagueRepository,
+        private readonly NpcClubRepository        $npcClubRepository,
+        private readonly PlayerRepository         $playerRepository,
+        private readonly ScoutRepository          $scoutRepository,
+        private readonly StaffRepository          $staffRepository,
+        private readonly StarterConfigRepository  $starterConfigRepository,
         private readonly FixtureGenerationService $fixtureGenerationService,
-        private readonly EntityManagerInterface  $em,
+        private readonly EntityManagerInterface   $em,
     ) {}
 
     public function initialize(Club $club): array
@@ -124,9 +128,11 @@ class WorldInitializationService
             $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures);
         }
 
-        // AMP starter pack — use the same leagueAbilityRanges config as NPC clubs
+        // AMP starter pack — use the same leagueAbilityRanges config as NPC clubs.
+        // Convert the 2-letter country code to the nationality string used in the player pool.
         $ampLeagueTier = $club->getCurrentLeague()?->getTier() ?? 8;
         $ampRange      = $leagueRanges[$country][(string) $ampLeagueTier] ?? self::ABILITY_RANGES[$ampLeagueTier] ?? ['min' => 5, 'max' => 35];
+        $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
         // Guarantee at least 2 goalkeepers for the AMP starter squad
         $ampGks = $this->playerRepository->findForWorldInitByPosition(
@@ -135,24 +141,33 @@ class WorldInitializationService
 
         $ampOutfieldCount = max(0, $starterConfig->getStarterPlayerCount() - count($ampGks));
         $ampPlayers = $this->playerRepository->findForWorldInit(
-            $ampRange['min'], $ampRange['max'], $country, $ampOutfieldCount
+            $ampRange['min'], $ampRange['max'], $ampNationality, $ampOutfieldCount
         );
         if (count($ampPlayers) < $ampOutfieldCount) {
             $deficit = $ampOutfieldCount - count($ampPlayers);
             $extra   = $this->playerRepository->findForeignForWorldInit(
-                $ampRange['min'], $ampRange['max'], '__none__', $deficit // '__none__' is an impossible nationality value used to draw from any nationality (no exclusion)
+                $ampRange['min'], $ampRange['max'], '__none__', $deficit // '__none__' draws from any nationality
             );
             $ampPlayers = array_merge($ampPlayers, $extra);
         }
         $ampPlayers = array_values(array_unique(array_merge($ampGks, $ampPlayers), SORT_REGULAR));
 
         $ampStaff = array_merge(
-            $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,           $starterConfig->getStarterManagerCount()),
-            $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,             $starterConfig->getStarterCoachCount()),
-            $this->staffRepository->findInPoolByRoleRandom(StaffRole::DIRECTOR_OF_FOOTBALL, $starterConfig->getStarterDirectorOfFootballCount()),
-            $this->staffRepository->findInPoolByRoleRandom(StaffRole::FACILITY_MANAGER,  $starterConfig->getStarterFacilityManagerCount()),
-            $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,          $starterConfig->getStarterChairmanCount()),
+            $this->fillStaffRole(StaffRole::MANAGER,              $starterConfig->getStarterManagerCount(),              $ampNationality),
+            $this->fillStaffRole(StaffRole::COACH,                $starterConfig->getStarterCoachCount(),                $ampNationality),
+            $this->fillStaffRole(StaffRole::DIRECTOR_OF_FOOTBALL, $starterConfig->getStarterDirectorOfFootballCount(),   $ampNationality),
+            $this->fillStaffRole(StaffRole::FACILITY_MANAGER,     $starterConfig->getStarterFacilityManagerCount(),      $ampNationality),
+            $this->fillStaffRole(StaffRole::CHAIRMAN,             $starterConfig->getStarterChairmanCount(),             $ampNationality),
         );
+
+        $ampScouts = $this->scoutRepository->findInPool($starterConfig->getStarterScoutCount(), nationality: $ampNationality);
+        if (count($ampScouts) < $starterConfig->getStarterScoutCount()) {
+            $deficit    = $starterConfig->getStarterScoutCount() - count($ampScouts);
+            $ampScouts  = array_merge(
+                $ampScouts,
+                $this->scoutRepository->findInPool($deficit), // fallback: any nationality
+            );
+        }
 
         foreach ($ampPlayers as $p) { $p->setClub($club); }
         foreach ($ampStaff   as $s) { $s->setClub($club); }
@@ -170,6 +185,7 @@ class WorldInitializationService
             'ampStarter' => [
                 'players' => array_map(fn(Player $p) => $this->buildPlayerSnapshot($p), $ampPlayers),
                 'staff'   => array_map(fn(Staff $s) => $this->buildStaffSnapshot($s), $ampStaff),
+                'scouts'  => array_map(fn(Scout $s) => $this->buildScoutSnapshot($s), $ampScouts),
             ],
         ];
     }
@@ -251,6 +267,31 @@ class WorldInitializationService
             'role'            => $staff->getRole()->value,
             'coachingAbility' => $staff->getCoachingAbility(),
             'nationality'     => $staff->getNationality() ?? '',
+        ];
+    }
+
+    /** Fetch up to $limit staff of $role matching $nationality; backfill with any-nationality if short. */
+    private function fillStaffRole(StaffRole $role, int $limit, string $nationality): array
+    {
+        $results = $this->staffRepository->findInPoolByRoleRandom($role, $limit, $nationality);
+        if (count($results) < $limit) {
+            $deficit = $limit - count($results);
+            $results = array_merge(
+                $results,
+                $this->staffRepository->findInPoolByRoleRandom($role, $deficit),
+            );
+        }
+        return $results;
+    }
+
+    private function buildScoutSnapshot(Scout $scout): array
+    {
+        return [
+            'id'          => (string) $scout->getId(),
+            'name'        => $scout->getName(),
+            'nationality' => $scout->getNationality() ?? '',
+            'experience'  => $scout->getExperience(),
+            'judgements'  => $scout->getJudgements(),
         ];
     }
 

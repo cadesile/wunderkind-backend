@@ -7,9 +7,12 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\ClubRepository;
 use App\Repository\PlayerRepository;
+use App\Service\ClubInitializationService;
 use App\Service\WorldInitializationService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -22,6 +25,7 @@ class InitializeController extends AbstractController
         private readonly ClubRepository             $clubRepository,
         private readonly PlayerRepository           $playerRepository,
         private readonly WorldInitializationService $worldInitializationService,
+        private readonly EntityManagerInterface     $em,
     ) {}
 
     /**
@@ -34,7 +38,7 @@ class InitializeController extends AbstractController
      *   - 412 if player pool has fewer than MIN_POOL_SIZE players
      */
     #[Route('/initialize', name: 'api_initialize', methods: ['POST'])]
-    public function initialize(): JsonResponse
+    public function initialize(Request $request): JsonResponse
     {
         /** @var User $user */
         $user    = $this->getUser();
@@ -44,9 +48,29 @@ class InitializeController extends AbstractController
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        // Accept an optional ?country=EN query param — overrides whatever is on the club.
+        $countryParam = $request->query->get('country');
+        if ($countryParam !== null) {
+            $countryParam = strtoupper(trim($countryParam));
+            if (ClubInitializationService::countryToNationality($countryParam) === null) {
+                return $this->json(
+                    ['error' => "Unknown country code '{$countryParam}'."],
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                );
+            }
+            $club->setCountry($countryParam);
+            $this->em->flush();
+        }
+
+        // Fallback: derive country from the club's assigned league if still unset.
+        if ($club->getCountry() === null && $club->getCurrentLeague() !== null) {
+            $club->setCountry($club->getCurrentLeague()->getCountry());
+            $this->em->flush();
+        }
+
         if ($club->getCountry() === null) {
             return $this->json(
-                ['error' => 'Club must have a country set before initialization.'],
+                ['error' => 'Club must have a country set before initialization. Pass ?country=<code>.'],
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }

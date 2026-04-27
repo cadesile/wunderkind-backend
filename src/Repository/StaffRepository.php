@@ -66,14 +66,18 @@ class StaffRepository extends ServiceEntityRepository
      * Random pool draw filtered by exact role. Used by WorldInitializationService.
      * @return Staff[]
      */
-    public function findInPoolByRoleRandom(StaffRole $role, int $limit): array
+    public function findInPoolByRoleRandom(StaffRole $role, int $limit, ?string $nationality = null): array
     {
-        $results = $this->createQueryBuilder('s')
+        $qb = $this->createQueryBuilder('s')
             ->where('s.club IS NULL')
             ->andWhere('s.role = :role')
-            ->setParameter('role', $role)
-            ->getQuery()
-            ->getResult();
+            ->setParameter('role', $role);
+
+        if ($nationality !== null) {
+            $qb->andWhere('s.nationality = :nationality')->setParameter('nationality', $nationality);
+        }
+
+        $results = $qb->getQuery()->getResult();
         shuffle($results);
         return array_slice($results, 0, $limit);
     }

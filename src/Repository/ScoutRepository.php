@@ -18,7 +18,7 @@ class ScoutRepository extends ServiceEntityRepository
      * @param int|null $experienceMin If provided, only scouts with experience >= this value
      * @param int|null $experienceMax If provided, only scouts with experience <= this value
      */
-    public function findInPool(int $limit = 10, ?int $experienceMin = null, ?int $experienceMax = null): array
+    public function findInPool(int $limit = 10, ?int $experienceMin = null, ?int $experienceMax = null, ?string $nationality = null): array
     {
         $qb = $this->createQueryBuilder('s')
             ->orderBy('s.id', 'DESC')
@@ -30,6 +30,10 @@ class ScoutRepository extends ServiceEntityRepository
 
         if ($experienceMax !== null) {
             $qb->andWhere('s.experience <= :expMax')->setParameter('expMax', $experienceMax);
+        }
+
+        if ($nationality !== null) {
+            $qb->andWhere('s.nationality = :nationality')->setParameter('nationality', $nationality);
         }
 
         return $qb->getQuery()->getResult();
