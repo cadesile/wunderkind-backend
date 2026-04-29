@@ -46,9 +46,17 @@ class WorldInitializationService
         private readonly EntityManagerInterface   $em,
     ) {}
 
-    public function initialize(Club $club): array
+    /**
+     * Builds the full NPC league pack for a country: all tiers, with fresh squads drawn from
+     * the player pool and fixtures generated. NPC players/staff used for snapshots are deleted
+     * from the pool immediately (DQL, no flush required).
+     *
+     * Safe to call independently of initialize() — used by LeagueService on season conclusion.
+     *
+     * @return array{leagues: array}
+     */
+    public function buildLeaguesPack(Club $club, string $country): array
     {
-        $country       = $club->getCountry();
         $starterConfig = $this->starterConfigRepository->getConfig();
         $npcConfig     = $starterConfig->getNpcSquadConfig();
         $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
@@ -62,13 +70,13 @@ class WorldInitializationService
             $tier         = $league->getTier();
             $tierKey      = (string) $tier;
             $tierConf     = $npcConfig[$tierKey] ?? $this->defaultTierConfig($tier);
-            
+
             // Use configured ranges if available, otherwise fallback to hardcoded defaults
             $abilityRange = $leagueRanges[$country][$tierKey] ?? self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
-            
-            $npcClubs     = $this->npcClubRepository->findByLeague($league);
-            $clubsData    = [];
-            $allClubIds   = [];
+
+            $npcClubs   = $this->npcClubRepository->findByLeague($league);
+            $clubsData  = [];
+            $allClubIds = [];
 
             // Add the player's club to the fixture list if it belongs to this league
             if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
@@ -77,7 +85,7 @@ class WorldInitializationService
 
             foreach ($npcClubs as $npcClub) {
                 $allClubIds[] = (string) $npcClub->getId();
-                $totalPlayers  = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
+                $totalPlayers = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
 
                 // Guarantee at least 2 goalkeepers per squad before the general draw
                 $gks = $this->playerRepository->findForWorldInitByPosition(
@@ -85,16 +93,16 @@ class WorldInitializationService
                 );
 
                 $remainingCount = max(0, $totalPlayers - count($gks));
-                $foreignCount  = (int) round($remainingCount * (int) $tierConf['foreignPercent'] / 100);
-                $domesticCount = $remainingCount - $foreignCount;
+                $foreignCount   = (int) round($remainingCount * (int) $tierConf['foreignPercent'] / 100);
+                $domesticCount  = $remainingCount - $foreignCount;
 
                 $domestic = $this->playerRepository->findForWorldInit(
                     $abilityRange['min'], $abilityRange['max'], $country, $domesticCount
                 );
                 if (count($domestic) < $domesticCount) {
-                    $deficit = $domesticCount - count($domestic);
-                    $extra   = $this->playerRepository->findForeignForWorldInit(
-                        $abilityRange['min'], $abilityRange['max'], '__none__', $deficit // '__none__' is an impossible nationality value used to draw from any nationality (no exclusion)
+                    $deficit  = $domesticCount - count($domestic);
+                    $extra    = $this->playerRepository->findForeignForWorldInit(
+                        $abilityRange['min'], $abilityRange['max'], '__none__', $deficit
                     );
                     $domestic = array_merge($domestic, $extra);
                 }
@@ -113,9 +121,9 @@ class WorldInitializationService
                 // Doctrine identity map ensures same-player objects are identical references;
                 // array_unique with SORT_REGULAR safely deduplicates by object reference.
                 $players  = array_values(array_unique(array_merge($gks, $domestic, $foreign), SORT_REGULAR));
-                $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,    (int) $tierConf['managerCount']);
-                $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,  (int) $tierConf['coachCount']);
-                $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,    (int) $tierConf['chairmanCount']);
+                $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,   (int) $tierConf['managerCount']);
+                $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,     (int) $tierConf['coachCount']);
+                $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,  (int) $tierConf['chairmanCount']);
                 $staff    = array_merge($managers, $coaches, $chairmen);
 
                 foreach ($players as $p) { $npcPlayerIds[] = (string) $p->getId(); }
@@ -124,9 +132,23 @@ class WorldInitializationService
                 $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff);
             }
 
-            $fixtures = $this->fixtureGenerationService->generate($allClubIds);
+            $fixtures      = $this->fixtureGenerationService->generate($allClubIds);
             $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures);
         }
+
+        $this->playerRepository->deleteByIds($npcPlayerIds);
+        $this->staffRepository->deleteByIds($npcStaffIds);
+
+        return ['leagues' => $leaguesData];
+    }
+
+    public function initialize(Club $club): array
+    {
+        $country     = $club->getCountry();
+        $leaguesPack = $this->buildLeaguesPack($club, $country);
+
+        $starterConfig = $this->starterConfigRepository->getConfig();
+        $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
 
         // AMP starter pack — use the same leagueAbilityRanges config as NPC clubs.
         // Convert the 2-letter country code to the nationality string used in the player pool.
@@ -172,22 +194,19 @@ class WorldInitializationService
         foreach ($ampPlayers as $p) { $p->setClub($club); }
         foreach ($ampStaff   as $s) { $s->setClub($club); }
 
-        $this->playerRepository->deleteByIds($npcPlayerIds);
-        $this->staffRepository->deleteByIds($npcStaffIds);
-
         // Note: Doctrine wraps flush() in an implicit DB transaction on PostgreSQL.
-        // All DML (AMP FK assignments + NPC deletes) is atomically committed here.
+        // NPC player/staff pool deletions already executed (DQL) inside buildLeaguesPack().
+        // This flush commits AMP FK assignments + worldInitializedAt.
         $club->setWorldInitializedAt(new \DateTimeImmutable());
         $this->em->flush();
 
-        return [
-            'leagues'    => $leaguesData,
+        return array_merge($leaguesPack, [
             'ampStarter' => [
                 'players' => array_map(fn(Player $p) => $this->buildPlayerSnapshot($p), $ampPlayers),
                 'staff'   => array_map(fn(Staff $s) => $this->buildStaffSnapshot($s), $ampStaff),
                 'scouts'  => array_map(fn(Scout $s) => $this->buildScoutSnapshot($s), $ampScouts),
             ],
-        ];
+        ]);
     }
 
     private function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures): array

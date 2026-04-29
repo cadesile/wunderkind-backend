@@ -14,14 +14,17 @@ use App\Entity\SeasonSnapshot;
 use App\Enum\CompanySize;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
+use App\Repository\NpcClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class LeagueService
 {
     public function __construct(
-        private readonly LeagueRepository       $leagueRepository,
-        private readonly EntityManagerInterface $em,
-        private readonly GameConfigRepository   $gameConfigRepository,
+        private readonly LeagueRepository         $leagueRepository,
+        private readonly EntityManagerInterface   $em,
+        private readonly GameConfigRepository     $gameConfigRepository,
+        private readonly NpcClubRepository        $npcClubRepository,
+        private readonly FixtureGenerationService $fixtureGenerationService,
     ) {}
 
     /** @return League[] newly created leagues (skips tiers that already exist) */
@@ -62,6 +65,41 @@ class LeagueService
     }
 
     /**
+     * Reads pyramidSnapshot.standings and moves each NPC club to its new tier/league.
+     * Only NpcClub.tier and NpcClub.league are updated — player associations are untouched.
+     * isAmp entries and unknown clubIds are silently skipped.
+     *
+     * Expected standing shape: { clubId: string, isAmp: bool, promoted: bool, relegated: bool }
+     */
+    private function applyNpcMovements(string $country, array $pyramidSnapshot): void
+    {
+        foreach ($pyramidSnapshot['standings'] ?? [] as $entry) {
+            if ($entry['isAmp'] ?? false) {
+                continue;
+            }
+
+            $npcClub = $this->npcClubRepository->find($entry['clubId']);
+            if ($npcClub === null) {
+                continue;
+            }
+
+            if ($entry['promoted'] ?? false) {
+                $newTier = $npcClub->getTier() - 1;
+                if ($newTier >= 1) {
+                    $npcClub->setTier($newTier);
+                    $npcClub->setLeague($this->leagueRepository->findByCountryAndTier($country, $newTier));
+                }
+            } elseif ($entry['relegated'] ?? false) {
+                $newTier = $npcClub->getTier() + 1;
+                if ($newTier <= 8) {
+                    $npcClub->setTier($newTier);
+                    $npcClub->setLeague($this->leagueRepository->findByCountryAndTier($country, $newTier));
+                }
+            }
+        }
+    }
+
+    /**
      * Re-rolls the income for every sponsor on the given league.
      * Each sponsor's rolledValue is set to a random integer within the
      * GameConfig range for that sponsor's CompanySize.
@@ -85,13 +123,69 @@ class LeagueService
     }
 
     /**
-     * Concludes the current season for an club:
-     * - Persists SeasonRecord + SeasonSnapshot
-     * - Moves club to new league if promoted/relegated
-     * - Re-rolls sponsor income for the next league
-     * - Increments club.currentSeason
+     * Builds the full league pyramid for a country with only the data that can
+     * change server-side between seasons: league financials, freshly rolled sponsor
+     * pots, and new fixture schedules. NPC squad data is excluded — the client
+     * already holds it and it does not change on conclude-season.
      *
-     * @return array{seasonRecordId: string, newLeague: array{id: string, tier: int, name: string}|null, nextSeasonFinancials: array}
+     * @return array[]
+     */
+    private function buildSeasonPyramid(Club $club, string $country, GameConfig $gameConfig): array
+    {
+        $leagues = $this->leagueRepository->findByCountry($country);
+        $result  = [];
+
+        foreach ($leagues as $league) {
+            $npcClubs   = $this->npcClubRepository->findByLeague($league);
+            $allClubIds = [];
+
+            if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
+                $allClubIds[] = (string) $club->getId();
+            }
+
+            $clubsData = [];
+            foreach ($npcClubs as $npcClub) {
+                $allClubIds[] = (string) $npcClub->getId();
+                $clubsData[]  = [
+                    'id'   => (string) $npcClub->getId(),
+                    'name' => $npcClub->getName(),
+                    'tier' => $npcClub->getTier(),
+                ];
+            }
+
+            $sponsorPot = $this->rollLeagueSponsors($league, $gameConfig);
+            $fixtures   = $this->fixtureGenerationService->generate($allClubIds);
+
+            $result[] = [
+                'id'                            => (string) $league->getId(),
+                'tier'                          => $league->getTier(),
+                'name'                          => $league->getName(),
+                'country'                       => $league->getCountry(),
+                'promotionSpots'                => $league->getPromotionSpots(),
+                'reputationTier'                => $league->getLeagueReputationTier()?->value,
+                'tvDeal'                        => $league->getTvDeal(),
+                'sponsorPot'                    => $sponsorPot,
+                'prizeMoney'                    => $league->getPrizeMoney(),
+                'leaguePositionPot'             => $league->getLeaguePositionPot(),
+                'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+                'clubs'                         => $clubsData,
+                'fixtures'                      => $fixtures,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Concludes the current season for a club:
+     * - Persists SeasonRecord + SeasonSnapshot
+     * - Moves AMP club to new league based on dto->promoted/relegated
+     * - Moves NPC clubs to new leagues based on pyramidSnapshot.standings
+     *   (only tier + league FK — player associations are untouched)
+     * - Increments club.currentSeason
+     * - Returns the full league pyramid with re-rolled financials and new fixtures
+     *
+     * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
      */
     public function concludeSeason(Club $club, ConcludeSeasonRequest $dto): array
     {
@@ -100,8 +194,10 @@ class LeagueService
             throw new \RuntimeException('Club has no current league assigned.');
         }
 
+        $country = $currentLeague->getCountry();
+
         $record = new SeasonRecord(
-            club:       $club,
+            club:          $club,
             league:        $currentLeague,
             season:        $club->getCurrentSeason(),
             finalPosition: $dto->finalPosition,
@@ -118,9 +214,9 @@ class LeagueService
         $this->em->persist($record);
 
         $snapshot = new SeasonSnapshot(
-            club:      $club,
+            club:         $club,
             season:       $club->getCurrentSeason(),
-            country:      $currentLeague->getCountry(),
+            country:      $country,
             snapshotData: [
                 'amp' => [
                     'leagueTier'    => $currentLeague->getTier(),
@@ -141,46 +237,40 @@ class LeagueService
         );
         $this->em->persist($snapshot);
 
+        // Move AMP club
         $newLeague = null;
         if ($dto->promoted && $currentLeague->getTier() > 1) {
-            $newLeague = $this->leagueRepository->findByCountryAndTier(
-                $currentLeague->getCountry(),
-                $currentLeague->getTier() - 1
-            );
+            $newLeague = $this->leagueRepository->findByCountryAndTier($country, $currentLeague->getTier() - 1);
         } elseif ($dto->relegated && $currentLeague->getTier() < 8) {
-            $newLeague = $this->leagueRepository->findByCountryAndTier(
-                $currentLeague->getCountry(),
-                $currentLeague->getTier() + 1
-            );
+            $newLeague = $this->leagueRepository->findByCountryAndTier($country, $currentLeague->getTier() + 1);
         }
-
         if ($newLeague !== null) {
             $club->setCurrentLeague($newLeague);
         }
 
+        // Move NPC clubs — only league/tier FK, player associations are untouched
+        $this->applyNpcMovements($country, $dto->pyramidSnapshot);
+
         $club->setCurrentSeason($club->getCurrentSeason() + 1);
 
-        // Re-roll sponsor income for next season's league
-        $nextLeague = $newLeague ?? $currentLeague;
         $gameConfig = $this->gameConfigRepository->getConfig();
-        $sponsorPot = $this->rollLeagueSponsors($nextLeague, $gameConfig);
 
+        // Flush all movements before buildSeasonPyramid() queries clubs by league
         $this->em->flush();
 
+        // Build the full pyramid: league financials (with freshly rolled sponsor pots)
+        // + club identifiers + new fixtures. No squad data — client holds that already.
+        $leagues = $this->buildSeasonPyramid($club, $country, $gameConfig);
+
         return [
-            'seasonRecordId'       => (string) $record->getId(),
-            'newLeague'            => $newLeague !== null ? [
+            'seasonRecordId' => (string) $record->getId(),
+            'newLeague'      => $newLeague !== null ? [
                 'id'   => (string) $newLeague->getId(),
                 'tier' => $newLeague->getTier(),
                 'name' => $newLeague->getName(),
             ] : null,
-            'nextSeasonFinancials' => [
-                'tvDeal'                        => $nextLeague->getTvDeal(),
-                'sponsorPot'                    => $sponsorPot,
-                'prizeMoney'                    => $nextLeague->getPrizeMoney(),
-                'leaguePositionPot'             => $nextLeague->getLeaguePositionPot(),
-                'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
-            ],
+            'leagues'        => $leagues,
         ];
     }
+
 }
