@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -11,7 +12,8 @@ use Symfony\Component\Routing\Attribute\Route;
 class GameConfigController extends AbstractController
 {
     public function __construct(
-        private readonly GameConfigRepository $gameConfigRepository,
+        private readonly GameConfigRepository      $gameConfigRepository,
+        private readonly FacilityTemplateRepository $facilityTemplateRepository,
     ) {}
 
     #[Route('/game-config', name: 'api_game_config', methods: ['GET'])]
@@ -40,6 +42,7 @@ class GameConfigController extends AbstractController
             'scoutMaxAssignments'               => $config->getScoutMaxAssignments(),
             'missionGemRollThresholds'          => $config->getMissionGemRollThresholds(),
             'playerFeeMultiplier'               => $config->getPlayerFeeMultiplier(),
+            'playerWageMultiplier'              => $config->getPlayerWageMultiplier(),
             'defaultMoraleMin'                  => $config->getDefaultMoraleMin(),
             'defaultMoraleMax'                  => $config->getDefaultMoraleMax(),
 
@@ -94,6 +97,13 @@ class GameConfigController extends AbstractController
             'investorProbabilityElite'   => $config->getInvestorProbabilityElite(),
 
             'staffRoles' => array_column(\App\Enum\StaffRole::cases(), 'value'),
+
+            // Facility templates — defines per-level gameplay effects for each facility type.
+            // Client applies these during the weekly tick on top of the GameConfig baselines above.
+            'facilityTemplates' => array_map(
+                fn($ft) => $ft->toArray(),
+                $this->facilityTemplateRepository->getActiveTemplates()
+            ),
         ]);
     }
 }

@@ -181,6 +181,14 @@ class GameConfig
     #[ORM\Column(type: 'float')]
     private float $playerFeeMultiplier = 1000.0;
 
+    /**
+     * Global multiplier applied to player wage calculations.
+     * Applied on top of the base wage derived from ability/position.
+     * Default: 1.0
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 1.0])]
+    private float $playerWageMultiplier = 1.0;
+
     // ── Guardian Complaints ───────────────────────────────────────────────
 
     /** Player morale boost when manager convinces a guardian. Default: 5 */
@@ -299,6 +307,9 @@ class GameConfig
 
     public function getPlayerFeeMultiplier(): float { return $this->playerFeeMultiplier; }
     public function setPlayerFeeMultiplier(float $v): static { $this->playerFeeMultiplier = $v; return $this; }
+
+    public function getPlayerWageMultiplier(): float { return $this->playerWageMultiplier; }
+    public function setPlayerWageMultiplier(float $v): static { $this->playerWageMultiplier = max(0.0, $v); return $this; }
 
     public function getDefaultMoraleMin(): int { return $this->defaultMoraleMin; }
     public function setDefaultMoraleMin(int $v): static { $this->defaultMoraleMin = $v; return $this; }

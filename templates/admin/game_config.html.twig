@@ -366,6 +366,13 @@
                                    step="1" min="1" class="form-control">
                             <div class="form-text">Controls player transfer fee scale. Default 1000. Higher = larger fees.</div>
                         </div>
+                        <div class="col-md-4">
+                            <label for="playerWageMultiplier" class="form-label fw-semibold small">Player Wage Multiplier</label>
+                            <input type="number" id="playerWageMultiplier" name="playerWageMultiplier"
+                                   value="{{ config.playerWageMultiplier }}"
+                                   step="0.01" min="0" class="form-control">
+                            <div class="form-text">Global multiplier applied to all player wage calculations. Default 1.0. Higher = larger wages.</div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -58,6 +58,25 @@ class FacilityTemplate
     #[ORM\Column(type: 'float', options: ['default' => 2.0])]
     private float $decayBase = 2.0;
 
+    /**
+     * Declarative per-level effect deltas applied by the client during the weekly tick.
+     * The client reads these alongside GameConfig baselines to compute effective values.
+     *
+     * Supported keys (all values are per-level amounts):
+     *   xpMultiplierPerLevel              — multiplies baseXP:               baseXP × (1 + v × level)
+     *   technicalGrowthMultiplierPerLevel — multiplies technical attr XP:    xp × (1 + v × level)
+     *   powerGrowthMultiplierPerLevel     — multiplies power attr XP:        xp × (1 + v × level)
+     *   injuryProbabilityDeltaPerLevel    — reduces baseInjuryProbability:   base − (v × level)
+     *   injuryRecoveryMultiplierPerLevel  — reduces recovery weeks:          weeks × (1 − v × level)
+     *   scoutErrorRangeDeltaPerLevel      — reduces scoutAbilityErrorRange:  base − (v × level)
+     *   scoutRevealWeeksDeltaPerLevel     — reduces scoutRevealWeeks:        base − (v × level)
+     *   cohesionBonusPerLevel             — adds to team cohesion:           cohesion + (v × level)
+     *
+     * @var array<string, float>
+     */
+    #[ORM\Column(type: 'json', options: ['default' => '{}'])]
+    private array $gameplayEffects = [];
+
     /** Controls display order in the facilities screen */
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $sortOrder = 0;
@@ -127,6 +146,21 @@ class FacilityTemplate
     public function getDecayBase(): float { return $this->decayBase; }
     public function setDecayBase(float $decayBase): void { $this->decayBase = max(0.0, $decayBase); }
 
+    /** @return array<string, float> */
+    public function getGameplayEffects(): array { return $this->gameplayEffects; }
+    /** @param array<string, float> $gameplayEffects */
+    public function setGameplayEffects(array $gameplayEffects): void { $this->gameplayEffects = $gameplayEffects; }
+
+    public function getGameplayEffectsJson(): string
+    {
+        return json_encode($this->gameplayEffects, JSON_PRETTY_PRINT) ?: '{}';
+    }
+
+    public function setGameplayEffectsJson(string $v): void
+    {
+        $this->gameplayEffects = json_decode($v, true) ?? [];
+    }
+
     public function getSortOrder(): int { return $this->sortOrder; }
     public function setSortOrder(int $sortOrder): void { $this->sortOrder = $sortOrder; }
 
@@ -152,6 +186,7 @@ class FacilityTemplate
             'reputationBonus'          => $this->reputationBonus,
             'maxLevel'                 => $this->maxLevel,
             'decayBase'                => $this->decayBase,
+            'gameplayEffects'          => $this->gameplayEffects,
             'sortOrder'                => $this->sortOrder,
             'isActive'                 => $this->isActive,
         ];

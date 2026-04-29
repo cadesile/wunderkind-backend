@@ -66,6 +66,64 @@ class FacilityTemplateCrudController extends AbstractCrudController
             ->setHelp('Weekly condition decay base. App formula: decayBase + level')
             ->setNumDecimals(1)
             ->hideOnIndex();
+        yield TextareaField::new('gameplayEffectsJson', 'Gameplay Effects')
+            ->setHelp(<<<HTML
+                <p>JSON object of per-level effect deltas applied by the client during the weekly tick. A facility can have multiple effects.</p>
+                <table class="table table-sm table-bordered mt-2" style="font-size:0.8rem">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Field name</th>
+                            <th>Example value</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>xpMultiplierPerLevel</code></td>
+                            <td><code>0.10</code></td>
+                            <td>Increases overall XP gain by 10% per level. Formula: <em>baseXP × (1 + v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>technicalGrowthMultiplierPerLevel</code></td>
+                            <td><code>0.12</code></td>
+                            <td>Increases technical attribute XP by 12% per level. Formula: <em>xp × (1 + v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>powerGrowthMultiplierPerLevel</code></td>
+                            <td><code>0.12</code></td>
+                            <td>Increases power/strength attribute XP by 12% per level. Formula: <em>xp × (1 + v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>injuryProbabilityDeltaPerLevel</code></td>
+                            <td><code>0.004</code></td>
+                            <td>Reduces weekly injury chance by 0.4% per level (subtracts from <em>baseInjuryProbability</em>). Formula: <em>base − (v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>injuryRecoveryMultiplierPerLevel</code></td>
+                            <td><code>0.10</code></td>
+                            <td>Reduces injury recovery weeks by 10% per level. Formula: <em>weeks × (1 − v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>scoutErrorRangeDeltaPerLevel</code></td>
+                            <td><code>3.0</code></td>
+                            <td>Reduces scout ability error range by 3 per level, improving accuracy (subtracts from <em>scoutAbilityErrorRange</em>). Formula: <em>base − (v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>scoutRevealWeeksDeltaPerLevel</code></td>
+                            <td><code>0.25</code></td>
+                            <td>Reduces the weeks required to reveal a scouted player by 0.25 per level (subtracts from <em>scoutRevealWeeks</em>). Formula: <em>base − (v × level)</em></td>
+                        </tr>
+                        <tr>
+                            <td><code>cohesionBonusPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Adds 0.05 to team cohesion score per level. Formula: <em>cohesion + (v × level)</em></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mt-1 text-muted" style="font-size:0.8rem">Baselines (<em>baseXP</em>, <em>baseInjuryProbability</em>, <em>scoutAbilityErrorRange</em>, <em>scoutRevealWeeks</em>) are configured in Admin → Game Config.</p>
+            HTML)
+            ->hideOnIndex()
+            ->setFormTypeOption('attr', ['rows' => 6, 'style' => 'font-family: monospace']);
         yield IntegerField::new('sortOrder')
             ->setHelp('Display order in the facilities screen (ascending)');
         yield BooleanField::new('isActive')
