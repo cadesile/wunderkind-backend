@@ -14,7 +14,6 @@ use App\Entity\SeasonSnapshot;
 use App\Enum\CompanySize;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
-use App\Repository\NpcClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class LeagueService
@@ -23,7 +22,6 @@ class LeagueService
         private readonly LeagueRepository         $leagueRepository,
         private readonly EntityManagerInterface   $em,
         private readonly GameConfigRepository     $gameConfigRepository,
-        private readonly NpcClubRepository        $npcClubRepository,
         private readonly FixtureGenerationService $fixtureGenerationService,
     ) {}
 
@@ -89,39 +87,90 @@ class LeagueService
     }
 
     /**
+     * Computes new league membership for the next season by applying the
+     * promoted/relegated flags from the pyramid snapshot.
+     *
+     * For each club in a league's standings:
+     *   - promoted=true  → moves to tier-1 league
+     *   - relegated=true → moves to tier+1 league
+     *   - otherwise      → stays in the same league
+     *
+     * @param  array<string, mixed> $pyramidSnapshot  The `pyramidSnapshot` from ConcludeSeasonRequest
+     * @return array<string, string[]>  leagueId (string UUID) → array of club IDs
+     */
+    private function computeNewLeagueMembership(array $pyramidSnapshot, string $country): array
+    {
+        $leagues     = $this->leagueRepository->findByCountry($country);
+        $leagueById  = [];
+        $leagueByTier = [];
+        foreach ($leagues as $league) {
+            $id = (string) $league->getId();
+            $leagueById[$id]                   = $league;
+            $leagueByTier[$league->getTier()]   = $id;
+        }
+
+        // Initialise empty buckets for every league.
+        $membership = array_fill_keys(array_keys($leagueById), []);
+
+        foreach ($pyramidSnapshot['leagues'] ?? [] as $leagueEntry) {
+            $leagueId = $leagueEntry['leagueId'] ?? null;
+            if ($leagueId === null || !isset($leagueById[$leagueId])) {
+                continue;
+            }
+
+            $currentTier = $leagueById[$leagueId]->getTier();
+
+            foreach ($leagueEntry['standings'] ?? [] as $standing) {
+                $clubId = $standing['clubId'] ?? null;
+                if ($clubId === null) {
+                    continue;
+                }
+
+                if ($standing['promoted'] ?? false) {
+                    $targetId = $leagueByTier[$currentTier - 1] ?? null;
+                } elseif ($standing['relegated'] ?? false) {
+                    $targetId = $leagueByTier[$currentTier + 1] ?? null;
+                } else {
+                    $targetId = null;
+                }
+
+                // Fall back to same league if target tier doesn't exist.
+                $destinationId = $targetId ?? $leagueId;
+                $membership[$destinationId][] = [
+                    'clubId'    => $clubId,
+                    'isAmp'     => $standing['isAmp'] ?? false,
+                    'promoted'  => $standing['promoted'] ?? false,
+                    'relegated' => $standing['relegated'] ?? false,
+                ];
+            }
+        }
+
+        return $membership;
+    }
+
+    /**
      * Builds the full league pyramid for a country with only the data that can
      * change server-side between seasons: league financials, freshly rolled sponsor
-     * pots, and new fixture schedules. NPC squad data is excluded — the client
-     * already holds it and it does not change on conclude-season.
+     * pots, new fixture schedules, and post-movement club lists.
      *
+     * @param  array<string, string[]> $newLeagueMembership  leagueId → clubIds after promotion/relegation
      * @return array[]
      */
-    private function buildSeasonPyramid(Club $club, string $country, GameConfig $gameConfig): array
+    private function buildSeasonPyramid(string $country, GameConfig $gameConfig, array $newLeagueMembership): array
     {
         $leagues = $this->leagueRepository->findByCountry($country);
         $result  = [];
 
         foreach ($leagues as $league) {
-            $npcClubs   = $this->npcClubRepository->findByLeague($league);
-            // Collect all participant IDs for fixture generation.
-            // clubs[] is intentionally excluded: NPC tier assignments are static pool
-            // data managed client-side. The client applies NPC promotion/relegation
-            // movements itself using the previous season's standings.
-            $allClubIds = [];
-
-            if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
-                $allClubIds[] = (string) $club->getId();
-            }
-
-            foreach ($npcClubs as $npcClub) {
-                $allClubIds[] = (string) $npcClub->getId();
-            }
+            $leagueId   = (string) $league->getId();
+            $clubs      = $newLeagueMembership[$leagueId] ?? [];
+            $clubIds    = array_column($clubs, 'clubId');
 
             $sponsorPot = $this->rollLeagueSponsors($league, $gameConfig);
-            $fixtures   = $this->fixtureGenerationService->generate($allClubIds);
+            $fixtures   = $this->fixtureGenerationService->generate($clubIds);
 
             $result[] = [
-                'id'                            => (string) $league->getId(),
+                'id'                            => $leagueId,
                 'tier'                          => $league->getTier(),
                 'name'                          => $league->getName(),
                 'country'                       => $league->getCountry(),
@@ -132,6 +181,7 @@ class LeagueService
                 'prizeMoney'                    => $league->getPrizeMoney(),
                 'leaguePositionPot'             => $league->getLeaguePositionPot(),
                 'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+                'clubs'                         => $clubs,
                 'fixtures'                      => $fixtures,
             ];
         }
@@ -219,9 +269,10 @@ class LeagueService
         // Flush all movements before buildSeasonPyramid() queries clubs by league
         $this->em->flush();
 
-        // Build the full pyramid: league financials (with freshly rolled sponsor pots)
-        // + club identifiers + new fixtures. No squad data — client holds that already.
-        $leagues = $this->buildSeasonPyramid($club, $country, $gameConfig);
+        // Compute new league membership from the snapshot's promotion/relegation flags,
+        // then build the full pyramid: financials, clubs per league, and new fixtures.
+        $newLeagueMembership = $this->computeNewLeagueMembership($dto->pyramidSnapshot, $country);
+        $leagues = $this->buildSeasonPyramid($country, $gameConfig, $newLeagueMembership);
 
         return [
             'seasonRecordId' => (string) $record->getId(),
