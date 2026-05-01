@@ -63,6 +63,7 @@ security:
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,           roles: PUBLIC_ACCESS }
         - { path: ^/api/starter-config,        roles: PUBLIC_ACCESS }
+        - { path: ^/api/archetypes,            roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/pool,             roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/sync,             roles: ROLE_CLUB }
@@ -72,7 +73,6 @@ security:
         - { path: ^/api/inbox,           roles: ROLE_CLUB }
         - { path: ^/api/finance/,        roles: ROLE_CLUB }
         - { path: ^/api/events/,         roles: ROLE_CLUB }
-        - { path: ^/api/archetypes,      roles: ROLE_CLUB }
         - { path: ^/api/squad,           roles: ROLE_CLUB }
         - { path: ^/api/staff,           roles: ROLE_CLUB }
         - { path: ^/api/facilities,      roles: ROLE_CLUB }

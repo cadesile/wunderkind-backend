@@ -5,16 +5,21 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Club;
+use App\Entity\GameConfig;
 use App\Entity\NpcClub;
 use App\Entity\League;
 use App\Entity\Player;
+use App\Entity\PoolConfig;
 use App\Entity\Scout;
 use App\Entity\Staff;
+use App\Enum\CompanySize;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
+use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
+use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
@@ -42,6 +47,8 @@ class WorldInitializationService
         private readonly ScoutRepository          $scoutRepository,
         private readonly StaffRepository          $staffRepository,
         private readonly StarterConfigRepository  $starterConfigRepository,
+        private readonly GameConfigRepository     $gameConfigRepository,
+        private readonly PoolConfigRepository     $poolConfigRepository,
         private readonly FixtureGenerationService $fixtureGenerationService,
         private readonly EntityManagerInterface   $em,
     ) {}
@@ -61,6 +68,8 @@ class WorldInitializationService
         $npcConfig     = $starterConfig->getNpcSquadConfig();
         $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
 
+        $poolConfig   = $this->poolConfigRepository->getConfig();
+        $gameConfig   = $this->gameConfigRepository->getConfig();
         $leagues      = $this->leagueRepository->findByCountry($country);
         $leaguesData  = [];
         $npcPlayerIds = [];
@@ -86,41 +95,45 @@ class WorldInitializationService
             foreach ($npcClubs as $npcClub) {
                 $allClubIds[] = (string) $npcClub->getId();
                 $totalPlayers = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
+                $foreignPct   = (int) $tierConf['foreignPercent'];
 
-                // Guarantee at least 2 goalkeepers per squad before the general draw
-                $gks = $this->playerRepository->findForWorldInitByPosition(
-                    $abilityRange['min'], $abilityRange['max'], PlayerPosition::GOALKEEPER, 2
-                );
+                // Distribute squad size across positions using PoolConfig weights
+                $posCounts = $this->distributeByPosition($totalPlayers, $poolConfig);
+                $players   = [];
 
-                $remainingCount = max(0, $totalPlayers - count($gks));
-                $foreignCount   = (int) round($remainingCount * (int) $tierConf['foreignPercent'] / 100);
-                $domesticCount  = $remainingCount - $foreignCount;
+                foreach ($posCounts as $posValue => $posTotal) {
+                    $position      = PlayerPosition::from($posValue);
+                    $foreignCount  = (int) round($posTotal * $foreignPct / 100);
+                    $domesticCount = $posTotal - $foreignCount;
 
-                $domestic = $this->playerRepository->findForWorldInit(
-                    $abilityRange['min'], $abilityRange['max'], $country, $domesticCount
-                );
-                if (count($domestic) < $domesticCount) {
-                    $deficit  = $domesticCount - count($domestic);
-                    $extra    = $this->playerRepository->findForeignForWorldInit(
-                        $abilityRange['min'], $abilityRange['max'], '__none__', $deficit
+                    $domestic = $this->playerRepository->findForWorldInitByPositionAndNationality(
+                        $abilityRange['min'], $abilityRange['max'], $position, $country, $domesticCount
                     );
-                    $domestic = array_merge($domestic, $extra);
-                }
+                    if (count($domestic) < $domesticCount) {
+                        $deficit  = $domesticCount - count($domestic);
+                        $extra    = $this->playerRepository->findForeignForWorldInitByPosition(
+                            $abilityRange['min'], $abilityRange['max'], '__none__', $position, $deficit
+                        );
+                        $domestic = array_merge($domestic, $extra);
+                    }
 
-                $foreign = $this->playerRepository->findForeignForWorldInit(
-                    $abilityRange['min'], $abilityRange['max'], $country, $foreignCount
-                );
-                if (count($foreign) < $foreignCount) {
-                    $deficit = $foreignCount - count($foreign);
-                    $extra   = $this->playerRepository->findForWorldInit(
-                        $abilityRange['min'], $abilityRange['max'], $country, $deficit
+                    $foreign = $this->playerRepository->findForeignForWorldInitByPosition(
+                        $abilityRange['min'], $abilityRange['max'], $country, $position, $foreignCount
                     );
-                    $foreign = array_merge($foreign, $extra);
+                    if (count($foreign) < $foreignCount) {
+                        $deficit = $foreignCount - count($foreign);
+                        $extra   = $this->playerRepository->findForWorldInitByPositionAndNationality(
+                            $abilityRange['min'], $abilityRange['max'], $position, $country, $deficit
+                        );
+                        $foreign = array_merge($foreign, $extra);
+                    }
+
+                    $players = array_merge($players, $domestic, $foreign);
                 }
 
                 // Doctrine identity map ensures same-player objects are identical references;
                 // array_unique with SORT_REGULAR safely deduplicates by object reference.
-                $players  = array_values(array_unique(array_merge($gks, $domestic, $foreign), SORT_REGULAR));
+                $players = array_values(array_unique($players, SORT_REGULAR));
                 $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,   (int) $tierConf['managerCount']);
                 $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,     (int) $tierConf['coachCount']);
                 $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,  (int) $tierConf['chairmanCount']);
@@ -133,7 +146,8 @@ class WorldInitializationService
             }
 
             $fixtures      = $this->fixtureGenerationService->generate($allClubIds);
-            $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures);
+            $sponsorPot    = $this->rollLeagueSponsors($league, $gameConfig);
+            $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures, $sponsorPot, $gameConfig);
         }
 
         $this->playerRepository->deleteByIds($npcPlayerIds);
@@ -156,23 +170,26 @@ class WorldInitializationService
         $ampRange      = $leagueRanges[$country][(string) $ampLeagueTier] ?? self::ABILITY_RANGES[$ampLeagueTier] ?? ['min' => 5, 'max' => 35];
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
-        // Guarantee at least 2 goalkeepers for the AMP starter squad
-        $ampGks = $this->playerRepository->findForWorldInitByPosition(
-            $ampRange['min'], $ampRange['max'], PlayerPosition::GOALKEEPER, 2
-        );
+        // Distribute AMP starter squad across positions using PoolConfig weights
+        $poolConfig = $this->poolConfigRepository->getConfig();
+        $posCounts  = $this->distributeByPosition($starterConfig->getStarterPlayerCount(), $poolConfig);
+        $ampPlayers = [];
 
-        $ampOutfieldCount = max(0, $starterConfig->getStarterPlayerCount() - count($ampGks));
-        $ampPlayers = $this->playerRepository->findForWorldInit(
-            $ampRange['min'], $ampRange['max'], $ampNationality, $ampOutfieldCount
-        );
-        if (count($ampPlayers) < $ampOutfieldCount) {
-            $deficit = $ampOutfieldCount - count($ampPlayers);
-            $extra   = $this->playerRepository->findForeignForWorldInit(
-                $ampRange['min'], $ampRange['max'], '__none__', $deficit // '__none__' draws from any nationality
+        foreach ($posCounts as $posValue => $count) {
+            $position   = PlayerPosition::from($posValue);
+            $posPlayers = $this->playerRepository->findForWorldInitByPositionAndNationality(
+                $ampRange['min'], $ampRange['max'], $position, $ampNationality, $count
             );
-            $ampPlayers = array_merge($ampPlayers, $extra);
+            if (count($posPlayers) < $count) {
+                $deficit    = $count - count($posPlayers);
+                $extra      = $this->playerRepository->findForeignForWorldInitByPosition(
+                    $ampRange['min'], $ampRange['max'], '__none__', $position, $deficit
+                );
+                $posPlayers = array_merge($posPlayers, $extra);
+            }
+            $ampPlayers = array_merge($ampPlayers, $posPlayers);
         }
-        $ampPlayers = array_values(array_unique(array_merge($ampGks, $ampPlayers), SORT_REGULAR));
+        $ampPlayers = array_values(array_unique($ampPlayers, SORT_REGULAR));
 
         $ampStaff = array_merge(
             $this->fillStaffRole(StaffRole::MANAGER,              $starterConfig->getStarterManagerCount(),              $ampNationality),
@@ -209,19 +226,82 @@ class WorldInitializationService
         ]);
     }
 
-    private function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures): array
+    /**
+     * Distributes $total players across GK/DEF/MID/ATT using PoolConfig position weights.
+     * Uses the largest-remainder method so the counts always sum exactly to $total.
+     *
+     * @return array<string, int>  Keys are PlayerPosition backed-enum values ('GK','DEF','MID','ATT')
+     */
+    private function distributeByPosition(int $total, PoolConfig $config): array
     {
-        // getLeagueReputationTier() returns ?ReputationTier (backed enum: string)
-        return [
-            'id'             => (string) $league->getId(),
-            'tier'           => $league->getTier(),
-            'name'           => $league->getName(),
-            'country'        => $league->getCountry(),
-            'promotionSpots' => $league->getPromotionSpots(),
-            'reputationTier' => $league->getLeagueReputationTier()?->value,
-            'clubs'          => $clubsData,
-            'fixtures'       => $fixtures,
+        $weights = [
+            PlayerPosition::GOALKEEPER->value => $config->getPositionWeightGk(),
+            PlayerPosition::DEFENDER->value   => $config->getPositionWeightDef(),
+            PlayerPosition::MIDFIELDER->value => $config->getPositionWeightMid(),
+            PlayerPosition::ATTACKER->value   => $config->getPositionWeightAtt(),
         ];
+
+        $totalWeight = array_sum($weights);
+        $counts      = [];
+        $fractions   = [];
+        $assigned    = 0;
+
+        foreach ($weights as $pos => $weight) {
+            $exact        = $total * $weight / $totalWeight;
+            $counts[$pos] = (int) floor($exact);
+            $fractions[$pos] = $exact - $counts[$pos];
+            $assigned    += $counts[$pos];
+        }
+
+        // Distribute remainder to positions with the largest fractional parts
+        $remainder = $total - $assigned;
+        arsort($fractions);
+        foreach (array_keys($fractions) as $pos) {
+            if ($remainder <= 0) break;
+            $counts[$pos]++;
+            $remainder--;
+        }
+
+        return $counts;
+    }
+
+    private function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures, int $sponsorPot, GameConfig $gameConfig): array
+    {
+        return [
+            'id'                            => (string) $league->getId(),
+            'tier'                          => $league->getTier(),
+            'name'                          => $league->getName(),
+            'country'                       => $league->getCountry(),
+            'promotionSpots'                => $league->getPromotionSpots(),
+            'reputationTier'                => $league->getLeagueReputationTier()?->value,
+            'tvDeal'                        => $league->getTvDeal(),
+            'sponsorPot'                    => $sponsorPot,
+            'prizeMoney'                    => $league->getPrizeMoney(),
+            'leaguePositionPot'             => $league->getLeaguePositionPot(),
+            'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+            'clubs'                         => $clubsData,
+            'fixtures'                      => $fixtures,
+        ];
+    }
+
+    /**
+     * Rolls sponsor pot for a league: randomises each LeagueSponsor's value within
+     * the GameConfig band for its CompanySize, persists rolled values, returns the total.
+     */
+    private function rollLeagueSponsors(League $league, GameConfig $config): int
+    {
+        $total = 0;
+        foreach ($league->getLeagueSponsors() as $ls) {
+            [$min, $max] = match ($ls->getSponsor()->getSize()) {
+                CompanySize::SMALL  => [$config->getSmallSponsorMin(),  $config->getSmallSponsorMax()],
+                CompanySize::MEDIUM => [$config->getMediumSponsorMin(), $config->getMediumSponsorMax()],
+                CompanySize::LARGE  => [$config->getLargeSponsorMin(),  $config->getLargeSponsorMax()],
+            };
+            $value = $max > $min ? random_int($min, $max) : $min;
+            $ls->setRolledValue($value);
+            $total += $value;
+        }
+        return $total;
     }
 
     private function buildClubSnapshot(NpcClub $club, array $players, array $staff): array

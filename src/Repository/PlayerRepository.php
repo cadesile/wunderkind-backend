@@ -156,6 +156,56 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Random pool draw filtered by ability range, position, and exact nationality.
+     * Used for position-weighted squad generation (domestic slot per position).
+     * @return Player[]
+     */
+    public function findForWorldInitByPositionAndNationality(int $abilityMin, int $abilityMax, PlayerPosition $position, string $nationality, int $limit): array
+    {
+        if ($limit <= 0) return [];
+
+        return $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.club IS NULL')
+            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->andWhere('p.position = :position')
+            ->andWhere('p.nationality = :nationality')
+            ->setParameter('min', $abilityMin)
+            ->setParameter('max', $abilityMax)
+            ->setParameter('position', $position)
+            ->setParameter('nationality', $nationality)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Random pool draw filtered by ability range, position, excluding a nationality (foreign slot per position).
+     * Pass '__none__' as $excludeNationality to draw from any nationality (backfill use case).
+     * @return Player[]
+     */
+    public function findForeignForWorldInitByPosition(int $abilityMin, int $abilityMax, string $excludeNationality, PlayerPosition $position, int $limit): array
+    {
+        if ($limit <= 0) return [];
+
+        return $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.club IS NULL')
+            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->andWhere('p.position = :position')
+            ->andWhere('p.nationality != :nationality')
+            ->setParameter('min', $abilityMin)
+            ->setParameter('max', $abilityMax)
+            ->setParameter('position', $position)
+            ->setParameter('nationality', $excludeNationality)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Random pool draw filtered by ability range, excluding a nationality (for foreign players).
      * @return Player[]
      */

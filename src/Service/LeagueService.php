@@ -64,40 +64,6 @@ class LeagueService
         }
     }
 
-    /**
-     * Reads pyramidSnapshot.standings and moves each NPC club to its new tier/league.
-     * Only NpcClub.tier and NpcClub.league are updated — player associations are untouched.
-     * isAmp entries and unknown clubIds are silently skipped.
-     *
-     * Expected standing shape: { clubId: string, isAmp: bool, promoted: bool, relegated: bool }
-     */
-    private function applyNpcMovements(string $country, array $pyramidSnapshot): void
-    {
-        foreach ($pyramidSnapshot['standings'] ?? [] as $entry) {
-            if ($entry['isAmp'] ?? false) {
-                continue;
-            }
-
-            $npcClub = $this->npcClubRepository->find($entry['clubId']);
-            if ($npcClub === null) {
-                continue;
-            }
-
-            if ($entry['promoted'] ?? false) {
-                $newTier = $npcClub->getTier() - 1;
-                if ($newTier >= 1) {
-                    $npcClub->setTier($newTier);
-                    $npcClub->setLeague($this->leagueRepository->findByCountryAndTier($country, $newTier));
-                }
-            } elseif ($entry['relegated'] ?? false) {
-                $newTier = $npcClub->getTier() + 1;
-                if ($newTier <= 8) {
-                    $npcClub->setTier($newTier);
-                    $npcClub->setLeague($this->leagueRepository->findByCountryAndTier($country, $newTier));
-                }
-            }
-        }
-    }
 
     /**
      * Re-rolls the income for every sponsor on the given league.
@@ -180,10 +146,11 @@ class LeagueService
      * Concludes the current season for a club:
      * - Persists SeasonRecord + SeasonSnapshot
      * - Moves AMP club to new league based on dto->promoted/relegated
-     * - Moves NPC clubs to new leagues based on pyramidSnapshot.standings
-     *   (only tier + league FK — player associations are untouched)
      * - Increments club.currentSeason
      * - Returns the full league pyramid with re-rolled financials and new fixtures
+     *
+     * NPC club/league structure is static pool data and is never mutated here.
+     * Promotion/relegation of NPC clubs is managed entirely on the client.
      *
      * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
      */
@@ -247,9 +214,6 @@ class LeagueService
         if ($newLeague !== null) {
             $club->setCurrentLeague($newLeague);
         }
-
-        // Move NPC clubs — only league/tier FK, player associations are untouched
-        $this->applyNpcMovements($country, $dto->pyramidSnapshot);
 
         $club->setCurrentSeason($club->getCurrentSeason() + 1);
 
