@@ -103,20 +103,18 @@ class LeagueService
 
         foreach ($leagues as $league) {
             $npcClubs   = $this->npcClubRepository->findByLeague($league);
+            // Collect all participant IDs for fixture generation.
+            // clubs[] is intentionally excluded: NPC tier assignments are static pool
+            // data managed client-side. The client applies NPC promotion/relegation
+            // movements itself using the previous season's standings.
             $allClubIds = [];
 
             if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
                 $allClubIds[] = (string) $club->getId();
             }
 
-            $clubsData = [];
             foreach ($npcClubs as $npcClub) {
                 $allClubIds[] = (string) $npcClub->getId();
-                $clubsData[]  = [
-                    'id'   => (string) $npcClub->getId(),
-                    'name' => $npcClub->getName(),
-                    'tier' => $npcClub->getTier(),
-                ];
             }
 
             $sponsorPot = $this->rollLeagueSponsors($league, $gameConfig);
@@ -134,7 +132,6 @@ class LeagueService
                 'prizeMoney'                    => $league->getPrizeMoney(),
                 'leaguePositionPot'             => $league->getLeaguePositionPot(),
                 'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
-                'clubs'                         => $clubsData,
                 'fixtures'                      => $fixtures,
             ];
         }
