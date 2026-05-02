@@ -161,6 +161,9 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreGuardianDemandIncrease((int) $request->request->get('guardianIgnoreGuardianDemandIncrease', 2));
         $config->setGuardianIgnoreSiblingMoralePenalty((int) $request->request->get('guardianIgnoreSiblingMoralePenalty', 5));
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
+        $config->setRetirementMinAge((int) $request->request->get('retirementMinAge', 16));
+        $config->setRetirementMaxAge((int) $request->request->get('retirementMaxAge', 21));
+        $config->setRetirementChance((float) $request->request->get('retirementChance', 0.5));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
         // League finances

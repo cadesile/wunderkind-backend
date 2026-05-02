@@ -66,6 +66,11 @@ class GameConfigController extends AbstractController
             'guardianIgnoreSiblingMoralePenalty'           => $config->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'     => $config->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
 
+            // Player retirement
+            'retirementMinAge'   => $config->getRetirementMinAge(),
+            'retirementMaxAge'   => $config->getRetirementMaxAge(),
+            'retirementChance'   => $config->getRetirementChance(),
+
             // Developer / Debug
             'debugLoggingEnabled'                          => $config->isDebugLoggingEnabled(),
 

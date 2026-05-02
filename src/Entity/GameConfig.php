@@ -497,6 +497,32 @@ class GameConfig
     public function getMaxScoutsPerClub(): int { return $this->maxScoutsPerClub; }
     public function setMaxScoutsPerClub(int $v): static { $this->maxScoutsPerClub = $v; return $this; }
 
+    // ── Player Retirement ─────────────────────────────────────────────────
+
+    /** Minimum player age at which retirement becomes possible. Default: 16 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 16])]
+    private int $retirementMinAge = 16;
+
+    /** Maximum player age at which retirement is guaranteed. Default: 21 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 21])]
+    private int $retirementMaxAge = 21;
+
+    /**
+     * Weekly probability that an eligible player (age >= retirementMinAge) retires.
+     * Probability scales linearly from 0 at minAge to this value at maxAge. Default: 0.5
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.5])]
+    private float $retirementChance = 0.5;
+
+    public function getRetirementMinAge(): int { return $this->retirementMinAge; }
+    public function setRetirementMinAge(int $v): static { $this->retirementMinAge = $v; return $this; }
+
+    public function getRetirementMaxAge(): int { return $this->retirementMaxAge; }
+    public function setRetirementMaxAge(int $v): static { $this->retirementMaxAge = $v; return $this; }
+
+    public function getRetirementChance(): float { return $this->retirementChance; }
+    public function setRetirementChance(float $v): static { $this->retirementChance = max(0.0, min(1.0, $v)); return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */
