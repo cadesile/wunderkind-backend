@@ -7,6 +7,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -66,7 +67,9 @@ class FacilityTemplateCrudController extends AbstractCrudController
             ->setHelp('Weekly condition decay base. App formula: decayBase + level')
             ->setNumDecimals(1)
             ->hideOnIndex();
-        yield TextareaField::new('gameplayEffectsJson', 'Gameplay Effects')
+        yield CodeEditorField::new('gameplayEffectsJson', 'Gameplay Effects')
+            ->setLanguage('js')
+            ->setNumOfRows(10)
             ->setHelp(<<<HTML
                 <p>JSON object of per-level effect deltas applied by the client during the weekly tick. A facility can have multiple effects.</p>
                 <table class="table table-sm table-bordered mt-2" style="font-size:0.8rem">
@@ -122,8 +125,7 @@ class FacilityTemplateCrudController extends AbstractCrudController
                 </table>
                 <p class="mt-1 text-muted" style="font-size:0.8rem">Baselines (<em>baseXP</em>, <em>baseInjuryProbability</em>, <em>scoutAbilityErrorRange</em>, <em>scoutRevealWeeks</em>) are configured in Admin → Game Config.</p>
             HTML)
-            ->hideOnIndex()
-            ->setFormTypeOption('attr', ['rows' => 6, 'style' => 'font-family: monospace']);
+            ->hideOnIndex();
         yield IntegerField::new('sortOrder')
             ->setHelp('Display order in the facilities screen (ascending)');
         yield BooleanField::new('isActive')
