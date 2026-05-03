@@ -497,6 +497,28 @@ class GameConfig
     public function getMaxScoutsPerClub(): int { return $this->maxScoutsPerClub; }
     public function setMaxScoutsPerClub(int $v): static { $this->maxScoutsPerClub = $v; return $this; }
 
+    // ── Playing Style Influence ───────────────────────────────────────────
+
+    /**
+     * Maps each playing style to the player attributes it emphasises during match simulation.
+     * Keys: POSSESSION | DIRECT | COUNTER | HIGH_PRESS
+     * Values: subset of [pace, technical, vision, power, stamina, heart]
+     *
+     * @var array<string, string[]>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $playingStyleInfluence = [
+        'POSSESSION' => [],
+        'DIRECT'     => [],
+        'COUNTER'    => [],
+        'HIGH_PRESS' => [],
+    ];
+
+    /** @return array<string, string[]> */
+    public function getPlayingStyleInfluence(): array { return $this->playingStyleInfluence; }
+    /** @param array<string, string[]> $v */
+    public function setPlayingStyleInfluence(array $v): static { $this->playingStyleInfluence = $v; return $this; }
+
     // ── Player Retirement ─────────────────────────────────────────────────
 
     /** Minimum player age at which retirement becomes possible. Default: 16 */

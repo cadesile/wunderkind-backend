@@ -161,6 +161,17 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreGuardianDemandIncrease((int) $request->request->get('guardianIgnoreGuardianDemandIncrease', 2));
         $config->setGuardianIgnoreSiblingMoralePenalty((int) $request->request->get('guardianIgnoreSiblingMoralePenalty', 5));
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
+        // Playing style influence
+        $validAttributes = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
+        $rawInfluence    = $request->request->all()['playingStyleInfluence'] ?? [];
+        $influence       = [];
+        foreach (['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'] as $style) {
+            $influence[$style] = array_values(
+                array_intersect((array) ($rawInfluence[$style] ?? []), $validAttributes)
+            );
+        }
+        $config->setPlayingStyleInfluence($influence);
+
         $config->setRetirementMinAge((int) $request->request->get('retirementMinAge', 16));
         $config->setRetirementMaxAge((int) $request->request->get('retirementMaxAge', 21));
         $config->setRetirementChance((float) $request->request->get('retirementChance', 0.5));
