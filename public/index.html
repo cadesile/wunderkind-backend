@@ -725,7 +725,7 @@
                     tier to the elite — all in the palm of your hand.
                 </p>
                 <div class="hero-actions">
-                    <a href="#download" class="btn btn-gold">Download Beta (Android)</a>
+                    <a href="#download" id="hero-download-btn" class="btn btn-gold">Download Beta</a>
                     <a href="#features" class="btn btn-outline">See Features</a>
                 </div>
                 <div class="hero-stat-row">
@@ -1150,10 +1150,11 @@
     <div class="wrap">
         <h2>Help us build something great.</h2>
         <p class="cta-sub">Wunderkind Factory is in active development and we're looking for testers. Download the Android APK and let us know what you think.</p>
-        <div class="cta-actions">
-            <a href="https://expo.dev/artifacts/eas/7tNnoyE2oG8hUycvMaHpp1.apk" class="btn btn-gold btn-lg" aria-label="Download Android APK">Download APK (Android)</a>
+        <div class="cta-actions" id="download-buttons">
+            <a href="#" id="android-download-btn" class="btn btn-gold btn-lg" aria-label="Download Android" style="display:none">Download (Android)</a>
+            <a href="#" id="ios-download-btn" class="btn btn-outline btn-lg" aria-label="Download iOS" style="display:none">Download (iOS)</a>
         </div>
-        <p style="margin-top:24px; font-size:11px; color:var(--text-muted);">iOS version not yet available. Free to play. Works fully offline. No ads in gameplay.</p>
+        <p id="download-note" style="margin-top:24px; font-size:11px; color:var(--text-muted);"></p>
     </div>
 </section>
 
@@ -1171,5 +1172,47 @@
     </div>
 </footer>
 
+<script>
+(function () {
+    fetch('/api/app-links')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var androidBtn = document.getElementById('android-download-btn');
+            var iosBtn     = document.getElementById('ios-download-btn');
+            var heroBtn    = document.getElementById('hero-download-btn');
+            var note       = document.getElementById('download-note');
+
+            if (data.android) {
+                androidBtn.href = data.android;
+                androidBtn.style.display = '';
+                if (heroBtn) {
+                    heroBtn.href = data.android;
+                    heroBtn.textContent = 'Download Beta (Android)';
+                }
+            }
+
+            if (data.ios) {
+                iosBtn.href = data.ios;
+                iosBtn.style.display = '';
+                if (heroBtn && !data.android) {
+                    heroBtn.href = data.ios;
+                    heroBtn.textContent = 'Download Beta (iOS)';
+                }
+            }
+
+            var missing = [];
+            if (!data.android) missing.push('Android');
+            if (!data.ios) missing.push('iOS');
+            if (missing.length) {
+                note.textContent = missing.join(' & ') + ' version' + (missing.length > 1 ? 's' : '') + ' not yet available. Free to play. Works fully offline. No ads in gameplay.';
+            } else {
+                note.textContent = 'Free to play. Works fully offline. No ads in gameplay.';
+            }
+        })
+        .catch(function () {
+            document.getElementById('download-note').textContent = 'Download links temporarily unavailable. Please check back soon.';
+        });
+}());
+</script>
 </body>
 </html>

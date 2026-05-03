@@ -61,6 +61,7 @@ security:
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
+        - { path: ^/api/app-links,             roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,           roles: PUBLIC_ACCESS }
         - { path: ^/api/starter-config,        roles: PUBLIC_ACCESS }
         - { path: ^/api/archetypes,            roles: PUBLIC_ACCESS }

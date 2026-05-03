@@ -66,11 +66,11 @@ class GameConfig
 
     /** Base reputation delta per week before facility multiplier. Default: 0.5 */
     #[ORM\Column(type: 'float')]
-    private float $reputationDeltaBase = 0.5;
+    private float $reputationDeltaBase = 0.15;
 
     /** Per-level facility multiplier applied to reputation delta. Default: 1.2 */
     #[ORM\Column(type: 'float')]
-    private float $reputationDeltaFacilityMultiplier = 1.2;
+    private float $reputationDeltaFacilityMultiplier = 0.15;
 
     /** Injury severity weight for minor injuries. Default: 60 */
     #[ORM\Column(type: 'integer')]
@@ -535,18 +535,18 @@ class GameConfig
 
     /** Minimum player age at which retirement becomes possible. Default: 16 */
     #[ORM\Column(type: 'smallint', options: ['default' => 16])]
-    private int $retirementMinAge = 16;
+    private int $retirementMinAge = 30;
 
     /** Maximum player age at which retirement is guaranteed. Default: 21 */
     #[ORM\Column(type: 'smallint', options: ['default' => 21])]
-    private int $retirementMaxAge = 21;
+    private int $retirementMaxAge = 38;
 
     /**
      * Weekly probability that an eligible player (age >= retirementMinAge) retires.
      * Probability scales linearly from 0 at minAge to this value at maxAge. Default: 0.5
      */
     #[ORM\Column(type: 'float', options: ['default' => 0.5])]
-    private float $retirementChance = 0.5;
+    private float $retirementChance = 0.35;
 
     public function getRetirementMinAge(): int { return $this->retirementMinAge; }
     public function setRetirementMinAge(int $v): static { $this->retirementMinAge = $v; return $this; }
@@ -556,6 +556,22 @@ class GameConfig
 
     public function getRetirementChance(): float { return $this->retirementChance; }
     public function setRetirementChance(float $v): static { $this->retirementChance = max(0.0, min(1.0, $v)); return $this; }
+
+    // ── App Links ─────────────────────────────────────────────────────────
+
+    /** Google Play / APK download URL for the Android build. Nullable — omit button if empty. */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $androidDownloadUrl = null;
+
+    /** App Store URL for the iOS build. Nullable — omit button if empty. */
+    #[ORM\Column(type: 'string', length: 500, nullable: true)]
+    private ?string $iosDownloadUrl = null;
+
+    public function getAndroidDownloadUrl(): ?string { return $this->androidDownloadUrl; }
+    public function setAndroidDownloadUrl(?string $v): static { $this->androidDownloadUrl = $v ?: null; return $this; }
+
+    public function getIosDownloadUrl(): ?string { return $this->iosDownloadUrl; }
+    public function setIosDownloadUrl(?string $v): static { $this->iosDownloadUrl = $v ?: null; return $this; }
 
     // ── Squad Configuration ───────────────────────────────────────────────
 

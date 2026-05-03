@@ -124,8 +124,8 @@ class DashboardController extends AbstractDashboardController
         $config->setBaseInjuryProbability((float) $request->request->get('baseInjuryProbability', 0.05));
         $config->setRegressionUpperThreshold((int) $request->request->get('regressionUpperThreshold', 14));
         $config->setRegressionLowerThreshold((int) $request->request->get('regressionLowerThreshold', 7));
-        $config->setReputationDeltaBase((float) $request->request->get('reputationDeltaBase', 0.5));
-        $config->setReputationDeltaFacilityMultiplier((float) $request->request->get('reputationDeltaFacilityMultiplier', 1.2));
+        $config->setReputationDeltaBase((float) $request->request->get('reputationDeltaBase', 0.15));
+        $config->setReputationDeltaFacilityMultiplier((float) $request->request->get('reputationDeltaFacilityMultiplier', 0.15));
         $config->setInjuryMinorWeight((int) $request->request->get('injuryMinorWeight', 60));
         $config->setInjuryModerateWeight((int) $request->request->get('injuryModerateWeight', 30));
         $config->setInjurySeriousWeight((int) $request->request->get('injurySeriousWeight', 10));
@@ -174,9 +174,9 @@ class DashboardController extends AbstractDashboardController
         }
         $config->setPlayingStyleInfluence($influence);
 
-        $config->setRetirementMinAge((int) $request->request->get('retirementMinAge', 16));
-        $config->setRetirementMaxAge((int) $request->request->get('retirementMaxAge', 21));
-        $config->setRetirementChance((float) $request->request->get('retirementChance', 0.5));
+        $config->setRetirementMinAge((int) $request->request->get('retirementMinAge', 30));
+        $config->setRetirementMaxAge((int) $request->request->get('retirementMaxAge', 38));
+        $config->setRetirementChance((float) $request->request->get('retirementChance', 0.35));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
         // League finances
@@ -205,6 +205,10 @@ class DashboardController extends AbstractDashboardController
         $config->setMaxFacilityManagersPerClub((int) $request->request->get('maxFacilityManagersPerClub', 1));
         $config->setMaxChairmensPerClub((int) $request->request->get('maxChairmensPerClub', 1));
         $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
+
+        // App links
+        $config->setAndroidDownloadUrl($request->request->get('androidDownloadUrl', ''));
+        $config->setIosDownloadUrl($request->request->get('iosDownloadUrl', ''));
 
         // Squad configuration
         $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
