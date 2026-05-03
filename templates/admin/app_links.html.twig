@@ -1,0 +1,75 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">App Links</h5>
+        <p class="text-muted small mb-0">Download URLs shown on the landing page and returned by <code>GET /api/app-links</code>. Leave a field blank to hide that platform's button.</p>
+    </div>
+
+    <div class="col-12">
+    <form method="POST" action="{{ path('admin_app_links_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_app_links') }}">
+
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-mobile-screen text-muted"></i>
+                <span class="fw-semibold small">Download URLs</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label for="androidDownloadUrl" class="form-label fw-semibold">
+                            <i class="fa fa-android text-success me-1"></i> Android
+                        </label>
+                        <input type="url" id="androidDownloadUrl" name="androidDownloadUrl"
+                               value="{{ config.androidDownloadUrl ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="https://play.google.com/store/apps/... or APK URL">
+                        <div class="form-text">Google Play listing or direct APK link. Blank = button hidden.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="iosDownloadUrl" class="form-label fw-semibold">
+                            <i class="fa fa-apple text-secondary me-1"></i> iOS
+                        </label>
+                        <input type="url" id="iosDownloadUrl" name="iosDownloadUrl"
+                               value="{{ config.iosDownloadUrl ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="https://apps.apple.com/app/...">
+                        <div class="form-text">App Store listing URL. Blank = button hidden.</div>
+                    </div>
+                </div>
+
+                {% if config.androidDownloadUrl or config.iosDownloadUrl %}
+                <div class="mt-4 p-3 bg-body-secondary rounded">
+                    <p class="small fw-semibold mb-2 text-muted">Current live links</p>
+                    <div class="d-flex flex-column gap-1">
+                        {% if config.androidDownloadUrl %}
+                            <a href="{{ config.androidDownloadUrl }}" target="_blank" rel="noopener" class="small text-break">
+                                <i class="fa fa-android text-success me-1"></i>{{ config.androidDownloadUrl }}
+                            </a>
+                        {% else %}
+                            <span class="small text-muted"><i class="fa fa-android me-1"></i>Android — not set</span>
+                        {% endif %}
+                        {% if config.iosDownloadUrl %}
+                            <a href="{{ config.iosDownloadUrl }}" target="_blank" rel="noopener" class="small text-break">
+                                <i class="fa fa-apple text-secondary me-1"></i>{{ config.iosDownloadUrl }}
+                            </a>
+                        {% else %}
+                            <span class="small text-muted"><i class="fa fa-apple me-1"></i>iOS — not set</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary btn-sm">Save App Links</button>
+        </div>
+    </form>
+    </div>
+
+</div>
+{% endblock %}

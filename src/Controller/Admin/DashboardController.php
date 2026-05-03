@@ -87,6 +87,35 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
+    // ── App Links ─────────────────────────────────────────────────────────
+
+    #[Route('/admin/app-links', name: 'admin_app_links')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function appLinks(): Response
+    {
+        return $this->render('admin/app_links.html.twig', [
+            'config' => $this->gameConfigRepository->getConfig(),
+        ]);
+    }
+
+    #[Route('/admin/app-links/save', name: 'admin_app_links_save', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function saveAppLinks(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('save_app_links', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_app_links']));
+        }
+
+        $config = $this->gameConfigRepository->getConfig();
+        $config->setAndroidDownloadUrl($request->request->get('androidDownloadUrl', ''));
+        $config->setIosDownloadUrl($request->request->get('iosDownloadUrl', ''));
+        $this->em->flush();
+
+        $this->addFlash('success', 'App links saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_app_links']));
+    }
+
     // ── Settings ──────────────────────────────────────────────────────────
 
     #[Route('/admin/settings', name: 'admin_settings')]
@@ -205,10 +234,6 @@ class DashboardController extends AbstractDashboardController
         $config->setMaxFacilityManagersPerClub((int) $request->request->get('maxFacilityManagersPerClub', 1));
         $config->setMaxChairmensPerClub((int) $request->request->get('maxChairmensPerClub', 1));
         $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
-
-        // App links
-        $config->setAndroidDownloadUrl($request->request->get('androidDownloadUrl', ''));
-        $config->setIosDownloadUrl($request->request->get('iosDownloadUrl', ''));
 
         // Squad configuration
         $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
@@ -894,6 +919,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('Pool Config', 'fa fa-layer-group', 'admin_pool_config');
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');
+        yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::section('Market');
         yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
