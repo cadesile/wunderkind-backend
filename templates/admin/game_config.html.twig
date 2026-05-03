@@ -648,6 +648,25 @@
                 </div>
             </div>
 
+            {# ── Facility Income ────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-building text-muted"></i>
+                    <span class="fw-semibold small">Facility Income</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="nonMatchFacilityIncomePercent" class="form-label fw-semibold small">Non-Match Facility Income %</label>
+                            <input type="number" id="nonMatchFacilityIncomePercent" name="nonMatchFacilityIncomePercent"
+                                   value="{{ config.nonMatchFacilityIncomePercent }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Percentage of matchday facility income earned on non-match weeks (0–100). Default: 0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Playing Style Influence ────────────────────────────────── #}
             {% set psStyles = {
                 'POSSESSION': 'Possession',

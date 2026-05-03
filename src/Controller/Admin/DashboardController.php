@@ -161,6 +161,8 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreGuardianDemandIncrease((int) $request->request->get('guardianIgnoreGuardianDemandIncrease', 2));
         $config->setGuardianIgnoreSiblingMoralePenalty((int) $request->request->get('guardianIgnoreSiblingMoralePenalty', 5));
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
+        $config->setNonMatchFacilityIncomePercent((int) $request->request->get('nonMatchFacilityIncomePercent', 0));
+
         // Playing style influence
         $validAttributes = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
         $rawInfluence    = $request->request->all()['playingStyleInfluence'] ?? [];

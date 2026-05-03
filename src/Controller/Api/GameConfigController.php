@@ -66,6 +66,9 @@ class GameConfigController extends AbstractController
             'guardianIgnoreSiblingMoralePenalty'           => $config->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'     => $config->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
 
+            // Facility income
+            'nonMatchFacilityIncomePercent' => $config->getNonMatchFacilityIncomePercent(),
+
             // Playing style influence
             'playingStyleInfluence' => $config->getPlayingStyleInfluence(),
 

@@ -497,6 +497,18 @@ class GameConfig
     public function getMaxScoutsPerClub(): int { return $this->maxScoutsPerClub; }
     public function setMaxScoutsPerClub(int $v): static { $this->maxScoutsPerClub = $v; return $this; }
 
+    // ── Facility Income ───────────────────────────────────────────────────
+
+    /**
+     * Percentage of a facility's matchday income that is also earned on non-match weeks.
+     * Range 0–100. Default: 0
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0, 'unsigned' => true])]
+    private int $nonMatchFacilityIncomePercent = 0;
+
+    public function getNonMatchFacilityIncomePercent(): int { return $this->nonMatchFacilityIncomePercent; }
+    public function setNonMatchFacilityIncomePercent(int $v): static { $this->nonMatchFacilityIncomePercent = max(0, min(100, $v)); return $this; }
+
     // ── Playing Style Influence ───────────────────────────────────────────
 
     /**
