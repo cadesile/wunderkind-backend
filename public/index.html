@@ -257,101 +257,6 @@
             display: flex;
             flex-direction: column;
         }
-        .phone-ui-bar {
-            background: var(--card);
-            border-bottom: 1px solid var(--border);
-            padding: 8px 10px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 6px;
-            color: var(--gold);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .phone-ui-dot {
-            width: 5px;
-            height: 5px;
-            background: var(--mint);
-            display: inline-block;
-            box-shadow: 0 0 6px var(--mint);
-            animation: pulse 2s infinite;
-        }
-        .phone-ui-body {
-            flex: 1;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .phone-row {
-            background: var(--card);
-            border: 1px solid var(--border);
-            padding: 7px 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .phone-row-label {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 5px;
-            color: var(--text-muted);
-        }
-        .phone-row-val {
-            font-family: 'VT323', monospace;
-            font-size: 14px;
-            color: var(--gold);
-        }
-        .phone-row-val.mint { color: var(--mint); }
-        .phone-week-strip {
-            background: var(--gold);
-            color: #070f0a;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 6px;
-            padding: 5px 8px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .phone-match-card {
-            background: var(--card-hi);
-            border: 1px solid var(--gold);
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .phone-match-teams {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 5px;
-            color: var(--text);
-        }
-        .phone-match-score {
-            font-family: 'VT323', monospace;
-            font-size: 22px;
-            color: var(--mint);
-            text-align: center;
-        }
-        .phone-tab-bar {
-            background: var(--card);
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: space-around;
-            padding: 6px 0;
-        }
-        .phone-tab {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 5px;
-            color: var(--text-muted);
-            text-align: center;
-            padding: 3px 6px;
-            cursor: default;
-        }
-        .phone-tab.active {
-            color: var(--gold);
-            text-shadow: 0 0 8px rgba(245,200,66,.5);
-        }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -371,7 +276,7 @@
         .ticker-track {
             display: flex;
             gap: 0;
-            animation: ticker 30s linear infinite;
+            animation: ticker 40s linear infinite;
             white-space: nowrap;
         }
         .ticker-item {
@@ -787,7 +692,6 @@
         /* ── Reduced motion ── */
         @media (prefers-reduced-motion: reduce) {
             .ticker-track  { animation: none; }
-            .phone-ui-dot  { animation: none; }
             * { transition-duration: 0.01ms !important; }
         }
     </style>
@@ -816,9 +720,9 @@
                 <div class="hero-badge">IN DEVELOPMENT &nbsp;// ANDROID BETA</div>
                 <h1 class="glow-gold">THE FOOTBALL&nbsp;SIM YOU'VE BEEN WAITING FOR</h1>
                 <p class="hero-sub">
-                    Build a club from nothing. Sign players, manage staff, chase promotions,
-                    navigate transfer politics, keep your board happy, and survive the grind —
-                    all in the palm of your hand.
+                    Build a club from nothing. Scout talent, hire your staff, pick your tactics,
+                    navigate transfer politics, keep your board happy, and climb from the bottom
+                    tier to the elite — all in the palm of your hand.
                 </p>
                 <div class="hero-actions">
                     <a href="#download" class="btn btn-gold">Download Beta (Android)</a>
@@ -830,8 +734,8 @@
                         <span class="hero-stat-label">League Tiers</span>
                     </div>
                     <div class="hero-stat">
-                        <span class="hero-stat-val glow-mint">22</span>
-                        <span class="hero-stat-label">Clubs per League</span>
+                        <span class="hero-stat-val glow-mint">6</span>
+                        <span class="hero-stat-label">Staff Roles</span>
                     </div>
                     <div class="hero-stat">
                         <span class="hero-stat-val" style="color:var(--red);">8</span>
@@ -843,7 +747,7 @@
             <div class="phone-frame">
                 <div class="phone-outer">
                     <div class="phone-screen">
-                        <img src="screenshots/dashboard.png" alt="Wunderkind Factory — club dashboard" style="width:100%;height:100%;object-fit:cover;display:block;">
+                        <img src="screenshots/Screenshot_20260503-133447.png" alt="Wunderkind Factory — club dashboard" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;">
                     </div>
                 </div>
             </div>
@@ -857,28 +761,38 @@
         <span class="ticker-item">Transfer Market</span>
         <span class="ticker-item">8-Tier League Pyramid</span>
         <span class="ticker-item">Player Personality Matrix</span>
-        <span class="ticker-item">Fan Happiness System</span>
+        <span class="ticker-item">Director of Football</span>
         <span class="ticker-item">Sponsor Contracts</span>
         <span class="ticker-item">Investor Relations</span>
         <span class="ticker-item">Facility Upgrades</span>
-        <span class="ticker-item">Staff Management</span>
+        <span class="ticker-item">6 Staff Roles</span>
         <span class="ticker-item">Narrative Events</span>
         <span class="ticker-item">Offline-First</span>
         <span class="ticker-item">Weekly Tick Engine</span>
         <span class="ticker-item">Formation Tactics</span>
+        <span class="ticker-item">Playing Styles</span>
+        <span class="ticker-item">Kit Colours</span>
+        <span class="ticker-item">Full Match Reports</span>
+        <span class="ticker-item">Competition Hub</span>
+        <span class="ticker-item">Season History</span>
         <!-- duplicate for seamless loop -->
         <span class="ticker-item">Transfer Market</span>
         <span class="ticker-item">8-Tier League Pyramid</span>
         <span class="ticker-item">Player Personality Matrix</span>
-        <span class="ticker-item">Fan Happiness System</span>
+        <span class="ticker-item">Director of Football</span>
         <span class="ticker-item">Sponsor Contracts</span>
         <span class="ticker-item">Investor Relations</span>
         <span class="ticker-item">Facility Upgrades</span>
-        <span class="ticker-item">Staff Management</span>
+        <span class="ticker-item">6 Staff Roles</span>
         <span class="ticker-item">Narrative Events</span>
         <span class="ticker-item">Offline-First</span>
         <span class="ticker-item">Weekly Tick Engine</span>
         <span class="ticker-item">Formation Tactics</span>
+        <span class="ticker-item">Playing Styles</span>
+        <span class="ticker-item">Kit Colours</span>
+        <span class="ticker-item">Full Match Reports</span>
+        <span class="ticker-item">Competition Hub</span>
+        <span class="ticker-item">Season History</span>
     </div>
 </div>
 
@@ -892,28 +806,52 @@
     <div class="screenshot-scroll" role="region" aria-label="Game screenshots">
         <div class="screenshot-track">
             <div class="ss-frame">
-                <img src="screenshots/manager-creation.png" alt="Manager creation screen" loading="lazy">
+                <img src="screenshots/Screenshot_20260503-133022.png" alt="Manager creation screen" loading="lazy">
                 <p class="ss-caption">Create Your Manager</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/welcome.png" alt="Welcome intro screen" loading="lazy">
+                <img src="screenshots/Screenshot_20260503-133051.png" alt="Club setup loading screen" loading="lazy">
+                <p class="ss-caption">Club Setup</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/Screenshot_20260503-133105.png" alt="Welcome overlay" loading="lazy">
                 <p class="ss-caption">Your Club Awaits</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/dashboard.png" alt="Main club dashboard" loading="lazy">
+                <img src="screenshots/Screenshot_20260503-133447.png" alt="Main club dashboard" loading="lazy">
                 <p class="ss-caption">Club Dashboard</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/office.png" alt="Office and staff management" loading="lazy">
-                <p class="ss-caption">Office &amp; Staff</p>
+                <img src="screenshots/Screenshot_20260503-133254.png" alt="Staff hire screen with all 6 roles" loading="lazy">
+                <p class="ss-caption">Hire Staff</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/squad.png" alt="Squad list view" loading="lazy">
-                <p class="ss-caption">Squad Management</p>
+                <img src="screenshots/Screenshot_20260503-133326.png" alt="Director of Football auto-management toggles" loading="lazy">
+                <p class="ss-caption">Director of Football</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/league.png" alt="League table view" loading="lazy">
-                <p class="ss-caption">League Table</p>
+                <img src="screenshots/Screenshot_20260503-133337.png" alt="Formation, playing style and kit colours" loading="lazy">
+                <p class="ss-caption">Tactics &amp; Identity</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/Screenshot_20260503-133454.png" alt="Inbox match report with full player ratings" loading="lazy">
+                <p class="ss-caption">Match Report</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/Screenshot_20260503-133504.png" alt="League table with golden boot standings" loading="lazy">
+                <p class="ss-caption">Competition Hub</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/Screenshot_20260503-133511.png" alt="Browse all leagues across the pyramid" loading="lazy">
+                <p class="ss-caption">Browse All Leagues</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/Screenshot_20260503-141436.png" alt="Player profile with archetype and scout report" loading="lazy">
+                <p class="ss-caption">Player Profile</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/Screenshot_20260503-141455.png" alt="Scout profile managed by Director of Football" loading="lazy">
+                <p class="ss-caption">Scouting</p>
             </div>
         </div>
     </div>
@@ -948,7 +886,7 @@
     <div class="wrap">
         <div class="section-label">Game Systems</div>
         <h2 class="section-title">Every angle of football management. In your pocket.</h2>
-        <p class="section-sub">From scouting raw talent to negotiating with investors — the full game is here.</p>
+        <p class="section-sub">From scouting raw talent to setting your Director of Football loose — the full game is here.</p>
 
         <div class="features-grid">
 
@@ -966,7 +904,7 @@
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
                 <div class="feature-title">Full Staff Management</div>
-                <p class="feature-desc">Hire managers, coaches, directors of football, and facility managers. Each role shapes your club's culture and performance ceiling.</p>
+                <p class="feature-desc">Hire from 6 distinct roles — Coach, Manager, Director of Football, Facility Manager, Chairman, and Scout. Each shapes your club's ceiling.</p>
             </div>
 
             <div class="feature-card">
@@ -1001,6 +939,30 @@
                 <p class="feature-desc">Fans react to every match result, signing, and upgrade. Happy fans drive income. Angry fans demand change. You need to keep them onside.</p>
             </div>
 
+            <div class="feature-card mint">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                </svg>
+                <div class="feature-title">Director of Football</div>
+                <p class="feature-desc">Hire a DoF and delegate the day-to-day. Auto-manage player events, auto-renew contracts, auto-assign scouts. Hands-on or hands-off — your call.</p>
+            </div>
+
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18"/><path d="M3 9h18M9 21V9"/>
+                </svg>
+                <div class="feature-title">Competition Hub</div>
+                <p class="feature-desc">Track your league table, fixtures, golden boot standings, and browse every division in the pyramid. Full season history records your journey.</p>
+            </div>
+
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <div class="feature-title">Tactics & Club Identity</div>
+                <p class="feature-desc">Choose your formation, set your playing style — Possession, Direct, Counter, or High Press — and customise your kit colours and club badge.</p>
+            </div>
+
         </div>
     </div>
 </section>
@@ -1023,7 +985,7 @@
                 <p class="section-sub">
                     An 8-trait personality matrix governs player behaviour. Social graphs track
                     relationships and trigger chained narrative events. Guardians push back.
-                    Agents negotiate. It's all connected.
+                    Agents negotiate. Your Director of Football has an opinion. It's all connected.
                 </p>
             </div>
             <ul class="depth-list" aria-label="Simulation depth features">
@@ -1051,22 +1013,36 @@
                 <li class="depth-item">
                     <span class="depth-num">04</span>
                     <div class="depth-text">
-                        <strong>Manager Personality</strong>
-                        <span>Your managerial temperament, discipline, and ambition shift based on decisions made. The board notices. The players notice.</span>
+                        <strong>Director of Football</strong>
+                        <span>Hire a DoF with their own archetype and philosophy. Toggle auto-management for scouting, contracts, signings, and player events.</span>
                     </div>
                 </li>
                 <li class="depth-item">
                     <span class="depth-num">05</span>
                     <div class="depth-text">
-                        <strong>Morale Engine</strong>
-                        <span>Squad morale fluctuates with results, events, wages, and playing time. Low morale tanks performance. High morale unlocks potential.</span>
+                        <strong>Manager Personality</strong>
+                        <span>Your managerial temperament, discipline, and ambition shift based on decisions made. The board notices. The players notice.</span>
                     </div>
                 </li>
                 <li class="depth-item">
                     <span class="depth-num">06</span>
                     <div class="depth-text">
                         <strong>Player Archetypes</strong>
-                        <span>Players are classified into archetypes based on their personality traits — the Maverick, the Rock, the Grinder. Each plays differently.</span>
+                        <span>Players are classified into archetypes — The Prospect, The Maverick, The Iceman and more. Each has a scout-written report and distinct behavioural tendencies.</span>
+                    </div>
+                </li>
+                <li class="depth-item">
+                    <span class="depth-num">07</span>
+                    <div class="depth-text">
+                        <strong>Full Match Reports</strong>
+                        <span>Every match generates a detailed inbox report with individual player ratings, goals, assists, and a team average. Know exactly how you won or lost.</span>
+                    </div>
+                </li>
+                <li class="depth-item">
+                    <span class="depth-num">08</span>
+                    <div class="depth-text">
+                        <strong>Season History</strong>
+                        <span>Track your journey season-by-season. League finishes, promotion runs, golden boot winners — the full record of your club's rise.</span>
                     </div>
                 </li>
             </ul>
@@ -1086,15 +1062,15 @@
         <div class="tick-grid">
             <div class="tick-step" data-num="01">
                 <div class="tick-step-title">Make Your Decisions</div>
-                <p class="tick-step-text">Set your formation, manage transfers, respond to inbox messages from agents, sponsors, and your board.</p>
+                <p class="tick-step-text">Set your formation, playing style, manage transfers, respond to inbox messages from agents, sponsors, and your board.</p>
             </div>
             <div class="tick-step" data-num="02">
                 <div class="tick-step-title">Advance the Week</div>
-                <p class="tick-step-text">The game engine simulates your match, processes wages, runs facility upkeep, and fires narrative events.</p>
+                <p class="tick-step-text">The game engine simulates your match, processes wages, runs facility upkeep, and fires narrative events — all offline.</p>
             </div>
             <div class="tick-step" data-num="03">
                 <div class="tick-step-title">React to Results</div>
-                <p class="tick-step-text">Check match results, read event reports, accept or reject offers. Every outcome shapes the next week.</p>
+                <p class="tick-step-text">Read the full match report, check your league position, accept or reject transfer bids. Every outcome shapes the next week.</p>
             </div>
             <div class="tick-step" data-num="04">
                 <div class="tick-step-title">Build Your Legacy</div>
@@ -1120,8 +1096,9 @@
                 </p>
                 <br>
                 <p class="section-sub" style="color: var(--text-muted);">
-                    NPC clubs are fully simulated — they have squads, staff, finances,
-                    and tactics. Beating them means building something real.
+                    Browse every league in the pyramid from the Competition Hub.
+                    NPC clubs are fully simulated — squads, staff, finances, tactics.
+                    Beating them means building something real.
                 </p>
             </div>
             <div>
@@ -1159,7 +1136,7 @@
                         <span class="pyramid-tier-clubs">22 clubs</span>
                     </div>
                 </div>
-                <p class="pyramid-label">176 NPC clubs · England launch · more countries coming</p>
+                <p class="pyramid-label">176 NPC clubs · Brazil launch · more countries coming</p>
             </div>
         </div>
     </div>
