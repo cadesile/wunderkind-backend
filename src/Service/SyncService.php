@@ -69,6 +69,13 @@ class SyncService
                 'staffCount'          => $request->staffCount,
                 'facilityLevels'      => $request->facilityLevels,
                 'managerShifts'       => $request->managerShifts,
+                // v2
+                'squadAvgOvr'         => $request->squadAvgOvr,
+                'form'                => $request->form,
+                'leaguePosition'      => $request->leaguePosition,
+                'seasonRecord'        => $request->seasonRecord,
+                'playerStats'         => $request->playerStats,
+                'signings'            => $request->signings,
                 'transfers'           => array_map(fn($t) => [
                     'playerId'        => $t->playerId,
                     'playerName'      => $t->playerName,
@@ -152,8 +159,9 @@ class SyncService
         }
 
         // ── Match result persistence ──────────────────────────────────────────
+        $syncedFixtureIds = [];
         if (!empty($request->matchResults)) {
-            $this->processMatchResults($club, $request->matchResults);
+            $syncedFixtureIds = $this->processMatchResults($club, $request->matchResults);
         }
 
         $this->em->flush();
@@ -311,12 +319,14 @@ class SyncService
         $gameConfigData['tacticalMatrix'] = $tacticalMatrix;
         $gameConfigData['staffRoles'] = array_column(StaffRole::cases(), 'value');
 
+        $achievements = $this->detectAchievements($request);
+
         return [
             'accepted'          => true,
             'weekNumber'        => $request->weekNumber,
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,
-            'club'           => [
+            'club'              => [
                 'id'                  => (string) $club->getId(),
                 'reputation'          => $club->getReputation(),
                 'totalCareerEarnings' => $club->getTotalCareerEarnings(),
@@ -330,8 +340,10 @@ class SyncService
                     'ambition'    => $club->getManagerAmbition(),
                 ],
             ],
-            'gameConfig' => $gameConfigData,
-            'league'     => $this->buildLeagueSnapshot($club, $gameConfig),
+            'gameConfig'        => $gameConfigData,
+            'league'            => $this->buildLeagueSnapshot($club, $gameConfig),
+            'syncedFixtureIds'  => $syncedFixtureIds,
+            'achievements'      => $achievements,
         ];
     }
 
@@ -384,29 +396,133 @@ class SyncService
 
     /**
      * Persists MatchResult entities from sync payload.
+     * Uses fixtureId as idempotency key — re-sending the same fixture is a safe no-op.
      *
-     * @param MatchResultDto[] $results
+     * @param  MatchResultDto[] $results
+     * @return string[]         IDs of fixtures successfully recorded
      */
-    private function processMatchResults(Club $club, array $results): void
+    private function processMatchResults(Club $club, array $results): array
     {
+        $syncedIds = [];
+
         foreach ($results as $dto) {
             if (empty($dto->opponentClubId)) {
                 continue;
             }
+
+            // Idempotency: skip if this fixtureId has already been stored.
+            if ($dto->fixtureId !== '') {
+                $existing = $this->em->getRepository(MatchResult::class)
+                    ->findOneBy(['fixtureId' => $dto->fixtureId]);
+                if ($existing !== null) {
+                    $syncedIds[] = $dto->fixtureId;
+                    continue;
+                }
+            }
+
             $opponent = $this->npcClubRepository->find($dto->opponentClubId);
             if ($opponent === null) {
-                continue; // silently skip unknown clubs
+                continue; // silently skip unknown opponents
             }
+
+            // Derive goalsFor/Against from v2 home/away fields if provided,
+            // falling back to legacy v1 fields.
+            $goalsFor     = $dto->homeGoals !== 0 || $dto->awayGoals !== 0
+                ? ($dto->isHome ? $dto->homeGoals : $dto->awayGoals)
+                : $dto->goalsFor;
+            $goalsAgainst = $dto->homeGoals !== 0 || $dto->awayGoals !== 0
+                ? ($dto->isHome ? $dto->awayGoals : $dto->homeGoals)
+                : $dto->goalsAgainst;
+
+            $season = $dto->season > 0 ? $dto->season : $club->getCurrentSeason();
+            $week   = $dto->round > 0  ? $dto->round  : $dto->week;
+
             $matchResult = new MatchResult(
                 club:         $club,
                 opponentClub: $opponent,
-                goalsFor:     $dto->goalsFor,
-                goalsAgainst: $dto->goalsAgainst,
-                week:         $dto->week,
-                season:       $club->getCurrentSeason(),
+                goalsFor:     $goalsFor,
+                goalsAgainst: $goalsAgainst,
+                week:         $week,
+                season:       $season,
             );
+
+            if ($dto->fixtureId !== '')        { $matchResult->setFixtureId($dto->fixtureId); }
+            if ($dto->opponentClubName !== '')  { $matchResult->setOpponentClubName($dto->opponentClubName); }
+            $matchResult->setIsHome($dto->isHome);
+            if ($dto->homeGoals > 0 || $dto->awayGoals > 0) {
+                $matchResult->setHomeGoals($dto->homeGoals);
+                $matchResult->setAwayGoals($dto->awayGoals);
+            }
+            if ($dto->round > 0)               { $matchResult->setRound($dto->round); }
+            if ($dto->playedAt !== '') {
+                try {
+                    $matchResult->setPlayedAt(new \DateTimeImmutable($dto->playedAt));
+                } catch (\Exception) { /* invalid date — skip */ }
+            }
+
             $this->em->persist($matchResult);
+
+            if ($dto->fixtureId !== '') {
+                $syncedIds[] = $dto->fixtureId;
+            }
         }
+
+        return $syncedIds;
+    }
+
+    /**
+     * Server-detected milestones derived from the form array sent by the client.
+     *
+     * @return array<array{type: string, description: string, weekNumber: int}>
+     */
+    private function detectAchievements(SyncRequest $request): array
+    {
+        $form         = $request->form;
+        $weekNumber   = $request->weekNumber;
+        $achievements = [];
+
+        if (empty($form)) {
+            return [];
+        }
+
+        $last5 = array_slice($form, 0, 5);
+        $last3 = array_slice($form, 0, 3);
+
+        if (count($last5) === 5 && !in_array('L', $last5, true)) {
+            $achievements[] = [
+                'type'        => 'unbeaten_run_5',
+                'description' => 'Unbeaten in the last 5 league games — keep the momentum going!',
+                'weekNumber'  => $weekNumber,
+            ];
+        }
+
+        if (count($last3) === 3 && $last3 === ['W', 'W', 'W']) {
+            $achievements[] = [
+                'type'        => 'winning_streak_3',
+                'description' => 'Three wins on the bounce — the squad is flying!',
+                'weekNumber'  => $weekNumber,
+            ];
+        }
+
+        // Clean-sheet run: last 3 results and goals against all 0.
+        if (count($request->matchResults) >= 3) {
+            $last3Results = array_slice(array_reverse($request->matchResults), 0, 3);
+            $cleanSheets  = array_filter($last3Results, function (MatchResultDto $r): bool {
+                $ga = $r->homeGoals !== 0 || $r->awayGoals !== 0
+                    ? ($r->isHome ? $r->awayGoals : $r->homeGoals)
+                    : $r->goalsAgainst;
+                return $ga === 0;
+            });
+            if (count($cleanSheets) === 3) {
+                $achievements[] = [
+                    'type'        => 'clean_sheet_run_3',
+                    'description' => '3 consecutive clean sheets — the defence is impenetrable!',
+                    'weekNumber'  => $weekNumber,
+                ];
+            }
+        }
+
+        return $achievements;
     }
 
     /**

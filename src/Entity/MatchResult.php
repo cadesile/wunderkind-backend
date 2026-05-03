@@ -34,6 +34,34 @@ class MatchResult
     #[ORM\Column(type: 'smallint')]
     private int $season;
 
+    /** Client-side fixture UUID — idempotency key. Nullable for legacy v1 records. */
+    #[ORM\Column(type: 'string', length: 36, nullable: true, unique: true)]
+    private ?string $fixtureId = null;
+
+    /** Display name of the opponent club (snapshot from client). */
+    #[ORM\Column(type: 'string', length: 100, nullable: true)]
+    private ?string $opponentClubName = null;
+
+    /** True if the AMP club was the home side. */
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    private ?bool $isHome = null;
+
+    /** Goals scored by the home team. */
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $homeGoals = null;
+
+    /** Goals scored by the away team. */
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $awayGoals = null;
+
+    /** League round number. */
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $round = null;
+
+    /** Client-side ISO 8601 timestamp when the match was played. */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $playedAt = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -46,7 +74,7 @@ class MatchResult
         int $season,
     ) {
         $this->id           = new UuidV7();
-        $this->club      = $club;
+        $this->club         = $club;
         $this->opponentClub = $opponentClub;
         $this->goalsFor     = $goalsFor;
         $this->goalsAgainst = $goalsAgainst;
@@ -63,4 +91,25 @@ class MatchResult
     public function getWeek(): int { return $this->week; }
     public function getSeason(): int { return $this->season; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public function getFixtureId(): ?string { return $this->fixtureId; }
+    public function setFixtureId(?string $v): static { $this->fixtureId = $v; return $this; }
+
+    public function getOpponentClubName(): ?string { return $this->opponentClubName; }
+    public function setOpponentClubName(?string $v): static { $this->opponentClubName = $v; return $this; }
+
+    public function getIsHome(): ?bool { return $this->isHome; }
+    public function setIsHome(?bool $v): static { $this->isHome = $v; return $this; }
+
+    public function getHomeGoals(): ?int { return $this->homeGoals; }
+    public function setHomeGoals(?int $v): static { $this->homeGoals = $v; return $this; }
+
+    public function getAwayGoals(): ?int { return $this->awayGoals; }
+    public function setAwayGoals(?int $v): static { $this->awayGoals = $v; return $this; }
+
+    public function getRound(): ?int { return $this->round; }
+    public function setRound(?int $v): static { $this->round = $v; return $this; }
+
+    public function getPlayedAt(): ?\DateTimeImmutable { return $this->playedAt; }
+    public function setPlayedAt(?\DateTimeImmutable $v): static { $this->playedAt = $v; return $this; }
 }

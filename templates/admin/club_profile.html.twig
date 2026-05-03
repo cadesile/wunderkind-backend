@@ -1,90 +1,124 @@
 {% extends '@EasyAdmin/layout.html.twig' %}
 
 {% set payload = latestValidSync ? latestValidSync.payload : {} %}
+{% set sr = payload.seasonRecord ?? {} %}
+{% set form = payload.form ?? [] %}
 
 {% from 'admin/_macros.html.twig' import currency as fmt_currency %}
+
+{% macro result_badge(r) %}
+    <span class="fw-bold d-inline-flex align-items-center justify-content-center rounded-1"
+          style="width:26px;height:26px;font-size:.7rem;letter-spacing:0;
+                 background:{{ r == 'W' ? '#198754' : (r == 'D' ? '#6c757d' : '#dc3545') }};color:#fff;">
+        {{ r }}
+    </span>
+{% endmacro %}
 
 {% block content %}
 <div class="row g-3 mt-1">
 
-    {# ── Breadcrumb / back link ───────────────────────────────────────── #}
-    <div class="col-12 mb-1">
+    {# ── Breadcrumb ───────────────────────────────────────────────────── #}
+    <div class="col-12">
         <a href="{{ ea_url().setController('App\\Controller\\Admin\\ClubCrudController') }}"
            class="text-muted text-decoration-none small">
             <i class="fa fa-arrow-left me-1"></i> Back to Academies
         </a>
     </div>
 
-    {# ── Club header card ──────────────────────────────────────────── #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# HEADER                                                             #}
+    {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12">
-        <div class="card">
-            <div class="card-body py-3">
-                <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
-                    <div>
-                        <h4 class="fw-bold mb-1">
-                            {% if club.country %}
-                                <span class="text-muted small me-1">{{ club.country }}</span>
-                            {% endif %}
-                            {{ club.name }}
-                        </h4>
-                        <div class="text-muted small d-flex flex-wrap gap-3">
-                            <span><i class="fa fa-envelope me-1"></i>{{ club.user.email }}</span>
-                            {% if club.paName %}
-                                <span><i class="fa fa-id-badge me-1"></i>PA: {{ club.paName }}</span>
-                            {% endif %}
-                            <span><i class="fa fa-calendar me-1"></i>Joined {{ club.createdAt|date('d M Y') }}</span>
+        <div class="card border-0 shadow-sm" style="background:linear-gradient(135deg,var(--bs-body-bg) 0%,var(--bs-tertiary-bg) 100%);">
+            <div class="card-body py-3 px-4">
+                <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+
+                    <div class="d-flex align-items-center gap-3">
+                        {# Avatar / initials #}
+                        <div class="d-flex align-items-center justify-content-center rounded-2 fw-bold text-white"
+                             style="width:52px;height:52px;font-size:1.1rem;background:var(--bs-primary);flex-shrink:0;">
+                            {{ club.name|slice(0,2)|upper }}
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-0 lh-1">{{ club.name }}</h4>
+                            <div class="text-muted small mt-1 d-flex flex-wrap gap-3">
+                                {% if club.country %}
+                                    <span><i class="fa fa-earth-europe me-1"></i>{{ club.country }}</span>
+                                {% endif %}
+                                <span><i class="fa fa-envelope me-1"></i>{{ club.user.email }}</span>
+                                {% if club.paName %}
+                                    <span><i class="fa fa-id-badge me-1"></i>PA: {{ club.paName }}</span>
+                                {% endif %}
+                                <span><i class="fa fa-calendar me-1"></i>Joined {{ club.createdAt|date('d M Y') }}</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="text-end">
+
+                    <div class="d-flex flex-column align-items-end gap-2">
+                        {# Sync status #}
                         {% if club.lastSyncedAt %}
                             <span class="badge bg-success-subtle text-success border border-success-subtle">
                                 <i class="fa fa-circle-check me-1"></i>
-                                Last sync: Week {{ club.lastSyncedWeek }} &middot; {{ club.lastSyncedAt|date('d M Y H:i') }}
+                                Week {{ club.lastSyncedWeek }} &middot; {{ club.lastSyncedAt|date('d M Y H:i') }}
                             </span>
                         {% else %}
                             <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
                                 <i class="fa fa-circle-xmark me-1"></i> Never synced
                             </span>
                         {% endif %}
+                        {# Formation + league position badges #}
+                        <div class="d-flex gap-2">
+                            {% if club.formation is defined %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                    <i class="fa fa-diagram-project me-1"></i>{{ club.formation.value }}
+                                </span>
+                            {% endif %}
+                            {% if payload.leaguePosition is defined and payload.leaguePosition is not null %}
+                                <span class="badge {{ payload.leaguePosition <= 3 ? 'bg-warning text-dark' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}">
+                                    <i class="fa fa-ranking-star me-1"></i>P{{ payload.leaguePosition }}
+                                </span>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    {# ── Core stat cards ──────────────────────────────────────────────── #}
-    <div class="col-12">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2"
-            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-primary);padding-left:.5rem;">
-            Core Stats
-        </h6>
-    </div>
-
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# CORE STATS                                                         #}
+    {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-star fa-lg"></i></div>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-warning mb-2"><i class="fa fa-star fa-lg"></i></div>
                 <div class="text-muted small mb-1">Reputation</div>
                 <div class="fs-3 fw-bold">{{ club.reputation|number_format }}</div>
+                {% if payload.squadAvgOvr is defined and payload.squadAvgOvr > 0 %}
+                    <div class="text-muted mt-1" style="font-size:.7rem;">Avg OVR <strong>{{ payload.squadAvgOvr }}</strong></div>
+                {% endif %}
             </div>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-sterling-sign fa-lg"></i></div>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-primary mb-2"><i class="fa fa-sterling-sign fa-lg"></i></div>
                 <div class="text-muted small mb-1">Balance</div>
                 <div class="fs-3 fw-bold {{ club.balance < 0 ? 'text-danger' : '' }}"
                      title="£{{ (club.balance / 100)|number_format(0, '.', ',') }}">
                     {{ fmt_currency(club.balance) }}
                 </div>
+                {% if club.balance < 0 %}
+                    <div class="text-danger mt-1" style="font-size:.7rem;"><i class="fa fa-triangle-exclamation me-1"></i>In debt</div>
+                {% endif %}
             </div>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-chart-line fa-lg"></i></div>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-success mb-2"><i class="fa fa-chart-line fa-lg"></i></div>
                 <div class="text-muted small mb-1">Career Earnings</div>
                 <div class="fs-3 fw-bold"
                      title="£{{ (club.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
@@ -94,27 +128,144 @@
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-trophy fa-lg"></i></div>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-warning mb-2"><i class="fa fa-trophy fa-lg"></i></div>
                 <div class="text-muted small mb-1">Hall of Fame</div>
                 <div class="fs-3 fw-bold text-warning">{{ club.hallOfFamePoints|number_format }}</div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">HoF pts</div>
             </div>
         </div>
     </div>
 
-    {# ── Latest sync info + Manager profile ───────────────────────────── #}
-    <div class="col-12 mt-2">
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# SEASON AT A GLANCE (v2)                                            #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% if latestValidSync and (form|length > 0 or sr|length > 0) %}
+    <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
             style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-success);padding-left:.5rem;">
+            Season at a Glance
+        </h6>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
+                <span class="fw-semibold small"><i class="fa fa-table-list me-1 text-muted"></i> Season Record</span>
+            </div>
+            <div class="card-body">
+                {% if sr|length > 0 %}
+                <div class="row g-0 text-center mb-3">
+                    <div class="col">
+                        <div class="fw-bold fs-4 text-success">{{ sr.wins ?? 0 }}</div>
+                        <div class="text-muted" style="font-size:.7rem;">W</div>
+                    </div>
+                    <div class="col">
+                        <div class="fw-bold fs-4 text-secondary">{{ sr.draws ?? 0 }}</div>
+                        <div class="text-muted" style="font-size:.7rem;">D</div>
+                    </div>
+                    <div class="col">
+                        <div class="fw-bold fs-4 text-danger">{{ sr.losses ?? 0 }}</div>
+                        <div class="text-muted" style="font-size:.7rem;">L</div>
+                    </div>
+                    <div class="col border-start">
+                        <div class="fw-bold fs-4">{{ (sr.goalsFor ?? 0) }}:{{ (sr.goalsAgainst ?? 0) }}</div>
+                        <div class="text-muted" style="font-size:.7rem;">GF:GA</div>
+                    </div>
+                    <div class="col border-start">
+                        {% set gd = (sr.goalsFor ?? 0) - (sr.goalsAgainst ?? 0) %}
+                        <div class="fw-bold fs-4 {{ gd >= 0 ? 'text-success' : 'text-danger' }}">
+                            {{ gd >= 0 ? '+' : '' }}{{ gd }}
+                        </div>
+                        <div class="text-muted" style="font-size:.7rem;">GD</div>
+                    </div>
+                    <div class="col border-start">
+                        <div class="fw-bold fs-4 text-primary">{{ sr.points ?? 0 }}</div>
+                        <div class="text-muted" style="font-size:.7rem;">Pts</div>
+                    </div>
+                </div>
+                {% else %}
+                    <p class="text-muted small mb-3"><i class="fa fa-circle-info me-1"></i> No season record yet.</p>
+                {% endif %}
+
+                {# Form strip #}
+                {% if form|length > 0 %}
+                <div class="border-top pt-3">
+                    <div class="text-muted mb-2" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600;">
+                        Form <span class="fw-normal">(most recent first)</span>
+                    </div>
+                    <div class="d-flex gap-1">
+                        {% for r in form %}
+                            {{ _self.result_badge(r) }}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom d-flex justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-person-running me-1 text-muted"></i> Player Stats (Season)</span>
+                {% if payload.playerStats is defined and payload.playerStats|length > 0 %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ payload.playerStats|length }} players</span>
+                {% endif %}
+            </div>
+            {% if payload.playerStats is defined and payload.playerStats|length > 0 %}
+            <div class="table-responsive" style="max-height:220px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Player</th>
+                            <th class="small text-muted fw-semibold text-center">Apps</th>
+                            <th class="small text-muted fw-semibold text-center">G</th>
+                            <th class="small text-muted fw-semibold text-center">A</th>
+                            <th class="small text-muted fw-semibold text-center">Rating</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in payload.playerStats|sort((a, b) => b.goals <=> a.goals) %}
+                        <tr>
+                            <td class="small">{{ stat.playerId }}</td>
+                            <td class="small text-center">{{ stat.appearances }}</td>
+                            <td class="small text-center fw-semibold {{ stat.goals > 0 ? 'text-success' : 'text-muted' }}">{{ stat.goals }}</td>
+                            <td class="small text-center {{ stat.assists > 0 ? 'text-primary' : 'text-muted' }}">{{ stat.assists }}</td>
+                            <td class="small text-center">
+                                <span class="badge {{ stat.averageRating >= 7 ? 'bg-success-subtle text-success border border-success-subtle' : (stat.averageRating >= 5 ? 'bg-secondary-subtle text-secondary border border-secondary-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle') }}">
+                                    {{ stat.averageRating|number_format(1) }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body">
+                <p class="text-muted small mb-0"><i class="fa fa-circle-info me-1"></i> No player stats in latest sync.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# LATEST SYNC SNAPSHOT + MANAGER PROFILE                            #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-primary);padding-left:.5rem;">
             Latest Sync Snapshot
         </h6>
     </div>
 
     <div class="col-lg-7">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center justify-content-between">
-                <span class="fw-semibold small"><i class="fa fa-sync me-1 text-muted"></i> Week {{ payload.weekNumber ?? club.lastSyncedWeek }} snapshot</span>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-rotate me-1 text-muted"></i> Week {{ payload.weekNumber ?? club.lastSyncedWeek }} snapshot</span>
                 {% if latestValidSync %}
                     <span class="text-muted" style="font-size:.7rem;">
                         received {{ latestValidSync.serverTimestamp|date('d M Y H:i') }}
@@ -123,29 +274,29 @@
             </div>
             <div class="card-body">
                 {% if latestValidSync %}
-                    <div class="row g-3">
-                        <div class="col-6 col-md-3 text-center">
+                    <div class="row g-3 text-center">
+                        <div class="col-6 col-md-3">
                             <div class="fw-bold fs-5">{{ payload.squadSize ?? '—' }}</div>
-                            <div class="text-muted" style="font-size:.75rem;">Squad Size</div>
+                            <div class="text-muted" style="font-size:.75rem;">Squad</div>
                         </div>
-                        <div class="col-6 col-md-3 text-center">
+                        <div class="col-6 col-md-3">
                             <div class="fw-bold fs-5">{{ payload.staffCount ?? '—' }}</div>
-                            <div class="text-muted" style="font-size:.75rem;">Staff Count</div>
+                            <div class="text-muted" style="font-size:.75rem;">Staff</div>
                         </div>
-                        <div class="col-6 col-md-3 text-center">
+                        <div class="col-6 col-md-3">
                             {% set ed = payload.earningsDelta ?? 0 %}
                             <div class="fw-bold fs-5 {{ ed >= 0 ? 'text-success' : 'text-danger' }}"
                                  title="{{ ed >= 0 ? '+' : '' }}£{{ (ed / 100)|number_format(0, '.', ',') }}">
                                 {{ ed >= 0 ? '+' : '' }}{{ fmt_currency(ed) }}
                             </div>
-                            <div class="text-muted" style="font-size:.75rem;">Earnings Delta</div>
+                            <div class="text-muted" style="font-size:.75rem;">Earnings Δ</div>
                         </div>
-                        <div class="col-6 col-md-3 text-center">
+                        <div class="col-6 col-md-3">
                             {% set rd = payload.reputationDelta ?? 0 %}
                             <div class="fw-bold fs-5 {{ rd >= 0 ? 'text-success' : 'text-danger' }}">
                                 {{ rd >= 0 ? '+' : '' }}{{ rd|number_format(1) }}
                             </div>
-                            <div class="text-muted" style="font-size:.75rem;">Rep Delta</div>
+                            <div class="text-muted" style="font-size:.75rem;">Rep Δ</div>
                         </div>
                     </div>
 
@@ -153,22 +304,46 @@
                     {% if payload.facilityLevels is defined and payload.facilityLevels|length > 0 %}
                         <hr class="my-3">
                         <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
-                            <i class="fa fa-building me-1"></i> Facility Levels
+                            <i class="fa fa-building me-1"></i> Facilities
                         </div>
                         <div class="d-flex flex-wrap gap-2">
                             {% for slug, level in payload.facilityLevels %}
                                 <span class="badge {{ level > 0 ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}">
-                                    {{ slug|replace({'_': ' '})|title }} Lv{{ level }}
+                                    {{ slug|replace({'_': ' ', 'camelCase': ' '})|title }} Lv{{ level }}
                                 </span>
                             {% endfor %}
                         </div>
                     {% endif %}
 
-                    {# Manager shifts this week #}
+                    {# Recent signings (v2) #}
+                    {% if payload.signings is defined and payload.signings|length > 0 %}
+                        <hr class="my-3">
+                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
+                            <i class="fa fa-right-to-bracket me-1"></i> Signings This Week
+                        </div>
+                        <div class="d-flex flex-column gap-1">
+                            {% for signing in payload.signings %}
+                                <div class="d-flex align-items-center justify-content-between small">
+                                    <span>
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle me-1">{{ signing.position }}</span>
+                                        <strong>{{ signing.playerName }}</strong>
+                                        <span class="text-muted">&middot; {{ signing.age }} yrs &middot; OVR {{ signing.overallRating }}</span>
+                                    </span>
+                                    {% if signing.fee > 0 %}
+                                        <span class="text-danger fw-semibold">{{ fmt_currency(signing.fee) }}</span>
+                                    {% else %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Free</span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {# Manager shifts #}
                     {% if payload.managerShifts is defined and payload.managerShifts|length > 0 %}
                         <hr class="my-3">
                         <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
-                            <i class="fa fa-person-walking me-1"></i> Manager Shifts This Week
+                            <i class="fa fa-person-walking me-1"></i> Manager Shifts
                         </div>
                         <div class="d-flex flex-wrap gap-2">
                             {% for trait, delta in payload.managerShifts %}
@@ -186,68 +361,54 @@
     </div>
 
     <div class="col-lg-5">
-        <div class="card h-100">
-            <div class="card-header py-2">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
                 <span class="fw-semibold small"><i class="fa fa-user-tie me-1 text-muted"></i> Manager Profile</span>
             </div>
             <div class="card-body">
-                {% if club.managerProfile %}
+                {% if club.managerProfile is defined and club.managerProfile %}
                     <div class="mb-3">
                         <div class="fw-semibold">{{ club.managerProfile.name ?? '—' }}</div>
                         <div class="text-muted small">
-                            {% if club.managerProfile.nationality is defined %}
-                                {{ club.managerProfile.nationality }}
-                            {% endif %}
-                            {% if club.managerProfile.dateOfBirth is defined %}
-                                &middot; b. {{ club.managerProfile.dateOfBirth }}
-                            {% endif %}
+                            {% if club.managerProfile.nationality is defined %}{{ club.managerProfile.nationality }}{% endif %}
+                            {% if club.managerProfile.dateOfBirth is defined %}&middot; b. {{ club.managerProfile.dateOfBirth }}{% endif %}
                         </div>
                     </div>
                     <hr class="my-2">
                 {% endif %}
 
-                <div class="mb-3">
+                {% set traits = [
+                    { label: 'Temperament', value: club.managerTemperament, icon: 'fa-fire',  color: 'warning' },
+                    { label: 'Discipline',  value: club.managerDiscipline,  icon: 'fa-gavel', color: 'danger'  },
+                    { label: 'Ambition',    value: club.managerAmbition,    icon: 'fa-bolt',  color: 'primary' },
+                ] %}
+                {% for trait in traits %}
+                <div class="{{ not loop.last ? 'mb-3' : 'mb-0' }}">
                     <div class="d-flex justify-content-between small mb-1">
-                        <span><i class="fa fa-fire text-warning me-1"></i> Temperament</span>
-                        <span class="fw-semibold">{{ club.managerTemperament }}</span>
+                        <span><i class="fa {{ trait.icon }} text-{{ trait.color }} me-1"></i> {{ trait.label }}</span>
+                        <span class="fw-semibold">{{ trait.value }}</span>
                     </div>
-                    <div class="progress" style="height:6px;">
-                        <div class="progress-bar bg-warning" style="width:{{ club.managerTemperament }}%"></div>
+                    <div class="progress" style="height:5px;border-radius:2px;">
+                        <div class="progress-bar bg-{{ trait.color }}" style="width:{{ trait.value }}%"></div>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span><i class="fa fa-gavel text-danger me-1"></i> Discipline</span>
-                        <span class="fw-semibold">{{ club.managerDiscipline }}</span>
-                    </div>
-                    <div class="progress" style="height:6px;">
-                        <div class="progress-bar bg-danger" style="width:{{ club.managerDiscipline }}%"></div>
-                    </div>
-                </div>
-                <div class="mb-0">
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span><i class="fa fa-bolt text-primary me-1"></i> Ambition</span>
-                        <span class="fw-semibold">{{ club.managerAmbition }}</span>
-                    </div>
-                    <div class="progress" style="height:6px;">
-                        <div class="progress-bar bg-primary" style="width:{{ club.managerAmbition }}%"></div>
-                    </div>
-                </div>
+                {% endfor %}
             </div>
         </div>
     </div>
 
-    {# ── Leaderboard standings ─────────────────────────────────────────── #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# LEADERBOARD                                                        #}
+    {# ══════════════════════════════════════════════════════════════════ #}
     {% if leaderboardEntries|length > 0 %}
-    <div class="col-12 mt-2">
+    <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
             style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-warning);padding-left:.5rem;">
             Leaderboard Standings
         </h6>
     </div>
-
     <div class="col-12">
-        <div class="card">
+        <div class="card border-0 shadow-sm">
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light">
@@ -279,7 +440,7 @@
                             <td class="text-end small fw-semibold">{{ entry.score|number_format }}</td>
                             <td class="text-end small">
                                 {% if entry.rank %}
-                                    <span class="fw-bold">#{{ entry.rank }}</span>
+                                    <span class="fw-bold {{ entry.rank <= 3 ? 'text-warning' : '' }}">#{{ entry.rank }}</span>
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}
@@ -294,29 +455,31 @@
     </div>
     {% endif %}
 
-    {# ── Sync log ─────────────────────────────────────────────────────── #}
-    <div class="col-12 mt-2">
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# SYNC LOG                                                           #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
             style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-secondary);padding-left:.5rem;">
             Sync Log
             <span class="text-muted fw-normal ms-1" style="font-size:.7rem;">(last {{ syncRecords|length }})</span>
         </h6>
     </div>
-
     <div class="col-12">
-        <div class="card">
+        <div class="card border-0 shadow-sm">
             {% if syncRecords|length > 0 %}
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="small text-muted fw-semibold">Week</th>
+                            <th class="small text-muted fw-semibold">Wk</th>
                             <th class="small text-muted fw-semibold">Status</th>
+                            <th class="small text-muted fw-semibold text-center">Form</th>
+                            <th class="small text-muted fw-semibold text-center">Pos</th>
                             <th class="small text-muted fw-semibold text-end">Earnings Δ</th>
                             <th class="small text-muted fw-semibold text-end">Rep Δ</th>
                             <th class="small text-muted fw-semibold text-end">Squad</th>
-                            <th class="small text-muted fw-semibold">Client Time</th>
-                            <th class="small text-muted fw-semibold">Server Received</th>
+                            <th class="small text-muted fw-semibold">Received</th>
                             <th class="small text-muted fw-semibold">Reason</th>
                         </tr>
                     </thead>
@@ -330,6 +493,24 @@
                                     <span class="badge bg-success-subtle text-success border border-success-subtle">valid</span>
                                 {% else %}
                                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle">invalid</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex gap-1 justify-content-center">
+                                    {% if p.form is defined and p.form|length > 0 %}
+                                        {% for r in p.form|slice(0, 3) %}
+                                            {{ _self.result_badge(r) }}
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="text-center small">
+                                {% if p.leaguePosition is defined and p.leaguePosition is not null %}
+                                    <span class="fw-semibold {{ p.leaguePosition <= 3 ? 'text-warning' : '' }}">P{{ p.leaguePosition }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td class="text-end small">
@@ -353,8 +534,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-end small text-muted">{{ p.squadSize ?? '—' }}</td>
-                            <td class="small text-muted">{{ record.clientTimestamp|date('d M Y H:i') }}</td>
-                            <td class="small text-muted">{{ record.serverTimestamp|date('d M Y H:i') }}</td>
+                            <td class="small text-muted">{{ record.serverTimestamp|date('d M H:i') }}</td>
                             <td class="small text-muted">{{ record.invalidReason ?? '' }}</td>
                         </tr>
                         {% endfor %}

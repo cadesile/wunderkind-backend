@@ -116,11 +116,22 @@ class SyncRequest
             if ($item instanceof MatchResultDto) {
                 return $item;
             }
-            $dto                 = new MatchResultDto();
-            $dto->opponentClubId = $item['opponentClubId'] ?? '';
-            $dto->goalsFor       = (int) ($item['goalsFor'] ?? 0);
-            $dto->goalsAgainst   = (int) ($item['goalsAgainst'] ?? 0);
-            $dto->week           = (int) ($item['week'] ?? 1);
+            $dto                   = new MatchResultDto();
+            // v2
+            $dto->fixtureId        = $item['fixtureId'] ?? '';
+            $dto->leagueId         = $item['leagueId'] ?? '';
+            $dto->season           = (int) ($item['season'] ?? 0);
+            $dto->round            = (int) ($item['round'] ?? 0);
+            $dto->opponentClubId   = $item['opponentClubId'] ?? '';
+            $dto->opponentClubName = $item['opponentClubName'] ?? '';
+            $dto->homeGoals        = (int) ($item['homeGoals'] ?? 0);
+            $dto->awayGoals        = (int) ($item['awayGoals'] ?? 0);
+            $dto->isHome           = (bool) ($item['isHome'] ?? false);
+            $dto->playedAt         = $item['playedAt'] ?? '';
+            // v1 legacy
+            $dto->goalsFor         = (int) ($item['goalsFor'] ?? 0);
+            $dto->goalsAgainst     = (int) ($item['goalsAgainst'] ?? 0);
+            $dto->week             = (int) ($item['week'] ?? 1);
             return $dto;
         }, $matchResults);
     }
@@ -132,6 +143,44 @@ class SyncRequest
      * @var array<string, int>
      */
     public array $managerShifts = [];
+
+    // ── v2 fields ─────────────────────────────────────────────────────────
+
+    /**
+     * Mean overall rating of all active players at sync time. Integer, rounded.
+     */
+    public int $squadAvgOvr = 0;
+
+    /**
+     * Last ≤5 league results, newest first. Values: 'W' | 'D' | 'L'.
+     *
+     * @var string[]
+     */
+    public array $form = [];
+
+    /** AMP's current league table position (1 = top). null = no league. */
+    public ?int $leaguePosition = null;
+
+    /**
+     * Season running totals at the time of sync.
+     *
+     * @var array{wins: int, draws: int, losses: int, goalsFor: int, goalsAgainst: int, points: int}
+     */
+    public array $seasonRecord = [];
+
+    /**
+     * Season-to-date stats per AMP player with ≥1 appearance.
+     *
+     * @var array<array{playerId: string, appearances: int, goals: int, assists: int, averageRating: float}>
+     */
+    public array $playerStats = [];
+
+    /**
+     * Players signed into the squad this week (incoming transfers).
+     *
+     * @var array<array{playerId: string, playerName: string, position: string, age: int, overallRating: int, fee: int, fromClub: string|null}>
+     */
+    public array $signings = [];
 
     /**
      * Player attribute snapshots sent by the client each week.

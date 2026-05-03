@@ -235,6 +235,18 @@ class DashboardController extends AbstractDashboardController
         $config->setMaxChairmensPerClub((int) $request->request->get('maxChairmensPerClub', 1));
         $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
 
+        // Attendance ranges — clamp min to [0, max] before persisting
+        foreach (['Local', 'Regional', 'National', 'Elite'] as $tier) {
+            $minKey = 'attendance' . $tier . 'Min';
+            $maxKey = 'attendance' . $tier . 'Max';
+            $min = (int) $request->request->get($minKey, 0);
+            $max = (int) $request->request->get($maxKey, 100);
+            $max = max(0, min(100, $max));
+            $min = max(0, min($max, $min)); // min cannot exceed max
+            $config->{'set' . $minKey}($min);
+            $config->{'set' . $maxKey}($max);
+        }
+
         // Squad configuration
         $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
         $config->setSquadSizeMax((int) $request->request->get('squadSizeMax', 25));

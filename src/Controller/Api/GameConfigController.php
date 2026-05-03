@@ -77,6 +77,16 @@ class GameConfigController extends AbstractController
             'retirementMaxAge'   => $config->getRetirementMaxAge(),
             'retirementChance'   => $config->getRetirementChance(),
 
+            // Attendance ranges (% of stadium capacity per reputation tier)
+            'attendanceLocalMin'    => $config->getAttendanceLocalMin(),
+            'attendanceLocalMax'    => $config->getAttendanceLocalMax(),
+            'attendanceRegionalMin' => $config->getAttendanceRegionalMin(),
+            'attendanceRegionalMax' => $config->getAttendanceRegionalMax(),
+            'attendanceNationalMin' => $config->getAttendanceNationalMin(),
+            'attendanceNationalMax' => $config->getAttendanceNationalMax(),
+            'attendanceEliteMin'    => $config->getAttendanceEliteMin(),
+            'attendanceEliteMax'    => $config->getAttendanceEliteMax(),
+
             // Squad configuration
             'squadSizeMin' => $config->getSquadSizeMin(),
             'squadSizeMax' => $config->getSquadSizeMax(),

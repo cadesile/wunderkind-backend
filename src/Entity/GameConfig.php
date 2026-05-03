@@ -557,6 +557,61 @@ class GameConfig
     public function getRetirementChance(): float { return $this->retirementChance; }
     public function setRetirementChance(float $v): static { $this->retirementChance = max(0.0, min(1.0, $v)); return $this; }
 
+    // ── Attendance Ranges ─────────────────────────────────────────────────
+
+    /**
+     * Attendance as a % of stadium capacity per reputation tier (0–100).
+     * The engine picks a random value in [min, max] each matchday.
+     */
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 10])]
+    private int $attendanceLocalMin = 10;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 30])]
+    private int $attendanceLocalMax = 30;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 30])]
+    private int $attendanceRegionalMin = 30;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 55])]
+    private int $attendanceRegionalMax = 55;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 55])]
+    private int $attendanceNationalMin = 55;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 80])]
+    private int $attendanceNationalMax = 80;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 80])]
+    private int $attendanceEliteMin = 80;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 100])]
+    private int $attendanceEliteMax = 100;
+
+    public function getAttendanceLocalMin(): int { return $this->attendanceLocalMin; }
+    public function setAttendanceLocalMin(int $v): static { $this->attendanceLocalMin = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceLocalMax(): int { return $this->attendanceLocalMax; }
+    public function setAttendanceLocalMax(int $v): static { $this->attendanceLocalMax = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceRegionalMin(): int { return $this->attendanceRegionalMin; }
+    public function setAttendanceRegionalMin(int $v): static { $this->attendanceRegionalMin = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceRegionalMax(): int { return $this->attendanceRegionalMax; }
+    public function setAttendanceRegionalMax(int $v): static { $this->attendanceRegionalMax = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceNationalMin(): int { return $this->attendanceNationalMin; }
+    public function setAttendanceNationalMin(int $v): static { $this->attendanceNationalMin = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceNationalMax(): int { return $this->attendanceNationalMax; }
+    public function setAttendanceNationalMax(int $v): static { $this->attendanceNationalMax = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceEliteMin(): int { return $this->attendanceEliteMin; }
+    public function setAttendanceEliteMin(int $v): static { $this->attendanceEliteMin = max(0, min(100, $v)); return $this; }
+
+    public function getAttendanceEliteMax(): int { return $this->attendanceEliteMax; }
+    public function setAttendanceEliteMax(int $v): static { $this->attendanceEliteMax = max(0, min(100, $v)); return $this; }
+
     // ── App Links ─────────────────────────────────────────────────────────
 
     /** Google Play / APK download URL for the Android build. Nullable — omit button if empty. */

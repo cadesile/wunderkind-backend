@@ -716,6 +716,88 @@
                 </div>
             </div>
 
+            {# ── Attendance Ranges ───────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-people-roof text-muted"></i>
+                    <span class="fw-semibold small">Attendance Ranges</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Attendance as a <strong>percentage of stadium capacity</strong> (0–100%) per reputation tier.
+                        The engine picks a random value between min and max each matchday.
+                        Min cannot exceed max.
+                    </p>
+                    {% set tiers = [
+                        { key: 'Local',    label: 'Local',    color: 'secondary' },
+                        { key: 'Regional', label: 'Regional', color: 'info' },
+                        { key: 'National', label: 'National', color: 'primary' },
+                        { key: 'Elite',    label: 'Elite',    color: 'warning' },
+                    ] %}
+                    <div class="row g-3">
+                        {% for tier in tiers %}
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="border rounded p-3">
+                                <div class="fw-semibold small mb-3 d-flex align-items-center gap-2">
+                                    <span class="badge bg-{{ tier.color }}-subtle text-{{ tier.color }} border border-{{ tier.color }}-subtle">{{ tier.label }}</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label for="attendance{{ tier.key }}Min" class="form-label small mb-1">Min %</label>
+                                        <input type="number"
+                                               id="attendance{{ tier.key }}Min"
+                                               name="attendance{{ tier.key }}Min"
+                                               value="{{ attribute(config, 'attendance' ~ tier.key ~ 'Min') }}"
+                                               min="0" max="100" class="form-control form-control-sm"
+                                               oninput="clampAttendance(this)">
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="attendance{{ tier.key }}Max" class="form-label small mb-1">Max %</label>
+                                        <input type="number"
+                                               id="attendance{{ tier.key }}Max"
+                                               name="attendance{{ tier.key }}Max"
+                                               value="{{ attribute(config, 'attendance' ~ tier.key ~ 'Max') }}"
+                                               min="0" max="100" class="form-control form-control-sm"
+                                               oninput="clampAttendance(this)">
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    {% set minVal = attribute(config, 'attendance' ~ tier.key ~ 'Min') %}
+                                    {% set maxVal = attribute(config, 'attendance' ~ tier.key ~ 'Max') %}
+                                    <div class="progress" style="height:4px;border-radius:2px;">
+                                        <div class="progress-bar bg-{{ tier.color }}"
+                                             style="margin-left:{{ minVal }}%;width:{{ maxVal - minVal }}%;">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1" style="font-size:.68rem;color:var(--bs-secondary-color);">
+                                        <span>{{ minVal }}%</span><span>{{ maxVal }}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <script>
+            function clampAttendance(input) {
+                var val = parseInt(input.value, 10) || 0;
+                val = Math.max(0, Math.min(100, val));
+                input.value = val;
+                var isMin = input.name.endsWith('Min');
+                var base  = input.name.replace(/Min$|Max$/, '');
+                var minEl = document.querySelector('[name="' + base + 'Min"]');
+                var maxEl = document.querySelector('[name="' + base + 'Max"]');
+                if (!minEl || !maxEl) return;
+                if (isMin && parseInt(minEl.value) > parseInt(maxEl.value)) {
+                    maxEl.value = minEl.value;
+                } else if (!isMin && parseInt(maxEl.value) < parseInt(minEl.value)) {
+                    minEl.value = maxEl.value;
+                }
+            }
+            </script>
+
             {# ── Squad Configuration ────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
