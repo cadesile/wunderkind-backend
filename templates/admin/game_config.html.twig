@@ -716,6 +716,36 @@
                 </div>
             </div>
 
+            {# ── Squad Configuration ────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-users text-muted"></i>
+                    <span class="fw-semibold small">Squad Configuration</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Defines the minimum and maximum number of players allowed in a club's active squad.
+                        The client enforces these limits when signing or releasing players.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="squadSizeMin" class="form-label fw-semibold small">Min Squad Size</label>
+                            <input type="number" id="squadSizeMin" name="squadSizeMin"
+                                   value="{{ config.squadSizeMin }}"
+                                   min="1" max="50" class="form-control">
+                            <div class="form-text">Minimum players required in the squad. Default: 11</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="squadSizeMax" class="form-label fw-semibold small">Max Squad Size</label>
+                            <input type="number" id="squadSizeMax" name="squadSizeMax"
+                                   value="{{ config.squadSizeMax }}"
+                                   min="1" max="100" class="form-control">
+                            <div class="form-text">Maximum players allowed in the squad. Default: 25</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Player Retirement ──────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">

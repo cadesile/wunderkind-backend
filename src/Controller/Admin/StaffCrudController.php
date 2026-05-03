@@ -8,7 +8,12 @@ use App\Repository\ClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -49,6 +54,23 @@ class StaffCrudController extends AbstractCrudController
             role: StaffRole::COACH,
             club: $club,
         );
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters
+            ->add(ChoiceFilter::new('role')->setChoices([
+                'Coach'                => StaffRole::COACH,
+                'Manager'              => StaffRole::MANAGER,
+                'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL,
+                'Facility Manager'     => StaffRole::FACILITY_MANAGER,
+                'Chairman'             => StaffRole::CHAIRMAN,
+            ]))
+            ->add(EntityFilter::new('club'))
+            ->add(TextFilter::new('nationality'))
+            ->add(NumericFilter::new('coachingAbility'))
+            ->add(NumericFilter::new('scoutingRange'))
+            ->add(NumericFilter::new('morale'));
     }
 
     public function configureFields(string $pageName): iterable

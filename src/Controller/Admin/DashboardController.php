@@ -206,6 +206,10 @@ class DashboardController extends AbstractDashboardController
         $config->setMaxChairmensPerClub((int) $request->request->get('maxChairmensPerClub', 1));
         $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
 
+        // Squad configuration
+        $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
+        $config->setSquadSizeMax((int) $request->request->get('squadSizeMax', 25));
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');

@@ -77,6 +77,10 @@ class GameConfigController extends AbstractController
             'retirementMaxAge'   => $config->getRetirementMaxAge(),
             'retirementChance'   => $config->getRetirementChance(),
 
+            // Squad configuration
+            'squadSizeMin' => $config->getSquadSizeMin(),
+            'squadSizeMax' => $config->getSquadSizeMax(),
+
             // Developer / Debug
             'debugLoggingEnabled'                          => $config->isDebugLoggingEnabled(),
 

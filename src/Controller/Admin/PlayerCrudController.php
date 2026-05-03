@@ -12,8 +12,13 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 use Symfony\Component\HttpFoundation\Response;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
@@ -82,6 +87,34 @@ class PlayerCrudController extends AbstractCrudController
             currentAbility: 50,
             club: $club,
         );
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters
+            ->add(ChoiceFilter::new('position')->setChoices([
+                'Goalkeeper' => PlayerPosition::GOALKEEPER,
+                'Defender'   => PlayerPosition::DEFENDER,
+                'Midfielder' => PlayerPosition::MIDFIELDER,
+                'Attacker'   => PlayerPosition::ATTACKER,
+            ]))
+            ->add(ChoiceFilter::new('status')->setChoices([
+                'Active'               => PlayerStatus::ACTIVE,
+                'Loaned Out'           => PlayerStatus::LOANED_OUT,
+                'Transferred'          => PlayerStatus::TRANSFERRED,
+                'Transferred (Agent)'  => PlayerStatus::TRANSFERRED_VIA_AGENT,
+                'Retired'              => PlayerStatus::RETIRED,
+            ]))
+            ->add(ChoiceFilter::new('recruitmentSource')->setChoices([
+                'Scouting Network' => RecruitmentSource::SCOUTING_NETWORK,
+                'Coaching Find'    => RecruitmentSource::COACHING_FIND,
+                'Agent Offer'      => RecruitmentSource::AGENT_OFFER,
+                'Youth Request'    => RecruitmentSource::YOUTH_REQUEST,
+            ]))
+            ->add(EntityFilter::new('club'))
+            ->add(TextFilter::new('nationality'))
+            ->add(NumericFilter::new('currentAbility'))
+            ->add(NumericFilter::new('potential'));
     }
 
     public function configureFields(string $pageName): iterable

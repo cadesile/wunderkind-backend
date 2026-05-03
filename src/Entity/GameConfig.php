@@ -557,6 +557,22 @@ class GameConfig
     public function getRetirementChance(): float { return $this->retirementChance; }
     public function setRetirementChance(float $v): static { $this->retirementChance = max(0.0, min(1.0, $v)); return $this; }
 
+    // ── Squad Configuration ───────────────────────────────────────────────
+
+    /** Minimum number of players required in a club's active squad. Default: 11 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 11])]
+    private int $squadSizeMin = 11;
+
+    /** Maximum number of players allowed in a club's active squad. Default: 25 */
+    #[ORM\Column(type: 'smallint', options: ['default' => 25])]
+    private int $squadSizeMax = 25;
+
+    public function getSquadSizeMin(): int { return $this->squadSizeMin; }
+    public function setSquadSizeMin(int $v): static { $this->squadSizeMin = max(1, $v); return $this; }
+
+    public function getSquadSizeMax(): int { return $this->squadSizeMax; }
+    public function setSquadSizeMax(int $v): static { $this->squadSizeMax = max(1, $v); return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */
