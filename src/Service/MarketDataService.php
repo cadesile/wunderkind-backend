@@ -36,7 +36,7 @@ class MarketDataService
             scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(100, $scoreMin, $scoreMax)),
             investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(100)),
             sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(100)),
-            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(1000, $nationality, $scoreMin, $scoreMax)),
+            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(50, $nationality, $scoreMin, $scoreMax)),
             coaches:   array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(500, $scoreMin, $scoreMax)),
         );
     }
