@@ -32,12 +32,12 @@ class MarketDataService
         $scoreMax = $tier?->scoreRange()[1];
 
         return new MarketDataResponse(
-            agents:    array_map($this->serializeAgent(...),    $this->pool->getAgents(20, $scoreMin, $scoreMax)),
-            scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(10, $scoreMin, $scoreMax)),
-            investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(10)),
-            sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(20)),
-            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(100, $nationality, $scoreMin, $scoreMax)),
-            coaches:   array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(20, $scoreMin, $scoreMax)),
+            agents:    array_map($this->serializeAgent(...),    $this->pool->getAgents(100, $scoreMin, $scoreMax)),
+            scouts:    array_map($this->serializeScout(...),    $this->pool->getAvailableScouts(100, $scoreMin, $scoreMax)),
+            investors: array_map($this->serializeInvestor(...), $this->pool->getAvailableInvestorPool(100)),
+            sponsors:  array_map($this->serializeSponsor(...),  $this->pool->getAvailableSponsorPool(100)),
+            players:   array_map($this->serializePlayer(...),   $this->pool->getAvailablePlayers(1000, $nationality, $scoreMin, $scoreMax)),
+            coaches:   array_map($this->serializeCoach(...),    $this->pool->getAvailableCoaches(500, $scoreMin, $scoreMax)),
         );
     }
 

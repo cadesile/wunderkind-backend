@@ -798,6 +798,108 @@
             }
             </script>
 
+            {# ── League Player Ability Ranges ───────────────────────────── #}
+            {% set tierDefaults = {1: {min: 55, max: 95}, 2: {min: 45, max: 65}, 3: {min: 35, max: 55}, 4: {min: 25, max: 50}, 5: {min: 25, max: 40}, 6: {min: 15, max: 35}, 7: {min: 15, max: 25}, 8: {min: 5, max: 15}} %}
+
+            {# Build a flat lookup: "EN_1" → {min, max} from stored config #}
+            {% set abilityLookup = {} %}
+            {% for entry in config.leaguePlayerAbilityRanges %}
+                {% for league in entry.leagues %}
+                    {% set abilityLookup = abilityLookup|merge({(entry.country ~ '_' ~ league.tier): league}) %}
+                {% endfor %}
+            {% endfor %}
+
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-chart-line text-muted"></i>
+                    <span class="fw-semibold small">League Player Ability Ranges</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-4">
+                        Define the min/max ability for players generated for NPC clubs in each league tier.
+                        If missing, sensible tier-based defaults are used (e.g. Tier 1: 55–95, Tier 8: 5–15).
+                    </p>
+
+                    {% if leaguesByCountry|length == 0 %}
+                        <p class="text-muted small"><i class="fa fa-circle-info me-1"></i> No leagues configured yet. Create leagues first.</p>
+                    {% else %}
+                        {% for country, tiers in leaguesByCountry %}
+                        <div class="{{ not loop.last ? 'mb-4' : '' }}">
+                            <div class="text-uppercase fw-bold small text-muted mb-2"
+                                 style="letter-spacing:.1em;font-size:.7rem;border-bottom:1px solid var(--bs-border-color);padding-bottom:.35rem;">
+                                {{ country }} Leagues
+                            </div>
+                            <div class="row g-3">
+                                {% for tier, league in tiers %}
+                                    {% set lookupKey = country ~ '_' ~ tier %}
+                                    {% set stored = abilityLookup[lookupKey] ?? null %}
+                                    {% set defaults = tierDefaults[tier] ?? {min: 10, max: 60} %}
+                                    {% set curMin = stored ? stored.min : defaults.min %}
+                                    {% set curMax = stored ? stored.max : defaults.max %}
+                                    <div class="col-sm-6 col-lg-3">
+                                        <div class="border rounded p-2" style="font-size:.8rem;">
+                                            <div class="fw-semibold mb-2">Tier {{ tier }}</div>
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <label class="form-label small mb-1 text-muted">Min</label>
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text" style="font-size:.7rem;">Min</span>
+                                                        <input type="number"
+                                                               name="abilityRange[{{ country }}][{{ tier }}][min]"
+                                                               value="{{ curMin }}"
+                                                               min="0" max="100"
+                                                               class="form-control form-control-sm ability-range-input"
+                                                               data-country="{{ country }}"
+                                                               data-tier="{{ tier }}"
+                                                               data-bound="min"
+                                                               oninput="clampAbilityRange(this)">
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label small mb-1 text-muted">Max</label>
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text" style="font-size:.7rem;">Max</span>
+                                                        <input type="number"
+                                                               name="abilityRange[{{ country }}][{{ tier }}][max]"
+                                                               value="{{ curMax }}"
+                                                               min="0" max="100"
+                                                               class="form-control form-control-sm ability-range-input"
+                                                               data-country="{{ country }}"
+                                                               data-tier="{{ tier }}"
+                                                               data-bound="max"
+                                                               oninput="clampAbilityRange(this)">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <script>
+            function clampAbilityRange(input) {
+                var val = parseInt(input.value, 10) || 0;
+                val = Math.max(0, Math.min(100, val));
+                input.value = val;
+                var country = input.dataset.country;
+                var tier    = input.dataset.tier;
+                var isMin   = input.dataset.bound === 'min';
+                var minEl   = document.querySelector('[data-country="' + country + '"][data-tier="' + tier + '"][data-bound="min"]');
+                var maxEl   = document.querySelector('[data-country="' + country + '"][data-tier="' + tier + '"][data-bound="max"]');
+                if (!minEl || !maxEl) return;
+                if (isMin && parseInt(minEl.value) > parseInt(maxEl.value)) {
+                    maxEl.value = minEl.value;
+                } else if (!isMin && parseInt(maxEl.value) < parseInt(minEl.value)) {
+                    minEl.value = maxEl.value;
+                }
+            }
+            </script>
+
             {# ── Squad Configuration ────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">

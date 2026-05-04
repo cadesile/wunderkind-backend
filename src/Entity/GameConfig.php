@@ -644,6 +644,21 @@ class GameConfig
     public function getSquadSizeMax(): int { return $this->squadSizeMax; }
     public function setSquadSizeMax(int $v): static { $this->squadSizeMax = max(1, $v); return $this; }
 
+    // ── League Player Ability Ranges ──────────────────────────────────────
+
+    /**
+     * Min/max ability ranges for NPC players generated per league tier, grouped by country.
+     * Structure: [{country: string, leagues: [{tier: int, min: int, max: int}]}]
+     * Empty array = use engine tier-based defaults.
+     *
+     * @var array<array{country: string, leagues: array<array{tier: int, min: int, max: int}>}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $leaguePlayerAbilityRanges = [];
+
+    public function getLeaguePlayerAbilityRanges(): array { return $this->leaguePlayerAbilityRanges; }
+    public function setLeaguePlayerAbilityRanges(array $v): static { $this->leaguePlayerAbilityRanges = $v; return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */

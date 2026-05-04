@@ -251,6 +251,7 @@ class SyncService
             'maxFacilityManagersPerClub'    => $gameConfig->getMaxFacilityManagersPerClub(),
             'maxChairmensPerClub'           => $gameConfig->getMaxChairmensPerClub(),
             'maxScoutsPerClub'              => $gameConfig->getMaxScoutsPerClub(),
+            'leaguePlayerAbilityRanges'     => $gameConfig->getLeaguePlayerAbilityRanges(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -313,6 +314,7 @@ class SyncService
             'maxFacilityManagersPerClub'    => 1,
             'maxChairmensPerClub'           => 1,
             'maxScoutsPerClub'              => 3,
+            'leaguePlayerAbilityRanges'     => [],
         ];
 
         $facilityTemplates = array_map(

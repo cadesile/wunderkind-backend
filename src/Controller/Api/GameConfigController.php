@@ -91,6 +91,9 @@ class GameConfigController extends AbstractController
             'squadSizeMin' => $config->getSquadSizeMin(),
             'squadSizeMax' => $config->getSquadSizeMax(),
 
+            // League player ability ranges per country/tier
+            'leaguePlayerAbilityRanges' => $config->getLeaguePlayerAbilityRanges(),
+
             // Developer / Debug
             'debugLoggingEnabled'                          => $config->isDebugLoggingEnabled(),
 

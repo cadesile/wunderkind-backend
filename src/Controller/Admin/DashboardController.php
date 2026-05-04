@@ -131,8 +131,22 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function gameConfig(): Response
     {
+        $leagues = $this->leagueRepository->findAll();
+
+        // Group leagues by country, keyed by tier, for the ability ranges card
+        $leaguesByCountry = [];
+        foreach ($leagues as $league) {
+            $country = $league->getCountry();
+            $leaguesByCountry[$country][$league->getTier()] = $league;
+        }
+        ksort($leaguesByCountry);
+        foreach ($leaguesByCountry as &$tiers) {
+            ksort($tiers);
+        }
+
         return $this->render('admin/game_config.html.twig', [
-            'config' => $this->gameConfigRepository->getConfig(),
+            'config'           => $this->gameConfigRepository->getConfig(),
+            'leaguesByCountry' => $leaguesByCountry,
         ]);
     }
 
@@ -250,6 +264,24 @@ class DashboardController extends AbstractDashboardController
         // Squad configuration
         $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
         $config->setSquadSizeMax((int) $request->request->get('squadSizeMax', 25));
+
+        // League player ability ranges
+        // Submitted as abilityRange[EN][1][min]=55 &abilityRange[EN][1][max]=95 etc.
+        $rawRanges    = $request->request->all()['abilityRange'] ?? [];
+        $abilityRanges = [];
+        foreach ($rawRanges as $country => $tiers) {
+            $countryLeagues = [];
+            foreach ($tiers as $tier => $bounds) {
+                $min = max(0, min(100, (int) ($bounds['min'] ?? 0)));
+                $max = max(0, min(100, (int) ($bounds['max'] ?? 100)));
+                $min = min($min, $max); // min cannot exceed max
+                $countryLeagues[] = ['tier' => (int) $tier, 'min' => $min, 'max' => $max];
+            }
+            usort($countryLeagues, fn($a, $b) => $a['tier'] <=> $b['tier']);
+            $abilityRanges[] = ['country' => (string) $country, 'leagues' => $countryLeagues];
+        }
+        usort($abilityRanges, fn($a, $b) => strcmp($a['country'], $b['country']));
+        $config->setLeaguePlayerAbilityRanges($abilityRanges);
 
         $this->em->flush();
 
