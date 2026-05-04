@@ -35,7 +35,7 @@ class MatchResult
     private int $season;
 
     /** Client-side fixture UUID — idempotency key. Nullable for legacy v1 records. */
-    #[ORM\Column(type: 'string', length: 36, nullable: true, unique: true)]
+    #[ORM\Column(type: 'string', length: 255, nullable: true, unique: true)]
     private ?string $fixtureId = null;
 
     /** Display name of the opponent club (snapshot from client). */
