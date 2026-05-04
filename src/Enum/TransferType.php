@@ -9,4 +9,5 @@ enum TransferType: string
     case FREE_RELEASE        = 'free_release';
     case AGENT_ASSISTED      = 'agent_assisted';
     case GUARDIAN_WITHDRAWAL = 'guardian_withdrawal';
+    case SIGNING             = 'signing';
 }

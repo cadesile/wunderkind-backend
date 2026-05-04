@@ -74,6 +74,7 @@ class SyncRequest
             $dto = new TransferSyncDto();
             $dto->playerId        = $item['playerId'] ?? '';
             $dto->playerName      = $item['playerName'] ?? '';
+            $dto->playerPosition  = $item['playerPosition'] ?? '';
             $dto->destinationClub = $item['destinationClub'] ?? '';
             $dto->grossFee        = (int) ($item['grossFee'] ?? 0);
             $dto->agentCommission = (int) ($item['agentCommission'] ?? 0);

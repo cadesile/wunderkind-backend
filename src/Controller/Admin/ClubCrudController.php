@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\Club;
 use App\Entity\LeaderboardEntry;
 use App\Entity\SyncRecord;
+use App\Entity\Transfer;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -58,11 +59,15 @@ class ClubCrudController extends AbstractCrudController
         $leaderboardEntries = $this->em->getRepository(LeaderboardEntry::class)
             ->findBy(['club' => $club], ['updatedAt' => 'DESC']);
 
+        $recentTransfers = $this->em->getRepository(Transfer::class)
+            ->findBy(['club' => $club], ['occurredAt' => 'DESC'], 5);
+
         return $this->render('admin/club_profile.html.twig', [
-            'club'            => $club,
+            'club'               => $club,
             'syncRecords'        => $syncRecords,
             'latestValidSync'    => $latestValidSync,
             'leaderboardEntries' => $leaderboardEntries,
+            'recentTransfers'    => $recentTransfers,
         ]);
     }
 

@@ -54,4 +54,5 @@ class TransferRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult() ?? 0);
     }
+
 }

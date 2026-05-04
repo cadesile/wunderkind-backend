@@ -24,7 +24,9 @@ class TransferSyncDto
     #[Assert\PositiveOrZero]
     public int $netProceeds = 0;
 
+    public string $playerPosition = '';
+
     #[Assert\NotBlank]
-    #[Assert\Choice(choices: ['sale', 'loan', 'free_release', 'agent_assisted', 'guardian_withdrawal'])]
+    #[Assert\Choice(choices: ['sale', 'loan', 'free_release', 'agent_assisted', 'guardian_withdrawal', 'signing'])]
     public string $type = '';
 }

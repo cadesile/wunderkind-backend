@@ -21,10 +21,22 @@ class Transfer
     private ?Player $player = null;
 
     #[ORM\ManyToOne(inversedBy: 'transfers')]
-    #[ORM\JoinColumn(nullable: false)]
-    private Club $club;
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Club $club = null;
 
-    /** Name of the buying club (external, not another club in our system) */
+    /** Snapshot: player name at time of transfer */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $playerName = null;
+
+    /** Snapshot: player position at time of transfer (e.g. GK, DEF, MID, ATT) */
+    #[ORM\Column(length: 10, nullable: true)]
+    private ?string $playerPosition = null;
+
+    /** Club the player departed from */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $clubLeaving = null;
+
+    /** Name of the club signing the player */
     #[ORM\Column(length: 100)]
     private string $destinationClubName;
 
@@ -65,14 +77,14 @@ class Transfer
 
     public function __construct(
         ?Player $player,
-        Club $club,
+        ?Club $club,
         string $destinationClubName,
         TransferType $type,
         \DateTimeImmutable $occurredAt,
     ) {
         $this->id                  = new UuidV7();
         $this->player              = $player;
-        $this->club             = $club;
+        $this->club                = $club;
         $this->destinationClubName = $destinationClubName;
         $this->type                = $type;
         $this->occurredAt          = $occurredAt;
@@ -81,7 +93,16 @@ class Transfer
     public function getId(): UuidV7 { return $this->id; }
 
     public function getPlayer(): ?Player { return $this->player; }
-    public function getClub(): Club { return $this->club; }
+    public function getClub(): ?Club { return $this->club; }
+
+    public function getPlayerName(): ?string { return $this->playerName; }
+    public function setPlayerName(?string $v): void { $this->playerName = $v; }
+
+    public function getPlayerPosition(): ?string { return $this->playerPosition; }
+    public function setPlayerPosition(?string $v): void { $this->playerPosition = $v; }
+
+    public function getClubLeaving(): ?string { return $this->clubLeaving; }
+    public function setClubLeaving(?string $v): void { $this->clubLeaving = $v; }
 
     public function getDestinationClubName(): string { return $this->destinationClubName; }
     public function setDestinationClubName(string $name): void { $this->destinationClubName = $name; }

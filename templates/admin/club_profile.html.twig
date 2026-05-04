@@ -398,6 +398,76 @@
     </div>
 
     {# ══════════════════════════════════════════════════════════════════ #}
+    {# TRANSFER HISTORY                                                   #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-info);padding-left:.5rem;">
+            Transfer History
+        </h6>
+    </div>
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-right-left me-1 text-muted"></i> Last 5 Transfers</span>
+            </div>
+            {% if recentTransfers|length > 0 %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Pos</th>
+                            <th class="small text-muted fw-semibold">Player</th>
+                            <th class="small text-muted fw-semibold">Club (signed from)</th>
+                            <th class="small text-muted fw-semibold">To</th>
+                            <th class="small text-muted fw-semibold">Type</th>
+                            <th class="small text-muted fw-semibold text-end">Fee</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in recentTransfers %}
+                        <tr>
+                            <td class="small">
+                                {% if t.playerPosition %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ t.playerPosition }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small fw-semibold">{{ t.playerName ?? (t.player ? t.player.name : '—') }}</td>
+                            <td class="small text-muted">{{ t.clubLeaving ?? '—' }}</td>
+                            <td class="small text-muted">{{ t.destinationClubName }}</td>
+                            <td class="small">
+                                <span class="badge
+                                    {{ t.type.value == 'signing'          ? 'bg-success-subtle text-success border border-success-subtle' :
+                                       t.type.value == 'sale'             ? 'bg-primary-subtle text-primary border border-primary-subtle' :
+                                       t.type.value == 'loan'             ? 'bg-warning-subtle text-warning border border-warning-subtle' :
+                                       t.type.value == 'free_release'     ? 'bg-secondary-subtle text-secondary border border-secondary-subtle' :
+                                                                            'bg-dark-subtle text-dark border border-dark-subtle' }}">
+                                    {{ t.type.value|replace({'_': ' '})|title }}
+                                </span>
+                            </td>
+                            <td class="small text-end fw-semibold">
+                                {% if t.fee > 0 %}
+                                    £{{ (t.fee / 100)|number_format(0) }}
+                                {% else %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Free</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body">
+                <p class="text-muted small mb-0"><i class="fa fa-circle-info me-1"></i> No transfer records yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════ #}
     {# LEADERBOARD                                                        #}
     {# ══════════════════════════════════════════════════════════════════ #}
     {% if leaderboardEntries|length > 0 %}

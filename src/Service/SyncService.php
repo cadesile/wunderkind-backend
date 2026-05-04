@@ -158,6 +158,16 @@ class SyncService
             $this->processPlayerUpdates($club, $request->players);
         }
 
+        // ── Outgoing transfers (players leaving the AMP club) ─────────────────
+        if (!empty($request->transfers)) {
+            $this->processOutgoingTransfers($club, $request->transfers, $clientTimestamp);
+        }
+
+        // ── Signings (players joining the AMP club) ───────────────────────────
+        if (!empty($request->signings)) {
+            $this->processSignings($club, $request->signings, $clientTimestamp);
+        }
+
         // ── Match result persistence ──────────────────────────────────────────
         $syncedFixtureIds = [];
         if (!empty($request->matchResults)) {
@@ -599,38 +609,40 @@ class SyncService
         ];
     }
 
-    private function processTransfers(Club $club, array $transfers, \DateTimeImmutable $syncedAt): void
+    /**
+     * Persists Transfer records for players leaving the AMP club.
+     * Also mirrors a SIGNING record on the receiving NPC club if the destination name matches.
+     *
+     * @param \App\Dto\TransferSyncDto[] $transfers
+     */
+    private function processOutgoingTransfers(Club $club, array $transfers, \DateTimeImmutable $syncedAt): void
     {
-        foreach ($transfers as $data) {
+        foreach ($transfers as $dto) {
             $player = null;
-            if (!empty($data['playerId'])) {
-                $player = $this->em->getRepository(Player::class)->find($data['playerId']);
+            if (!empty($dto->playerId)) {
+                $player = $this->em->getRepository(Player::class)->find($dto->playerId);
             }
 
-            $occurredAt = isset($data['occurredAt'])
-                ? new \DateTimeImmutable($data['occurredAt'])
-                : $syncedAt;
+            $type = TransferType::tryFrom($dto->type) ?? TransferType::SALE;
 
-            $type = isset($data['type'])
-                ? (TransferType::tryFrom($data['type']) ?? TransferType::SALE)
-                : TransferType::SALE;
-
+            // AMP club record (player leaving)
             $transfer = new Transfer(
-                $player,
-                $club,
-                $data['buyingClub'] ?? 'Unknown Club',
-                $type,
-                $occurredAt,
+                player:              $player,
+                club:                $club,
+                destinationClubName: $dto->destinationClub,
+                type:                $type,
+                occurredAt:          $syncedAt,
             );
-
-            $transfer->setFee($data['transferFee'] ?? 0);
-            $transfer->setAgentCommission($data['agentCommission'] ?? 0);
-            $transfer->setNetProceeds($data['netProceeds'] ?? 0);
-            $transfer->setDevelopmentPoints($data['developmentPoints'] ?? 0);
-            $transfer->setReputationGained($data['reputationGained'] ?? 0);
-            $transfer->setBuyingClub($data['buyingClub'] ?? null);
+            $transfer->setPlayerName($dto->playerName ?: ($player?->getName()));
+            $transfer->setPlayerPosition($dto->playerPosition ?: null);
+            $transfer->setClubLeaving($club->getName());
+            $transfer->setFee($dto->grossFee);
+            $transfer->setAgentCommission($dto->agentCommission);
+            $transfer->setNetProceeds($dto->netProceeds);
             $transfer->setSyncedAt($syncedAt);
+            $this->em->persist($transfer);
 
+            // Update player status
             if ($player !== null && $player->getClub() === $club) {
                 $player->setStatus(
                     $type === TransferType::AGENT_ASSISTED
@@ -638,7 +650,41 @@ class SyncService
                         : PlayerStatus::TRANSFERRED
                 );
             }
+        }
+    }
 
+    /**
+     * Persists Transfer records for players signing into the AMP club.
+     * Also mirrors a departure record on the source NPC club if the fromClub name matches.
+     *
+     * @param array<array{playerId: string, playerName: string, position: string, age: int, overallRating: int, fee: int, fromClub: string|null}> $signings
+     */
+    private function processSignings(Club $club, array $signings, \DateTimeImmutable $syncedAt): void
+    {
+        foreach ($signings as $signing) {
+            $player = null;
+            if (!empty($signing['playerId'])) {
+                $player = $this->em->getRepository(Player::class)->find($signing['playerId']);
+            }
+
+            $fromClub = $signing['fromClub'] ?? null;
+            $fee      = (int) ($signing['fee'] ?? 0);
+            $name     = $signing['playerName'] ?? ($player?->getName() ?? '');
+            $position = $signing['position'] ?? null;
+
+            // AMP club record (player arriving)
+            $transfer = new Transfer(
+                player:              $player,
+                club:                $club,
+                destinationClubName: $club->getName(),
+                type:                TransferType::SIGNING,
+                occurredAt:          $syncedAt,
+            );
+            $transfer->setPlayerName($name);
+            $transfer->setPlayerPosition($position);
+            $transfer->setClubLeaving($fromClub ?? 'Free Agent');
+            $transfer->setFee($fee);
+            $transfer->setSyncedAt($syncedAt);
             $this->em->persist($transfer);
         }
     }
