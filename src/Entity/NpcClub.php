@@ -33,6 +33,9 @@ class NpcClub
     #[ORM\Column(length: 7)]
     private string $secondaryColor;
 
+    #[ORM\Column(length: 5, nullable: true)]
+    private ?string $abbreviation = null;
+
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $stadiumName = null;
 
@@ -102,6 +105,9 @@ class NpcClub
 
     public function getSecondaryColor(): string { return $this->secondaryColor; }
     public function setSecondaryColor(string $v): static { $this->secondaryColor = $v; return $this; }
+
+    public function getAbbreviation(): ?string { return $this->abbreviation; }
+    public function setAbbreviation(?string $v): static { $this->abbreviation = $v; return $this; }
 
     public function getStadiumName(): ?string { return $this->stadiumName; }
     public function setStadiumName(?string $v): static { $this->stadiumName = $v; return $this; }

@@ -222,13 +222,13 @@ class DashboardController extends AbstractDashboardController
         $config->setRetirementChance((float) $request->request->get('retirementChance', 0.35));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
-        // League finances
-        $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0));
-        $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0));
-        $config->setMediumSponsorMin((int) $request->request->get('mediumSponsorMin', 0));
-        $config->setMediumSponsorMax((int) $request->request->get('mediumSponsorMax', 0));
-        $config->setLargeSponsorMin((int) $request->request->get('largeSponsorMin', 0));
-        $config->setLargeSponsorMax((int) $request->request->get('largeSponsorMax', 0));
+        // League finances — form submits pounds; multiply by 100 to store pence
+        $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0) * 100);
+        $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0) * 100);
+        $config->setMediumSponsorMin((int) $request->request->get('mediumSponsorMin', 0) * 100);
+        $config->setMediumSponsorMax((int) $request->request->get('mediumSponsorMax', 0) * 100);
+        $config->setLargeSponsorMin((int) $request->request->get('largeSponsorMin', 0) * 100);
+        $config->setLargeSponsorMax((int) $request->request->get('largeSponsorMax', 0) * 100);
         $config->setLeaguePositionDecreasePercent((int) $request->request->get('leaguePositionDecreasePercent', 5));
 
         // Sponsor & investor offer probabilities
@@ -322,7 +322,8 @@ class DashboardController extends AbstractDashboardController
         }
 
         $config = $this->starterConfigRepository->getConfig();
-        $config->setStartingBalance((int) $request->request->get('startingBalance', 5_000_000));
+        // Form submits pounds; multiply by 100 to store pence
+        $config->setStartingBalance((int) $request->request->get('startingBalance', 50_000) * 100);
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));

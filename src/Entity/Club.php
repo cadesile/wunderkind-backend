@@ -50,6 +50,10 @@ class Club
     #[ORM\Column(length: 2, nullable: true)]
     private ?string $country = null;
 
+    /** Short club abbreviation, up to 5 characters (e.g. 'MAN', 'BARCA') */
+    #[ORM\Column(length: 5, nullable: true)]
+    private ?string $abbreviation = null;
+
     /** Set once when POST /api/initialize succeeds. Guards re-initialization (409). */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $worldInitializedAt = null;
@@ -168,6 +172,9 @@ class Club
 
     public function getCountry(): ?string { return $this->country; }
     public function setCountry(?string $country): void { $this->country = $country; }
+
+    public function getAbbreviation(): ?string { return $this->abbreviation; }
+    public function setAbbreviation(?string $abbreviation): void { $this->abbreviation = $abbreviation; }
 
     public function getWorldInitializedAt(): ?\DateTimeImmutable { return $this->worldInitializedAt; }
     public function setWorldInitializedAt(?\DateTimeImmutable $v): static { $this->worldInitializedAt = $v; return $this; }

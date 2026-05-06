@@ -1,49 +1,53 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-04-19 19:15:09 | Duration: 38s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
+> Generated: 2026-05-06 22:18:45 | Duration: 38s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players discover, develop, and trade young footballers. The backend follows a client-authoritative hybrid sync model — all gameplay (training, aging, weekly ticks) runs on-device, while this Symfony 8 API handles legacy metric sync, global leaderboards, and anti-cheat validation. Built with PHP 8.4, PostgreSQL 16, and JWT authentication, it exposes a RESTful API consumed by the React Native mobile client alongside an EasyAdmin v5 dashboard for operational management.
+The Wunderkind Factory backend is a Symfony 8.0 REST API powering a mobile-first youth football academy management game, where gameplay runs client-side and this server handles sync validation, global leaderboards, and market data. It follows a client-authoritative hybrid model: the device owns all game state (training, aging, weekly ticks), while the API enforces anti-cheat rules, persists aggregate metrics, and serves shared data like player markets, sponsors, and investors. Built on PHP 8.4 with PostgreSQL 16 and JWT authentication, it exposes a lean set of endpoints consumed by the React Native mobile client.
 
 ---
 
 ## Document Context
 
 ### [CLAUDE.md](CLAUDE.md)
-> AI Summary: CLAUDE.md is the developer guide for the Wunderkind backend, covering the Lando/PHP/PostgreSQL dev environment setup, common Symfony console commands, git workflow conventions, and key architectural decisions for this client-authoritative game sync API.
+> AI Summary: CLAUDE.md is a developer guide for the Wunderkind backend repository, covering how to run PHP/Symfony commands inside the Lando container, manage the PostgreSQL database, follow git branching conventions, and understand the client-authoritative sync architecture.
 
 ### [docs/event-guide.md](docs/event-guide.md)
-> AI Summary: The `docs/event-guide.md` is a configuration reference for the Wunderkind Factory fat client's event system, defining how server-authored `GameEventTemplate` impacts are interpreted on-device. Events are expressed as JSON arrays of `{ target, delta }` mutation objects that the client applies directly to local store state, reinforcing the client-authoritative architecture where the server defines *what* can happen but the device executes it. Valid targets span three domains: availability/health (`injuredWeeks`, `morale`, `isActive`), and a personality matrix of eight traits (1–20 scale, auto-clamped by `squadStore`) that drive downstream simulation behaviors like training XP multipliers, transfer interest frequency, and injury susceptibility. This guide serves as the contract between the backend's `GameEventTemplate.impacts` JSON field and the React Native client's `squadStore`, ensuring both sides agree on the target path schema.
+> AI Summary: The `event-guide.md` documents the configuration format for game events in Wunderkind Factory's fat-client architecture, where event impacts are defined as JSON arrays of mutation objects with a `target` path and numerical `delta`. It specifies all valid mutation targets across two categories: availability/health fields (`injuredWeeks`, `morale`, `isActive`) and the eight-trait `PersonalityMatrix` (`determination`, `professionalism`, `ambition`, `loyalty`, `consistency`, `adaptability`, `pressure`, `temperament`). A key architectural decision documented here is that personality traits are clamped to a 1–20 scale client-side by the `squadStore`, keeping validation logic on-device consistent with the fat-client model. The guide serves as the contract between the server-side `GameEventTemplate.impacts` JSON column and the client's weekly tick simulation engine.
 
 ### [docs/frontend-integration.md](docs/frontend-integration.md)
-> AI Summary: The `docs/frontend-integration.md` file is an integration guide for connecting a React Native (MMKV-based) mobile client to the Wunderkind backend API. It documents the environment configuration pattern (build-time `API_BASE_URL` injection via `react-native-dotenv` or Expo env vars), the JWT auth flow (check MMKV on launch, register/login if absent, retry once on 401), and the balance model — a server-side integer (pence/cents) updated each sync via earnings deltas, sponsor payments, staff/player wages, facility upgrades, and investor payouts, which can go negative (debt). The guide also catalogs all protected API endpoints and their expected request/response shapes, serving as the canonical contract between frontend and backend.
+> AI Summary: The `docs/frontend-integration.md` file is an integration guide for connecting a React Native (MMKV-based) client to the Wunderkind backend API, covering environment configuration, authentication flow, and endpoint contracts. It documents the auth lifecycle — checking MMKV for a stored JWT on launch, registering/logging in if absent, and retrying once on `401` — with `403` treated as a hard stop. A core architectural decision is that the academy's liquid `balance` (stored server-side in pence/cents) is the canonical financial state, updated on every sync via a defined set of credit/debit events including earnings deltas, staff/player wages, sponsor payments, and investor payouts, with debt (negative balance) being an explicitly supported state surfaced via `hasDebt`. The guide appears to be a living reference for typed API client setup, with the endpoint section cut off mid-content (`### POST /a`), suggesting it was still being written.
 
 ### [docs/superpowers/plans/2026-04-14-npc-club-generation.md](docs/superpowers/plans/2026-04-14-npc-club-generation.md)
-> AI Summary: The plan implements **Spec A of the Club Sim expansion** — adding NPC club persistence, a senior player pool, and a `POST /api/market/consume` endpoint to the Symfony/PostgreSQL backend. The core architectural decision is that the backend remains a **pure producer**: NPC clubs are stored as metadata-only entities (no player foreign keys), senior and youth players share a single unified pool, and the frontend is responsible for hard-deleting claimed entities via the consume endpoint. The implementation spans ~15 files including new entities (`NpcClub`), a `NpcClubGenerationService` with hybrid naming logic, senior player generation in `MarketPoolService`, and a Doctrine migration to alter `pool_config` and create the `npc_club` table. A `ConsumeController` exposes the consume endpoint with JWT auth, and an EasyAdmin CRUD controller provides admin visibility into NPC clubs.
+> AI Summary: This plan documents the implementation of **NPC Club Generation** for the Wunderkind backend's "Club Sim" expansion (Spec A). Its core purpose is to add persistent NPC clubs as pure metadata (no player foreign keys), a shared senior/youth player pool, and a `POST /api/market/consume` endpoint for clients to claim and hard-delete market entities. A key architectural decision is that the **backend remains a producer, not a tracker** — NPC clubs store only descriptive data, and the frontend owns the lifecycle of claimed entities. The plan spans ~25 discrete file-level tasks covering new entities (`NpcClub`), enum extensions (`StaffRole`, `RecruitmentSource`), service additions (`NpcClubGenerationService`, senior player generation in `MarketPoolService`), a Doctrine migration, EasyAdmin CRUD wiring, and a new REST endpoint — all implemented inside the Lando/PHP 8.4/PostgreSQL 16 stack.
 
 ### [docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md](docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md)
-> AI Summary: This plan implements a **dynamic league ability ranges configuration matrix** for the `StarterConfig` entity, allowing admins to set min/max player ability bounds per country and league tier. The core architectural decision is to store this matrix as a **JSON column** on `StarterConfig` (format: `{ "EN": { "1": { "min": 75, "max": 100 } } }`), keeping it flexible without requiring schema changes as new countries/tiers are added. The EasyAdmin form is made dynamic by querying `LeagueRepository` at render time — inputs are generated programmatically from whatever country/tier combinations exist in the database, rather than being hardcoded. The plan spans four tasks: updating the TypeScript `StarterConfig` interface on the frontend, adding the entity field + migration on the backend, wiring the admin form's read/save handlers, and threading the configured ranges into player generation logic via `WorldInitializationService`.
+> AI Summary: This plan implements a dynamic configuration matrix in the `StarterConfig` entity to manage player ability ranges per country/league tier, stored as a JSON column in the database. The backend uses EasyAdmin 5 to dynamically generate form inputs based on countries/tiers present in the database, while the frontend TypeScript interface is updated with a `leagueAbilityRanges` field typed as `Record<string, Record<number, { min: number; max: number }>>`. The architecture deliberately chooses a JSON column over a normalized relational table for flexibility, allowing the matrix structure to evolve without schema migrations when new countries or tiers are added. The plan spans both repositories (backend PHP/Symfony and frontend React Native), with task-by-task tracking using checkbox syntax intended for agentic execution via the `superpowers:subagent-driven-development` skill.
 
 ### [docs/superpowers/specs/2026-04-14-npc-club-generation-design.md](docs/superpowers/specs/2026-04-14-npc-club-generation-design.md)
-> AI Summary: This spec defines the backend design for NPC Club Generation (Spec A of the Club Sim expansion), adding `NpcClub` as a persistent entity that stores club metadata (name, country, tier, reputation, colors, stadium, budget, and facilities as a flat JSON map) without any FK relationships to `Player` or `Staff`. The core architectural decision is that the backend acts as a **producer, not a tracker** — it generates entities and serves them via the market API, then discards claimed ones, with NPC clubs being the sole exception that persist as pure metadata (squads are assembled client-side at game-start by pulling from the pool). The spec also introduces senior player support in the player pool, a consume endpoint for the frontend to remove claimed entities, new staff roles, and Stadium as a new facility category. Facility levels are tier-scaled at generation time (e.g., Tier 1–2 clubs get training pitch level 7–9, stands 4–5), keeping NPC club state lightweight and decoupled from live gameplay tracking.
+> AI Summary: This spec defines the backend design for NPC Club Generation (Spec A of the Club Sim expansion). Its core purpose is to add persistent `NpcClub` entities to the backend and extend the market pool with senior players (ages 17–35), without modeling any live club–player relationships — clubs are pure metadata snapshots with no FK ties to `Player` or `Staff`, with squads assembled client-side at game-start.
+
+A key architectural decision is that the backend remains a **producer, not a tracker**: all claimed entities are hard-deleted via a new `POST /api/market/consume` endpoint (idempotent by design), while `NpcClub` is the sole exception that persists — storing only identity data (name, country, tier, colors, facilities as a flat JSON map). Facility levels, reputation, and starting balance are all tier-banded at generation time by `NpcClubGenerationService`, with club names assembled from hardcoded per-country place name arrays combined with universal suffixes.
+
+The spec also adds three new `StaffRole` enum values (MANAGER, DIRECTOR_OF_FOOTBALL, FACILITY_MANAGER), a `Stadium` facility category, new `PoolConfig` senior player fields, and an admin UI section ("Clubs & Leagues") mirroring the existing EasyAdmin patterns. Country entity, League/Competition structure, and all frontend changes are explicitly deferred to Spec B.
 
 ### [docs/wunderkind-backend-context.md](docs/wunderkind-backend-context.md)
-> AI Summary: The `docs/wunderkind-backend-context.md` file is an auto-generated project context snapshot for the Wunderkind Backend, a Symfony 8 / PHP 8.4 / PostgreSQL 16 API serving a client-authoritative mobile game where all gameplay runs offline and the server handles JWT auth, sync anti-cheat, global leaderboards, and economic simulation (sponsors, investors, player markets). It documents the full technology stack and dependency manifest, including API Platform v4, Doctrine ORM 3, EasyAdmin v5, and lexik/jwt-authentication-bundle. The file also captures project scale metrics (165 PHP files, 22 entities, 34 controllers, 9 services, 39 migrations) and the overall structure, serving as a high-level reference for onboarding or tooling that needs to understand the project without reading the full codebase. No architectural decisions are made here — it is a descriptive snapshot, not a prescriptive document.
+> AI Summary: The `wunderkind-backend-context.md` is an auto-generated project overview that serves as a high-level entry point into the codebase, summarizing the stack (Symfony 8, PHP 8.4, PostgreSQL 16, JWT, EasyAdmin v5) and the client-authoritative hybrid sync architecture where all gameplay runs on-device and the API handles only sync, leaderboards, and anti-cheat. It aggregates AI-generated summaries of key documentation files (`CLAUDE.md` and `docs/event-guide.md`), acting as a navigational index rather than a source of new information. A notable architectural decision it surfaces is the event impact contract: server-authored `GameEventTemplate.impacts` are JSON mutation arrays the client applies locally, reinforcing that the server defines *what* can happen while the device executes it. The file is intended to orient developers (and AI assistants) quickly without requiring deep reading of individual source files.
 
 ### [migrations/archive/README.md](migrations/archive/README.md)
-> AI Summary: The file documents 29 archived MySQL-specific migrations that were retired when the project migrated to PostgreSQL, replaced by a single baseline migration.
+> AI Summary: The archived MySQL migrations folder contains 29 old MySQL 8.0-specific migrations that were replaced by a single PostgreSQL baseline migration during the 2026-03-26 database migration.
 
 ### [project_plan.md](project_plan.md)
-> AI Summary: Wunderkind Factory is a mobile youth football academy strategy game with a client-authoritative sync architecture, where players manage scouts, personalities, and finances to maximize Total Career Earnings across a React Native frontend and Symfony/API Platform backend.
+> AI Summary: Wunderkind Factory is a mobile youth football academy strategy game where players scout and develop talent, navigate personality-driven relationships with agents and guardians, and compete on global leaderboards — built on a client-authoritative offline-first architecture with a React Native frontend and Symfony/API Platform backend.
 
 ### [README.md](README.md)
-> AI Summary: The Wunderkind Factory backend is a Symfony 8/PHP 8.4 API powering a mobile youth football academy management game, handling legacy sync, global leaderboards, and anti-cheat validation for a client-authoritative React Native app.
+> AI Summary: The Wunderkind Factory backend is a Symfony 8.0/PHP 8.4 API powering a mobile youth football academy management game, handling legacy metric syncing, anti-cheat validation, and global leaderboards via a client-authoritative hybrid sync model.
 
 ### [wunderkind-backend-context.md](wunderkind-backend-context.md)
-> AI Summary: A project context snapshot for the Wunderkind backend — a Symfony 8/PHP 8.4 API with 2175 files and 6715 PHP lines across 26 controllers, built on Doctrine ORM, API Platform v4, EasyAdmin v5, and JWT auth.
+> AI Summary: This file is a snapshot of the Wunderkind backend codebase — summarizing file counts, PHP line counts, controller count, and the full technology stack (Symfony 8, API Platform 4, Doctrine ORM 3, EasyAdmin 5, JWT auth, PostgreSQL).
 
 ---
 
@@ -51,11 +55,11 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Category | Count |
 |---|---|
-| PHP files         | 255 |
+| PHP files         | 280 |
 | Entities/Models   | 29 |
-| Controllers       | 39 |
+| Controllers       | 40 |
 | Services          | 15 |
-| Migrations        | 59 |
+| Migrations        | 81 |
 
 ---
 
@@ -150,7 +154,8 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── event-guide.md
 │   ├── frontend-integration.md
 │   ├── wunderkind-backend-context.md
-│   └── wunderkind-backend-context.md.tmp
+│   ├── wunderkind-backend-context.md.tmp
+│   └── wunderkind-narrative-2026-04-21.json
 ├── migrations
 │   ├── archive
 │   │   ├── README.md
@@ -212,13 +217,58 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   ├── Version20260418121622.php
 │   ├── Version20260418124854.php
 │   ├── Version20260419105604.php
-│   └── Version20260419160039.php
+│   ├── Version20260419160039.php
+│   ├── Version20260421184302.php
+│   ├── Version20260422221445.php
+│   ├── Version20260423204907.php
+│   ├── Version20260423220216.php
+│   ├── Version20260426000001.php
+│   ├── Version20260426000002.php
+│   ├── Version20260429090303.php
+│   ├── Version20260429095810.php
+│   ├── Version20260502191637.php
+│   ├── Version20260502230625.php
+│   ├── Version20260503074622.php
+│   ├── Version20260503100000.php
+│   ├── Version20260503110000.php
+│   ├── Version20260503120000.php
+│   ├── Version20260504000000.php
+│   ├── Version20260504010000.php
+│   ├── Version20260504020000.php
+│   ├── Version20260504030000.php
+│   ├── Version20260504040000.php
+│   ├── Version20260504050000.php
+│   ├── Version20260504165645.php
+│   └── Version20260504200100.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
 │   │   └── easyadmin
 │   ├── images
 │   │   └── logo.webp
+│   ├── screenshots
+│   │   ├── dashboard.png
+│   │   ├── league.png
+│   │   ├── manager-creation.png
+│   │   ├── office.png
+│   │   ├── Screenshot_20260503-133022.png
+│   │   ├── Screenshot_20260503-133029.png
+│   │   ├── Screenshot_20260503-133051.png
+│   │   ├── Screenshot_20260503-133105.png
+│   │   ├── Screenshot_20260503-133111.png
+│   │   ├── Screenshot_20260503-133254.png
+│   │   ├── Screenshot_20260503-133326.png
+│   │   ├── Screenshot_20260503-133337.png
+│   │   ├── Screenshot_20260503-133447.png
+│   │   ├── Screenshot_20260503-133454.png
+│   │   ├── Screenshot_20260503-133457.png
+│   │   ├── Screenshot_20260503-133504.png
+│   │   ├── Screenshot_20260503-133511.png
+│   │   ├── Screenshot_20260503-141436.png
+│   │   ├── Screenshot_20260503-141443.png
+│   │   ├── Screenshot_20260503-141455.png
+│   │   ├── squad.png
+│   │   └── welcome.png
 │   ├── admin-login.css
 │   ├── index.html
 │   └── index.php
@@ -354,6 +404,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ├── templates
 │   ├── admin
 │   │   ├── _macros.html.twig
+│   │   ├── app_links.html.twig
 │   │   ├── club_profile.html.twig
 │   │   ├── config_content.html.twig
 │   │   ├── dashboard.html.twig
@@ -383,6 +434,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── MatchResultTest.php
 │   │   ├── NpcClubLeagueFieldTest.php
 │   │   ├── NpcClubTest.php
+│   │   ├── PoolConfigStaffTargetsTest.php
 │   │   ├── SeasonRecordTest.php
 │   │   ├── SeasonSnapshotTest.php
 │   │   └── StarterConfigLeagueFieldsTest.php
@@ -399,6 +451,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 │   │   ├── InboxServiceTest.php
 │   │   ├── LeagueServiceSponsorRollTest.php
 │   │   ├── LeagueServiceTest.php
+│   │   ├── MarketPoolServiceGenerateStaffTest.php
 │   │   ├── NpcClubGenerationServiceLeagueTest.php
 │   │   ├── NpcClubGenerationServiceTest.php
 │   │   ├── SyncServiceLeagueTest.php
@@ -419,7 +472,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ├── symfony.lock
 └── wunderkind-backend-context.md
 
-47 directories, 268 files
+48 directories, 316 files
 ```
 
 ---
@@ -497,9 +550,9 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private float $reputationBonus = 0.0;
     private int $maxLevel = 5;
     private float $decayBase = 2.0;
+    private array $gameplayEffects = [];
     private int $sortOrder = 0;
     private bool $isActive = true;
-    private \DateTimeImmutable $updatedAt;
 ```
 
 #### GameConfig
@@ -512,8 +565,8 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private float $baseInjuryProbability = 0.05;
     private int $regressionUpperThreshold = 14;
     private int $regressionLowerThreshold = 7;
-    private float $reputationDeltaBase = 0.5;
-    private float $reputationDeltaFacilityMultiplier = 1.2;
+    private float $reputationDeltaBase = 0.15;
+    private float $reputationDeltaFacilityMultiplier = 0.15;
     private int $injuryMinorWeight = 60;
     private int $injuryModerateWeight = 30;
     private int $injurySeriousWeight = 10;
@@ -532,12 +585,12 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private array $impacts = [];
     private ?array $firingConditions = null;
     private ?string $severity = null;
+    private bool $noInteract = false;
     private ?array $chainedEvents = null;
     private \DateTimeImmutable $createdAt;
     public function __construct(
     public function getId(): UuidV7 { return $this->id; }
     public function getSlug(): string { return $this->slug; }
-    public function setSlug(string $slug): void { $this->slug = $slug; }
 ```
 
 #### Guardian
@@ -656,14 +709,14 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $goalsAgainst;
     private int $week;
     private int $season;
+    private ?string $fixtureId = null;
+    private ?string $opponentClubName = null;
+    private ?bool $isHome = null;
+    private ?int $homeGoals = null;
+    private ?int $awayGoals = null;
+    private ?int $round = null;
+    private ?\DateTimeImmutable $playedAt = null;
     private \DateTimeImmutable $createdAt;
-    public function __construct(
-    public function getId(): UuidV7 { return $this->id; }
-    public function getClub(): Club { return $this->club; }
-    public function getOpponentClub(): NpcClub { return $this->opponentClub; }
-    public function getGoalsFor(): int { return $this->goalsFor; }
-    public function getGoalsAgainst(): int { return $this->goalsAgainst; }
-    public function getWeek(): int { return $this->week; }
 ```
 
 #### NpcClub
@@ -865,16 +918,16 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $starterPlayerCount = 5;
     private int $starterCoachCount = 1;
     private int $starterScoutCount = 1;
+    private int $starterManagerCount = 1;
+    private int $starterDirectorOfFootballCount = 0;
+    private int $starterFacilityManagerCount = 0;
+    private int $starterChairmanCount = 1;
     private string $starterSponsorTier = 'SMALL';
     private string $starterClubTier = 'local';
     private array $defaultFacilities = [];
     private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
     private array $enabledCountries = ['EN'];
     private array $leagueAbilityRanges = [
-    private array $npcSquadConfig = [
-    public static function defaults(): self
-    public function getId(): int { return $this->id; }
-    public function getStartingBalance(): int { return $this->startingBalance; }
 ```
 
 #### SyncRecord
@@ -916,7 +969,10 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ```php
     private UuidV7 $id;
     private ?Player $player = null;
-    private Club $club;
+    private ?Club $club = null;
+    private ?string $playerName = null;
+    private ?string $playerPosition = null;
+    private ?string $clubLeaving = null;
     private string $destinationClubName;
     private TransferType $type;
     private int $fee = 0;
@@ -926,9 +982,6 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     private int $reputationGained = 0;
     private ?string $buyingClub = null;
     private \DateTimeImmutable $occurredAt;
-    private ?\DateTimeImmutable $syncedAt = null;
-    public function __construct(
-    public function getId(): UuidV7 { return $this->id; }
 ```
 
 #### User
@@ -1049,6 +1102,10 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ```php
     public function __construct(
     public function index(): Response
+    #[Route('/admin/app-links', name: 'admin_app_links')]
+    public function appLinks(): Response
+    #[Route('/admin/app-links/save', name: 'admin_app_links_save', methods: ['POST'])]
+    public function saveAppLinks(Request $request): Response
     #[Route('/admin/settings', name: 'admin_settings')]
     public function settings(): Response
     #[Route('/admin/game-config', name: 'admin_game_config')]
@@ -1063,10 +1120,6 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function poolConfig(): Response
     #[Route('/admin/pool-config/save', name: 'admin_pool_config_save', methods: ['POST'])]
     public function savePoolConfig(Request $request): Response
-    #[Route('/admin/pool-config/generate', name: 'admin_pool_generate', methods: ['POST'])]
-    public function generatePool(Request $request): Response
-    #[Route('/admin/pool-config/clear', name: 'admin_pool_clear', methods: ['POST'])]
-    public function clearPool(Request $request): Response
 ```
 
 #### FacilityTemplateCrudController
@@ -1128,6 +1181,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function configureCrud(Crud $crud): Crud
     public function index(AdminContext $context): KeyValueStore|Response
     public function createEntity(string $entityFqcn): Player
+    public function configureFilters(Filters $filters): Filters
     public function configureFields(string $pageName): iterable
 ```
 
@@ -1151,6 +1205,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
     public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
     public function createEntity(string $entityFqcn): Staff
+    public function configureFilters(Filters $filters): Filters
     public function configureFields(string $pageName): iterable
 ```
 
@@ -1193,6 +1248,14 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #[Route('/api/admin')]
     #[Route('/stats', name: 'api_admin_stats', methods: ['GET'])]
     public function stats(): JsonResponse
+```
+
+#### AppLinksController
+```php
+#[Route('/api')]
+    public function __construct(
+    #[Route('/app-links', name: 'api_app_links', methods: ['GET'])]
+    public function index(): JsonResponse
 ```
 
 #### ArchetypeController
@@ -1339,7 +1402,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #[Route('/api')]
     public function __construct(
     #[Route('/initialize', name: 'api_initialize', methods: ['POST'])]
-    public function initialize(): JsonResponse
+    public function initialize(Request $request): JsonResponse
 ```
 
 #### LeaderboardController
@@ -1437,7 +1500,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 ```php
     public function __construct(
     public function generatePlayers(int $count, ?int $clubReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
-    public function generateCoaches(int $count, ?int $clubReputation = null): array
+    public function generateStaffForRole(StaffRole $role, int $count, ?int $clubReputation = null): array
     public function generateScouts(int $count): array
     public function generateAgents(int $count): array
     public function generateSponsors(int $count): array
@@ -1488,6 +1551,7 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 #### WorldInitializationService
 ```php
     public function __construct(
+    public function buildLeaguesPack(Club $club, string $country): array
     public function initialize(Club $club): array
 ```
 
@@ -1498,17 +1562,17 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 
 | Migration | Date |
 |---|---|
-| `Version20260414213004` | 20260414 |
-| `Version20260414225753` | 20260414 |
-| `Version20260415224451` | 20260415 |
-| `Version20260416205447` | 20260416 |
-| `Version20260417175315` | 20260417 |
-| `Version20260417185449` | 20260417 |
-| `Version20260418121622` | 20260418 |
-| `Version20260418124854` | 20260418 |
-| `Version20260419105604` | 20260419 |
-| `Version20260419160039` | 20260419 |
-_Showing latest 10 of 59 total._
+| `Version20260503110000` | 20260503 |
+| `Version20260503120000` | 20260503 |
+| `Version20260504000000` | 20260504 |
+| `Version20260504010000` | 20260504 |
+| `Version20260504020000` | 20260504 |
+| `Version20260504030000` | 20260504 |
+| `Version20260504040000` | 20260504 |
+| `Version20260504050000` | 20260504 |
+| `Version20260504165645` | 20260504 |
+| `Version20260504200100` | 20260504 |
+_Showing latest 10 of 81 total._
 
 ---
 
@@ -1523,7 +1587,7 @@ DATABASE_URL=***
 CORS_ALLOW_ORIGIN=***
 JWT_SECRET_KEY=***
 JWT_PUBLIC_KEY=***
-ACADEMY_STARTING_BALANCE=***
+CLUB_STARTING_BALANCE=***
 ```
 
 ---
@@ -1542,42 +1606,42 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
-ba044b6 Merge branch 'dynamic-seeding' into master (resolved conflicts)
-8b14ec4 chore: apply naming and isolation fixes to root master
-239dd0a chore: fix naming and finalize isolation logic
-d565778 chore: isolate reset script to only touch pool data and users
-651fd01 feat: drive reset_and_seed.sh defaults from pool_config table
-81fb912 feat: update player snapshot to use unified 1-20 trait scale and nested personality object
-98af910 refactor: unify personality traits to 1-20 scale matching frontend
-a16749b ui: add world data import/export to admin dashboard
-c25185f feat: implement LeagueImportExportService for world data
-9cfc17f feat: add matchday income and tactical advantages to NarrativeImportExportService
-6af736b feat: expand ConfigImportExportService with missing fields
-c235e6c test: update StarterConfigLeagueFieldsTest to match new defaults
-3779e2a Merge branch 'feat/npc-config-ui' # Please enter a commit message to explain why this merge is necessary, # especially if it merges an updated upstream into a topic branch. # # Lines starting with '#' will be ignored, and an empty message aborts # the commit.
-52ad6ca feat: implement league ability ranges in StarterConfig
-67e0c5d test: remove stale senior-player tests
+8a38209 return more data
+56a8531 return more data
+4d82878  npc_club_id is gone. Snapshot columns (player_name, player_position, club_leaving) remain. Schema is clean and in sync.
+936a079 The fixture_id column is now VARCHAR(255) — the composite IDs in the payload (e.g.   {leagueId}-s{season}-r{round}-{homeId}-{awayId}) run ~110–120 chars, well within the new limit.
+eeb320f added config for app URLs
+797ab3c added config for app URLs
+b1ad410 added config for app URLs
+85ebc45 configuration fields
+8c15a38 update landing page with new screenshots and feature content
+480b3b4 facility non-game income config
+50c5a9f playing style influnce configuration
+1b52598 add properties for retirement
+4a03b6a conclude season
+273db98 conclude season
+acb7fc7 further league service tweaks
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Repository Pattern** — every entity has a dedicated `*Repository` class encapsulating all query logic, keeping entities as pure data containers
-- **Service Layer** — business logic is isolated in named services (`SyncService`, `EconomicService`, `LeagueService`, etc.) rather than bleeding into controllers or entities
-- **DTO (Data Transfer Object)** — a dedicated `src/Dto` directory decouples HTTP input/output shapes from domain entities, enabling validation at the boundary
-- **Command Pattern (CQRS-lite)** — `src/Command` houses console commands (`CleanupAssignedEntitiesCommand`, `SeedGameEventsCommand`, etc.) that encapsulate discrete write operations, separating mutation triggers from the HTTP request cycle
-- **Import/Export Service Decomposition** — `ConfigImportExportService`, `LeagueImportExportService`, `NarrativeImportExportService` suggest a deliberate split of serialisation/deserialisation concerns into dedicated collaborators rather than embedding them in CRUD controllers
+- **Repository Pattern** — each entity has a dedicated `Repository/` class encapsulating all query logic, keeping persistence concerns out of services and controllers
+- **Service Layer** — business logic is delegated to focused service classes (`SyncService`, `EconomicService`, `LeagueService`, etc.) keeping controllers thin HTTP adapters
+- **DTO (Data Transfer Object)** — `src/Dto/` separates external API input/output shapes from internal domain entities, validated before touching domain logic
+- **Import/Export Command Pattern** — dedicated `*ImportExportService` classes (`ConfigImportExportService`, `LeagueImportExportService`, `NarrativeImportExportService`) suggest a pluggable data portability layer decoupled from core domain services
+- **Event-Driven / Subscriber Pattern** — `src/EventSubscriber/` indicates cross-cutting concerns (auth, logging, lifecycle hooks) are handled via Symfony's event dispatcher rather than embedded in controllers or services
 
 ---
 
 ## Current Development Focus
 
-- **Personality trait generation** — the shift to a unified 1-20 scale across `PersonalityProfile` and `SquadController` opens up AI-driven trait generation: producing statistically realistic, archetype-coherent trait bundles (e.g. high loyalty correlating with low ego) rather than uniform random values
-- **Narrative text templating** — `NarrativeImportExportService` now carries matchday income and tactical advantages; an LLM could generate contextual event body text dynamically from `GameEventTemplate` impacts rather than requiring hand-authored `bodyTemplate` strings per slug
-- **Dynamic pool seeding and balance** — `SeedProspectPoolCommand` + `MarketPoolService` driven by `pool_config` creates a clear hook for AI-assisted calibration: analysing current player distributions and recommending config values that keep the market economically balanced across reputation tiers
-- **World data validation on import** — `LeagueImportExportService` + `WorldInitializationService` handle structured JSON world blobs; AI assistance could flag inconsistent or unrealistic league/club data during import (e.g. wage budgets mismatched to tier, missing required fields) before they corrupt downstream economic calculations
-- **Reset and seed script intelligence** — the `reset_and_seed.sh` refactor isolates pool data, but the seeding logic still relies on static defaults; AI could analyse live academy progression data and surface recommended `pool_config` overrides to keep challenge difficulty appropriately scaled as the game evolves
+- **Transfer sync pipeline** — `TransferSyncDto`, `TransferRepository`, snapshot columns (`player_name`, `player_position`, `club_leaving`), and schema churn across multiple migrations suggest the transfer ingestion flow is being actively reshaped; AI could help validate DTO mapping, enforce snapshot consistency, and generate edge-case tests for the sync logic.
+- **Match result processing** — `MatchResultDto` and `MatchResult` entity changes alongside the `fixture_id` VARCHAR expansion point to a new or evolving match data flow; AI could help design robust composite-ID parsing, result aggregation queries, and conflict-resolution when duplicate fixture payloads arrive.
+- **Game configuration system** — `GameConfig` entity and `GameConfigController` are new, with config entries for facility income and app URLs landing in rapid succession; AI could help define a typed config schema, add validation, and build a caching layer so config reads don't hit the DB on every request.
+- **Migration sprawl** — eight migrations in a single day (`Version20260504*`) indicates fast, iterative schema changes that risk drift and ordering bugs; AI could audit the migration sequence for idempotency, detect reversible vs. destructive changes, and suggest consolidation before the next release.
+- **Admin CRUD surface** — `ClubCrudController` and `DashboardController` edits alongside new entities suggest the admin panel is expanding rapidly; AI could accelerate generating consistent EasyAdmin CRUD controllers, sidebar entries, and permission guards for each new entity.
 
 ---
 

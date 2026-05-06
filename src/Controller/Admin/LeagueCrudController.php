@@ -12,6 +12,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
+use Symfony\Component\Form\Extension\Core\Type\MoneyType;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
@@ -64,20 +65,29 @@ class LeagueCrudController extends AbstractCrudController
                 ? 'Tier 1 — no promotion available.'
                 : 'Number of teams promoted per season. Leave empty if not configured.');
 
-        yield NumberField::new('tvDeal')
+        yield IntegerField::new('tvDeal', 'TV Deal')
+            ->setFormType(MoneyType::class)
+            ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100])
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
             ->setRequired(false)
             ->hideOnIndex()
-            ->setHelp('TV deal income per season in pence (e.g. 500000 = £5,000). Divided equally among all clubs.');
+            ->setHelp('Per-season income divided equally among all clubs.');
 
-        yield NumberField::new('prizeMoney')
+        yield IntegerField::new('prizeMoney', 'Prize Money')
+            ->setFormType(MoneyType::class)
+            ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100])
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
             ->setRequired(false)
             ->hideOnIndex()
-            ->setHelp('Prize paid in full to the league winner (pence).');
+            ->setHelp('Paid in full to the league winner.');
 
-        yield NumberField::new('leaguePositionPot')
+        yield IntegerField::new('leaguePositionPot', 'Position Pot')
+            ->setFormType(MoneyType::class)
+            ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100])
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
             ->setRequired(false)
             ->hideOnIndex()
-            ->setHelp('Total pot distributed by finishing position (pence). 1st gets most; each lower position gets leaguePositionDecreasePercent% less.');
+            ->setHelp('Total pot distributed by finishing position. 1st gets most; each lower position gets leaguePositionDecreasePercent% less.');
 
         yield AssociationField::new('sponsors')
             ->setFormTypeOption('by_reference', false)

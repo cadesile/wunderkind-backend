@@ -309,6 +309,7 @@ class WorldInitializationService
         return [
             'id'             => (string) $club->getId(),
             'name'           => $club->getName(),
+            'abbreviation'   => $club->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($club->getName()),
             'tier'           => $club->getTier(),
             'reputation'     => $club->getReputation(),
             'primaryColor'   => $club->getPrimaryColor(),

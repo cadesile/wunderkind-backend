@@ -80,6 +80,7 @@ class ClubCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name');
+        yield TextField::new('abbreviation')->setHelp('Up to 5 chars, e.g. MAN, BARCA');
         yield TextField::new('country');
         yield AssociationField::new('user');
         yield IntegerField::new('reputation');

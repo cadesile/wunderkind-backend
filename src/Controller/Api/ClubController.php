@@ -79,6 +79,7 @@ class ClubController extends AbstractController
         return $this->json([
             'id'                  => $club->getId()->toRfc4122(),
             'name'                => $club->getName(),
+            'abbreviation'        => $club->getAbbreviation(),
             'balance'             => $club->getBalance(),
             'hasDebt'             => $club->hasDebt(),
             'reputation'          => $club->getReputation(),

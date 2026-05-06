@@ -465,49 +465,49 @@
                 <div class="card-header fw-semibold">League Finances</div>
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-12"><p class="small text-muted mb-0">Sponsor income ranges are in pence per season (e.g. 100000 = £1,000). Re-rolled each conclude-season.</p></div>
+                        <div class="col-12"><p class="small text-muted mb-0">Sponsor income ranges in <strong>£ (pounds)</strong> per season. Re-rolled each conclude-season.</p></div>
 
                         <div class="col-md-3">
-                            <label for="smallSponsorMin" class="form-label fw-semibold small">Small Sponsor Min</label>
+                            <label for="smallSponsorMin" class="form-label fw-semibold small">Small Sponsor Min (£)</label>
                             <input type="number" id="smallSponsorMin" name="smallSponsorMin"
-                                   value="{{ config.smallSponsorMin }}"
-                                   min="0" class="form-control">
-                            <div class="form-text">Minimum per-season income for SMALL sponsors. Default: 0</div>
+                                   value="{{ config.smallSponsorMin / 100 }}"
+                                   min="0" step="1" class="form-control">
+                            <div class="form-text">Minimum per-season income for SMALL sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="smallSponsorMax" class="form-label fw-semibold small">Small Sponsor Max</label>
+                            <label for="smallSponsorMax" class="form-label fw-semibold small">Small Sponsor Max (£)</label>
                             <input type="number" id="smallSponsorMax" name="smallSponsorMax"
-                                   value="{{ config.smallSponsorMax }}"
-                                   min="0" class="form-control">
-                            <div class="form-text">Maximum per-season income for SMALL sponsors. Default: 0</div>
+                                   value="{{ config.smallSponsorMax / 100 }}"
+                                   min="0" step="1" class="form-control">
+                            <div class="form-text">Maximum per-season income for SMALL sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="mediumSponsorMin" class="form-label fw-semibold small">Medium Sponsor Min</label>
+                            <label for="mediumSponsorMin" class="form-label fw-semibold small">Medium Sponsor Min (£)</label>
                             <input type="number" id="mediumSponsorMin" name="mediumSponsorMin"
-                                   value="{{ config.mediumSponsorMin }}"
-                                   min="0" class="form-control">
-                            <div class="form-text">Minimum per-season income for MEDIUM sponsors. Default: 0</div>
+                                   value="{{ config.mediumSponsorMin / 100 }}"
+                                   min="0" step="1" class="form-control">
+                            <div class="form-text">Minimum per-season income for MEDIUM sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="mediumSponsorMax" class="form-label fw-semibold small">Medium Sponsor Max</label>
+                            <label for="mediumSponsorMax" class="form-label fw-semibold small">Medium Sponsor Max (£)</label>
                             <input type="number" id="mediumSponsorMax" name="mediumSponsorMax"
-                                   value="{{ config.mediumSponsorMax }}"
-                                   min="0" class="form-control">
-                            <div class="form-text">Maximum per-season income for MEDIUM sponsors. Default: 0</div>
+                                   value="{{ config.mediumSponsorMax / 100 }}"
+                                   min="0" step="1" class="form-control">
+                            <div class="form-text">Maximum per-season income for MEDIUM sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="largeSponsorMin" class="form-label fw-semibold small">Large Sponsor Min</label>
+                            <label for="largeSponsorMin" class="form-label fw-semibold small">Large Sponsor Min (£)</label>
                             <input type="number" id="largeSponsorMin" name="largeSponsorMin"
-                                   value="{{ config.largeSponsorMin }}"
-                                   min="0" class="form-control">
-                            <div class="form-text">Minimum per-season income for LARGE sponsors. Default: 0</div>
+                                   value="{{ config.largeSponsorMin / 100 }}"
+                                   min="0" step="1" class="form-control">
+                            <div class="form-text">Minimum per-season income for LARGE sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="largeSponsorMax" class="form-label fw-semibold small">Large Sponsor Max</label>
+                            <label for="largeSponsorMax" class="form-label fw-semibold small">Large Sponsor Max (£)</label>
                             <input type="number" id="largeSponsorMax" name="largeSponsorMax"
-                                   value="{{ config.largeSponsorMax }}"
-                                   min="0" class="form-control">
-                            <div class="form-text">Maximum per-season income for LARGE sponsors. Default: 0</div>
+                                   value="{{ config.largeSponsorMax / 100 }}"
+                                   min="0" step="1" class="form-control">
+                            <div class="form-text">Maximum per-season income for LARGE sponsors.</div>
                         </div>
                         <div class="col-md-3">
                             <label for="leaguePositionDecreasePercent" class="form-label fw-semibold small">Position Prize Decrease %</label>
