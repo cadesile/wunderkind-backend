@@ -123,20 +123,20 @@ class ClubInitializationService
     public static function generateAbbreviation(string $name): string
     {
         $strip = ['fc', 'afc', 'sc', 'cf', 'ac', 'bk', 'the'];
-        $words = preg_split('/[\s\-]+/', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [$name];
-        $words = array_values(array_filter($words, fn($w) => !in_array(strtolower($w), $strip)));
+        $words = preg_split('/[\s\-]+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [$name];
+        $words = array_values(array_filter($words, fn($w) => !in_array(mb_strtolower($w), $strip)));
 
         if (empty($words)) {
-            $words = preg_split('/[\s\-]+/', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [$name];
+            $words = preg_split('/[\s\-]+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [$name];
         }
 
         $abbr = match (count($words)) {
-            1       => substr($words[0], 0, 5),
-            2       => substr($words[0], 0, 3) . substr($words[1], 0, 2),
-            default => implode('', array_map(fn($w) => $w[0], $words)),
+            1       => mb_substr($words[0], 0, 5),
+            2       => mb_substr($words[0], 0, 3) . mb_substr($words[1], 0, 2),
+            default => implode('', array_map(fn($w) => mb_substr($w, 0, 1), $words)),
         };
 
-        return strtoupper(substr($abbr, 0, 5));
+        return mb_strtoupper(mb_substr($abbr, 0, 5));
     }
 
     private function generatePaName(): string

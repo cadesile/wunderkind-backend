@@ -34,11 +34,14 @@
                 <div class="row g-3">
 
                     <div class="col-md-6">
-                        <label for="startingBalance" class="form-label fw-semibold small">Starting Balance (£)</label>
-                        <input type="number" id="startingBalance" name="startingBalance"
-                               value="{{ config.startingBalancePounds }}"
-                               min="0" step="1" class="form-control">
-                        <div class="form-text">Enter in pounds. Default: £50,000</div>
+                        <label for="startingBalance" class="form-label fw-semibold small">Starting Balance</label>
+                        <div class="input-group">
+                            <span class="input-group-text">£</span>
+                            <input type="number" id="startingBalance" name="startingBalance"
+                                   value="{{ config.startingBalancePounds }}"
+                                   min="0" step="1" class="form-control">
+                        </div>
+                        <div class="form-text">Default: £50,000</div>
                     </div>
 
                     <div class="col-md-6">

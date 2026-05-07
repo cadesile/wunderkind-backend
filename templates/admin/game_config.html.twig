@@ -468,45 +468,63 @@
                         <div class="col-12"><p class="small text-muted mb-0">Sponsor income ranges in <strong>£ (pounds)</strong> per season. Re-rolled each conclude-season.</p></div>
 
                         <div class="col-md-3">
-                            <label for="smallSponsorMin" class="form-label fw-semibold small">Small Sponsor Min (£)</label>
-                            <input type="number" id="smallSponsorMin" name="smallSponsorMin"
-                                   value="{{ config.smallSponsorMin / 100 }}"
-                                   min="0" step="1" class="form-control">
+                            <label for="smallSponsorMin" class="form-label fw-semibold small">Small Sponsor Min</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="smallSponsorMin" name="smallSponsorMin"
+                                       value="{{ config.smallSponsorMin / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
                             <div class="form-text">Minimum per-season income for SMALL sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="smallSponsorMax" class="form-label fw-semibold small">Small Sponsor Max (£)</label>
-                            <input type="number" id="smallSponsorMax" name="smallSponsorMax"
-                                   value="{{ config.smallSponsorMax / 100 }}"
-                                   min="0" step="1" class="form-control">
+                            <label for="smallSponsorMax" class="form-label fw-semibold small">Small Sponsor Max</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="smallSponsorMax" name="smallSponsorMax"
+                                       value="{{ config.smallSponsorMax / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
                             <div class="form-text">Maximum per-season income for SMALL sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="mediumSponsorMin" class="form-label fw-semibold small">Medium Sponsor Min (£)</label>
-                            <input type="number" id="mediumSponsorMin" name="mediumSponsorMin"
-                                   value="{{ config.mediumSponsorMin / 100 }}"
-                                   min="0" step="1" class="form-control">
+                            <label for="mediumSponsorMin" class="form-label fw-semibold small">Medium Sponsor Min</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="mediumSponsorMin" name="mediumSponsorMin"
+                                       value="{{ config.mediumSponsorMin / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
                             <div class="form-text">Minimum per-season income for MEDIUM sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="mediumSponsorMax" class="form-label fw-semibold small">Medium Sponsor Max (£)</label>
-                            <input type="number" id="mediumSponsorMax" name="mediumSponsorMax"
-                                   value="{{ config.mediumSponsorMax / 100 }}"
-                                   min="0" step="1" class="form-control">
+                            <label for="mediumSponsorMax" class="form-label fw-semibold small">Medium Sponsor Max</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="mediumSponsorMax" name="mediumSponsorMax"
+                                       value="{{ config.mediumSponsorMax / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
                             <div class="form-text">Maximum per-season income for MEDIUM sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="largeSponsorMin" class="form-label fw-semibold small">Large Sponsor Min (£)</label>
-                            <input type="number" id="largeSponsorMin" name="largeSponsorMin"
-                                   value="{{ config.largeSponsorMin / 100 }}"
-                                   min="0" step="1" class="form-control">
+                            <label for="largeSponsorMin" class="form-label fw-semibold small">Large Sponsor Min</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="largeSponsorMin" name="largeSponsorMin"
+                                       value="{{ config.largeSponsorMin / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
                             <div class="form-text">Minimum per-season income for LARGE sponsors.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="largeSponsorMax" class="form-label fw-semibold small">Large Sponsor Max (£)</label>
-                            <input type="number" id="largeSponsorMax" name="largeSponsorMax"
-                                   value="{{ config.largeSponsorMax / 100 }}"
-                                   min="0" step="1" class="form-control">
+                            <label for="largeSponsorMax" class="form-label fw-semibold small">Large Sponsor Max</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="largeSponsorMax" name="largeSponsorMax"
+                                       value="{{ config.largeSponsorMax / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
                             <div class="form-text">Maximum per-season income for LARGE sponsors.</div>
                         </div>
                         <div class="col-md-3">
@@ -963,6 +981,36 @@
                                    value="{{ config.retirementChance }}"
                                    min="0" max="1" step="0.01" class="form-control">
                             <div class="form-text">Weekly probability at max age (0–1). Default: 0.35</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Inbox / Notification Frequencies ───────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-bell text-muted"></i>
+                    <span class="fw-semibold small">Inbox &amp; Notification Frequencies</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how often the system generates recurring inbox notifications for players.
+                        Values are in weeks (1–52).
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="facilityMaintenanceFrequencyWeeks" class="form-label fw-semibold small">Facility Maintenance Reminder (weeks)</label>
+                            <input type="number" id="facilityMaintenanceFrequencyWeeks" name="facilityMaintenanceFrequencyWeeks"
+                                   value="{{ config.facilityMaintenanceFrequencyWeeks }}"
+                                   min="1" max="52" class="form-control">
+                            <div class="form-text">How often a facility maintenance reminder is sent to the inbox. Default: 4</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="systemNotificationFrequencyWeeks" class="form-label fw-semibold small">System Notification Frequency (weeks)</label>
+                            <input type="number" id="systemNotificationFrequencyWeeks" name="systemNotificationFrequencyWeeks"
+                                   value="{{ config.systemNotificationFrequencyWeeks }}"
+                                   min="1" max="52" class="form-control">
+                            <div class="form-text">How often general system digest notifications are sent to the inbox. Default: 8</div>
                         </div>
                     </div>
                 </div>

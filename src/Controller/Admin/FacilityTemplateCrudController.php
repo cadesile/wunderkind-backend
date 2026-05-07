@@ -14,6 +14,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Symfony\Component\Form\Extension\Core\Type\MoneyType;
 
 class FacilityTemplateCrudController extends AbstractCrudController
 {
@@ -44,13 +45,22 @@ class FacilityTemplateCrudController extends AbstractCrudController
                 'Scouting' => 'SCOUTING',
                 'Stadium'  => 'STADIUM',
             ]);
-        yield IntegerField::new('baseCost')
-            ->setHelp('Upgrade cost base in pence. App formula: (currentLevel + 1) × baseCost');
-        yield IntegerField::new('weeklyUpkeepBase')
-            ->setHelp('Weekly upkeep in pence at level 1. App formula: base × 1.5^level')
+        yield IntegerField::new('baseCost', 'Base Cost')
+            ->setFormType(MoneyType::class)
+            ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100])
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
+            ->setHelp('Upgrade cost base. App formula: (currentLevel + 1) × baseCost');
+        yield IntegerField::new('weeklyUpkeepBase', 'Weekly Upkeep')
+            ->setFormType(MoneyType::class)
+            ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100])
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
+            ->setHelp('Weekly upkeep at level 1. App formula: base × 1.5^level')
             ->hideOnIndex();
-        yield IntegerField::new('matchdayIncome')
-            ->setHelp('Base income per home game in pence. Leave blank for no matchday income.')
+        yield IntegerField::new('matchdayIncome', 'Matchday Income')
+            ->setFormType(MoneyType::class)
+            ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100, 'required' => false])
+            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
+            ->setHelp('Base income per home game. Leave blank for no matchday income.')
             ->hideOnIndex();
         yield NumberField::new('matchdayIncomeMultiplier')
             ->setHelp('Income multiplier per effective level. Only used when matchday income > 0. Formula: income × effectiveLevel × multiplier')

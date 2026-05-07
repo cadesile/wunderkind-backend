@@ -659,6 +659,28 @@ class GameConfig
     public function getLeaguePlayerAbilityRanges(): array { return $this->leaguePlayerAbilityRanges; }
     public function setLeaguePlayerAbilityRanges(array $v): static { $this->leaguePlayerAbilityRanges = $v; return $this; }
 
+    // ── Inbox / Notification Frequencies ─────────────────────────────────
+
+    /**
+     * How often (in weeks) the system sends a facility maintenance reminder to the inbox.
+     * Range 1–52. Default: 4
+     */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 4])]
+    private int $facilityMaintenanceFrequencyWeeks = 4;
+
+    /**
+     * How often (in weeks) the system sends general status / digest notifications to the inbox.
+     * Range 1–52. Default: 8
+     */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 8])]
+    private int $systemNotificationFrequencyWeeks = 8;
+
+    public function getFacilityMaintenanceFrequencyWeeks(): int { return $this->facilityMaintenanceFrequencyWeeks; }
+    public function setFacilityMaintenanceFrequencyWeeks(int $v): static { $this->facilityMaintenanceFrequencyWeeks = max(1, min(52, $v)); return $this; }
+
+    public function getSystemNotificationFrequencyWeeks(): int { return $this->systemNotificationFrequencyWeeks; }
+    public function setSystemNotificationFrequencyWeeks(int $v): static { $this->systemNotificationFrequencyWeeks = max(1, min(52, $v)); return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */

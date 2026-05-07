@@ -94,8 +94,12 @@ class GameConfigController extends AbstractController
             // League player ability ranges per country/tier
             'leaguePlayerAbilityRanges' => $config->getLeaguePlayerAbilityRanges(),
 
+            // Inbox / Notification frequencies
+            'facilityMaintenanceFrequencyWeeks' => $config->getFacilityMaintenanceFrequencyWeeks(),
+            'systemNotificationFrequencyWeeks'  => $config->getSystemNotificationFrequencyWeeks(),
+
             // Developer / Debug
-            'debugLoggingEnabled'                          => $config->isDebugLoggingEnabled(),
+            'debugLoggingEnabled'               => $config->isDebugLoggingEnabled(),
 
             // League finances
             'smallSponsorMin'               => $config->getSmallSponsorMin(),

@@ -222,6 +222,10 @@ class DashboardController extends AbstractDashboardController
         $config->setRetirementChance((float) $request->request->get('retirementChance', 0.35));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
+        // Inbox / notification frequencies
+        $config->setFacilityMaintenanceFrequencyWeeks((int) $request->request->get('facilityMaintenanceFrequencyWeeks', 4));
+        $config->setSystemNotificationFrequencyWeeks((int) $request->request->get('systemNotificationFrequencyWeeks', 8));
+
         // League finances — form submits pounds; multiply by 100 to store pence
         $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0) * 100);
         $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0) * 100);
