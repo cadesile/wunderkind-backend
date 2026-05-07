@@ -28,7 +28,7 @@ final class Version20260504165645 extends AbstractMigration
         $this->addSql('DROP INDEX uniq_match_result_fixture_id');
         $this->addSql('CREATE UNIQUE INDEX UNIQ_B2053812E524616D ON match_result (fixture_id)');
         $this->addSql('ALTER TABLE transfer DROP CONSTRAINT fk_4034a3c06d55acab');
-        $this->addSql('DROP INDEX idx_transfer_npc_club_occurred');
+        $this->addSql('DROP INDEX IF EXISTS idx_transfer_npc_club_occurred');
         $this->addSql('ALTER TABLE transfer ADD CONSTRAINT FK_4034A3C061190A32 FOREIGN KEY (club_id) REFERENCES club (id) ON DELETE SET NULL NOT DEFERRABLE');
     }
 
