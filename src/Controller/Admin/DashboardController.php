@@ -931,6 +931,58 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
     }
 
+    // ── Logs ──────────────────────────────────────────────────────────────
+
+    #[Route('/admin/logs', name: 'admin_logs')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function logs(Request $request, KernelInterface $kernel): Response
+    {
+        $logDir = $kernel->getProjectDir() . '/var/log';
+
+        // Discover available log files
+        $files = [];
+        if (is_dir($logDir)) {
+            foreach (glob($logDir . '/*.log') ?: [] as $path) {
+                $files[] = basename($path, '.log');
+            }
+            sort($files);
+        }
+
+        $selectedFile = $request->query->get('file', $files[0] ?? 'dev');
+        $lines        = max(50, min(2000, (int) ($request->query->get('lines', 500))));
+
+        // Sanitise: only allow filenames that actually exist in the log dir
+        if (!in_array($selectedFile, $files, true)) {
+            $selectedFile = $files[0] ?? null;
+        }
+
+        $logLines = [];
+        $error    = null;
+        $fileSize = null;
+
+        if ($selectedFile === null) {
+            $error = 'No log files found. The application may not have written any logs yet.';
+        } else {
+            $logPath = $logDir . '/' . $selectedFile . '.log';
+            if (!is_readable($logPath)) {
+                $error = "Cannot read '{$selectedFile}.log' — check file permissions.";
+            } else {
+                $fileSize = filesize($logPath);
+                $all      = file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+                $logLines = array_slice($all, -$lines);
+            }
+        }
+
+        return $this->render('admin/logs.html.twig', [
+            'files'        => $files,
+            'selectedFile' => $selectedFile,
+            'lines'        => $lines,
+            'logLines'     => $logLines,
+            'fileSize'     => $fileSize,
+            'error'        => $error,
+        ]);
+    }
+
     // ── EasyAdmin configuration ───────────────────────────────────────────
 
     public function configureDashboard(): Dashboard
@@ -970,6 +1022,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
+        yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
         yield MenuItem::section('Market');
         yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
         yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
