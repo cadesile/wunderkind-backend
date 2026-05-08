@@ -3,6 +3,11 @@ services:
     image: ghcr.io/cadesile/wunderkind-backend:prod
     container_name: wunderkind-prod
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     ports:
       - "80:80"
       - "443:443"
@@ -25,6 +30,11 @@ services:
     image: postgres:16-alpine
     container_name: postgres-prod
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     environment:
       POSTGRES_USER: wunderkind
       POSTGRES_PASSWORD: ${DB_PASSWORD}

@@ -67,3 +67,4 @@ jobs:
               php bin/console assets:install --symlink
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console cache:clear
+            docker image prune -a -f --filter "until=24h"
