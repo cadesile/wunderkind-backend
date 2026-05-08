@@ -25,6 +25,7 @@ use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 class SyncService
 {
@@ -39,6 +40,7 @@ class SyncService
         private readonly NpcClubRepository              $npcClubRepository,
         private readonly LeagueRepository               $leagueRepository,
         private readonly TacticalAdvantageRepository    $tacticalAdvantageRepository,
+        private readonly LoggerInterface                 $logger,
     ) {}
 
     /**
@@ -92,6 +94,10 @@ class SyncService
                 ], $request->ledger),
             ],
         );
+        if ($request->log !== null) {
+            $syncRecord->setDebugLog($request->log);
+            $this->checkDebugLogThresholds($request->log);
+        }
         $this->em->persist($syncRecord);
 
         // Anti-cheat: reject week rollbacks.
@@ -678,6 +684,46 @@ class SyncService
             $transfer->setFee($fee);
             $transfer->setSyncedAt($syncedAt);
             $this->em->persist($transfer);
+        }
+    }
+
+    /**
+     * Emits warning logs when debug diagnostic values exceed alert thresholds.
+     * Value -1 on any storage field means the read failed — treated as unknown, not zero.
+     *
+     * @param array<string, mixed> $log
+     */
+    private function checkDebugLogThresholds(array $log): void
+    {
+        $context = [
+            'platform'      => $log['platform']      ?? 'unknown',
+            'capturedAt'    => $log['capturedAt']     ?? null,
+            'tickDurationMs'=> $log['tickDurationMs'] ?? null,
+        ];
+
+        if (isset($log['tickDurationMs']) && $log['tickDurationMs'] > 3000) {
+            $this->logger->warning('sync.debug: tick duration regression', array_merge($context, [
+                'tickDurationMs' => $log['tickDurationMs'],
+                'threshold'      => 3000,
+            ]));
+        }
+
+        $storage = $log['storage'] ?? [];
+
+        $totalKb = $storage['totalKb'] ?? -1;
+        if ($totalKb !== -1 && $totalKb > 4500) {
+            $this->logger->warning('sync.debug: storage approaching SQLite ceiling', array_merge($context, [
+                'totalKb'   => $totalKb,
+                'threshold' => 4500,
+            ]));
+        }
+
+        $playerAppKeyCount = $storage['playerAppKeyCount'] ?? -1;
+        if ($playerAppKeyCount !== -1 && $playerAppKeyCount > 500) {
+            $this->logger->warning('sync.debug: playerAppKeyCount indicates pruning failure', array_merge($context, [
+                'playerAppKeyCount' => $playerAppKeyCount,
+                'threshold'         => 500,
+            ]));
         }
     }
 }

@@ -43,6 +43,15 @@ class SyncRecord
     #[ORM\Column(type: 'json')]
     private array $payload = [];
 
+    /**
+     * Raw debug log from the client — only populated when debugLoggingEnabled is true.
+     * Contains platform, tickDurationMs, and storage diagnostics.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $debugLog = null;
+
     /** False if validation fails (e.g. week number went backwards) */
     #[ORM\Column]
     private bool $isValid = true;
@@ -72,6 +81,9 @@ class SyncRecord
     public function getServerTimestamp(): \DateTimeImmutable { return $this->serverTimestamp; }
 
     public function getPayload(): array { return $this->payload; }
+
+    public function getDebugLog(): ?array { return $this->debugLog; }
+    public function setDebugLog(?array $log): void { $this->debugLog = $log; }
 
     public function isValid(): bool { return $this->isValid; }
 

@@ -190,4 +190,23 @@ class SyncRequest
      * @var array<array{playerId: string, pace?: int, technical?: int, vision?: int, power?: int, stamina?: int, heart?: int, height?: int, weight?: int, morale?: int}>
      */
     public array $players = [];
+
+    /**
+     * Optional debug diagnostics — only present when gameConfig.debugLoggingEnabled === true on the client.
+     * Stored verbatim on SyncRecord; never fails validation if absent.
+     *
+     * @var array{
+     *   capturedAt: string,
+     *   platform: string,
+     *   tickDurationMs: int,
+     *   storage: array{
+     *     totalKb: float,
+     *     keyCount: int,
+     *     topKeys: array<array{key: string, kb: float}>,
+     *     leagueStatsKeyCount: int,
+     *     playerAppKeyCount: int
+     *   }
+     * }|null
+     */
+    public ?array $log = null;
 }
