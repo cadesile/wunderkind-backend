@@ -75,7 +75,7 @@ class StaffCrudController extends AbstractCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        yield IdField::new('id')->hideOnForm();
+        // Index: firstName | lastName | nationality | role | DOB | coachingAbility
         yield TextField::new('firstName');
         yield TextField::new('lastName');
         yield TextField::new('nationality');
@@ -96,12 +96,14 @@ class StaffCrudController extends AbstractCrudController
                 StaffRole::CHAIRMAN->value             => 'danger',
             ]);
 
-        yield IntegerField::new('coachingAbility')->setHelp('1–100');
-        yield IntegerField::new('scoutingRange')->setHelp('1–100');
-        yield IntegerField::new('morale')->setHelp('0–100');
+        yield \EasyCorp\Bundle\EasyAdminBundle\Field\DateField::new('dob', 'DOB');
 
-        yield \EasyCorp\Bundle\EasyAdminBundle\Field\DateField::new('dob', 'Date of Birth')
-            ->hideOnForm();
+        yield IntegerField::new('coachingAbility')->setHelp('1–100');
+
+        // Detail / form only
+        yield IdField::new('id')->onlyOnDetail();
+        yield IntegerField::new('scoutingRange')->setHelp('1–100')->hideOnIndex();
+        yield IntegerField::new('morale')->setHelp('0–100')->hideOnIndex();
 
         yield TextField::new('specialty')->hideOnIndex();
 
@@ -130,8 +132,8 @@ class StaffCrudController extends AbstractCrudController
             ->setHelp('Weekly salary in pence — £1,000 = 100,000')
             ->hideOnIndex();
 
-        yield AssociationField::new('club');
+        yield AssociationField::new('club')->hideOnIndex();
 
-        yield DateTimeField::new('hiredAt')->hideOnForm();
+        yield DateTimeField::new('hiredAt')->hideOnForm()->hideOnIndex();
     }
 }

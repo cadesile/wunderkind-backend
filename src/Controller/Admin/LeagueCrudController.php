@@ -7,7 +7,11 @@ use App\Enum\CompanySize;
 use App\Enum\ReputationTier;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -28,6 +32,27 @@ class LeagueCrudController extends AbstractCrudController
     public function configureCrud(Crud $crud): Crud
     {
         return $crud->setDefaultSort(['country' => 'ASC', 'tier' => 'ASC']);
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters
+            ->add(TextFilter::new('country'))
+            ->add(ChoiceFilter::new('tier')->setChoices(array_combine(
+                array_map(fn($t) => "Tier $t", range(1, 8)),
+                range(1, 8)
+            )))
+            ->add(TextFilter::new('name'))
+            ->add(ChoiceFilter::new('leagueReputationTier')->setChoices([
+                'Local'    => ReputationTier::LOCAL,
+                'Regional' => ReputationTier::REGIONAL,
+                'National' => ReputationTier::NATIONAL,
+                'Elite'    => ReputationTier::ELITE,
+            ]))
+            ->add(NumericFilter::new('promotionSpots'))
+            ->add(NumericFilter::new('tvDeal', 'TV Deal'))
+            ->add(NumericFilter::new('prizeMoney', 'Prize Money'))
+            ->add(NumericFilter::new('leaguePositionPot', 'Position Pot'));
     }
 
     public function configureFields(string $pageName): iterable
