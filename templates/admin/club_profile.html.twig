@@ -526,6 +526,183 @@
     {% endif %}
 
     {# ══════════════════════════════════════════════════════════════════ #}
+    {# DEBUG DIAGNOSTICS                                                  #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% if debugLogs|length > 0 %}
+    {% set latestLog = debugLogs[0].debugLog %}
+    {% set storage   = latestLog.storage ?? {} %}
+    {% set totalKb   = storage.totalKb ?? -1 %}
+    {% set playerAppKeyCount = storage.playerAppKeyCount ?? -1 %}
+    {% set tickMs    = latestLog.tickDurationMs ?? -1 %}
+
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-danger);padding-left:.5rem;">
+            Debug Diagnostics
+            <span class="text-muted fw-normal ms-1" style="font-size:.7rem;">(last {{ debugLogs|length }} debug syncs)</span>
+        </h6>
+    </div>
+
+    {# Alert banners #}
+    {% if totalKb != -1 and totalKb > 4500 %}
+    <div class="col-12">
+        <div class="alert alert-danger py-2 mb-0 d-flex align-items-center gap-2">
+            <i class="fa fa-triangle-exclamation"></i>
+            <span><strong>Storage critical:</strong> {{ totalKb|number_format(1) }} KB — approaching 6 MB SQLite ceiling.</span>
+        </div>
+    </div>
+    {% endif %}
+    {% if playerAppKeyCount != -1 and playerAppKeyCount > 500 %}
+    <div class="col-12">
+        <div class="alert alert-warning py-2 mb-0 d-flex align-items-center gap-2">
+            <i class="fa fa-triangle-exclamation"></i>
+            <span><strong>Pruning failure:</strong> {{ playerAppKeyCount }} player_app:* keys — expected near-zero after season end.</span>
+        </div>
+    </div>
+    {% endif %}
+    {% if tickMs != -1 and tickMs > 3000 %}
+    <div class="col-12">
+        <div class="alert alert-warning py-2 mb-0 d-flex align-items-center gap-2">
+            <i class="fa fa-triangle-exclamation"></i>
+            <span><strong>Tick regression:</strong> last tick took {{ tickMs }} ms (threshold 3000 ms).</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Latest snapshot metrics #}
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-info mb-2"><i class="fa fa-stopwatch fa-lg"></i></div>
+                <div class="text-muted small mb-1">Tick Duration</div>
+                <div class="fs-4 fw-bold {{ tickMs > 3000 ? 'text-danger' : (tickMs > 1500 ? 'text-warning' : '') }}">
+                    {{ tickMs != -1 ? tickMs ~ ' ms' : '—' }}
+                </div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">{{ latestLog.platform ?? '—' }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-info mb-2"><i class="fa fa-database fa-lg"></i></div>
+                <div class="text-muted small mb-1">Storage</div>
+                <div class="fs-4 fw-bold {{ totalKb > 4500 ? 'text-danger' : (totalKb > 3000 ? 'text-warning' : '') }}">
+                    {{ totalKb != -1 ? totalKb|number_format(1) ~ ' KB' : '—' }}
+                </div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">{{ storage.keyCount ?? '—' }} keys total</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-info mb-2"><i class="fa fa-table-columns fa-lg"></i></div>
+                <div class="text-muted small mb-1">League Stats Keys</div>
+                <div class="fs-4 fw-bold">{{ storage.leagueStatsKeyCount ?? '—' }}</div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">expected: tiers × 2</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body py-3 text-center">
+                <div class="text-info mb-2"><i class="fa fa-person-running fa-lg"></i></div>
+                <div class="text-muted small mb-1">player_app Keys</div>
+                <div class="fs-4 fw-bold {{ playerAppKeyCount > 500 ? 'text-danger' : (playerAppKeyCount > 200 ? 'text-warning' : '') }}">
+                    {{ playerAppKeyCount != -1 ? playerAppKeyCount : '—' }}
+                </div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">should drop at season end</div>
+            </div>
+        </div>
+    </div>
+
+    {# Top storage keys + history table side by side #}
+    <div class="col-lg-5">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
+                <span class="fw-semibold small"><i class="fa fa-arrow-down-wide-short me-1 text-muted"></i> Top Storage Keys (latest sync)</span>
+            </div>
+            {% if storage.topKeys is defined and storage.topKeys|length > 0 %}
+            <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Key</th>
+                            <th class="small text-muted fw-semibold text-end">KB</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in storage.topKeys %}
+                        <tr>
+                            <td class="small" style="font-family:monospace;font-size:.7rem;word-break:break-all;">{{ entry.key }}</td>
+                            <td class="small text-end fw-semibold {{ entry.kb > 100 ? 'text-danger' : (entry.kb > 50 ? 'text-warning' : '') }}">
+                                {{ entry.kb|number_format(1) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body">
+                <p class="text-muted small mb-0">No top keys recorded.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
+                <span class="fw-semibold small"><i class="fa fa-clock-rotate-left me-1 text-muted"></i> Debug Sync History</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Received</th>
+                            <th class="small text-muted fw-semibold">Platform</th>
+                            <th class="small text-muted fw-semibold text-end">Tick</th>
+                            <th class="small text-muted fw-semibold text-end">Storage</th>
+                            <th class="small text-muted fw-semibold text-end">Keys</th>
+                            <th class="small text-muted fw-semibold text-end">player_app</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in debugLogs %}
+                        {% set dl = record.debugLog %}
+                        {% set ds = dl.storage ?? {} %}
+                        {% set dTick = dl.tickDurationMs ?? -1 %}
+                        {% set dKb   = ds.totalKb ?? -1 %}
+                        {% set dPak  = ds.playerAppKeyCount ?? -1 %}
+                        <tr>
+                            <td class="small text-muted">{{ record.serverTimestamp|date('d M H:i') }}</td>
+                            <td class="small">
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                    {{ dl.platform ?? '—' }}
+                                </span>
+                            </td>
+                            <td class="small text-end {{ dTick > 3000 ? 'text-danger fw-semibold' : (dTick > 1500 ? 'text-warning' : '') }}">
+                                {{ dTick != -1 ? dTick ~ ' ms' : '—' }}
+                            </td>
+                            <td class="small text-end {{ dKb > 4500 ? 'text-danger fw-semibold' : (dKb > 3000 ? 'text-warning' : '') }}">
+                                {{ dKb != -1 ? dKb|number_format(1) ~ ' KB' : '—' }}
+                            </td>
+                            <td class="small text-end text-muted">{{ ds.keyCount ?? '—' }}</td>
+                            <td class="small text-end {{ dPak > 500 ? 'text-danger fw-semibold' : (dPak > 200 ? 'text-warning' : '') }}">
+                                {{ dPak != -1 ? dPak : '—' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
     {# SYNC LOG                                                           #}
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12 mt-1">

@@ -62,12 +62,24 @@ class ClubCrudController extends AbstractCrudController
         $recentTransfers = $this->em->getRepository(Transfer::class)
             ->findBy(['club' => $club], ['occurredAt' => 'DESC'], 5);
 
+        $debugLogs = $this->em->createQueryBuilder()
+            ->select('s')
+            ->from(SyncRecord::class, 's')
+            ->where('s.club = :club')
+            ->andWhere('s.debugLog IS NOT NULL')
+            ->orderBy('s.serverTimestamp', 'DESC')
+            ->setMaxResults(10)
+            ->setParameter('club', $club)
+            ->getQuery()
+            ->getResult();
+
         return $this->render('admin/club_profile.html.twig', [
             'club'               => $club,
             'syncRecords'        => $syncRecords,
             'latestValidSync'    => $latestValidSync,
             'leaderboardEntries' => $leaderboardEntries,
             'recentTransfers'    => $recentTransfers,
+            'debugLogs'          => $debugLogs,
         ]);
     }
 
