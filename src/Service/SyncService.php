@@ -418,10 +418,6 @@ class SyncService
         $syncedIds = [];
 
         foreach ($results as $dto) {
-            if (empty($dto->opponentClubId)) {
-                continue;
-            }
-
             // Idempotency: skip if this fixtureId has already been stored.
             if ($dto->fixtureId !== '') {
                 $existing = $this->em->getRepository(MatchResult::class)
@@ -430,11 +426,6 @@ class SyncService
                     $syncedIds[] = $dto->fixtureId;
                     continue;
                 }
-            }
-
-            $opponent = $this->npcClubRepository->find($dto->opponentClubId);
-            if ($opponent === null) {
-                continue; // silently skip unknown opponents
             }
 
             // Derive goalsFor/Against from v2 home/away fields if provided,
@@ -451,7 +442,6 @@ class SyncService
 
             $matchResult = new MatchResult(
                 club:         $club,
-                opponentClub: $opponent,
                 goalsFor:     $goalsFor,
                 goalsAgainst: $goalsAgainst,
                 week:         $week,

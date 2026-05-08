@@ -47,6 +47,7 @@ jobs:
           username: deploy
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
+            set -e
             cd /mnt/volume-wkf/wunderkind/prod
 
             cat > .env <<EOF

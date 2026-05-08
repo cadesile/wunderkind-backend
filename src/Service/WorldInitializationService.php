@@ -74,14 +74,18 @@ class WorldInitializationService
         $leaguesData  = [];
         $npcPlayerIds = [];
         $npcStaffIds  = [];
+        $nationality  = ClubInitializationService::countryToNationality($country) ?? $country;
 
         foreach ($leagues as $league) {
             $tier         = $league->getTier();
             $tierKey      = (string) $tier;
             $tierConf     = $npcConfig[$tierKey] ?? $this->defaultTierConfig($tier);
 
-            // Use configured ranges if available, otherwise fallback to hardcoded defaults
-            $abilityRange = $leagueRanges[$country][$tierKey] ?? self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
+            // Use configured ranges if available and non-zero, otherwise fallback to hardcoded defaults
+            $configured   = $leagueRanges[$country][$tierKey] ?? null;
+            $abilityRange = ($configured && ($configured['min'] ?? 0) > 0)
+                ? $configured
+                : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
 
             $npcClubs   = $this->npcClubRepository->findByLeague($league);
             $clubsData  = [];
@@ -107,7 +111,7 @@ class WorldInitializationService
                     $domesticCount = $posTotal - $foreignCount;
 
                     $domestic = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                        $abilityRange['min'], $abilityRange['max'], $position, $country, $domesticCount
+                        $abilityRange['min'], $abilityRange['max'], $position, $nationality, $domesticCount
                     );
                     if (count($domestic) < $domesticCount) {
                         $deficit  = $domesticCount - count($domestic);
@@ -118,12 +122,12 @@ class WorldInitializationService
                     }
 
                     $foreign = $this->playerRepository->findForeignForWorldInitByPosition(
-                        $abilityRange['min'], $abilityRange['max'], $country, $position, $foreignCount
+                        $abilityRange['min'], $abilityRange['max'], $nationality, $position, $foreignCount
                     );
                     if (count($foreign) < $foreignCount) {
                         $deficit = $foreignCount - count($foreign);
                         $extra   = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                            $abilityRange['min'], $abilityRange['max'], $position, $country, $deficit
+                            $abilityRange['min'], $abilityRange['max'], $position, $nationality, $deficit
                         );
                         $foreign = array_merge($foreign, $extra);
                     }
@@ -367,6 +371,7 @@ class WorldInitializationService
             'role'            => $staff->getRole()->value,
             'coachingAbility' => $staff->getCoachingAbility(),
             'nationality'     => $staff->getNationality() ?? '',
+            'specialisms'     => $staff->getSpecialisms() ?? [],
         ];
     }
 

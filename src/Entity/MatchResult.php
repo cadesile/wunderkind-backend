@@ -6,6 +6,7 @@ use App\Repository\MatchResultRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
+
 #[ORM\Entity(repositoryClass: MatchResultRepository::class)]
 #[ORM\Table(name: 'match_result')]
 class MatchResult
@@ -17,10 +18,6 @@ class MatchResult
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
     private Club $club;
-
-    #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: false)]
-    private NpcClub $opponentClub;
 
     #[ORM\Column(type: 'smallint')]
     private int $goalsFor;
@@ -67,7 +64,6 @@ class MatchResult
 
     public function __construct(
         Club $club,
-        NpcClub $opponentClub,
         int $goalsFor,
         int $goalsAgainst,
         int $week,
@@ -75,7 +71,6 @@ class MatchResult
     ) {
         $this->id           = new UuidV7();
         $this->club         = $club;
-        $this->opponentClub = $opponentClub;
         $this->goalsFor     = $goalsFor;
         $this->goalsAgainst = $goalsAgainst;
         $this->week         = $week;
@@ -85,7 +80,6 @@ class MatchResult
 
     public function getId(): UuidV7 { return $this->id; }
     public function getClub(): Club { return $this->club; }
-    public function getOpponentClub(): NpcClub { return $this->opponentClub; }
     public function getGoalsFor(): int { return $this->goalsFor; }
     public function getGoalsAgainst(): int { return $this->goalsAgainst; }
     public function getWeek(): int { return $this->week; }

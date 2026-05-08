@@ -25,6 +25,21 @@ class LeagueService
         private readonly FixtureGenerationService $fixtureGenerationService,
     ) {}
 
+    /**
+     * Tier-based financial defaults applied when generating new leagues.
+     * Values are in pence. Promotion spots: null = no promotion (top tier).
+     */
+    private const LEAGUE_TIER_DEFAULTS = [
+        1 => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000],
+        2 => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000],
+        3 => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000],
+        4 => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000],
+        5 => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000],
+        6 => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000],
+        7 => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000],
+        8 => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000],
+    ];
+
     /** @return League[] newly created leagues (skips tiers that already exist) */
     public function generateLeaguesForCountry(string $country): array
     {
@@ -33,7 +48,12 @@ class LeagueService
             if ($this->leagueRepository->findByCountryAndTier($country, $tier) !== null) {
                 continue;
             }
-            $league    = new League($country, $tier, sprintf('League %d', $tier));
+            $defaults = self::LEAGUE_TIER_DEFAULTS[$tier];
+            $league   = new League($country, $tier, sprintf('League %d', $tier));
+            $league->setPromotionSpots($defaults['promotionSpots']);
+            $league->setTvDeal($defaults['tvDeal']);
+            $league->setPrizeMoney($defaults['prizeMoney']);
+            $league->setLeaguePositionPot($defaults['leaguePositionPot']);
             $this->em->persist($league);
             $created[] = $league;
         }

@@ -81,18 +81,43 @@ class StarterConfig
      * Global ability ranges per country and league tier.
      * Format: { "EN": { "1": { "min": 75, "max": 100 } } }
      */
+    /**
+     * Standard 8-tier ability ranges applied to every country that doesn't have
+     * custom overrides. All supported country codes share these defaults; admins
+     * can override per-country in the DB via EasyAdmin.
+     */
+    private const DEFAULT_TIER_RANGES = [
+        '1' => ['min' => 75, 'max' => 95],
+        '2' => ['min' => 65, 'max' => 85],
+        '3' => ['min' => 55, 'max' => 75],
+        '4' => ['min' => 45, 'max' => 65],
+        '5' => ['min' => 35, 'max' => 55],
+        '6' => ['min' => 25, 'max' => 45],
+        '7' => ['min' => 15, 'max' => 35],
+        '8' => ['min' => 10, 'max' => 25],
+    ];
+
     #[ORM\Column(type: 'json')]
     private array $leagueAbilityRanges = [
-        'EN' => [
-            '1' => ['min' => 75, 'max' => 95],
-            '2' => ['min' => 65, 'max' => 85],
-            '3' => ['min' => 55, 'max' => 75],
-            '4' => ['min' => 45, 'max' => 65],
-            '5' => ['min' => 35, 'max' => 55],
-            '6' => ['min' => 25, 'max' => 45],
-            '7' => ['min' => 15, 'max' => 35],
-            '8' => ['min' => 10, 'max' => 25],
-        ]
+        'EN' => self::DEFAULT_TIER_RANGES,
+        'ES' => self::DEFAULT_TIER_RANGES,
+        'IT' => self::DEFAULT_TIER_RANGES,
+        'DE' => self::DEFAULT_TIER_RANGES,
+        'FR' => self::DEFAULT_TIER_RANGES,
+        'PT' => self::DEFAULT_TIER_RANGES,
+        'NL' => self::DEFAULT_TIER_RANGES,
+        'BR' => self::DEFAULT_TIER_RANGES,
+        'AR' => self::DEFAULT_TIER_RANGES,
+        'NG' => self::DEFAULT_TIER_RANGES,
+        'GH' => self::DEFAULT_TIER_RANGES,
+        'CI' => self::DEFAULT_TIER_RANGES,
+        'SN' => self::DEFAULT_TIER_RANGES,
+        'JP' => self::DEFAULT_TIER_RANGES,
+        'KR' => self::DEFAULT_TIER_RANGES,
+        'SE' => self::DEFAULT_TIER_RANGES,
+        'DK' => self::DEFAULT_TIER_RANGES,
+        'IE' => self::DEFAULT_TIER_RANGES,
+        'CN' => self::DEFAULT_TIER_RANGES,
     ];
 
     /**
