@@ -709,8 +709,9 @@ class SyncService
         }
 
         $storage = $log['storage'] ?? [];
+        $sqlite  = $storage['sqlite'] ?? [];
 
-        $totalKb = $storage['totalKb'] ?? -1;
+        $totalKb = $sqlite['totalKb'] ?? -1;
         if ($totalKb !== -1 && $totalKb > 4500) {
             $this->logger->warning('sync.debug: storage approaching SQLite ceiling', array_merge($context, [
                 'totalKb'   => $totalKb,
@@ -718,7 +719,7 @@ class SyncService
             ]));
         }
 
-        $playerAppKeyCount = $storage['playerAppKeyCount'] ?? -1;
+        $playerAppKeyCount = $sqlite['playerAppKeyCount'] ?? -1;
         if ($playerAppKeyCount !== -1 && $playerAppKeyCount > 500) {
             $this->logger->warning('sync.debug: playerAppKeyCount indicates pruning failure', array_merge($context, [
                 'playerAppKeyCount' => $playerAppKeyCount,

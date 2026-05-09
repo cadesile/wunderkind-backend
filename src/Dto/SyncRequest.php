@@ -194,17 +194,24 @@ class SyncRequest
     /**
      * Optional debug diagnostics — only present when gameConfig.debugLoggingEnabled === true on the client.
      * Stored verbatim on SyncRecord; never fails validation if absent.
+     * A value of -1 on any numeric field means the scan failed — treat as unavailable, not zero.
      *
      * @var array{
      *   capturedAt: string,
      *   platform: string,
      *   tickDurationMs: int,
      *   storage: array{
-     *     totalKb: float,
-     *     keyCount: int,
-     *     topKeys: array<array{key: string, kb: float}>,
-     *     leagueStatsKeyCount: int,
-     *     playerAppKeyCount: int
+     *     sqlite: array{
+     *       totalKb: float,
+     *       keyCount: int,
+     *       topKeys: array<array{key: string, kb: float}>,
+     *       leagueStatsKeyCount: int,
+     *       playerAppKeyCount: int
+     *     },
+     *     fileSystem: array{
+     *       totalKb: float,
+     *       directories: array<array{dir: string, fileCount: int, totalKb: float}>
+     *     }
      *   }
      * }|null
      */
