@@ -541,6 +541,58 @@ class SeedGameEventsCommand extends Command
                 'impacts'      => [],
             ],
 
+            // ── Fan Engagement Events ─────────────────────────────────────────
+            // weight: 0 — all triggered programmatically, never randomly selected.
+
+            [
+                'slug'         => 'fan_manager_sacking_demand',
+                'category'     => EventCategory::FINANCE,
+                'weight'       => 0,
+                'title'        => 'Fans Demand Change',
+                'bodyTemplate' => 'Fans are calling for the manager to be sacked. With only a {win_rate}% win rate, supporters are running out of patience.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'fan_manager_sacking_resolved',
+                'category'     => EventCategory::FINANCE,
+                'weight'       => 0,
+                'title'        => 'Fan Pressure Eased',
+                'bodyTemplate' => 'Fans have calmed down following improved results.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'fan_shirt_sales_income',
+                'category'     => EventCategory::FINANCE,
+                'weight'       => 0,
+                'title'        => 'Season Shirt Sales Revenue',
+                'bodyTemplate' => 'Season shirt sales revenue of {amount} has been credited to your balance.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'fan_promotion_boost',
+                'category'     => EventCategory::FINANCE,
+                'weight'       => 0,
+                'title'        => 'Fanbase Energised by Promotion',
+                'bodyTemplate' => 'Promotion has sent the fanbase into a frenzy! Fan numbers are up.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'fan_relegation_drop',
+                'category'     => EventCategory::FINANCE,
+                'weight'       => 0,
+                'title'        => 'Fanbase Hit by Relegation',
+                'bodyTemplate' => 'Relegation has hit the fanbase hard. Supporters are disheartened.',
+                'impacts'      => [],
+            ],
+            [
+                'slug'         => 'fan_morale_critical',
+                'category'     => EventCategory::FINANCE,
+                'weight'       => 0,
+                'title'        => 'Fan Morale Critical',
+                'bodyTemplate' => 'Fan morale has reached a critical low. Something must change.',
+                'impacts'      => [],
+            ],
+
             [
                 'slug'             => 'npc-squad-banter',
                 'category'         => EventCategory::NPC_INTERACTION,

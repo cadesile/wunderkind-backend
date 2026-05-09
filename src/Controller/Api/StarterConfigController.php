@@ -38,6 +38,9 @@ class StarterConfigController extends AbstractController
             'enabledCountries'   => $config->getEnabledCountries(),
             'leagueAbilityRanges' => $config->getLeagueAbilityRanges(),
             'defaultFacilities'   => $config->getDefaultFacilities(),
+            'fanBaseRanges'              => $config->getFanBaseRanges(),
+            'fanBasePromotionIncrease'   => $config->getFanBasePromotionIncrease(),
+            'fanBaseRelegationDecrease'  => $config->getFanBaseRelegationDecrease(),
         ]);
     }
 }

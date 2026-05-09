@@ -1016,6 +1016,50 @@
                 </div>
             </div>
 
+            {# ── Manager Sacking ─────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-person-walking-arrow-right text-muted"></i>
+                    <span class="fw-semibold small">Manager Sacking</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls when fan sacking demands are raised and resolved, and the attendance
+                        penalty applied while a demand is active.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="managerSackingWinRatioTrigger" class="form-label fw-semibold small">Win Ratio Trigger</label>
+                            <input type="number" id="managerSackingWinRatioTrigger" name="managerSackingWinRatioTrigger"
+                                   value="{{ config.managerSackingWinRatioTrigger }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Win % below which sacking demand fires (0–1). Default: 0.20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="managerSackingWinRatioRecovery" class="form-label fw-semibold small">Win Ratio Recovery</label>
+                            <input type="number" id="managerSackingWinRatioRecovery" name="managerSackingWinRatioRecovery"
+                                   value="{{ config.managerSackingWinRatioRecovery }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Win % above which demand is resolved (0–1). Default: 0.25</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="managerSackingMinGames" class="form-label fw-semibold small">Min Games Before Trigger</label>
+                            <input type="number" id="managerSackingMinGames" name="managerSackingMinGames"
+                                   value="{{ config.managerSackingMinGames }}"
+                                   min="0" max="200" class="form-control">
+                            <div class="form-text">Games played before trigger can fire. Default: 30</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="managerSackingAttendancePenaltyPerWeek" class="form-label fw-semibold small">Weekly Attendance Penalty</label>
+                            <input type="number" id="managerSackingAttendancePenaltyPerWeek" name="managerSackingAttendancePenaltyPerWeek"
+                                   value="{{ config.managerSackingAttendancePenaltyPerWeek }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <div class="form-text">Weekly attendance drop while demand is active (0–1). Default: 0.05</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>{# /gap wrapper #}
 
         <div class="mt-4">

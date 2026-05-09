@@ -136,6 +136,38 @@ class StarterConfig
         '8' => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 3],
     ];
 
+    /**
+     * Initial fan base count ranges per league tier.
+     * Format: { "1": { "min": 50000, "max": 150000 }, "2": { "min": 10000, "max": 50000 } }
+     *
+     * @var array<string, array{min: int, max: int}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $fanBaseRanges = [
+        '1' => ['min' => 50000,  'max' => 150000],
+        '2' => ['min' => 20000,  'max' => 70000],
+        '3' => ['min' => 10000,  'max' => 30000],
+        '4' => ['min' => 5000,   'max' => 15000],
+        '5' => ['min' => 2000,   'max' => 8000],
+        '6' => ['min' => 1000,   'max' => 4000],
+        '7' => ['min' => 500,    'max' => 2000],
+        '8' => ['min' => 200,    'max' => 1000],
+    ];
+
+    /**
+     * Percentage increase applied to a club's fan base on promotion.
+     * e.g. 0.20 = 20%. Default: 0.20
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.20])]
+    private float $fanBasePromotionIncrease = 0.20;
+
+    /**
+     * Percentage decrease applied to a club's fan base on relegation.
+     * e.g. 0.10 = 10%. Default: 0.10
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.10])]
+    private float $fanBaseRelegationDecrease = 0.10;
+
     /** Returns a new instance pre-populated with all defaults. */
     public static function defaults(): self
     {
@@ -217,4 +249,26 @@ class StarterConfig
 
     public function getLeagueAbilityRanges(): array { return $this->leagueAbilityRanges; }
     public function setLeagueAbilityRanges(array $v): static { $this->leagueAbilityRanges = $v; return $this; }
+
+    /** @return array<string, array{min: int, max: int}> */
+    public function getFanBaseRanges(): array { return $this->fanBaseRanges; }
+    /** @param array<string, array{min: int, max: int}> $v */
+    public function setFanBaseRanges(array $v): static { $this->fanBaseRanges = $v; return $this; }
+
+    public function getFanBaseRangesJson(): string
+    {
+        return json_encode($this->fanBaseRanges, JSON_PRETTY_PRINT) ?: '{}';
+    }
+
+    public function setFanBaseRangesJson(string $v): static
+    {
+        $this->fanBaseRanges = json_decode($v, true) ?? [];
+        return $this;
+    }
+
+    public function getFanBasePromotionIncrease(): float { return $this->fanBasePromotionIncrease; }
+    public function setFanBasePromotionIncrease(float $v): static { $this->fanBasePromotionIncrease = max(0.0, $v); return $this; }
+
+    public function getFanBaseRelegationDecrease(): float { return $this->fanBaseRelegationDecrease; }
+    public function setFanBaseRelegationDecrease(float $v): static { $this->fanBaseRelegationDecrease = max(0.0, $v); return $this; }
 }

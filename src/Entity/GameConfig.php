@@ -689,4 +689,46 @@ class GameConfig
 
     public function isDebugLoggingEnabled(): bool { return $this->debugLoggingEnabled; }
     public function setDebugLoggingEnabled(bool $v): static { $this->debugLoggingEnabled = $v; return $this; }
+
+    // ── Manager Sacking ───────────────────────────────────────────────────
+
+    /**
+     * Win ratio below which fan sacking demand fires.
+     * e.g. 0.20 = triggered when win% < 20%. Default: 0.20
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.20])]
+    private float $managerSackingWinRatioTrigger = 0.20;
+
+    /**
+     * Win ratio above which an active sacking demand is resolved.
+     * Must be >= managerSackingWinRatioTrigger. Default: 0.25
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.25])]
+    private float $managerSackingWinRatioRecovery = 0.25;
+
+    /**
+     * Minimum games played before the sacking trigger can fire.
+     * Prevents early-season noise. Default: 30
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
+    private int $managerSackingMinGames = 30;
+
+    /**
+     * Weekly attendance multiplier penalty while a sacking demand is active.
+     * e.g. 0.05 = 5% drop per week. Default: 0.05
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.05])]
+    private float $managerSackingAttendancePenaltyPerWeek = 0.05;
+
+    public function getManagerSackingWinRatioTrigger(): float { return $this->managerSackingWinRatioTrigger; }
+    public function setManagerSackingWinRatioTrigger(float $v): static { $this->managerSackingWinRatioTrigger = max(0.0, min(1.0, $v)); return $this; }
+
+    public function getManagerSackingWinRatioRecovery(): float { return $this->managerSackingWinRatioRecovery; }
+    public function setManagerSackingWinRatioRecovery(float $v): static { $this->managerSackingWinRatioRecovery = max(0.0, min(1.0, $v)); return $this; }
+
+    public function getManagerSackingMinGames(): int { return $this->managerSackingMinGames; }
+    public function setManagerSackingMinGames(int $v): static { $this->managerSackingMinGames = max(0, $v); return $this; }
+
+    public function getManagerSackingAttendancePenaltyPerWeek(): float { return $this->managerSackingAttendancePenaltyPerWeek; }
+    public function setManagerSackingAttendancePenaltyPerWeek(float $v): static { $this->managerSackingAttendancePenaltyPerWeek = max(0.0, $v); return $this; }
 }

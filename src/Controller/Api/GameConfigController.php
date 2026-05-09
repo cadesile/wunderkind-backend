@@ -101,6 +101,12 @@ class GameConfigController extends AbstractController
             // Developer / Debug
             'debugLoggingEnabled'               => $config->isDebugLoggingEnabled(),
 
+            // Manager sacking
+            'managerSackingWinRatioTrigger'           => $config->getManagerSackingWinRatioTrigger(),
+            'managerSackingWinRatioRecovery'          => $config->getManagerSackingWinRatioRecovery(),
+            'managerSackingMinGames'                  => $config->getManagerSackingMinGames(),
+            'managerSackingAttendancePenaltyPerWeek'  => $config->getManagerSackingAttendancePenaltyPerWeek(),
+
             // League finances
             'smallSponsorMin'               => $config->getSmallSponsorMin(),
             'smallSponsorMax'               => $config->getSmallSponsorMax(),

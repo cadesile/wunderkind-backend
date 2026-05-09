@@ -258,6 +258,80 @@
             </div>
         </div>
 
+        {# ── Fan Base Initialisation ──────────────────────────────────────── #}
+        <div class="card mt-3">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-users text-muted"></i>
+                <span class="fw-semibold small">Fan Base Initialisation</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Starting fan base count range per league tier assigned during world initialisation.
+                    A random value in [min, max] is chosen for each NPC club at that tier.
+                </p>
+
+                {# Per-tier fan base ranges table #}
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm align-middle mb-0" style="min-width:480px;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="small text-muted fw-semibold" style="width:80px;">Tier</th>
+                                <th class="small text-muted fw-semibold" style="width:160px;">Min Fans</th>
+                                <th class="small text-muted fw-semibold" style="width:160px;">Max Fans</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tier in 1..8 %}
+                            {% set tierKey = tier ~ '' %}
+                            {% set fb = config.fanBaseRanges[tierKey] ?? {min: 0, max: 0} %}
+                            <tr>
+                                <td class="small fw-semibold text-muted">Tier {{ tier }}</td>
+                                <td>
+                                    <input type="number" name="fanBaseRanges[{{ tier }}][min]"
+                                           value="{{ fb.min ?? 0 }}"
+                                           min="0" step="100" class="form-control form-control-sm">
+                                </td>
+                                <td>
+                                    <input type="number" name="fanBaseRanges[{{ tier }}][max]"
+                                           value="{{ fb.max ?? 0 }}"
+                                           min="0" step="100" class="form-control form-control-sm">
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {# Promotion / relegation changes #}
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="fanBasePromotionIncrease" class="form-label fw-semibold small">
+                            Promotion Fan Base Increase
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="fanBasePromotionIncrease" name="fanBasePromotionIncrease"
+                                   value="{{ config.fanBasePromotionIncrease }}"
+                                   min="0" max="2" step="0.01" class="form-control">
+                            <span class="input-group-text">× (e.g. 0.20 = +20%)</span>
+                        </div>
+                        <div class="form-text">Percentage increase to fan base on promotion. Default: 0.20</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="fanBaseRelegationDecrease" class="form-label fw-semibold small">
+                            Relegation Fan Base Decrease
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="fanBaseRelegationDecrease" name="fanBaseRelegationDecrease"
+                                   value="{{ config.fanBaseRelegationDecrease }}"
+                                   min="0" max="1" step="0.01" class="form-control">
+                            <span class="input-group-text">× (e.g. 0.10 = −10%)</span>
+                        </div>
+                        <div class="form-text">Percentage decrease to fan base on relegation. Default: 0.10</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card mt-3">
             <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-globe text-muted"></i>

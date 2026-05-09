@@ -222,6 +222,12 @@ class DashboardController extends AbstractDashboardController
         $config->setRetirementChance((float) $request->request->get('retirementChance', 0.35));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
+        // Manager sacking
+        $config->setManagerSackingWinRatioTrigger((float) $request->request->get('managerSackingWinRatioTrigger', 0.20));
+        $config->setManagerSackingWinRatioRecovery((float) $request->request->get('managerSackingWinRatioRecovery', 0.25));
+        $config->setManagerSackingMinGames((int) $request->request->get('managerSackingMinGames', 30));
+        $config->setManagerSackingAttendancePenaltyPerWeek((float) $request->request->get('managerSackingAttendancePenaltyPerWeek', 0.05));
+
         // Inbox / notification frequencies
         $config->setFacilityMaintenanceFrequencyWeeks((int) $request->request->get('facilityMaintenanceFrequencyWeeks', 4));
         $config->setSystemNotificationFrequencyWeeks((int) $request->request->get('systemNotificationFrequencyWeeks', 8));
@@ -381,6 +387,21 @@ class DashboardController extends AbstractDashboardController
             }
         }
         $config->setLeagueAbilityRanges($ranges);
+
+        // Fan base ranges — submitted as fanBaseRanges[1][min]=50000 etc.
+        $fanBaseInput = $request->request->all('fanBaseRanges') ?: [];
+        $fanBaseRanges = [];
+        foreach ($fanBaseInput as $tier => $bounds) {
+            $min = max(0, (int) ($bounds['min'] ?? 0));
+            $max = max(0, (int) ($bounds['max'] ?? 0));
+            $fanBaseRanges[(string) $tier] = ['min' => min($min, $max), 'max' => max($min, $max)];
+        }
+        if (!empty($fanBaseRanges)) {
+            $config->setFanBaseRanges($fanBaseRanges);
+        }
+
+        $config->setFanBasePromotionIncrease((float) $request->request->get('fanBasePromotionIncrease', 0.20));
+        $config->setFanBaseRelegationDecrease((float) $request->request->get('fanBaseRelegationDecrease', 0.10));
 
         $this->em->persist($config);
         $this->em->flush();
