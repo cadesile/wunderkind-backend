@@ -10,4 +10,5 @@ enum EventCategory: string
     case FINANCE         = 'finance';
     case NPC_INTERACTION = 'NPC_INTERACTION';
     case GUARDIAN        = 'GUARDIAN';
+    case MATCH           = 'MATCH';
 }

@@ -610,6 +610,200 @@ class SeedGameEventsCommand extends Command
                     'minPairRelationship' => 5,
                 ],
             ],
+
+            // ── Match Events ──────────────────────────────────────────────────
+            [
+                'slug'         => 'match_goal_1',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Goal!',
+                'bodyTemplate' => '{player} gets on the scoresheet!',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 5],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_goal_2',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Goal!',
+                'bodyTemplate' => '{player} finds the net!',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 5],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_goal_3',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Goal!',
+                'bodyTemplate' => '{player} with a composed finish!',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 5],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_goal_4',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Goal!',
+                'bodyTemplate' => '{player} breaks the deadlock!',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 5],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_assist_1',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Assist',
+                'bodyTemplate' => '{player} with the perfect ball!',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 3],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_assist_2',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Assist',
+                'bodyTemplate' => '{player} sets it up on a plate.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 3],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_assist_3',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Assist',
+                'bodyTemplate' => '{player} with a brilliant assist!',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 3],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_assist_4',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 10,
+                'title'        => 'Assist',
+                'bodyTemplate' => '{player} picks out the run perfectly.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 3],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_high_1',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Star Performance',
+                'bodyTemplate' => '{player} is having a superb game.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_high_2',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Star Performance',
+                'bodyTemplate' => '{player} is unplayable today.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_high_3',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Star Performance',
+                'bodyTemplate' => '{player} dominates their position.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_high_4',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Star Performance',
+                'bodyTemplate' => 'A commanding display from {player}.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_low_1',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Off Day',
+                'bodyTemplate' => '{player} struggling to make an impact.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'subtract', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_low_2',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Off Day',
+                'bodyTemplate' => '{player} having a difficult afternoon.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'subtract', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_low_3',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Off Day',
+                'bodyTemplate' => '{player} is not at the races today.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'subtract', 'value' => 4],
+                    ],
+                ],
+            ],
+            [
+                'slug'         => 'match_performance_low_4',
+                'category'     => EventCategory::MATCH,
+                'weight'       => 8,
+                'title'        => 'Off Day',
+                'bodyTemplate' => '{player} can\'t get into the game.',
+                'impacts'      => [
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'subtract', 'value' => 4],
+                    ],
+                ],
+            ],
         ];
     }
 }
