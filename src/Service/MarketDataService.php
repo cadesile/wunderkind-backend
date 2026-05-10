@@ -75,6 +75,16 @@ class MarketDataService
                 'name'           => $p->getAgent()->getName(),
                 'commissionRate' => $p->getAgent()->getCommissionRate(),
             ] : null,
+            'personality'       => [
+                'determination'   => $p->getPersonality()->getDetermination(),
+                'professionalism' => $p->getPersonality()->getProfessionalism(),
+                'ambition'        => $p->getPersonality()->getAmbition(),
+                'loyalty'         => $p->getPersonality()->getLoyalty(),
+                'adaptability'    => $p->getPersonality()->getAdaptability(),
+                'pressure'        => $p->getPersonality()->getPressure(),
+                'temperament'     => $p->getPersonality()->getTemperament(),
+                'consistency'     => $p->getPersonality()->getConsistency(),
+            ],
             'guardians'         => array_map(fn($g) => [
                 'id'               => $g->getId()->toRfc4122(),
                 'firstName'        => $g->getFirstName(),

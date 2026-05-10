@@ -24,6 +24,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
@@ -120,10 +121,10 @@ class PlayerCrudController extends AbstractCrudController
 
     public function configureFields(string $pageName): iterable
     {
+        // ── Index: flat list columns ──────────────────────────────────────────
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('firstName');
         yield TextField::new('lastName');
-        yield DateField::new('dateOfBirth')->setFormat('yyyy-MM-dd');
         yield TextField::new('nationality');
 
         yield ChoiceField::new('position')
@@ -156,6 +157,21 @@ class PlayerCrudController extends AbstractCrudController
                 PlayerStatus::RETIRED->value               => 'secondary',
             ]);
 
+        // Calculated overall — index only
+        yield IntegerField::new('overall', 'Overall')
+            ->hideOnForm()
+            ->setHelp('(pace+technical+vision+power+stamina+heart) / 6');
+
+        yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
+
+        // ── Panel: Identity ───────────────────────────────────────────────────
+        yield FormField::addFieldset('Identity', 'fa fa-user')->hideOnIndex();
+
+        yield TextField::new('firstName')->setColumns(6)->hideOnIndex();
+        yield TextField::new('lastName')->setColumns(6)->hideOnIndex();
+        yield DateField::new('dateOfBirth')->setFormat('yyyy-MM-dd')->setColumns(4)->hideOnIndex();
+        yield TextField::new('nationality')->setColumns(4)->hideOnIndex();
+
         yield ChoiceField::new('recruitmentSource')
             ->setChoices([
                 'Scouting Network' => RecruitmentSource::SCOUTING_NETWORK,
@@ -163,36 +179,50 @@ class PlayerCrudController extends AbstractCrudController
                 'Agent Offer'      => RecruitmentSource::AGENT_OFFER,
                 'Youth Request'    => RecruitmentSource::YOUTH_REQUEST,
             ])
+            ->setColumns(4)
             ->hideOnIndex();
 
-        yield IntegerField::new('potential')->hideOnIndex();
-        yield IntegerField::new('currentAbility')->hideOnIndex();
+        // ── Panel: Ability ────────────────────────────────────────────────────
+        yield FormField::addFieldset('Ability', 'fa fa-chart-bar')->hideOnIndex();
 
-        // Calculated overall (read-only, list view only)
-        yield IntegerField::new('overall', 'Overall')
-            ->hideOnForm()
-            ->setHelp('(pace+technical+vision+power+stamina+heart) / 6');
+        yield IntegerField::new('potential')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('currentAbility', 'Current Ability')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('pace')->setHelp('0–100')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('technical')->setHelp('0–100')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('vision')->setHelp('0–100')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('power')->setHelp('0–100')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('stamina')->setHelp('0–100')->setColumns(4)->hideOnIndex();
+        yield IntegerField::new('heart')->setHelp('0–100')->setColumns(4)->hideOnIndex();
 
-        yield IntegerField::new('pace')->setHelp('0–100')->hideOnIndex();
-        yield IntegerField::new('technical')->setHelp('0–100')->hideOnIndex();
-        yield IntegerField::new('vision')->setHelp('0–100')->hideOnIndex();
-        yield IntegerField::new('power')->setHelp('0–100')->hideOnIndex();
-        yield IntegerField::new('stamina')->setHelp('0–100')->hideOnIndex();
-        yield IntegerField::new('heart')->setHelp('0–100')->hideOnIndex();
+        // ── Panel: Personality ────────────────────────────────────────────────
+        yield FormField::addFieldset('Personality', 'fa fa-brain')->hideOnIndex();
 
-        yield IntegerField::new('height')->setHelp('cm')->hideOnIndex();
-        yield IntegerField::new('weight')->setHelp('kg')->hideOnIndex();
+        yield IntegerField::new('personality.determination', 'Determination')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.professionalism', 'Professionalism')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.ambition', 'Ambition')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.loyalty', 'Loyalty')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.adaptability', 'Adaptability')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.pressure', 'Pressure')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.temperament', 'Temperament')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.consistency', 'Consistency')->setHelp('1–20')->setColumns(3)->hideOnIndex();
 
+        // ── Panel: Physical & Contract ────────────────────────────────────────
+        yield FormField::addFieldset('Physical & Contract', 'fa fa-weight-scale')->hideOnIndex();
+
+        yield IntegerField::new('height')->setHelp('cm')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('weight')->setHelp('kg')->setColumns(3)->hideOnIndex();
         yield MoneyField::new('contractValue', 'Contract Value / wk')
             ->setCurrency('GBP')
             ->setStoredAsCents(true)
-            ->setHelp('Weekly wage stored in pence (£1 = 100p)')
+            ->setHelp('Weekly wage in pence (£1 = 100p)')
+            ->setColumns(6)
             ->hideOnIndex();
 
-        yield AssociationField::new('club');
-        yield AssociationField::new('agent')->setRequired(false)->hideOnIndex();
-        yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
+        // ── Panel: Associations ───────────────────────────────────────────────
+        yield FormField::addFieldset('Associations', 'fa fa-link')->hideOnIndex();
 
-        yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
+        yield AssociationField::new('club')->setColumns(6)->hideOnIndex();
+        yield AssociationField::new('agent')->setRequired(false)->setColumns(6)->hideOnIndex();
+        yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
     }
 }
