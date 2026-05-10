@@ -1016,6 +1016,76 @@
                 </div>
             </div>
 
+            {# ── Wage Multiplier Tiers ───────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-money-bill-trend-up text-muted"></i>
+                    <span class="fw-semibold small">Wage Multiplier Tiers</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Ability-based multipliers applied when generating player and staff contract values.
+                        Pool players never have a club, so the player's own <strong>current ability</strong> determines the tier.<br>
+                        Formula: <code>contractValue = currentAbility × rand(min, max) × playerMultiplier</code><br>
+                        Tiers are evaluated in order; first entry where current ability &lt; Max Ability wins.
+                        Leave Max Ability blank on the last row to catch all higher abilities.
+                    </p>
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="small text-muted fw-semibold">Tier</th>
+                                    <th class="small text-muted fw-semibold">Max Ability (exclusive)</th>
+                                    <th class="small text-muted fw-semibold">Player ×</th>
+                                    <th class="small text-muted fw-semibold">Staff ×</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for i, tier in config.wageMultiplierTiers %}
+                                <tr>
+                                    <td class="small fw-semibold text-muted">Tier {{ i + 1 }}</td>
+                                    <td>
+                                        <input type="number" name="wageMultiplierTiers[{{ i }}][maxAbility]"
+                                               value="{{ tier.maxAbility ?? '' }}"
+                                               min="0" max="100" placeholder="∞ (default)"
+                                               class="form-control form-control-sm" style="width:140px;">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="wageMultiplierTiers[{{ i }}][playerMultiplier]"
+                                               value="{{ tier.playerMultiplier }}"
+                                               min="0" step="0.1" class="form-control form-control-sm" style="width:100px;">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="wageMultiplierTiers[{{ i }}][staffMultiplier]"
+                                               value="{{ tier.staffMultiplier }}"
+                                               min="0" step="0.1" class="form-control form-control-sm" style="width:100px;">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="contractValueRandMin" class="form-label fw-semibold small">Rand Min</label>
+                            <input type="number" id="contractValueRandMin" name="contractValueRandMin"
+                                   value="{{ config.contractValueRandMin }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Lower bound of the random multiplier. Default: 10</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="contractValueRandMax" class="form-label fw-semibold small">Rand Max</label>
+                            <input type="number" id="contractValueRandMax" name="contractValueRandMax"
+                                   value="{{ config.contractValueRandMax }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Upper bound of the random multiplier. Must be ≥ Rand Min. Default: 40</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Manager Sacking ─────────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">

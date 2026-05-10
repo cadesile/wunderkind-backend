@@ -73,7 +73,7 @@ class GenerateMarketPoolCommand extends Command
                 $io->text(sprintf('Generating %d market players (YOUTH_INTAKE, club = null)...', $playerCount));
                 $bar = $io->createProgressBar($playerCount);
                 $bar->start();
-                $this->pool->generatePlayers($playerCount, null, RecruitmentSource::YOUTH_INTAKE);
+                $this->pool->generatePlayers($playerCount, RecruitmentSource::YOUTH_INTAKE);
                 $bar->finish();
                 $io->newLine(2);
             }
@@ -82,7 +82,7 @@ class GenerateMarketPoolCommand extends Command
                 $io->text(sprintf('Generating %d prospect players (SCOUTING_NETWORK, club = null)...', $prospectCount));
                 $bar = $io->createProgressBar($prospectCount);
                 $bar->start();
-                $this->pool->generatePlayers($prospectCount, null, RecruitmentSource::SCOUTING_NETWORK);
+                $this->pool->generatePlayers($prospectCount, RecruitmentSource::SCOUTING_NETWORK);
                 $bar->finish();
                 $io->newLine(2);
             }

@@ -143,17 +143,17 @@ class MarketPoolService
         private readonly InvestorRepository     $investorRepo,
         private readonly NameGeneratorService   $nameGenerator,
         private readonly PoolConfigRepository   $poolConfigRepo,
+        private readonly \App\Repository\GameConfigRepository $gameConfigRepo,
     ) {}
 
     // ── Generate ─────────────────────────────────────────────────────────────
 
     /** @return Player[] */
-    public function generatePlayers(int $count, ?int $clubReputation = null, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
+    public function generatePlayers(int $count, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
     {
-        $cfg         = $this->poolConfigRepo->getConfig();
-        $agents      = $this->agentRepo->findAll();
-        $multipliers = $this->getWageMultiplier($clubReputation);
-        $players     = [];
+        $cfg     = $this->poolConfigRepo->getConfig();
+        $agents  = $this->agentRepo->findAll();
+        $players = [];
 
         for ($i = 0; $i < $count; $i++) {
             $potential      = $this->bellCurveInt($cfg->getPlayerPotentialMin(), $cfg->getPlayerPotentialMax(), $cfg->getPlayerPotentialMean());
@@ -177,7 +177,9 @@ class MarketPoolService
             );
 
             $player->setStatus(PlayerStatus::ACTIVE);
-            $baseWage = $currentAbility * random_int(10, 40);
+            $gc          = $this->gameConfigRepo->getConfig();
+            $multipliers = $this->getWageMultiplier($currentAbility);
+            $baseWage    = $currentAbility * random_int($gc->getContractValueRandMin(), $gc->getContractValueRandMax());
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
             $attrBudget = $currentAbility * 6;
@@ -251,11 +253,10 @@ class MarketPoolService
     }
 
     /** @return Staff[] */
-    public function generateStaffForRole(StaffRole $role, int $count, ?int $clubReputation = null): array
+    public function generateStaffForRole(StaffRole $role, int $count): array
     {
-        $cfg         = $this->poolConfigRepo->getConfig();
-        $multipliers = $this->getWageMultiplier($clubReputation);
-        $staff       = [];
+        $cfg   = $this->poolConfigRepo->getConfig();
+        $staff = [];
 
         for ($i = 0; $i < $count; $i++) {
             $ability        = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
@@ -276,6 +277,7 @@ class MarketPoolService
             $member->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
             $member->setSpecialisms($this->generateSpecialisms());
 
+            $multipliers = $this->getWageMultiplier($ability);
             $baseSalary = match ($role) {
                 StaffRole::COACH                => random_int(2000, 8000),
                 StaffRole::MANAGER              => random_int(10000, 30000),
@@ -589,7 +591,7 @@ class MarketPoolService
         $cfg       = $this->poolConfigRepo->getConfig();
         $generated = [];
 
-        $this->generatePlayers($cfg->getPlayerPoolTarget(), null, RecruitmentSource::YOUTH_INTAKE, $nationality);
+        $this->generatePlayers($cfg->getPlayerPoolTarget(), RecruitmentSource::YOUTH_INTAKE, $nationality);
         $generated[] = $cfg->getPlayerPoolTarget() . ' players';
 
         foreach ($this->staffRoleTargetMap($cfg) as [$role, $target]) {
@@ -704,18 +706,18 @@ class MarketPoolService
     /**
      * @return array{player: float, staff: float}
      */
-    private function getWageMultiplier(?int $clubReputation): array
+    private function getWageMultiplier(int $ability): array
     {
-        if ($clubReputation === null) {
-            return ['player' => 1.0, 'staff' => 1.0];
+        $tiers = $this->gameConfigRepo->getConfig()->getWageMultiplierTiers();
+        foreach ($tiers as $tier) {
+            if ($tier['maxAbility'] === null || $ability < $tier['maxAbility']) {
+                return ['player' => (float) $tier['playerMultiplier'], 'staff' => (float) $tier['staffMultiplier']];
+            }
         }
 
-        return match (true) {
-            $clubReputation < 100 => ['player' => 0.5, 'staff' => 0.6],
-            $clubReputation < 300 => ['player' => 1.0, 'staff' => 1.0],
-            $clubReputation < 600 => ['player' => 2.5, 'staff' => 2.0],
-            default                  => ['player' => 5.0, 'staff' => 4.0],
-        };
+        // Fallback: use last tier (should always have a null maxAbility catch-all)
+        $last = end($tiers);
+        return ['player' => (float) ($last['playerMultiplier'] ?? 1.0), 'staff' => (float) ($last['staffMultiplier'] ?? 1.0)];
     }
 
     private function pick(array $items): mixed

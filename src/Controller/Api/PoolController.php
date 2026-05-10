@@ -55,7 +55,7 @@ class PoolController extends AbstractController
         $deficit  = max(0, $min - $inPool);
 
         if ($deficit > 0) {
-            $pool->generatePlayers($deficit, null, RecruitmentSource::YOUTH_INTAKE, $nationality);
+            $pool->generatePlayers($deficit, RecruitmentSource::YOUTH_INTAKE, $nationality);
         }
 
         return $this->json([

@@ -101,6 +101,11 @@ class GameConfigController extends AbstractController
             // Developer / Debug
             'debugLoggingEnabled'               => $config->isDebugLoggingEnabled(),
 
+            // Wage multiplier tiers
+            'wageMultiplierTiers'    => $config->getWageMultiplierTiers(),
+            'contractValueRandMin'   => $config->getContractValueRandMin(),
+            'contractValueRandMax'   => $config->getContractValueRandMax(),
+
             // Manager sacking
             'managerSackingWinRatioTrigger'           => $config->getManagerSackingWinRatioTrigger(),
             'managerSackingWinRatioRecovery'          => $config->getManagerSackingWinRatioRecovery(),

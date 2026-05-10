@@ -222,6 +222,25 @@ class DashboardController extends AbstractDashboardController
         $config->setRetirementChance((float) $request->request->get('retirementChance', 0.35));
         $config->setDebugLoggingEnabled($request->request->has('debugLoggingEnabled'));
 
+        // Wage multiplier tiers
+        $rawTiers = $request->request->all('wageMultiplierTiers') ?: [];
+        $tiers = [];
+        foreach ($rawTiers as $tier) {
+            $maxAbility = isset($tier['maxAbility']) && $tier['maxAbility'] !== '' ? (int) $tier['maxAbility'] : null;
+            $tiers[] = [
+                'maxAbility'       => $maxAbility,
+                'playerMultiplier' => (float) ($tier['playerMultiplier'] ?? 1.0),
+                'staffMultiplier'  => (float) ($tier['staffMultiplier'] ?? 1.0),
+            ];
+        }
+        if (!empty($tiers)) {
+            $config->setWageMultiplierTiers($tiers);
+        }
+        $randMin = (int) $request->request->get('contractValueRandMin', 10);
+        $randMax = (int) $request->request->get('contractValueRandMax', 40);
+        $config->setContractValueRandMin(min($randMin, $randMax));
+        $config->setContractValueRandMax(max($randMin, $randMax));
+
         // Manager sacking
         $config->setManagerSackingWinRatioTrigger((float) $request->request->get('managerSackingWinRatioTrigger', 0.20));
         $config->setManagerSackingWinRatioRecovery((float) $request->request->get('managerSackingWinRatioRecovery', 0.25));
@@ -932,6 +951,7 @@ class DashboardController extends AbstractDashboardController
         // pool_config, game_event_template, player_archetype) and the admin table
         // are intentionally left untouched.
         $conn->executeStatement('DELETE FROM guardian');
+        $conn->executeStatement('DELETE FROM match_result');
         $conn->executeStatement('DELETE FROM transfer');
         $conn->executeStatement('DELETE FROM inbox_message');
         $conn->executeStatement('DELETE FROM sync_record');

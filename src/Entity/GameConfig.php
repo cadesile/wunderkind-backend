@@ -690,6 +690,51 @@ class GameConfig
     public function isDebugLoggingEnabled(): bool { return $this->debugLoggingEnabled; }
     public function setDebugLoggingEnabled(bool $v): static { $this->debugLoggingEnabled = $v; return $this; }
 
+    // ── Wage Multiplier Tiers ─────────────────────────────────────────────
+
+    /**
+     * Ability-based wage multiplier tiers applied when generating player/staff contracts.
+     * Tiers are evaluated in order; the first entry whose maxAbility > entity's currentAbility wins.
+     * A null maxAbility means "all remaining" (i.e. the default/highest tier).
+     *
+     * contractValue = currentAbility × rand(contractValueRandMin, contractValueRandMax) × playerMultiplier
+     *
+     * @var array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $wageMultiplierTiers = [
+        ['maxAbility' => 25,   'playerMultiplier' => 0.5, 'staffMultiplier' => 0.6],
+        ['maxAbility' => 50,   'playerMultiplier' => 1.0, 'staffMultiplier' => 1.0],
+        ['maxAbility' => 75,   'playerMultiplier' => 2.5, 'staffMultiplier' => 2.0],
+        ['maxAbility' => null, 'playerMultiplier' => 5.0, 'staffMultiplier' => 4.0],
+    ];
+
+    /**
+     * Minimum random multiplier in the contract value formula:
+     * contractValue = currentAbility × rand(min, max) × wageMultiplier
+     * Default: 10
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
+    private int $contractValueRandMin = 10;
+
+    /**
+     * Maximum random multiplier in the contract value formula.
+     * Default: 40
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
+    private int $contractValueRandMax = 40;
+
+    /** @return array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}> */
+    public function getWageMultiplierTiers(): array { return $this->wageMultiplierTiers; }
+    /** @param array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}> $v */
+    public function setWageMultiplierTiers(array $v): static { $this->wageMultiplierTiers = $v; return $this; }
+
+    public function getContractValueRandMin(): int { return $this->contractValueRandMin; }
+    public function setContractValueRandMin(int $v): static { $this->contractValueRandMin = max(1, $v); return $this; }
+
+    public function getContractValueRandMax(): int { return $this->contractValueRandMax; }
+    public function setContractValueRandMax(int $v): static { $this->contractValueRandMax = max(1, $v); return $this; }
+
     // ── Manager Sacking ───────────────────────────────────────────────────
 
     /**

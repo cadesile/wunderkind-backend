@@ -26,6 +26,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class PlayerCrudController extends AbstractCrudController
@@ -182,9 +183,10 @@ class PlayerCrudController extends AbstractCrudController
         yield IntegerField::new('height')->setHelp('cm')->hideOnIndex();
         yield IntegerField::new('weight')->setHelp('kg')->hideOnIndex();
 
-        yield IntegerField::new('contractValue', 'Contract Value')
-            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) . ' / wk' : '—')
-            ->setHelp('Weekly value in pence — £1,000 = 100,000')
+        yield MoneyField::new('contractValue', 'Contract Value / wk')
+            ->setCurrency('GBP')
+            ->setStoredAsCents(true)
+            ->setHelp('Weekly wage stored in pence (£1 = 100p)')
             ->hideOnIndex();
 
         yield AssociationField::new('club');
