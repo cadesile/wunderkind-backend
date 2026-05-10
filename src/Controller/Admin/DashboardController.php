@@ -952,6 +952,8 @@ class DashboardController extends AbstractDashboardController
         // are intentionally left untouched.
         $conn->executeStatement('DELETE FROM guardian');
         $conn->executeStatement('DELETE FROM match_result');
+        $conn->executeStatement('DELETE FROM season_record');
+        $conn->executeStatement('DELETE FROM season_snapshot');
         $conn->executeStatement('DELETE FROM transfer');
         $conn->executeStatement('DELETE FROM inbox_message');
         $conn->executeStatement('DELETE FROM sync_record');
