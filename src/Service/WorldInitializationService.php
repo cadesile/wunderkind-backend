@@ -343,7 +343,11 @@ class WorldInitializationService
             'nationality'   => $player->getNationality(),
             'dateOfBirth'   => $player->getDateOfBirth()->format('Y-m-d'),
             'contractValue' => $player->getContractValue(),
-            'pace'          => $player->getPace(),
+            'physical'    => [
+                'height' => $player->getHeight(),
+                'weight' => $player->getWeight(),
+            ],
+            'pace'        => $player->getPace(),
             'technical'   => $player->getTechnical(),
             'vision'      => $player->getVision(),
             'power'       => $player->getPower(),

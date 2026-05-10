@@ -68,8 +68,10 @@ class MarketDataService
             'stamina'           => $p->getStamina(),
             'heart'             => $p->getHeart(),
             'overall'           => $p->getOverall(),
-            'height'            => $p->getHeight(),
-            'weight'            => $p->getWeight(),
+            'physical'          => [
+                'height' => $p->getHeight(),
+                'weight' => $p->getWeight(),
+            ],
             'agent'             => $p->getAgent() ? [
                 'id'             => $p->getAgent()->getId()->toRfc4122(),
                 'name'           => $p->getAgent()->getName(),
