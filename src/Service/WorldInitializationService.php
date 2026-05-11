@@ -84,7 +84,7 @@ class WorldInitializationService
             // Use configured ranges if available and non-zero, otherwise fallback to hardcoded defaults
             $configured   = $leagueRanges[$country][$tierKey] ?? null;
             $abilityRange = ($configured && ($configured['min'] ?? 0) > 0)
-                ? $configured
+                ? ['min' => (int) $configured['min'], 'max' => (int) $configured['max']]
                 : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
 
             $npcClubs   = $this->npcClubRepository->findByLeague($league);
@@ -171,7 +171,8 @@ class WorldInitializationService
         // AMP starter pack — use the same leagueAbilityRanges config as NPC clubs.
         // Convert the 2-letter country code to the nationality string used in the player pool.
         $ampLeagueTier = $club->getCurrentLeague()?->getTier() ?? 8;
-        $ampRange      = $leagueRanges[$country][(string) $ampLeagueTier] ?? self::ABILITY_RANGES[$ampLeagueTier] ?? ['min' => 5, 'max' => 35];
+        $ampRangeRaw   = $leagueRanges[$country][(string) $ampLeagueTier] ?? self::ABILITY_RANGES[$ampLeagueTier] ?? ['min' => 5, 'max' => 35];
+        $ampRange      = ['min' => (int) $ampRangeRaw['min'], 'max' => (int) $ampRangeRaw['max']];
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
         // Distribute AMP starter squad across positions using PoolConfig weights
