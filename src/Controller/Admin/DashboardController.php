@@ -405,7 +405,12 @@ class DashboardController extends AbstractDashboardController
                 $bounds['max'] = (int) ($bounds['max'] ?? 100);
             }
         }
-        $config->setLeagueAbilityRanges($ranges);
+        // Write league ability ranges directly — Doctrine's JSON change-detection
+        // can silently skip updates when the stored data has mixed string/int types.
+        $this->em->getConnection()->executeStatement(
+            'UPDATE starter_config SET league_ability_ranges = :val WHERE id = :id',
+            ['val' => json_encode($ranges), 'id' => $config->getId()]
+        );
 
         // Fan base ranges — submitted as fanBaseRanges[1][min]=50000 etc.
         $fanBaseInput = $request->request->all('fanBaseRanges') ?: [];

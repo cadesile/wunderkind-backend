@@ -237,15 +237,15 @@
                                 <label class="small fw-bold d-block mb-1">Tier {{ tier }}</label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">Min</span>
-                                    <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][min]" 
-                                           class="form-control" placeholder="Min" 
+                                    <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][min]"
+                                           class="form-control" placeholder="Min"
                                            value="{{ config.leagueAbilityRanges[country][tier]['min'] ?? '' }}"
-                                           min="1" max="100">
+                                           min="1">
                                     <span class="input-group-text">Max</span>
-                                    <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][max]" 
+                                    <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][max]"
                                            class="form-control" placeholder="Max"
                                            value="{{ config.leagueAbilityRanges[country][tier]['max'] ?? '' }}"
-                                           min="1" max="100">
+                                           min="1">
                                 </div>
                             </div>
                         {% endfor %}
