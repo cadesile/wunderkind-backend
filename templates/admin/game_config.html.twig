@@ -587,6 +587,25 @@
                             <div class="form-text">Default: 3</div>
                         </div>
                     </div>
+
+                    <hr class="my-3">
+                    <p class="small text-muted mb-3">Sign-on fee as a % of the overall contract offer value.</p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="signOnFeePercentMin" class="form-label fw-semibold small">Sign-on % Min</label>
+                            <input type="number" id="signOnFeePercentMin" name="signOnFeePercentMin"
+                                   value="{{ config.signOnFeePercentMin }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Default: 0</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="signOnFeePercentMax" class="form-label fw-semibold small">Sign-on % Max</label>
+                            <input type="number" id="signOnFeePercentMax" name="signOnFeePercentMax"
+                                   value="{{ config.signOnFeePercentMax }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Default: 10</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -730,6 +749,25 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Stadium Settings ────────────────────────────────────────── #}
+            <div class="card mb-4">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-building text-muted"></i>
+                    <span class="fw-semibold small">Stadium Settings</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="capacityCalculation" class="form-label fw-semibold small">Capacity Calculation</label>
+                            <input type="number" id="capacityCalculation" name="capacityCalculation"
+                                   value="{{ config.capacityCalculation }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Multiplier used to calculate stadium capacity from fan base. Default: 100</div>
+                        </div>
                     </div>
                 </div>
             </div>

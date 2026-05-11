@@ -479,6 +479,18 @@ class GameConfig
     #[ORM\Column(type: 'smallint', options: ['default' => 3])]
     private int $maxScoutsPerClub = 3;
 
+    /**
+     * Minimum sign-on fee as a % of the overall contract offer value. Default: 0
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0, 'unsigned' => true])]
+    private int $signOnFeePercentMin = 0;
+
+    /**
+     * Maximum sign-on fee as a % of the overall contract offer value. Default: 10
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 10, 'unsigned' => true])]
+    private int $signOnFeePercentMax = 10;
+
     public function getMaxCoachesPerClub(): int { return $this->maxCoachesPerClub; }
     public function setMaxCoachesPerClub(int $v): static { $this->maxCoachesPerClub = $v; return $this; }
 
@@ -496,6 +508,12 @@ class GameConfig
 
     public function getMaxScoutsPerClub(): int { return $this->maxScoutsPerClub; }
     public function setMaxScoutsPerClub(int $v): static { $this->maxScoutsPerClub = $v; return $this; }
+
+    public function getSignOnFeePercentMin(): int { return $this->signOnFeePercentMin; }
+    public function setSignOnFeePercentMin(int $v): static { $this->signOnFeePercentMin = max(0, min(100, $v)); return $this; }
+
+    public function getSignOnFeePercentMax(): int { return $this->signOnFeePercentMax; }
+    public function setSignOnFeePercentMax(int $v): static { $this->signOnFeePercentMax = max(0, min(100, $v)); return $this; }
 
     // ── Facility Income ───────────────────────────────────────────────────
 
@@ -734,6 +752,15 @@ class GameConfig
 
     public function getContractValueRandMax(): int { return $this->contractValueRandMax; }
     public function setContractValueRandMax(int $v): static { $this->contractValueRandMax = max(1, $v); return $this; }
+
+    // ── Capacity Calculation ──────────────────────────────────────────────
+
+    /** Multiplier used when calculating stadium capacity from fan base. Default: 100 */
+    #[ORM\Column(type: 'integer', options: ['default' => 100])]
+    private int $capacityCalculation = 100;
+
+    public function getCapacityCalculation(): int { return $this->capacityCalculation; }
+    public function setCapacityCalculation(int $v): static { $this->capacityCalculation = max(1, $v); return $this; }
 
     // ── Manager Sacking ───────────────────────────────────────────────────
 

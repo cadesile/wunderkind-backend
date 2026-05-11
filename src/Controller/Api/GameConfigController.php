@@ -106,6 +106,9 @@ class GameConfigController extends AbstractController
             'contractValueRandMin'   => $config->getContractValueRandMin(),
             'contractValueRandMax'   => $config->getContractValueRandMax(),
 
+            // Capacity calculation
+            'capacityCalculation' => $config->getCapacityCalculation(),
+
             // Manager sacking
             'managerSackingWinRatioTrigger'           => $config->getManagerSackingWinRatioTrigger(),
             'managerSackingWinRatioRecovery'          => $config->getManagerSackingWinRatioRecovery(),
@@ -128,6 +131,8 @@ class GameConfigController extends AbstractController
             'maxFacilityManagersPerClub'    => $config->getMaxFacilityManagersPerClub(),
             'maxChairmensPerClub'           => $config->getMaxChairmensPerClub(),
             'maxScoutsPerClub'              => $config->getMaxScoutsPerClub(),
+            'signOnFeePercentMin'           => $config->getSignOnFeePercentMin(),
+            'signOnFeePercentMax'           => $config->getSignOnFeePercentMax(),
 
             // Sponsor & investor offer probabilities (by reputation tier)
             'sponsorProbabilityLocal'    => $config->getSponsorProbabilityLocal(),

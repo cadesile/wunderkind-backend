@@ -277,6 +277,10 @@ class DashboardController extends AbstractDashboardController
         $config->setMaxFacilityManagersPerClub((int) $request->request->get('maxFacilityManagersPerClub', 1));
         $config->setMaxChairmensPerClub((int) $request->request->get('maxChairmensPerClub', 1));
         $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
+        $config->setSignOnFeePercentMin((int) $request->request->get('signOnFeePercentMin', 0));
+        $config->setSignOnFeePercentMax((int) $request->request->get('signOnFeePercentMax', 10));
+
+        $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
 
         // Attendance ranges — clamp min to [0, max] before persisting
         foreach (['Local', 'Regional', 'National', 'Elite'] as $tier) {

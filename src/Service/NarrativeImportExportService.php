@@ -217,6 +217,7 @@ class NarrativeImportExportService
         $template->setDecayBase((float) ($row['decayBase'] ?? 2.0));
         $template->setSortOrder((int) ($row['sortOrder'] ?? 0));
         $template->setIsActive((bool) ($row['isActive'] ?? true));
+        $template->setGameplayEffects((array) ($row['gameplayEffects'] ?? []));
         $template->touch();
 
         return $created;
