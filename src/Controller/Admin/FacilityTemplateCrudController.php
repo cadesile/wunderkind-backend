@@ -131,6 +131,68 @@ class FacilityTemplateCrudController extends AbstractCrudController
                             <td><code>0.05</code></td>
                             <td>Adds 0.05 to team cohesion score per level. Formula: <em>cohesion + (v × level)</em></td>
                         </tr>
+                        <tr class="table-secondary"><td colspan="3"><strong>Attribute-specific growth multipliers</strong> — each boosts only the named attribute's XP. Use these instead of <code>technicalGrowthMultiplierPerLevel</code> when building a specialist facility (e.g. a Speed Track that only boosts pace). Formula: <em>xp × (1 + v × level)</em></td></tr>
+                        <tr>
+                            <td><code>paceGrowthMultiplierPerLevel</code></td>
+                            <td><code>0.12</code></td>
+                            <td>Boosts pace XP by v × level fraction per week</td>
+                        </tr>
+                        <tr>
+                            <td><code>visionGrowthMultiplierPerLevel</code></td>
+                            <td><code>0.12</code></td>
+                            <td>Boosts vision XP by v × level fraction per week</td>
+                        </tr>
+                        <tr>
+                            <td><code>staminaGrowthMultiplierPerLevel</code></td>
+                            <td><code>0.12</code></td>
+                            <td>Boosts stamina XP by v × level fraction per week</td>
+                        </tr>
+                        <tr>
+                            <td><code>heartGrowthMultiplierPerLevel</code></td>
+                            <td><code>0.12</code></td>
+                            <td>Boosts heart XP by v × level fraction per week</td>
+                        </tr>
+                        <tr class="table-secondary"><td colspan="3"><strong>Personality trait growth</strong> — flat weekly delta added to the named trait, capped at 20. Use for facilities like a Mental Conditioning Suite.</td></tr>
+                        <tr>
+                            <td><code>determinationGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>determination</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>professionalismGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>professionalism</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ambitionGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>ambition</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>loyaltyGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>loyalty</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>adaptabilityGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>adaptability</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>pressureGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>pressure</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>temperamentGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>temperament</em> by v × level per week (capped at 20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>consistencyGrowthPerLevel</code></td>
+                            <td><code>0.05</code></td>
+                            <td>Increases <em>consistency</em> by v × level per week (capped at 20)</td>
+                        </tr>
                     </tbody>
                 </table>
                 <p class="mt-1 text-muted" style="font-size:0.8rem">Baselines (<em>baseXP</em>, <em>baseInjuryProbability</em>, <em>scoutAbilityErrorRange</em>, <em>scoutRevealWeeks</em>) are configured in Admin → Game Config.</p>
