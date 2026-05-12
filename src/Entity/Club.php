@@ -58,6 +58,10 @@ class Club
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $worldInitializedAt = null;
 
+    /** Set once when POST /api/initialize/starter succeeds. Guards re-initialization. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $starterInitializedAt = null;
+
     /** Player Agent / PA name assigned at club creation */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $paName = null;
@@ -179,6 +183,10 @@ class Club
     public function getWorldInitializedAt(): ?\DateTimeImmutable { return $this->worldInitializedAt; }
     public function setWorldInitializedAt(?\DateTimeImmutable $v): static { $this->worldInitializedAt = $v; return $this; }
     public function isWorldInitialized(): bool { return $this->worldInitializedAt !== null; }
+
+    public function getStarterInitializedAt(): ?\DateTimeImmutable { return $this->starterInitializedAt; }
+    public function setStarterInitializedAt(?\DateTimeImmutable $v): void { $this->starterInitializedAt = $v; }
+    public function isStarterInitialized(): bool { return $this->starterInitializedAt !== null; }
 
     public function getPaName(): ?string { return $this->paName; }
     public function setPaName(?string $paName): void { $this->paName = $paName; }
