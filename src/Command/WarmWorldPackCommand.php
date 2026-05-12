@@ -46,6 +46,11 @@ class WarmWorldPackCommand extends Command
         $io      = new SymfonyStyle($input, $output);
         $country = strtoupper(trim((string) $input->getArgument('country')));
 
+        if (strlen($country) !== 2) {
+            $io->error("Country code must be exactly 2 characters (e.g. EN, ES). Got: '{$country}'.");
+            return Command::FAILURE;
+        }
+
         if (ClubInitializationService::countryToNationality($country) === null) {
             $io->error("Unknown country code '{$country}'. Supported codes: EN, IT, DE, ES, BR, AR, NL, FR, PT, NG, GH, JP, KR, SE, DK, IE, CI, SN, CN");
             return Command::FAILURE;
@@ -76,11 +81,16 @@ class WarmWorldPackCommand extends Command
 
             $io->write("[tier {$tier}] ");
 
-            $payload = $this->worldPackCacheService->getOrBuild(
-                $country,
-                $tier,
-                fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier)
-            );
+            try {
+                $payload = $this->worldPackCacheService->getOrBuild(
+                    $country,
+                    $tier,
+                    fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier)
+                );
+            } catch (\Throwable $e) {
+                $io->warning("tier {$tier} failed: " . $e->getMessage() . " — skipping.");
+                continue;
+            }
 
             if ($alreadyHit) {
                 $io->writeln('already cached — skipped');
