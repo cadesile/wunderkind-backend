@@ -90,6 +90,10 @@ class InitializeController extends AbstractController
             );
         }
 
+        // World initialization is expensive (hundreds of DB queries across all leagues).
+        // Allow up to 5 minutes for this one-time operation.
+        set_time_limit(300);
+
         $worldPack = $this->worldInitializationService->initialize($club);
 
         return $this->json(['worldPack' => $worldPack]);

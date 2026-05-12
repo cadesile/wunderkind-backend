@@ -23,7 +23,7 @@ Unlike traditional management sims, Wunderkind Factory prioritizes the "human el
 |---|---|
 | Frontend | React Native (Mobile) |
 | Backend | Symfony 8.0 (PHP 8.4) + API Platform v4 |
-| Database | MySQL 8.0 |
+| Database | PostgreSQL 16 |
 | Dev Ops | Lando + Docker |
 | Auth | lexik/jwt-authentication-bundle v3.2 |
 | Admin UI | EasyAdmin v5 |
@@ -60,7 +60,7 @@ JWT firewall → SyncController::sync()
 
 ### Prerequisites
 
-- [Lando](https://lando.dev/) (runs PHP 8.4 + MySQL 8.0 via Docker)
+- [Lando](https://lando.dev/) (runs PHP 8.4 + PostgreSQL 16 via Docker)
 
 ### Setup
 
@@ -72,7 +72,7 @@ lando start
 lando composer install
 
 # Generate JWT keys (once, or after key rotation)
-lando php bin/console lexik:jwt:generate-keypair
+lando php bin/console lexik:jwt:generate-keypair --no-pass --overwrite
 
 # Fresh database setup
 lando php bin/console doctrine:database:drop --force
@@ -88,10 +88,10 @@ lando php bin/console cache:clear
 ### Useful Commands
 
 ```bash
-lando logs -s appserver           # view app logs
-lando php bin/console debug:router    # inspect registered routes
-lando php bin/console debug:firewall  # inspect firewall config
-lando mysql                           # MySQL shell (db: wunderkind)
+lando logs -s appserver                   # view app logs
+lando php bin/console debug:router        # inspect registered routes
+lando php bin/console debug:firewall      # inspect firewall config
+lando psql                                # PostgreSQL shell (db: wunderkind)
 ```
 
 ### Environment Variables
@@ -99,7 +99,7 @@ lando mysql                           # MySQL shell (db: wunderkind)
 ```bash
 APP_ENV=
 APP_SECRET=
-DATABASE_URL=mysql://wunderkind:wunderkind@database:3306/wunderkind?serverVersion=8.0&charset=utf8mb4
+DATABASE_URL=postgresql://wunderkind:wunderkind@postgres:5432/wunderkind?serverVersion=16&charset=utf8
 CORS_ALLOW_ORIGIN=
 JWT_SECRET_KEY=
 JWT_PUBLIC_KEY=
@@ -114,11 +114,37 @@ JWT_PASSPHRASE=
 |---|---|---|---|
 | `POST` | `/api/register` | Public | Create user + academy |
 | `POST` | `/api/login` | Public | JWT login → returns token |
-| `POST` | `/api/sync` | `ROLE_CLUB` | Anti-cheat sync + leaderboard upsert |
+| `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
 | `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
-| `GET` | `/api/market-data` | JWT | Returns agents, scouts, investors, sponsors |
+| `GET` | `/api/market-data` | JWT | Agents, scouts, investors, sponsors |
+| `GET` | `/api/game-config` | JWT | Global game configuration values |
+| `GET` | `/api/events/templates` | JWT | Narrative event templates |
+| `GET` | `/api/inbox` | JWT | Inbox messages |
+| `POST` | `/api/inbox/{id}/respond` | JWT | Accept or reject an inbox offer |
+| `GET` | `/api/finance` | JWT | Financial year summary |
+| `POST` | `/api/finance/year-end` | JWT | Trigger financial year-end processing |
 
 Admin UI is available at `/admin` (session-based, `ROLE_ADMIN`).
+
+---
+
+## Admin Panel
+
+The EasyAdmin v5 panel at `/admin` provides:
+
+- **CRUD** — Read-only views for all core entities; writable for Scouts, Investors, Sponsors
+- **Game Config** — Tune all global gameplay constants (clique thresholds, XP, injuries, scouting, wages, attendance, stadium capacity, etc.)
+- **Starter Config** — Seed league player ability ranges and fan base growth curves
+- **Pool Config** — Configure the market data generation pipeline
+- **Import / Export** — JSON round-trip for narrative data (event templates, facility templates, player archetypes, tactical advantages)
+- **App Links** — Manage deep-links shown in the mobile app
+- **Settings & Tools** — Developer utilities (age-out trigger, entity cleanup, environment info)
+- **Logs** — Tail `var/log/prod.log` from the browser
+
+**Grant admin access:**
+```bash
+lando psql -c "UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';"
+```
 
 ---
 
@@ -131,8 +157,8 @@ Admin UI is available at `/admin` (session-based, `ROLE_ADMIN`).
 | `src/Dto/` | Validated input/output DTOs |
 | `src/Repository/` | Domain-specific query methods |
 | `src/Service/` | Business logic |
-| `src/Controller/` | Thin HTTP layer |
-| `src/Controller/Admin/` | EasyAdmin CRUD controllers |
+| `src/Controller/Api/` | Thin HTTP layer — game client endpoints |
+| `src/Controller/Admin/` | EasyAdmin CRUD + custom admin routes |
 | `src/ApiResource/` | API Platform v4 resource definitions |
 | `migrations/` | Doctrine migrations |
 | `config/jwt/` | RSA keypair (gitignored) |
@@ -144,20 +170,25 @@ Admin UI is available at `/admin` (session-based, `ROLE_ADMIN`).
 | Entity | Key Fields |
 |---|---|
 | `User` | email, roles (`ROLE_CLUB` / `ROLE_ADMIN`), OneToOne Academy |
-| `Academy` | name, reputation, totalCareerEarnings, hallOfFamePoints, lastSyncedWeek |
+| `Academy` | name, reputation, totalCareerEarnings, hallOfFamePoints, lastSyncedWeek, manager traits |
 | `Player` | position, status, recruitmentSource, potential, currentAbility, PersonalityProfile |
 | `PersonalityProfile` | confidence, maturity, teamwork, leadership, ego, bravery, greed, loyalty (0–100) |
 | `Guardian` | demandLevel (1–10), loyaltyToAcademy (0–100), OneToOne Player |
 | `Agent` | isUniversal, commissionRate, experience, rating, OneToMany Players |
 | `Scout` | name, dob, nationality, judgements (json), experience |
-| `Investor` | company, nationality, size (CompanySize), isActive |
-| `Sponsor` | company, nationality, size (CompanySize), isActive |
-| `Staff` | role, coachingAbility, scoutingRange, weeklySalary |
+| `Investor` | company, tier (InvestorTier), investmentAmount, percentageOwned |
+| `Sponsor` | company, monthlyPayment, contractStart/EndDate, status (SponsorStatus) |
+| `Staff` | role (StaffRole), coachingAbility, scoutingRange, weeklySalary |
 | `Transfer` | fee + agentCommission (pence); getNetProceeds() helper |
 | `SyncRecord` | clientWeekNumber, isValid, invalidReason — every sync logged |
-| `LeaderboardEntry` | UNIQUE(academy, category, period); score BIGINT; rank_position column |
+| `LeaderboardEntry` | UNIQUE(academy, category, period); score BIGINT; rank_position |
+| `GameEventTemplate` | slug, category (EventCategory), weight, title, bodyTemplate, impacts (json) |
+| `InboxMessage` | senderType, subject, body, offerData (json), status (MessageStatus) |
+| `GameConfig` | All global gameplay constants (singleton row) |
+| `StarterConfig` | League ability ranges + fan base growth curves (singleton row) |
+| `FacilityTemplate` | slug, label, baseCost, upkeep, gameplayEffects (json), maxLevel |
 
-**Enums:** `PlayerPosition`, `PlayerStatus`, `RecruitmentSource`, `StaffRole`, `TransferType`, `LeaderboardCategory`, `CompanySize`
+**Enums:** `PlayerPosition`, `PlayerStatus`, `RecruitmentSource`, `StaffRole`, `TransferType`, `LeaderboardCategory`, `CompanySize`, `InvestorTier`, `SponsorStatus`, `MessageSenderType`, `MessageStatus`, `EventCategory`, `PlayingStyle`
 
 ---
 
@@ -170,20 +201,18 @@ Two separate firewalls:
 
 Role separation: `ROLE_CLUB` for game clients, `ROLE_ADMIN` for the admin panel. See `config/packages/security.yaml` for full access control rules.
 
-**Grant admin access:**
-```bash
-lando mysql -e "UPDATE user SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';" wunderkind
-```
-
 ---
 
 ## Key Gotchas
 
-- **UUID columns** are `BINARY(16)` (Doctrine's `uuid` type for MySQL) — not `VARCHAR(36)`.
-- **`rank`** is reserved in MySQL 8.0; `LeaderboardEntry` uses column name `rank_position`.
+- **PostgreSQL** — migrated from MySQL 8.0. All new migrations must use Doctrine Schema API or PostgreSQL syntax (no `AUTO_INCREMENT`, no `ENGINE=InnoDB`).
+- **UUID columns** — Doctrine uses its `uuid` type, stored as UUID strings in PostgreSQL.
+- **`rank`** is a reserved word in some SQL dialects; `LeaderboardEntry` uses column name `rank_position`.
 - **`hallOfFamePoints`** is `max(current, incoming)` — never decreases.
 - **`reputation`** floors at 0. **`totalCareerEarnings`** accumulates deltas.
+- **Doctrine JSON dirty-check** — When a `json` column contains mixed PHP string/int types, Doctrine silently skips the UPDATE. Use `$em->getConnection()->executeStatement()` with `json_encode()` to bypass.
 - Symfony `RouterListener` (priority 32) runs before `FirewallListener` (priority 8) — `json_login` check_path must be a real registered route.
+- EasyAdmin custom POST actions must redirect through `$this->redirect($this->generateUrl('admin', ['routeName' => '...']))`, never `$this->redirectToRoute()` directly.
 
 ---
 

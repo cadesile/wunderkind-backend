@@ -1,0 +1,13 @@
+{% extends '@!EasyAdmin/layout.html.twig' %}
+
+{#
+  Override head_favicon to guard against null admin context.
+  When the EasyAdmin context isn't set up (e.g. during exception rendering
+  or direct route access), ea() returns null and asset(null) throws a TypeError.
+#}
+{% block head_favicon %}
+    {% set _ea = ea() %}
+    {% if _ea is not null %}
+        <link rel="shortcut icon" href="{{ asset(_ea.dashboardFaviconPath) }}">
+    {% endif %}
+{% endblock %}

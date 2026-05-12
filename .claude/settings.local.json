@@ -59,7 +59,8 @@
       "Bash(gh run:*)",
       "Bash(mkdir:*)",
       "Bash(grep -rn \"WorldStaff\\\\|worldStaffToCoach\\\\|worldStaff\" /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/docs/ 2>/dev/null | head -20\ngrep -rn \"WorldStaff\\\\|worldStaffToCoach\" /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/ --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.md\" 2>/dev/null | head -20)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(cat:*)"
     ]
   }
 }
