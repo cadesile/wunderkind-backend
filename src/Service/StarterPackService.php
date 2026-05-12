@@ -76,11 +76,14 @@ class StarterPackService
             $this->fillStaffRole(StaffRole::CHAIRMAN,             $starterConfig->getStarterChairmanCount(),           $ampNationality),
         );
 
+        // Scouts are not consumed from the pool (no assignedAt guard) — this mirrors
+        // the pre-existing behaviour in WorldInitializationService::initialize().
         $ampScouts = $this->scoutRepository->findInPool($starterConfig->getStarterScoutCount(), nationality: $ampNationality);
         if (count($ampScouts) < $starterConfig->getStarterScoutCount()) {
             $deficit   = $starterConfig->getStarterScoutCount() - count($ampScouts);
             $ampScouts = array_merge($ampScouts, $this->scoutRepository->findInPool($deficit));
         }
+        $ampScouts = array_values(array_unique($ampScouts, SORT_REGULAR));
 
         foreach ($ampPlayers as $p) { $p->setClub($club); }
         foreach ($ampStaff   as $s) { $s->setClub($club); }
