@@ -15,6 +15,7 @@ use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
+use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class StarterPackService
