@@ -17,7 +17,7 @@ class CountryWorldPackCache
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
 
-    #[ORM\Column(length: 2)]
+    #[ORM\Column(length: 2, options: ['fixed' => true])]
     private string $country;
 
     #[ORM\Column(type: 'smallint')]
@@ -38,6 +38,7 @@ class CountryWorldPackCache
         $this->generatedAt = new \DateTimeImmutable();
     }
 
+    public function getId(): UuidV7 { return $this->id; }
     public function getCountry(): string { return $this->country; }
     public function getTier(): int { return $this->tier; }
     public function getPayload(): array { return $this->payload; }

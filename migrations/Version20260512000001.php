@@ -22,7 +22,7 @@ final class Version20260512000001 extends AbstractMigration
             id UUID NOT NULL,
             country CHAR(2) NOT NULL,
             tier SMALLINT NOT NULL,
-            payload JSONB NOT NULL,
+            payload json NOT NULL,
             generated_at TIMESTAMPTZ NOT NULL,
             PRIMARY KEY(id),
             CONSTRAINT uq_country_tier UNIQUE (country, tier)

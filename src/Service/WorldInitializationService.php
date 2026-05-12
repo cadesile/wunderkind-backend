@@ -234,6 +234,8 @@ class WorldInitializationService
                 $players = array_merge($players, $domestic, $foreign);
             }
 
+            // Doctrine identity map ensures same-player objects are identical references;
+            // array_unique with SORT_REGULAR safely deduplicates by object reference.
             $players  = array_values(array_unique($players, SORT_REGULAR));
             $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,  (int) $tierConf['managerCount']);
             $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,    (int) $tierConf['coachCount']);
