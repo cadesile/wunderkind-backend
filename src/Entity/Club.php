@@ -185,7 +185,7 @@ class Club
     public function isWorldInitialized(): bool { return $this->worldInitializedAt !== null; }
 
     public function getStarterInitializedAt(): ?\DateTimeImmutable { return $this->starterInitializedAt; }
-    public function setStarterInitializedAt(?\DateTimeImmutable $v): void { $this->starterInitializedAt = $v; }
+    public function setStarterInitializedAt(?\DateTimeImmutable $v): static { $this->starterInitializedAt = $v; return $this; }
     public function isStarterInitialized(): bool { return $this->starterInitializedAt !== null; }
 
     public function getPaName(): ?string { return $this->paName; }
