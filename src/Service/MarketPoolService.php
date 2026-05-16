@@ -275,7 +275,11 @@ class MarketPoolService
             $member->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
             $member->setCoachingAbility($ability);
             $member->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
-            $member->setSpecialisms($this->generateSpecialisms());
+            $member->setSpecialisms(
+                $role === StaffRole::MANAGER
+                    ? $this->generateManagerSpecialisms()
+                    : $this->generateSpecialisms()
+            );
 
             $multipliers = $this->getWageMultiplier($ability);
             $baseSalary = match ($role) {
@@ -810,5 +814,19 @@ class MarketPoolService
             $specialisms[$key] = random_int(50, 90);
         }
         return $specialisms;
+    }
+
+    private const MANAGER_PLAYING_STYLES = ['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'];
+    private const MANAGER_FORMATIONS     = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '5-3-2', '4-5-1', '5-4-1'];
+
+    /**
+     * Generate manager-specific specialisms: a preferred playing style and formation.
+     */
+    private function generateManagerSpecialisms(): array
+    {
+        return [
+            'playingStyle' => $this->pick(self::MANAGER_PLAYING_STYLES),
+            'formation'    => $this->pick(self::MANAGER_FORMATIONS),
+        ];
     }
 }

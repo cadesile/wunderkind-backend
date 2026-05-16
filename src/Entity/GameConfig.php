@@ -189,6 +189,13 @@ class GameConfig
     #[ORM\Column(type: 'float', options: ['default' => 1.0])]
     private float $playerWageMultiplier = 1.0;
 
+    /**
+     * Number of free (zero-fee) transfers a club may make per season.
+     * Default: 3
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 3])]
+    private int $freeTransfersPerSeason = 3;
+
     // ── Guardian Complaints ───────────────────────────────────────────────
 
     /** Player morale boost when manager convinces a guardian. Default: 5 */
@@ -310,6 +317,9 @@ class GameConfig
 
     public function getPlayerWageMultiplier(): float { return $this->playerWageMultiplier; }
     public function setPlayerWageMultiplier(float $v): static { $this->playerWageMultiplier = max(0.0, $v); return $this; }
+
+    public function getFreeTransfersPerSeason(): int { return $this->freeTransfersPerSeason; }
+    public function setFreeTransfersPerSeason(int $v): static { $this->freeTransfersPerSeason = max(0, $v); return $this; }
 
     public function getDefaultMoraleMin(): int { return $this->defaultMoraleMin; }
     public function setDefaultMoraleMin(int $v): static { $this->defaultMoraleMin = $v; return $this; }

@@ -43,6 +43,7 @@ class GameConfigController extends AbstractController
             'missionGemRollThresholds'          => $config->getMissionGemRollThresholds(),
             'playerFeeMultiplier'               => $config->getPlayerFeeMultiplier(),
             'playerWageMultiplier'              => $config->getPlayerWageMultiplier(),
+            'freeTransfersPerSeason'            => $config->getFreeTransfersPerSeason(),
             'defaultMoraleMin'                  => $config->getDefaultMoraleMin(),
             'defaultMoraleMax'                  => $config->getDefaultMoraleMax(),
 

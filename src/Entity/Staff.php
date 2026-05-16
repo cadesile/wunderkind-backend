@@ -52,8 +52,9 @@ class Staff
     private ?string $specialty = null;
 
     /**
-     * Structured coaching specialisms, e.g. {"pace": 85, "technical": 70}.
-     * Valid keys: pace, technical, vision, power, stamina, heart. Values 50–90.
+     * Structured coaching specialisms.
+     * Coaches: attribute keys (pace, technical, vision, power, stamina, heart) → int 50–90.
+     * Managers: {"playingStyle": "POSSESSION|DIRECT|COUNTER|HIGH_PRESS", "formation": "4-4-2|4-3-3|4-2-3-1|3-5-2|5-3-2|4-5-1|5-4-1"}.
      */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $specialisms = null;

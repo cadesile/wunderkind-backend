@@ -279,6 +279,7 @@ class DashboardController extends AbstractDashboardController
         $config->setMaxScoutsPerClub((int) $request->request->get('maxScoutsPerClub', 3));
         $config->setSignOnFeePercentMin((int) $request->request->get('signOnFeePercentMin', 0));
         $config->setSignOnFeePercentMax((int) $request->request->get('signOnFeePercentMax', 10));
+        $config->setFreeTransfersPerSeason((int) $request->request->get('freeTransfersPerSeason', 3));
 
         $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
 
