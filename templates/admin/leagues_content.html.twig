@@ -1,0 +1,364 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% set COUNTRIES = {
+    'EN': 'England',     'ES': 'Spain',       'DE': 'Germany',
+    'IT': 'Italy',       'FR': 'France',       'BR': 'Brazil',
+    'AR': 'Argentina',   'NL': 'Netherlands',  'PT': 'Portugal',
+    'NG': 'Nigeria',     'GH': 'Ghana',        'JP': 'Japan',
+    'KR': 'South Korea', 'SE': 'Sweden',       'DK': 'Denmark',
+    'IE': 'Ireland',     'CI': 'Ivory Coast',  'SN': 'Senegal',
+    'CN': 'China'
+} %}
+
+{% set NPC_CLUB_CTRL = 'App\\Controller\\Admin\\NpcClubCrudController' %}
+{% set LEAGUE_CTRL   = 'App\\Controller\\Admin\\LeagueCrudController' %}
+
+{% set TIER_COLORS = {
+    1: '#ffd700', 2: '#e0b020', 3: '#c0a060',
+    4: '#6c757d', 5: '#6c757d', 6: '#495057',
+    7: '#343a40', 8: '#198754'
+} %}
+
+{% block content %}
+<style>
+    .league-country-section { margin-bottom: 2rem; }
+    .league-country-header {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .6rem 1rem;
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-bottom: 2px solid var(--bs-primary);
+        cursor: pointer;
+        user-select: none;
+    }
+    .league-country-header:hover { background: var(--bs-tertiary-bg); }
+    .league-country-code {
+        font-family: 'Courier New', monospace;
+        font-weight: 700;
+        font-size: .9rem;
+        letter-spacing: .05em;
+    }
+    .league-country-name { font-weight: 600; }
+    .league-country-meta { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+
+    .league-tier-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: .75rem;
+        padding: .75rem 0;
+    }
+    .league-card {
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        display: flex;
+        flex-direction: column;
+    }
+    .league-card-header {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .5rem .75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-tertiary-bg);
+    }
+    .tier-badge {
+        font-family: 'Courier New', monospace;
+        font-size: .7rem;
+        font-weight: 700;
+        padding: .2rem .45rem;
+        min-width: 2.2rem;
+        text-align: center;
+        letter-spacing: .03em;
+    }
+    .league-name {
+        font-weight: 600;
+        font-size: .85rem;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .league-edit-btn {
+        font-size: .7rem;
+        padding: .15rem .4rem;
+        opacity: .6;
+        transition: opacity .15s;
+        white-space: nowrap;
+    }
+    .league-edit-btn:hover { opacity: 1; }
+
+    .league-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .3rem;
+        padding: .5rem .75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+    .league-stat-chip {
+        display: flex;
+        align-items: center;
+        gap: .25rem;
+        font-size: .7rem;
+        padding: .15rem .4rem;
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        white-space: nowrap;
+    }
+    .league-stat-chip .chip-label {
+        color: var(--bs-secondary-color);
+        font-size: .65rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .league-stat-chip .chip-val {
+        font-weight: 600;
+        font-family: 'Courier New', monospace;
+    }
+
+    .league-sponsors {
+        padding: .4rem .75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+        display: flex;
+        flex-wrap: wrap;
+        gap: .3rem;
+        align-items: center;
+    }
+    .sponsor-label {
+        font-size: .65rem;
+        color: var(--bs-secondary-color);
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        margin-right: .15rem;
+    }
+    .sponsor-chip {
+        font-size: .7rem;
+        padding: .15rem .45rem;
+        background: rgba(var(--bs-warning-rgb), .12);
+        border: 1px solid rgba(var(--bs-warning-rgb), .3);
+        color: var(--bs-warning-text-emphasis);
+        white-space: nowrap;
+    }
+
+    .league-clubs {
+        padding: .5rem .75rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: .35rem;
+        align-items: flex-start;
+    }
+    .league-clubs-empty {
+        padding: .5rem .75rem;
+        color: var(--bs-secondary-color);
+        font-size: .75rem;
+        font-style: italic;
+    }
+    .club-label {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        font-size: .72rem;
+        padding: .18rem .5rem .18rem .25rem;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-secondary-bg);
+        text-decoration: none;
+        color: var(--bs-body-color);
+        cursor: pointer;
+        transition: border-color .15s, background .15s;
+        white-space: nowrap;
+    }
+    .club-label:hover {
+        border-color: var(--bs-primary);
+        background: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+    }
+    .club-swatch {
+        width: 10px;
+        height: 10px;
+        flex-shrink: 0;
+        border: 1px solid rgba(0,0,0,.15);
+    }
+    .club-abbr {
+        font-family: 'Courier New', monospace;
+        font-size: .65rem;
+        color: var(--bs-secondary-color);
+    }
+
+    .no-leagues-msg {
+        padding: 1rem;
+        color: var(--bs-secondary-color);
+        font-style: italic;
+        font-size: .85rem;
+        border: 1px dashed var(--bs-border-color);
+        text-align: center;
+    }
+</style>
+
+<div class="mt-1">
+
+    {# ── Page header ─────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <div>
+            <h5 class="fw-semibold mb-0">League Overview</h5>
+            <p class="text-muted small mb-0">All leagues grouped by country. Click a club to edit it.</p>
+        </div>
+        <div class="ms-auto d-flex gap-2">
+            <a href="{{ path('admin', {crudControllerFqcn: LEAGUE_CTRL, crudAction: 'index'}) }}"
+               class="btn btn-sm btn-outline-secondary">
+                <i class="fa fa-trophy me-1"></i>League CRUD
+            </a>
+            <a href="{{ path('admin', {routeName: 'admin_npc_clubs_content'}) }}"
+               class="btn btn-sm btn-outline-secondary">
+                <i class="fa fa-wand-magic-sparkles me-1"></i>Generate
+            </a>
+        </div>
+    </div>
+
+    {% if leaguesByCountry is empty %}
+        <div class="no-leagues-msg">No leagues found. Use the Generate panel to create league structures.</div>
+    {% else %}
+
+        {% for countryCode, tiers in leaguesByCountry %}
+        {% set countryName = COUNTRIES[countryCode] ?? countryCode %}
+        {% set leagueCount = tiers|length %}
+        {% set totalClubs  = 0 %}
+        {% for tier, league in tiers %}
+            {% set leagueClubs = clubsByLeague[league.id|ea_as_string] ?? [] %}
+            {% set totalClubs  = totalClubs + leagueClubs|length %}
+        {% endfor %}
+
+        <div class="league-country-section">
+
+            {# ── Country header ─────────────────────────────────────────── #}
+            <div class="league-country-header"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#country-{{ countryCode }}"
+                 aria-expanded="true">
+                <span class="league-country-code">{{ countryCode }}</span>
+                <span class="league-country-name">{{ countryName }}</span>
+                <span class="league-country-meta">
+                    <span class="badge bg-secondary">{{ leagueCount }} league{{ leagueCount != 1 ? 's' : '' }}</span>
+                    {% if totalClubs > 0 %}
+                        <span class="badge bg-primary bg-opacity-75">{{ totalClubs }} clubs</span>
+                    {% endif %}
+                    <i class="fa fa-chevron-down fa-xs text-muted ms-1" style="transition: transform .2s;"></i>
+                </span>
+            </div>
+
+            {# ── League cards ───────────────────────────────────────────── #}
+            <div class="collapse show" id="country-{{ countryCode }}">
+                <div class="league-tier-grid">
+
+                    {% for tier, league in tiers %}
+                    {% set clubs       = clubsByLeague[league.id|ea_as_string] ?? [] %}
+                    {% set tierColor   = TIER_COLORS[tier] ?? '#6c757d' %}
+                    {% set hasStats    = league.prizeMoney or league.tvDeal or league.leaguePositionPot or league.promotionSpots %}
+                    {% set hasSponsors = league.sponsors|length > 0 %}
+
+                    <div class="league-card">
+
+                        {# Header: tier badge + name + edit link #}
+                        <div class="league-card-header">
+                            <span class="tier-badge"
+                                  style="background: {{ tierColor }}22; color: {{ tierColor }}; border: 1px solid {{ tierColor }}55;">
+                                T{{ tier }}
+                            </span>
+                            <span class="league-name" title="{{ league.name }}">{{ league.name }}</span>
+                            {% if league.leagueReputationTier %}
+                                <span class="badge bg-secondary bg-opacity-50 fw-normal"
+                                      style="font-size:.6rem;">
+                                    {{ league.leagueReputationTier.value|upper }}
+                                </span>
+                            {% endif %}
+                            <a href="{{ path('admin', {crudControllerFqcn: LEAGUE_CTRL, crudAction: 'edit', entityId: league.id}) }}"
+                               class="btn btn-sm btn-outline-secondary league-edit-btn"
+                               title="Edit league">
+                                <i class="fa fa-pencil"></i>
+                            </a>
+                        </div>
+
+                        {# Stats: prize money, TV deal, position pot, promotion spots #}
+                        {% if hasStats %}
+                        <div class="league-stats">
+                            {% if league.prizeMoney %}
+                                <div class="league-stat-chip">
+                                    <span class="chip-label">Prize</span>
+                                    <span class="chip-val">£{{ (league.prizeMoney / 100)|number_format(0, '.', ',') }}</span>
+                                </div>
+                            {% endif %}
+                            {% if league.tvDeal %}
+                                <div class="league-stat-chip">
+                                    <span class="chip-label">TV</span>
+                                    <span class="chip-val">£{{ (league.tvDeal / 100)|number_format(0, '.', ',') }}</span>
+                                </div>
+                            {% endif %}
+                            {% if league.leaguePositionPot %}
+                                <div class="league-stat-chip">
+                                    <span class="chip-label">Pos Pot</span>
+                                    <span class="chip-val">£{{ (league.leaguePositionPot / 100)|number_format(0, '.', ',') }}</span>
+                                </div>
+                            {% endif %}
+                            {% if league.promotionSpots %}
+                                <div class="league-stat-chip">
+                                    <span class="chip-label">Up</span>
+                                    <span class="chip-val" style="color: #198754;">+{{ league.promotionSpots }}</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {# Sponsors #}
+                        {% if hasSponsors %}
+                        <div class="league-sponsors">
+                            <span class="sponsor-label">
+                                <i class="fa fa-star fa-xs"></i> Sponsors
+                            </span>
+                            {% for sponsor in league.sponsors %}
+                                <span class="sponsor-chip">{{ sponsor.name }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {# Clubs inline labels #}
+                        {% if clubs|length > 0 %}
+                        <div class="league-clubs">
+                            {% for club in clubs %}
+                                <a href="{{ path('admin', {crudControllerFqcn: NPC_CLUB_CTRL, crudAction: 'edit', entityId: club.id}) }}"
+                                   class="club-label"
+                                   title="{{ club.name }}{% if club.stadiumName %} · {{ club.stadiumName }}{% endif %} · Rep {{ club.reputation }}">
+                                    <span class="club-swatch" style="background: {{ club.primaryColor }};"></span>
+                                    {{ club.name }}
+                                    {% if club.abbreviation %}
+                                        <span class="club-abbr">{{ club.abbreviation }}</span>
+                                    {% endif %}
+                                </a>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="league-clubs-empty">No clubs assigned to this league.</div>
+                        {% endif %}
+
+                    </div>{# /.league-card #}
+                    {% endfor %}
+
+                </div>{# /.league-tier-grid #}
+            </div>{# /.collapse #}
+
+        </div>{# /.league-country-section #}
+        {% endfor %}
+
+    {% endif %}
+</div>
+
+<script>
+// Rotate chevron on collapse toggle
+document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
+    var chevron = el.querySelector('.fa-chevron-down');
+    var target  = document.querySelector(el.getAttribute('data-bs-target'));
+    if (!target || !chevron) return;
+    target.addEventListener('show.bs.collapse',  function () { chevron.style.transform = 'rotate(0deg)';    });
+    target.addEventListener('hide.bs.collapse',  function () { chevron.style.transform = 'rotate(-90deg)'; });
+});
+</script>
+{% endblock %}

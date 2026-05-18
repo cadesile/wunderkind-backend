@@ -57,4 +57,25 @@ class NpcClubRepository extends ServiceEntityRepository
     {
         return $this->findBy(['league' => $league]);
     }
+
+    /**
+     * Returns all clubs that have a league assigned, grouped by league UUID string.
+     *
+     * @return array<string, NpcClub[]>
+     */
+    public function getAllGroupedByLeague(): array
+    {
+        $clubs = $this->createQueryBuilder('c')
+            ->innerJoin('c.league', 'l')
+            ->addSelect('l')
+            ->orderBy('c.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $grouped = [];
+        foreach ($clubs as $club) {
+            $grouped[(string) $club->getLeague()->getId()][] = $club;
+        }
+        return $grouped;
+    }
 }

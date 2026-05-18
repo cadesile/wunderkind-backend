@@ -41,4 +41,20 @@ class LeagueRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    /**
+     * Returns all leagues with sponsors eagerly loaded, sorted country ASC → tier ASC.
+     *
+     * @return League[]
+     */
+    public function findAllWithSponsors(): array
+    {
+        return $this->createQueryBuilder('l')
+            ->leftJoin('l.sponsors', 's')
+            ->addSelect('s')
+            ->orderBy('l.country', 'ASC')
+            ->addOrderBy('l.tier', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

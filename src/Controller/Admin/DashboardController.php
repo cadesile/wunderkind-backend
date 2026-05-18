@@ -760,6 +760,24 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
+    #[Route('/admin/leagues/overview', name: 'admin_leagues_overview')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function leaguesOverview(): Response
+    {
+        $leagues = $this->leagueRepository->findAllWithSponsors();
+
+        $leaguesByCountry = [];
+        foreach ($leagues as $league) {
+            $leaguesByCountry[$league->getCountry()][$league->getTier()] = $league;
+        }
+        ksort($leaguesByCountry);
+
+        return $this->render('admin/leagues_content.html.twig', [
+            'leaguesByCountry' => $leaguesByCountry,
+            'clubsByLeague'    => $this->npcClubRepository->getAllGroupedByLeague(),
+        ]);
+    }
+
     #[Route('/admin/npc-clubs/generate', name: 'admin_npc_clubs_generate', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
     public function generateNpcClubs(Request $request): Response
@@ -1122,6 +1140,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
         yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
         yield MenuItem::section('Clubs & Leagues');
+        yield MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview');
         yield MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved');
         yield MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy');
         yield MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board');
