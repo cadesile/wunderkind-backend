@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wunderkind Factory — Football Management Sim</title>
     <meta name="description" content="Build a football empire from the ground up. Scout talent, develop players, manage staff, control finances, and climb from the bottom tier to the elite. Wunderkind Factory is a deep, offline-first football management sim for mobile.">
-    <meta name="theme-color" content="#070f0a">
+    <meta name="theme-color" content="#0f1420">
     <meta property="og:title" content="Wunderkind Factory — Football Management Sim">
     <meta property="og:description" content="Build a football empire. Scout. Develop. Dominate.">
     <meta property="og:type" content="website">
@@ -21,24 +21,29 @@
         }
 
         :root {
-            --bg:         #070f0a;
-            --card:       #0c1c12;
-            --card-hi:    #112218;
-            --dark:       #040a05;
-            --border:     #1a3322;
-            --gold:       #f5c842;
-            --gold-dim:   #d4a017;
-            --mint:       #4ecdc4;
-            --mint-dim:   #3aada5;
-            --red:        #e05252;
-            --text:       #dff0df;
-            --text-muted: #6b9e80;
+            --bg:         #0f1420;
+            --bg-mid:     #1a2240;
+            --card:       #1e2448;
+            --card-hi:    #1e2a50;
+            --dark:       #120d18;
+            --border:     #080d1a;
+            --panel:      #2a1e38;
+            --gold:       #E8CF59;
+            --gold-dim:   #c4a83a;
+            --mint:       #3FAA7E;
+            --mint-dim:   #2d8a63;
+            --red:        #C44747;
+            --orange:     #e8852a;
+            --blue:       #3F52A5;
+            --plum:       #7D2A60;
+            --text:       #e8f0f4;
+            --text-muted: #9bb0c4;
             --grid: repeating-linear-gradient(
                         0deg, transparent, transparent 39px,
-                        rgba(0,200,80,0.04) 39px, rgba(0,200,80,0.04) 40px),
+                        rgba(63,82,165,0.05) 39px, rgba(63,82,165,0.05) 40px),
                     repeating-linear-gradient(
                         90deg, transparent, transparent 39px,
-                        rgba(0,200,80,0.04) 39px, rgba(0,200,80,0.04) 40px);
+                        rgba(63,82,165,0.05) 39px, rgba(63,82,165,0.05) 40px);
         }
 
         html { scroll-behavior: smooth; }
@@ -86,10 +91,10 @@
         section { padding: 80px 0; }
 
         /* ── Glow utilities ── */
-        .glow-gold  { text-shadow: 0 0 18px rgba(245,200,66,.55), 0 0 40px rgba(245,200,66,.25); }
-        .glow-mint  { text-shadow: 0 0 18px rgba(78,205,196,.55), 0 0 40px rgba(78,205,196,.25); }
-        .box-glow-gold { box-shadow: 0 0 0 1px var(--gold), 0 0 24px rgba(245,200,66,.2); }
-        .box-glow-mint { box-shadow: 0 0 0 1px var(--mint), 0 0 24px rgba(78,205,196,.15); }
+        .glow-gold  { text-shadow: 0 0 18px rgba(232,207,89,.55), 0 0 40px rgba(232,207,89,.25); }
+        .glow-mint  { text-shadow: 0 0 18px rgba(63,170,126,.55), 0 0 40px rgba(63,170,126,.25); }
+        .box-glow-gold { box-shadow: 0 0 0 1px var(--gold), 0 0 24px rgba(232,207,89,.2); }
+        .box-glow-mint { box-shadow: 0 0 0 1px var(--mint), 0 0 24px rgba(63,170,126,.15); }
 
         /* ── Divider ── */
         .divider {
@@ -105,7 +110,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(7,15,10,0.92);
+            background: rgba(18,13,24,0.94);
             border-bottom: 1px solid var(--border);
             backdrop-filter: blur(8px);
         }
@@ -122,7 +127,7 @@
             font-family: 'Press Start 2P', monospace;
             font-size: 9px;
             color: var(--gold);
-            text-shadow: 0 0 12px rgba(245,200,66,.5);
+            text-shadow: 0 0 12px rgba(232,207,89,.5);
             letter-spacing: 0.05em;
         }
         .nav-links {
@@ -149,12 +154,12 @@
         }
         .btn-gold {
             background: var(--gold);
-            color: #070f0a;
+            color: #0f1420;
         }
         .btn-gold:hover {
             background: #fff;
-            color: #070f0a;
-            box-shadow: 0 0 20px rgba(245,200,66,.4);
+            color: #0f1420;
+            box-shadow: 0 0 20px rgba(232,207,89,.4);
         }
         .btn-outline {
             background: transparent;
@@ -163,8 +168,8 @@
         }
         .btn-outline:hover {
             background: var(--mint);
-            color: #070f0a;
-            box-shadow: 0 0 20px rgba(78,205,196,.3);
+            color: #0f1420;
+            box-shadow: 0 0 20px rgba(63,170,126,.3);
         }
 
         /* ════════════════════════════════
@@ -194,7 +199,7 @@
         .hero h1 {
             font-size: clamp(14px, 2.2vw, 22px);
             color: var(--gold);
-            text-shadow: 0 0 24px rgba(245,200,66,.45), 0 0 60px rgba(245,200,66,.2);
+            text-shadow: 0 0 24px rgba(232,207,89,.45), 0 0 60px rgba(232,207,89,.2);
             margin-bottom: 24px;
             line-height: 1.7;
         }
@@ -243,9 +248,9 @@
         .phone-outer {
             border: 3px solid var(--gold);
             box-shadow: 0 0 0 1px var(--gold-dim),
-                        0 0 40px rgba(245,200,66,.2),
+                        0 0 40px rgba(232,207,89,.2),
                         inset 0 0 20px rgba(0,0,0,.5);
-            background: #040a05;
+            background: #120d18;
             padding: 12px 8px;
             position: relative;
         }
@@ -604,7 +609,7 @@
             font-family: 'Press Start 2P', monospace;
             font-size: clamp(14px, 2vw, 20px);
             color: var(--gold);
-            text-shadow: 0 0 20px rgba(245,200,66,.4);
+            text-shadow: 0 0 20px rgba(232,207,89,.4);
             display: block;
             margin-bottom: 8px;
         }
@@ -629,13 +634,13 @@
             transform: translate(-50%, -50%);
             width: 600px;
             height: 300px;
-            background: radial-gradient(ellipse, rgba(245,200,66,.08) 0%, transparent 70%);
+            background: radial-gradient(ellipse, rgba(232,207,89,.08) 0%, transparent 70%);
             pointer-events: none;
         }
         .cta-section h2 {
             font-size: clamp(12px, 2vw, 20px);
             color: var(--gold);
-            text-shadow: 0 0 30px rgba(245,200,66,.4);
+            text-shadow: 0 0 30px rgba(232,207,89,.4);
             margin-bottom: 20px;
         }
         .cta-sub {
@@ -747,7 +752,7 @@
         }
         .ss-frame:hover img {
             border-color: var(--gold);
-            box-shadow: 0 0 24px rgba(245,200,66,.2);
+            box-shadow: 0 0 24px rgba(232,207,89,.2);
         }
         .ss-caption {
             font-family: 'Space Mono', monospace;
@@ -774,7 +779,7 @@
             position: fixed;
             inset: 0;
             z-index: 10000;
-            background: rgba(4, 10, 5, 0.92);
+            background: rgba(18, 13, 24, 0.94);
             backdrop-filter: blur(4px);
             align-items: center;
             justify-content: center;
@@ -784,7 +789,7 @@
         .privacy-modal {
             background: var(--card);
             border: 1px solid var(--border);
-            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(245,200,66,.1);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(232,207,89,.1);
             max-width: 680px;
             width: 100%;
             max-height: 85vh;
@@ -881,6 +886,8 @@
                     all offline, all in the palm of your hand.
                 </p>
                 <div class="hero-actions">
+                    <a href="#download" id="hero-android-btn" class="btn btn-gold" style="display:none">Download (Android)</a>
+                    <a href="#download" id="hero-ios-btn" class="btn btn-outline" style="display:none">Download (iOS)</a>
                     <a href="#download" id="hero-download-btn" class="btn btn-gold">Download Beta</a>
                     <a href="#features" class="btn btn-outline">See Features</a>
                 </div>
@@ -1478,27 +1485,29 @@
     fetch('/api/app-links')
         .then(function (r) { return r.json(); })
         .then(function (data) {
-            var androidBtn = document.getElementById('android-download-btn');
-            var iosBtn     = document.getElementById('ios-download-btn');
-            var heroBtn    = document.getElementById('hero-download-btn');
-            var note       = document.getElementById('download-note');
+            var androidBtn     = document.getElementById('android-download-btn');
+            var iosBtn         = document.getElementById('ios-download-btn');
+            var heroGenericBtn = document.getElementById('hero-download-btn');
+            var heroAndroidBtn = document.getElementById('hero-android-btn');
+            var heroIosBtn     = document.getElementById('hero-ios-btn');
+            var note           = document.getElementById('download-note');
 
             if (data.android) {
                 androidBtn.href = data.android;
                 androidBtn.style.display = '';
-                if (heroBtn) {
-                    heroBtn.href = data.android;
-                    heroBtn.textContent = 'Download Beta (Android)';
-                }
+                heroAndroidBtn.href = data.android;
+                heroAndroidBtn.style.display = '';
             }
 
             if (data.ios) {
                 iosBtn.href = data.ios;
                 iosBtn.style.display = '';
-                if (heroBtn && !data.android) {
-                    heroBtn.href = data.ios;
-                    heroBtn.textContent = 'Download Beta (iOS)';
-                }
+                heroIosBtn.href = data.ios;
+                heroIosBtn.style.display = '';
+            }
+
+            if (data.android || data.ios) {
+                heroGenericBtn.style.display = 'none';
             }
 
             var missing = [];
