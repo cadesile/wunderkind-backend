@@ -33,14 +33,14 @@ class WorldPackController extends AbstractController
     {
         if (!$this->isCsrfTokenValid('worldpack_delete_entry', $request->request->get('_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
         $entry = $this->cacheRepository->find($id);
 
         if ($entry === null) {
             $this->addFlash('warning', "Cache entry {$id} not found — it may have already been deleted.");
-            return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
         $label = "{$entry->getCountry()} / Tier {$entry->getTier()}";
@@ -48,7 +48,7 @@ class WorldPackController extends AbstractController
         $this->em->flush();
 
         $this->addFlash('success', "Deleted cache entry: {$label}.");
-        return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
     }
 
     // ── Delete all entries for a country ─────────────────────────────────
@@ -59,20 +59,20 @@ class WorldPackController extends AbstractController
     {
         if (!$this->isCsrfTokenValid('worldpack_delete_country', $request->request->get('_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
         $country = strtoupper(trim($request->request->getString('country')));
 
         if (strlen($country) !== 2) {
             $this->addFlash('danger', 'Invalid country code.');
-            return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
         $deleted = $this->worldPackCacheService->deleteByCountry($country);
         $this->addFlash('success', "Deleted {$deleted} cache entry/entries for {$country}.");
 
-        return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
     }
 
     // ── Regenerate cache for a country ────────────────────────────────────
@@ -83,14 +83,14 @@ class WorldPackController extends AbstractController
     {
         if (!$this->isCsrfTokenValid('worldpack_regenerate', $request->request->get('_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
         $country = strtoupper(trim($request->request->getString('country')));
 
         if (strlen($country) !== 2) {
             $this->addFlash('danger', 'Invalid country code.');
-            return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
         $application = new Application($kernel);
@@ -120,6 +120,6 @@ class WorldPackController extends AbstractController
             $this->addFlash('danger', "Error running worldpack command: " . $e->getMessage());
         }
 
-        return $this->redirect($this->generateUrl('admin_worldpack_cache'));
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
     }
 }
