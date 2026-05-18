@@ -8,6 +8,7 @@ use App\Repository\CountryWorldPackCacheRepository;
 use App\Service\WorldPackCacheService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,7 +16,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 class WorldPackController extends AbstractController
 {
@@ -24,43 +24,6 @@ class WorldPackController extends AbstractController
         private readonly CountryWorldPackCacheRepository $cacheRepository,
         private readonly WorldPackCacheService           $worldPackCacheService,
     ) {}
-
-    // ── List ─────────────────────────────────────────────────────────────
-
-    #[Route('/admin/worldpack-cache', name: 'admin_worldpack_cache')]
-    #[IsGranted('ROLE_ADMIN')]
-    public function index(): Response
-    {
-        $rawEntries = $this->cacheRepository->findAllOrderedByCountryAndTier();
-
-        $entries   = [];
-        $byCountry = [];
-
-        foreach ($rawEntries as $entry) {
-            $payload     = $entry->getPayload();
-            $clubCount   = count($payload['clubs'] ?? []);
-            $playerCount = array_sum(
-                array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? [])
-            );
-
-            $entries[] = [
-                'id'          => (string) $entry->getId(),
-                'country'     => $entry->getCountry(),
-                'tier'        => $entry->getTier(),
-                'clubCount'   => $clubCount,
-                'playerCount' => $playerCount,
-                'generatedAt' => $entry->getGeneratedAt(),
-            ];
-
-            $byCountry[$entry->getCountry()][$entry->getTier()] = true;
-        }
-
-        return $this->render('admin/worldpack_cache.html.twig', [
-            'entries'      => $entries,
-            'byCountry'    => $byCountry,
-            'totalEntries' => count($entries),
-        ]);
-    }
 
     // ── Delete single entry ───────────────────────────────────────────────
 

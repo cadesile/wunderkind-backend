@@ -19,7 +19,9 @@ use App\Controller\Admin\LeagueCrudController;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
 use App\Service\LeagueService;
+use App\Repository\CountryWorldPackCacheRepository;
 use App\Service\NpcClubGenerationService;
+use App\Service\WorldPackCacheService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
@@ -48,8 +50,10 @@ class DashboardController extends AbstractDashboardController
         private PlayerRepository $playerRepository,
         private NpcClubGenerationService $npcClubGenerationService,
         private NpcClubRepository $npcClubRepository,
-        private LeagueRepository            $leagueRepository,
-        private LeagueService               $leagueService,
+        private LeagueRepository                 $leagueRepository,
+        private LeagueService                    $leagueService,
+        private CountryWorldPackCacheRepository  $worldPackCacheRepository,
+        private WorldPackCacheService            $worldPackCacheService,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -887,6 +891,43 @@ class DashboardController extends AbstractDashboardController
         }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_world_content']));
+    }
+
+    // ── Worldpack Cache ───────────────────────────────────────────────────
+
+    #[Route('/admin/worldpack-cache', name: 'admin_worldpack_cache')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function worldpackCache(): Response
+    {
+        $rawEntries = $this->worldPackCacheRepository->findAllOrderedByCountryAndTier();
+
+        $entries   = [];
+        $byCountry = [];
+
+        foreach ($rawEntries as $entry) {
+            $payload     = $entry->getPayload();
+            $clubCount   = count($payload['clubs'] ?? []);
+            $playerCount = array_sum(
+                array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? [])
+            );
+
+            $entries[] = [
+                'id'          => (string) $entry->getId(),
+                'country'     => $entry->getCountry(),
+                'tier'        => $entry->getTier(),
+                'clubCount'   => $clubCount,
+                'playerCount' => $playerCount,
+                'generatedAt' => $entry->getGeneratedAt(),
+            ];
+
+            $byCountry[$entry->getCountry()][$entry->getTier()] = true;
+        }
+
+        return $this->render('admin/worldpack_cache.html.twig', [
+            'entries'      => $entries,
+            'byCountry'    => $byCountry,
+            'totalEntries' => count($entries),
+        ]);
     }
 
     // ── Developer Tools ───────────────────────────────────────────────────
