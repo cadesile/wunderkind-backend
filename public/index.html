@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wunderkind Factory — Football Management Sim</title>
-    <meta name="description" content="Build a football empire from the ground up. Scout talent, develop players, manage staff, control finances, and climb from the bottom tier to the elite. Wunderkind Factory is a deep, offline-first football management sim for mobile.">
+    <title>Wunderkind Factory — Football Club Owner Sim</title>
+    <meta name="description" content="Own the club. Invest the capital. Build the infrastructure. Hire your staff and climb eight league tiers — all offline, all in the palm of your hand. Wunderkind Factory is a deep football club ownership sim for mobile.">
     <meta name="theme-color" content="#0f1420">
-    <meta property="og:title" content="Wunderkind Factory — Football Management Sim">
-    <meta property="og:description" content="Build a football empire. Scout. Develop. Dominate.">
+    <meta property="og:title" content="Wunderkind Factory — Football Club Owner Sim">
+    <meta property="og:description" content="Own the club. Build the empire. Climb the pyramid.">
     <meta property="og:type" content="website">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -790,6 +790,77 @@
             text-transform: uppercase;
         }
 
+        /* ════════════════════════════════
+           YOUR ROLE SECTION
+        ════════════════════════════════ */
+        .role-section {
+            background: var(--dark);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 80px 0;
+        }
+        .role-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            margin-top: 48px;
+        }
+        .role-col { background: var(--card); padding: 28px 24px; }
+        .role-col-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+            letter-spacing: 0.05em;
+        }
+        .role-col-owner .role-col-title { color: var(--gold); }
+        .role-col-staff  .role-col-title { color: var(--text-muted); }
+        .role-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .role-list li {
+            font-family: 'VT323', monospace;
+            font-size: 19px;
+            color: var(--text-muted);
+            line-height: 1.4;
+            padding-left: 16px;
+            position: relative;
+        }
+        .role-list li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+        }
+        .role-col-owner .role-list li::before { color: var(--gold); }
+        .role-col-staff  .role-list li::before { color: var(--text-muted); }
+        .role-staff-name {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px;
+            color: var(--mint);
+            display: block;
+            margin-bottom: 3px;
+            line-height: 1.6;
+        }
+        .role-footer {
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            color: var(--text-muted);
+            margin-top: 32px;
+            padding: 20px 24px;
+            border: 1px solid var(--border);
+            background: var(--bg-mid);
+            border-left: 3px solid var(--mint);
+            line-height: 1.5;
+        }
+        @media (max-width: 600px) {
+            .role-grid { grid-template-columns: 1fr; }
+        }
+
         /* ── Reduced motion ── */
         @media (prefers-reduced-motion: reduce) {
             .ticker-track  { animation: none; }
@@ -890,6 +961,7 @@
     <div class="nav-inner">
         <span class="nav-logo">WUNDERKIND FACTORY</span>
         <ul class="nav-links">
+            <li><a href="#your-role">Your Role</a></li>
             <li><a href="#screenshots">Screenshots</a></li>
             <li><a href="#features">Features</a></li>
             <li><a href="#depth">The Sim</a></li>
@@ -905,11 +977,12 @@
         <div class="hero-inner">
             <div>
                 <div class="hero-badge">IN DEVELOPMENT &nbsp;// ANDROID BETA</div>
-                <h1 class="glow-gold">THE FOOTBALL&nbsp;SIM YOU'VE BEEN WAITING FOR</h1>
+                <h1 class="glow-gold">OWN THE CLUB. BUILD THE EMPIRE.</h1>
                 <p class="hero-sub">
-                    Build a club from nothing. Develop young talent, hire your staff, navigate
-                    investor deals, manage guardian politics, and climb eight league tiers —
-                    all offline, all in the palm of your hand.
+                    You're the owner, not the manager. Invest capital, build the infrastructure,
+                    hire the right staff, and negotiate with agents, guardians, and investors.
+                    Delegate the dugout and focus on the boardroom — or stay hands-on across
+                    every decision. Either way, promotion means your club is working.
                 </p>
                 <div class="hero-actions">
                     <a href="#download" id="hero-android-btn" class="btn btn-gold" style="display:none">Download (Android)</a>
@@ -1016,6 +1089,41 @@
         <span class="ticker-item">Formation & Tactics</span>
     </div>
 </div>
+
+<!-- ═══════════════════════════════ YOUR ROLE ═══════════════════════════════ -->
+<section class="role-section" id="your-role">
+    <div class="wrap">
+        <div class="section-label">Your Role</div>
+        <h2 class="section-title">You're the owner. Not the manager.</h2>
+        <p class="section-sub">This isn't Football Manager. You don't pick the team or shout from the touchline. You run the club — the money, the staff, the infrastructure, the politics. Set the strategy and direction. Your staff execute it.</p>
+
+        <div class="role-grid">
+            <div class="role-col role-col-owner">
+                <div class="role-col-title">YOU CONTROL</div>
+                <ul class="role-list">
+                    <li>Capital allocation &amp; financial decisions</li>
+                    <li>Facility investment &amp; infrastructure build-out</li>
+                    <li>Staff hiring across 6 distinct roles</li>
+                    <li>Sponsor negotiations &amp; investor equity deals</li>
+                    <li>Agent &amp; guardian relations</li>
+                    <li>Club identity, kit colours &amp; strategic direction</li>
+                </ul>
+            </div>
+            <div class="role-col role-col-staff">
+                <div class="role-col-title">YOUR STAFF HANDLE</div>
+                <ul class="role-list">
+                    <li><span class="role-staff-name">Manager</span>Formation &amp; playing style — override anytime</li>
+                    <li><span class="role-staff-name">Director of Football</span>Scouting, signings &amp; transfers — delegate or control</li>
+                    <li><span class="role-staff-name">Facility Manager</span>Upkeep, repairs &amp; auto-maintenance</li>
+                    <li><span class="role-staff-name">Scout</span>Talent identification &amp; player reports</li>
+                    <li><span class="role-staff-name">Chairman</span>Board relations &amp; club governance</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="role-footer">Delegate everything to your DoF and Manager and focus on the boardroom — or override every decision yourself. The level of involvement is always your choice. Promotion means your decisions worked, not just your tactics.</p>
+    </div>
+</section>
 
 <!-- ═══════════════════════════════ SCREENSHOTS ═══════════════════════════════ -->
 <section class="screenshots-section" id="screenshots">
@@ -1202,8 +1310,8 @@
 <section id="features">
     <div class="wrap">
         <div class="section-label">Game Systems</div>
-        <h2 class="section-title">Every angle of football management. In your pocket.</h2>
-        <p class="section-sub">From scouting raw talent to accepting investor equity — the full game is here.</p>
+        <h2 class="section-title">Every angle of running a football club. In your pocket.</h2>
+        <p class="section-sub">From scouting raw talent to negotiating investor equity — the full ownership experience is here.</p>
 
         <div class="features-grid">
 
@@ -1217,27 +1325,19 @@
 
             <div class="feature-card mint">
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
                 </svg>
-                <div class="feature-title">Full Staff Management</div>
-                <p class="feature-desc">Hire from 6 distinct roles — Coach, Manager, Director of Football, Facility Manager, Chairman, and Scout. Each shapes your club's ceiling.</p>
-            </div>
-
-            <div class="feature-card">
-                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                </svg>
-                <div class="feature-title">Match Events Engine</div>
-                <p class="feature-desc">Goals, assists, star performances, and off-days fire narrative events mid-match that directly shift player morale. Every match tells a story.</p>
+                <div class="feature-title">Director of Football</div>
+                <p class="feature-desc">Hire a DoF and delegate the day-to-day. Toggle auto-scouting, auto-signing, auto-selling, and auto-repairs. The key to a hands-off ownership approach — or the first role you override when you want control back.</p>
             </div>
 
             <div class="feature-card mint">
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
-                <div class="feature-title">Facilities & Infrastructure</div>
-                <p class="feature-desc">Upgrade training pitches, medical suites, speed tracks, and mental conditioning suites. Each facility targets specific player attributes and personality traits.</p>
+                <div class="feature-title">Full Staff Management</div>
+                <p class="feature-desc">Hire from 6 distinct roles — Coach, Manager, Director of Football, Facility Manager, Chairman, and Scout. Each shapes your club's ceiling. The right hire at the right time changes everything.</p>
             </div>
 
             <div class="feature-card">
@@ -1245,23 +1345,15 @@
                     <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                 </svg>
                 <div class="feature-title">Finance & Investment</div>
-                <p class="feature-desc">Negotiate sponsor contracts, accept investor equity stakes, and manage wages and upkeep. Every financial decision has second-order consequences.</p>
-            </div>
-
-            <div class="feature-card red">
-                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-                <div class="feature-title">Fan Happiness System</div>
-                <p class="feature-desc">Five happiness tiers that respond to results, signings, promotions, and trophies. Permanent fan events record your greatest moments forever.</p>
+                <p class="feature-desc">Negotiate sponsor contracts, accept investor equity stakes, and manage wages and upkeep. Capital allocation is the core ownership decision — every pound spent is a bet on what your club needs most.</p>
             </div>
 
             <div class="feature-card mint">
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
                 </svg>
-                <div class="feature-title">Director of Football</div>
-                <p class="feature-desc">Hire a DoF and delegate the day-to-day. Toggle auto-scouting, auto-signing, auto-selling, and auto-repairs. Hands-on or hands-off — your call.</p>
+                <div class="feature-title">Facilities & Infrastructure</div>
+                <p class="feature-desc">Three investment tracks with distinct purposes. TRAINING (technical zone, speed track, conditioning suites) accelerates player development. MEDICAL (physio clinic, medical suite) cuts injuries and protects squad depth. STADIUM &amp; COMMERCIAL upgrades grow matchday income and reputation — unlocking better sponsors and higher-quality recruits. Every pound spent is a choice about the kind of club you're building.</p>
             </div>
 
             <div class="feature-card">
@@ -1274,10 +1366,26 @@
 
             <div class="feature-card">
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+                <div class="feature-title">Match Events Engine</div>
+                <p class="feature-desc">Goals, assists, star performances, and off-days fire narrative events mid-match that directly shift player morale. Every match tells a story.</p>
+            </div>
+
+            <div class="feature-card red">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+                <div class="feature-title">Fan Happiness System</div>
+                <p class="feature-desc">Five happiness tiers that respond to results, signings, promotions, and trophies. Permanent fan events record your greatest moments forever.</p>
+            </div>
+
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
                 <div class="feature-title">Tactics & Club Identity</div>
-                <p class="feature-desc">Choose your formation, set your playing style — Possession, Direct, Counter, or High Press — and customise your kit colours.</p>
+                <p class="feature-desc">Set your formation and playing style — Possession, Direct, Counter, or High Press — and customise your kit colours. Delegate to your Manager or set it yourself.</p>
             </div>
 
         </div>
@@ -1340,15 +1448,16 @@
                 <div class="section-label">The Simulation</div>
                 <h2 class="section-title">Deep systems. Real decisions.</h2>
                 <p class="section-sub">
-                    This isn't a clicker. Every week brings real choices — who plays,
-                    who to sign, where to invest, how to react to your players' personalities
+                    This isn't a clicker. Every week brings real ownership decisions — where to invest,
+                    who to hire, how to react to your players' personalities
                     and the narratives unfolding in your dressing room.
                 </p>
                 <br>
                 <p class="section-sub">
                     An 8-trait personality matrix governs player behaviour. Social graphs track
                     relationships and trigger chained narrative events. Guardians push back.
-                    Agents negotiate. Your Director of Football has an opinion. It's all connected.
+                    Agents negotiate. Your Director of Football has an opinion. Investors want returns.
+                    It's all connected.
                 </p>
             </div>
             <ul class="depth-list" aria-label="Simulation depth features">
@@ -1408,6 +1517,13 @@
                         <span>Every title, promotion, and golden boot is recorded forever in the Museum. Season-by-season stats stored in SQLite — your full career, always intact.</span>
                     </div>
                 </li>
+                <li class="depth-item">
+                    <span class="depth-num">09</span>
+                    <div class="depth-text">
+                        <strong>Club Finances & Investment</strong>
+                        <span>Negotiate equity deals with investors, renew or void sponsor contracts, and allocate capital across wages, facilities, and transfers. Every financial decision determines how fast your club can grow — and how exposed you are when things go wrong.</span>
+                    </div>
+                </li>
             </ul>
         </div>
     </div>
@@ -1425,11 +1541,11 @@
         <div class="tick-grid">
             <div class="tick-step" data-num="01">
                 <div class="tick-step-title">Make Your Decisions</div>
-                <p class="tick-step-text">Set your formation, manage transfers, respond to inbox messages from agents, sponsors, investors, and your board. React to guardian demands.</p>
+                <p class="tick-step-text">Manage transfers, allocate budget to facility upgrades, respond to inbox messages from agents, sponsors, investors, and your board. React to guardian demands. Delegate what you don't want to handle yourself.</p>
             </div>
             <div class="tick-step" data-num="02">
                 <div class="tick-step-title">Advance the Week</div>
-                <p class="tick-step-text">The engine simulates your match with live match events, processes wages, runs facility upkeep, fires narrative incidents — all offline.</p>
+                <p class="tick-step-text">The engine simulates your match with live match events, processes wages, applies facility benefits to player development, runs upkeep, fires narrative incidents — all offline, all on-device.</p>
             </div>
             <div class="tick-step" data-num="03">
                 <div class="tick-step-title">React to Results</div>
