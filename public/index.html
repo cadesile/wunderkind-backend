@@ -46,7 +46,10 @@
                         rgba(63,82,165,0.05) 39px, rgba(63,82,165,0.05) 40px);
         }
 
-        html { scroll-behavior: smooth; }
+        html {
+            scroll-behavior: smooth;
+            overflow-x: hidden;
+        }
 
         body {
             background-color: var(--bg);
@@ -369,6 +372,14 @@
             line-height: 1.5;
         }
 
+        /* prevent grid children from blowing out their track */
+        .features-grid > *,
+        .archetype-grid > *,
+        .tick-grid > *,
+        .depth-inner > *,
+        .hero-inner > *,
+        .stats-inner > * { min-width: 0; }
+
         /* ════════════════════════════════
            FEATURES GRID
         ════════════════════════════════ */
@@ -538,6 +549,17 @@
         }
 
         /* ════════════════════════════════
+           LEAGUES SECTION
+        ════════════════════════════════ */
+        .leagues-inner {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: start;
+        }
+        .leagues-inner > * { min-width: 0; }
+
+        /* ════════════════════════════════
            LEAGUE PYRAMID
         ════════════════════════════════ */
         .pyramid-wrap {
@@ -626,6 +648,7 @@
             text-align: center;
             padding: 100px 0;
             position: relative;
+            overflow: hidden;
         }
         .cta-glow {
             position: absolute;
@@ -708,6 +731,7 @@
             .tick-grid       { grid-template-columns: 1fr 1fr; }
             .stats-inner     { grid-template-columns: 1fr 1fr; }
             .stat-block:nth-child(2) { border-right: none; }
+            .leagues-inner   { grid-template-columns: 1fr; gap: 48px; }
         }
         @media (max-width: 600px) {
             section          { padding: 60px 0; }
@@ -719,11 +743,11 @@
             .stat-block:last-child { border-bottom: none; }
             .nav-links       { display: none; }
             .hero-stat-row   { flex-wrap: wrap; gap: 20px; }
-            .pyramid-tier.t5,
-            .pyramid-tier.t6,
-            .pyramid-tier.t7,
-            .pyramid-tier.t8 { width: 100%; }
+            .pyramid-tier    { width: 100% !important; }
             .footer-inner    { flex-direction: column; align-items: flex-start; }
+            .hero-actions    { flex-direction: column; align-items: flex-start; }
+            .hero-actions .btn { width: 100%; text-align: center; }
+            .cta-actions     { flex-direction: column; align-items: center; }
         }
 
         /* ════════════════════════════════
@@ -732,9 +756,11 @@
         .screenshots-section { padding-bottom: 0; }
         .screenshot-scroll {
             overflow-x: auto;
+            overflow-y: visible;
             padding: 32px 0 48px;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
+            max-width: 100vw;
         }
         .screenshot-scroll::-webkit-scrollbar { display: none; }
         .screenshot-track {
@@ -1322,7 +1348,7 @@
 <!-- ═══════════════════════════════ LEAGUES ═══════════════════════════════ -->
 <section id="leagues">
     <div class="wrap">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start;">
+        <div class="leagues-inner">
             <div>
                 <div class="section-label">The League System</div>
                 <h2 class="section-title">Eight tiers. One goal. Get to the top.</h2>
