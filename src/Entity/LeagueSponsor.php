@@ -10,12 +10,12 @@ class LeagueSponsor
 {
     #[ORM\Id]
     #[ORM\ManyToOne(inversedBy: 'leagueSponsors')]
-    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(onDelete: 'CASCADE')]
     private League $league;
 
     #[ORM\Id]
     #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(onDelete: 'CASCADE')]
     private Sponsor $sponsor;
 
     #[ORM\Column(type: 'bigint', options: ['default' => 0])]
