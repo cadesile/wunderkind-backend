@@ -50,4 +50,18 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
             ->getQuery()
             ->execute();
     }
+
+    /**
+     * Returns all cache entries ordered by country (ASC) then tier (ASC).
+     *
+     * @return CountryWorldPackCache[]
+     */
+    public function findAllOrderedByCountryAndTier(): array
+    {
+        return $this->createQueryBuilder('c')
+            ->orderBy('c.country', 'ASC')
+            ->addOrderBy('c.tier', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }
