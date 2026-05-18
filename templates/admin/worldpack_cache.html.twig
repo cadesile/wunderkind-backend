@@ -1,0 +1,197 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% set COUNTRIES = {
+    'EN': 'England',    'IT': 'Italy',       'DE': 'Germany',
+    'ES': 'Spain',      'BR': 'Brazil',      'AR': 'Argentina',
+    'NL': 'Netherlands','FR': 'France',      'PT': 'Portugal',
+    'NG': 'Nigeria',    'GH': 'Ghana',       'JP': 'Japan',
+    'KR': 'South Korea','SE': 'Sweden',      'DK': 'Denmark',
+    'IE': 'Ireland',    'CI': 'Ivory Coast', 'SN': 'Senegal',
+    'CN': 'China'
+} %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    {# ── Header ─────────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Worldpack Cache</h5>
+        <p class="text-muted small mb-0">
+            Pre-generated NPC league packs keyed by country + tier.
+            Used at game initialisation to skip expensive world-pack generation on the device.
+        </p>
+    </div>
+
+    {# ── Status grid ─────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-database text-muted"></i>
+                <span class="fw-semibold small">Cache Status</span>
+                <span class="ms-auto badge bg-secondary">{{ totalEntries }} total entries</span>
+            </div>
+            <div class="card-body p-0">
+                {% if byCountry is empty %}
+                    <p class="text-muted small p-3 mb-0">No cache entries found. Use the Regenerate panel below to warm the cache for a country.</p>
+                {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Country</th>
+                                    {% for tier in 1..8 %}
+                                        <th class="text-center">T{{ tier }}</th>
+                                    {% endfor %}
+                                    <th class="text-end pe-3">Cached</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for code, tiers in byCountry %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold">
+                                            {{ COUNTRIES[code] ?? code }}
+                                            <span class="text-muted fw-normal">({{ code }})</span>
+                                        </td>
+                                        {% for tier in 1..8 %}
+                                            <td class="text-center">
+                                                {% if tiers[tier] is defined %}
+                                                    <span class="badge bg-success bg-opacity-75">✓</span>
+                                                {% else %}
+                                                    <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                        <td class="text-end pe-3 fw-semibold">{{ tiers|length }} / 8</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Entry detail table ──────────────────────────────────────────────── #}
+    {% if entries is not empty %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-list text-muted"></i>
+                <span class="fw-semibold small">All Entries</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Country</th>
+                                <th class="text-center">Tier</th>
+                                <th class="text-center">Clubs</th>
+                                <th class="text-center">Players</th>
+                                <th>Generated</th>
+                                <th class="pe-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in entries %}
+                                <tr>
+                                    <td class="ps-3 fw-semibold">
+                                        {{ COUNTRIES[entry.country] ?? entry.country }}
+                                        <span class="text-muted fw-normal">({{ entry.country }})</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary bg-opacity-75">{{ entry.tier }}</span>
+                                    </td>
+                                    <td class="text-center">{{ entry.clubCount }}</td>
+                                    <td class="text-center">{{ entry.playerCount }}</td>
+                                    <td class="text-muted">{{ entry.generatedAt|date('Y-m-d H:i') }}</td>
+                                    <td class="pe-3 text-end">
+                                        <form method="POST"
+                                              action="{{ path('admin_worldpack_delete_entry', {id: entry.id}) }}"
+                                              onsubmit="return confirm('Delete {{ COUNTRIES[entry.country] ?? entry.country }} Tier {{ entry.tier }} cache entry?')">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('worldpack_delete_entry') }}">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Regenerate ──────────────────────────────────────────────────────── #}
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-rotate text-primary"></i>
+                <span class="fw-semibold small">Regenerate Country Cache</span>
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+                <p class="text-muted small mb-0">
+                    Deletes all existing entries for the selected country then re-runs
+                    <code>app:worldpack:warm --force</code> to rebuild from scratch.
+                    Requires leagues to be generated for the country first.
+                </p>
+                <div class="mt-auto">
+                    <form method="POST" action="{{ path('admin_worldpack_regenerate') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('worldpack_regenerate') }}">
+                        <div class="mb-3">
+                            <label for="regen_country" class="form-label fw-semibold small">Country</label>
+                            <select id="regen_country" name="country" class="form-select form-select-sm">
+                                {% for code, name in COUNTRIES %}
+                                    <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-rotate me-1"></i>Regenerate (--force)
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Delete country ──────────────────────────────────────────────────── #}
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-trash text-danger"></i>
+                <span class="fw-semibold small">Delete All for Country</span>
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+                <p class="text-muted small mb-0">
+                    Removes all cache entries for the selected country without regenerating.
+                    The cache will be rebuilt on next game initialisation for that country.
+                </p>
+                <div class="mt-auto">
+                    <form method="POST"
+                          action="{{ path('admin_worldpack_delete_country') }}"
+                          onsubmit="return confirm('Delete all cache entries for ' + this.country.options[this.country.selectedIndex].text + '?')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('worldpack_delete_country') }}">
+                        <div class="mb-3">
+                            <label for="del_country" class="form-label fw-semibold small">Country</label>
+                            <select id="del_country" name="country" class="form-select form-select-sm">
+                                {% for code, name in COUNTRIES %}
+                                    <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="fa fa-trash me-1"></i>Delete All
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
