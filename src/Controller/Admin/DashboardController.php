@@ -1112,6 +1112,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
         yield MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config');
         yield MenuItem::linkToRoute('Pool Config', 'fa fa-layer-group', 'admin_pool_config');
+        yield MenuItem::linkToRoute('Worldpack Cache', 'fa fa-database', 'admin_worldpack_cache');
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
