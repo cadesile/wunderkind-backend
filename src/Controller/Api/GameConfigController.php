@@ -122,6 +122,13 @@ class GameConfigController extends AbstractController
             // Capacity calculation
             'capacityCalculation' => $config->getCapacityCalculation(),
 
+            // Cards & Discipline
+            'yellowCardBaseChance'            => $config->getYellowCardBaseChance(),
+            'redCardBaseChance'               => $config->getRedCardBaseChance(),
+            'yellowCardAccumulationThreshold' => $config->getYellowCardAccumulationThreshold(),
+            'redCardSuspensionMatches'        => $config->getRedCardSuspensionMatches(),
+            'temperamentCardScale'            => $config->getTemperamentCardScale(),
+
             // Manager sacking
             'managerSackingWinRatioTrigger'           => $config->getManagerSackingWinRatioTrigger(),
             'managerSackingWinRatioRecovery'          => $config->getManagerSackingWinRatioRecovery(),

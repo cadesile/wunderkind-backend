@@ -59,6 +59,14 @@ class MatchResult
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $playedAt = null;
 
+    /** Total yellow cards issued in this match (aggregate count, not per-player). */
+    #[ORM\Column(type: 'integer')]
+    private int $yellowCards = 0;
+
+    /** Total red cards issued in this match (aggregate count, not per-player). */
+    #[ORM\Column(type: 'integer')]
+    private int $redCards = 0;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -106,4 +114,10 @@ class MatchResult
 
     public function getPlayedAt(): ?\DateTimeImmutable { return $this->playedAt; }
     public function setPlayedAt(?\DateTimeImmutable $v): static { $this->playedAt = $v; return $this; }
+
+    public function getYellowCards(): int { return $this->yellowCards; }
+    public function setYellowCards(int $v): static { $this->yellowCards = max(0, $v); return $this; }
+
+    public function getRedCards(): int { return $this->redCards; }
+    public function setRedCards(int $v): static { $this->redCards = max(0, $v); return $this; }
 }

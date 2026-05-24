@@ -1266,6 +1266,57 @@
                 </div>
             </div>
 
+            {# ── Cards & Discipline ──────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-rectangle-xmark text-muted"></i>
+                    <span class="fw-semibold small">Cards &amp; Discipline</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls yellow and red card probabilities and suspension lengths. The frontend
+                        scales these values by a player's temperament trait before applying them.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="yellowCardBaseChance" class="form-label fw-semibold small">Yellow Card Base Chance</label>
+                            <input type="number" id="yellowCardBaseChance" name="yellowCardBaseChance"
+                                   value="{{ config.yellowCardBaseChance }}"
+                                   step="0.01" min="0.0" max="1.0" class="form-control">
+                            <div class="form-text">Base probability per player per match. Default: 0.08</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="redCardBaseChance" class="form-label fw-semibold small">Red Card Base Chance</label>
+                            <input type="number" id="redCardBaseChance" name="redCardBaseChance"
+                                   value="{{ config.redCardBaseChance }}"
+                                   step="0.001" min="0.0" max="1.0" class="form-control">
+                            <div class="form-text">Direct red card probability per player per match. Default: 0.01</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="temperamentCardScale" class="form-label fw-semibold small">Temperament Scale</label>
+                            <input type="number" id="temperamentCardScale" name="temperamentCardScale"
+                                   value="{{ config.temperamentCardScale }}"
+                                   step="0.1" min="0.0" max="5.0" class="form-control">
+                            <div class="form-text">How much temperament affects card probability. Default: 1.0</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="yellowCardAccumulationThreshold" class="form-label fw-semibold small">Yellow Accumulation Threshold</label>
+                            <input type="number" id="yellowCardAccumulationThreshold" name="yellowCardAccumulationThreshold"
+                                   value="{{ config.yellowCardAccumulationThreshold }}"
+                                   step="1" min="1" class="form-control">
+                            <div class="form-text">Yellows before automatic one-match suspension. Default: 5</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="redCardSuspensionMatches" class="form-label fw-semibold small">Red Card Suspension (matches)</label>
+                            <input type="number" id="redCardSuspensionMatches" name="redCardSuspensionMatches"
+                                   value="{{ config.redCardSuspensionMatches }}"
+                                   step="1" min="1" class="form-control">
+                            <div class="form-text">Matches banned for a direct red card. Default: 1</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>{# /gap wrapper #}
 
         <div class="mt-4">

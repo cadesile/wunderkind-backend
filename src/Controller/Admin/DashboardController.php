@@ -255,6 +255,13 @@ class DashboardController extends AbstractDashboardController
         $config->setContractValueRandMin(min($randMin, $randMax));
         $config->setContractValueRandMax(max($randMin, $randMax));
 
+        // Cards & Discipline
+        $config->setYellowCardBaseChance((float) $request->request->get('yellowCardBaseChance', 0.08));
+        $config->setRedCardBaseChance((float) $request->request->get('redCardBaseChance', 0.01));
+        $config->setYellowCardAccumulationThreshold((int) $request->request->get('yellowCardAccumulationThreshold', 5));
+        $config->setRedCardSuspensionMatches((int) $request->request->get('redCardSuspensionMatches', 1));
+        $config->setTemperamentCardScale((float) $request->request->get('temperamentCardScale', 1.0));
+
         // Manager sacking
         $config->setManagerSackingWinRatioTrigger((float) $request->request->get('managerSackingWinRatioTrigger', 0.20));
         $config->setManagerSackingWinRatioRecovery((float) $request->request->get('managerSackingWinRatioRecovery', 0.25));

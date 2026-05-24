@@ -920,4 +920,62 @@ class GameConfig
 
     public function getManagerSackingAttendancePenaltyPerWeek(): float { return $this->managerSackingAttendancePenaltyPerWeek; }
     public function setManagerSackingAttendancePenaltyPerWeek(float $v): static { $this->managerSackingAttendancePenaltyPerWeek = max(0.0, $v); return $this; }
+
+    // ── Cards & Discipline ────────────────────────────────────────────────────
+
+    /**
+     * Base probability per player per match of receiving a yellow card.
+     * Modified by player temperament trait on the frontend.
+     * Default: 0.08 (8%)
+     */
+    #[ORM\Column(type: 'float')]
+    private float $yellowCardBaseChance = 0.08;
+
+    /**
+     * Base probability per player per match of receiving a direct red card
+     * (independent of yellows).
+     * Modified by player temperament trait on the frontend.
+     * Default: 0.01 (1%)
+     */
+    #[ORM\Column(type: 'float')]
+    private float $redCardBaseChance = 0.01;
+
+    /**
+     * Number of yellow cards accumulated across a season that triggers
+     * an automatic one-match suspension.
+     * Default: 5
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $yellowCardAccumulationThreshold = 5;
+
+    /**
+     * Number of matches suspended for a direct red card.
+     * Default: 1
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $redCardSuspensionMatches = 1;
+
+    /**
+     * Temperament trait scaling factor for card probability.
+     * Higher = more volatile players are significantly more card-prone.
+     * cardChance = baseChance * (1 + (20 - temperament) / 20 * temperamentCardScale)
+     * Default: 1.0
+     */
+    #[ORM\Column(type: 'float')]
+    private float $temperamentCardScale = 1.0;
+
+    public function getYellowCardBaseChance(): float { return $this->yellowCardBaseChance; }
+    public function setYellowCardBaseChance(float $v): static { $this->yellowCardBaseChance = max(0.0, $v); return $this; }
+
+    public function getRedCardBaseChance(): float { return $this->redCardBaseChance; }
+    public function setRedCardBaseChance(float $v): static { $this->redCardBaseChance = max(0.0, $v); return $this; }
+
+    public function getYellowCardAccumulationThreshold(): int { return $this->yellowCardAccumulationThreshold; }
+    public function setYellowCardAccumulationThreshold(int $v): static { $this->yellowCardAccumulationThreshold = max(0, $v); return $this; }
+
+    public function getRedCardSuspensionMatches(): int { return $this->redCardSuspensionMatches; }
+    public function setRedCardSuspensionMatches(int $v): static { $this->redCardSuspensionMatches = max(0, $v); return $this; }
+
+    public function getTemperamentCardScale(): float { return $this->temperamentCardScale; }
+    public function setTemperamentCardScale(float $v): static { $this->temperamentCardScale = max(0.0, $v); return $this; }
 }

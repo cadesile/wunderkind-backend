@@ -30,6 +30,12 @@ class MatchResultDto
     /** ISO 8601 timestamp when the match was played (client-side). */
     public string $playedAt = '';
 
+    /** @var array<array{playerId: string, type: 'yellow'|'red', minute?: int}> */
+    public array $cards = [];
+
+    /** @var array<array{playerId: string, suspendedMatches: int}> */
+    public array $suspensions = [];
+
     // ── Legacy v1 fields — kept for backward compatibility ─────────────
 
     #[Assert\PositiveOrZero]
