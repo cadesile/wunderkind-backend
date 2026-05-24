@@ -204,11 +204,11 @@
             <p class="text-muted small mb-0">All leagues grouped by country. Click a club to edit it.</p>
         </div>
         <div class="ms-auto d-flex gap-2">
-            <a href="{{ path('admin', {crudControllerFqcn: LEAGUE_CTRL, crudAction: 'index'}) }}"
+            <a href="{{ ea_url().setController(LEAGUE_CTRL).setAction('index') }}"
                class="btn btn-sm btn-outline-secondary">
                 <i class="fa fa-trophy me-1"></i>League CRUD
             </a>
-            <a href="{{ path('admin', {routeName: 'admin_npc_clubs_content'}) }}"
+            <a href="{{ path('admin_npc_clubs_content') }}"
                class="btn btn-sm btn-outline-secondary">
                 <i class="fa fa-wand-magic-sparkles me-1"></i>Generate
             </a>
@@ -258,7 +258,7 @@
 
                     <div class="league-card">
 
-                        {# Header: tier badge + name + edit link #}
+                        {# Header: tier badge + name + quick-edit button #}
                         <div class="league-card-header">
                             <span class="tier-badge"
                                   style="background: {{ tierColor }}22; color: {{ tierColor }}; border: 1px solid {{ tierColor }}55;">
@@ -271,11 +271,22 @@
                                     {{ league.leagueReputationTier.value|upper }}
                                 </span>
                             {% endif %}
-                            <a href="{{ path('admin', {crudControllerFqcn: LEAGUE_CTRL, crudAction: 'edit', entityId: league.id}) }}"
-                               class="btn btn-sm btn-outline-secondary league-edit-btn"
-                               title="Edit league">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary league-edit-btn"
+                                    title="Quick edit"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#leagueQuickEditModal"
+                                    data-league-id="{{ league.id|ea_as_string }}"
+                                    data-name="{{ league.name|e('html_attr') }}"
+                                    data-tier="{{ league.tier }}"
+                                    data-promotion-spots="{{ league.promotionSpots ?? '' }}"
+                                    data-tv-deal="{{ league.tvDeal is not null ? (league.tvDeal / 100)|round : '' }}"
+                                    data-prize-money="{{ league.prizeMoney is not null ? (league.prizeMoney / 100)|round : '' }}"
+                                    data-league-position-pot="{{ league.leaguePositionPot is not null ? (league.leaguePositionPot / 100)|round : '' }}"
+                                    data-csrf-token="{{ csrf_token('league_qe_' ~ league.id|ea_as_string) }}"
+                                    data-full-edit-url="{{ ea_url().setController(LEAGUE_CTRL).setAction('edit').setEntityId(league.id|ea_as_string) }}">
                                 <i class="fa fa-pencil"></i>
-                            </a>
+                            </button>
                         </div>
 
                         {# Stats: prize money, TV deal, position pot, promotion spots #}
@@ -324,7 +335,7 @@
                         {% if clubs|length > 0 %}
                         <div class="league-clubs">
                             {% for club in clubs %}
-                                <a href="{{ path('admin', {crudControllerFqcn: NPC_CLUB_CTRL, crudAction: 'edit', entityId: club.id}) }}"
+                                <a href="{{ ea_url().setController(NPC_CLUB_CTRL).setAction('edit').setEntityId(club.id|ea_as_string) }}"
                                    class="club-label"
                                    title="{{ club.name }}{% if club.stadiumName %} · {{ club.stadiumName }}{% endif %} · Rep {{ club.reputation }}">
                                     <span class="club-swatch" style="background: {{ club.primaryColor }};"></span>
@@ -351,6 +362,60 @@
     {% endif %}
 </div>
 
+{# ── League Quick-Edit Modal ──────────────────────────────────────────────── #}
+<div class="modal fade" id="leagueQuickEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:460px;">
+        <div class="modal-content">
+            <form method="POST" id="leagueQuickEditForm" action="">
+                <input type="hidden" name="_token" id="qe-token" value="">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title fw-semibold mb-0">
+                        <i class="fa fa-pencil fa-xs me-1 text-muted"></i> Quick Edit League
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body pb-2">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold mb-1" for="qe-name">Name</label>
+                            <input type="text" class="form-control form-control-sm" id="qe-name" name="name" required maxlength="100">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold mb-1" for="qe-tier">Tier</label>
+                            <input type="number" class="form-control form-control-sm" id="qe-tier" name="tier" min="1" max="8" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold mb-1" for="qe-promotionSpots">Promotion Spots</label>
+                            <input type="number" class="form-control form-control-sm" id="qe-promotionSpots" name="promotionSpots" min="0" placeholder="none">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold mb-1" for="qe-tvDeal">TV Deal (£)</label>
+                            <input type="number" class="form-control form-control-sm" id="qe-tvDeal" name="tvDeal" min="0" step="1" placeholder="none">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold mb-1" for="qe-prizeMoney">Prize Money (£)</label>
+                            <input type="number" class="form-control form-control-sm" id="qe-prizeMoney" name="prizeMoney" min="0" step="1" placeholder="none">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold mb-1" for="qe-leaguePositionPot">Position Pot (£)</label>
+                            <input type="number" class="form-control form-control-sm" id="qe-leaguePositionPot" name="leaguePositionPot" min="0" step="1" placeholder="none">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 d-flex align-items-center gap-2">
+                    <a href="#" id="qe-full-edit-link" class="btn btn-sm btn-outline-secondary me-auto" title="Open full EasyAdmin edit page">
+                        <i class="fa fa-arrow-up-right-from-square fa-xs me-1"></i>Full Edit
+                    </a>
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fa fa-floppy-disk fa-xs me-1"></i>Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 // Rotate chevron on collapse toggle
 document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
@@ -360,5 +425,27 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     target.addEventListener('show.bs.collapse',  function () { chevron.style.transform = 'rotate(0deg)';    });
     target.addEventListener('hide.bs.collapse',  function () { chevron.style.transform = 'rotate(-90deg)'; });
 });
+
+// Populate quick-edit modal from button data attributes
+(function () {
+    var modal = document.getElementById('leagueQuickEditModal');
+    if (!modal) return;
+
+    modal.addEventListener('show.bs.modal', function (event) {
+        var btn = event.relatedTarget;
+        var id  = btn.dataset.leagueId;
+
+        document.getElementById('leagueQuickEditForm').action =
+            '/admin/leagues/' + id + '/quick-edit';
+        document.getElementById('qe-token').value            = btn.dataset.csrfToken  || '';
+        document.getElementById('qe-name').value             = btn.dataset.name        || '';
+        document.getElementById('qe-tier').value             = btn.dataset.tier        || '';
+        document.getElementById('qe-promotionSpots').value   = btn.dataset.promotionSpots   || '';
+        document.getElementById('qe-tvDeal').value           = btn.dataset.tvDeal      || '';
+        document.getElementById('qe-prizeMoney').value       = btn.dataset.prizeMoney  || '';
+        document.getElementById('qe-leaguePositionPot').value = btn.dataset.leaguePositionPot || '';
+        document.getElementById('qe-full-edit-link').href    = btn.dataset.fullEditUrl || '#';
+    });
+}());
 </script>
 {% endblock %}

@@ -11,4 +11,5 @@ enum EventCategory: string
     case NPC_INTERACTION = 'NPC_INTERACTION';
     case GUARDIAN        = 'GUARDIAN';
     case MATCH           = 'MATCH';
+    case PRESS           = 'press';
 }

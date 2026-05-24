@@ -176,6 +176,8 @@ class DashboardController extends AbstractDashboardController
         $config->setInjuryMinorWeight((int) $request->request->get('injuryMinorWeight', 60));
         $config->setInjuryModerateWeight((int) $request->request->get('injuryModerateWeight', 30));
         $config->setInjurySeriousWeight((int) $request->request->get('injurySeriousWeight', 10));
+        $config->setPotentialOvershootMax((float) $request->request->get('potentialOvershootMax', 0.05));
+        $config->setPotentialDecayRate((float) $request->request->get('potentialDecayRate', 0.5));
 
         $config->setScoutMoraleThreshold((int) $request->request->get('scoutMoraleThreshold', 40));
         $config->setScoutRevealWeeks((int) $request->request->get('scoutRevealWeeks', 2));

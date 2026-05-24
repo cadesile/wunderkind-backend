@@ -152,8 +152,10 @@ class SyncService
         }
 
         // ── Economic lifecycle checks ─────────────────────────────────────────
+        $dividendPaidPence = 0;
         if ($club->isFinancialYearEnd($request->weekNumber)) {
-            $this->economicService->processFinancialYearEnd($club);
+            $yearEndResult     = $this->economicService->processFinancialYearEnd($club);
+            $dividendPaidPence = $yearEndResult['dividendPaidPence'];
         }
 
         $this->economicService->checkSponsorContracts($club, $club->getReputation());
@@ -258,6 +260,8 @@ class SyncService
             'maxChairmensPerClub'           => $gameConfig->getMaxChairmensPerClub(),
             'maxScoutsPerClub'              => $gameConfig->getMaxScoutsPerClub(),
             'leaguePlayerAbilityRanges'     => $gameConfig->getLeaguePlayerAbilityRanges(),
+            'managerDividendPercent'        => $gameConfig->getManagerDividendPercent(),
+            'transferBudgetPercent'         => $gameConfig->getTransferBudgetPercent(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -321,6 +325,8 @@ class SyncService
             'maxChairmensPerClub'           => 1,
             'maxScoutsPerClub'              => 3,
             'leaguePlayerAbilityRanges'     => [],
+            'managerDividendPercent'        => 5.0,
+            'transferBudgetPercent'         => 20.0,
         ];
 
         $facilityTemplates = array_map(
@@ -344,6 +350,7 @@ class SyncService
             'weekNumber'        => $request->weekNumber,
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,
+            'dividendPaidPence' => $dividendPaidPence,
             'club'              => [
                 'id'                  => (string) $club->getId(),
                 'reputation'          => $club->getReputation(),

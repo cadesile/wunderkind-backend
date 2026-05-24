@@ -804,6 +804,81 @@ class SeedGameEventsCommand extends Command
                     ],
                 ],
             ],
+
+            // ── Press Events ──────────────────────────────────────────────────
+            // Narrative-only inbox items triggered by form/league-position conditions.
+            // impacts is always empty — no stat mutations; the client handles display only.
+
+            [
+                'slug'             => 'press_bad_form_3',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'Under Pressure',
+                'bodyTemplate'     => 'A three-game losing streak has brought unwanted attention to {clubName}\'s dugout. Speaking to reporters ahead of the weekend fixture, {managerName} was composed but the questions came thick and fast. Three consecutive defeats and no goals in the last two — the press pack wants answers.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'consecutiveLosses', 'threshold' => 3],
+                'severity'         => 'minor',
+            ],
+            [
+                'slug'             => 'press_bad_form_5',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'Calls for Sacking',
+                'bodyTemplate'     => 'Five consecutive defeats have left {clubName} in freefall, and the calls for {managerName}\'s dismissal are growing louder. After {streak} games without a win, sections of the fanbase have turned, and the board will be watching developments closely. Whether {managerName} can arrest the slide before it becomes irreversible remains to be seen.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'consecutiveLosses', 'threshold' => 5],
+                'severity'         => 'major',
+            ],
+            [
+                'slug'             => 'press_good_form_5',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'On Fire',
+                'bodyTemplate'     => '{clubName} are the talk of the division. A {streak}-game winning streak has turned heads across the league, with {managerName}\'s side playing with a confidence and fluency that looked impossible just weeks ago. The current position of {position} flatters no one — this team has earned every point.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'consecutiveWins', 'threshold' => 5],
+                'severity'         => 'minor',
+            ],
+            [
+                'slug'             => 'press_unbeaten_10',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'Unbeaten Run Continues',
+                'bodyTemplate'     => 'Ten games unbeaten and counting. {clubName}\'s remarkable run continues to attract attention from across the football world. {managerName} has been measured in their assessment, insisting the squad is focused only on the next game, but a {streak}-match unbeaten run tells its own story. At {position} in the table, this is no fluke.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'unbeatenRun', 'threshold' => 10],
+                'severity'         => 'minor',
+            ],
+            [
+                'slug'             => 'press_top_of_table',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'Top of the Table',
+                'bodyTemplate'     => 'There is no more prestigious place to sit, and right now {clubName} are at the summit. {managerName}\'s side occupy {position} in the table following another positive week, and the momentum behind this club feels genuine. The question is whether they can sustain it when the pressure really begins to mount.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'leaguePosition', 'threshold' => 1],
+                'severity'         => 'minor',
+            ],
+            [
+                'slug'             => 'press_relegation_zone',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'Relegation Fears',
+                'bodyTemplate'     => 'The word "relegation" is being said openly now, and {clubName} cannot afford to ignore it. Sitting in {position} in the table with the season approaching a critical juncture, {managerName} faces the biggest test of their tenure. The players insist belief remains in the dressing room, but results have to come — and soon.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'relegationZone', 'threshold' => 1],
+                'severity'         => 'major',
+            ],
+            [
+                'slug'             => 'press_heavy_defeat',
+                'category'         => EventCategory::PRESS,
+                'weight'           => 1,
+                'title'            => 'Heavy Defeat Fallout',
+                'bodyTemplate'     => 'There are no easy words after a result like that. {clubName} were beaten heavily, conceding multiple goals in a performance that raised serious questions about the squad\'s resilience. {managerName} faced a tough room in the post-match press conference, with journalists pressing for explanations that were hard to come by.',
+                'impacts'          => [],
+                'firingConditions' => ['type' => 'goalDifference', 'threshold' => -4],
+                'severity'         => 'minor',
+            ],
         ];
     }
 }

@@ -84,6 +84,27 @@ class GameConfig
     #[ORM\Column(type: 'integer')]
     private int $injurySeriousWeight = 10;
 
+    // ── Development / Potential ceiling ──────────────────────────────────
+
+    /**
+     * Maximum percentage a player's overall rating can temporarily exceed
+     * their potential ceiling.
+     * e.g. 0.05 = player with potential 70 can peak at 73.5 temporarily.
+     * Default: 0.05
+     */
+    #[ORM\Column(type: 'float')]
+    private float $potentialOvershootMax = 0.05;
+
+    /**
+     * Weekly decay rate applied to attributes when overall rating exceeds
+     * potential ceiling. Applied as a downward nudge to the most recently
+     * boosted attribute each tick.
+     * e.g. 0.5 = 0.5 attribute points nudged down per week above ceiling.
+     * Default: 0.5
+     */
+    #[ORM\Column(type: 'float')]
+    private float $potentialDecayRate = 0.5;
+
     // ── Scouting System ───────────────────────────────────────────────────
 
     /**
@@ -273,6 +294,12 @@ class GameConfig
 
     public function getInjurySeriousWeight(): int { return $this->injurySeriousWeight; }
     public function setInjurySeriousWeight(int $v): static { $this->injurySeriousWeight = $v; return $this; }
+
+    public function getPotentialOvershootMax(): float { return $this->potentialOvershootMax; }
+    public function setPotentialOvershootMax(float $v): static { $this->potentialOvershootMax = max(0.0, $v); return $this; }
+
+    public function getPotentialDecayRate(): float { return $this->potentialDecayRate; }
+    public function setPotentialDecayRate(float $v): static { $this->potentialDecayRate = max(0.0, $v); return $this; }
 
     public function getScoutMoraleThreshold(): int { return $this->scoutMoraleThreshold; }
     public function setScoutMoraleThreshold(int $v): static { $this->scoutMoraleThreshold = $v; return $this; }
@@ -771,6 +798,22 @@ class GameConfig
 
     public function getCapacityCalculation(): int { return $this->capacityCalculation; }
     public function setCapacityCalculation(int $v): static { $this->capacityCalculation = max(1, $v); return $this; }
+
+    // ── Manager Dividend & Transfer Budget ───────────────────────────────────
+
+    /** Percentage of season profit paid to the manager as a personal dividend at financial year end. Default: 5.0 */
+    #[ORM\Column(type: 'float', options: ['default' => 5.0])]
+    private float $managerDividendPercent = 5.0;
+
+    /** Transfer budget as a percentage of the club's current balance, recalculated each season. Default: 20.0 */
+    #[ORM\Column(type: 'float', options: ['default' => 20.0])]
+    private float $transferBudgetPercent = 20.0;
+
+    public function getManagerDividendPercent(): float { return $this->managerDividendPercent; }
+    public function setManagerDividendPercent(float $v): static { $this->managerDividendPercent = max(0.0, min(100.0, $v)); return $this; }
+
+    public function getTransferBudgetPercent(): float { return $this->transferBudgetPercent; }
+    public function setTransferBudgetPercent(float $v): static { $this->transferBudgetPercent = max(0.0, min(100.0, $v)); return $this; }
 
     // ── Manager Sacking ───────────────────────────────────────────────────
 

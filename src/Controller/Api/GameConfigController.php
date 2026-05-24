@@ -35,6 +35,10 @@ class GameConfigController extends AbstractController
             'injuryModerateWeight'              => $config->getInjuryModerateWeight(),
             'injurySeriousWeight'               => $config->getInjurySeriousWeight(),
 
+            // Development / Potential ceiling
+            'potentialOvershootMax' => $config->getPotentialOvershootMax(),
+            'potentialDecayRate'    => $config->getPotentialDecayRate(),
+
             // Scouting
             'scoutMoraleThreshold'              => $config->getScoutMoraleThreshold(),
             'scoutRevealWeeks'                  => $config->getScoutRevealWeeks(),

@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Club;
+use App\Entity\GameConfig;
 use App\Entity\Player;
 use App\Entity\Transfer;
 use App\Enum\InvestorTier;
 use App\Enum\PlayerStatus;
 use App\Enum\SponsorStatus;
+use App\Repository\GameConfigRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\SponsorRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,6 +24,7 @@ class EconomicService
         private readonly InboxService           $inboxService,
         private readonly InvestorRepository     $investorRepository,
         private readonly SponsorRepository      $sponsorRepository,
+        private readonly GameConfigRepository   $gameConfigRepository,
         private readonly LoggerInterface        $logger,
     ) {}
 
@@ -113,7 +116,10 @@ class EconomicService
     // Financial year-end processing
     // -------------------------------------------------------------------------
 
-    public function processFinancialYearEnd(Club $club): void
+    /**
+     * @return array{dividendPaidPence: int}
+     */
+    public function processFinancialYearEnd(Club $club): array
     {
         $annualProfit = $club->calculateAnnualProfit();
         $now          = new \DateTimeImmutable();
@@ -135,7 +141,21 @@ class EconomicService
             );
         }
 
+        // Manager dividend: a % of season profit, if the season was profitable.
+        // The client is authoritative for the actual dividend calculation; this record
+        // on the backend exists as an audit trail and leaderboard source of truth.
+        $dividendPaidPence = 0;
+        $gameConfig = $this->gameConfigRepository->getConfig();
+        $dividendPercent = $gameConfig !== null ? $gameConfig->getManagerDividendPercent() : 5.0;
+
+        if ($annualProfit > 0) {
+            $dividendPaidPence = (int) round($annualProfit * ($dividendPercent / 100));
+            $club->setTotalCareerEarnings($club->getTotalCareerEarnings() + $dividendPaidPence);
+        }
+
         $this->em->flush();
+
+        return ['dividendPaidPence' => $dividendPaidPence];
     }
 
     // -------------------------------------------------------------------------

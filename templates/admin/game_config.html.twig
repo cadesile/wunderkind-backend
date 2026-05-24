@@ -108,6 +108,36 @@
                 </div>
             </div>
 
+            {# ── Development / Potential Ceiling ────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-chart-bar text-muted"></i>
+                    <span class="fw-semibold small">Development / Potential Ceiling</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how far a player's overall rating can temporarily exceed their potential ceiling,
+                        and how quickly attributes decay back down once they do.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="potentialOvershootMax" class="form-label fw-semibold small">Overshoot Max</label>
+                            <input type="number" id="potentialOvershootMax" name="potentialOvershootMax"
+                                   value="{{ config.potentialOvershootMax }}"
+                                   step="0.01" min="0.0" max="0.5" class="form-control">
+                            <div class="form-text">Max % overall can temporarily exceed potential ceiling (e.g. 0.05 = 5%). Default: 0.05</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="potentialDecayRate" class="form-label fw-semibold small">Decay Rate</label>
+                            <input type="number" id="potentialDecayRate" name="potentialDecayRate"
+                                   value="{{ config.potentialDecayRate }}"
+                                   step="0.1" min="0.0" max="5.0" class="form-control">
+                            <div class="form-text">Attribute points nudged down per week above ceiling. Default: 0.5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Reputation ─────────────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
