@@ -178,6 +178,10 @@ class DashboardController extends AbstractDashboardController
         $config->setInjurySeriousWeight((int) $request->request->get('injurySeriousWeight', 10));
         $config->setPotentialOvershootMax((float) $request->request->get('potentialOvershootMax', 0.05));
         $config->setPotentialDecayRate((float) $request->request->get('potentialDecayRate', 0.5));
+        $config->setCoachDevelopmentMaxMultiplier((float) $request->request->get('coachDevelopmentMaxMultiplier', 2.0));
+        $config->setCoachDevelopmentMinSpecialism((int) $request->request->get('coachDevelopmentMinSpecialism', 20));
+        $config->setCoachDevelopmentStackingFactor((float) $request->request->get('coachDevelopmentStackingFactor', 0.3));
+        $config->setCoachMoraleInfluence((float) $request->request->get('coachMoraleInfluence', 0.5));
 
         $config->setScoutMoraleThreshold((int) $request->request->get('scoutMoraleThreshold', 40));
         $config->setScoutRevealWeeks((int) $request->request->get('scoutRevealWeeks', 2));
@@ -215,8 +219,8 @@ class DashboardController extends AbstractDashboardController
         // Facility construction
         $config->setConstructionTimeMultiplier((float) $request->request->get('constructionTimeMultiplier', 1.0));
         $config->setFacilityConstructionFailureChance((float) $request->request->get('facilityConstructionFailureChance', 0.05));
-        $config->setFacilityConstructionFailureCostMin((int) $request->request->get('facilityConstructionFailureCostMin', 50000));
-        $config->setFacilityConstructionFailureCostMax((int) $request->request->get('facilityConstructionFailureCostMax', 200000));
+        $config->setFacilityConstructionFailureCostMin((float) $request->request->get('facilityConstructionFailureCostMin', 5.0));
+        $config->setFacilityConstructionFailureCostMax((float) $request->request->get('facilityConstructionFailureCostMax', 20.0));
         $config->setFacilityConstructionFailureTimeMin((int) $request->request->get('facilityConstructionFailureTimeMin', 2));
         $config->setFacilityConstructionFailureTimeMax((int) $request->request->get('facilityConstructionFailureTimeMax', 6));
 

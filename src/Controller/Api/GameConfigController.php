@@ -39,6 +39,12 @@ class GameConfigController extends AbstractController
             'potentialOvershootMax' => $config->getPotentialOvershootMax(),
             'potentialDecayRate'    => $config->getPotentialDecayRate(),
 
+            // Coach Development Influence
+            'coachDevelopmentMaxMultiplier'  => $config->getCoachDevelopmentMaxMultiplier(),
+            'coachDevelopmentMinSpecialism'  => $config->getCoachDevelopmentMinSpecialism(),
+            'coachDevelopmentStackingFactor' => $config->getCoachDevelopmentStackingFactor(),
+            'coachMoraleInfluence'           => $config->getCoachMoraleInfluence(),
+
             // Scouting
             'scoutMoraleThreshold'              => $config->getScoutMoraleThreshold(),
             'scoutRevealWeeks'                  => $config->getScoutRevealWeeks(),

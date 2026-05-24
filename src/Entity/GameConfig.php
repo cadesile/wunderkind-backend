@@ -105,6 +105,50 @@ class GameConfig
     #[ORM\Column(type: 'float')]
     private float $potentialDecayRate = 0.5;
 
+    // ── Coach Development Influence ───────────────────────────────────────
+
+    /**
+     * Maximum XP multiplier a coach can apply to a player attribute
+     * they specialise in. A coach with specialism value 100 applies
+     * this multiplier; lower values scale linearly.
+     * coachMultiplier = 1.0 + (coachSpecialismValue / 100) *
+     *                   (coachDevelopmentMaxMultiplier - 1.0)
+     * Default: 2.0 (coach at 100 doubles XP gain for that attribute)
+     */
+    #[ORM\Column(type: 'float')]
+    private float $coachDevelopmentMaxMultiplier = 2.0;
+
+    /**
+     * Minimum coach specialism value (0-100) required before any
+     * development bonus is applied. Below this threshold the coach
+     * has no influence on that attribute category.
+     * Default: 20
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $coachDevelopmentMinSpecialism = 20;
+
+    /**
+     * When multiple coaches cover the same specialism, this controls
+     * how additional coaches stack.
+     * 0.0 = no stacking (only best coach counts)
+     * 1.0 = full linear stacking
+     * Default: 0.3 (diminishing returns — each additional coach adds 30%
+     * of their individual contribution)
+     */
+    #[ORM\Column(type: 'float')]
+    private float $coachDevelopmentStackingFactor = 0.3;
+
+    /**
+     * Scales how strongly a coach's morale affects their development
+     * contribution. At morale 0 the coach contributes nothing; at 100
+     * they contribute fully.
+     * effectiveSpecialism = specialism * (coachMorale / 100) ^
+     *                       coachMoraleInfluence
+     * Default: 0.5 (square root — morale 25 = 50% contribution)
+     */
+    #[ORM\Column(type: 'float')]
+    private float $coachMoraleInfluence = 0.5;
+
     // ── Scouting System ───────────────────────────────────────────────────
 
     /**
@@ -300,6 +344,18 @@ class GameConfig
 
     public function getPotentialDecayRate(): float { return $this->potentialDecayRate; }
     public function setPotentialDecayRate(float $v): static { $this->potentialDecayRate = max(0.0, $v); return $this; }
+
+    public function getCoachDevelopmentMaxMultiplier(): float { return $this->coachDevelopmentMaxMultiplier; }
+    public function setCoachDevelopmentMaxMultiplier(float $v): static { $this->coachDevelopmentMaxMultiplier = max(0.0, $v); return $this; }
+
+    public function getCoachDevelopmentMinSpecialism(): int { return $this->coachDevelopmentMinSpecialism; }
+    public function setCoachDevelopmentMinSpecialism(int $v): static { $this->coachDevelopmentMinSpecialism = max(0, $v); return $this; }
+
+    public function getCoachDevelopmentStackingFactor(): float { return $this->coachDevelopmentStackingFactor; }
+    public function setCoachDevelopmentStackingFactor(float $v): static { $this->coachDevelopmentStackingFactor = max(0.0, $v); return $this; }
+
+    public function getCoachMoraleInfluence(): float { return $this->coachMoraleInfluence; }
+    public function setCoachMoraleInfluence(float $v): static { $this->coachMoraleInfluence = max(0.0, $v); return $this; }
 
     public function getScoutMoraleThreshold(): int { return $this->scoutMoraleThreshold; }
     public function setScoutMoraleThreshold(int $v): static { $this->scoutMoraleThreshold = $v; return $this; }
@@ -583,18 +639,20 @@ class GameConfig
     private float $facilityConstructionFailureChance = 0.05;
 
     /**
-     * Minimum additional cost (pence) triggered by a construction failure.
-     * Default: 50000 (£500)
+     * Minimum additional cost triggered by a construction failure, expressed as a
+     * percentage of the total upgrade cost (e.g. 5.0 = 5% on top of the upgrade price).
+     * Default: 5.0
      */
-    #[ORM\Column(type: 'integer')]
-    private int $facilityConstructionFailureCostMin = 50000;
+    #[ORM\Column(type: 'float')]
+    private float $facilityConstructionFailureCostMin = 5.0;
 
     /**
-     * Maximum additional cost (pence) triggered by a construction failure.
-     * Default: 200000 (£2,000)
+     * Maximum additional cost triggered by a construction failure, expressed as a
+     * percentage of the total upgrade cost (e.g. 20.0 = 20% on top of the upgrade price).
+     * Default: 20.0
      */
-    #[ORM\Column(type: 'integer')]
-    private int $facilityConstructionFailureCostMax = 200000;
+    #[ORM\Column(type: 'float')]
+    private float $facilityConstructionFailureCostMax = 20.0;
 
     /**
      * Minimum number of weeks added to construction time on failure.
@@ -616,11 +674,11 @@ class GameConfig
     public function getFacilityConstructionFailureChance(): float { return $this->facilityConstructionFailureChance; }
     public function setFacilityConstructionFailureChance(float $v): static { $this->facilityConstructionFailureChance = max(0.0, $v); return $this; }
 
-    public function getFacilityConstructionFailureCostMin(): int { return $this->facilityConstructionFailureCostMin; }
-    public function setFacilityConstructionFailureCostMin(int $v): static { $this->facilityConstructionFailureCostMin = max(0, $v); return $this; }
+    public function getFacilityConstructionFailureCostMin(): float { return $this->facilityConstructionFailureCostMin; }
+    public function setFacilityConstructionFailureCostMin(float $v): static { $this->facilityConstructionFailureCostMin = max(0.0, $v); return $this; }
 
-    public function getFacilityConstructionFailureCostMax(): int { return $this->facilityConstructionFailureCostMax; }
-    public function setFacilityConstructionFailureCostMax(int $v): static { $this->facilityConstructionFailureCostMax = max(0, $v); return $this; }
+    public function getFacilityConstructionFailureCostMax(): float { return $this->facilityConstructionFailureCostMax; }
+    public function setFacilityConstructionFailureCostMax(float $v): static { $this->facilityConstructionFailureCostMax = max(0.0, $v); return $this; }
 
     public function getFacilityConstructionFailureTimeMin(): int { return $this->facilityConstructionFailureTimeMin; }
     public function setFacilityConstructionFailureTimeMin(int $v): static { $this->facilityConstructionFailureTimeMin = max(0, $v); return $this; }

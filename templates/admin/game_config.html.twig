@@ -138,6 +138,50 @@
                 </div>
             </div>
 
+            {# ── Coach Development Influence ─────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-whistle text-muted"></i>
+                    <span class="fw-semibold small">Coach Development Influence</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how coach attribute specialisms (pace, technical, vision, power, stamina, heart)
+                        scale player XP gain, and how morale and stacking across multiple coaches are handled.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="coachDevelopmentMaxMultiplier" class="form-label fw-semibold small">Max XP Multiplier</label>
+                            <input type="number" id="coachDevelopmentMaxMultiplier" name="coachDevelopmentMaxMultiplier"
+                                   value="{{ config.coachDevelopmentMaxMultiplier }}"
+                                   step="0.1" min="1.0" max="5.0" class="form-control">
+                            <div class="form-text">Max XP multiplier at specialism 100. Default: 2.0</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="coachDevelopmentMinSpecialism" class="form-label fw-semibold small">Min Specialism Threshold</label>
+                            <input type="number" id="coachDevelopmentMinSpecialism" name="coachDevelopmentMinSpecialism"
+                                   value="{{ config.coachDevelopmentMinSpecialism }}"
+                                   step="1" min="0" max="100" class="form-control">
+                            <div class="form-text">Minimum specialism before any bonus applies (0–100). Default: 20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="coachDevelopmentStackingFactor" class="form-label fw-semibold small">Stacking Factor</label>
+                            <input type="number" id="coachDevelopmentStackingFactor" name="coachDevelopmentStackingFactor"
+                                   value="{{ config.coachDevelopmentStackingFactor }}"
+                                   step="0.05" min="0.0" max="1.0" class="form-control">
+                            <div class="form-text">0 = best coach only, 1 = full linear stack. Default: 0.3</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="coachMoraleInfluence" class="form-label fw-semibold small">Morale Influence</label>
+                            <input type="number" id="coachMoraleInfluence" name="coachMoraleInfluence"
+                                   value="{{ config.coachMoraleInfluence }}"
+                                   step="0.1" min="0.0" max="2.0" class="form-control">
+                            <div class="form-text">Exponent: 0.5 = square root scaling with morale. Default: 0.5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Reputation ─────────────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
@@ -771,18 +815,18 @@
                             {# spacer #}
                         </div>
                         <div class="col-md-3">
-                            <label for="facilityConstructionFailureCostMin" class="form-label fw-semibold small">Failure Cost Min</label>
+                            <label for="facilityConstructionFailureCostMin" class="form-label fw-semibold small">Failure Cost Min %</label>
                             <input type="number" id="facilityConstructionFailureCostMin" name="facilityConstructionFailureCostMin"
                                    value="{{ config.facilityConstructionFailureCostMin }}"
-                                   step="1" min="0" class="form-control">
-                            <div class="form-text">Pence. Default: 50000 (£500)</div>
+                                   step="0.5" min="0" max="100" class="form-control">
+                            <div class="form-text">% of upgrade cost added on failure. Default: 5.0</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="facilityConstructionFailureCostMax" class="form-label fw-semibold small">Failure Cost Max</label>
+                            <label for="facilityConstructionFailureCostMax" class="form-label fw-semibold small">Failure Cost Max %</label>
                             <input type="number" id="facilityConstructionFailureCostMax" name="facilityConstructionFailureCostMax"
                                    value="{{ config.facilityConstructionFailureCostMax }}"
-                                   step="1" min="0" class="form-control">
-                            <div class="form-text">Pence. Default: 200000 (£2,000)</div>
+                                   step="0.5" min="0" max="100" class="form-control">
+                            <div class="form-text">% of upgrade cost added on failure. Default: 20.0</div>
                         </div>
                         <div class="col-md-3">
                             <label for="facilityConstructionFailureTimeMin" class="form-label fw-semibold small">Failure Time Min</label>
