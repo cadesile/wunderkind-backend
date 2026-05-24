@@ -564,6 +564,70 @@ class GameConfig
     public function getNonMatchFacilityIncomePercent(): int { return $this->nonMatchFacilityIncomePercent; }
     public function setNonMatchFacilityIncomePercent(int $v): static { $this->nonMatchFacilityIncomePercent = max(0, min(100, $v)); return $this; }
 
+    // ── Facility Construction ─────────────────────────────────────────────
+
+    /**
+     * Global multiplier applied to all facility construction times.
+     * constructionWeeks = baseConstructionWeeks * level^decayBase * multiplier
+     * Default: 1.0
+     */
+    #[ORM\Column(type: 'float')]
+    private float $constructionTimeMultiplier = 1.0;
+
+    /**
+     * Probability (0.0–1.0) that a construction project encounters a
+     * failure event during any given week.
+     * Default: 0.05 (5%)
+     */
+    #[ORM\Column(type: 'float')]
+    private float $facilityConstructionFailureChance = 0.05;
+
+    /**
+     * Minimum additional cost (pence) triggered by a construction failure.
+     * Default: 50000 (£500)
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityConstructionFailureCostMin = 50000;
+
+    /**
+     * Maximum additional cost (pence) triggered by a construction failure.
+     * Default: 200000 (£2,000)
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityConstructionFailureCostMax = 200000;
+
+    /**
+     * Minimum number of weeks added to construction time on failure.
+     * Default: 2
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityConstructionFailureTimeMin = 2;
+
+    /**
+     * Maximum number of weeks added to construction time on failure.
+     * Default: 6
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityConstructionFailureTimeMax = 6;
+
+    public function getConstructionTimeMultiplier(): float { return $this->constructionTimeMultiplier; }
+    public function setConstructionTimeMultiplier(float $v): static { $this->constructionTimeMultiplier = max(0.0, $v); return $this; }
+
+    public function getFacilityConstructionFailureChance(): float { return $this->facilityConstructionFailureChance; }
+    public function setFacilityConstructionFailureChance(float $v): static { $this->facilityConstructionFailureChance = max(0.0, $v); return $this; }
+
+    public function getFacilityConstructionFailureCostMin(): int { return $this->facilityConstructionFailureCostMin; }
+    public function setFacilityConstructionFailureCostMin(int $v): static { $this->facilityConstructionFailureCostMin = max(0, $v); return $this; }
+
+    public function getFacilityConstructionFailureCostMax(): int { return $this->facilityConstructionFailureCostMax; }
+    public function setFacilityConstructionFailureCostMax(int $v): static { $this->facilityConstructionFailureCostMax = max(0, $v); return $this; }
+
+    public function getFacilityConstructionFailureTimeMin(): int { return $this->facilityConstructionFailureTimeMin; }
+    public function setFacilityConstructionFailureTimeMin(int $v): static { $this->facilityConstructionFailureTimeMin = max(0, $v); return $this; }
+
+    public function getFacilityConstructionFailureTimeMax(): int { return $this->facilityConstructionFailureTimeMax; }
+    public function setFacilityConstructionFailureTimeMax(int $v): static { $this->facilityConstructionFailureTimeMax = max(0, $v); return $this; }
+
     // ── Playing Style Influence ───────────────────────────────────────────
 
     /**

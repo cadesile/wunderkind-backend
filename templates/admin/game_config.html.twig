@@ -741,6 +741,67 @@
                 </div>
             </div>
 
+            {# ── Facility Construction ──────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-hard-hat text-muted"></i>
+                    <span class="fw-semibold small">Facility Construction</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how long facility upgrades take to complete and the parameters for
+                        random construction failure events (Feature 47a).
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="constructionTimeMultiplier" class="form-label fw-semibold small">Time Multiplier</label>
+                            <input type="number" id="constructionTimeMultiplier" name="constructionTimeMultiplier"
+                                   value="{{ config.constructionTimeMultiplier }}"
+                                   step="0.1" min="0.1" max="5.0" class="form-control">
+                            <div class="form-text">Global multiplier applied to all construction times. Default: 1.0</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="facilityConstructionFailureChance" class="form-label fw-semibold small">Failure Chance</label>
+                            <input type="number" id="facilityConstructionFailureChance" name="facilityConstructionFailureChance"
+                                   value="{{ config.facilityConstructionFailureChance }}"
+                                   step="0.01" min="0.0" max="1.0" class="form-control">
+                            <div class="form-text">Weekly probability of a failure event (0.0 = never, 1.0 = always). Default: 0.05</div>
+                        </div>
+                        <div class="col-md-4">
+                            {# spacer #}
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityConstructionFailureCostMin" class="form-label fw-semibold small">Failure Cost Min</label>
+                            <input type="number" id="facilityConstructionFailureCostMin" name="facilityConstructionFailureCostMin"
+                                   value="{{ config.facilityConstructionFailureCostMin }}"
+                                   step="1" min="0" class="form-control">
+                            <div class="form-text">Pence. Default: 50000 (£500)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityConstructionFailureCostMax" class="form-label fw-semibold small">Failure Cost Max</label>
+                            <input type="number" id="facilityConstructionFailureCostMax" name="facilityConstructionFailureCostMax"
+                                   value="{{ config.facilityConstructionFailureCostMax }}"
+                                   step="1" min="0" class="form-control">
+                            <div class="form-text">Pence. Default: 200000 (£2,000)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityConstructionFailureTimeMin" class="form-label fw-semibold small">Failure Time Min</label>
+                            <input type="number" id="facilityConstructionFailureTimeMin" name="facilityConstructionFailureTimeMin"
+                                   value="{{ config.facilityConstructionFailureTimeMin }}"
+                                   step="1" min="0" class="form-control">
+                            <div class="form-text">Weeks added on failure. Default: 2</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityConstructionFailureTimeMax" class="form-label fw-semibold small">Failure Time Max</label>
+                            <input type="number" id="facilityConstructionFailureTimeMax" name="facilityConstructionFailureTimeMax"
+                                   value="{{ config.facilityConstructionFailureTimeMax }}"
+                                   step="1" min="0" class="form-control">
+                            <div class="form-text">Weeks added on failure. Default: 6</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Playing Style Influence ────────────────────────────────── #}
             {% set psStyles = {
                 'POSSESSION': 'Possession',

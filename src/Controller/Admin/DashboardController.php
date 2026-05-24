@@ -212,6 +212,14 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
         $config->setNonMatchFacilityIncomePercent((int) $request->request->get('nonMatchFacilityIncomePercent', 0));
 
+        // Facility construction
+        $config->setConstructionTimeMultiplier((float) $request->request->get('constructionTimeMultiplier', 1.0));
+        $config->setFacilityConstructionFailureChance((float) $request->request->get('facilityConstructionFailureChance', 0.05));
+        $config->setFacilityConstructionFailureCostMin((int) $request->request->get('facilityConstructionFailureCostMin', 50000));
+        $config->setFacilityConstructionFailureCostMax((int) $request->request->get('facilityConstructionFailureCostMax', 200000));
+        $config->setFacilityConstructionFailureTimeMin((int) $request->request->get('facilityConstructionFailureTimeMin', 2));
+        $config->setFacilityConstructionFailureTimeMax((int) $request->request->get('facilityConstructionFailureTimeMax', 6));
+
         // Playing style influence
         $validAttributes = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
         $rawInfluence    = $request->request->all()['playingStyleInfluence'] ?? [];

@@ -74,6 +74,14 @@ class GameConfigController extends AbstractController
             // Facility income
             'nonMatchFacilityIncomePercent' => $config->getNonMatchFacilityIncomePercent(),
 
+            // Facility Construction
+            'constructionTimeMultiplier'           => $config->getConstructionTimeMultiplier(),
+            'facilityConstructionFailureChance'    => $config->getFacilityConstructionFailureChance(),
+            'facilityConstructionFailureCostMin'   => $config->getFacilityConstructionFailureCostMin(),
+            'facilityConstructionFailureCostMax'   => $config->getFacilityConstructionFailureCostMax(),
+            'facilityConstructionFailureTimeMin'   => $config->getFacilityConstructionFailureTimeMin(),
+            'facilityConstructionFailureTimeMax'   => $config->getFacilityConstructionFailureTimeMax(),
+
             // Playing style influence
             'playingStyleInfluence' => $config->getPlayingStyleInfluence(),
 

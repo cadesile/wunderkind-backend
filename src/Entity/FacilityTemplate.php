@@ -77,6 +77,17 @@ class FacilityTemplate
     #[ORM\Column(type: 'json', options: ['default' => '{}'])]
     private array $gameplayEffects = [];
 
+    // ── Construction ─────────────────────────────────────────────────────────
+    /**
+     * Base number of weeks to complete construction at level 1.
+     * Construction time scales with level using the same decayBase multiplier
+     * as cost: constructionWeeks = baseConstructionWeeks * level^decayBase
+     * Set to 0 to disable construction time for this facility type.
+     * Default: 4
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $baseConstructionWeeks = 4;
+
     /** Controls display order in the facilities screen */
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $sortOrder = 0;
@@ -143,6 +154,9 @@ class FacilityTemplate
     public function getMaxLevel(): int { return $this->maxLevel; }
     public function setMaxLevel(int $maxLevel): void { $this->maxLevel = max(1, $maxLevel); }
 
+    public function getBaseConstructionWeeks(): int { return $this->baseConstructionWeeks; }
+    public function setBaseConstructionWeeks(int $v): void { $this->baseConstructionWeeks = max(0, $v); }
+
     public function getDecayBase(): float { return $this->decayBase; }
     public function setDecayBase(float $decayBase): void { $this->decayBase = max(0.0, $decayBase); }
 
@@ -185,6 +199,7 @@ class FacilityTemplate
             'matchdayIncomeMultiplier' => $this->matchdayIncomeMultiplier,
             'reputationBonus'          => $this->reputationBonus,
             'maxLevel'                 => $this->maxLevel,
+            'baseConstructionWeeks'    => $this->baseConstructionWeeks,
             'decayBase'                => $this->decayBase,
             'gameplayEffects'          => $this->gameplayEffects,
             'sortOrder'                => $this->sortOrder,

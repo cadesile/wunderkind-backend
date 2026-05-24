@@ -73,6 +73,9 @@ class FacilityTemplateCrudController extends AbstractCrudController
             ->hideOnIndex();
         yield IntegerField::new('maxLevel')
             ->setHelp('Maximum upgrade level (default 5)');
+        yield IntegerField::new('baseConstructionWeeks', 'Base Construction Weeks')
+            ->setHelp('Weeks to build at level 1. Scales with level. 0 = instant.')
+            ->hideOnIndex();
         yield NumberField::new('decayBase')
             ->setHelp('Weekly condition decay base. App formula: decayBase + level')
             ->setNumDecimals(1)
