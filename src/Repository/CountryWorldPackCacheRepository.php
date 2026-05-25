@@ -53,6 +53,7 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
 
     /**
      * Returns all cache entries ordered by country (ASC) then tier (ASC).
+     * NOTE: hydrates the full payload column — use findAllSummaries() for the admin list view.
      *
      * @return CountryWorldPackCache[]
      */
@@ -63,5 +64,41 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
             ->addOrderBy('c.tier', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Lightweight summary rows for the admin cache overview.
+     * Club and player counts are computed in PostgreSQL using JSON functions so
+     * the payload column is never loaded into PHP memory.
+     *
+     * @return array<array{id:string, country:string, tier:int, club_count:int, player_count:int, generated_at:string}>
+     */
+    public function findAllSummaries(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT
+                id::text                                        AS id,
+                country,
+                tier,
+                generated_at,
+                COALESCE(json_array_length(payload->'clubs'), 0)         AS club_count,
+                COALESCE((
+                    SELECT SUM(json_array_length(c->'players'))
+                    FROM   json_array_elements(payload->'clubs') AS c
+                ), 0)                                           AS player_count
+             FROM  country_world_pack_cache
+             ORDER BY country ASC, tier ASC"
+        );
+
+        return array_map(static function (array $row): array {
+            return [
+                'id'          => $row['id'],
+                'country'     => $row['country'],
+                'tier'        => (int) $row['tier'],
+                'clubCount'   => (int) $row['club_count'],
+                'playerCount' => (int) $row['player_count'],
+                'generatedAt' => new \DateTimeImmutable($row['generated_at']),
+            ];
+        }, $rows);
     }
 }

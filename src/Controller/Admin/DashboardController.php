@@ -959,28 +959,14 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function worldpackCache(): Response
     {
-        $rawEntries = $this->worldPackCacheRepository->findAllOrderedByCountryAndTier();
+        $summaries = $this->worldPackCacheRepository->findAllSummaries();
 
         $entries   = [];
         $byCountry = [];
 
-        foreach ($rawEntries as $entry) {
-            $payload     = $entry->getPayload();
-            $clubCount   = count($payload['clubs'] ?? []);
-            $playerCount = array_sum(
-                array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? [])
-            );
-
-            $entries[] = [
-                'id'          => (string) $entry->getId(),
-                'country'     => $entry->getCountry(),
-                'tier'        => $entry->getTier(),
-                'clubCount'   => $clubCount,
-                'playerCount' => $playerCount,
-                'generatedAt' => $entry->getGeneratedAt(),
-            ];
-
-            $byCountry[$entry->getCountry()][$entry->getTier()] = true;
+        foreach ($summaries as $row) {
+            $entries[] = $row;
+            $byCountry[$row['country']][$row['tier']] = true;
         }
 
         $enabledCodes    = $this->starterConfigRepository->getConfig()->getEnabledCountries();
