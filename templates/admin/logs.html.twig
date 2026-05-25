@@ -17,7 +17,8 @@
 
     {# ── Controls ─────────────────────────────────────────────────────── #}
     <div class="col-12">
-        <form method="GET" action="{{ path('admin_logs') }}" class="d-flex flex-wrap align-items-end gap-3">
+        <form method="GET" action="{{ path('admin') }}" class="d-flex flex-wrap align-items-end gap-3">
+            <input type="hidden" name="routeName" value="admin_logs">
             {% if files|length > 1 %}
             <div>
                 <label for="file" class="form-label fw-semibold small mb-1">Log file</label>
