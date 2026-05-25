@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Entity\Club;
+use App\Entity\User;
 use App\Repository\CountryWorldPackCacheRepository;
+use App\Repository\LeagueRepository;
+use App\Service\WorldInitializationService;
 use App\Service\WorldPackCacheService;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -23,6 +24,8 @@ class WorldPackController extends AbstractController
         private readonly EntityManagerInterface          $em,
         private readonly CountryWorldPackCacheRepository $cacheRepository,
         private readonly WorldPackCacheService           $worldPackCacheService,
+        private readonly WorldInitializationService      $worldInitializationService,
+        private readonly LeagueRepository                $leagueRepository,
     ) {}
 
     // ── Delete single entry ───────────────────────────────────────────────
@@ -75,51 +78,80 @@ class WorldPackController extends AbstractController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
     }
 
-    // ── Regenerate cache for a country ────────────────────────────────────
+    // ── List tiers for a country (AJAX) ──────────────────────────────────
 
-    #[Route('/admin/worldpack-cache/regenerate', name: 'admin_worldpack_regenerate', methods: ['POST'])]
+    #[Route('/admin/worldpack-cache/tiers/{country}', name: 'admin_worldpack_tiers', methods: ['GET'])]
     #[IsGranted('ROLE_ADMIN')]
-    public function regenerate(Request $request, KernelInterface $kernel): Response
+    public function getTiers(string $country): JsonResponse
     {
-        if (!$this->isCsrfTokenValid('worldpack_regenerate', $request->request->get('_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+        $country = strtoupper(trim($country));
+        if (strlen($country) !== 2) {
+            return $this->json(['error' => 'Invalid country code'], 400);
+        }
+
+        $leagues = $this->leagueRepository->findByCountry($country);
+        if (empty($leagues)) {
+            return $this->json(['error' => "No leagues found for '{$country}'. Seed leagues first."], 404);
+        }
+
+        return $this->json([
+            'country' => $country,
+            'tiers'   => array_map(fn($l) => $l->getTier(), $leagues),
+        ]);
+    }
+
+    // ── Warm a single tier (AJAX) ─────────────────────────────────────────
+
+    #[Route('/admin/worldpack-cache/warm-tier', name: 'admin_worldpack_warm_tier', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function warmTier(Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid('worldpack_warm_tier', $request->request->get('_token'))) {
+            return $this->json(['success' => false, 'error' => 'Invalid CSRF token'], 403);
         }
 
         $country = strtoupper(trim($request->request->getString('country')));
+        $tier    = (int) $request->request->get('tier', 0);
+        $force   = (bool) $request->request->get('force', false);
 
-        if (strlen($country) !== 2) {
-            $this->addFlash('danger', 'Invalid country code.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+        if (strlen($country) !== 2 || $tier < 1) {
+            return $this->json(['success' => false, 'error' => 'Invalid country or tier'], 400);
         }
-
-        $application = new Application($kernel);
-        $application->setAutoExit(false);
-
-        $input  = new ArrayInput([
-            'command' => 'app:worldpack:warm',
-            'country' => $country,
-            '--force' => true,
-        ]);
-        $output = new BufferedOutput();
 
         try {
-            $exitCode = $application->run($input, $output);
-            $text     = trim($output->fetch());
-
-            if ($exitCode === 0) {
-                $this->addFlash('success', "Worldpack regenerated for {$country}.");
-            } else {
-                $this->addFlash('danger', "Regeneration failed for {$country}: {$text}");
+            if ($force) {
+                $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
+                if ($existing !== null) {
+                    $this->em->remove($existing);
+                    $this->em->flush();
+                }
             }
 
-            if ($text !== '') {
-                $this->addFlash('info', nl2br(htmlspecialchars($text)));
-            }
+            $dummyUser = new User('__warmup__@warmup.local');
+            $dummyClub = new Club('__warmup__', $dummyUser);
+            $dummyClub->setCountry($country);
+
+            $wasCached = $this->cacheRepository->findForCountryAndTier($country, $tier) !== null;
+
+            $payload = $this->worldPackCacheService->getOrBuild(
+                $country,
+                $tier,
+                fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier)
+            );
+
+            $clubCount   = count($payload['clubs'] ?? []);
+            $playerCount = array_sum(array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? []));
+
+            return $this->json([
+                'success'     => true,
+                'country'     => $country,
+                'tier'        => $tier,
+                'clubCount'   => $clubCount,
+                'playerCount' => $playerCount,
+                'cached'      => $wasCached,
+            ]);
         } catch (\Throwable $e) {
-            $this->addFlash('danger', "Error running worldpack command: " . $e->getMessage());
+            return $this->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
-
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
     }
 }

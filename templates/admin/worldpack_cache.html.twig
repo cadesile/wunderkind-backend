@@ -126,7 +126,7 @@
     </div>
     {% endif %}
 
-    {# ── Regenerate ──────────────────────────────────────────────────────── #}
+    {# ── Regenerate (AJAX per-tier) ──────────────────────────────────────── #}
     <div class="col-12 col-lg-6">
         <div class="card h-100">
             <div class="card-header py-2 d-flex align-items-center gap-2">
@@ -135,29 +135,137 @@
             </div>
             <div class="card-body d-flex flex-column gap-3">
                 <p class="text-muted small mb-0">
-                    Deletes all existing entries for the selected country then re-runs
-                    <code>app:worldpack:warm --force</code> to rebuild from scratch.
-                    Requires leagues to be generated for the country first.
+                    Rebuilds the cache tier-by-tier using background requests so the page
+                    never times out. Requires leagues to be seeded for the selected country.
                 </p>
-                <div class="mt-auto">
-                    <form method="POST" action="{{ path('admin_worldpack_regenerate') }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('worldpack_regenerate') }}">
-                        <div class="mb-3">
-                            <label for="regen_country" class="form-label fw-semibold small">Country</label>
-                            <select id="regen_country" name="country" class="form-select form-select-sm">
-                                {% for code, name in COUNTRIES %}
-                                    <option value="{{ code }}">{{ name }} ({{ code }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="fa fa-rotate me-1"></i>Regenerate (--force)
-                        </button>
-                    </form>
+
+                {# Controls #}
+                <div id="regen-controls">
+                    <div class="mb-3">
+                        <label for="regen_country" class="form-label fw-semibold small">Country</label>
+                        <select id="regen_country" class="form-select form-select-sm">
+                            {% for code, name in COUNTRIES %}
+                                <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button id="regen-btn" class="btn btn-primary btn-sm" onclick="startRegen()">
+                        <i class="fa fa-rotate me-1"></i>Regenerate (--force)
+                    </button>
+                </div>
+
+                {# Progress UI (hidden until running) #}
+                <div id="regen-progress" class="d-none">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span id="regen-status" class="text-muted">Starting…</span>
+                        <span id="regen-fraction" class="fw-semibold">0 / 0</span>
+                    </div>
+                    <div class="progress mb-2" style="height:8px">
+                        <div id="regen-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width:0%"></div>
+                    </div>
+                    <div id="regen-log" class="font-monospace small text-muted" style="max-height:160px;overflow-y:auto"></div>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+    const TIERS_URL_TPL  = '{{ path('admin_worldpack_tiers', {country: '__CC__'}) }}';
+    const WARM_TIER_URL  = '{{ path('admin_worldpack_warm_tier') }}';
+    const CSRF_TOKEN     = '{{ csrf_token('worldpack_warm_tier') }}';
+
+    async function startRegen() {
+        const country = document.getElementById('regen_country').value;
+        const btn     = document.getElementById('regen-btn');
+        const controls = document.getElementById('regen-controls');
+        const progress = document.getElementById('regen-progress');
+        const bar      = document.getElementById('regen-bar');
+        const status   = document.getElementById('regen-status');
+        const fraction = document.getElementById('regen-fraction');
+        const log      = document.getElementById('regen-log');
+
+        btn.disabled = true;
+        log.innerHTML = '';
+        progress.classList.remove('d-none');
+
+        // 1. Fetch tier list
+        const tiersUrl = TIERS_URL_TPL.replace('__CC__', country);
+        let tiers;
+        try {
+            const res = await fetch(tiersUrl);
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                appendLog(log, `ERROR: ${data.error ?? 'Failed to load tiers'}`, 'text-danger');
+                btn.disabled = false;
+                return;
+            }
+            tiers = data.tiers;
+        } catch (e) {
+            appendLog(log, `ERROR: ${e.message}`, 'text-danger');
+            btn.disabled = false;
+            return;
+        }
+
+        fraction.textContent = `0 / ${tiers.length}`;
+        status.textContent   = `Warming ${country}…`;
+
+        let done = 0, failed = 0;
+
+        // 2. Warm each tier sequentially
+        for (const tier of tiers) {
+            status.textContent = `Tier ${tier}…`;
+            const body = new FormData();
+            body.append('_token',  CSRF_TOKEN);
+            body.append('country', country);
+            body.append('tier',    tier);
+            body.append('force',   '1');
+
+            try {
+                const res  = await fetch(WARM_TIER_URL, { method: 'POST', body });
+                const data = await res.json();
+
+                if (data.success) {
+                    const label = data.cached
+                        ? `Tier ${tier}: skipped (already cached)`
+                        : `Tier ${tier}: ${data.clubCount} clubs, ${data.playerCount} players`;
+                    appendLog(log, label, 'text-success');
+                } else {
+                    appendLog(log, `Tier ${tier}: FAILED — ${data.error}`, 'text-danger');
+                    failed++;
+                }
+            } catch (e) {
+                appendLog(log, `Tier ${tier}: FAILED — ${e.message}`, 'text-danger');
+                failed++;
+            }
+
+            done++;
+            const pct = Math.round(done / tiers.length * 100);
+            bar.style.width       = pct + '%';
+            fraction.textContent  = `${done} / ${tiers.length}`;
+        }
+
+        // 3. Done
+        bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        if (failed === 0) {
+            bar.classList.add('bg-success');
+            status.textContent = `Done — ${tiers.length} tiers warmed for ${country}.`;
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            bar.classList.add('bg-warning');
+            status.textContent = `Finished with ${failed} failure(s). See log above.`;
+            btn.disabled = false;
+        }
+    }
+
+    function appendLog(el, msg, cls) {
+        const line = document.createElement('div');
+        line.className = cls ?? '';
+        line.textContent = msg;
+        el.appendChild(line);
+        el.scrollTop = el.scrollHeight;
+    }
+    </script>
 
     {# ── Delete country ──────────────────────────────────────────────────── #}
     <div class="col-12 col-lg-6">
