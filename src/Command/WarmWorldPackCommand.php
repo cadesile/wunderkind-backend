@@ -91,26 +91,20 @@ class WarmWorldPackCommand extends Command
             return Command::SUCCESS;
         }
 
-        if ($force) {
-            $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
-            if ($existing !== null) {
-                $this->entityManager->remove($existing);
-                $this->entityManager->flush();
-                $output->writeln("<comment>[{$country}/T{$tier}] --force: deleted existing cache entry.</comment>");
-            }
-        }
-
         $dummyUser = new User('__warmup__@warmup.local');
         $dummyClub = new Club('__warmup__', $dummyUser);
         $dummyClub->setCountry($country);
 
         $start = microtime(true);
         try {
-            $payload     = $this->worldPackCacheService->getOrBuild(
-                $country,
-                $tier,
-                fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier)
-            );
+            $builder = fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier);
+
+            // forceRebuild generates the payload first, then atomically replaces the old
+            // entry — so a failed build never leaves the cache empty.
+            // getOrBuild skips existing entries (used when --force is not set).
+            $payload = $force
+                ? $this->worldPackCacheService->forceRebuild($country, $tier, $builder)
+                : $this->worldPackCacheService->getOrBuild($country, $tier, $builder);
             $clubCount   = count($payload['clubs'] ?? []);
             $playerCount = array_sum(array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? []));
             $duration    = round(microtime(true) - $start, 1);

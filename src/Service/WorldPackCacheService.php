@@ -54,7 +54,33 @@ class WorldPackCacheService
     }
 
     /**
-     * Deletes all cached tiers for $country. Used by WarmWorldPackCommand --force.
+     * Generates a fresh payload for (country, tier) and atomically replaces any
+     * existing cache entry. The old entry is only removed AFTER the generator
+     * succeeds — so a failed build never leaves the cache empty.
+     *
+     * @param callable(): array $generator
+     */
+    public function forceRebuild(string $country, int $tier, callable $generator): array
+    {
+        $payload = $generator();
+
+        $this->em->clear();
+
+        $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
+        if ($existing !== null) {
+            $this->em->remove($existing);
+            $this->em->flush();
+        }
+
+        $entry = new CountryWorldPackCache($country, $tier, $payload);
+        $this->em->persist($entry);
+        $this->em->flush();
+
+        return $payload;
+    }
+
+    /**
+     * Deletes all cached tiers for $country.
      */
     public function deleteByCountry(string $country): int
     {
