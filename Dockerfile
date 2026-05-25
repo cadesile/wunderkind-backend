@@ -28,8 +28,16 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/nginx-http-only.conf /etc/nginx/nginx-http-only.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/jwt-entrypoint.sh /usr/local/bin/jwt-entrypoint.sh
+COPY docker/worldpack-warm.sh /usr/local/bin/worldpack-warm.sh
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh
+# Register the worldpack cron: rebuild all country caches every 6 hours.
+# Alpine's busybox crond reads per-user crontabs from /var/spool/cron/crontabs/.
+RUN mkdir -p /var/spool/cron/crontabs \
+ && echo '0 */6 * * * /usr/local/bin/worldpack-warm.sh >> /var/log/worldpack-cron.log 2>&1' \
+    > /var/spool/cron/crontabs/root \
+ && chmod 0600 /var/spool/cron/crontabs/root
+
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/worldpack-warm.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 
 EXPOSE 80 443
