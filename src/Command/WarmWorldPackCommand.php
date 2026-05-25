@@ -41,31 +41,104 @@ class WarmWorldPackCommand extends Command
     {
         $this
             ->addArgument('country', InputArgument::REQUIRED, 'ISO 3166-1 alpha-2 country code (e.g. EN, ES)')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Delete existing cache entries before regenerating')
-            ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Number of tiers to process per batch', 3)
-            ->addOption('memory-warning', null, InputOption::VALUE_REQUIRED, 'Memory threshold in MB at which to log a per-tier warning', 256);
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Delete existing cache entry/entries before regenerating')
+            ->addOption('tier', null, InputOption::VALUE_REQUIRED, 'Process a single tier only (1–8). Recommended for cron use.')
+            ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Tiers per batch when running all tiers (ignored with --tier)', 3)
+            ->addOption('memory-warning', null, InputOption::VALUE_REQUIRED, 'Memory threshold in MB at which to log a warning', 256);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io              = new SymfonyStyle($input, $output);
-        $country         = strtoupper(trim((string) $input->getArgument('country')));
-        $batchSize       = max(1, (int) $input->getOption('batch-size'));
-        $memWarningBytes = (int) $input->getOption('memory-warning') * 1024 * 1024;
+        $io      = new SymfonyStyle($input, $output);
+        $country = strtoupper(trim((string) $input->getArgument('country')));
+        $tierOpt = $input->getOption('tier');
 
         if (strlen($country) !== 2) {
-            $io->error("Country code must be exactly 2 characters (e.g. EN, ES). Got: '{$country}'.");
+            $io->error("Country code must be exactly 2 characters. Got: '{$country}'.");
             return Command::FAILURE;
         }
 
         if (ClubInitializationService::countryToNationality($country) === null) {
-            $io->error("Unknown country code '{$country}'. Supported codes: EN, IT, DE, ES, BR, AR, NL, FR, PT, NG, GH, JP, KR, SE, DK, IE, CI, SN, CN");
+            $io->error("Unknown country code '{$country}'. Supported: EN IT DE ES BR AR NL FR PT NG GH JP KR SE DK IE CI SN CN");
             return Command::FAILURE;
         }
 
+        // ── Single-tier mode (used by cron) ──────────────────────────────────
+        if ($tierOpt !== null) {
+            return $this->executeSingleTier($io, $output, $country, (int) $tierOpt, (bool) $input->getOption('force'));
+        }
+
+        // ── All-tiers batch mode (interactive / admin) ────────────────────────
+        return $this->executeAllTiers($io, $output, $input, $country);
+    }
+
+    private function executeSingleTier(
+        SymfonyStyle    $io,
+        OutputInterface $output,
+        string          $country,
+        int             $tier,
+        bool            $force,
+    ): int {
+        if ($tier < 1 || $tier > 8) {
+            $io->error("Tier must be between 1 and 8. Got: {$tier}.");
+            return Command::FAILURE;
+        }
+
+        // Silently succeed if this tier has no league (country may have fewer than 8 tiers).
+        $league = $this->leagueRepository->findByCountryAndTier($country, $tier);
+        if ($league === null) {
+            $output->writeln("<comment>[{$country}/T{$tier}] No league — skipping.</comment>");
+            return Command::SUCCESS;
+        }
+
+        if ($force) {
+            $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
+            if ($existing !== null) {
+                $this->entityManager->remove($existing);
+                $this->entityManager->flush();
+                $output->writeln("<comment>[{$country}/T{$tier}] --force: deleted existing cache entry.</comment>");
+            }
+        }
+
+        $dummyUser = new User('__warmup__@warmup.local');
+        $dummyClub = new Club('__warmup__', $dummyUser);
+        $dummyClub->setCountry($country);
+
+        $start = microtime(true);
+        try {
+            $payload     = $this->worldPackCacheService->getOrBuild(
+                $country,
+                $tier,
+                fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier)
+            );
+            $clubCount   = count($payload['clubs'] ?? []);
+            $playerCount = array_sum(array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? []));
+            $duration    = round(microtime(true) - $start, 1);
+            $peakMb      = round(memory_get_peak_usage(true) / 1024 / 1024, 1);
+
+            $io->success(sprintf(
+                '[%s/T%d] generated — %d clubs, %d players | %.1fs | peak %sMB',
+                $country, $tier, $clubCount, $playerCount, $duration, $peakMb
+            ));
+            return Command::SUCCESS;
+        } catch (\Throwable $e) {
+            $io->error(sprintf('[%s/T%d] FAILED: %s', $country, $tier, $e->getMessage()));
+            return Command::FAILURE;
+        }
+    }
+
+    private function executeAllTiers(
+        SymfonyStyle    $io,
+        OutputInterface $output,
+        InputInterface  $input,
+        string          $country,
+    ): int {
+        $batchSize       = max(1, (int) $input->getOption('batch-size'));
+        $memWarningBytes = (int) $input->getOption('memory-warning') * 1024 * 1024;
+
         $leagues = $this->leagueRepository->findByCountry($country);
         if (empty($leagues)) {
-            $io->error("No leagues found for country '{$country}'. Seed leagues first.");
+            $io->error("No leagues found for '{$country}'. Seed leagues first.");
             return Command::FAILURE;
         }
 
@@ -74,10 +147,6 @@ class WarmWorldPackCommand extends Command
             $io->note("--force: deleted {$deleted} existing cache entries for {$country}.");
         }
 
-        // buildTierPack() uses $club->getCurrentLeague() only to decide whether to
-        // include the player's club in fixture generation. For pre-warming, no player
-        // club exists, so we create a transient stub (never persisted) with no league.
-        // User constructor requires a string $email, so we provide a throwaway value.
         $dummyUser = new User('__warmup__@warmup.local');
         $dummyClub = new Club('__warmup__', $dummyUser);
         $dummyClub->setCountry($country);
@@ -85,13 +154,12 @@ class WarmWorldPackCommand extends Command
         $totalTiers = count($leagues);
         $batches    = array_chunk($leagues, $batchSize);
         $batchCount = count($batches);
+        $generated  = 0;
+        $skipped    = 0;
+        $failed     = 0;
+        $startTime  = microtime(true);
 
         $output->writeln("Warming <info>{$country}</info>: <info>{$totalTiers}</info> tiers in batches of <info>{$batchSize}</info>");
-
-        $generated = 0;
-        $skipped   = 0;
-        $failed    = 0;
-        $startTime = microtime(true);
 
         $progressBar = new ProgressBar($output, $totalTiers);
         $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %elapsed:6s%/%estimated:-6s%');
@@ -122,7 +190,7 @@ class WarmWorldPackCommand extends Command
                         $generated++;
                         $clubCount   = count($payload['clubs'] ?? []);
                         $playerCount = array_sum(array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? []));
-                        $status = "generated ({$clubCount} clubs, {$playerCount} players)";
+                        $status      = "generated ({$clubCount} clubs, {$playerCount} players)";
                     }
                 } catch (\Throwable $e) {
                     $batchFailed++;
@@ -145,14 +213,12 @@ class WarmWorldPackCommand extends Command
                 $progressBar->advance();
             }
 
-            // Free the identity map between batches to prevent unbounded memory growth.
             $this->entityManager->clear();
 
-            $batchNum = $batchIndex + 1;
             $progressBar->clear();
             $output->writeln(sprintf(
                 'Batch [%d/%d] complete — %d generated, %d skipped, %d failed',
-                $batchNum, $batchCount, $batchGenerated, $batchSkipped, $batchFailed
+                $batchIndex + 1, $batchCount, $batchGenerated, $batchSkipped, $batchFailed
             ));
             $progressBar->display();
         }
