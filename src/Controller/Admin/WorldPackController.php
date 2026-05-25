@@ -106,6 +106,11 @@ class WorldPackController extends AbstractController
     #[IsGranted('ROLE_ADMIN')]
     public function warmTier(Request $request): JsonResponse
     {
+        // Tier-pack generation involves hundreds of DB queries and can take well over
+        // the default PHP max_execution_time (30 s). Remove the limit for this action.
+        set_time_limit(0);
+        ini_set('memory_limit', '512M');
+
         if (!$this->isCsrfTokenValid('worldpack_warm_tier', $request->request->get('_token'))) {
             return $this->json(['success' => false, 'error' => 'Invalid CSRF token'], 403);
         }

@@ -144,7 +144,7 @@
                     <div class="mb-3">
                         <label for="regen_country" class="form-label fw-semibold small">Country</label>
                         <select id="regen_country" class="form-select form-select-sm">
-                            {% for code, name in COUNTRIES %}
+                            {% for code, name in enabledCountries %}
                                 <option value="{{ code }}">{{ name }} ({{ code }})</option>
                             {% endfor %}
                         </select>
@@ -287,7 +287,7 @@
                         <div class="mb-3">
                             <label for="del_country" class="form-label fw-semibold small">Country</label>
                             <select id="del_country" name="country" class="form-select form-select-sm">
-                                {% for code, name in COUNTRIES %}
+                                {% for code, name in enabledCountries %}
                                     <option value="{{ code }}">{{ name }} ({{ code }})</option>
                                 {% endfor %}
                             </select>

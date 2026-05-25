@@ -29,7 +29,13 @@ class WorldPackCacheService
         }
 
         $payload = $generator();
-        $entry   = new CountryWorldPackCache($country, $tier, $payload);
+
+        // buildTierPack deletes player/staff entities via DQL, which bypasses Doctrine's
+        // UnitOfWork. Those entities remain ghost-managed; clearing the map before flush
+        // prevents Doctrine from trying to re-process them when persisting the cache entry.
+        $this->em->clear();
+
+        $entry = new CountryWorldPackCache($country, $tier, $payload);
         $this->em->persist($entry);
         $this->em->flush();
 

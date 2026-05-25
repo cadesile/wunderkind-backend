@@ -962,10 +962,26 @@ class DashboardController extends AbstractDashboardController
             $byCountry[$entry->getCountry()][$entry->getTier()] = true;
         }
 
+        $enabledCodes    = $this->starterConfigRepository->getConfig()->getEnabledCountries();
+        $allCountryNames = [
+            'EN' => 'England',     'IT' => 'Italy',        'DE' => 'Germany',
+            'ES' => 'Spain',       'BR' => 'Brazil',       'AR' => 'Argentina',
+            'NL' => 'Netherlands', 'FR' => 'France',       'PT' => 'Portugal',
+            'NG' => 'Nigeria',     'GH' => 'Ghana',        'JP' => 'Japan',
+            'KR' => 'South Korea', 'SE' => 'Sweden',       'DK' => 'Denmark',
+            'IE' => 'Ireland',     'CI' => 'Ivory Coast',  'SN' => 'Senegal',
+            'CN' => 'China',
+        ];
+        $enabledCountries = array_intersect_key(
+            $allCountryNames,
+            array_flip($enabledCodes)
+        );
+
         return $this->render('admin/worldpack_cache.html.twig', [
-            'entries'      => $entries,
-            'byCountry'    => $byCountry,
-            'totalEntries' => count($entries),
+            'entries'          => $entries,
+            'byCountry'        => $byCountry,
+            'totalEntries'     => count($entries),
+            'enabledCountries' => $enabledCountries,
         ]);
     }
 
