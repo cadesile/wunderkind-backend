@@ -56,6 +56,19 @@ class StaffRepository extends ServiceEntityRepository
         return (int) $qb->getQuery()->getSingleScalarResult();
     }
 
+    public function countInPoolByNationalityAndRole(string $nationality, StaffRole $role): int
+    {
+        return (int) $this->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->where('s.club IS NULL')
+            ->andWhere('s.nationality = :nat')
+            ->andWhere('s.role = :role')
+            ->setParameter('nat', $nationality)
+            ->setParameter('role', $role)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /** @return Staff[] */
     public function findByClub(Club $club): array
     {

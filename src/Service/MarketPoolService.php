@@ -253,14 +253,14 @@ class MarketPoolService
     }
 
     /** @return Staff[] */
-    public function generateStaffForRole(StaffRole $role, int $count): array
+    public function generateStaffForRole(StaffRole $role, int $count, ?string $nationality = null): array
     {
         $cfg   = $this->poolConfigRepo->getConfig();
         $staff = [];
 
         for ($i = 0; $i < $count; $i++) {
             $ability        = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
-            $nat            = $this->nameGenerator->getRandomNationality();
+            $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();
             $name           = $this->nameGenerator->generateName($nat);
             [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
 
@@ -306,7 +306,7 @@ class MarketPoolService
     }
 
     /** @return Scout[] */
-    public function generateScouts(int $count): array
+    public function generateScouts(int $count, ?string $nationality = null): array
     {
         $cfg    = $this->poolConfigRepo->getConfig();
         $scouts = [];
@@ -314,7 +314,7 @@ class MarketPoolService
         for ($i = 0; $i < $count; $i++) {
             $age        = random_int($cfg->getScoutAgeMin(), $cfg->getScoutAgeMax());
             $experience = random_int($cfg->getScoutExperienceMin(), $cfg->getScoutExperienceMax());
-            $scoutNat   = $this->nameGenerator->getRandomNationality();
+            $scoutNat   = $nationality ?? $this->nameGenerator->getRandomNationality();
             $scoutName  = $this->nameGenerator->generateName($scoutNat);
 
             $scout = new Scout($scoutName);

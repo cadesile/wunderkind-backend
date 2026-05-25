@@ -38,4 +38,14 @@ class ScoutRepository extends ServiceEntityRepository
 
         return $qb->getQuery()->getResult();
     }
+
+    public function countByNationality(string $nationality): int
+    {
+        return (int) $this->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->andWhere('s.nationality = :nat')
+            ->setParameter('nat', $nationality)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

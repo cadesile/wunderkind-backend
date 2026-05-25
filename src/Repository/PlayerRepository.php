@@ -61,6 +61,19 @@ class PlayerRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
+    public function countInPoolByNationality(string $nationality): int
+    {
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.club IS NULL')
+            ->andWhere('p.recruitmentSource = :source')
+            ->andWhere('p.nationality = :nat')
+            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
+            ->setParameter('nat', $nationality)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /** @return Player[] Unassigned SCOUTING_NETWORK players (scout prospect pool) */
     public function findProspects(int $limit = 150): array
     {

@@ -28,16 +28,21 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/nginx-http-only.conf /etc/nginx/nginx-http-only.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/jwt-entrypoint.sh /usr/local/bin/jwt-entrypoint.sh
+COPY docker/pool-warm.sh /usr/local/bin/pool-warm.sh
 COPY docker/worldpack-warm.sh /usr/local/bin/worldpack-warm.sh
 
-# Register the worldpack cron: rebuild all country caches every 6 hours.
-# Alpine's busybox crond reads per-user crontabs from /var/spool/cron/crontabs/.
+# Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
+#   :00 — pool-warm:     top up player/staff/scout pool for all 19 countries
+#   :30 — worldpack-warm: rebuild NPC league caches (consumes from the freshly stocked pool)
+# Both run every 6 hours with 256 MB PHP memory limit (set inside each script).
 RUN mkdir -p /var/spool/cron/crontabs \
- && echo '0 */6 * * * /usr/local/bin/worldpack-warm.sh >> /var/log/worldpack-cron.log 2>&1' \
+ && printf '%s\n' \
+    '0  */6 * * * /usr/local/bin/pool-warm.sh      >> /var/log/pool-cron.log      2>&1' \
+    '30 */6 * * * /usr/local/bin/worldpack-warm.sh >> /var/log/worldpack-cron.log 2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/worldpack-warm.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 
 EXPOSE 80 443
