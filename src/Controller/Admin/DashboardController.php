@@ -54,6 +54,7 @@ class DashboardController extends AbstractDashboardController
         private LeagueService                    $leagueService,
         private CountryWorldPackCacheRepository  $worldPackCacheRepository,
         private WorldPackCacheService            $worldPackCacheService,
+        private \App\Repository\FacilityTemplateRepository $facilityTemplateRepository,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -799,6 +800,26 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
+    // ── Facilities Overview ───────────────────────────────────────────────
+
+    #[Route('/admin/facilities/overview', name: 'admin_facilities_overview')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function facilitiesOverview(): Response
+    {
+        $facilities = $this->facilityTemplateRepository->findAllOrderedByCategoryAndSort();
+
+        $byCategory = [];
+        foreach ($facilities as $f) {
+            $byCategory[$f->getCategory()][] = $f;
+        }
+        ksort($byCategory);
+
+        return $this->render('admin/facilities_content.html.twig', [
+            'facilities' => $facilities,
+            'byCategory' => $byCategory,
+        ]);
+    }
+
     #[Route('/admin/npc-clubs/generate', name: 'admin_npc_clubs_generate', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
     public function generateNpcClubs(Request $request): Response
@@ -1160,7 +1181,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users');
         yield MenuItem::section('Narrative');
         yield MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll');
-        yield MenuItem::linkTo(FacilityTemplateCrudController::class, 'Facility Templates', 'fa fa-building');
+        yield MenuItem::linkToRoute('Facility Templates', 'fa fa-building', 'admin_facilities_overview');
         yield MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater');
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content');
         yield MenuItem::section('Configuration');

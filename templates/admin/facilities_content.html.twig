@@ -1,0 +1,698 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% set FACILITY_CTRL = 'App\\Controller\\Admin\\FacilityTemplateCrudController' %}
+
+{% set CAT_META = {
+    'TRAINING': { label: 'Training',  color: '#3B82F6', bg: 'rgba(59,130,246,.12)', border: 'rgba(59,130,246,.35)', icon: 'fa-dumbbell' },
+    'MEDICAL':  { label: 'Medical',   color: '#F43F5E', bg: 'rgba(244,63,94,.12)',  border: 'rgba(244,63,94,.35)',  icon: 'fa-kit-medical' },
+    'SCOUTING': { label: 'Scouting',  color: '#F59E0B', bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', icon: 'fa-binoculars' },
+    'STADIUM':  { label: 'Stadium',   color: '#8B5CF6', bg: 'rgba(139,92,246,.12)', border: 'rgba(139,92,246,.35)', icon: 'fa-stadium' },
+} %}
+
+{% block content %}
+<style>
+/* ── Reset & base ──────────────────────────────────────────────────────── */
+.fac-page { font-family: 'Inter', system-ui, sans-serif; }
+
+/* ── Filter bar ───────────────────────────────────────────────────────── */
+.fac-filter-bar {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.fac-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .85rem;
+    border: 1px solid var(--bs-border-color);
+    background: transparent;
+    color: var(--bs-secondary-color);
+    font-size: .78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 150ms ease;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.fac-filter-btn:hover {
+    border-color: var(--bs-primary);
+    color: var(--bs-body-color);
+    background: var(--bs-tertiary-bg);
+}
+.fac-filter-btn.active {
+    background: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+}
+.fac-filter-btn .fac-count {
+    font-size: .68rem;
+    padding: .05rem .35rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,.2);
+    font-weight: 600;
+    line-height: 1.4;
+}
+.fac-filter-btn:not(.active) .fac-count {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+}
+
+/* ── Card grid ────────────────────────────────────────────────────────── */
+.fac-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: .875rem;
+}
+
+/* ── Facility card ────────────────────────────────────────────────────── */
+.fac-card {
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    display: flex;
+    flex-direction: column;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+    position: relative;
+    overflow: hidden;
+}
+.fac-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--fac-accent, #3B82F6);
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+.fac-card:hover { border-color: var(--fac-accent, #3B82F6); }
+.fac-card:hover::before { opacity: 1; }
+
+/* Card header */
+.fac-card-head {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .65rem .875rem .5rem;
+}
+.fac-cat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: .2rem .5rem;
+    border-radius: 3px;
+    border: 1px solid;
+    flex-shrink: 0;
+}
+.fac-label {
+    font-weight: 600;
+    font-size: .88rem;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.fac-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #22C55E;
+}
+.fac-status-dot.inactive { background: #6B7280; }
+
+/* Slug row */
+.fac-slug {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: .7rem;
+    color: var(--bs-secondary-color);
+    padding: 0 .875rem .55rem;
+    letter-spacing: .02em;
+}
+
+/* Divider */
+.fac-divider { height: 1px; background: var(--bs-border-color); margin: 0; }
+
+/* Stat chips */
+.fac-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    padding: .55rem .875rem;
+}
+.fac-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .7rem;
+    padding: .18rem .45rem;
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    white-space: nowrap;
+}
+.fac-stat-label {
+    font-size: .62rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bs-secondary-color);
+}
+.fac-stat-val {
+    font-weight: 600;
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--bs-body-color);
+}
+
+/* Gameplay effects */
+.fac-effects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    padding: .4rem .875rem .55rem;
+    border-top: 1px solid var(--bs-border-color);
+    min-height: 2.4rem;
+}
+.fac-effect-chip {
+    font-size: .65rem;
+    padding: .15rem .4rem;
+    border-radius: 2px;
+    background: var(--fac-bg);
+    border: 1px solid var(--fac-border);
+    color: var(--fac-accent);
+    font-family: 'Courier New', Courier, monospace;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.fac-no-effects {
+    font-size: .7rem;
+    color: var(--bs-secondary-color);
+    font-style: italic;
+    align-self: center;
+}
+
+/* Card footer actions */
+.fac-card-foot {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .875rem;
+    border-top: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+    margin-top: auto;
+}
+.fac-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .72rem;
+    font-weight: 500;
+    padding: .28rem .65rem;
+    border: 1px solid var(--bs-border-color);
+    background: transparent;
+    color: var(--bs-body-color);
+    cursor: pointer;
+    transition: all 150ms ease;
+    text-decoration: none;
+}
+.fac-btn:hover {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-primary);
+}
+.fac-btn-primary {
+    background: var(--fac-accent);
+    border-color: var(--fac-accent);
+    color: #fff;
+}
+.fac-btn-primary:hover {
+    opacity: .85;
+    color: #fff;
+    background: var(--fac-accent);
+    border-color: var(--fac-accent);
+}
+
+/* Search box */
+.fac-search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 260px;
+}
+.fac-search-wrap .fa-magnifying-glass {
+    position: absolute;
+    left: .65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    pointer-events: none;
+}
+.fac-search {
+    width: 100%;
+    padding: .35rem .7rem .35rem 2rem;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-size: .78rem;
+    border-radius: 999px;
+    transition: border-color 150ms ease;
+}
+.fac-search:focus {
+    outline: none;
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .15);
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────── */
+.fac-modal-header {
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: .85rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.fac-modal-accent-bar {
+    width: 3px;
+    height: 1.4rem;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+.fac-modal-body { padding: 1rem 1.1rem; }
+.fac-field-label {
+    font-size: .73rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: .3rem;
+    display: block;
+}
+.fac-input {
+    width: 100%;
+    padding: .42rem .65rem;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-size: .82rem;
+    transition: border-color 150ms ease;
+}
+.fac-input:focus {
+    outline: none;
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .15);
+}
+.fac-input-mono { font-family: 'Courier New', Courier, monospace; }
+select.fac-input { cursor: pointer; }
+.fac-modal-footer {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .65rem 1.1rem;
+    border-top: 1px solid var(--bs-border-color);
+}
+.fac-toggle {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    cursor: pointer;
+    font-size: .8rem;
+    user-select: none;
+}
+
+/* Empty state */
+.fac-empty {
+    grid-column: 1/-1;
+    padding: 2.5rem;
+    text-align: center;
+    color: var(--bs-secondary-color);
+    border: 1px dashed var(--bs-border-color);
+    font-size: .85rem;
+}
+</style>
+
+<div class="fac-page mt-1">
+
+    {# ── Page header ─────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <div>
+            <h5 class="fw-semibold mb-0">Facility Templates</h5>
+            <p class="text-muted small mb-0">
+                {{ facilities|length }} template{{ facilities|length != 1 ? 's' : '' }} across {{ byCategory|length }} categor{{ byCategory|length != 1 ? 'ies' : 'y' }}.
+                Edit gameplay effects in the Full Edit view.
+            </p>
+        </div>
+        <div class="ms-auto d-flex gap-2 align-items-center">
+            <a href="{{ ea_url().setController(FACILITY_CTRL).setAction('new') }}"
+               class="btn btn-sm btn-primary">
+                <i class="fa fa-plus me-1"></i>New Template
+            </a>
+        </div>
+    </div>
+
+    {# ── Controls: filter bar + search ──────────────────────────────────── #}
+    <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+        <div class="fac-filter-bar" id="fac-filters">
+            <button class="fac-filter-btn active" data-filter="all" onclick="setFilter('all', this)">
+                <i class="fa fa-layer-group fa-xs"></i>
+                All
+                <span class="fac-count">{{ facilities|length }}</span>
+            </button>
+            {% for cat, items in byCategory %}
+                {% set meta = CAT_META[cat] ?? { label: cat, color: '#6B7280', icon: 'fa-circle' } %}
+                <button class="fac-filter-btn" data-filter="{{ cat }}"
+                        style="--fac-accent: {{ meta.color }}"
+                        onclick="setFilter('{{ cat }}', this)">
+                    <i class="fa {{ meta.icon }} fa-xs" style="color:{{ meta.color }}"></i>
+                    {{ meta.label }}
+                    <span class="fac-count">{{ items|length }}</span>
+                </button>
+            {% endfor %}
+        </div>
+
+        <div class="fac-search-wrap ms-auto">
+            <i class="fa fa-magnifying-glass"></i>
+            <input type="search" class="fac-search" id="fac-search"
+                   placeholder="Search templates…" oninput="filterCards()">
+        </div>
+    </div>
+
+    {# ── Card grid ───────────────────────────────────────────────────────── #}
+    <div class="fac-grid" id="fac-grid">
+
+        {% for facility in facilities %}
+        {% set cat  = facility.category %}
+        {% set meta = CAT_META[cat] ?? { label: cat, color: '#6B7280', bg: 'rgba(107,114,128,.12)', border: 'rgba(107,114,128,.35)', icon: 'fa-circle' } %}
+        {% set effects = facility.gameplayEffects %}
+
+        <div class="fac-card"
+             data-category="{{ cat }}"
+             data-label="{{ facility.label|lower }}"
+             data-slug="{{ facility.slug|lower }}"
+             style="--fac-accent:{{ meta.color }};--fac-bg:{{ meta.bg }};--fac-border:{{ meta.border }}">
+
+            {# Header #}
+            <div class="fac-card-head">
+                <span class="fac-cat-badge"
+                      style="color:{{ meta.color }};background:{{ meta.bg }};border-color:{{ meta.border }}">
+                    <i class="fa {{ meta.icon }} fa-xs"></i>
+                    {{ meta.label }}
+                </span>
+                <span class="fac-label" title="{{ facility.label }}">{{ facility.label }}</span>
+                <span class="fac-status-dot {{ facility.isActive ? '' : 'inactive' }}"
+                      title="{{ facility.isActive ? 'Active' : 'Inactive' }}"></span>
+            </div>
+
+            {# Slug #}
+            <div class="fac-slug">{{ facility.slug }}</div>
+
+            <div class="fac-divider"></div>
+
+            {# Stats #}
+            <div class="fac-stats">
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Cost</span>
+                    <span class="fac-stat-val">£{{ (facility.baseCost / 100)|number_format(0, '.', ',') }}</span>
+                </div>
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Upkeep/wk</span>
+                    <span class="fac-stat-val">£{{ (facility.weeklyUpkeepBase / 100)|number_format(0, '.', ',') }}</span>
+                </div>
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Max Lvl</span>
+                    <span class="fac-stat-val">{{ facility.maxLevel }}</span>
+                </div>
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Build Wks</span>
+                    <span class="fac-stat-val">{{ facility.baseConstructionWeeks == 0 ? '—' : facility.baseConstructionWeeks }}</span>
+                </div>
+                {% if facility.reputationBonus > 0 %}
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Rep Bonus</span>
+                    <span class="fac-stat-val" style="color:#22C55E">+{{ facility.reputationBonus }}</span>
+                </div>
+                {% endif %}
+                {% if facility.matchdayIncome %}
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Matchday</span>
+                    <span class="fac-stat-val">£{{ (facility.matchdayIncome / 100)|number_format(0, '.', ',') }}</span>
+                </div>
+                {% endif %}
+                <div class="fac-stat">
+                    <span class="fac-stat-label">Sort</span>
+                    <span class="fac-stat-val">{{ facility.sortOrder }}</span>
+                </div>
+            </div>
+
+            {# Gameplay effects #}
+            <div class="fac-effects">
+                {% if effects is empty %}
+                    <span class="fac-no-effects">No gameplay effects configured</span>
+                {% else %}
+                    {% for key, val in effects %}
+                        <span class="fac-effect-chip" title="{{ key }}: {{ val }}">
+                            {{ key|replace({'PerLevel': '/lvl', 'Multiplier': '×', 'Delta': 'Δ', 'Growth': '+', 'Bonus': '+'}) }}: {{ val }}
+                        </span>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            {# Footer #}
+            <div class="fac-card-foot">
+                <button type="button"
+                        class="fac-btn fac-btn-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#facilityQuickEditModal"
+                        data-id="{{ facility.id|ea_as_string }}"
+                        data-label="{{ facility.label|e('html_attr') }}"
+                        data-description="{{ facility.description|e('html_attr') }}"
+                        data-category="{{ cat }}"
+                        data-base-cost="{{ (facility.baseCost / 100) }}"
+                        data-weekly-upkeep="{{ (facility.weeklyUpkeepBase / 100) }}"
+                        data-max-level="{{ facility.maxLevel }}"
+                        data-build-weeks="{{ facility.baseConstructionWeeks }}"
+                        data-sort-order="{{ facility.sortOrder }}"
+                        data-reputation-bonus="{{ facility.reputationBonus }}"
+                        data-decay-base="{{ facility.decayBase }}"
+                        data-is-active="{{ facility.isActive ? '1' : '0' }}"
+                        data-csrf="{{ csrf_token('facility_qe_' ~ facility.id|ea_as_string) }}"
+                        data-full-edit="{{ ea_url().setController(FACILITY_CTRL).setAction('edit').setEntityId(facility.id|ea_as_string) }}"
+                        data-accent="{{ meta.color }}">
+                    <i class="fa fa-pencil fa-xs"></i>Quick Edit
+                </button>
+                <a href="{{ ea_url().setController(FACILITY_CTRL).setAction('edit').setEntityId(facility.id|ea_as_string) }}"
+                   class="fac-btn ms-auto" title="Full edit in EasyAdmin">
+                    <i class="fa fa-arrow-up-right-from-square fa-xs"></i>Full Edit
+                </a>
+            </div>
+
+        </div>{# /.fac-card #}
+        {% else %}
+        <div class="fac-empty">
+            <i class="fa fa-building fa-2x mb-2 d-block" style="opacity:.3"></i>
+            No facility templates found. Create one to get started.
+        </div>
+        {% endfor %}
+
+        <div class="fac-empty d-none" id="fac-no-match">
+            <i class="fa fa-magnifying-glass fa-2x mb-2 d-block" style="opacity:.3"></i>
+            No templates match your filter.
+        </div>
+    </div>
+
+</div>
+
+{# ── Quick Edit Modal ─────────────────────────────────────────────────────── #}
+<div class="modal fade" id="facilityQuickEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:520px">
+        <div class="modal-content" style="border:1px solid var(--bs-border-color)">
+            <form method="POST" id="facilityQEForm" action="">
+                <input type="hidden" name="_token" id="qe-token">
+
+                {# Modal header #}
+                <div class="fac-modal-header">
+                    <div class="fac-modal-accent-bar" id="qe-accent-bar" style="background:#3B82F6"></div>
+                    <div>
+                        <div class="fw-semibold" style="font-size:.88rem">
+                            <i class="fa fa-pencil fa-xs me-1 text-muted"></i>Quick Edit
+                        </div>
+                        <div class="text-muted" id="qe-title-label" style="font-size:.75rem;font-family:'Courier New',monospace"></div>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+                </div>
+
+                {# Modal body #}
+                <div class="fac-modal-body">
+                    <div class="row g-3">
+
+                        {# Label + Category row #}
+                        <div class="col-8">
+                            <label class="fac-field-label" for="qe-label">Label</label>
+                            <input type="text" class="fac-input" id="qe-label" name="label"
+                                   required maxlength="100" placeholder="Display name">
+                        </div>
+                        <div class="col-4">
+                            <label class="fac-field-label" for="qe-category">Category</label>
+                            <select class="fac-input" id="qe-category" name="category">
+                                <option value="TRAINING">Training</option>
+                                <option value="MEDICAL">Medical</option>
+                                <option value="SCOUTING">Scouting</option>
+                                <option value="STADIUM">Stadium</option>
+                            </select>
+                        </div>
+
+                        {# Description #}
+                        <div class="col-12">
+                            <label class="fac-field-label" for="qe-description">Description</label>
+                            <textarea class="fac-input" id="qe-description" name="description"
+                                      rows="2" style="resize:vertical" maxlength="500"></textarea>
+                        </div>
+
+                        {# Costs #}
+                        <div class="col-6">
+                            <label class="fac-field-label" for="qe-base-cost">Base Cost (£)</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-base-cost"
+                                   name="baseCost" min="0" step="1" placeholder="e.g. 50000">
+                        </div>
+                        <div class="col-6">
+                            <label class="fac-field-label" for="qe-upkeep">Weekly Upkeep (£)</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-upkeep"
+                                   name="weeklyUpkeepBase" min="0" step="1" placeholder="e.g. 500">
+                        </div>
+
+                        {# Levels & build #}
+                        <div class="col-4">
+                            <label class="fac-field-label" for="qe-max-level">Max Level</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-max-level"
+                                   name="maxLevel" min="1" max="10" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="fac-field-label" for="qe-build-weeks">Build Weeks</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-build-weeks"
+                                   name="baseConstructionWeeks" min="0" max="52">
+                        </div>
+                        <div class="col-4">
+                            <label class="fac-field-label" for="qe-sort">Sort Order</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-sort"
+                                   name="sortOrder" min="0">
+                        </div>
+
+                        {# Bonuses #}
+                        <div class="col-6">
+                            <label class="fac-field-label" for="qe-rep-bonus">Reputation Bonus</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-rep-bonus"
+                                   name="reputationBonus" min="0" step="0.1">
+                        </div>
+                        <div class="col-6">
+                            <label class="fac-field-label" for="qe-decay-base">Decay Base</label>
+                            <input type="number" class="fac-input fac-input-mono" id="qe-decay-base"
+                                   name="decayBase" min="0" step="0.1">
+                        </div>
+
+                    </div>
+                </div>
+
+                {# Modal footer #}
+                <div class="fac-modal-footer">
+                    <label class="fac-toggle" for="qe-is-active">
+                        <input type="checkbox" class="form-check-input m-0" id="qe-is-active" name="isActive">
+                        <span>Active</span>
+                    </label>
+                    <a href="#" id="qe-full-edit-link" class="fac-btn ms-auto">
+                        <i class="fa fa-arrow-up-right-from-square fa-xs"></i>Full Edit
+                    </a>
+                    <button type="button" class="fac-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="fac-btn fac-btn-primary" id="qe-submit-btn"
+                            style="background:#3B82F6;border-color:#3B82F6">
+                        <i class="fa fa-floppy-disk fa-xs"></i>Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Filter & search ──────────────────────────────────────────────────────
+
+let activeFilter = 'all';
+
+function setFilter(cat, btn) {
+    activeFilter = cat;
+    document.querySelectorAll('.fac-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterCards();
+}
+
+function filterCards() {
+    const q    = document.getElementById('fac-search').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('#fac-grid .fac-card');
+    let visible = 0;
+
+    cards.forEach(card => {
+        const catMatch   = activeFilter === 'all' || card.dataset.category === activeFilter;
+        const labelMatch = q === '' || card.dataset.label.includes(q) || card.dataset.slug.includes(q);
+        const show = catMatch && labelMatch;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    document.getElementById('fac-no-match').classList.toggle('d-none', visible > 0);
+}
+
+// ── Quick-edit modal ──────────────────────────────────────────────────────
+
+(function () {
+    const modal = document.getElementById('facilityQuickEditModal');
+    if (!modal) return;
+
+    const CAT_COLORS = {
+        TRAINING: '#3B82F6',
+        MEDICAL:  '#F43F5E',
+        SCOUTING: '#F59E0B',
+        STADIUM:  '#8B5CF6',
+    };
+
+    modal.addEventListener('show.bs.modal', function (ev) {
+        const btn = ev.relatedTarget;
+        const id  = btn.dataset.id;
+        const accent = btn.dataset.accent || '#3B82F6';
+
+        // Form action
+        document.getElementById('facilityQEForm').action = '/admin/facilities/' + id + '/quick-edit';
+
+        // Accent bar + submit button colour
+        document.getElementById('qe-accent-bar').style.background = accent;
+        document.getElementById('qe-submit-btn').style.background   = accent;
+        document.getElementById('qe-submit-btn').style.borderColor  = accent;
+
+        // Populate fields
+        document.getElementById('qe-token').value        = btn.dataset.csrf        || '';
+        document.getElementById('qe-title-label').textContent = btn.dataset.label  || '';
+        document.getElementById('qe-label').value         = btn.dataset.label       || '';
+        document.getElementById('qe-description').value   = btn.dataset.description || '';
+        document.getElementById('qe-category').value      = btn.dataset.category    || 'TRAINING';
+        document.getElementById('qe-base-cost').value     = btn.dataset.baseCost    || '';
+        document.getElementById('qe-upkeep').value        = btn.dataset.weeklyUpkeep|| '';
+        document.getElementById('qe-max-level').value     = btn.dataset.maxLevel    || '';
+        document.getElementById('qe-build-weeks').value   = btn.dataset.buildWeeks  || '';
+        document.getElementById('qe-sort').value          = btn.dataset.sortOrder   || '';
+        document.getElementById('qe-rep-bonus').value     = btn.dataset.reputationBonus || '';
+        document.getElementById('qe-decay-base').value    = btn.dataset.decayBase   || '';
+        document.getElementById('qe-is-active').checked   = btn.dataset.isActive === '1';
+        document.getElementById('qe-full-edit-link').href = btn.dataset.fullEdit    || '#';
+
+        // Update accent when category changes
+        document.getElementById('qe-category').onchange = function () {
+            const c = CAT_COLORS[this.value] || '#3B82F6';
+            document.getElementById('qe-accent-bar').style.background  = c;
+            document.getElementById('qe-submit-btn').style.background   = c;
+            document.getElementById('qe-submit-btn').style.borderColor  = c;
+        };
+    });
+}());
+</script>
+{% endblock %}

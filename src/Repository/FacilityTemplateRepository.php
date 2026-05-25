@@ -23,4 +23,15 @@ class FacilityTemplateRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return FacilityTemplate[] sorted by category then sortOrder then slug */
+    public function findAllOrderedByCategoryAndSort(): array
+    {
+        return $this->createQueryBuilder('ft')
+            ->orderBy('ft.category', 'ASC')
+            ->addOrderBy('ft.sortOrder', 'ASC')
+            ->addOrderBy('ft.slug', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

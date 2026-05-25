@@ -20,7 +20,7 @@ class LeagueAdminController extends AbstractController
     {
         if (!$this->isCsrfTokenValid('league_qe_' . $league->getId(), $request->request->get('_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirectToRoute('admin_leagues_overview');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_leagues_overview']));
         }
 
         $name = trim((string) $request->request->get('name', ''));
@@ -56,6 +56,6 @@ class LeagueAdminController extends AbstractController
         $this->em->flush();
 
         $this->addFlash('success', sprintf('League "%s" updated.', $league->getName()));
-        return $this->redirectToRoute('admin_leagues_overview');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_leagues_overview']));
     }
 }
