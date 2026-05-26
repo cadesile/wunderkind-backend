@@ -36,8 +36,49 @@
                 </div>
             </div>
 
+            {# ── Section navigation ───────────────────────────────────────── #}
+            {% set cfgSections = [
+                {id: 'clique',            label: 'Clique System'},
+                {id: 'xp',               label: 'XP &amp; Progression'},
+                {id: 'development',      label: 'Development / Potential'},
+                {id: 'coach',            label: 'Coach Influence'},
+                {id: 'reputation',       label: 'Reputation'},
+                {id: 'injury',           label: 'Injury'},
+                {id: 'scouting',         label: 'Scouting'},
+                {id: 'morale',           label: 'Morale'},
+                {id: 'incidents',        label: 'Incidents'},
+                {id: 'transfer',         label: 'Transfer Market'},
+                {id: 'guardian',         label: 'Guardian Complaints'},
+                {id: 'league-finances',  label: 'League Finances'},
+                {id: 'staff-limits',     label: 'Staff Limits'},
+                {id: 'sponsor-probs',    label: 'Sponsor Offers'},
+                {id: 'investor-probs',   label: 'Investor Offers'},
+                {id: 'facility-income',  label: 'Facility Income'},
+                {id: 'facility-build',   label: 'Facility Construction'},
+                {id: 'playing-style',    label: 'Playing Style'},
+                {id: 'stadium',          label: 'Stadium'},
+                {id: 'attendance',       label: 'Attendance'},
+                {id: 'ability-ranges',   label: 'Ability Ranges'},
+                {id: 'squad',            label: 'Squad'},
+                {id: 'retirement',       label: 'Retirement'},
+                {id: 'inbox',            label: 'Inbox'},
+                {id: 'wages',            label: 'Wages'},
+                {id: 'sacking',          label: 'Manager Sacking'},
+                {id: 'cards',            label: 'Cards &amp; Discipline'},
+            ] %}
+            <div class="d-flex flex-wrap gap-1" id="cfg-tab-nav">
+                {% for s in cfgSections %}
+                <button type="button"
+                        class="cfg-tab btn btn-sm btn-outline-secondary"
+                        data-tab="{{ s.id }}"
+                        style="font-size:.72rem;padding:.2rem .55rem;">
+                    {{ s.label|raw }}
+                </button>
+                {% endfor %}
+            </div>
+
             {# ── Clique System ──────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="clique">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-people-group text-muted"></i>
                     <span class="fw-semibold small">Clique System</span>
@@ -76,7 +117,7 @@
             </div>
 
             {# ── XP & Progression ───────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="xp">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-star text-muted"></i>
                     <span class="fw-semibold small">XP &amp; Progression</span>
@@ -109,7 +150,7 @@
             </div>
 
             {# ── Development / Potential Ceiling ────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="development">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-chart-bar text-muted"></i>
                     <span class="fw-semibold small">Development / Potential Ceiling</span>
@@ -139,7 +180,7 @@
             </div>
 
             {# ── Coach Development Influence ─────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="coach">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-whistle text-muted"></i>
                     <span class="fw-semibold small">Coach Development Influence</span>
@@ -183,7 +224,7 @@
             </div>
 
             {# ── Reputation ─────────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="reputation">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-chart-line text-muted"></i>
                     <span class="fw-semibold small">Reputation</span>
@@ -209,7 +250,7 @@
             </div>
 
             {# ── Injury ─────────────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="injury">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-kit-medical text-muted"></i>
                     <span class="fw-semibold small">Injury</span>
@@ -249,7 +290,7 @@
             </div>
 
             {# ── Scouting ───────────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="scouting">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-binoculars text-muted"></i>
                     <span class="fw-semibold small">Scouting</span>
@@ -330,7 +371,7 @@
             </div>
 
             {# ── Morale ─────────────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="morale">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-face-smile text-muted"></i>
                     <span class="fw-semibold small">Morale</span>
@@ -360,7 +401,7 @@
             </div>
 
             {# ── Incidents ──────────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="incidents">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-bolt text-muted"></i>
                     <span class="fw-semibold small">Incidents</span>
@@ -426,7 +467,7 @@
             </div>
 
             {# ── Transfer Market ────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="transfer">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-money-bill-transfer text-muted"></i>
                     <span class="fw-semibold small">Transfer Market</span>
@@ -459,7 +500,7 @@
             </div>
 
             {# ── Guardian Complaints ─────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="guardian">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-family text-muted"></i>
                     <span class="fw-semibold small">Guardian Complaints</span>
@@ -542,7 +583,7 @@
             </div>
 
             {# ── League Finances ─────────────────────────────────────────────────── #}
-            <div class="card mb-4">
+            <div class="card mb-4 cfg-section" data-section-id="league-finances">
                 <div class="card-header fw-semibold">League Finances</div>
                 <div class="card-body">
                     <div class="row g-3">
@@ -620,7 +661,7 @@
             </div>
 
             {# ── Staff Limits Per Club ────────────────────────────────────────────── #}
-            <div class="card mb-4">
+            <div class="card mb-4 cfg-section" data-section-id="staff-limits">
                 <div class="card-header fw-semibold">Staff Limits Per Club</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">Maximum number of each staff type a single club is allowed to hold.</p>
@@ -691,7 +732,7 @@
             </div>
 
             {# ── Sponsor Offer Probabilities ──────────────────────────────────────── #}
-            <div class="card mb-4">
+            <div class="card mb-4 cfg-section" data-section-id="sponsor-probs">
                 <div class="card-header fw-semibold">Sponsor Offer Probabilities</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">Weekly probability (0.0–1.0) that an academy receives a sponsor offer from each reputation tier.</p>
@@ -729,7 +770,7 @@
             </div>
 
             {# ── Investor Offer Probabilities ─────────────────────────────────────── #}
-            <div class="card mb-4">
+            <div class="card mb-4 cfg-section" data-section-id="investor-probs">
                 <div class="card-header fw-semibold">Investor Offer Probabilities</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">Weekly probability (0.0–1.0) that an academy receives an investor offer from each reputation tier.</p>
@@ -767,7 +808,7 @@
             </div>
 
             {# ── Facility Income ────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="facility-income">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-building text-muted"></i>
                     <span class="fw-semibold small">Facility Income</span>
@@ -786,7 +827,7 @@
             </div>
 
             {# ── Facility Construction ──────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="facility-build">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-hard-hat text-muted"></i>
                     <span class="fw-semibold small">Facility Construction</span>
@@ -854,7 +895,7 @@
                 'HIGH_PRESS': 'High Press'
             } %}
             {% set psAttributes = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'] %}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="playing-style">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-futbol text-muted"></i>
                     <span class="fw-semibold small">Playing Style Influence</span>
@@ -896,7 +937,7 @@
             </div>
 
             {# ── Stadium Settings ────────────────────────────────────────── #}
-            <div class="card mb-4">
+            <div class="card mb-4 cfg-section" data-section-id="stadium">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-building text-muted"></i>
                     <span class="fw-semibold small">Stadium Settings</span>
@@ -915,7 +956,7 @@
             </div>
 
             {# ── Attendance Ranges ───────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="attendance">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-people-roof text-muted"></i>
                     <span class="fw-semibold small">Attendance Ranges</span>
@@ -1007,7 +1048,7 @@
                 {% endfor %}
             {% endfor %}
 
-            <div class="card">
+            <div class="card cfg-section" data-section-id="ability-ranges">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-chart-line text-muted"></i>
                     <span class="fw-semibold small">League Player Ability Ranges</span>
@@ -1099,7 +1140,7 @@
             </script>
 
             {# ── Squad Configuration ────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="squad">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-users text-muted"></i>
                     <span class="fw-semibold small">Squad Configuration</span>
@@ -1129,7 +1170,7 @@
             </div>
 
             {# ── Player Retirement ──────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="retirement">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-person-walking-arrow-right text-muted"></i>
                     <span class="fw-semibold small">Player Retirement</span>
@@ -1167,7 +1208,7 @@
             </div>
 
             {# ── Inbox / Notification Frequencies ───────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="inbox">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-bell text-muted"></i>
                     <span class="fw-semibold small">Inbox &amp; Notification Frequencies</span>
@@ -1197,7 +1238,7 @@
             </div>
 
             {# ── Wage Multiplier Tiers ───────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="wages">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-money-bill-trend-up text-muted"></i>
                     <span class="fw-semibold small">Wage Multiplier Tiers</span>
@@ -1267,7 +1308,7 @@
             </div>
 
             {# ── Manager Sacking ─────────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="sacking">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-person-walking-arrow-right text-muted"></i>
                     <span class="fw-semibold small">Manager Sacking</span>
@@ -1311,7 +1352,7 @@
             </div>
 
             {# ── Cards & Discipline ──────────────────────────────────────── #}
-            <div class="card">
+            <div class="card cfg-section" data-section-id="cards">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-rectangle-xmark text-muted"></i>
                     <span class="fw-semibold small">Cards &amp; Discipline</span>
@@ -1370,4 +1411,35 @@
     </div>
 
 </div>
+
+<script>
+(function () {
+    var STORAGE_KEY = 'gc_active_tab';
+    var tabs   = Array.from(document.querySelectorAll('.cfg-tab'));
+    var panels = Array.from(document.querySelectorAll('.cfg-section'));
+
+    if (!tabs.length || !panels.length) return;
+
+    function activate(id) {
+        panels.forEach(function (p) {
+            p.style.display = p.dataset.sectionId === id ? '' : 'none';
+        });
+        tabs.forEach(function (t) {
+            var active = t.dataset.tab === id;
+            t.classList.toggle('btn-primary',          active);
+            t.classList.toggle('btn-outline-secondary', !active);
+        });
+        try { localStorage.setItem(STORAGE_KEY, id); } catch (e) {}
+    }
+
+    tabs.forEach(function (t) {
+        t.addEventListener('click', function () { activate(t.dataset.tab); });
+    });
+
+    var saved = null;
+    try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    var validIds = panels.map(function (p) { return p.dataset.sectionId; });
+    activate(saved && validIds.indexOf(saved) !== -1 ? saved : tabs[0].dataset.tab);
+})();
+</script>
 {% endblock %}

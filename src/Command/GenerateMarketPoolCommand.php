@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use App\Service\MarketPoolService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -28,11 +27,10 @@ class GenerateMarketPoolCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('players',   null, InputOption::VALUE_OPTIONAL, 'Market players to generate (YOUTH_INTAKE)',       100)
-            ->addOption('prospects', null, InputOption::VALUE_OPTIONAL, 'Prospect players to generate (SCOUTING_NETWORK)', 150)
-            ->addOption('coaches',   null, InputOption::VALUE_OPTIONAL, 'Coaches to generate',                              20)
-            ->addOption('scouts',    null, InputOption::VALUE_OPTIONAL, 'Scouts to generate',                               10)
-            ->addOption('agents',    null, InputOption::VALUE_OPTIONAL, 'Universal agents',                                 30)
+            ->addOption('players',   null, InputOption::VALUE_OPTIONAL, 'Pool players to generate',   100)
+            ->addOption('coaches',   null, InputOption::VALUE_OPTIONAL, 'Coaches to generate',          20)
+            ->addOption('scouts',    null, InputOption::VALUE_OPTIONAL, 'Scouts to generate',           10)
+            ->addOption('agents',    null, InputOption::VALUE_OPTIONAL, 'Universal agents',             30)
             ->addOption('replenish', 'r',  InputOption::VALUE_NONE,     'Top up pool to minimum thresholds only')
         ;
     }
@@ -54,7 +52,6 @@ class GenerateMarketPoolCommand extends Command
         }
 
         $playerCount   = (int) $input->getOption('players');
-        $prospectCount = (int) $input->getOption('prospects');
         $coachCount    = (int) $input->getOption('coaches');
         $scoutCount    = (int) $input->getOption('scouts');
         $agentCount    = (int) $input->getOption('agents');
@@ -70,19 +67,10 @@ class GenerateMarketPoolCommand extends Command
             }
 
             if ($playerCount > 0) {
-                $io->text(sprintf('Generating %d market players (YOUTH_INTAKE, club = null)...', $playerCount));
+                $io->text(sprintf('Generating %d pool players (club = null)...', $playerCount));
                 $bar = $io->createProgressBar($playerCount);
                 $bar->start();
-                $this->pool->generatePlayers($playerCount, RecruitmentSource::YOUTH_INTAKE);
-                $bar->finish();
-                $io->newLine(2);
-            }
-
-            if ($prospectCount > 0) {
-                $io->text(sprintf('Generating %d prospect players (SCOUTING_NETWORK, club = null)...', $prospectCount));
-                $bar = $io->createProgressBar($prospectCount);
-                $bar->start();
-                $this->pool->generatePlayers($prospectCount, RecruitmentSource::SCOUTING_NETWORK);
+                $this->pool->generatePlayers($playerCount);
                 $bar->finish();
                 $io->newLine(2);
             }
@@ -122,11 +110,10 @@ class GenerateMarketPoolCommand extends Command
 
         $io->success('Market pool generated successfully!');
         $io->definitionList(
-            ['Agents'            => $agentCount],
-            ['Market Players'    => $playerCount],
-            ['Prospect Players'  => $prospectCount],
-            ['Pool Coaches'      => $coachCount],
-            ['Scouts'            => $scoutCount],
+            ['Agents'       => $agentCount],
+            ['Pool Players' => $playerCount],
+            ['Pool Coaches' => $coachCount],
+            ['Scouts'       => $scoutCount],
         );
 
         return Command::SUCCESS;

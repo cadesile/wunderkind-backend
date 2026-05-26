@@ -66,16 +66,6 @@ class MarketController extends AbstractController
         return $response;
     }
 
-    #[Route('/prospects', name: 'api_market_prospects', methods: ['GET'])]
-    #[IsGranted('ROLE_CLUB')]
-    public function prospects(MarketDataService $service): JsonResponse
-    {
-        $players  = $service->getProspectSnapshot();
-        $response = $this->json(['players' => $players]);
-        $response->setMaxAge(3600); // 1-hour cache hint — prospects refresh slowly
-        return $response;
-    }
-
     #[Route('/assign', name: 'api_market_assign', methods: ['POST'])]
     #[IsGranted('ROLE_CLUB')]
     public function assign(

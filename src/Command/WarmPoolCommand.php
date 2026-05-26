@@ -249,9 +249,7 @@ class WarmPoolCommand extends Command
         return (int) $this->playerRepo->createQueryBuilder('p')
             ->select('COUNT(p.id)')
             ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :src')
             ->andWhere('p.nationality NOT IN (:nats)')
-            ->setParameter('src', RecruitmentSource::YOUTH_INTAKE)
             ->setParameter('nats', $exclude)
             ->getQuery()
             ->getSingleScalarResult();

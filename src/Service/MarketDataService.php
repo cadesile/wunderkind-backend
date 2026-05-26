@@ -41,12 +41,6 @@ class MarketDataService
         );
     }
 
-    /** @return array<int, array<string, mixed>> SCOUTING_NETWORK players for the prospect pool endpoint */
-    public function getProspectSnapshot(): array
-    {
-        return array_map($this->serializePlayer(...), $this->pool->getAvailableProspects(150));
-    }
-
     private function serializePlayer(Player $p): array
     {
         return [

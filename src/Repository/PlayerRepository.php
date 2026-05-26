@@ -7,7 +7,6 @@ use App\Entity\Guardian;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
-use App\Enum\RecruitmentSource;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -19,7 +18,7 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return Player[] Unassigned YOUTH_INTAKE players (open market pool)
+     * @return Player[] All unassigned pool players, optionally filtered by nationality / ability.
      * @param int|null $abilityMin If provided, only players with currentAbility >= this value
      * @param int|null $abilityMax If provided, only players with currentAbility <= this value
      */
@@ -27,8 +26,6 @@ class PlayerRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('p')
             ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :source')
-            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
             ->orderBy('p.createdAt', 'DESC')
             ->setMaxResults($limit);
 
@@ -55,8 +52,6 @@ class PlayerRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
             ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :source')
-            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
             ->getQuery()
             ->getSingleScalarResult();
     }
@@ -66,34 +61,8 @@ class PlayerRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
             ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :source')
             ->andWhere('p.nationality = :nat')
-            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
             ->setParameter('nat', $nationality)
-            ->getQuery()
-            ->getSingleScalarResult();
-    }
-
-    /** @return Player[] Unassigned SCOUTING_NETWORK players (scout prospect pool) */
-    public function findProspects(int $limit = 150): array
-    {
-        return $this->createQueryBuilder('p')
-            ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :source')
-            ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
-            ->orderBy('p.createdAt', 'DESC')
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
-    }
-
-    public function countProspects(): int
-    {
-        return (int) $this->createQueryBuilder('p')
-            ->select('COUNT(p.id)')
-            ->where('p.club IS NULL')
-            ->andWhere('p.recruitmentSource = :source')
-            ->setParameter('source', RecruitmentSource::SCOUTING_NETWORK)
             ->getQuery()
             ->getSingleScalarResult();
     }

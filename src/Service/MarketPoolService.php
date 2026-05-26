@@ -425,16 +425,10 @@ class MarketPoolService
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
 
-    /** @return Player[] Unassigned YOUTH_INTAKE players for the open market */
+    /** @return Player[] All unassigned pool players, optionally filtered by nationality / ability */
     public function getAvailablePlayers(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         return $this->playerRepo->findInPool($limit, $nationality, $abilityMin, $abilityMax);
-    }
-
-    /** @return Player[] Unassigned SCOUTING_NETWORK players for the scout prospect pool */
-    public function getAvailableProspects(int $limit = 150): array
-    {
-        return $this->playerRepo->findProspects($limit);
     }
 
     /** @return Staff[] */
