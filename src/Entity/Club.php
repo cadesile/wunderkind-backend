@@ -20,7 +20,7 @@ class Club
     private string $name;
 
     /** Club Reputation score — drives Youth Requests recruitment pipeline */
-    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $reputation = 0;
 
     /** Lifetime earnings in pence/cents (integer avoids float precision issues) */
@@ -28,7 +28,7 @@ class Club
     private int $totalCareerEarnings = 0;
 
     /** Hall of Fame points accumulated across all careers */
-    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $hallOfFamePoints = 0;
 
     /** Week number of the most recent valid sync (for anti-cheat) */
@@ -79,7 +79,7 @@ class Club
     private int $managerAmbition = 50;
 
     /** Club cash balance in pence/cents */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'bigint')]
     private int $balance = 0;
 
     /**
