@@ -124,15 +124,17 @@ class InitializeController extends AbstractController
         $leagues = $this->leagueRepository->findByCountry($club->getCountry());
 
         $data = array_map(fn($league) => [
-            'id'               => (string) $league->getId(),
-            'tier'             => $league->getTier(),
-            'name'             => $league->getName(),
-            'country'          => $league->getCountry(),
-            'promotionSpots'   => $league->getPromotionSpots(),
-            'reputationTier'   => $league->getLeagueReputationTier()?->value,
-            'tvDeal'           => $league->getTvDeal(),
-            'prizeMoney'       => $league->getPrizeMoney(),
+            'id'                => (string) $league->getId(),
+            'tier'              => $league->getTier(),
+            'name'              => $league->getName(),
+            'country'           => $league->getCountry(),
+            'promotionSpots'    => $league->getPromotionSpots(),
+            'reputationTier'    => $league->getLeagueReputationTier()?->value,
+            'tvDeal'            => $league->getTvDeal(),
+            'prizeMoney'        => $league->getPrizeMoney(),
             'leaguePositionPot' => $league->getLeaguePositionPot(),
+            'trophyImage'       => $league->getTrophyImage(),
+            'trophyColour'      => $league->getTrophyColour()?->value,
         ], $leagues);
 
         return $this->json(['leagues' => $data]);
