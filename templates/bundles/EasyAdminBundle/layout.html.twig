@@ -11,3 +11,69 @@
         <link rel="shortcut icon" href="{{ asset(_ea.dashboardFaviconPath) }}">
     {% endif %}
 {% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script>
+(function () {
+    // Trophy preview — activates on any League edit/new form that has the trophyImage select
+    function initTrophyPreview() {
+        var imgSelect    = document.querySelector('select[id$="_trophyImage"]');
+        var colourSelect = document.querySelector('select[id$="_trophyColour"]');
+        if (!imgSelect) return;
+
+        // Correct filter chains for black SVG silhouettes:
+        // brightness(0) → black, invert(1) → white, sepia+saturate+hue-rotate → target colour
+        var COLOUR_FILTERS = {
+            silver:      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
+            gold:        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
+            gold_silver: 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)',
+        };
+
+        // Build preview container and insert it after the trophyImage field's form-group
+        var wrapper = document.createElement('div');
+        wrapper.id  = 'trophy-preview-wrap';
+        wrapper.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:12px 14px;background:var(--bs-secondary-bg);border:1px solid var(--bs-border-color);';
+
+        var previewImg = document.createElement('img');
+        previewImg.id  = 'trophy-preview-img';
+        previewImg.style.cssText = 'width:80px;height:80px;object-fit:contain;transition:filter .25s;';
+        previewImg.alt = 'Trophy preview';
+
+        var previewLabel = document.createElement('div');
+        previewLabel.id  = 'trophy-preview-label';
+        previewLabel.style.cssText = 'font-size:.75rem;color:var(--bs-secondary-color);align-self:flex-end;';
+
+        wrapper.appendChild(previewImg);
+        wrapper.appendChild(previewLabel);
+
+        // Append preview after the trophyImage select's closest form-group ancestor
+        var fieldGroup = imgSelect.closest('.field-group, .form-group, .mb-3, .mb-4') || imgSelect.parentNode;
+        fieldGroup.parentNode.insertBefore(wrapper, fieldGroup.nextSibling);
+
+        function refresh() {
+            var slug   = imgSelect.value;
+            var colour = colourSelect ? colourSelect.value : '';
+            if (!slug) {
+                wrapper.style.display = 'none';
+                return;
+            }
+            wrapper.style.display = 'flex';
+            previewImg.src         = '/images/trophies/' + slug + '.svg';
+            previewImg.style.filter = COLOUR_FILTERS[colour] || 'brightness(0) invert(0.15)';
+            previewLabel.textContent = slug.replace('trophy-', 'Trophy ') + (colour ? ' · ' + colour.replace('_', ' & ') : '');
+        }
+
+        imgSelect.addEventListener('change', refresh);
+        if (colourSelect) colourSelect.addEventListener('change', refresh);
+        refresh();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTrophyPreview);
+    } else {
+        initTrophyPreview();
+    }
+}());
+</script>
+{% endblock %}

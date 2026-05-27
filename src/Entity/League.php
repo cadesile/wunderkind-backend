@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Enum\ReputationTier;
+use App\Enum\TrophyColour;
 use App\Repository\LeagueRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -41,6 +42,13 @@ class League
 
     #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $leaguePositionPot = null;
+
+    /** Slug of the trophy silhouette, e.g. "trophy-3". Serves /images/trophies/{slug}.svg */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $trophyImage = null;
+
+    #[ORM\Column(type: 'string', enumType: TrophyColour::class, nullable: true)]
+    private ?TrophyColour $trophyColour = null;
 
     #[ORM\OneToMany(mappedBy: 'league', targetEntity: LeagueSponsor::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $leagueSponsors;
@@ -92,6 +100,12 @@ class League
 
     public function getLeaguePositionPot(): ?int { return $this->leaguePositionPot; }
     public function setLeaguePositionPot(?int $v): static { $this->leaguePositionPot = $v; return $this; }
+
+    public function getTrophyImage(): ?string { return $this->trophyImage; }
+    public function setTrophyImage(?string $v): static { $this->trophyImage = $v; return $this; }
+
+    public function getTrophyColour(): ?TrophyColour { return $this->trophyColour; }
+    public function setTrophyColour(?TrophyColour $v): static { $this->trophyColour = $v; return $this; }
 
     /** @return Collection<int, LeagueSponsor> */
     public function getLeagueSponsors(): Collection { return $this->leagueSponsors; }

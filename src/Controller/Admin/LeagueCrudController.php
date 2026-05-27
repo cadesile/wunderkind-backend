@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\League;
 use App\Enum\CompanySize;
 use App\Enum\ReputationTier;
+use App\Enum\TrophyColour;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
@@ -113,6 +114,26 @@ class LeagueCrudController extends AbstractCrudController
             ->setRequired(false)
             ->hideOnIndex()
             ->setHelp('Total pot distributed by finishing position. 1st gets most; each lower position gets leaguePositionDecreasePercent% less.');
+
+        yield ChoiceField::new('trophyImage', 'Trophy Design')
+            ->setChoices(array_combine(
+                array_map(fn ($n) => "Trophy $n", range(1, 15)),
+                array_map(fn ($n) => "trophy-$n", range(1, 15))
+            ))
+            ->setRequired(false)
+            ->hideOnIndex()
+            ->setHelp('Select the trophy silhouette. A live preview appears below once you choose.');
+
+        yield ChoiceField::new('trophyColour', 'Trophy Colour')
+            ->setFormType(EnumType::class)
+            ->setFormTypeOptions([
+                'class'       => TrophyColour::class,
+                'required'    => false,
+                'placeholder' => '-- Not set --',
+            ])
+            ->setRequired(false)
+            ->hideOnIndex()
+            ->setHelp('Gold, Silver, or Gold & Silver — applied by the frontend when rendering the trophy.');
 
         yield AssociationField::new('sponsors')
             ->setFormTypeOption('by_reference', false)

@@ -193,6 +193,68 @@
         border: 1px dashed var(--bs-border-color);
         text-align: center;
     }
+
+    /* ── Trophy panel on league cards ──────────────────────────────── */
+    .league-trophy-row {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .5rem .75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-tertiary-bg);
+    }
+    .league-trophy-img {
+        width: 52px;
+        height: 52px;
+        object-fit: contain;
+        flex-shrink: 0;
+        transition: filter .25s;
+    }
+    .league-trophy-meta {
+        display: flex;
+        flex-direction: column;
+        gap: .15rem;
+    }
+    .league-trophy-name {
+        font-size: .72rem;
+        font-weight: 600;
+        font-family: 'Courier New', monospace;
+        color: var(--bs-body-color);
+    }
+    .league-trophy-colour {
+        font-size: .65rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--bs-secondary-color);
+    }
+
+    /* ── Trophy panel inside quick-edit modal ───────────────────────── */
+    .qe-trophy-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .4rem;
+        padding: .6rem;
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        min-height: 96px;
+    }
+    .qe-trophy-panel img {
+        width: 64px;
+        height: 64px;
+        object-fit: contain;
+        transition: filter .2s, opacity .15s;
+    }
+    .qe-trophy-panel .qe-trophy-label {
+        font-size: .65rem;
+        color: var(--bs-secondary-color);
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        text-align: center;
+    }
+    .qe-trophy-panel.empty img { opacity: 0.12; filter: none !important; }
+    .qe-trophy-panel.empty .qe-trophy-label { font-style: italic; }
 </style>
 
 <div class="mt-1">
@@ -254,11 +316,21 @@
                     {% set clubs       = clubsByLeague[league.id|ea_as_string] ?? [] %}
                     {% set tierColor   = TIER_COLORS[tier] ?? '#6c757d' %}
                     {% set hasStats    = league.prizeMoney or league.tvDeal or league.leaguePositionPot or league.promotionSpots %}
+                    {% set hasTrophy   = league.trophyImage is not null %}
                     {% set hasSponsors = league.sponsors|length > 0 %}
 
                     <div class="league-card">
 
                         {# Header: tier badge + name + quick-edit button #}
+                        {# Correct CSS filter chains for black SVG silhouettes:
+                           brightness(0) normalises to black, invert(1) flips to white,
+                           then sepia+saturate+hue-rotate applies the target colour. #}
+                        {% set TROPHY_FILTERS = {
+                            'silver':      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
+                            'gold':        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
+                            'gold_silver': 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)'
+                        } %}
+
                         <div class="league-card-header">
                             <span class="tier-badge"
                                   style="background: {{ tierColor }}22; color: {{ tierColor }}; border: 1px solid {{ tierColor }}55;">
@@ -283,11 +355,30 @@
                                     data-tv-deal="{{ league.tvDeal is not null ? (league.tvDeal / 100)|round : '' }}"
                                     data-prize-money="{{ league.prizeMoney is not null ? (league.prizeMoney / 100)|round : '' }}"
                                     data-league-position-pot="{{ league.leaguePositionPot is not null ? (league.leaguePositionPot / 100)|round : '' }}"
+                                    data-trophy-image="{{ league.trophyImage ?? '' }}"
+                                    data-trophy-colour="{{ league.trophyColour ? league.trophyColour.value : '' }}"
                                     data-csrf-token="{{ csrf_token('league_qe_' ~ league.id|ea_as_string) }}"
                                     data-full-edit-url="{{ ea_url().setController(LEAGUE_CTRL).setAction('edit').setEntityId(league.id|ea_as_string) }}">
                                 <i class="fa fa-pencil"></i>
                             </button>
                         </div>
+
+                        {# Trophy panel — only shown when a trophy is configured #}
+                        {% if hasTrophy %}
+                        {% set trophyFilter = TROPHY_FILTERS[league.trophyColour ? league.trophyColour.value : ''] ?? 'none' %}
+                        <div class="league-trophy-row">
+                            <img class="league-trophy-img"
+                                 src="/images/trophies/{{ league.trophyImage }}.svg"
+                                 alt="Trophy"
+                                 style="filter: {{ trophyFilter }};">
+                            <div class="league-trophy-meta">
+                                <span class="league-trophy-name">{{ league.trophyImage|replace({'trophy-': 'Trophy '}) }}</span>
+                                {% if league.trophyColour %}
+                                    <span class="league-trophy-colour">{{ league.trophyColour.label() }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
 
                         {# Stats: prize money, TV deal, position pot, promotion spots #}
                         {% if hasStats %}
@@ -400,6 +491,37 @@
                             <label class="form-label small fw-semibold mb-1" for="qe-leaguePositionPot">Position Pot (£)</label>
                             <input type="number" class="form-control form-control-sm" id="qe-leaguePositionPot" name="leaguePositionPot" min="0" step="1" placeholder="none">
                         </div>
+                        {# ── Trophy row: selects left · live preview right ── #}
+                        <div class="col-12">
+                            <div class="d-flex gap-2 align-items-stretch">
+                                <div class="flex-grow-1 d-flex flex-column gap-2">
+                                    <div>
+                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyImage">Trophy Design</label>
+                                        <select class="form-select form-select-sm" id="qe-trophyImage" name="trophyImage">
+                                            <option value="">— None —</option>
+                                            {% for n in 1..15 %}
+                                                <option value="trophy-{{ n }}">Trophy {{ n }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyColour">Colour</label>
+                                        <select class="form-select form-select-sm" id="qe-trophyColour" name="trophyColour">
+                                            <option value="">— None —</option>
+                                            <option value="silver">Silver</option>
+                                            <option value="gold">Gold</option>
+                                            <option value="gold_silver">Gold &amp; Silver</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="qe-trophy-panel empty" id="qe-trophy-panel" style="width:104px;flex-shrink:0;">
+                                    <img id="qe-trophy-preview"
+                                         src="/images/trophies/trophy-1.svg"
+                                         alt="Trophy preview">
+                                    <span class="qe-trophy-label" id="qe-trophy-label">No trophy</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-2 d-flex align-items-center gap-2">
@@ -431,20 +553,55 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     var modal = document.getElementById('leagueQuickEditModal');
     if (!modal) return;
 
+    // Correct filter chains for black SVG silhouettes:
+    // brightness(0) → black, invert(1) → white, sepia+saturate+hue-rotate → target colour
+    var COLOUR_FILTERS = {
+        silver:      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
+        gold:        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
+        gold_silver: 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)',
+    };
+
+    function refreshTrophyPreview() {
+        var slug    = document.getElementById('qe-trophyImage').value;
+        var colour  = document.getElementById('qe-trophyColour').value;
+        var panel   = document.getElementById('qe-trophy-panel');
+        var img     = document.getElementById('qe-trophy-preview');
+        var label   = document.getElementById('qe-trophy-label');
+
+        if (slug) {
+            img.src          = '/images/trophies/' + slug + '.svg';
+            img.style.filter = COLOUR_FILTERS[colour] || 'brightness(0) invert(0.15)';
+            label.textContent = slug.replace('trophy-', 'Trophy ') +
+                (colour ? '\n' + colour.replace('_', ' & ') : '');
+            panel.classList.remove('empty');
+        } else {
+            img.src          = '/images/trophies/trophy-1.svg';
+            img.style.filter = 'none';
+            label.textContent = 'No trophy';
+            panel.classList.add('empty');
+        }
+    }
+
+    document.getElementById('qe-trophyImage').addEventListener('change', refreshTrophyPreview);
+    document.getElementById('qe-trophyColour').addEventListener('change', refreshTrophyPreview);
+
     modal.addEventListener('show.bs.modal', function (event) {
         var btn = event.relatedTarget;
         var id  = btn.dataset.leagueId;
 
         document.getElementById('leagueQuickEditForm').action =
             '/admin/leagues/' + id + '/quick-edit';
-        document.getElementById('qe-token').value            = btn.dataset.csrfToken  || '';
-        document.getElementById('qe-name').value             = btn.dataset.name        || '';
-        document.getElementById('qe-tier').value             = btn.dataset.tier        || '';
-        document.getElementById('qe-promotionSpots').value   = btn.dataset.promotionSpots   || '';
-        document.getElementById('qe-tvDeal').value           = btn.dataset.tvDeal      || '';
-        document.getElementById('qe-prizeMoney').value       = btn.dataset.prizeMoney  || '';
+        document.getElementById('qe-token').value             = btn.dataset.csrfToken  || '';
+        document.getElementById('qe-name').value              = btn.dataset.name        || '';
+        document.getElementById('qe-tier').value              = btn.dataset.tier        || '';
+        document.getElementById('qe-promotionSpots').value    = btn.dataset.promotionSpots   || '';
+        document.getElementById('qe-tvDeal').value            = btn.dataset.tvDeal      || '';
+        document.getElementById('qe-prizeMoney').value        = btn.dataset.prizeMoney  || '';
         document.getElementById('qe-leaguePositionPot').value = btn.dataset.leaguePositionPot || '';
-        document.getElementById('qe-full-edit-link').href    = btn.dataset.fullEditUrl || '#';
+        document.getElementById('qe-trophyImage').value       = btn.dataset.trophyImage  || '';
+        document.getElementById('qe-trophyColour').value      = btn.dataset.trophyColour || '';
+        document.getElementById('qe-full-edit-link').href     = btn.dataset.fullEditUrl || '#';
+        refreshTrophyPreview();
     });
 }());
 </script>

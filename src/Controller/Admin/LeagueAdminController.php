@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\League;
+use App\Enum\TrophyColour;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -51,6 +52,19 @@ class LeagueAdminController extends AbstractController
         $leaguePositionPot = $request->request->get('leaguePositionPot');
         $league->setLeaguePositionPot(
             ($leaguePositionPot !== null && $leaguePositionPot !== '') ? ((int) $leaguePositionPot) * 100 : null
+        );
+
+        $trophyImage = $request->request->get('trophyImage');
+        $validImages = array_map(fn ($n) => "trophy-$n", range(1, 15));
+        $league->setTrophyImage(
+            ($trophyImage !== null && $trophyImage !== '' && in_array($trophyImage, $validImages, true))
+                ? $trophyImage
+                : null
+        );
+
+        $trophyColour = $request->request->get('trophyColour');
+        $league->setTrophyColour(
+            $trophyColour !== null && $trophyColour !== '' ? TrophyColour::tryFrom($trophyColour) : null
         );
 
         $this->em->flush();
