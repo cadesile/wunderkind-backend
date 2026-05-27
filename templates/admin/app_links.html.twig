@@ -7,7 +7,6 @@
         <h5 class="fw-semibold mb-0">App Links</h5>
         <p class="text-muted small mb-0">Download URLs shown on the landing page and returned by <code>GET /api/app-links</code>. Leave a field blank to hide that platform's button.</p>
     </div>
-
     <div class="col-12">
     <form method="POST" action="{{ path('admin_app_links_save') }}">
         <input type="hidden" name="_token" value="{{ csrf_token('save_app_links') }}">
