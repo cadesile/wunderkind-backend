@@ -184,6 +184,19 @@ class DashboardController extends AbstractDashboardController
         $config->setCoachDevelopmentStackingFactor((float) $request->request->get('coachDevelopmentStackingFactor', 0.3));
         $config->setCoachMoraleInfluence((float) $request->request->get('coachMoraleInfluence', 0.5));
 
+        // Physical Degradation & Form
+        $config->setAttributeHardCap((int) $request->request->get('attributeHardCap', 98));
+        $config->setPhysicalDegradationAgeThreshold((int) $request->request->get('physicalDegradationAgeThreshold', 30));
+        $config->setPhysicalDegradationRateMild((float) $request->request->get('physicalDegradationRateMild', 0.1));
+        $config->setPhysicalDegradationRateModerate((float) $request->request->get('physicalDegradationRateModerate', 0.2));
+        $config->setPhysicalDegradationRateSevere((float) $request->request->get('physicalDegradationRateSevere', 0.4));
+        $config->setPhysicalDegradationPersonalityScale((float) $request->request->get('physicalDegradationPersonalityScale', 0.2));
+        $config->setFormDevelopmentMatchCount((int) $request->request->get('formDevelopmentMatchCount', 5));
+        $config->setFormDevelopmentThreshold((float) $request->request->get('formDevelopmentThreshold', 7.0));
+        $config->setFormDevelopmentMultiplierMid((float) $request->request->get('formDevelopmentMultiplierMid', 0.6));
+        $config->setFormDevelopmentMultiplierLow((float) $request->request->get('formDevelopmentMultiplierLow', 0.25));
+        $config->setFormDevelopmentThresholdLow((float) $request->request->get('formDevelopmentThresholdLow', 5.0));
+
         $config->setScoutMoraleThreshold((int) $request->request->get('scoutMoraleThreshold', 40));
         $config->setScoutRevealWeeks((int) $request->request->get('scoutRevealWeeks', 2));
         $config->setScoutAbilityErrorRange((int) $request->request->get('scoutAbilityErrorRange', 30));

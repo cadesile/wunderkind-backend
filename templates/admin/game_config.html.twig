@@ -223,6 +223,110 @@
                 </div>
             </div>
 
+            {# ── Physical Degradation & Form ─────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="physical-degradation">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-running text-muted"></i>
+                    <span class="fw-semibold small">Physical Degradation &amp; Form</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls the hard cap on individual player attributes, physical pace/stamina
+                        decay after a configurable age threshold, and how recent match form influences
+                        the weekly development multiplier.
+                    </p>
+
+                    <p class="fw-semibold small mb-2">Attribute Cap</p>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label for="attributeHardCap" class="form-label fw-semibold small">Attribute Hard Cap</label>
+                            <input type="number" id="attributeHardCap" name="attributeHardCap"
+                                   value="{{ config.attributeHardCap }}"
+                                   step="1" min="1" max="100" class="form-control">
+                            <div class="form-text">Maximum value for any individual player attribute</div>
+                        </div>
+                    </div>
+
+                    <p class="fw-semibold small mb-2">Physical Degradation (after age threshold)</p>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label for="physicalDegradationAgeThreshold" class="form-label fw-semibold small">Age Threshold</label>
+                            <input type="number" id="physicalDegradationAgeThreshold" name="physicalDegradationAgeThreshold"
+                                   value="{{ config.physicalDegradationAgeThreshold }}"
+                                   step="1" min="25" max="40" class="form-control">
+                            <div class="form-text">Age degradation begins (players at or below this age are unaffected)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="physicalDegradationRateMild" class="form-label fw-semibold small">Mild Rate (threshold+1 to +3)</label>
+                            <input type="number" id="physicalDegradationRateMild" name="physicalDegradationRateMild"
+                                   value="{{ config.physicalDegradationRateMild }}"
+                                   step="0.05" min="0" max="2.0" class="form-control">
+                            <div class="form-text">Weekly pace/stamina loss: age threshold+1 to threshold+3</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="physicalDegradationRateModerate" class="form-label fw-semibold small">Moderate Rate (threshold+4 to +6)</label>
+                            <input type="number" id="physicalDegradationRateModerate" name="physicalDegradationRateModerate"
+                                   value="{{ config.physicalDegradationRateModerate }}"
+                                   step="0.05" min="0" max="2.0" class="form-control">
+                            <div class="form-text">Weekly loss: age threshold+4 to threshold+6</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="physicalDegradationRateSevere" class="form-label fw-semibold small">Severe Rate (threshold+7+)</label>
+                            <input type="number" id="physicalDegradationRateSevere" name="physicalDegradationRateSevere"
+                                   value="{{ config.physicalDegradationRateSevere }}"
+                                   step="0.05" min="0" max="2.0" class="form-control">
+                            <div class="form-text">Weekly loss: age threshold+7 and above</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="physicalDegradationPersonalityScale" class="form-label fw-semibold small">Personality Scale</label>
+                            <input type="number" id="physicalDegradationPersonalityScale" name="physicalDegradationPersonalityScale"
+                                   value="{{ config.physicalDegradationPersonalityScale }}"
+                                   step="0.05" min="0" max="1.0" class="form-control">
+                            <div class="form-text">How much heart/determination trait reduces degradation rate</div>
+                        </div>
+                    </div>
+
+                    <p class="fw-semibold small mb-2">Form &amp; Development</p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="formDevelopmentMatchCount" class="form-label fw-semibold small">Match Count</label>
+                            <input type="number" id="formDevelopmentMatchCount" name="formDevelopmentMatchCount"
+                                   value="{{ config.formDevelopmentMatchCount }}"
+                                   step="1" min="1" max="20" class="form-control">
+                            <div class="form-text">Recent matches used for form average</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="formDevelopmentThreshold" class="form-label fw-semibold small">Full Development Threshold</label>
+                            <input type="number" id="formDevelopmentThreshold" name="formDevelopmentThreshold"
+                                   value="{{ config.formDevelopmentThreshold }}"
+                                   step="0.1" min="1" max="10" class="form-control">
+                            <div class="form-text">Rating average for full development (1.0×)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="formDevelopmentThresholdLow" class="form-label fw-semibold small">Low Threshold</label>
+                            <input type="number" id="formDevelopmentThresholdLow" name="formDevelopmentThresholdLow"
+                                   value="{{ config.formDevelopmentThresholdLow }}"
+                                   step="0.1" min="1" max="10" class="form-control">
+                            <div class="form-text">Rating average below which low multiplier applies</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="formDevelopmentMultiplierMid" class="form-label fw-semibold small">Mid Multiplier</label>
+                            <input type="number" id="formDevelopmentMultiplierMid" name="formDevelopmentMultiplierMid"
+                                   value="{{ config.formDevelopmentMultiplierMid }}"
+                                   step="0.05" min="0" max="1.0" class="form-control">
+                            <div class="form-text">Development rate between low and full threshold</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="formDevelopmentMultiplierLow" class="form-label fw-semibold small">Low Multiplier</label>
+                            <input type="number" id="formDevelopmentMultiplierLow" name="formDevelopmentMultiplierLow"
+                                   value="{{ config.formDevelopmentMultiplierLow }}"
+                                   step="0.05" min="0" max="1.0" class="form-control">
+                            <div class="form-text">Development rate below low threshold</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Reputation ─────────────────────────────────────────────── #}
             <div class="card cfg-section" data-section-id="reputation">
                 <div class="card-header py-2 d-flex align-items-center gap-2">

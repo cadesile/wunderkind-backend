@@ -45,6 +45,19 @@ class GameConfigController extends AbstractController
             'coachDevelopmentStackingFactor' => $config->getCoachDevelopmentStackingFactor(),
             'coachMoraleInfluence'           => $config->getCoachMoraleInfluence(),
 
+            // Physical Degradation & Form
+            'attributeHardCap'                       => $config->getAttributeHardCap(),
+            'physicalDegradationAgeThreshold'        => $config->getPhysicalDegradationAgeThreshold(),
+            'physicalDegradationRateMild'            => $config->getPhysicalDegradationRateMild(),
+            'physicalDegradationRateModerate'        => $config->getPhysicalDegradationRateModerate(),
+            'physicalDegradationRateSevere'          => $config->getPhysicalDegradationRateSevere(),
+            'physicalDegradationPersonalityScale'    => $config->getPhysicalDegradationPersonalityScale(),
+            'formDevelopmentMatchCount'              => $config->getFormDevelopmentMatchCount(),
+            'formDevelopmentThreshold'               => $config->getFormDevelopmentThreshold(),
+            'formDevelopmentMultiplierMid'           => $config->getFormDevelopmentMultiplierMid(),
+            'formDevelopmentMultiplierLow'           => $config->getFormDevelopmentMultiplierLow(),
+            'formDevelopmentThresholdLow'            => $config->getFormDevelopmentThresholdLow(),
+
             // Scouting
             'scoutMoraleThreshold'              => $config->getScoutMoraleThreshold(),
             'scoutRevealWeeks'                  => $config->getScoutRevealWeeks(),

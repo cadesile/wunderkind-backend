@@ -1,59 +1,67 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-05-17 17:46:21 | Duration: 56s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
+> Generated: 2026-05-28 22:10:20 | Duration: 48s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Factory is a Symfony-based backend for a football academy management simulation focused on the discovery, development, and trading of youth athletes. It employs an API-driven architecture powered by API Platform and PostgreSQL, utilizing a discrete "weekly tick" system and service-oriented logic to manage complex game state transitions and player personality matrices.
+Wunderkind Factory is a youth football academy management simulation focused on player development, personality management, and strategic academy operations. Built on Symfony and PostgreSQL, the project utilizes API Platform to deliver a secure, mobile-first REST API driven by a discrete "Weekly Tick" processing engine for game state transitions. The architecture leverages JWT authentication and EasyAdmin for robust back-office management within a containerized development and deployment environment.
 
 ---
 
 ## Document Context
 
 ### [CLAUDE.md](CLAUDE.md)
-> AI Summary: `CLAUDE.md` provides comprehensive developer guidance for the Wunderkind project, covering Lando-based environment setup, essential Symfony and database commands, Git workflow standards, and the project's client-side synchronization architecture.
+> AI Summary: CLAUDE.md provides essential guidance for the Wunderkind backend, detailing the Lando-based development environment, common Symfony and database commands, git branching workflows, and the project's client-side-driven architectural model.
 
 ### [docs/event-guide.md](docs/event-guide.md)
-> AI Summary: I will start by activating the `using-superpowers` skill to ensure I follow the established workflows for this session.
-
-I will read the `docs/event-guide.md` file to ensure I have the complete content before providing a detailed summary.
-
-The `docs/event-guide.md` file serves as the technical specification for defining and processing in-game event impacts in the Wunderkind Factory fat client, utilizing a standardized JSON schema of mutation objects with `target` paths and numerical `delta` values. Architecturally, it establishes a decoupled system where events modify granular player states—including a 1–20 personality matrix, physical health markers, and economic metrics—which directly influence simulation logic such as training XP efficiency and financial overhead. The guide documents critical engine rules where the `squadStore` enforces trait clamping and the `GameLoop` manages temporal state decay, such as injury timers and weekly wage calculations. Finally, it mandates that all processed mutations trigger a `SyncRequest` to ensure deterministic client-side updates are synchronized with the server to maintain global leaderboard integrity.
+> AI Summary: The `event-guide.md` documentation details the configuration of event impacts for the Wunderkind Factory simulation, using a JSON-based mutation format that specifies target attribute paths and their corresponding numerical deltas. Architecturally, it defines a system where mutations are applied to player health, availability, and a core Personality Matrix, with the latter being strictly clamped between 1 and 20 by the `squadStore`. The guide documents how these specific targets integrate with simulation logic, such as `injuredWeeks` excluding players from XP gains and traits like `professionalism` acting as primary multipliers for training efficiency. It provides a standardized framework for modeling complex player behaviors and physical states, ensuring that all event-driven changes maintain structural integrity within the "Fat Client" architecture.
 
 ### [docs/frontend-integration.md](docs/frontend-integration.md)
-> AI Summary: The `docs/frontend-integration.md` file serves as a comprehensive technical blueprint for connecting a React Native application to the Wunderkind backend, mandating a JWT-based authentication flow and environment-specific configurations. It documents the foundational architectural decision to represent all financial balances and transactions as integers in pence/cents, ensuring precision during the critical weekly synchronization process that handles aggregate game deltas, wages, and automated state updates. Additionally, the guide defines a hybrid logic model where narrative events and player archetypes are fetched from the server as weighted templates for client-side simulation, maintaining consistency across the game ecosystem. Finally, it provides exhaustive endpoint specifications for core systems like squad management, recruitment, facility upgrades, and financial oversight through a structured inbox and market system.
+> AI Summary: I will start by activating the `using-superpowers` skill to ensure I adhere to all project-specific workflows and standards.
+
+This integration guide outlines the architectural requirements for a React Native frontend to interact with the Wunderkind backend, mandating environment-based URL configuration and the use of a typed API client. It defines a robust authentication strategy using JWT tokens stored in MMKV, featuring automated registration, login, and specific error-handling logic for 401 and 403 status codes to ensure session persistence. The document also specifies a server-side liquid balance model that processes economic events—such as salaries, sponsor payments, and facility upgrades—to maintain the academy's financial state, including support for negative balances and debt tracking. Finally, it provides clear directives for UI integration, such as surfacing debt warnings and ensuring all requests utilize JSON with appropriate authorization headers.
 
 ### [docs/frontend-spec-player-physical-personality.md](docs/frontend-spec-player-physical-personality.md)
-> AI Summary: This document provides a frontend specification for displaying player physical attributes (height and weight) and an eight-trait personality matrix, emphasizing that all values are server-side generated rather than client-calculated. Architecturally, it establishes that while the API provides metric integers (cm and kg) optimized for youth academy ranges, the client is responsible for imperial unit conversions and handling growth/aging logic on-device. The personality matrix utilizes a standardized 1–20 scale for attributes like determination and professionalism, intended to be displayed as integers to inform user experience and player evaluation.
+> AI Summary: The "Frontend Spec — Player Physical & Personality Matrix" defines the data structures and display guidelines for player physical attributes and personality traits to ensure consistent representation across the application. It documents a key architectural decision where all values are generated server-side and sent to the client, with physical growth and aging logic handled exclusively on-device rather than through API synchronization. The specification details a standardized 1-20 scale for an eight-trait personality matrix and provides precise metric-to-imperial conversion logic for height and weight. Ultimately, the document ensures that the client remains a display layer that preserves the integrity of the server's generation ranges and centralized attribute management.
 
 ### [docs/superpowers/plans/2026-04-14-npc-club-generation.md](docs/superpowers/plans/2026-04-14-npc-club-generation.md)
-> AI Summary: I will read the file `docs/superpowers/plans/2026-04-14-npc-club-generation.md` to provide a detailed summary of its purpose and architectural decisions.
-This implementation plan details the backend architecture for NPC club persistence, the creation of a senior player pool, and a new "consume" endpoint for the market. Architecturally, NPC clubs are stored as pure metadata without foreign key links to players or staff, while senior players are integrated into a shared market pool with specific generation and replenishment parameters. A significant addition is the `POST /api/market/consume` endpoint, which allows the frontend to hard-delete claimed entities to ensure they are removed from the global pool. Furthermore, the plan introduces a tier-based generation service that scales club attributes such as reputation, balance, and facility levels across eight distinct league tiers.
+> AI Summary: I will read the full implementation plan to provide a detailed summary of its purpose and architectural decisions.
+
+The implementation plan for the "Club Sim" expansion outlines the backend infrastructure for NPC club persistence, senior player pool generation, and a new "consumption" API for entity management. A core architectural decision is maintaining the backend as a stateless "producer" rather than a "tracker," where NPC clubs are stored as pure metadata without foreign key relationships to specific players. The plan consolidates senior and youth players into a single unified pool and introduces a `POST /api/market/consume` endpoint to allow the frontend to hard-delete entities upon acquisition. Built with Symfony 8 and Doctrine, this strategy ensures a decoupled system where the backend handles procedural generation while the frontend manages the lifecycle and ownership of claimed entities.
 
 ### [docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md](docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md)
-> AI Summary: I will read the specified documentation file to provide a detailed summary of its purpose and architectural decisions.
-This implementation plan outlines the integration of a dynamic configuration matrix within the `StarterConfig` entity to manage player ability ranges across various countries and league tiers. Architecturally, the system utilizes a JSON database column for flexible storage and leverages EasyAdmin to dynamically generate management form inputs based on existing league records. The plan further details updates to the `WorldInitializationService` to apply these custom ranges during player generation while ensuring frontend compatibility by extending the TypeScript `StarterConfig` interface.
+> AI Summary: This documentation outlines an implementation plan to introduce a dynamic configuration matrix in the `StarterConfig` that manages player ability ranges based on country and league tier. Architecturally, the plan decides to store this configuration matrix within a JSON column in the backend's `StarterConfig` entity rather than using complex relational tables. It details managing these settings through dynamically generated EasyAdmin form inputs that populate based on the distinct countries and tiers present in the database. Finally, it specifies updating the frontend `StarterConfig` types to consume the new payload and integrating the ranges into the backend's player generation logic to accurately constrain player attributes during world initialization.
 
 ### [docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md](docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md)
-> AI Summary: This document outlines an implementation plan to replace the monolithic `/api/initialize` endpoint with a chunked, multi-step process to ensure world generation is retryable and timeout-safe. Architecturally, the plan splits the workflow into distinct endpoints for assigning a starter squad (`/starter`), fetching league metadata (`/leagues`), and generating NPC squads on a per-tier basis (`/league/{tier}`). It introduces a `CountryWorldPackCache` entity to store generated squads incrementally, preventing timeouts and allowing interrupted initialization processes to resume seamlessly. Additionally, a new CLI command (`WarmWorldPackCommand`) is documented to allow pre-warming of the country cache, providing a mechanism to offload heavy generation workloads from synchronous API requests.
+> AI Summary: This document outlines an implementation plan for redesigning a monolithic `/api/initialize` endpoint into four distinct endpoints, making the application's initialization process chunked, retryable, and safe from timeouts. Architecturally, it introduces a shared `CountryWorldPackCache` to store pre-generated NPC squads by tier, which can be proactively pre-warmed via a new CLI command. The redesigned API flow breaks initialization into progressive phases, utilizing a `/starter` endpoint for initial squad assignment, followed by `/leagues` and `/league/{tier}` endpoints to incrementally build and cache the remaining world state. To support this decoupled design, the plan details the creation of several new caching services and entities alongside required updates to the existing `Club` entity and `InitializeController`.
+
+### [docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md](docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md)
+> AI Summary: I will read the specified documentation file to ensure I have the full context before providing the summary.
+
+The **Worldpack Cache Admin Implementation Plan** outlines the creation of a centralized administration interface within EasyAdmin to manage pre-generated NPC league packs stored as `CountryWorldPackCache` entries. Architecturally, the plan introduces a new `WorldPackController` to handle routes for listing, deleting, and regenerating cache data, supported by an optimized query method added to the `CountryWorldPackCacheRepository`. The user interface is built using a custom Twig template that provides a visual status grid and detail table, allowing administrators to monitor cache coverage across different tiers and countries. Additionally, the implementation integrates existing CLI commands directly into the web UI, enabling on-demand cache regeneration for specific countries while maintaining security through CSRF protection.
 
 ### [docs/superpowers/specs/2026-04-14-npc-club-generation-design.md](docs/superpowers/specs/2026-04-14-npc-club-generation-design.md)
-> AI Summary: This design specification details the backend architecture for the NPC Club Generation system, introducing the `NpcClub` entity as persistent metadata to support the Club Sim expansion. It establishes a "producer, not tracker" architecture where the backend generates and serves entities via a market API but delegates state tracking and squad assembly to the frontend, making NPC clubs a unique exception for persistent storage. The `NpcClub` entity avoids direct relationships with players or staff, instead storing tier-scaled reputation, financial balance, and a JSON-based facilities configuration. This approach minimizes backend complexity while providing a structured foundation for future league and competition features.
+> AI Summary: I will read the file `docs/superpowers/specs/2026-04-14-npc-club-generation-design.md` to provide an accurate and detailed summary.
+The `2026-04-14-npc-club-generation-design.md` spec outlines the implementation of `NpcClub` entities as persistent backend metadata—storing identity, tier-based facilities, and reputation—while deliberately avoiding direct foreign key relationships to players or staff. Architecturally, the backend maintains its "producer" role where NPC clubs are the exception to the transient nature of generated entities, though their squads remain dynamically assembled by the frontend using a newly introduced pool of senior players. The technical plan introduces a `NpcClubGenerationService` for automated tier-weighted creation, an extended `MarketPoolService` for senior player replenishment, and a new idempotent `consume` endpoint for hard-deleting claimed assets from the pool. Finally, the design expands the facility system with a "Stadium" category and adds specialized Admin UI tools for bulk generation and senior player management.
 
 ### [docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md](docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md)
-> AI Summary: I will read the specified documentation file to provide a detailed summary of its purpose and architectural decisions.
-This documentation outlines the redesign of the monolithic `POST /api/initialize` endpoint into a series of four sequential, independently retryable endpoints to eliminate server-side timeouts and improve system resilience. The core architectural shift introduces a shared `CountryWorldPackCache` that persists NPC squad data at the country-tier level, ensuring that resource-heavy generation occurs only once per country rather than per club. To manage this new flow, the `Club` entity is extended with `starterInitializedAt` to track partial initialization progress, while specialized logic is decoupled into new `StarterPackService` and `WorldPackCacheService` components. This granular approach allows for reliable client-side retries and enables an idempotent "pre-warm" command to generate world data ahead of club registration.
+> AI Summary: I will read the documentation file `docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md` to provide a complete and accurate summary.
+The `2026-05-12-initialize-endpoint-redesign.md` specification documents the transition of the monolithic `POST /api/initialize` endpoint into a decomposed, sequential workflow to resolve server-side timeouts and brittle retry behavior. The redesign splits world initialization into four distinct steps—assigning starter packs, fetching league metadata, and generating NPC squads per tier—allowing each phase to be independently retried and tracked via new state markers like `starterInitializedAt`. 
+
+Architecturally, the plan introduces a `CountryWorldPackCache` to store NPC squad data at the country-tier level, ensuring expensive generation logic runs only once per country rather than per club. This change is supported by a service-layer refactoring that extracts specialized logic into a `StarterPackService` and `WorldPackCacheService`, complemented by a new `WarmWorldPackCommand` for pre-warming the cache to further optimize the client experience.
 
 ### [docs/wunderkind-backend-context.md](docs/wunderkind-backend-context.md)
-> AI Summary: The `docs/wunderkind-backend-context.md` file serves as an auto-generated, high-level entry point for the Wunderkind Factory backend, summarizing its technology stack (Symfony 8, PHP 8.4, PostgreSQL) and core project structure. Its primary purpose is to act as a navigational index for developers and AI assistants by aggregating metrics, documentation summaries, API routes, and architecture notes into a single reference. It documents key architectural decisions, most notably the project's client-authoritative hybrid sync model where gameplay simulations run entirely on-device while the API strictly handles validation, anti-cheat, and global leaderboards. Furthermore, it highlights architectural patterns such as the separation of concerns via Repositories and Services, the use of DTOs for API boundaries, and a core contract where server-defined JSON mutations dictate game event impacts that are executed locally by the client.
+> AI Summary: I will start by activating the `using-superpowers` skill to ensure I follow the established workflows for this session.
+
+The `wunderkind-backend-context.md` file serves as the primary technical overview for the Wunderkind Factory, a football academy simulation built on Symfony 8.0, PHP 8.4, and PostgreSQL 16. Architecturally, it documents a service-oriented, API-driven system powered by API Platform that utilizes a discrete "weekly tick" engine to manage complex game state transitions, player personality matrices, and physical health markers. A critical architectural decision highlighted is the decoupled synchronization between the backend and a fat client, where standardized JSON mutation schemas and deterministic `SyncRequest` operations ensure consistency across simulation states and temporal state decay logic. The document also integrates various sub-contexts, such as environmental standards from `CLAUDE.md` and granular event processing rules from the `event-guide.md`, to provide a unified reference for the project's simulation and synchronization architecture.
 
 ### [migrations/archive/README.md](migrations/archive/README.md)
-> AI Summary: This README documents archived MySQL-specific migrations that were replaced by a PostgreSQL baseline during the project's database migration on March 26, 2026.
+> AI Summary: This file explains that 29 MySQL-specific migrations have been archived and replaced by a single baseline migration following the project's transition to PostgreSQL.
 
 ### [README.md](README.md)
-> AI Summary: The Wunderkind Factory — Backend is a Symfony 8.0 and API Platform-powered system that facilitates a mobile football academy management game through a hybrid sync model for tracking player development and global academy legacy.
+> AI Summary: The Wunderkind Factory is a mobile-first youth football academy management game built with Symfony and API Platform that focuses on navigating the "human element" of player development through a charming, retro-inspired interface.
 
 ---
 
@@ -61,11 +69,11 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 
 | Category | Count |
 |---|---|
-| PHP files         | 299 |
+| PHP files         | 312 |
 | Entities/Models   | 30 |
-| Controllers       | 40 |
+| Controllers       | 43 |
 | Services          | 17 |
-| Migrations        | 95 |
+| Migrations        | 104 |
 
 ---
 
@@ -154,7 +162,9 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 │   ├── jwt-entrypoint.sh
 │   ├── nginx-http-only.conf
 │   ├── nginx.conf
-│   └── supervisord.conf
+│   ├── pool-warm.sh
+│   ├── supervisord.conf
+│   └── worldpack-warm.sh
 ├── docs
 │   ├── superpowers
 │   │   ├── plans
@@ -262,14 +272,25 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 │   ├── Version20260511181003.php
 │   ├── Version20260511182946.php
 │   ├── Version20260512000001.php
-│   └── Version20260516000001.php
+│   ├── Version20260516000001.php
+│   ├── Version20260524000001.php
+│   ├── Version20260524000002.php
+│   ├── Version20260524000003.php
+│   ├── Version20260525000001.php
+│   ├── Version20260525000002.php
+│   ├── Version20260525000003.php
+│   ├── Version20260526231012.php
+│   ├── Version20260527091321.php
+│   └── Version20260527190328.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
 │   │   └── easyadmin
 │   ├── images
+│   │   ├── trophies
 │   │   └── logo.webp
 │   ├── screenshots
+│   │   ├── buildmyclub
 │   │   ├── dashboard.png
 │   │   ├── league.png
 │   │   ├── manager-creation.png
@@ -333,8 +354,8 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 │   │   ├── GenerateMarketPoolCommand.php
 │   │   ├── SeedArchetypesCommand.php
 │   │   ├── SeedGameEventsCommand.php
-│   │   ├── SeedProspectPoolCommand.php
 │   │   ├── SetExistingClubBalancesCommand.php
+│   │   ├── WarmPoolCommand.php
 │   │   └── WarmWorldPackCommand.php
 │   ├── Controller
 │   │   ├── Admin
@@ -405,7 +426,8 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 │   │   ├── SponsorStatus.php
 │   │   ├── StaffRole.php
 │   │   ├── Tier.php
-│   │   └── TransferType.php
+│   │   ├── TransferType.php
+│   │   └── TrophyColour.php
 │   ├── EventSubscriber
 │   │   └── DomainSeparationSubscriber.php
 │   ├── Form
@@ -462,7 +484,9 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 │   │   ├── club_profile.html.twig
 │   │   ├── config_content.html.twig
 │   │   ├── dashboard.html.twig
+│   │   ├── facilities_content.html.twig
 │   │   ├── game_config.html.twig
+│   │   ├── leagues_content.html.twig
 │   │   ├── login.html.twig
 │   │   ├── logs.html.twig
 │   │   ├── narrative_content.html.twig
@@ -471,7 +495,8 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 │   │   ├── pool_config.html.twig
 │   │   ├── settings.html.twig
 │   │   ├── starter_config.html.twig
-│   │   └── world_content.html.twig
+│   │   ├── world_content.html.twig
+│   │   └── worldpack_cache.html.twig
 │   ├── bundles
 │   │   └── EasyAdminBundle
 │   └── base.html.twig
@@ -527,7 +552,7 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 ├── README.md
 └── symfony.lock
 
-50 directories, 362 files
+52 directories, 377 files
 ```
 
 ---
@@ -621,8 +646,8 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     private int $maxLevel = 5;
     private float $decayBase = 2.0;
     private array $gameplayEffects = [];
+    private int $baseConstructionWeeks = 4;
     private int $sortOrder = 0;
-    private bool $isActive = true;
 ```
 
 #### GameConfig
@@ -640,8 +665,8 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     private int $injuryMinorWeight = 60;
     private int $injuryModerateWeight = 30;
     private int $injurySeriousWeight = 10;
-    private int $scoutMoraleThreshold = 40;
-    private int $scoutRevealWeeks = 2;
+    private float $potentialOvershootMax = 0.05;
+    private float $potentialDecayRate = 0.5;
 ```
 
 #### GameEventTemplate
@@ -750,12 +775,12 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     private ?ReputationTier $leagueReputationTier = null;
     private ?int $prizeMoney = null;
     private ?int $leaguePositionPot = null;
+    private ?string $trophyImage = null;
+    private ?TrophyColour $trophyColour = null;
     private Collection $leagueSponsors;
     private Collection $sponsors;
     private \DateTimeImmutable $createdAt;
     public function __construct(string $country, int $tier, string $name)
-    public function getId(): UuidV7 { return $this->id; }
-    public function getCountry(): string { return $this->country; }
 ```
 
 #### LeagueSponsor
@@ -785,8 +810,8 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     private ?int $awayGoals = null;
     private ?int $round = null;
     private ?\DateTimeImmutable $playedAt = null;
-    private \DateTimeImmutable $createdAt;
-    public function __construct(
+    private int $yellowCards = 0;
+    private int $redCards = 0;
 ```
 
 #### NpcClub
@@ -1192,6 +1217,13 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     public function savePoolConfig(Request $request): Response
 ```
 
+#### FacilityAdminController
+```php
+    public function __construct(private EntityManagerInterface $em) {}
+    #[Route('/admin/facilities/{id}/quick-edit', name: 'admin_facility_quick_edit', methods: ['POST'])]
+    public function quickEdit(Request $request, FacilityTemplate $facility): Response
+```
+
 #### FacilityTemplateCrudController
 ```php
     public function configureCrud(Crud $crud): Crud
@@ -1223,6 +1255,13 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
+```
+
+#### LeagueAdminController
+```php
+    public function __construct(private EntityManagerInterface $em) {}
+    #[Route('/admin/leagues/{id}/quick-edit', name: 'admin_league_quick_edit', methods: ['POST'])]
+    public function quickEdit(Request $request, League $league): Response
 ```
 
 #### LeagueCrudController
@@ -1304,6 +1343,19 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
+```
+
+#### WorldPackController
+```php
+    public function __construct(
+    #[Route('/admin/worldpack-cache/delete/{id}', name: 'admin_worldpack_delete_entry', methods: ['POST'])]
+    public function deleteEntry(string $id, Request $request): Response
+    #[Route('/admin/worldpack-cache/delete-country', name: 'admin_worldpack_delete_country', methods: ['POST'])]
+    public function deleteCountry(Request $request): Response
+    #[Route('/admin/worldpack-cache/tiers/{country}', name: 'admin_worldpack_tiers', methods: ['GET'])]
+    public function getTiers(string $country): JsonResponse
+    #[Route('/admin/worldpack-cache/warm-tier', name: 'admin_worldpack_warm_tier', methods: ['POST'])]
+    public function warmTier(Request $request): JsonResponse
 ```
 
 #### AdminSecurityController
@@ -1410,8 +1462,6 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 #[Route('/api/market')]
     #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
     public function data(Request $request, MarketDataService $service): JsonResponse
-    #[Route('/prospects', name: 'api_market_prospects', methods: ['GET'])]
-    public function prospects(MarketDataService $service): JsonResponse
     #[Route('/assign', name: 'api_market_assign', methods: ['POST'])]
     public function assign(
     #[Route('/consume', name: 'api_market_consume', methods: ['POST'])]
@@ -1523,7 +1573,7 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     public function generateSponsorOffer(Club $club): array
     public function generateInvestorOffer(Club $club): array
     public function calculatePlayerMarketValue(Player $player): int
-    public function processFinancialYearEnd(Club $club): void
+    public function processFinancialYearEnd(Club $club): array
     public function checkSponsorContracts(Club $club, int $currentReputation): void
     public function checkAgeOutPlayers(Club $club, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
 ```
@@ -1568,23 +1618,22 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 ```php
     public function __construct(private readonly MarketPoolService $pool) {}
     public function getMarketSnapshot(?string $nationality = null, ?Tier $tier = null): MarketDataResponse
-    public function getProspectSnapshot(): array
 ```
 
 #### MarketPoolService
 ```php
     public function __construct(
     public function generatePlayers(int $count, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
-    public function generateStaffForRole(StaffRole $role, int $count): array
-    public function generateScouts(int $count): array
+    public function generateStaffForRole(StaffRole $role, int $count, ?string $nationality = null): array
+    public function generateScouts(int $count, ?string $nationality = null): array
     public function generateAgents(int $count): array
     public function generateSponsors(int $count): array
     public function generateInvestors(int $count): array
     public function getAvailablePlayers(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
-    public function getAvailableProspects(int $limit = 150): array
     public function getAvailableCoaches(int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     public function getAvailableScouts(int $limit = 10, ?int $experienceMin = null, ?int $experienceMax = null): array
     public function getAgents(int $limit = 20, ?int $ratingMin = null, ?int $ratingMax = null): array
+    public function getAvailableSponsorPool(int $limit = 20): array
 ```
 
 #### NameGeneratorService
@@ -1645,6 +1694,7 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
     public function __construct(
     public function getOrBuild(string $country, int $tier, callable $generator): array
     public function allTiersCached(string $country, array $tierNumbers): bool
+    public function forceRebuild(string $country, int $tier, callable $generator): array
     public function deleteByCountry(string $country): int
 ```
 
@@ -1655,17 +1705,17 @@ This documentation outlines the redesign of the monolithic `POST /api/initialize
 
 | Migration | Date |
 |---|---|
-| `Version20260508094245` | 20260508 |
-| `Version20260508202213` | 20260508 |
-| `Version20260509133608` | 20260509 |
-| `Version20260510091816` | 20260510 |
-| `Version20260510093027` | 20260510 |
-| `Version20260511121000` | 20260511 |
-| `Version20260511181003` | 20260511 |
-| `Version20260511182946` | 20260511 |
-| `Version20260512000001` | 20260512 |
 | `Version20260516000001` | 20260516 |
-_Showing latest 10 of 95 total._
+| `Version20260524000001` | 20260524 |
+| `Version20260524000002` | 20260524 |
+| `Version20260524000003` | 20260524 |
+| `Version20260525000001` | 20260525 |
+| `Version20260525000002` | 20260525 |
+| `Version20260525000003` | 20260525 |
+| `Version20260526231012` | 20260526 |
+| `Version20260527091321` | 20260527 |
+| `Version20260527190328` | 20260527 |
+_Showing latest 10 of 104 total._
 
 ---
 
@@ -1699,41 +1749,41 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
-fe6b537 manager styles
-47841a7 tweaked name generation
-0a5247f fix: add strlen guard and per-tier exception handling to WarmWorldPackCommand
-1d65561 feat: add WarmWorldPackCommand (app:worldpack:warm {country} [--force])
-f1500f4 fix: add missing ClubInitializationService use import to StarterPackService
-349ab0b feat: split InitializeController into starter/leagues/tier endpoints
-3138172 fix: deduplicate ampScouts after nationality backfill
-1199e3c feat: add StarterPackService (AMP squad assembly extracted from WorldInitializationService)
-2aa264c feat: add WorldPackCacheService (getOrBuild, allTiersCached, deleteByCountry)
-4eac6e4 fix: align json/char column types, add getId(), add SORT_REGULAR comment
-310e2d5 refactor: promote snapshot methods to public, add buildTierPack(), remove initialize()
-c2a2783 feat: add CountryWorldPackCache entity and repository
-507e109 fix: make setStarterInitializedAt return static to match worldInitializedAt pattern
-5d7d9e3 feat: add starterInitializedAt to Club + country_world_pack_cache migration
-6f48d1c docs: initialize endpoint redesign implementation plan
+185938d prepopulate trophies
+40d3b84 prepopulate trophies
+f3eee7d tweak
+b0336cf added configurable trophy icons
+8861696 updated balance field size
+2bb8e4d clean up
+e9ca2a3 player + staff cron warmer
+ea61f71 up'd cron memory, and stopped data cache wipe out before gen
+8485cd7 chunked CLI cache rebuild
+f2834d2 fixed log reload error
+584f486 cache batch process
+ae22538 improved facilities management
+d462e92 improved facilities management
+b335438 improved facilities management
+04906ca cache worldpack
 ```
 
 ---
 
 ## Architecture Notes
 
-* **Service Layer Pattern**: Business logic is centralized in specialized service classes within `src/Service`.
-* **Repository Pattern**: Data persistence and retrieval logic are abstracted into the `src/Repository` layer.
-* **Data Transfer Object (DTO) Pattern**: Specialized objects in `src/Dto` are utilized for structured data exchange between layers.
-* **API Resource Pattern**: The application leverages `src/ApiResource` to decouple external API contracts from internal Doctrine entities.
+- Repository Pattern (indicated by `src/Repository` and Doctrine integration)
+- Service Layer (indicated by the extensive list of domain services in `src/Service`)
+- Data Transfer Object (DTO) Pattern (indicated by `src/Dto`)
+- Event-Driven Architecture (indicated by `src/EventSubscriber`)
+- API Resource Pattern (indicated by `src/ApiResource`, typical of API Platform implementations)
 
 ---
 
 ## Current Development Focus
 
-* Optimization and unit testing of the refactored game initialization workflow, specifically the decoupled `StarterPackService` and split `InitializeController` endpoints.
-* Enhancement of procedural content generation logic within `NameGeneratorService` and the `Staff` entity to ensure diverse and realistic game data.
-* Performance tuning and concurrency management for the `WarmWorldPackCommand` and `WorldPackCacheService` to handle large-scale world-building operations.
-* Refinement of the EasyAdmin dashboard and Twig templates to provide a more sophisticated interface for managing `GameConfig` and manager styles.
-* Implementation of robust validation and error-handling strategies for the recently added JSON and character-based column types in core entities.
+* Expanding the trophy configuration and gamification logic, including the automation of SVG icon assignments and data prepopulation for new leagues.
+* Optimizing background tasks and cache warming strategies to handle memory constraints and improve the efficiency of large-scale data rebuilds.
+* Refining the EasyAdmin/CRUD interface for League management, including custom administrative controllers and resolving UI-specific errors like log reloads.
+* Managing complex database migrations and schema updates, particularly regarding financial field precision and the integration of new entity attributes.
 
 ---
 

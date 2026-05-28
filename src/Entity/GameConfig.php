@@ -149,6 +149,101 @@ class GameConfig
     #[ORM\Column(type: 'float')]
     private float $coachMoraleInfluence = 0.5;
 
+    // ── Physical Degradation & Form ──────────────────────────────────────────
+
+    /**
+     * Maximum value any individual player attribute can reach.
+     * Applies to all 6 attributes: pace, technical, vision, power,
+     * stamina, heart.
+     * Default: 98
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $attributeHardCap = 98;
+
+    /**
+     * Age at which physical attribute degradation begins.
+     * Players at or below this age experience no degradation.
+     * Default: 30
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $physicalDegradationAgeThreshold = 30;
+
+    /**
+     * Weekly degradation applied to pace and stamina for players
+     * aged (threshold+1) to (threshold+3). e.g. age 31-33.
+     * Default: 0.1
+     */
+    #[ORM\Column(type: 'float')]
+    private float $physicalDegradationRateMild = 0.1;
+
+    /**
+     * Weekly degradation for players aged (threshold+4) to
+     * (threshold+6). e.g. age 34-36.
+     * Default: 0.2
+     */
+    #[ORM\Column(type: 'float')]
+    private float $physicalDegradationRateModerate = 0.2;
+
+    /**
+     * Weekly degradation for players aged (threshold+7) and above.
+     * e.g. age 37+.
+     * Default: 0.4
+     */
+    #[ORM\Column(type: 'float')]
+    private float $physicalDegradationRateSevere = 0.4;
+
+    /**
+     * Scales how strongly a personality trait (heart or determination)
+     * reduces physical degradation. 0.0 = no reduction.
+     * effectiveDegradation = rate * (1 - traitValue/20 *
+     *                         physicalDegradationPersonalityScale)
+     * Default: 0.2
+     */
+    #[ORM\Column(type: 'float')]
+    private float $physicalDegradationPersonalityScale = 0.2;
+
+    /**
+     * Number of recent matches used to calculate form average
+     * for development multiplier.
+     * Default: 5
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $formDevelopmentMatchCount = 5;
+
+    /**
+     * Average match rating threshold above which full development
+     * applies (1.0× multiplier).
+     * Default: 7.0
+     */
+    #[ORM\Column(type: 'float')]
+    private float $formDevelopmentThreshold = 7.0;
+
+    /**
+     * Development multiplier when form average is between
+     * formDevelopmentThresholdLow and formDevelopmentThreshold.
+     * e.g. average 5.0–6.9.
+     * Default: 0.6
+     */
+    #[ORM\Column(type: 'float')]
+    private float $formDevelopmentMultiplierMid = 0.6;
+
+    /**
+     * Development multiplier when form average is below
+     * formDevelopmentThresholdLow.
+     * e.g. average < 5.0.
+     * Default: 0.25
+     */
+    #[ORM\Column(type: 'float')]
+    private float $formDevelopmentMultiplierLow = 0.25;
+
+    /**
+     * Average match rating below which the low development
+     * multiplier applies (formDevelopmentMultiplierLow).
+     * Default: 5.0
+     */
+    #[ORM\Column(type: 'float')]
+    private float $formDevelopmentThresholdLow = 5.0;
+
     // ── Scouting System ───────────────────────────────────────────────────
 
     /**
@@ -356,6 +451,39 @@ class GameConfig
 
     public function getCoachMoraleInfluence(): float { return $this->coachMoraleInfluence; }
     public function setCoachMoraleInfluence(float $v): static { $this->coachMoraleInfluence = max(0.0, $v); return $this; }
+
+    public function getAttributeHardCap(): int { return $this->attributeHardCap; }
+    public function setAttributeHardCap(int $v): static { $this->attributeHardCap = max(0, $v); return $this; }
+
+    public function getPhysicalDegradationAgeThreshold(): int { return $this->physicalDegradationAgeThreshold; }
+    public function setPhysicalDegradationAgeThreshold(int $v): static { $this->physicalDegradationAgeThreshold = max(0, $v); return $this; }
+
+    public function getPhysicalDegradationRateMild(): float { return $this->physicalDegradationRateMild; }
+    public function setPhysicalDegradationRateMild(float $v): static { $this->physicalDegradationRateMild = max(0.0, $v); return $this; }
+
+    public function getPhysicalDegradationRateModerate(): float { return $this->physicalDegradationRateModerate; }
+    public function setPhysicalDegradationRateModerate(float $v): static { $this->physicalDegradationRateModerate = max(0.0, $v); return $this; }
+
+    public function getPhysicalDegradationRateSevere(): float { return $this->physicalDegradationRateSevere; }
+    public function setPhysicalDegradationRateSevere(float $v): static { $this->physicalDegradationRateSevere = max(0.0, $v); return $this; }
+
+    public function getPhysicalDegradationPersonalityScale(): float { return $this->physicalDegradationPersonalityScale; }
+    public function setPhysicalDegradationPersonalityScale(float $v): static { $this->physicalDegradationPersonalityScale = max(0.0, $v); return $this; }
+
+    public function getFormDevelopmentMatchCount(): int { return $this->formDevelopmentMatchCount; }
+    public function setFormDevelopmentMatchCount(int $v): static { $this->formDevelopmentMatchCount = max(0, $v); return $this; }
+
+    public function getFormDevelopmentThreshold(): float { return $this->formDevelopmentThreshold; }
+    public function setFormDevelopmentThreshold(float $v): static { $this->formDevelopmentThreshold = max(0.0, $v); return $this; }
+
+    public function getFormDevelopmentMultiplierMid(): float { return $this->formDevelopmentMultiplierMid; }
+    public function setFormDevelopmentMultiplierMid(float $v): static { $this->formDevelopmentMultiplierMid = max(0.0, $v); return $this; }
+
+    public function getFormDevelopmentMultiplierLow(): float { return $this->formDevelopmentMultiplierLow; }
+    public function setFormDevelopmentMultiplierLow(float $v): static { $this->formDevelopmentMultiplierLow = max(0.0, $v); return $this; }
+
+    public function getFormDevelopmentThresholdLow(): float { return $this->formDevelopmentThresholdLow; }
+    public function setFormDevelopmentThresholdLow(float $v): static { $this->formDevelopmentThresholdLow = max(0.0, $v); return $this; }
 
     public function getScoutMoraleThreshold(): int { return $this->scoutMoraleThreshold; }
     public function setScoutMoraleThreshold(int $v): static { $this->scoutMoraleThreshold = $v; return $this; }
