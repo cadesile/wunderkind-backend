@@ -1293,7 +1293,7 @@
                             <label for="squadRoleAppearanceExpectations" class="form-label fw-semibold small">Appearance Expectations</label>
                             <textarea id="squadRoleAppearanceExpectations" name="squadRoleAppearanceExpectations"
                                       rows="8" class="form-control font-monospace">{{ config.squadRoleAppearanceExpectations|json_encode }}</textarea>
-                            <div class="form-text">Minimum appearances per season expected for each role. Based on a 38-game season.</div>
+                            <div class="form-text">Percentage of season matches expected per role (0.0–1.0). e.g. 0.9 = 90% of matches. Translated to actual match counts on the frontend based on season length.</div>
                         </div>
                         <div class="col-md-6">
                             <label for="squadRoleMoraleDecayPerWeek" class="form-label fw-semibold small">Morale Decay Per Week</label>

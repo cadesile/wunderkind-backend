@@ -993,12 +993,12 @@ class GameConfig
      */
     #[ORM\Column(type: 'json')]
     private array $squadRoleAppearanceExpectations = [
-        'star_player'  => 30,
-        'important'    => 25,
-        'first_team'   => 20,
-        'squad_player' => 12,
-        'backup'       => 5,
-        'prospect'     => 0,
+        'star_player'  => 0.90,  // 90% of season matches
+        'important'    => 0.75,  // 75%
+        'first_team'   => 0.60,  // 60%
+        'squad_player' => 0.40,  // 40%
+        'backup'       => 0.20,  // 20%
+        'prospect'     => 0.0,   // no expectation
     ];
 
     /**
