@@ -63,7 +63,7 @@ class SyncRequest
     public array $ledger = [];
 
     /**
-     * @param array<array{playerId?: string, playerName?: string, destinationClub?: string, grossFee?: int, agentCommission?: int, netProceeds?: int, type?: string}|TransferSyncDto> $transfers
+     * @param array<array{playerId?: string, playerName?: string, startingClub?: string|null, destinationClub?: string, grossFee?: int, agentCommission?: int, netProceeds?: int, type?: string}|TransferSyncDto> $transfers
      */
     public function setTransfers(array $transfers): void
     {
@@ -75,6 +75,7 @@ class SyncRequest
             $dto->playerId        = $item['playerId'] ?? '';
             $dto->playerName      = $item['playerName'] ?? '';
             $dto->playerPosition  = $item['playerPosition'] ?? '';
+            $dto->startingClub    = isset($item['startingClub']) ? ($item['startingClub'] ?: null) : null;
             $dto->destinationClub = $item['destinationClub'] ?? '';
             $dto->grossFee        = (int) ($item['grossFee'] ?? 0);
             $dto->agentCommission = (int) ($item['agentCommission'] ?? 0);
@@ -190,6 +191,33 @@ class SyncRequest
      * @var array<array{playerId: string, pace?: int, technical?: int, vision?: int, power?: int, stamina?: int, heart?: int, height?: int, weight?: int, morale?: int}>
      */
     public array $players = [];
+
+    /**
+     * Fan base and attendance snapshot for this week.
+     * weeklyAttendance is null on weeks with no home fixture.
+     * Missing from older clients defaults to all-zero / null.
+     *
+     * @var array{fanCount: int, fanSentiment: int, fanMorale: int, weeklyAttendance: int|null}
+     */
+    public array $attendance = [
+        'fanCount'         => 0,
+        'fanSentiment'     => 0,
+        'fanMorale'        => 0,
+        'weeklyAttendance' => null,
+    ];
+
+    /**
+     * @param array{fanCount?: int, fanSentiment?: int, fanMorale?: int, weeklyAttendance?: int|null} $attendance
+     */
+    public function setAttendance(array $attendance): void
+    {
+        $this->attendance = [
+            'fanCount'         => (int) ($attendance['fanCount'] ?? 0),
+            'fanSentiment'     => (int) ($attendance['fanSentiment'] ?? 0),
+            'fanMorale'        => (int) ($attendance['fanMorale'] ?? 0),
+            'weeklyAttendance' => isset($attendance['weeklyAttendance']) ? (int) $attendance['weeklyAttendance'] : null,
+        ];
+    }
 
     /**
      * Optional debug diagnostics — only present when gameConfig.debugLoggingEnabled === true on the client.

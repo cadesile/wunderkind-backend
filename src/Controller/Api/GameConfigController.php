@@ -154,6 +154,10 @@ class GameConfigController extends AbstractController
             'managerSackingMinGames'                  => $config->getManagerSackingMinGames(),
             'managerSackingAttendancePenaltyPerWeek'  => $config->getManagerSackingAttendancePenaltyPerWeek(),
 
+            // Financial Penalties
+            'bankruptcyDeductionTiers'    => $config->getBankruptcyDeductionTiers(),
+            'bankruptcyDeductionsEnabled' => $config->isBankruptcyDeductionsEnabled(),
+
             // League finances
             'smallSponsorMin'               => $config->getSmallSponsorMin(),
             'smallSponsorMax'               => $config->getSmallSponsorMax(),

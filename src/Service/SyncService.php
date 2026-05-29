@@ -81,6 +81,7 @@ class SyncService
                 'transfers'           => array_map(fn($t) => [
                     'playerId'        => $t->playerId,
                     'playerName'      => $t->playerName,
+                    'startingClub'    => $t->startingClub,
                     'destinationClub' => $t->destinationClub,
                     'grossFee'        => $t->grossFee,
                     'agentCommission' => $t->agentCommission,
@@ -92,6 +93,7 @@ class SyncService
                     'amount'      => $e->amount,
                     'description' => $e->description,
                 ], $request->ledger),
+                'attendance'          => $request->attendance,
             ],
         );
         if ($request->log !== null) {
@@ -640,7 +642,10 @@ class SyncService
             );
             $transfer->setPlayerName($dto->playerName ?: ($player?->getName()));
             $transfer->setPlayerPosition($dto->playerPosition ?: null);
-            $transfer->setClubLeaving($club->getName());
+            $transfer->setClubLeaving(
+                $dto->startingClub
+                ?? ($type === TransferType::SIGNING ? 'Free Agent' : $club->getName())
+            );
             $transfer->setFee($dto->grossFee);
             $transfer->setAgentCommission($dto->agentCommission);
             $transfer->setNetProceeds($dto->netProceeds);

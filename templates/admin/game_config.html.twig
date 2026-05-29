@@ -764,6 +764,39 @@
                 </div>
             </div>
 
+            {# ── Financial Penalties ──────────────────────────────────────────────── #}
+            <div class="card mb-4 cfg-section" data-section-id="financial-penalties">
+                <div class="card-header fw-semibold">Financial Penalties</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Controls the points deduction mechanic applied to clubs with a negative balance
+                        at season end. Deductions take effect in the following season.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="bankruptcyDeductionsEnabled"
+                                       name="bankruptcyDeductionsEnabled" value="1"
+                                       {{ config.bankruptcyDeductionsEnabled ? 'checked' : '' }}>
+                                <label class="form-check-label fw-semibold small" for="bankruptcyDeductionsEnabled">
+                                    Enable points deductions for negative balance at season end
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label for="bankruptcyDeductionTiers" class="form-label fw-semibold small">Deficit Tiers (JSON)</label>
+                            <textarea id="bankruptcyDeductionTiers" name="bankruptcyDeductionTiers"
+                                      rows="6" class="form-control font-monospace"
+                                      placeholder='[{"deficitMin":1,"deficitMax":200000,"points":3},{"deficitMin":200001,"deficitMax":500000,"points":6},{"deficitMin":500001,"deficitMax":null,"points":10}]'>{{ config.bankruptcyDeductionTiers|json_encode }}</textarea>
+                            <div class="form-text">
+                                Array of <code>{ deficitMin, deficitMax, points }</code> tiers evaluated in order — first match wins.
+                                <code>deficitMax: null</code> means no upper bound. All values in <strong>pence</strong>.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Staff Limits Per Club ────────────────────────────────────────────── #}
             <div class="card mb-4 cfg-section" data-section-id="staff-limits">
                 <div class="card-header fw-semibold">Staff Limits Per Club</div>

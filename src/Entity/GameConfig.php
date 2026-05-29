@@ -616,6 +616,38 @@ class GameConfig
     public function getLeaguePositionDecreasePercent(): int { return $this->leaguePositionDecreasePercent; }
     public function setLeaguePositionDecreasePercent(int $v): static { $this->leaguePositionDecreasePercent = $v; return $this; }
 
+    // ── Financial Penalties ───────────────────────────────────────────────────
+
+    /**
+     * JSON array of deficit tiers for points deduction at season end.
+     * Each tier: { "deficitMin": int, "deficitMax": int|null, "points": int }
+     * deficitMin/Max in pence. deficitMax null = no upper bound.
+     * Evaluated in order — first matching tier wins.
+     * Default: 3 tiers (small/medium/large deficit)
+     */
+    #[ORM\Column(type: 'json')]
+    private array $bankruptcyDeductionTiers = [
+        ['deficitMin' => 1,       'deficitMax' => 200000,  'points' => 3],
+        ['deficitMin' => 200001,  'deficitMax' => 500000,  'points' => 6],
+        ['deficitMin' => 500001,  'deficitMax' => null,    'points' => 10],
+    ];
+
+    /**
+     * Whether points deductions are enabled. Set to false to disable
+     * the mechanic entirely without removing config.
+     * Default: true
+     */
+    #[ORM\Column(type: 'boolean')]
+    private bool $bankruptcyDeductionsEnabled = true;
+
+    /** @return array<array{deficitMin: int, deficitMax: int|null, points: int}> */
+    public function getBankruptcyDeductionTiers(): array { return $this->bankruptcyDeductionTiers; }
+    /** @param array<array{deficitMin: int, deficitMax: int|null, points: int}> $v */
+    public function setBankruptcyDeductionTiers(array $v): static { $this->bankruptcyDeductionTiers = $v; return $this; }
+
+    public function isBankruptcyDeductionsEnabled(): bool { return $this->bankruptcyDeductionsEnabled; }
+    public function setBankruptcyDeductionsEnabled(bool $v): static { $this->bankruptcyDeductionsEnabled = $v; return $this; }
+
     // ── Sponsor & Investor Offer Probabilities ────────────────────────────
 
     /** Weekly probability of receiving a LOCAL-tier sponsor offer. Default: 0.30 */

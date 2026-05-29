@@ -12,6 +12,9 @@ class TransferSyncDto
     #[Assert\NotBlank]
     public string $playerName = '';
 
+    /** Club the player is leaving; null = free agent (for signing type) or not supplied by older clients. */
+    public ?string $startingClub = null;
+
     #[Assert\NotBlank]
     public string $destinationClub = '';
 

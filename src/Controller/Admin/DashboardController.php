@@ -290,6 +290,14 @@ class DashboardController extends AbstractDashboardController
         $config->setFacilityMaintenanceFrequencyWeeks((int) $request->request->get('facilityMaintenanceFrequencyWeeks', 4));
         $config->setSystemNotificationFrequencyWeeks((int) $request->request->get('systemNotificationFrequencyWeeks', 8));
 
+        // Financial Penalties
+        $config->setBankruptcyDeductionsEnabled((bool) $request->request->get('bankruptcyDeductionsEnabled', false));
+        $tiersJson = $request->request->get('bankruptcyDeductionTiers', '[]');
+        $tiers = json_decode($tiersJson, true);
+        if (is_array($tiers)) {
+            $config->setBankruptcyDeductionTiers($tiers);
+        }
+
         // League finances — form submits pounds; multiply by 100 to store pence
         $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0) * 100);
         $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0) * 100);
