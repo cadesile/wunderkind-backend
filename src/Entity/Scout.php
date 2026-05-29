@@ -52,6 +52,17 @@ class Scout
     public function getJudgements(): array { return $this->judgements; }
     public function setJudgements(array $judgements): void { $this->judgements = $judgements; }
 
+    public function getJudgementsJson(): string
+    {
+        return json_encode($this->judgements, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
+
+    public function setJudgementsJson(?string $json): void
+    {
+        $decoded = json_decode(trim($json ?? ''), true);
+        $this->judgements = is_array($decoded) ? $decoded : [];
+    }
+
     public function getExperience(): int { return $this->experience; }
     public function setExperience(int $experience): void { $this->experience = $experience; }
 

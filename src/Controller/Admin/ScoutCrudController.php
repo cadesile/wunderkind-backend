@@ -10,6 +10,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class ScoutCrudController extends AbstractCrudController
@@ -36,9 +37,9 @@ class ScoutCrudController extends AbstractCrudController
         yield DateField::new('dob')->setLabel('Date of Birth');
         yield TextField::new('nationality');
         yield IntegerField::new('experience');
-        yield TextField::new('judgements')
-            ->formatValue(fn($v) => is_array($v) ? json_encode($v) : ($v ?? ''))
-            ->hideOnForm()
+        yield TextareaField::new('judgementsJson', 'Judgements')
+            ->setHelp('JSON object of scout judgement attributes. Invalid JSON is silently ignored on save.')
+            ->addCssClass('font-monospace')
             ->hideOnIndex();
     }
 }

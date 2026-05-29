@@ -340,11 +340,12 @@ class WorldInitializationService
     private function buildClubSnapshot(NpcClub $club, array $players, array $staff): array
     {
         return [
-            'id'             => (string) $club->getId(),
-            'name'           => $club->getName(),
-            'abbreviation'   => $club->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($club->getName()),
-            'tier'           => $club->getTier(),
-            'reputation'     => $club->getReputation(),
+            'id'              => (string) $club->getId(),
+            'name'            => $club->getName(),
+            'abbreviation'    => $club->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($club->getName()),
+            'tier'            => $club->getTier(),
+            'reputation'      => $club->getReputation(),
+            'startingBalance' => $club->getBalance(),
             'primaryColor'   => $club->getPrimaryColor(),
             'secondaryColor' => $club->getSecondaryColor(),
             'stadiumName'    => $club->getStadiumName(),
