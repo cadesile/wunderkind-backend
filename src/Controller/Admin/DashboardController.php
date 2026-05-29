@@ -346,6 +346,20 @@ class DashboardController extends AbstractDashboardController
         $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
         $config->setSquadSizeMax((int) $request->request->get('squadSizeMax', 25));
 
+        // Squad Roles
+        $roleFields = [
+            'squadRoleAppearanceExpectations' => 'setSquadRoleAppearanceExpectations',
+            'squadRoleMoraleDecayPerWeek'     => 'setSquadRoleMoraleDecayPerWeek',
+            'squadRoleMoraleBoostPerWeek'     => 'setSquadRoleMoraleBoostPerWeek',
+            'squadRoleAutoAssignThresholds'   => 'setSquadRoleAutoAssignThresholds',
+        ];
+        foreach ($roleFields as $field => $setter) {
+            $decoded = json_decode($request->request->get($field, '{}'), true);
+            if (is_array($decoded)) {
+                $config->$setter($decoded);
+            }
+        }
+
         // League player ability ranges
         // Submitted as abilityRange[EN][1][min]=55 &abilityRange[EN][1][max]=95 etc.
         $rawRanges    = $request->request->all()['abilityRange'] ?? [];

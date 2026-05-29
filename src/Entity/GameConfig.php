@@ -981,6 +981,93 @@ class GameConfig
     public function getSquadSizeMax(): int { return $this->squadSizeMax; }
     public function setSquadSizeMax(int $v): static { $this->squadSizeMax = max(1, $v); return $this; }
 
+    // ── Squad Roles ───────────────────────────────────────────────────────────
+
+    /**
+     * Minimum appearances per season expected for each squad role.
+     * Used by the frontend to evaluate whether a player is getting
+     * sufficient game time for their role, driving morale and
+     * development consequences.
+     * Keys must match the six role slugs exactly.
+     * Default values represent a 38-game season.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $squadRoleAppearanceExpectations = [
+        'star_player'  => 30,
+        'important'    => 25,
+        'first_team'   => 20,
+        'squad_player' => 12,
+        'backup'       => 5,
+        'prospect'     => 0,
+    ];
+
+    /**
+     * Morale delta applied per week when a player is not meeting
+     * their role's appearance expectation.
+     * Negative value = morale decreases.
+     * Keys match the six role slugs.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $squadRoleMoraleDecayPerWeek = [
+        'star_player'  => -3,
+        'important'    => -2,
+        'first_team'   => -2,
+        'squad_player' => -1,
+        'backup'       => 0,
+        'prospect'     => 0,
+    ];
+
+    /**
+     * Morale delta applied per week when a player exceeds their
+     * role's appearance expectation (overperforming their role).
+     * Positive value = morale boost.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $squadRoleMoraleBoostPerWeek = [
+        'star_player'  => 0,
+        'important'    => 1,
+        'first_team'   => 1,
+        'squad_player' => 2,
+        'backup'       => 2,
+        'prospect'     => 3,
+    ];
+
+    /**
+     * Overall rating thresholds used to auto-assign squad roles
+     * during world pack generation. A player is assigned the
+     * highest role whose threshold they meet.
+     * Values are overallRating (0-100).
+     */
+    #[ORM\Column(type: 'json')]
+    private array $squadRoleAutoAssignThresholds = [
+        'star_player'  => 80,
+        'important'    => 65,
+        'first_team'   => 50,
+        'squad_player' => 35,
+        'backup'       => 20,
+        'prospect'     => 0,
+    ];
+
+    /** @return array<string, int> */
+    public function getSquadRoleAppearanceExpectations(): array { return $this->squadRoleAppearanceExpectations; }
+    /** @param array<string, int> $v */
+    public function setSquadRoleAppearanceExpectations(array $v): static { $this->squadRoleAppearanceExpectations = $v; return $this; }
+
+    /** @return array<string, int> */
+    public function getSquadRoleMoraleDecayPerWeek(): array { return $this->squadRoleMoraleDecayPerWeek; }
+    /** @param array<string, int> $v */
+    public function setSquadRoleMoraleDecayPerWeek(array $v): static { $this->squadRoleMoraleDecayPerWeek = $v; return $this; }
+
+    /** @return array<string, int> */
+    public function getSquadRoleMoraleBoostPerWeek(): array { return $this->squadRoleMoraleBoostPerWeek; }
+    /** @param array<string, int> $v */
+    public function setSquadRoleMoraleBoostPerWeek(array $v): static { $this->squadRoleMoraleBoostPerWeek = $v; return $this; }
+
+    /** @return array<string, int> */
+    public function getSquadRoleAutoAssignThresholds(): array { return $this->squadRoleAutoAssignThresholds; }
+    /** @param array<string, int> $v */
+    public function setSquadRoleAutoAssignThresholds(array $v): static { $this->squadRoleAutoAssignThresholds = $v; return $this; }
+
     // ── League Player Ability Ranges ──────────────────────────────────────
 
     /**

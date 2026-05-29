@@ -1276,6 +1276,47 @@
             }
             </script>
 
+            {# ── Squad Roles ─────────────────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="squad-roles">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-id-badge text-muted"></i>
+                    <span class="fw-semibold small">Squad Roles</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Configures the six squad roles (<code>star_player</code>, <code>important</code>,
+                        <code>first_team</code>, <code>squad_player</code>, <code>backup</code>, <code>prospect</code>).
+                        Edit each field as a JSON object keyed by role slug.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="squadRoleAppearanceExpectations" class="form-label fw-semibold small">Appearance Expectations</label>
+                            <textarea id="squadRoleAppearanceExpectations" name="squadRoleAppearanceExpectations"
+                                      rows="8" class="form-control font-monospace">{{ config.squadRoleAppearanceExpectations|json_encode }}</textarea>
+                            <div class="form-text">Minimum appearances per season expected for each role. Based on a 38-game season.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="squadRoleMoraleDecayPerWeek" class="form-label fw-semibold small">Morale Decay Per Week</label>
+                            <textarea id="squadRoleMoraleDecayPerWeek" name="squadRoleMoraleDecayPerWeek"
+                                      rows="8" class="form-control font-monospace">{{ config.squadRoleMoraleDecayPerWeek|json_encode }}</textarea>
+                            <div class="form-text">Weekly morale delta when a player is below their appearance expectation. Negative = morale loss.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="squadRoleMoraleBoostPerWeek" class="form-label fw-semibold small">Morale Boost Per Week</label>
+                            <textarea id="squadRoleMoraleBoostPerWeek" name="squadRoleMoraleBoostPerWeek"
+                                      rows="8" class="form-control font-monospace">{{ config.squadRoleMoraleBoostPerWeek|json_encode }}</textarea>
+                            <div class="form-text">Weekly morale delta when a player exceeds their appearance expectation. Positive = morale gain.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="squadRoleAutoAssignThresholds" class="form-label fw-semibold small">Auto-Assign Thresholds</label>
+                            <textarea id="squadRoleAutoAssignThresholds" name="squadRoleAutoAssignThresholds"
+                                      rows="8" class="form-control font-monospace">{{ config.squadRoleAutoAssignThresholds|json_encode }}</textarea>
+                            <div class="form-text">Overall rating (0–100) at which a player is auto-assigned to that role during world generation. Highest matching role wins.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Squad Configuration ────────────────────────────────────── #}
             <div class="card cfg-section" data-section-id="squad">
                 <div class="card-header py-2 d-flex align-items-center gap-2">

@@ -123,6 +123,12 @@ class GameConfigController extends AbstractController
             'squadSizeMin' => $config->getSquadSizeMin(),
             'squadSizeMax' => $config->getSquadSizeMax(),
 
+            // Squad Roles
+            'squadRoleAppearanceExpectations' => $config->getSquadRoleAppearanceExpectations(),
+            'squadRoleMoraleDecayPerWeek'     => $config->getSquadRoleMoraleDecayPerWeek(),
+            'squadRoleMoraleBoostPerWeek'     => $config->getSquadRoleMoraleBoostPerWeek(),
+            'squadRoleAutoAssignThresholds'   => $config->getSquadRoleAutoAssignThresholds(),
+
             // League player ability ranges per country/tier
             'leaguePlayerAbilityRanges' => $config->getLeaguePlayerAbilityRanges(),
 
