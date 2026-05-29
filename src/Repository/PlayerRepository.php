@@ -208,6 +208,59 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Random pool draw for the scout search endpoint.
+     * All parameters except ability range are optional filters.
+     * Age is derived from dateOfBirth server-side so no PostgreSQL-specific SQL is needed.
+     *
+     * @return Player[]
+     */
+    public function findForScoutSearch(
+        int $abilityMin,
+        int $abilityMax,
+        ?PlayerPosition $position,
+        ?string $nationality,
+        ?int $ageMin,
+        ?int $ageMax,
+        int $limit,
+    ): array {
+        if ($limit <= 0) return [];
+
+        $qb = $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.club IS NULL')
+            ->andWhere('p.currentAbility BETWEEN :abilityMin AND :abilityMax')
+            ->setParameter('abilityMin', $abilityMin)
+            ->setParameter('abilityMax', $abilityMax)
+            ->orderBy('rand_order')
+            ->setMaxResults($limit);
+
+        if ($position !== null) {
+            $qb->andWhere('p.position = :position')
+               ->setParameter('position', $position);
+        }
+
+        if ($nationality !== null) {
+            $qb->andWhere('p.nationality = :nationality')
+               ->setParameter('nationality', $nationality);
+        }
+
+        // Convert age bounds to dateOfBirth bounds (in PHP to avoid DQL date_sub limitations)
+        $now = new \DateTimeImmutable();
+        if ($ageMin !== null) {
+            // age >= ageMin → dateOfBirth <= today - ageMin years
+            $qb->andWhere('p.dateOfBirth <= :dobMax')
+               ->setParameter('dobMax', $now->modify("-{$ageMin} years"));
+        }
+        if ($ageMax !== null) {
+            // age <= ageMax → dateOfBirth >= today - ageMax years - 1 year + 1 day
+            $qb->andWhere('p.dateOfBirth >= :dobMin')
+               ->setParameter('dobMin', $now->modify("-{$ageMax} years")->modify('-1 year')->modify('+1 day'));
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
      * Bulk-delete players by UUID array. Used after world-init dispatch.
      * Guardians referencing these players are deleted first to satisfy the FK constraint.
      * @param string[] $ids
