@@ -20,8 +20,9 @@ class AppLinksController extends AbstractController
         $config = $this->gameConfigRepository->getConfig();
 
         return $this->json([
-            'android' => $config->getAndroidDownloadUrl(),
-            'ios'     => $config->getIosDownloadUrl(),
+            'android'         => $config->getAndroidDownloadUrl(),
+            'ios'             => $config->getIosDownloadUrl(),
+            'recaptchaSiteKey' => $config->getRecaptchaSiteKey(),
         ]);
     }
 }

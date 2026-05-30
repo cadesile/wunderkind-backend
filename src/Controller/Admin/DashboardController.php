@@ -115,6 +115,9 @@ class DashboardController extends AbstractDashboardController
         $config = $this->gameConfigRepository->getConfig();
         $config->setAndroidDownloadUrl($request->request->get('androidDownloadUrl', ''));
         $config->setIosDownloadUrl($request->request->get('iosDownloadUrl', ''));
+        $config->setBetaRequestEmail($request->request->get('betaRequestEmail', ''));
+        $config->setRecaptchaSiteKey($request->request->get('recaptchaSiteKey', ''));
+        $config->setRecaptchaSecretKey($request->request->get('recaptchaSecretKey', ''));
         $this->em->flush();
 
         $this->addFlash('success', 'App links saved.');

@@ -64,6 +64,45 @@
             </div>
         </div>
 
+        <div class="card mt-4">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-envelope text-muted"></i>
+                <span class="fw-semibold small">Beta Access Requests</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label for="betaRequestEmail" class="form-label fw-semibold">Notification Email</label>
+                        <input type="email" id="betaRequestEmail" name="betaRequestEmail"
+                               value="{{ config.betaRequestEmail ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="e.g. beta@wunderkindfactory.com">
+                        <div class="form-text">Receives an email for each beta request submitted via the landing page. Blank = requests are silently accepted without notification.</div>
+                    </div>
+                </div>
+                <hr class="my-4">
+                <p class="small fw-semibold text-muted mb-3">Google reCAPTCHA v2</p>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label for="recaptchaSiteKey" class="form-label fw-semibold">Site Key <span class="text-muted fw-normal">(public)</span></label>
+                        <input type="text" id="recaptchaSiteKey" name="recaptchaSiteKey"
+                               value="{{ config.recaptchaSiteKey ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="6Lc…">
+                        <div class="form-text">Embedded in the landing page HTML. Leave blank to hide the CAPTCHA widget (no bot protection).</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="recaptchaSecretKey" class="form-label fw-semibold">Secret Key <span class="text-muted fw-normal">(private)</span></label>
+                        <input type="text" id="recaptchaSecretKey" name="recaptchaSecretKey"
+                               value="{{ config.recaptchaSecretKey ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="6Lc…">
+                        <div class="form-text">Used server-side to verify CAPTCHA responses. Never expose this publicly.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="mt-4">
             <button type="submit" class="btn btn-primary btn-sm">Save App Links</button>
         </div>

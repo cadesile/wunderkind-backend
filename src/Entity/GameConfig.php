@@ -965,6 +965,27 @@ class GameConfig
     public function getIosDownloadUrl(): ?string { return $this->iosDownloadUrl; }
     public function setIosDownloadUrl(?string $v): static { $this->iosDownloadUrl = $v ?: null; return $this; }
 
+    /** Email address that receives beta access request notifications. */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $betaRequestEmail = null;
+
+    /** Google reCAPTCHA v2 site key (public — embedded in frontend HTML). */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $recaptchaSiteKey = null;
+
+    /** Google reCAPTCHA v2 secret key (private — used for server-side verification). */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $recaptchaSecretKey = null;
+
+    public function getBetaRequestEmail(): ?string { return $this->betaRequestEmail; }
+    public function setBetaRequestEmail(?string $v): static { $this->betaRequestEmail = $v ?: null; return $this; }
+
+    public function getRecaptchaSiteKey(): ?string { return $this->recaptchaSiteKey; }
+    public function setRecaptchaSiteKey(?string $v): static { $this->recaptchaSiteKey = $v ?: null; return $this; }
+
+    public function getRecaptchaSecretKey(): ?string { return $this->recaptchaSecretKey; }
+    public function setRecaptchaSecretKey(?string $v): static { $this->recaptchaSecretKey = $v ?: null; return $this; }
+
     // ── Squad Configuration ───────────────────────────────────────────────
 
     /** Minimum number of players required in a club's active squad. Default: 11 */
