@@ -3,7 +3,10 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Club;
+use App\Entity\Investor;
 use App\Entity\LeaderboardEntry;
+use App\Entity\RefreshToken;
+use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,8 +34,45 @@ class ClubCrudController extends AbstractCrudController
     public function configureActions(Actions $actions): Actions
     {
         return $actions
-            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->disable(Action::NEW, Action::EDIT)
             ->add(Crud::PAGE_INDEX, Action::DETAIL);
+    }
+
+    public function deleteEntity(EntityManagerInterface $em, $entityInstance): void
+    {
+        /** @var Club $club */
+        $club  = $entityInstance;
+        $user  = $club->getUser();
+        $email = $user->getUserIdentifier();
+
+        // Null out club FK on Investors and Sponsors — no onDelete cascade defined on these
+        $em->createQueryBuilder()
+            ->update(Investor::class, 'i')
+            ->set('i.club', ':null')
+            ->where('i.club = :club')
+            ->setParameter('null', null)
+            ->setParameter('club', $club)
+            ->getQuery()->execute();
+
+        $em->createQueryBuilder()
+            ->update(Sponsor::class, 's')
+            ->set('s.club', ':null')
+            ->where('s.club = :club')
+            ->setParameter('null', null)
+            ->setParameter('club', $club)
+            ->getQuery()->execute();
+
+        // Remove orphaned refresh tokens (stored by username string, no FK)
+        $em->createQueryBuilder()
+            ->delete(RefreshToken::class, 'rt')
+            ->where('rt.username = :email')
+            ->setParameter('email', $email)
+            ->getQuery()->execute();
+
+        // Remove User → Doctrine cascades to Club → Club cascades to players, staff,
+        // sync records, leaderboard entries, inbox messages
+        $em->remove($user);
+        $em->flush();
     }
 
     /**
