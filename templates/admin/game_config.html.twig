@@ -59,6 +59,7 @@
                 {id: 'stadium',          label: 'Stadium'},
                 {id: 'attendance',       label: 'Attendance'},
                 {id: 'ability-ranges',   label: 'Ability Ranges'},
+                {id: 'npc-finances',     label: 'NPC Club Finances'},
                 {id: 'squad',            label: 'Squad'},
                 {id: 'retirement',       label: 'Retirement'},
                 {id: 'inbox',            label: 'Inbox'},
@@ -1273,6 +1274,82 @@
                 } else if (!isMin && parseInt(maxEl.value) < parseInt(minEl.value)) {
                     minEl.value = maxEl.value;
                 }
+            }
+            </script>
+
+            {# ── NPC Club Finances ────────────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="npc-finances">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-coins text-muted"></i>
+                    <span class="fw-semibold small">NPC Club Starting Balance</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-4">
+                        Starting cash balance given to each NPC club when generated, expressed as a random draw
+                        within a min–max range per tier. Tier 1 is the top division; Tier 8 is the bottom.
+                        Values are in <strong>£ (pounds)</strong>.
+                    </p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0" style="font-size:.85rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:80px;">Tier</th>
+                                    <th>Min (£)</th>
+                                    <th>Max (£)</th>
+                                    <th class="text-muted" style="width:180px;">Preview</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set balanceRanges = config.npcClubBalanceRanges %}
+                                {% for i in 1..8 %}
+                                    {% set row = balanceRanges[i - 1] ?? {min: 0, max: 0} %}
+                                    {% set minPounds = (row.min / 100)|round(0, 'floor') %}
+                                    {% set maxPounds = (row.max / 100)|round(0, 'floor') %}
+                                    <tr>
+                                        <td class="fw-semibold text-center">{{ i }}</td>
+                                        <td>
+                                            <input type="number"
+                                                   name="npcBalanceRange[{{ i }}][min]"
+                                                   value="{{ minPounds }}"
+                                                   min="0" step="1000"
+                                                   class="form-control form-control-sm font-monospace npc-bal-input"
+                                                   data-tier="{{ i }}"
+                                                   data-bound="min"
+                                                   oninput="syncNpcBalancePreview({{ i }})">
+                                        </td>
+                                        <td>
+                                            <input type="number"
+                                                   name="npcBalanceRange[{{ i }}][max]"
+                                                   value="{{ maxPounds }}"
+                                                   min="0" step="1000"
+                                                   class="form-control form-control-sm font-monospace npc-bal-input"
+                                                   data-tier="{{ i }}"
+                                                   data-bound="max"
+                                                   oninput="syncNpcBalancePreview({{ i }})">
+                                        </td>
+                                        <td class="text-muted small" id="npc-bal-preview-{{ i }}">
+                                            £{{ (minPounds / 1000)|number_format(0) }}k – £{{ (maxPounds / 1000)|number_format(0) }}k
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <script>
+            function syncNpcBalancePreview(tier) {
+                var minEl  = document.querySelector('[data-tier="' + tier + '"][data-bound="min"].npc-bal-input');
+                var maxEl  = document.querySelector('[data-tier="' + tier + '"][data-bound="max"].npc-bal-input');
+                var prev   = document.getElementById('npc-bal-preview-' + tier);
+                if (!minEl || !maxEl || !prev) return;
+                var min = Math.max(0, parseInt(minEl.value, 10) || 0);
+                var max = Math.max(min, parseInt(maxEl.value, 10) || 0);
+                function fmt(n) {
+                    if (n >= 1000000) return '£' + (n / 1000000).toFixed(1) + 'm';
+                    return '£' + Math.round(n / 1000) + 'k';
+                }
+                prev.textContent = fmt(min) + ' – ' + fmt(max);
             }
             </script>
 

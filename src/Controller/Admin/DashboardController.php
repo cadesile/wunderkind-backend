@@ -381,6 +381,19 @@ class DashboardController extends AbstractDashboardController
         usort($abilityRanges, fn($a, $b) => strcmp($a['country'], $b['country']));
         $config->setLeaguePlayerAbilityRanges($abilityRanges);
 
+        // NPC club balance ranges — form submits pounds; store pence (* 100)
+        $rawBalanceRanges = $request->request->all()['npcBalanceRange'] ?? [];
+        $balanceRanges = [];
+        for ($t = 1; $t <= 8; $t++) {
+            $minPounds = max(0, (int) ($rawBalanceRanges[$t]['min'] ?? 0));
+            $maxPounds = max(0, (int) ($rawBalanceRanges[$t]['max'] ?? 0));
+            $minPounds = min($minPounds, max($minPounds, $maxPounds)); // min ≤ max
+            $balanceRanges[] = ['min' => $minPounds * 100, 'max' => max($minPounds, $maxPounds) * 100];
+        }
+        if (!empty(array_filter($balanceRanges))) {
+            $config->setNpcClubBalanceRanges($balanceRanges);
+        }
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');

@@ -986,6 +986,43 @@ class GameConfig
     public function getRecaptchaSecretKey(): ?string { return $this->recaptchaSecretKey; }
     public function setRecaptchaSecretKey(?string $v): static { $this->recaptchaSecretKey = $v ?: null; return $this; }
 
+    // ── NPC Club Finances ─────────────────────────────────────────────────
+
+    /**
+     * Starting balance range per tier (tiers 1–8, index 0 = tier 1).
+     * Each element: {min: <pence>, max: <pence>}.
+     * Defaults match the legacy formula: tier-1 ~£40m–£60m, halving each tier down to tier-8 ~£312k–£469k.
+     * @var array<array{min:int,max:int}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcClubBalanceRanges = [
+        ['min' => 4_000_000_000, 'max' => 6_000_000_000],
+        ['min' => 2_000_000_000, 'max' => 3_000_000_000],
+        ['min' => 1_000_000_000, 'max' => 1_500_000_000],
+        ['min' =>   500_000_000, 'max' =>   750_000_000],
+        ['min' =>   250_000_000, 'max' =>   375_000_000],
+        ['min' =>   125_000_000, 'max' =>   187_500_000],
+        ['min' =>    62_500_000, 'max' =>    93_750_000],
+        ['min' =>    31_250_000, 'max' =>    46_875_000],
+    ];
+
+    /** @return array<array{min:int,max:int}> */
+    public function getNpcClubBalanceRanges(): array { return $this->npcClubBalanceRanges; }
+
+    /** @param array<array{min:int,max:int}> $ranges */
+    public function setNpcClubBalanceRanges(array $ranges): static { $this->npcClubBalanceRanges = $ranges; return $this; }
+
+    /**
+     * Returns the {min, max} range for a given tier (1–8).
+     * Falls back to the tier-8 entry if the tier is out of bounds.
+     * @return array{min:int,max:int}
+     */
+    public function getNpcClubBalanceRangeForTier(int $tier): array
+    {
+        $idx = max(0, min(7, $tier - 1));
+        return $this->npcClubBalanceRanges[$idx] ?? ['min' => 31_250_000, 'max' => 46_875_000];
+    }
+
     // ── Squad Configuration ───────────────────────────────────────────────
 
     /** Minimum number of players required in a club's active squad. Default: 11 */

@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Entity\FacilityTemplate;
 use App\Entity\NpcClub;
 use App\Repository\FacilityTemplateRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\LeagueService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -682,6 +683,7 @@ class NpcClubGenerationService
         private readonly FacilityTemplateRepository  $facilityTemplateRepo,
         private readonly NpcClubRepository           $npcClubRepo,
         private readonly LeagueService               $leagueService,
+        private readonly GameConfigRepository        $gameConfigRepository,
     ) {}
 
     /** @return NpcClub[] */
@@ -798,10 +800,10 @@ class NpcClubGenerationService
 
     private function balanceForTier(int $tier): int
     {
-        // tier 1 → ~£50m (5_000_000_000 pence), tier 8 → ~£390k
-        $base     = (int) (5_000_000_000 / pow(2, $tier - 1));
-        $variance = (int) ($base * 0.2);
-        return random_int(max(0, $base - $variance), $base + $variance);
+        $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier);
+        $min   = max(0, (int) $range['min']);
+        $max   = max($min, (int) $range['max']);
+        return random_int($min, $max);
     }
 
     /** @return string[] [primaryColor, secondaryColor] */
