@@ -132,11 +132,20 @@
             padding: 0 24px;
         }
         .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             font-family: 'Press Start 2P', monospace;
             font-size: 9px;
             color: var(--gold);
             text-shadow: 0 0 12px rgba(232,207,89,.5);
             letter-spacing: 0.05em;
+            text-decoration: none;
+        }
+        .nav-logo img {
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
         }
         .nav-links {
             display: flex;
@@ -704,9 +713,17 @@
             gap: 16px;
         }
         .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             font-family: 'Press Start 2P', monospace;
             font-size: 8px;
             color: var(--gold-dim);
+        }
+        .footer-logo img {
+            width: 24px;
+            height: 24px;
+            opacity: 0.7;
         }
         .footer-copy {
             font-size: 11px;
@@ -1058,7 +1075,7 @@
 <!-- ═══════════════════════════════ NAV ═══════════════════════════════ -->
 <nav>
     <div class="nav-inner">
-        <span class="nav-logo">WUNDERKIND FACTORY</span>
+        <a href="#" class="nav-logo"><img src="/logo-48.png" alt="">WUNDERKIND FACTORY</a>
         <ul class="nav-links">
             <li><a href="#your-role">Your Role</a></li>
             <li><a href="#screenshots">Screenshots</a></li>
@@ -1742,7 +1759,7 @@
 <footer>
     <div class="wrap">
         <div class="footer-inner">
-            <span class="footer-logo">WUNDERKIND FACTORY</span>
+            <span class="footer-logo"><img src="/logo-48.png" alt="">WUNDERKIND FACTORY</span>
             <ul class="footer-links">
                 <li><a href="mailto:hello@wunderkindfactory.com">Contact</a></li>
                 <li><a href="#privacy">Privacy</a></li>
