@@ -815,9 +815,53 @@ class NpcClubGenerationService
     /** @return string[] [primaryColor, secondaryColor] */
     private function pickColorPair(): array
     {
-        $primary   = self::COLORS[array_rand(self::COLORS)];
-        $secondary = self::COLORS[array_rand(self::COLORS)];
-        return [$primary, $secondary];
+        $colors  = self::COLORS;
+        $primary = $colors[array_rand($colors)];
+
+        // Try up to 20 random picks for a contrasting secondary
+        for ($i = 0; $i < 20; $i++) {
+            $secondary = $colors[array_rand($colors)];
+            if ($secondary !== $primary && $this->contrastRatio($primary, $secondary) >= 3.0) {
+                return [$primary, $secondary];
+            }
+        }
+
+        // Fallback: pick whichever available color yields the highest contrast
+        $best      = null;
+        $bestRatio = 0.0;
+        foreach ($colors as $candidate) {
+            if ($candidate === $primary) {
+                continue;
+            }
+            $ratio = $this->contrastRatio($primary, $candidate);
+            if ($ratio > $bestRatio) {
+                $bestRatio = $ratio;
+                $best      = $candidate;
+            }
+        }
+
+        return [$primary, $best ?? $colors[0]];
+    }
+
+    private function contrastRatio(string $hexA, string $hexB): float
+    {
+        $la = $this->relativeLuminance($hexA);
+        $lb = $this->relativeLuminance($hexB);
+        [$lighter, $darker] = $la > $lb ? [$la, $lb] : [$lb, $la];
+        return ($lighter + 0.05) / ($darker + 0.05);
+    }
+
+    private function relativeLuminance(string $hex): float
+    {
+        $hex = ltrim($hex, '#');
+        $r   = hexdec(substr($hex, 0, 2)) / 255;
+        $g   = hexdec(substr($hex, 2, 2)) / 255;
+        $b   = hexdec(substr($hex, 4, 2)) / 255;
+
+        $linearise = static fn(float $c): float =>
+            $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+
+        return 0.2126 * $linearise($r) + 0.7152 * $linearise($g) + 0.0722 * $linearise($b);
     }
 
     private function playingStyleForTier(int $tier): string
