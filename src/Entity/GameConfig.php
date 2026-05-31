@@ -1023,6 +1023,31 @@ class GameConfig
         return $this->npcClubBalanceRanges[$idx] ?? ['min' => 31_250_000, 'max' => 46_875_000];
     }
 
+    // ── NPC Facility Level Ranges ─────────────────────────────────────────
+
+    /**
+     * Starting facility level range per tier band, per facility slug.
+     * 4 bands (index 0–3): band 0 = tiers 1–2, band 1 = tiers 3–4, band 2 = tiers 5–6, band 3 = tiers 7–8.
+     * Each band is a map of slug → {min: int, max: int}.
+     * Empty array (default) = fall back to the hardcoded FACILITY_LEVELS constants in NpcClubGenerationService.
+     *
+     * @var array<int, array<string, array{min: int, max: int}>>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcFacilityLevelRanges = [];
+
+    /** @return array<int, array<string, array{min: int, max: int}>> */
+    public function getNpcFacilityLevelRanges(): array { return $this->npcFacilityLevelRanges; }
+
+    /** @param array<int, array<string, array{min: int, max: int}>> $v */
+    public function setNpcFacilityLevelRanges(array $v): static { $this->npcFacilityLevelRanges = $v; return $this; }
+
+    /** Returns null when no override is configured (caller should use its own default). */
+    public function getNpcFacilityLevelRangeForSlugAndBand(string $slug, int $bandIndex): ?array
+    {
+        return $this->npcFacilityLevelRanges[$bandIndex][$slug] ?? null;
+    }
+
     // ── Squad Configuration ───────────────────────────────────────────────
 
     /** Minimum number of players required in a club's active squad. Default: 11 */

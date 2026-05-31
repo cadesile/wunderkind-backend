@@ -826,12 +826,46 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function npcClubsContent(): Response
     {
-        $config = $this->poolConfigRepository->getConfig();
+        $config      = $this->poolConfigRepository->getConfig();
+        $gameConfig  = $this->gameConfigRepository->getConfig();
+        $facilities  = $this->facilityTemplateRepository->findBy(['isActive' => true]);
+
         return $this->render('admin/npc_clubs_content.html.twig', [
-            'config'         => $config,
-            'clubCount'      => $this->npcClubRepository->count([]),
-            'clubsByCountry' => $this->npcClubRepository->getCountsByCountryAndTier(),
+            'config'               => $config,
+            'gameConfig'           => $gameConfig,
+            'facilities'           => $facilities,
+            'clubCount'            => $this->npcClubRepository->count([]),
+            'clubsByCountry'       => $this->npcClubRepository->getCountsByCountryAndTier(),
         ]);
+    }
+
+    #[Route('/admin/npc-clubs/save-facility-config', name: 'admin_npc_clubs_save_facility_config', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function saveNpcFacilityConfig(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('npc_facility_config', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $gameConfig  = $this->gameConfigRepository->getConfig();
+        $rawBands    = $request->request->all('facilityRanges');
+        $bands       = [];
+
+        for ($band = 0; $band < 4; $band++) {
+            $bandData = $rawBands[$band] ?? [];
+            foreach ($bandData as $slug => $minMax) {
+                $min = max(0, (int) ($minMax['min'] ?? 0));
+                $max = max($min, (int) ($minMax['max'] ?? 0));
+                $bands[$band][$slug] = ['min' => $min, 'max' => $max];
+            }
+        }
+
+        $gameConfig->setNpcFacilityLevelRanges($bands);
+        $this->em->flush();
+
+        $this->addFlash('success', 'Facility level ranges saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
 
     #[Route('/admin/leagues/overview', name: 'admin_leagues_overview')]

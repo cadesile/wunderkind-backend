@@ -691,7 +691,8 @@ class NpcClubGenerationService
     {
         $tier       = max(1, min(8, $tier));
         $slugs      = $this->getActiveFacilitySlugs();
-        $levelBand  = $this->getLevelBandForTier($tier);
+        $bandIndex  = $this->getBandIndexForTier($tier);
+        $levelBand  = self::FACILITY_LEVELS[$bandIndex];
         $placeNames = self::PLACE_NAMES_BY_COUNTRY[$country] ?? ['Capital', 'Northern', 'Southern', 'Eastern', 'Western', 'Central'];
         $suffixes   = self::SUFFIXES_BY_COUNTRY[$country];
         $usedNames  = [];
@@ -706,7 +707,7 @@ class NpcClubGenerationService
             $usedNames[]    = $name;
             $reputation     = $this->reputationForTier($tier);
             $balance        = $this->balanceForTier($tier);
-            $facilities     = $this->buildFacilities($slugs, $levelBand);
+            $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
             $colors         = $this->pickColorPair();
             $stadiumName    = $this->generateStadiumName($place, $country);
 
@@ -743,28 +744,33 @@ class NpcClubGenerationService
         return array_map(fn(FacilityTemplate $t) => $t->getSlug(), $templates);
     }
 
-    private function getLevelBandForTier(int $tier): array
+    private function getBandIndexForTier(int $tier): int
     {
-        foreach (self::FACILITY_LEVELS as $band) {
+        foreach (self::FACILITY_LEVELS as $i => $band) {
             if ($tier >= $band['min'] && $tier <= $band['max']) {
-                return $band;
+                return $i;
             }
         }
-        return self::FACILITY_LEVELS[3]; // fallback to tier 7–8
+        return 3;
     }
 
-    private function buildFacilities(array $slugs, array $band): array
+    private function buildFacilities(array $slugs, array $band, int $bandIndex): array
     {
+        $config     = $this->gameConfigRepository->getConfig();
         $facilities = [];
         foreach ($slugs as $slug) {
-            if (in_array($slug, self::TRAINING_SLUGS, true)) {
-                $range = $band['training'];
+            $override = $config->getNpcFacilityLevelRangeForSlugAndBand($slug, $bandIndex);
+            if ($override !== null) {
+                $min = (int) $override['min'];
+                $max = max($min, (int) $override['max']);
+            } elseif (in_array($slug, self::TRAINING_SLUGS, true)) {
+                [$min, $max] = $band['training'];
             } elseif (in_array($slug, self::STANDS_SLUGS, true)) {
-                $range = $band['stands'];
+                [$min, $max] = $band['stands'];
             } else {
-                $range = $band['other'];
+                [$min, $max] = $band['other'];
             }
-            $facilities[$slug] = random_int($range[0], max($range[0], $range[1]));
+            $facilities[$slug] = random_int($min, $max);
         }
         return $facilities;
     }

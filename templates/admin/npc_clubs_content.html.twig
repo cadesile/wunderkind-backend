@@ -153,5 +153,101 @@
         </div>
     </div>
 
+
+    {# ── Facility Level Ranges ──────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-building text-info"></i>
+                <span class="fw-semibold small">Facility Level Ranges by Tier Band</span>
+                <span class="ms-auto text-muted small">Starting level range assigned per facility when clubs are generated</span>
+            </div>
+            <div class="card-body">
+                {% if facilities is empty %}
+                    <p class="text-muted small mb-0">No active facility templates found. Add facilities first.</p>
+                {% else %}
+                    {% set bandLabels = ['Tiers 1–2', 'Tiers 3–4', 'Tiers 5–6', 'Tiers 7–8'] %}
+                    {% set trainingSlugs = ['training_pitch', 'strength_suite'] %}
+                    {% set standsSlugs   = ['north_stand', 'south_stand', 'east_stand', 'west_stand'] %}
+                    {# Hardcoded fallback defaults matching NpcClubGenerationService::FACILITY_LEVELS #}
+                    {% set defaults = [
+                        {training: [7,9], stands: [4,5], other: [3,5]},
+                        {training: [5,6], stands: [3,4], other: [2,3]},
+                        {training: [3,4], stands: [2,3], other: [1,2]},
+                        {training: [1,2], stands: [0,1], other: [0,1]}
+                    ] %}
+
+                    <form method="POST" action="{{ path('admin_npc_clubs_save_facility_config') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('npc_facility_config') }}">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-3 small align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3" style="min-width:140px">Facility</th>
+                                        {% for bandLabel in bandLabels %}
+                                            <th class="text-center" colspan="2" style="min-width:120px">{{ bandLabel }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                    <tr class="table-secondary">
+                                        <th class="ps-3 text-muted" style="font-size:10px">SLUG</th>
+                                        {% for i in 0..3 %}
+                                            <th class="text-center text-muted" style="font-size:10px">MIN</th>
+                                            <th class="text-center text-muted" style="font-size:10px">MAX</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for facility in facilities %}
+                                        {% set slug = facility.slug %}
+                                        {% set isTraining = slug in trainingSlugs %}
+                                        {% set isStands   = slug in standsSlugs %}
+                                        <tr>
+                                            <td class="ps-3">
+                                                <span class="fw-semibold">{{ facility.label }}</span><br>
+                                                <code class="text-muted" style="font-size:9px">{{ slug }}</code>
+                                            </td>
+                                            {% for band in 0..3 %}
+                                                {% set stored = gameConfig.npcFacilityLevelRanges[band][slug] ?? null %}
+                                                {% if isTraining %}
+                                                    {% set fallbackMin = defaults[band].training[0] %}
+                                                    {% set fallbackMax = defaults[band].training[1] %}
+                                                {% elseif isStands %}
+                                                    {% set fallbackMin = defaults[band].stands[0] %}
+                                                    {% set fallbackMax = defaults[band].stands[1] %}
+                                                {% else %}
+                                                    {% set fallbackMin = defaults[band].other[0] %}
+                                                    {% set fallbackMax = defaults[band].other[1] %}
+                                                {% endif %}
+                                                {% set currentMin = stored ? stored.min : fallbackMin %}
+                                                {% set currentMax = stored ? stored.max : fallbackMax %}
+                                                <td class="text-center p-1">
+                                                    <input type="number" name="facilityRanges[{{ band }}][{{ slug }}][min]"
+                                                           value="{{ currentMin }}" min="0" max="20"
+                                                           class="form-control form-control-sm text-center p-1"
+                                                           style="width:60px;margin:0 auto"
+                                                           title="Band {{ band + 1 }} min for {{ slug }}">
+                                                </td>
+                                                <td class="text-center p-1">
+                                                    <input type="number" name="facilityRanges[{{ band }}][{{ slug }}][max]"
+                                                           value="{{ currentMax }}" min="0" max="20"
+                                                           class="form-control form-control-sm text-center p-1"
+                                                           style="width:60px;margin:0 auto"
+                                                           title="Band {{ band + 1 }} max for {{ slug }}">
+                                                </td>
+                                            {% endfor %}
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-save me-1"></i>Save Facility Ranges
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
