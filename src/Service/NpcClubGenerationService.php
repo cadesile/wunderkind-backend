@@ -762,7 +762,11 @@ class NpcClubGenerationService
             $override = $config->getNpcFacilityLevelRangeForSlugAndBand($slug, $bandIndex);
             if ($override !== null) {
                 $min = (int) $override['min'];
-                $max = max($min, (int) $override['max']);
+                $max = (int) $override['max'];
+                if ($min === 0 && $max === 0) {
+                    continue; // facility excluded for this tier band
+                }
+                $max = max($min, $max);
             } elseif (in_array($slug, self::TRAINING_SLUGS, true)) {
                 [$min, $max] = $band['training'];
             } elseif (in_array($slug, self::STANDS_SLUGS, true)) {

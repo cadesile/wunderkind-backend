@@ -59,7 +59,7 @@
     </div>
 
     {# ── Generate Clubs ─────────────────────────────────────────────────── #}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-6">
         <div class="card h-100">
             <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-wand-magic-sparkles text-primary"></i>
@@ -115,7 +115,7 @@
     </div>
 
     {# ── Generate League Structure ───────────────────────────────────────── #}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-6">
         <div class="card h-100">
             <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-trophy text-warning"></i>
@@ -177,6 +177,10 @@
                         {training: [1,2], stands: [0,1], other: [0,1]}
                     ] %}
 
+                    <p class="text-muted small mb-3">
+                        Max values are capped to each facility's max upgrade level.
+                        Set both min and max to <strong>0</strong> to exclude a facility from clubs generated in that tier band.
+                    </p>
                     <form method="POST" action="{{ path('admin_npc_clubs_save_facility_config') }}">
                         <input type="hidden" name="_token" value="{{ csrf_token('npc_facility_config') }}">
                         <div class="table-responsive">
@@ -222,17 +226,17 @@
                                                 {% set currentMax = stored ? stored.max : fallbackMax %}
                                                 <td class="text-center p-1">
                                                     <input type="number" name="facilityRanges[{{ band }}][{{ slug }}][min]"
-                                                           value="{{ currentMin }}" min="0" max="20"
+                                                           value="{{ currentMin }}" min="0" max="{{ facility.maxLevel }}"
                                                            class="form-control form-control-sm text-center p-1"
                                                            style="width:60px;margin:0 auto"
-                                                           title="Band {{ band + 1 }} min for {{ slug }}">
+                                                           title="Band {{ band + 1 }} min for {{ slug }} (0 = omit facility)">
                                                 </td>
                                                 <td class="text-center p-1">
                                                     <input type="number" name="facilityRanges[{{ band }}][{{ slug }}][max]"
-                                                           value="{{ currentMax }}" min="0" max="20"
+                                                           value="{{ currentMax }}" min="0" max="{{ facility.maxLevel }}"
                                                            class="form-control form-control-sm text-center p-1"
                                                            style="width:60px;margin:0 auto"
-                                                           title="Band {{ band + 1 }} max for {{ slug }}">
+                                                           title="Band {{ band + 1 }} max for {{ slug }} (0/0 = omit facility)">
                                                 </td>
                                             {% endfor %}
                                         </tr>
