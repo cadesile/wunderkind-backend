@@ -6,7 +6,7 @@
     padding: 0;
     font-family: 'Press Start 2P', monospace;
     border-radius: 0 !important;
-    image-rendering: pixelated;
+    
 }
 
 body {
@@ -43,7 +43,7 @@ body {
 .logo {
     width: 120px;
     height: 120px;
-    image-rendering: pixelated;
+    
     margin-bottom: 0.75rem;
 }
 

@@ -63,7 +63,8 @@
       "Bash(cat:*)",
       "Bash(php:*)",
       "Bash(convert --version)",
-      "Read(//Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-app/assets/**)"
+      "Read(//Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-app/assets/**)",
+      "Bash(sips -z 240 240 /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-app/assets/logo_master.png --out /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/images/logo.png)"
     ]
   }
 }

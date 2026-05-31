@@ -1195,17 +1195,17 @@ class DashboardController extends AbstractDashboardController
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('<img src="/images/logo.webp" alt="Wunderkind Factory" style="width:48px;height:48px;image-rendering:pixelated;vertical-align:middle;margin-right:8px;"> Wunderkind')
-            ->setFaviconPath('images/logo.webp')
+            ->setTitle('<img src="/images/logo.png" alt="Wunderkind Factory" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;"> Wunderkind')
+            ->setFaviconPath('images/logo.png')
             ->renderContentMaximized();
     }
 
     public function configureMenuItems(): iterable
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
-        yield MenuItem::section('Users & Academies');
+        yield MenuItem::section('Users & Clubs');
         yield MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users');
-        yield MenuItem::linkTo(ClubCrudController::class, 'Academies', 'fa fa-school');
+        yield MenuItem::linkTo(ClubCrudController::class, 'Clubs', 'fa fa-school');
         yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
