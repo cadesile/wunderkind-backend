@@ -910,7 +910,12 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function generateNpcClubs(Request $request): Response
     {
+        $isAjax = $request->isXmlHttpRequest();
+
         if (!$this->isCsrfTokenValid('generate_npc_clubs', $request->request->get('_token'))) {
+            if ($isAjax) {
+                return $this->json(['success' => false, 'message' => 'Invalid CSRF token.'], 400);
+            }
             $this->addFlash('danger', 'Invalid CSRF token.');
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
         }
@@ -921,14 +926,27 @@ class DashboardController extends AbstractDashboardController
         $deleteExisting = (bool) $request->request->get('delete_existing', false);
 
         if ($country === '' || $tier < 1 || $tier > 8 || $count < 1) {
+            if ($isAjax) {
+                return $this->json(['success' => false, 'message' => 'Invalid parameters — country, tier (1–8) and count are required.'], 422);
+            }
             $this->addFlash('danger', 'Invalid parameters — country, tier (1–8) and count are required.');
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
         }
 
         $clubs  = $this->npcClubGenerationService->generateClubs($count, $tier, $country, $deleteExisting);
         $suffix = $deleteExisting ? ' (existing deleted first)' : '';
-        $this->addFlash('success', sprintf('Generated %d clubs for %s — Tier %d%s.', count($clubs), $country, $tier, $suffix));
+        $msg    = sprintf('Generated %d clubs for %s — Tier %d%s.', count($clubs), $country, $tier, $suffix);
 
+        if ($isAjax) {
+            return $this->json([
+                'success'        => true,
+                'message'        => $msg,
+                'clubCount'      => $this->npcClubRepository->count([]),
+                'clubsByCountry' => $this->npcClubRepository->getCountsByCountryAndTier(),
+            ]);
+        }
+
+        $this->addFlash('success', $msg);
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
 
