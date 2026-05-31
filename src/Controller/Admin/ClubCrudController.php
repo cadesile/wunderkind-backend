@@ -5,7 +5,10 @@ namespace App\Controller\Admin;
 use App\Entity\Club;
 use App\Entity\Investor;
 use App\Entity\LeaderboardEntry;
+use App\Entity\MatchResult;
 use App\Entity\RefreshToken;
+use App\Entity\SeasonRecord;
+use App\Entity\SeasonSnapshot;
 use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
@@ -45,7 +48,16 @@ class ClubCrudController extends AbstractCrudController
         $user  = $club->getUser();
         $email = $user->getUserIdentifier();
 
-        // Null out club FK on Investors and Sponsors — no onDelete cascade defined on these
+        // Delete records with FK to Club that have no Doctrine cascade
+        foreach ([MatchResult::class, SeasonRecord::class, SeasonSnapshot::class, Transfer::class] as $entityClass) {
+            $em->createQueryBuilder()
+                ->delete($entityClass, 'e')
+                ->where('e.club = :club')
+                ->setParameter('club', $club)
+                ->getQuery()->execute();
+        }
+
+        // Null out club FK on Investors and Sponsors — these are market-pool rows, keep them
         $em->createQueryBuilder()
             ->update(Investor::class, 'i')
             ->set('i.club', ':null')
