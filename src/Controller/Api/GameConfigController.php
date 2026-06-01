@@ -164,6 +164,9 @@ class GameConfigController extends AbstractController
             'bankruptcyDeductionTiers'    => $config->getBankruptcyDeductionTiers(),
             'bankruptcyDeductionsEnabled' => $config->isBankruptcyDeductionsEnabled(),
 
+            // Competition history — points per league-win by tier
+            'leagueWinPoints' => $config->getLeagueWinPoints(),
+
             // League finances
             'smallSponsorMin'               => $config->getSmallSponsorMin(),
             'smallSponsorMax'               => $config->getSmallSponsorMax(),

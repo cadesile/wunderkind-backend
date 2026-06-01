@@ -13,73 +13,100 @@
         <input type="hidden" name="_token" value="{{ csrf_token('save_game_config') }}">
         <div class="d-flex flex-column gap-4">
 
-            {# ── Developer / Debug ──────────────────────────────────────── #}
-            <div class="card border-warning">
-                <div class="card-header py-2 d-flex align-items-center gap-2 bg-warning-subtle">
-                    <i class="fa fa-bug text-warning"></i>
-                    <span class="fw-semibold small">Developer / Debug</span>
+            {# ── Section navigation ───────────────────────────────────────── #}
+            {#
+                cfgGroups  — parent fieldsets; each group button shows all child sections at once.
+                cfgSections — individual tabs; sections with a 'group' key belong to a parent fieldset.
+                Ungrouped sections (group: null) are standalone — clicked individually.
+            #}
+            {% set cfgGroups = [
+                {id: 'player-dev',      label: 'Player Development', icon: 'fa-chart-bar',           subs: 'Clique · Development · Coach · Physical · Retirement'},
+                {id: 'transfer',        label: 'Transfers',          icon: 'fa-money-bill-transfer', subs: 'Transfer Market · Wages · Scouting'},
+                {id: 'match-settings',  label: 'Match Settings',     icon: 'fa-futbol',              subs: 'Injury · Playing Style · Cards'},
+                {id: 'league-config',   label: 'League Config',      icon: 'fa-trophy',              subs: 'Morale · Finances · NPC · Squad · Penalties'},
+                {id: 'facility-config', label: 'Facility Config',    icon: 'fa-building',            subs: 'Income · Construction'},
+                {id: 'event-config',    label: 'Event Config',       icon: 'fa-bolt',                subs: 'Incidents · Sacking · Guardian'},
+                {id: 'club-dev',        label: 'Club Development',   icon: 'fa-seedling',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium'},
+            ] %}
+            {% set cfgSections = [
+                {id: 'clique',               label: 'Clique System',          group: 'player-dev'},
+                {id: 'development',          label: 'Development / Potential', group: 'player-dev'},
+                {id: 'coach',                label: 'Coach Influence',         group: 'player-dev'},
+                {id: 'transfer',             label: 'Transfer Market',         group: 'transfer'},
+                {id: 'injury',               label: 'Injury',                  group: 'match-settings'},
+                {id: 'playing-style',        label: 'Playing Style',           group: 'match-settings'},
+                {id: 'cards',                label: 'Cards &amp; Discipline',  group: 'match-settings'},
+                {id: 'morale',               label: 'Morale',                  group: 'league-config'},
+                {id: 'league-finances',      label: 'League Finances',         group: 'league-config'},
+                {id: 'npc-finances',         label: 'NPC Club Finances',       group: 'league-config'},
+                {id: 'squad-roles',          label: 'Squad Roles',             group: 'league-config'},
+                {id: 'squad',                label: 'Squad',                   group: 'league-config'},
+                {id: 'facility-income',      label: 'Facility Income',         group: 'facility-config'},
+                {id: 'facility-build',       label: 'Facility Construction',   group: 'facility-config'},
+                {id: 'incidents',            label: 'Incidents',               group: 'event-config'},
+                {id: 'sacking',              label: 'Manager Sacking',         group: 'event-config'},
+                {id: 'guardian',             label: 'Guardian Complaints',     group: 'event-config'},
+                {id: 'xp',                   label: 'XP &amp; Progression',   group: 'club-dev'},
+                {id: 'physical-degradation', label: 'Physical Degradation',   group: 'player-dev'},
+                {id: 'reputation',           label: 'Reputation',              group: 'club-dev'},
+                {id: 'scouting',             label: 'Scouting',                group: 'transfer'},
+                {id: 'financial-penalties',  label: 'Financial Penalties',     group: 'league-config'},
+                {id: 'staff-limits',         label: 'Staff Limits',            group: 'club-dev'},
+                {id: 'sponsor-probs',        label: 'Sponsor Offers',          group: 'club-dev'},
+                {id: 'investor-probs',       label: 'Investor Offers',         group: 'club-dev'},
+                {id: 'stadium',              label: 'Stadium',                 group: 'club-dev'},
+                {id: 'attendance',           label: 'Attendance',              group: 'league-config'},
+                {id: 'ability-ranges',       label: 'Ability Ranges',          group: 'league-config'},
+                {id: 'retirement',           label: 'Retirement',              group: 'player-dev'},
+                {id: 'inbox',                label: 'Inbox',                   group: 'club-dev'},
+                {id: 'wages',                label: 'Wages',                   group: 'transfer'},
+            ] %}
+
+            <div class="d-flex flex-column gap-2" id="cfg-tab-nav">
+                {# Row 1 — parent group buttons #}
+                <div class="d-flex flex-wrap gap-1 align-items-center">
+                    <span class="text-muted fw-semibold me-1" style="font-size:.68rem;white-space:nowrap">GROUPS:</span>
+                    {% for g in cfgGroups %}
+                    <button type="button"
+                            class="cfg-group-btn btn btn-sm btn-outline-primary"
+                            data-group="{{ g.id }}"
+                            title="{{ g.subs }}"
+                            style="font-size:.72rem;padding:.2rem .55rem;">
+                        <i class="fa {{ g.icon }} me-1"></i>{{ g.label }}
+                    </button>
+                    {% endfor %}
                 </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">
-                        When enabled, a <strong>cog icon</strong> appears in the app's bottom navigation.
-                        Tapping it opens the in-app debug log panel which records all API requests and responses.
-                        <strong>Disable in production.</strong>
-                    </p>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch"
-                               id="debugLoggingEnabled" name="debugLoggingEnabled"
-                               {% if config.debugLoggingEnabled %}checked{% endif %}>
-                        <label class="form-check-label fw-semibold small" for="debugLoggingEnabled">
-                            Enable in-app debug log panel
-                        </label>
+                {# Row 2 — individual section tabs (collapsible) #}
+                <details id="cfg-sections-drawer" style="border:1px solid var(--bs-border-color);border-radius:.375rem;padding:.25rem .5rem;">
+                    <summary style="font-size:.68rem;font-weight:600;color:var(--bs-secondary-color);cursor:pointer;list-style:none;display:flex;align-items:center;gap:.4rem;">
+                        <i class="fa fa-chevron-right" id="cfg-sections-chevron" style="font-size:.6rem;transition:transform .2s;"></i>
+                        SECTIONS
+                        <span id="cfg-sections-summary-hint" class="opacity-50 fw-normal ms-1"></span>
+                    </summary>
+                    <div class="d-flex flex-wrap gap-1 align-items-center pt-2">
+                        {% for s in cfgSections %}
+                        <button type="button"
+                                class="cfg-tab btn btn-sm btn-outline-secondary"
+                                data-tab="{{ s.id }}"
+                                {% if s.group %}data-group-member="{{ s.group }}"{% endif %}
+                                style="font-size:.72rem;padding:.2rem .55rem;">
+                            {{ s.label|raw }}
+                        </button>
+                        {% endfor %}
                     </div>
-                </div>
+                </details>
             </div>
 
-            {# ── Section navigation ───────────────────────────────────────── #}
-            {% set cfgSections = [
-                {id: 'clique',            label: 'Clique System'},
-                {id: 'xp',               label: 'XP &amp; Progression'},
-                {id: 'development',      label: 'Development / Potential'},
-                {id: 'coach',            label: 'Coach Influence'},
-                {id: 'reputation',       label: 'Reputation'},
-                {id: 'injury',           label: 'Injury'},
-                {id: 'scouting',         label: 'Scouting'},
-                {id: 'morale',           label: 'Morale'},
-                {id: 'incidents',        label: 'Incidents'},
-                {id: 'transfer',         label: 'Transfer Market'},
-                {id: 'guardian',         label: 'Guardian Complaints'},
-                {id: 'league-finances',  label: 'League Finances'},
-                {id: 'staff-limits',     label: 'Staff Limits'},
-                {id: 'sponsor-probs',    label: 'Sponsor Offers'},
-                {id: 'investor-probs',   label: 'Investor Offers'},
-                {id: 'facility-income',  label: 'Facility Income'},
-                {id: 'facility-build',   label: 'Facility Construction'},
-                {id: 'playing-style',    label: 'Playing Style'},
-                {id: 'stadium',          label: 'Stadium'},
-                {id: 'attendance',       label: 'Attendance'},
-                {id: 'ability-ranges',   label: 'Ability Ranges'},
-                {id: 'npc-finances',     label: 'NPC Club Finances'},
-                {id: 'squad',            label: 'Squad'},
-                {id: 'retirement',       label: 'Retirement'},
-                {id: 'inbox',            label: 'Inbox'},
-                {id: 'wages',            label: 'Wages'},
-                {id: 'sacking',          label: 'Manager Sacking'},
-                {id: 'cards',            label: 'Cards &amp; Discipline'},
-            ] %}
-            <div class="d-flex flex-wrap gap-1" id="cfg-tab-nav">
-                {% for s in cfgSections %}
-                <button type="button"
-                        class="cfg-tab btn btn-sm btn-outline-secondary"
-                        data-tab="{{ s.id }}"
-                        style="font-size:.72rem;padding:.2rem .55rem;">
-                    {{ s.label|raw }}
-                </button>
-                {% endfor %}
+            {# Active group context banner — populated and shown by JS when a group button is active #}
+            <div id="cfg-group-banner" class="d-none small py-2 px-3"
+                 style="border-left:3px solid var(--bs-primary);background:var(--bs-primary-bg-subtle,#cfe2ff);color:var(--bs-primary-text-emphasis,#052c65)">
+                <i class="fa fa-layer-group me-2"></i>
+                <strong id="cfg-group-banner-title"></strong>
+                <span class="ms-2 opacity-75" id="cfg-group-banner-subs"></span>
             </div>
 
             {# ── Clique System ──────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="clique">
+            <div class="card cfg-section" data-section-id="clique" data-group="player-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-people-group text-muted"></i>
                     <span class="fw-semibold small">Clique System</span>
@@ -118,7 +145,7 @@
             </div>
 
             {# ── XP & Progression ───────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="xp">
+            <div class="card cfg-section" data-section-id="xp" data-group="club-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-star text-muted"></i>
                     <span class="fw-semibold small">XP &amp; Progression</span>
@@ -151,7 +178,7 @@
             </div>
 
             {# ── Development / Potential Ceiling ────────────────────────── #}
-            <div class="card cfg-section" data-section-id="development">
+            <div class="card cfg-section" data-section-id="development" data-group="player-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-chart-bar text-muted"></i>
                     <span class="fw-semibold small">Development / Potential Ceiling</span>
@@ -181,7 +208,7 @@
             </div>
 
             {# ── Coach Development Influence ─────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="coach">
+            <div class="card cfg-section" data-section-id="coach" data-group="player-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-whistle text-muted"></i>
                     <span class="fw-semibold small">Coach Development Influence</span>
@@ -225,7 +252,7 @@
             </div>
 
             {# ── Physical Degradation & Form ─────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="physical-degradation">
+            <div class="card cfg-section" data-section-id="physical-degradation" data-group="player-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-running text-muted"></i>
                     <span class="fw-semibold small">Physical Degradation &amp; Form</span>
@@ -329,7 +356,7 @@
             </div>
 
             {# ── Reputation ─────────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="reputation">
+            <div class="card cfg-section" data-section-id="reputation" data-group="club-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-chart-line text-muted"></i>
                     <span class="fw-semibold small">Reputation</span>
@@ -355,7 +382,7 @@
             </div>
 
             {# ── Injury ─────────────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="injury">
+            <div class="card cfg-section" data-section-id="injury" data-group="match-settings">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-kit-medical text-muted"></i>
                     <span class="fw-semibold small">Injury</span>
@@ -395,7 +422,7 @@
             </div>
 
             {# ── Scouting ───────────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="scouting">
+            <div class="card cfg-section" data-section-id="scouting" data-group="transfer">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-binoculars text-muted"></i>
                     <span class="fw-semibold small">Scouting</span>
@@ -476,7 +503,7 @@
             </div>
 
             {# ── Morale ─────────────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="morale">
+            <div class="card cfg-section" data-section-id="morale" data-group="league-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-face-smile text-muted"></i>
                     <span class="fw-semibold small">Morale</span>
@@ -506,7 +533,7 @@
             </div>
 
             {# ── Incidents ──────────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="incidents">
+            <div class="card cfg-section" data-section-id="incidents" data-group="event-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-bolt text-muted"></i>
                     <span class="fw-semibold small">Incidents</span>
@@ -572,7 +599,7 @@
             </div>
 
             {# ── Transfer Market ────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="transfer">
+            <div class="card cfg-section" data-section-id="transfer" data-group="transfer">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-money-bill-transfer text-muted"></i>
                     <span class="fw-semibold small">Transfer Market</span>
@@ -605,7 +632,7 @@
             </div>
 
             {# ── Guardian Complaints ─────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="guardian">
+            <div class="card cfg-section" data-section-id="guardian" data-group="event-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-family text-muted"></i>
                     <span class="fw-semibold small">Guardian Complaints</span>
@@ -688,7 +715,7 @@
             </div>
 
             {# ── League Finances ─────────────────────────────────────────────────── #}
-            <div class="card mb-4 cfg-section" data-section-id="league-finances">
+            <div class="card mb-4 cfg-section" data-section-id="league-finances" data-group="league-config">
                 <div class="card-header fw-semibold">League Finances</div>
                 <div class="card-body">
                     <div class="row g-3">
@@ -766,7 +793,7 @@
             </div>
 
             {# ── Financial Penalties ──────────────────────────────────────────────── #}
-            <div class="card mb-4 cfg-section" data-section-id="financial-penalties">
+            <div class="card mb-4 cfg-section" data-section-id="financial-penalties" data-group="league-config">
                 <div class="card-header fw-semibold">Financial Penalties</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">
@@ -799,7 +826,7 @@
             </div>
 
             {# ── Staff Limits Per Club ────────────────────────────────────────────── #}
-            <div class="card mb-4 cfg-section" data-section-id="staff-limits">
+            <div class="card mb-4 cfg-section" data-section-id="staff-limits" data-group="club-dev">
                 <div class="card-header fw-semibold">Staff Limits Per Club</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">Maximum number of each staff type a single club is allowed to hold.</p>
@@ -870,7 +897,7 @@
             </div>
 
             {# ── Sponsor Offer Probabilities ──────────────────────────────────────── #}
-            <div class="card mb-4 cfg-section" data-section-id="sponsor-probs">
+            <div class="card mb-4 cfg-section" data-section-id="sponsor-probs" data-group="club-dev">
                 <div class="card-header fw-semibold">Sponsor Offer Probabilities</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">Weekly probability (0.0–1.0) that an academy receives a sponsor offer from each reputation tier.</p>
@@ -908,7 +935,7 @@
             </div>
 
             {# ── Investor Offer Probabilities ─────────────────────────────────────── #}
-            <div class="card mb-4 cfg-section" data-section-id="investor-probs">
+            <div class="card mb-4 cfg-section" data-section-id="investor-probs" data-group="club-dev">
                 <div class="card-header fw-semibold">Investor Offer Probabilities</div>
                 <div class="card-body">
                     <p class="small text-muted mb-3">Weekly probability (0.0–1.0) that an academy receives an investor offer from each reputation tier.</p>
@@ -946,7 +973,7 @@
             </div>
 
             {# ── Facility Income ────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="facility-income">
+            <div class="card cfg-section" data-section-id="facility-income" data-group="facility-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-building text-muted"></i>
                     <span class="fw-semibold small">Facility Income</span>
@@ -965,7 +992,7 @@
             </div>
 
             {# ── Facility Construction ──────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="facility-build">
+            <div class="card cfg-section" data-section-id="facility-build" data-group="facility-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-hard-hat text-muted"></i>
                     <span class="fw-semibold small">Facility Construction</span>
@@ -1033,7 +1060,7 @@
                 'HIGH_PRESS': 'High Press'
             } %}
             {% set psAttributes = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'] %}
-            <div class="card cfg-section" data-section-id="playing-style">
+            <div class="card cfg-section" data-section-id="playing-style" data-group="match-settings">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-futbol text-muted"></i>
                     <span class="fw-semibold small">Playing Style Influence</span>
@@ -1075,7 +1102,7 @@
             </div>
 
             {# ── Stadium Settings ────────────────────────────────────────── #}
-            <div class="card mb-4 cfg-section" data-section-id="stadium">
+            <div class="card mb-4 cfg-section" data-section-id="stadium" data-group="club-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-building text-muted"></i>
                     <span class="fw-semibold small">Stadium Settings</span>
@@ -1094,7 +1121,7 @@
             </div>
 
             {# ── Attendance Ranges ───────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="attendance">
+            <div class="card cfg-section" data-section-id="attendance" data-group="league-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-people-roof text-muted"></i>
                     <span class="fw-semibold small">Attendance Ranges</span>
@@ -1186,7 +1213,7 @@
                 {% endfor %}
             {% endfor %}
 
-            <div class="card cfg-section" data-section-id="ability-ranges">
+            <div class="card cfg-section" data-section-id="ability-ranges" data-group="league-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-chart-line text-muted"></i>
                     <span class="fw-semibold small">League Player Ability Ranges</span>
@@ -1278,7 +1305,7 @@
             </script>
 
             {# ── NPC Club Finances ────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="npc-finances">
+            <div class="card cfg-section" data-section-id="npc-finances" data-group="league-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-coins text-muted"></i>
                     <span class="fw-semibold small">NPC Club Starting Balance</span>
@@ -1354,7 +1381,7 @@
             </script>
 
             {# ── Squad Roles ─────────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="squad-roles">
+            <div class="card cfg-section" data-section-id="squad-roles" data-group="league-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-id-badge text-muted"></i>
                     <span class="fw-semibold small">Squad Roles</span>
@@ -1395,7 +1422,7 @@
             </div>
 
             {# ── Squad Configuration ────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="squad">
+            <div class="card cfg-section" data-section-id="squad" data-group="league-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-users text-muted"></i>
                     <span class="fw-semibold small">Squad Configuration</span>
@@ -1425,7 +1452,7 @@
             </div>
 
             {# ── Player Retirement ──────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="retirement">
+            <div class="card cfg-section" data-section-id="retirement" data-group="player-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-person-walking-arrow-right text-muted"></i>
                     <span class="fw-semibold small">Player Retirement</span>
@@ -1463,7 +1490,7 @@
             </div>
 
             {# ── Inbox / Notification Frequencies ───────────────────────── #}
-            <div class="card cfg-section" data-section-id="inbox">
+            <div class="card cfg-section" data-section-id="inbox" data-group="club-dev">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-bell text-muted"></i>
                     <span class="fw-semibold small">Inbox &amp; Notification Frequencies</span>
@@ -1493,7 +1520,7 @@
             </div>
 
             {# ── Wage Multiplier Tiers ───────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="wages">
+            <div class="card cfg-section" data-section-id="wages" data-group="transfer">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-money-bill-trend-up text-muted"></i>
                     <span class="fw-semibold small">Wage Multiplier Tiers</span>
@@ -1563,7 +1590,7 @@
             </div>
 
             {# ── Manager Sacking ─────────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="sacking">
+            <div class="card cfg-section" data-section-id="sacking" data-group="event-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-person-walking-arrow-right text-muted"></i>
                     <span class="fw-semibold small">Manager Sacking</span>
@@ -1607,7 +1634,7 @@
             </div>
 
             {# ── Cards & Discipline ──────────────────────────────────────── #}
-            <div class="card cfg-section" data-section-id="cards">
+            <div class="card cfg-section" data-section-id="cards" data-group="match-settings">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-rectangle-xmark text-muted"></i>
                     <span class="fw-semibold small">Cards &amp; Discipline</span>
@@ -1659,8 +1686,33 @@
 
         </div>{# /gap wrapper #}
 
-        <div class="mt-4">
+        <div class="mt-4 d-flex align-items-center gap-3">
             <button type="submit" class="btn btn-primary btn-sm">Save Game Config</button>
+        </div>
+
+        {# ── Developer / Debug — footer ──────────────────────────────── #}
+        <div class="mt-4 pt-4" style="border-top:1px solid var(--bs-border-color)">
+            <div class="card border-warning">
+                <div class="card-header py-2 d-flex align-items-center gap-2 bg-warning-subtle">
+                    <i class="fa fa-bug text-warning"></i>
+                    <span class="fw-semibold small">Developer / Debug</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        When enabled, a <strong>cog icon</strong> appears in the app's bottom navigation.
+                        Tapping it opens the in-app debug log panel which records all API requests and responses.
+                        <strong>Disable in production.</strong>
+                    </p>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="debugLoggingEnabled" name="debugLoggingEnabled"
+                               {% if config.debugLoggingEnabled %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold small" for="debugLoggingEnabled">
+                            Enable in-app debug log panel
+                        </label>
+                    </div>
+                </div>
+            </div>
         </div>
     </form>
     </div>
@@ -1670,31 +1722,135 @@
 <script>
 (function () {
     var STORAGE_KEY = 'gc_active_tab';
-    var tabs   = Array.from(document.querySelectorAll('.cfg-tab'));
-    var panels = Array.from(document.querySelectorAll('.cfg-section'));
+    var tabs    = Array.from(document.querySelectorAll('.cfg-tab'));
+    var grpBtns = Array.from(document.querySelectorAll('.cfg-group-btn'));
+    var panels  = Array.from(document.querySelectorAll('.cfg-section'));
+    var banner  = document.getElementById('cfg-group-banner');
+    var bannerTitle = document.getElementById('cfg-group-banner-title');
+    var bannerSubs  = document.getElementById('cfg-group-banner-subs');
 
-    if (!tabs.length || !panels.length) return;
+    if (!panels.length) return;
 
+    // Build section-id → group-id map from data-group attributes on each panel
+    var groupMap = {};
+    panels.forEach(function (p) {
+        if (p.dataset.group) groupMap[p.dataset.sectionId] = p.dataset.group;
+    });
+
+    // Build group-id → { label, subs } metadata from group button attributes
+    var groupMeta = {};
+    grpBtns.forEach(function (g) {
+        groupMeta[g.dataset.group] = { label: g.textContent.trim(), subs: g.title || '' };
+    });
+
+    function setNavState(activeSectionId, activeGroupId) {
+        tabs.forEach(function (t) {
+            var on = t.dataset.tab === activeSectionId;
+            t.classList.toggle('btn-primary',           on);
+            t.classList.toggle('btn-outline-secondary', !on);
+        });
+        grpBtns.forEach(function (g) {
+            var on = g.dataset.group === activeGroupId;
+            g.classList.toggle('btn-primary',        on);
+            g.classList.toggle('btn-outline-primary', !on);
+        });
+    }
+
+    function showBanner(groupId) {
+        if (!banner) return;
+        var meta = groupMeta[groupId];
+        if (meta) {
+            bannerTitle.textContent = meta.label;
+            bannerSubs.textContent  = meta.subs ? '— ' + meta.subs : '';
+        }
+        banner.classList.remove('d-none');
+    }
+
+    function hideBanner() {
+        if (banner) banner.classList.add('d-none');
+    }
+
+    // Show a single section
     function activate(id) {
+        var parentGroup = groupMap[id] || null;
         panels.forEach(function (p) {
             p.style.display = p.dataset.sectionId === id ? '' : 'none';
         });
-        tabs.forEach(function (t) {
-            var active = t.dataset.tab === id;
-            t.classList.toggle('btn-primary',          active);
-            t.classList.toggle('btn-outline-secondary', !active);
+        setNavState(id, parentGroup);
+        if (parentGroup) { showBanner(parentGroup); } else { hideBanner(); }
+        try { localStorage.setItem(STORAGE_KEY, 'section:' + id); } catch (e) {}
+    }
+
+    // Show all sections belonging to a group
+    function activateGroup(groupId) {
+        panels.forEach(function (p) {
+            p.style.display = groupMap[p.dataset.sectionId] === groupId ? '' : 'none';
         });
-        try { localStorage.setItem(STORAGE_KEY, id); } catch (e) {}
+        setNavState(null, groupId);
+        showBanner(groupId);
+        try { localStorage.setItem(STORAGE_KEY, 'group:' + groupId); } catch (e) {}
     }
 
     tabs.forEach(function (t) {
         t.addEventListener('click', function () { activate(t.dataset.tab); });
     });
+    grpBtns.forEach(function (g) {
+        g.addEventListener('click', function () { activateGroup(g.dataset.group); });
+    });
 
+    // Restore saved state (supports legacy bare ids, 'section:id', 'group:id')
     var saved = null;
     try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
-    var validIds = panels.map(function (p) { return p.dataset.sectionId; });
-    activate(saved && validIds.indexOf(saved) !== -1 ? saved : tabs[0].dataset.tab);
+
+    if (saved) {
+        if (saved.indexOf('group:') === 0) {
+            var gId = saved.slice(6);
+            if (grpBtns.some(function (g) { return g.dataset.group === gId; })) {
+                activateGroup(gId);
+                return;
+            }
+        } else {
+            var sId = saved.indexOf('section:') === 0 ? saved.slice(8) : saved;
+            if (panels.some(function (p) { return p.dataset.sectionId === sId; })) {
+                activate(sId);
+                return;
+            }
+        }
+    }
+
+    // Default: open first group
+    if (grpBtns.length) {
+        activateGroup(grpBtns[0].dataset.group);
+    } else if (tabs.length) {
+        activate(tabs[0].dataset.tab);
+    }
+})();
+
+// ── Sections drawer chevron + hint ───────────────────────────────────
+(function () {
+    var drawer   = document.getElementById('cfg-sections-drawer');
+    var chevron  = document.getElementById('cfg-sections-chevron');
+    var hint     = document.getElementById('cfg-sections-summary-hint');
+    if (!drawer) return;
+
+    function updateChevron() {
+        chevron.style.transform = drawer.open ? 'rotate(90deg)' : 'rotate(0deg)';
+    }
+    drawer.addEventListener('toggle', updateChevron);
+    updateChevron();
+
+    // Show the active tab label in the summary when collapsed
+    function updateHint() {
+        if (drawer.open) { hint.textContent = ''; return; }
+        var active = document.querySelector('.cfg-tab.active, .cfg-tab.btn-secondary');
+        hint.textContent = active ? '— ' + active.textContent.trim() : '';
+    }
+    drawer.addEventListener('toggle', updateHint);
+    document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('cfg-tab') || e.target.classList.contains('cfg-group-btn')) {
+            setTimeout(updateHint, 50);
+        }
+    });
 })();
 </script>
 {% endblock %}

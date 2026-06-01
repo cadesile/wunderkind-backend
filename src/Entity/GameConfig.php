@@ -1366,4 +1366,28 @@ class GameConfig
 
     public function getTemperamentCardScale(): float { return $this->temperamentCardScale; }
     public function setTemperamentCardScale(float $v): static { $this->temperamentCardScale = max(0.0, $v); return $this; }
+
+    // ── Competition History ───────────────────────────────────────────────────
+
+    /**
+     * Points awarded for winning each league tier (1–8), used to calculate
+     * a club's all-time competition history score. Keyed by tier number (1 = top flight).
+     * The 10× reduction per tier ensures one League 1 title outweighs any number
+     * of lower-division wins (e.g. T1=10M > 2 × T2=2M).
+     * Default: T1=10,000,000 … T8=1
+     */
+    #[ORM\Column(type: 'json')]
+    private array $leagueWinPoints = [
+        1 => 10000000,
+        2 => 1000000,
+        3 => 100000,
+        4 => 10000,
+        5 => 1000,
+        6 => 100,
+        7 => 10,
+        8 => 1,
+    ];
+
+    public function getLeagueWinPoints(): array { return $this->leagueWinPoints; }
+    public function setLeagueWinPoints(array $v): static { $this->leagueWinPoints = $v; return $this; }
 }
