@@ -229,7 +229,7 @@
                     <tbody>
                         {% for stat in payload.playerStats|sort((a, b) => b.goals <=> a.goals) %}
                         <tr>
-                            <td class="small">{{ stat.playerId }}</td>
+                            <td class="small">{{ playerNames[stat.playerId] ?? stat.playerId }}</td>
                             <td class="small text-center">{{ stat.appearances }}</td>
                             <td class="small text-center fw-semibold {{ stat.goals > 0 ? 'text-success' : 'text-muted' }}">{{ stat.goals }}</td>
                             <td class="small text-center {{ stat.assists > 0 ? 'text-primary' : 'text-muted' }}">{{ stat.assists }}</td>
