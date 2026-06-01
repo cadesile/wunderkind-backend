@@ -4,7 +4,6 @@ namespace App\Controller\Admin;
 
 use App\Entity\Club;
 use App\Entity\Investor;
-use App\Entity\Player;
 use App\Entity\LeaderboardEntry;
 use App\Entity\MatchResult;
 use App\Entity\RefreshToken;
@@ -126,26 +125,6 @@ class ClubCrudController extends AbstractCrudController
             ->getQuery()
             ->getResult();
 
-        // Build a UUID→name map for player stats rows in the latest valid sync payload
-        $playerNames = [];
-        if ($latestValidSync !== null) {
-            $stats = $latestValidSync->getPayload()['playerStats'] ?? [];
-            $ids   = array_filter(array_column($stats, 'playerId'));
-            if ($ids) {
-                $players = $this->em->createQueryBuilder()
-                    ->select('p.id, p.firstName, p.lastName')
-                    ->from(Player::class, 'p')
-                    ->where('p.id IN (:ids)')
-                    ->setParameter('ids', $ids)
-                    ->getQuery()
-                    ->getArrayResult();
-
-                foreach ($players as $row) {
-                    $playerNames[(string) $row['id']] = trim($row['firstName'] . ' ' . $row['lastName']);
-                }
-            }
-        }
-
         return $this->render('admin/club_profile.html.twig', [
             'club'               => $club,
             'syncRecords'        => $syncRecords,
@@ -153,7 +132,6 @@ class ClubCrudController extends AbstractCrudController
             'leaderboardEntries' => $leaderboardEntries,
             'recentTransfers'    => $recentTransfers,
             'debugLogs'          => $debugLogs,
-            'playerNames'        => $playerNames,
         ]);
     }
 
