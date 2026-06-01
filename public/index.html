@@ -1068,6 +1068,170 @@
         }
         .beta-msg.success { color: var(--mint); display: block; }
         .beta-msg.error   { color: var(--red);  display: block; }
+
+        /* ════════════════════════════════
+           STORY / JOURNEY SECTION
+        ════════════════════════════════ */
+        .story-section { padding: 0; border-top: 1px solid var(--border); }
+        .story-section > .wrap { padding: 80px 24px 0; }
+        .story-step {
+            border-top: 1px solid var(--border);
+            padding: 72px 0;
+            transition: background 0.25s;
+        }
+        .story-step:hover { background: rgba(30,36,72,0.45); }
+        .story-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+        .story-step--flip .story-inner { grid-template-columns: 1fr 240px; }
+        .story-step--flip .story-phone-wrap { order: 2; }
+        .story-step--flip .story-text { order: 1; }
+        .story-phone-wrap { display: flex; justify-content: center; }
+        .story-phone-outer {
+            border: 3px solid var(--border);
+            background: var(--dark);
+            padding: 10px 7px;
+            box-shadow: 0 0 0 1px rgba(232,207,89,.12), 0 0 32px rgba(0,0,0,.5);
+            transition: box-shadow 0.3s, border-color 0.3s;
+        }
+        .story-step:hover .story-phone-outer {
+            border-color: var(--gold-dim);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 40px rgba(232,207,89,.18);
+        }
+        .story-phone-screen {
+            width: 220px;
+            aspect-ratio: 9/20;
+            overflow: hidden;
+            background: var(--dark);
+            border: 1px solid var(--border);
+        }
+        .story-phone-screen img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top;
+            display: block;
+        }
+        .story-chapter {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--gold);
+            letter-spacing: 0.12em;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+        .story-headline {
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(9px, 1.3vw, 13px);
+            color: var(--text);
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+        .story-desc {
+            font-family: 'VT323', monospace;
+            font-size: 21px;
+            color: var(--text-muted);
+            line-height: 1.55;
+            margin-bottom: 28px;
+            max-width: 500px;
+        }
+        .story-step--flip .story-desc { max-width: 100%; }
+        .story-tags {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .story-tags li {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            padding: 8px 14px;
+            border: 1px solid var(--border);
+            border-left: 2px solid var(--gold);
+            background: var(--card);
+            line-height: 1.5;
+        }
+        @media (max-width: 900px) {
+            .story-inner,
+            .story-step--flip .story-inner { grid-template-columns: 1fr; gap: 40px; }
+            .story-step--flip .story-phone-wrap { order: 0; }
+            .story-step--flip .story-text { order: 0; }
+            .story-phone-screen { width: 180px; }
+        }
+
+        /* ════════════════════════════════
+           BENTO FEATURED PHONES
+        ════════════════════════════════ */
+        .bento-phones {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            max-width: 1100px;
+            margin: 40px auto 0;
+            padding: 0 24px;
+        }
+        .bento-phone-frame {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: default;
+        }
+        .bento-phone-outer {
+            border: 2px solid var(--border);
+            background: var(--dark);
+            padding: 8px 6px;
+            width: 100%;
+            max-width: 320px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .bento-phone-frame:hover .bento-phone-outer {
+            border-color: var(--gold-dim);
+            box-shadow: 0 0 32px rgba(232,207,89,.15);
+        }
+        .bento-phone-screen {
+            aspect-ratio: 9/20;
+            overflow: hidden;
+            background: var(--dark);
+        }
+        .bento-phone-screen img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top;
+            display: block;
+        }
+        .bento-phone-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 12px;
+            text-align: center;
+        }
+        .gallery-more-label {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 32px 24px 8px;
+            letter-spacing: 0.1em;
+        }
+        @media (max-width: 900px) {
+            .bento-phones { grid-template-columns: 1fr 1fr; }
+            .bento-phone-frame:last-child { display: none; }
+        }
+        @media (max-width: 600px) {
+            .bento-phones { grid-template-columns: 1fr; }
+            .bento-phone-frame:nth-child(n+2) { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -1078,7 +1242,8 @@
         <a href="#" class="nav-logo"><img src="/logo-48.png" alt="">WUNDERKIND FACTORY</a>
         <ul class="nav-links">
             <li><a href="#your-role">Your Role</a></li>
-            <li><a href="#screenshots">Screenshots</a></li>
+            <li><a href="#story">Story</a></li>
+            <li><a href="#screenshots">Screens</a></li>
             <li><a href="#features">Features</a></li>
             <li><a href="#depth">The Sim</a></li>
             <li><a href="#leagues">Leagues</a></li>
@@ -1132,19 +1297,19 @@
                 <div class="phone-outer">
                     <div class="phone-screen" id="phone-screen">
                         <div class="phone-slide active">
-                            <img src="screenshots/buildmyclub/Screenshot_20260518-213735.png" alt="Club hub showing live season — Mallorca at #3 in League 8" loading="eager">
+                            <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! modal — Milan FC earn promotion from League 8 Season 1 with 28 points" loading="eager">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260518-213740.png" alt="Match result detail — Mallorca 5-4 away victory with player ratings" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260601-093326.png" alt="Club hub mid-season — Milan FC 3rd in League 8 after 2 games with form W away" loading="lazy">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260518-214838.png" alt="Season summary — Mallorca finish 4th in League 8 with 33 points" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260601-090416.png" alt="Squad tab showing all players sorted by overall rating with club balance £35,000" loading="lazy">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260518-210245.png" alt="Manager creation with pixel avatar, name, date of birth and nationality" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260601-093045.png" alt="Predicted XI overlay — Milan FC 4-5-1 formation vs Savona Internazionale in Round 1" loading="lazy">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260518-214413.png" alt="Player profile showing Adrián Franco's development chart and season goals" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260601-090555.png" alt="Inbox with 4 messages across Finance, Story and System categories including investment offer" loading="lazy">
                         </div>
                     </div>
                 </div>
@@ -1242,158 +1407,293 @@
     </div>
 </section>
 
+<!-- ═══════════════════════════════ STORY / JOURNEY ═══════════════════════════════ -->
+<section class="story-section" id="story">
+    <div class="wrap">
+        <div class="section-label">The Journey</div>
+        <h2 class="section-title">From blank canvas to top flight.</h2>
+        <p class="section-sub">Four chapters. Infinite decisions. One club to call yours.</p>
+    </div>
+
+    <!-- Chapter 1 -->
+    <div class="story-step">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        <img src="screenshots/buildmyclub/Screenshot_20260601-090241.png" alt="Club setup step — name your club Milan FC, Create My Club button" loading="lazy">
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 01 // CREATE</div>
+                <h3 class="story-headline">Name your club.<br>Pick your battleground.</h3>
+                <p class="story-desc">Design your manager identity, choose your nation, and christen your club. The game then builds a world of 176 NPC clubs across 8 tiers — all simulated, all waiting to be beaten.</p>
+                <ul class="story-tags">
+                    <li>Custom manager — name, age, nationality</li>
+                    <li>Choose from 9 countries</li>
+                    <li>176 NPC clubs generated at kickoff</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter 2 -->
+    <div class="story-step story-step--flip">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        <img src="screenshots/buildmyclub/Screenshot_20260601-090416.png" alt="Squad tab showing all players sorted by overall rating with club balance" loading="lazy">
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 02 // BUILD</div>
+                <h3 class="story-headline">Assemble your squad.<br>Hire your staff.</h3>
+                <p class="story-desc">Every player has a personality profile, a contract, a guardian, and an agent. Your Director of Football scouts, your Manager coaches. Delegate everything — or stay hands-on across every call.</p>
+                <ul class="story-tags">
+                    <li>8 personality traits per player</li>
+                    <li>6 staff roles to fill</li>
+                    <li>Contract negotiations &amp; guardian dynamics</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter 3 -->
+    <div class="story-step">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        <img src="screenshots/buildmyclub/Screenshot_20260601-093326.png" alt="Club hub mid-season — Milan FC 3rd in League 8 after two games, form W away" loading="lazy">
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 03 // COMPETE</div>
+                <h3 class="story-headline">Every week,<br>the simulation runs.</h3>
+                <p class="story-desc">Advance time with a tap. The engine simulates matches, ages players, triggers narrative events, pays wages, and checks your finances — all at once. Stay ahead of the table or get relegated trying.</p>
+                <ul class="story-tags">
+                    <li>18-round seasons with full match events</li>
+                    <li>Inbox-driven narrative system</li>
+                    <li>Real player ratings &amp; form tracking</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter 4 -->
+    <div class="story-step story-step--flip">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! — Milan FC earn promotion from League 8 Season 1 with 28 points" loading="lazy">
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 04 // ASCEND</div>
+                <h3 class="story-headline">Get promoted.<br>Do it again.</h3>
+                <p class="story-desc">Win promotion and step up a division — new clubs, harder opponents, bigger wages, richer investors. Season review shows every champion across all 8 tiers. Track your hall of fame points. Become unstoppable.</p>
+                <ul class="story-tags">
+                    <li>8 tiers from local minnow to top flight</li>
+                    <li>Full season review across every league</li>
+                    <li>Hall of Fame &amp; all-time club records</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- ═══════════════════════════════ SCREENSHOTS ═══════════════════════════════ -->
 <section class="screenshots-section" id="screenshots">
     <div class="wrap">
         <div class="section-label">Real Screenshots</div>
         <h2 class="section-title">No mockups. No renders.</h2>
-        <p class="section-sub">Every frame taken from the live Android beta. Scroll right to explore.</p>
+        <p class="section-sub">Every frame taken from the live Android beta.</p>
     </div>
+
+    <!-- Featured three -->
+    <div class="bento-phones" aria-label="Featured screenshots">
+        <div class="bento-phone-frame">
+            <div class="bento-phone-outer">
+                <div class="bento-phone-screen">
+                    <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! — Milan FC earn promotion from League 8 Season 1 with 28 points and 6 wins" loading="lazy">
+                </div>
+            </div>
+            <span class="bento-phone-label">Promotion Day</span>
+        </div>
+        <div class="bento-phone-frame">
+            <div class="bento-phone-outer">
+                <div class="bento-phone-screen">
+                    <img src="screenshots/buildmyclub/Screenshot_20260601-093326.png" alt="Club hub mid-season — Milan FC 3rd in League 8, form W away, Round 3 next" loading="lazy">
+                </div>
+            </div>
+            <span class="bento-phone-label">Live Season</span>
+        </div>
+        <div class="bento-phone-frame">
+            <div class="bento-phone-outer">
+                <div class="bento-phone-screen">
+                    <img src="screenshots/buildmyclub/Screenshot_20260601-090555.png" alt="Inbox with 4 messages — Finance, Story and System categories including investment offer" loading="lazy">
+                </div>
+            </div>
+            <span class="bento-phone-label">Inbox &amp; Narrative</span>
+        </div>
+    </div>
+    <p class="gallery-more-label">▸ SCROLL TO EXPLORE ALL SCREENS</p>
+
     <div class="screenshot-scroll" role="region" aria-label="Game screenshots">
         <div class="screenshot-track">
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-210245.png" alt="Manager creation with pixel avatar, name, date of birth and nationality" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090148.png" alt="Manager creation form — pixel avatar, name, date of birth and gender fields blank" loading="lazy">
                 <p class="ss-caption">Create Your Manager</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-210251.png" alt="Club location — country list showing England, Spain and Brazil" loading="lazy">
-                <p class="ss-caption">Choose Your Country</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090155.png" alt="Manager creation filled — Thomas Novak, born 19 July 1971, Male" loading="lazy">
+                <p class="ss-caption">Name Your Manager</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-211458.png" alt="Country selection with England highlighted in the list" loading="lazy">
-                <p class="ss-caption">Pick Your Nation</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090241.png" alt="Club setup step — Thomas Novak card, club name Milan FC, Create My Club button" loading="lazy">
+                <p class="ss-caption">Name Your Club</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-211521.png" alt="Club setup loading screen — Building Your Stadium for Milano, Italy" loading="lazy">
-                <p class="ss-caption">Building Your Club</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090249.png" alt="World initialisation — Building Division 3, progress bar at step 4 of 10" loading="lazy">
+                <p class="ss-caption">Building Your World</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-211720.png" alt="Club setup loading — Mallorca, Spain academy in progress" loading="lazy">
-                <p class="ss-caption">Club Setup</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090253.png" alt="Welcome modal — Milan FC is yours now, Build your squad, Let's Get Started button" loading="lazy">
+                <p class="ss-caption">Your Club is Ready</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-211729.png" alt="Club hub for Mallorca in League 8 at season start with transfer window open" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090516.png" alt="Club hub at season start — Milan FC red and black badge, League 8 table, Round 1 next" loading="lazy">
                 <p class="ss-caption">Club Hub</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213603.png" alt="Office screen showing manager identity, key staff and auto-management toggles" loading="lazy">
-                <p class="ss-caption">Office & Staff</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090352.png" alt="Club office — Manager Fabio Rossi modal with contract, salary and auto-manage toggle" loading="lazy">
+                <p class="ss-caption">Your Manager</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213735.png" alt="Club hub mid-season — Mallorca 3rd in League 8 with form D/W and latest result 4-5" loading="lazy">
-                <p class="ss-caption">Live Season</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090403.png" alt="Club office — Director of Football Giorgio Galli with auto-management toggles" loading="lazy">
+                <p class="ss-caption">Director of Football</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213740.png" alt="Match result — Mallorca 5-4 away win with full player ratings" loading="lazy">
-                <p class="ss-caption">Match Result</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090416.png" alt="Squad tab showing all players sorted by overall rating with club balance £35,000" loading="lazy">
+                <p class="ss-caption">Squad Overview</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213747.png" alt="Match events log showing narrative match commentary" loading="lazy">
-                <p class="ss-caption">Match Events</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090430.png" alt="Squad form view showing contract status, goals, assists, form and reputation columns" loading="lazy">
+                <p class="ss-caption">Form & Contracts</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213800.png" alt="Performance tab showing all-time record, top scorer and assist maker" loading="lazy">
-                <p class="ss-caption">Club Performance</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213807.png" alt="Finances screen showing club value, balance and cashflow breakdown" loading="lazy">
-                <p class="ss-caption">Finances</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213815.png" alt="Inbox with match results, player signing and facility repair notifications" loading="lazy">
-                <p class="ss-caption">Inbox</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213827.png" alt="Stadium screen with pixel art ground and club shop and museum upgrade options" loading="lazy">
-                <p class="ss-caption">Stadium</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213833.png" alt="Physio Clinic upgrade confirmation dialog showing cost and level" loading="lazy">
-                <p class="ss-caption">Upgrade Facilities</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213838.png" alt="Competition browse screen showing the 8-tier Spanish league pyramid" loading="lazy">
-                <p class="ss-caption">League Pyramid</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213843.png" alt="Full league table with 10 clubs showing GP, W, D, L, GD and points" loading="lazy">
-                <p class="ss-caption">League Table</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-213846.png" alt="League stats showing Golden Boot and Top Assists leaderboards" loading="lazy">
-                <p class="ss-caption">League Stats</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214304.png" alt="Weekly tick processing overlay showing match simulation progress at 75%" loading="lazy">
-                <p class="ss-caption">Weekly Simulation</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214306.png" alt="Club hub showing Mallorca 4th in League 8 after a 0-1 home loss" loading="lazy">
-                <p class="ss-caption">Mid-Season Table</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214326.png" alt="Upgrade Technical Zone dialog — Level 0 to 1 for £12,000" loading="lazy">
-                <p class="ss-caption">Facility Upgrade</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214352.png" alt="Technical Zone at Level 1 providing +5% XP boost with condition and upgrade path" loading="lazy">
-                <p class="ss-caption">Training Facilities</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214413.png" alt="Adrián Franco's player profile showing development chart over 17 weeks and 11 goals" loading="lazy">
-                <p class="ss-caption">Player Development</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214421.png" alt="Player profile for Adrián Franco — Spanish forward, age 24, Not For Sale" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093341.png" alt="Player profile — Mario Sanna, Midfielder age 30, enrollment contract with 46 weeks remaining" loading="lazy">
                 <p class="ss-caption">Player Profile</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214500.png" alt="DOF Scouting Config with position and type filters, and Scouting Center at Level 1" loading="lazy">
-                <p class="ss-caption">Scouting Network</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090442.png" alt="Staff tab listing 12 coaches and 1 scout with specialisms and weekly wages" loading="lazy">
+                <p class="ss-caption">Coaching Staff</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214700.png" alt="Hire tab showing international scouts with role and tier filter panel" loading="lazy">
-                <p class="ss-caption">Staff Recruitment</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-095614.png" alt="Staff profile for Coach Lorenzo Cattaneo showing Pace and Power specialisms and personality traits" loading="lazy">
+                <p class="ss-caption">Staff Profile</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214810.png" alt="Club hub late season — Mallorca 4th with 33 points and form W/W/D/W/W" loading="lazy">
-                <p class="ss-caption">Late Season Push</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-095635.png" alt="Scout profile — Claudio Russo, Local scout with 14% success rate and 3 player assignments" loading="lazy">
+                <p class="ss-caption">Your Scout</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214818.png" alt="Season Over screen — preparing season review" loading="lazy">
-                <p class="ss-caption">Season Over</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090452.png" alt="Finances — balance tab showing budget allocation and club value £89,100" loading="lazy">
+                <p class="ss-caption">Finances</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214824.png" alt="Tier 8 season review — Champions Valls Europa, Golden Boot Adrián Franco 13 goals" loading="lazy">
-                <p class="ss-caption">Season Review</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214828.png" alt="Tier 5 season review showing champions, promoted and relegated clubs" loading="lazy">
-                <p class="ss-caption">League Review</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214831.png" alt="Tier 2 season review with promoted and relegated clubs and Golden Boot standings" loading="lazy">
-                <p class="ss-caption">Division Review</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214835.png" alt="Tier 1 review — Champions Getxo SD with top scorers and assist leaders" loading="lazy">
-                <p class="ss-caption">Top Flight Review</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214838.png" alt="Your Season summary — Mallorca 4th in League 8, 33pts, 10W 3D 5L, full final table" loading="lazy">
-                <p class="ss-caption">Your Season</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214916.png" alt="Finance ledger showing season prize money, TV deal income and facility upkeep costs" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090457.png" alt="Finance ledger — 12-week view showing Season 1 TV deal income of £5,000" loading="lazy">
                 <p class="ss-caption">Finance Ledger</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-214956.png" alt="Competition history — League 8 Season 1 final table with Mallorca highlighted in 4th" loading="lazy">
-                <p class="ss-caption">Season History</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090504.png" alt="Facilities — Training tab showing Training Pitch Level 1 active, Strength Suite Level 0 inactive" loading="lazy">
+                <p class="ss-caption">Training Facilities</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260518-215019.png" alt="Performance tab showing all-time stats — top scorer Adrián Franco 13 goals, assist maker Eloy Echeverría 8" loading="lazy">
-                <p class="ss-caption">All-Time Stats</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093840.png" alt="Facilities — Scouting tab showing DOF scouting config filters and Scouting Centre Level 1" loading="lazy">
+                <p class="ss-caption">Scouting Centre</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090509.png" alt="Competition screen — Season 1 League 8 LOCAL, full 10-club table with Milan FC 10th" loading="lazy">
+                <p class="ss-caption">Your League</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093849.png" alt="League table — Milan FC 3rd with 4 points, On Form section and Golden Boot leader Fergus Murray" loading="lazy">
+                <p class="ss-caption">League Table</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093854.png" alt="Browse tab showing League 1 through League 8 with YOUR LEAGUE badge on League 8" loading="lazy">
+                <p class="ss-caption">8-Tier Pyramid</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093346.png" alt="Performance tab showing top scorer Carlo Leone, assist maker and best-rated players" loading="lazy">
+                <p class="ss-caption">Season Performance</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093045.png" alt="Predicted XI overlay — Milan FC 4-5-1 formation vs Savona Internazionale in Round 1" loading="lazy">
+                <p class="ss-caption">Set Your Lineup</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-095850.png" alt="Predicted XI — 4-5-1 vs Casal di Principe Spal Round 8, two suspended players shown as unavailable" loading="lazy">
+                <p class="ss-caption">Tactical Planning</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100231.png" alt="Match result — Casal di Principe Spal 4-1 Milan FC with full player stats and ratings" loading="lazy">
+                <p class="ss-caption">Match Result</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100238.png" alt="Match events timeline from kick-off to full time with goals, cards and match notes" loading="lazy">
+                <p class="ss-caption">Match Events</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090555.png" alt="Inbox showing 4 messages across Finance, Story and System categories including an investment offer" loading="lazy">
+                <p class="ss-caption">Inbox</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-090842.png" alt="Investment offer detail — Village Roofing £27,000 for 10% stake, marked IGNORED" loading="lazy">
+                <p class="ss-caption">Investor Relations</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-093012.png" alt="Narrative inbox message — Entering the Veteran Years, Mario Sanna turns 30 this week" loading="lazy">
+                <p class="ss-caption">Narrative Events</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-095658.png" alt="Inbox narrative — Coming of Age system message, Mario Gallo turns 18 in Week 9" loading="lazy">
+                <p class="ss-caption">Coming of Age</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100449.png" alt="Museum — Achievements tab showing 3 unlocked, Promotion and Titles categories, Star is Born achievement" loading="lazy">
+                <p class="ss-caption">Achievements</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100827.png" alt="Weekly tick processing — 06 Nov 2026, advancing to 13 Nov 2026, 95% progress" loading="lazy">
+                <p class="ss-caption">Weekly Simulation</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! — Milan FC earn promotion from League 8 Season 1 with 28 points and 6 wins" loading="lazy">
+                <p class="ss-caption">Promotion!</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100926.png" alt="League Winners — Season 1 all-tier champions from League 1 through League 7 listed" loading="lazy">
+                <p class="ss-caption">League Winners</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100931.png" alt="Your Season awards — Giorgio Valentini top scorer 7 goals, Mario Sanna top assister 5, Carlo Leone best rated 7.8" loading="lazy">
+                <p class="ss-caption">Season Awards</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-100955.png" alt="Season summary — League 8 PROMOTED, 28pts, 35-28 goals, 6W 10D 2L with full final table" loading="lazy">
+                <p class="ss-caption">Season Summary</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260601-101012.png" alt="Predicted Finish for Season 3 — Milan FC predicted 7th of 10 based on current squad strength" loading="lazy">
+                <p class="ss-caption">New Season Preview</p>
             </div>
         </div>
     </div>
