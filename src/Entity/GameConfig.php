@@ -1398,13 +1398,21 @@ class GameConfig
 
     /**
      * Per-page-type config for pyramid news generation.
-     * Only page types with prevent_duplicate behaviour need entries.
-     * Shape: { "financial_turmoil": { "usedCacheClearAfterEditions": 5 }, ... }
+     * usedCacheClearAfterEditions — how many editions a club can appear in a
+     * preventDuplicate page before becoming eligible again.
      */
     #[ORM\Column(type: 'json')]
     private array $pyramidNewsConfig = [
-        'financial_turmoil'     => ['usedCacheClearAfterEditions' => 5],
-        'outperforming_critics' => ['usedCacheClearAfterEditions' => 3],
+        'financial_turmoil'    => ['usedCacheClearAfterEditions' => 5],
+        'top_goalscorer'       => ['usedCacheClearAfterEditions' => 10],
+        'top_assists'          => ['usedCacheClearAfterEditions' => 10],
+        'most_on_form_player'  => ['usedCacheClearAfterEditions' => 10],
+        'best_game_most_goals' => ['usedCacheClearAfterEditions' => 10],
+        'best_game_biggest_win'=> ['usedCacheClearAfterEditions' => 10],
+        'biggest_upset'        => ['usedCacheClearAfterEditions' => 5],
+        'on_the_rise'          => ['usedCacheClearAfterEditions' => 5],
+        'outperforming_critics'=> ['usedCacheClearAfterEditions' => 3],
+        'season_predictions'   => ['usedCacheClearAfterEditions' => 20],
     ];
 
     public function getPyramidNewsFrequencyWeeks(): int { return $this->pyramidNewsFrequencyWeeks; }
