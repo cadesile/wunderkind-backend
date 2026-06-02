@@ -167,6 +167,10 @@ class GameConfigController extends AbstractController
             // Competition history — points per league-win by tier
             'leagueWinPoints' => $config->getLeagueWinPoints(),
 
+            // Pyramid News
+            'pyramidNewsFrequencyWeeks' => $config->getPyramidNewsFrequencyWeeks(),
+            'pyramidNewsConfig'         => $config->getPyramidNewsConfig(),
+
             // League finances
             'smallSponsorMin'               => $config->getSmallSponsorMin(),
             'smallSponsorMax'               => $config->getSmallSponsorMax(),

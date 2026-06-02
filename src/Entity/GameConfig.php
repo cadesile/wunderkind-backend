@@ -1390,4 +1390,26 @@ class GameConfig
 
     public function getLeagueWinPoints(): array { return $this->leagueWinPoints; }
     public function setLeagueWinPoints(array $v): static { $this->leagueWinPoints = $v; return $this; }
+
+    // ── Pyramid News ──────────────────────────────────────────────────────────
+
+    #[ORM\Column(type: 'integer')]
+    private int $pyramidNewsFrequencyWeeks = 4;
+
+    /**
+     * Per-page-type config for pyramid news generation.
+     * Only page types with prevent_duplicate behaviour need entries.
+     * Shape: { "financial_turmoil": { "usedCacheClearAfterEditions": 5 }, ... }
+     */
+    #[ORM\Column(type: 'json')]
+    private array $pyramidNewsConfig = [
+        'financial_turmoil'     => ['usedCacheClearAfterEditions' => 5],
+        'outperforming_critics' => ['usedCacheClearAfterEditions' => 3],
+    ];
+
+    public function getPyramidNewsFrequencyWeeks(): int { return $this->pyramidNewsFrequencyWeeks; }
+    public function setPyramidNewsFrequencyWeeks(int $v): static { $this->pyramidNewsFrequencyWeeks = max(1, $v); return $this; }
+
+    public function getPyramidNewsConfig(): array { return $this->pyramidNewsConfig; }
+    public function setPyramidNewsConfig(array $v): static { $this->pyramidNewsConfig = $v; return $this; }
 }

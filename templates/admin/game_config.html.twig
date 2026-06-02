@@ -23,7 +23,7 @@
                 {id: 'player-dev',      label: 'Player Development', icon: 'fa-chart-bar',           subs: 'Clique · Development · Coach · Physical · Retirement'},
                 {id: 'transfer',        label: 'Transfers',          icon: 'fa-money-bill-transfer', subs: 'Transfer Market · Wages · Scouting'},
                 {id: 'match-settings',  label: 'Match Settings',     icon: 'fa-futbol',              subs: 'Injury · Playing Style · Cards'},
-                {id: 'league-config',   label: 'League Config',      icon: 'fa-trophy',              subs: 'Morale · Finances · NPC · Squad · Penalties'},
+                {id: 'league-config',   label: 'League Config',      icon: 'fa-trophy',              subs: 'Morale · Finances · NPC · Squad · Penalties · Trophy Points · Pyramid News'},
                 {id: 'facility-config', label: 'Facility Config',    icon: 'fa-building',            subs: 'Income · Construction'},
                 {id: 'event-config',    label: 'Event Config',       icon: 'fa-bolt',                subs: 'Incidents · Sacking · Guardian'},
                 {id: 'club-dev',        label: 'Club Development',   icon: 'fa-seedling',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium'},
@@ -60,6 +60,8 @@
                 {id: 'retirement',           label: 'Retirement',              group: 'player-dev'},
                 {id: 'inbox',                label: 'Inbox',                   group: 'club-dev'},
                 {id: 'wages',                label: 'Wages',                   group: 'transfer'},
+                {id: 'competition-history',  label: 'Competition History',     group: 'league-config'},
+                {id: 'pyramid-news',         label: 'Pyramid News',            group: 'league-config'},
             ] %}
 
             <div class="d-flex flex-column gap-2" id="cfg-tab-nav">
@@ -1679,6 +1681,65 @@
                                    value="{{ config.redCardSuspensionMatches }}"
                                    step="1" min="1" class="form-control">
                             <div class="form-text">Matches banned for a direct red card. Default: 1</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Competition History ─────────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="competition-history" data-group="league-config">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-trophy text-muted"></i>
+                    <span class="fw-semibold small">Competition History</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Points awarded for winning each league tier (1 = top flight). Used to calculate a club's all-time
+                        competition history score. The 10× reduction per tier ensures one League 1 title outweighs any
+                        number of lower-division wins.
+                    </p>
+                    <div class="row g-3">
+                        {% for tier, points in config.leagueWinPoints %}
+                        <div class="col-6 col-md-3">
+                            <label for="leagueWinPoints_{{ tier }}" class="form-label fw-semibold small">Tier {{ tier }} Points</label>
+                            <input type="number" id="leagueWinPoints_{{ tier }}"
+                                   name="leagueWinPoints[{{ tier }}]"
+                                   value="{{ points }}"
+                                   min="0" step="1" class="form-control">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {# ── Pyramid News ────────────────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="pyramid-news" data-group="league-config">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-newspaper text-muted"></i>
+                    <span class="fw-semibold small">Pyramid News</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how often pyramid news generates and per-page-type duplicate-prevention behaviour.
+                        Only page types with <code>prevent_duplicate</code> need entries in the config JSON.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="pyramidNewsFrequencyWeeks" class="form-label fw-semibold small">Frequency (weeks)</label>
+                            <input type="number" id="pyramidNewsFrequencyWeeks" name="pyramidNewsFrequencyWeeks"
+                                   value="{{ config.pyramidNewsFrequencyWeeks }}"
+                                   min="1" step="1" class="form-control">
+                            <div class="form-text">How often pyramid news generates. Default: 4</div>
+                        </div>
+                        <div class="col-12">
+                            <label for="pyramidNewsConfig" class="form-label fw-semibold small">Page-type Config (JSON)</label>
+                            <textarea id="pyramidNewsConfig" name="pyramidNewsConfig"
+                                      rows="6" class="form-control font-monospace"
+                                      style="font-size:.8rem;">{{ config.pyramidNewsConfig|json_encode(constant('JSON_PRETTY_PRINT')) }}</textarea>
+                            <div class="form-text">
+                                Keyed by page type slug. Example:
+                                <code>{"financial_turmoil":{"usedCacheClearAfterEditions":5}}</code>
+                            </div>
                         </div>
                     </div>
                 </div>

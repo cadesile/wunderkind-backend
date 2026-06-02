@@ -395,6 +395,24 @@ class DashboardController extends AbstractDashboardController
             $config->setNpcClubBalanceRanges($balanceRanges);
         }
 
+        // Pyramid News
+        $config->setPyramidNewsFrequencyWeeks((int) $request->request->get('pyramidNewsFrequencyWeeks', 4));
+        $pyramidNewsConfigJson = $request->request->get('pyramidNewsConfig', '{}');
+        $pyramidNewsConfig = json_decode($pyramidNewsConfigJson, true);
+        if (is_array($pyramidNewsConfig)) {
+            $config->setPyramidNewsConfig($pyramidNewsConfig);
+        }
+
+        // Competition history — league win points per tier
+        $rawLeagueWinPoints = $request->request->all('leagueWinPoints') ?: [];
+        if (!empty($rawLeagueWinPoints)) {
+            $leagueWinPoints = [];
+            for ($tier = 1; $tier <= 8; $tier++) {
+                $leagueWinPoints[$tier] = max(0, (int) ($rawLeagueWinPoints[$tier] ?? 0));
+            }
+            $config->setLeagueWinPoints($leagueWinPoints);
+        }
+
         $this->em->flush();
 
         $this->addFlash('success', 'Game config saved.');
