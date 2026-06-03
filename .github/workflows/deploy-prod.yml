@@ -50,17 +50,17 @@ jobs:
             set -e
             cd /mnt/volume-wkf/wunderkind/prod
 
-            cat > .env <<EOF
-            DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
-            APP_SECRET=${{ secrets.PROD_APP_SECRET }}
-            CORS_ALLOW_ORIGIN=${{ secrets.PROD_CORS_ALLOW_ORIGIN }}
-            CLUB_STARTING_BALANCE=${{ secrets.PROD_CLUB_STARTING_BALANCE }}
-            JWT_SECRET_KEY="${{ secrets.PROD_JWT_SECRET_KEY }}"
-            JWT_PUBLIC_KEY="${{ secrets.PROD_JWT_PUBLIC_KEY }}"
-            MAILER_DSN=${{ secrets.PROD_MAILER_DSN }}
-            MAILER_FROM=${{ secrets.PROD_MAILER_FROM }}
-            MAILER_FROM_NAME="${{ secrets.PROD_MAILER_FROM_NAME }}"
-            EOF
+            cat > .env <<'EOF'
+DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
+APP_SECRET=${{ secrets.PROD_APP_SECRET }}
+CORS_ALLOW_ORIGIN=${{ secrets.PROD_CORS_ALLOW_ORIGIN }}
+CLUB_STARTING_BALANCE=${{ secrets.PROD_CLUB_STARTING_BALANCE }}
+JWT_SECRET_KEY="${{ secrets.PROD_JWT_SECRET_KEY }}"
+JWT_PUBLIC_KEY="${{ secrets.PROD_JWT_PUBLIC_KEY }}"
+MAILER_DSN=${{ secrets.PROD_MAILER_DSN }}
+MAILER_FROM=${{ secrets.PROD_MAILER_FROM }}
+MAILER_FROM_NAME="${{ secrets.PROD_MAILER_FROM_NAME }}"
+EOF
 
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
