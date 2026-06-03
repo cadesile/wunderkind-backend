@@ -24,6 +24,7 @@
         "symfony/http-client": "8.0.*",
         "symfony/mailer": "8.0.*",
         "symfony/monolog-bundle": "^4.0",
+        "symfony/resend-mailer": "8.0.*",
         "symfony/runtime": "8.0.*",
         "symfony/security-bundle": "8.0.*",
         "symfony/uid": "8.0.*",
