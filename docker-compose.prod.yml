@@ -19,6 +19,9 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       CLUB_STARTING_BALANCE: ${CLUB_STARTING_BALANCE}
+      MAILER_DSN: ${MAILER_DSN}
+      MAILER_FROM: ${MAILER_FROM}
+      MAILER_FROM_NAME: ${MAILER_FROM_NAME}
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
