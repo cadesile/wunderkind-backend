@@ -4,6 +4,7 @@ namespace App\Form\Type;
 
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -14,6 +15,37 @@ class FiringConditionsType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
+            // ── Morale-based conditions (Feature 61) ─────────────────────────
+            ->add('subject', ChoiceType::class, [
+                'label'    => 'Subject',
+                'choices'  => ['Player' => 'player', 'Staff' => 'staff'],
+                'required' => false,
+                'placeholder' => '— any —',
+                'help'     => 'Scope the morale check to a specific subject type. Required when using morale_below / morale_above.',
+            ])
+            ->add('morale_below', NumberType::class, [
+                'label'    => 'Morale Below',
+                'required' => false,
+                'help'     => 'Event fires if the subject\'s morale is below this value (0–100). Pairs with subject.',
+            ])
+            ->add('morale_above', NumberType::class, [
+                'label'    => 'Morale Above',
+                'required' => false,
+                'help'     => 'Event fires if the subject\'s morale is above this value (0–100). Pairs with subject. Use both morale_above and morale_below for a range check.',
+            ])
+            ->add('staff_role', ChoiceType::class, [
+                'label'    => 'Staff Role (optional)',
+                'choices'  => [
+                    'Coach'               => 'coach',
+                    'Scout'               => 'scout',
+                    'Director of Football'=> 'director_of_football',
+                    'Manager'             => 'manager',
+                ],
+                'required'    => false,
+                'placeholder' => '— any role —',
+                'help'        => 'When subject is "staff", optionally filter by role.',
+            ])
+            // ── Squad / pair conditions ───────────────────────────────────────
             ->add('minSquadMorale', NumberType::class, [
                 'label'    => 'Min Squad Morale',
                 'required' => false,

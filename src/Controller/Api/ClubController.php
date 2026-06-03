@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Service\ClubInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
@@ -16,6 +17,53 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/api/club')]
 class ClubController extends AbstractController
 {
+    private const CITIES_BY_COUNTRY = [
+        'EN' => [
+            'Manchester', 'Liverpool', 'London', 'Birmingham', 'Leeds', 'Sheffield',
+            'Newcastle', 'Sunderland', 'Nottingham', 'Leicester', 'Bristol', 'Southampton',
+            'Coventry', 'Stoke', 'Derby', 'Bolton', 'Blackburn', 'Ipswich', 'Reading',
+            'Burnley', 'Huddersfield', 'Preston', 'Wolves', 'Charlton', 'Millwall',
+        ],
+        'ES' => [
+            'Madrid', 'Barcelona', 'Sevilla', 'Valencia', 'Bilbao', 'Málaga', 'Zaragoza',
+            'Valladolid', 'Cádiz', 'Almería', 'Murcia', 'Alicante', 'Santander', 'Vigo',
+            'Getafe', 'Leganés', 'Girona', 'Elche', 'Betis', 'Osasuna',
+        ],
+        'DE' => [
+            'München', 'Dortmund', 'Hamburg', 'Frankfurt', 'Stuttgart', 'Köln', 'Leipzig',
+            'Leverkusen', 'Mönchengladbach', 'Wolfsburg', 'Augsburg', 'Freiburg', 'Mainz',
+            'Bochum', 'Bremen', 'Hannover', 'Nürnberg', 'Düsseldorf', 'Bielefeld', 'Paderborn',
+        ],
+        'FR' => [
+            'Paris', 'Lyon', 'Marseille', 'Bordeaux', 'Lille', 'Monaco', 'Nantes', 'Nice',
+            'Rennes', 'Montpellier', 'Saint-Étienne', 'Strasbourg', 'Lens', 'Reims',
+            'Brest', 'Metz', 'Lorient', 'Angers', 'Troyes', 'Clermont',
+        ],
+        'IT' => [
+            'Roma', 'Milano', 'Torino', 'Napoli', 'Firenze', 'Genova', 'Venezia', 'Lazio',
+            'Bologna', 'Verona', 'Atalanta', 'Sassuolo', 'Monza', 'Lecce', 'Udinese',
+            'Empoli', 'Salernitana', 'Spezia', 'Cremonese', 'Cagliari',
+        ],
+    ];
+
+    private const SUFFIXES = [
+        'FC', 'United', 'City', 'Athletic', 'Rovers', 'Town',
+        'Rangers', 'Wednesday', 'Albion', 'Wanderers', 'Vale', 'Orient',
+    ];
+
+    #[Route('/name-options', name: 'api_clubs_name_options', methods: ['GET'])]
+    public function nameOptions(Request $request): JsonResponse
+    {
+        $country = strtoupper($request->query->get('country', 'EN'));
+        $cities  = self::CITIES_BY_COUNTRY[$country] ?? self::CITIES_BY_COUNTRY['EN'];
+
+        return $this->json([
+            'country'  => $country,
+            'cities'   => $cities,
+            'suffixes' => self::SUFFIXES,
+        ]);
+    }
+
     #[Route('/initialize', name: 'api_club_initialize', methods: ['POST'])]
     #[IsGranted('ROLE_CLUB')]
     public function initialize(

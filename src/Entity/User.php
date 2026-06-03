@@ -32,6 +32,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $managerProfile = null;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isVerified = false;
+
+    #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
+    private ?\DateTimeImmutable $verifiedAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -63,6 +69,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getManagerProfile(): ?array { return $this->managerProfile; }
     public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
+
+    public function isVerified(): bool { return $this->isVerified; }
+    public function setIsVerified(bool $isVerified): void { $this->isVerified = $isVerified; }
+
+    public function getVerifiedAt(): ?\DateTimeImmutable { return $this->verifiedAt; }
+    public function setVerifiedAt(?\DateTimeImmutable $verifiedAt): void { $this->verifiedAt = $verifiedAt; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

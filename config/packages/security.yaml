@@ -35,7 +35,7 @@ security:
             provider: app_user_provider
             json_login:
                 check_path: /api/login
-                success_handler: lexik_jwt_authentication.handler.authentication_success
+                success_handler: App\Security\VerificationAwareAuthenticationSuccessHandler
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
         refresh_token:
@@ -59,7 +59,10 @@ security:
         - { path: ^/admin,             roles: ROLE_ADMIN }
         - { path: ^/api/login,         roles: PUBLIC_ACCESS }
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
-        - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/register,              roles: PUBLIC_ACCESS }
+        - { path: ^/api/verify-email,          roles: PUBLIC_ACCESS }
+        - { path: ^/api/resend-verification,   roles: PUBLIC_ACCESS }
+        - { path: ^/api/club/name-options,     roles: PUBLIC_ACCESS }
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
         - { path: ^/api/app-links,             roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,           roles: PUBLIC_ACCESS }

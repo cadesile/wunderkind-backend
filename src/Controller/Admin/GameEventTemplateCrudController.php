@@ -64,7 +64,21 @@ class GameEventTemplateCrudController extends AbstractCrudController
             ->setFormType(FiringConditionsType::class)
             ->setRequired(false)
             ->hideOnIndex()
-            ->setHelp('Leave blank for events with no firing conditions.');
+            ->setHelp(
+                '<strong>Morale keys (Feature 61):</strong> '
+                . '<code>subject</code> "player"|"staff" · '
+                . '<code>morale_below</code> integer · '
+                . '<code>morale_above</code> integer · '
+                . '<code>staff_role</code> "coach"|"scout"|"director_of_football"|"manager"<br>'
+                . '<strong>Existing keys:</strong> '
+                . '<code>reputation_tier</code> · <code>reputation_direction</code> · '
+                . '<code>age_milestone</code> · <code>morale_threshold</code> · '
+                . '<code>morale_direction</code> · <code>consecutive_good_games</code> · '
+                . '<code>consecutive_poor_games</code> · <code>minSquadMorale</code> · '
+                . '<code>maxSquadMorale</code> · <code>minPairRelationship</code> · '
+                . '<code>maxPairRelationship</code><br>'
+                . 'Leave all blank for unconditional events.'
+            );
         yield CollectionField::new('chainedEventsArray', 'Chained Events')
             ->setEntryType(ChainLinkType::class)
             ->allowAdd()
