@@ -53,7 +53,7 @@ class BetaRequestController extends AbstractController
         }
 
         $message = (new Email())
-            ->from('noreply@wunderkindfactory.com')
+            ->from('noreply@buildmyclub.co.uk')
             ->to($recipientEmail)
             ->subject('Beta Access Request — ' . $email)
             ->text(implode("\n", [
