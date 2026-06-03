@@ -1,0 +1,3 @@
+[submodule "scripts/global-context-generator"]
+	path = scripts/global-context-generator
+	url = https://github.com/cadesile/global-context-generator
