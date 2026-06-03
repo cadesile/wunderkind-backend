@@ -55,6 +55,9 @@ jobs:
             CLUB_STARTING_BALANCE=${{ secrets.STAGE_CLUB_STARTING_BALANCE }}
             JWT_SECRET_KEY="${{ secrets.STAGE_JWT_SECRET_KEY }}"
             JWT_PUBLIC_KEY="${{ secrets.STAGE_JWT_PUBLIC_KEY }}"
+            MAILER_DSN=${{ secrets.STAGE_MAILER_DSN }}
+            MAILER_FROM=${{ secrets.STAGE_MAILER_FROM }}
+            MAILER_FROM_NAME="${{ secrets.STAGE_MAILER_FROM_NAME }}"
             EOF
 
             docker compose -f docker-compose.staging.yml pull
