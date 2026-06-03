@@ -43,6 +43,10 @@ class League
     #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $leaguePositionPot = null;
 
+    /** How many sponsors should be sourced for this league during world cache generation. */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $sponsorCount = 0;
+
     /** Slug of the trophy silhouette, e.g. "trophy-3". Serves /images/trophies/{slug}.svg */
     #[ORM\Column(length: 20, nullable: true)]
     private ?string $trophyImage = null;
@@ -100,6 +104,9 @@ class League
 
     public function getLeaguePositionPot(): ?int { return $this->leaguePositionPot; }
     public function setLeaguePositionPot(?int $v): static { $this->leaguePositionPot = $v; return $this; }
+
+    public function getSponsorCount(): int { return $this->sponsorCount; }
+    public function setSponsorCount(int $v): static { $this->sponsorCount = max(0, $v); return $this; }
 
     public function getTrophyImage(): ?string { return $this->trophyImage; }
     public function setTrophyImage(?string $v): static { $this->trophyImage = $v; return $this; }

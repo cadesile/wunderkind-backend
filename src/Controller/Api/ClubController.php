@@ -23,32 +23,80 @@ class ClubController extends AbstractController
             'Newcastle', 'Sunderland', 'Nottingham', 'Leicester', 'Bristol', 'Southampton',
             'Coventry', 'Stoke', 'Derby', 'Bolton', 'Blackburn', 'Ipswich', 'Reading',
             'Burnley', 'Huddersfield', 'Preston', 'Wolves', 'Charlton', 'Millwall',
+            'Portsmouth', 'Plymouth', 'Hull', 'Middlesbrough', 'Norwich', 'Watford',
+            'Bournemouth', 'Brighton', 'Luton', 'Brentford', 'Fulham', 'Blackpool',
+            'Bury', 'Stockport', 'Oldham', 'Rochdale', 'Wigan', 'Crewe', 'Swindon',
+            'Doncaster', 'Rotherham', 'Barnsley', 'Chesterfield', 'Lincoln', 'Carlisle',
+            'Shrewsbury', 'Walsall', 'Colchester', 'Southend', 'Wycombe', 'Exeter'
         ],
         'ES' => [
             'Madrid', 'Barcelona', 'Sevilla', 'Valencia', 'Bilbao', 'Málaga', 'Zaragoza',
             'Valladolid', 'Cádiz', 'Almería', 'Murcia', 'Alicante', 'Santander', 'Vigo',
-            'Getafe', 'Leganés', 'Girona', 'Elche', 'Betis', 'Osasuna',
+            'Getafe', 'Leganés', 'Girona', 'Elche', 'Betis', 'Osasuna', 'Granada',
+            'Las Palmas', 'Mallorca', 'Villarreal', 'Eibar', 'Tenerife', 'Oviedo', 'Gijón'
         ],
         'DE' => [
             'München', 'Dortmund', 'Hamburg', 'Frankfurt', 'Stuttgart', 'Köln', 'Leipzig',
             'Leverkusen', 'Mönchengladbach', 'Wolfsburg', 'Augsburg', 'Freiburg', 'Mainz',
             'Bochum', 'Bremen', 'Hannover', 'Nürnberg', 'Düsseldorf', 'Bielefeld', 'Paderborn',
+            'Schalke', 'Kaiserslautern', 'Hertha', 'Union Berlin', 'Darmstadt', 'Heidenheim', 'St. Pauli'
         ],
         'FR' => [
             'Paris', 'Lyon', 'Marseille', 'Bordeaux', 'Lille', 'Monaco', 'Nantes', 'Nice',
             'Rennes', 'Montpellier', 'Saint-Étienne', 'Strasbourg', 'Lens', 'Reims',
-            'Brest', 'Metz', 'Lorient', 'Angers', 'Troyes', 'Clermont',
+            'Brest', 'Metz', 'Lorient', 'Angers', 'Troyes', 'Clermont', 'Toulouse',
+            'Le Havre', 'Auxerre', 'Corsica', 'Ajaccio', 'Bastia', 'Dijon'
         ],
         'IT' => [
             'Roma', 'Milano', 'Torino', 'Napoli', 'Firenze', 'Genova', 'Venezia', 'Lazio',
             'Bologna', 'Verona', 'Atalanta', 'Sassuolo', 'Monza', 'Lecce', 'Udinese',
-            'Empoli', 'Salernitana', 'Spezia', 'Cremonese', 'Cagliari',
+            'Empoli', 'Salernitana', 'Spezia', 'Cremonese', 'Cagliari', 'Palermo',
+            'Bari', 'Parma', 'Modena', 'Pisa', 'Como', 'Brescia', 'Reggiana'
+        ],
+        'AR' => [
+            'Buenos Aires', 'Avellaneda', 'Rosario', 'Córdoba', 'Santa Fe', 'La Plata', 
+            'Mendoza', 'Tucumán', 'Mar del Plata', 'Salta', 'San Juan', 'Lanús', 
+            'Banfield', 'Quilmes', 'Tigre', 'Bahía Blanca', 'Paraná', 'Santiago del Estero',
+            'Resistencia', 'Corrientes', 'Jujuy', 'Posadas', 'Rafaela', 'Junín'
+        ],
+        'BR' => [
+            'São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Porto Alegre', 'Curitiba', 
+            'Salvador', 'Recife', 'Fortaleza', 'Goiânia', 'Belém', 'Manaus', 'Florianópolis', 
+            'Santos', 'Campinas', 'Caxias do Sul', 'Cuiabá', 'Natal', 'São Luís', 
+            'Maceió', 'João Pessoa', 'Chapecoense', 'Joinville', 'Ribeirão Preto', 'Juiz de Fora'
         ],
     ];
 
     private const SUFFIXES = [
-        'FC', 'United', 'City', 'Athletic', 'Rovers', 'Town',
-        'Rangers', 'Wednesday', 'Albion', 'Wanderers', 'Vale', 'Orient',
+        'EN' => [
+            'FC', 'United', 'City', 'Athletic', 'Rovers', 'Town', 'Rangers', 
+            'Wednesday', 'Albion', 'Wanderers', 'Vale', 'Orient', 'County', 
+            'Villa', 'North End', 'Alexandra', 'Harriers', 'Hotspur'
+        ],
+        'ES' => [
+            'CF', 'CD', 'UD', 'Real', 'Atlético', 'SD', 'Deportivo', 'Unión', 
+            'Club', 'Sporting', 'Racing', 'RC', 'RCD'
+        ],
+        'DE' => [
+            'SV', 'VfL', 'VfB', 'FC', 'SC', 'FSV', 'SpVgg', 'Borussia', 
+            'Eintracht', 'Hertha', 'Dynamo', 'Germania', 'Preußen', 'Fortuna'
+        ],
+        'FR' => [
+            'FC', 'AS', 'Olympique', 'Stade', 'RC', 'US', 'SC', 'SCO', 
+            'Racing Club', 'Girondins', 'AJ', 'CS'
+        ],
+        'IT' => [
+            'AC', 'FC', 'AS', 'US', 'Calcio', 'Virtus', 'Sporting', 'Polisportiva', 
+            'Città di', 'Real', 'Unione Sportiva', 'Atalanta'
+        ],
+        'AR' => [
+            'CA', 'Club Atlético', 'Deportivo', 'Social y Deportivo', 'Racing', 
+            'Unión', 'Gimnasia y Esgrima', 'Sportivo', 'Defensores de', 'Juventud Unida'
+        ],
+        'BR' => [
+            'FC', 'EC', 'CR', 'AC', 'Botafogo', 'Sport', 'Grêmio', 'Sociedade Esportiva', 
+            'Clube do Remo', 'Náutico', 'Juventude', 'Operário'
+        ],
     ];
 
     #[Route('/name-options', name: 'api_clubs_name_options', methods: ['GET'])]
@@ -56,11 +104,12 @@ class ClubController extends AbstractController
     {
         $country = strtoupper($request->query->get('country', 'EN'));
         $cities  = self::CITIES_BY_COUNTRY[$country] ?? self::CITIES_BY_COUNTRY['EN'];
+        $suffixes  = self::SUFFIXES[$country] ?? self::SUFFIXES['EN'];
 
         return $this->json([
             'country'  => $country,
             'cities'   => $cities,
-            'suffixes' => self::SUFFIXES,
+            'suffixes' => $suffixes,
         ]);
     }
 

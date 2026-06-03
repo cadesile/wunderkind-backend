@@ -67,6 +67,11 @@ class LeagueAdminController extends AbstractController
             $trophyColour !== null && $trophyColour !== '' ? TrophyColour::tryFrom($trophyColour) : null
         );
 
+        $sponsorCount = $request->request->get('sponsorCount');
+        if ($sponsorCount !== null && $sponsorCount !== '') {
+            $league->setSponsorCount(max(1, min(20, (int) $sponsorCount)));
+        }
+
         $this->em->flush();
 
         $this->addFlash('success', sprintf('League "%s" updated.', $league->getName()));

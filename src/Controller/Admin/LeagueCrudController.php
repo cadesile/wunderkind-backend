@@ -135,25 +135,9 @@ class LeagueCrudController extends AbstractCrudController
             ->hideOnIndex()
             ->setHelp('Gold, Silver, or Gold & Silver — applied by the frontend when rendering the trophy.');
 
-        yield AssociationField::new('sponsors')
-            ->setFormTypeOption('by_reference', false)
-            ->hideOnIndex()
-            ->setHelp('Sponsors attached to this league. Filtered by league reputation tier when set.')
-            ->setQueryBuilder(function (QueryBuilder $qb) use ($entity): QueryBuilder {
-                $qb->andWhere('entity.isActive = true');
-
-                if ($entity instanceof League && $entity->getLeagueReputationTier() !== null) {
-                    $sizes = match ($entity->getLeagueReputationTier()) {
-                        ReputationTier::LOCAL    => [CompanySize::SMALL->value],
-                        ReputationTier::REGIONAL => [CompanySize::SMALL->value, CompanySize::MEDIUM->value],
-                        ReputationTier::NATIONAL => [CompanySize::MEDIUM->value, CompanySize::LARGE->value],
-                        ReputationTier::ELITE    => [CompanySize::LARGE->value],
-                    };
-                    $qb->andWhere('entity.size IN (:sizes)')->setParameter('sizes', $sizes);
-                }
-
-                return $qb;
-            });
+        yield IntegerField::new('sponsorCount', 'Sponsor Count')
+            ->setHelp('Number of sponsors to source for this league during world cache generation. Sponsors are filtered by league reputation tier.')
+            ->hideOnIndex();
 
         yield DateTimeField::new('createdAt')->hideOnForm();
     }

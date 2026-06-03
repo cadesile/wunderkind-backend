@@ -357,6 +357,7 @@
                                     data-league-position-pot="{{ league.leaguePositionPot is not null ? (league.leaguePositionPot / 100)|round : '' }}"
                                     data-trophy-image="{{ league.trophyImage ?? '' }}"
                                     data-trophy-colour="{{ league.trophyColour ? league.trophyColour.value : '' }}"
+                                    data-sponsor-count="{{ league.sponsorCount }}"
                                     data-csrf-token="{{ csrf_token('league_qe_' ~ league.id|ea_as_string) }}"
                                     data-full-edit-url="{{ ea_url().setController(LEAGUE_CTRL).setAction('edit').setEntityId(league.id|ea_as_string) }}">
                                 <i class="fa fa-pencil"></i>
@@ -479,17 +480,30 @@
                             <label class="form-label small fw-semibold mb-1" for="qe-promotionSpots">Promotion Spots</label>
                             <input type="number" class="form-control form-control-sm" id="qe-promotionSpots" name="promotionSpots" min="0" placeholder="none">
                         </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold mb-1" for="qe-tvDeal">TV Deal (£)</label>
-                            <input type="number" class="form-control form-control-sm" id="qe-tvDeal" name="tvDeal" min="0" step="1" placeholder="none">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold mb-1" for="qe-tvDeal">TV Deal</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">£</span>
+                                <input type="number" class="form-control" id="qe-tvDeal" name="tvDeal" min="0" step="1" placeholder="none">
+                            </div>
                         </div>
                         <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-prizeMoney">Prize Money (£)</label>
-                            <input type="number" class="form-control form-control-sm" id="qe-prizeMoney" name="prizeMoney" min="0" step="1" placeholder="none">
+                            <label class="form-label small fw-semibold mb-1" for="qe-sponsorCount">Sponsors</label>
+                            <input type="number" class="form-control form-control-sm" id="qe-sponsorCount" name="sponsorCount" min="1" max="20" step="1" placeholder="0">
                         </div>
                         <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-leaguePositionPot">Position Pot (£)</label>
-                            <input type="number" class="form-control form-control-sm" id="qe-leaguePositionPot" name="leaguePositionPot" min="0" step="1" placeholder="none">
+                            <label class="form-label small fw-semibold mb-1" for="qe-prizeMoney">Prize Money</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">£</span>
+                                <input type="number" class="form-control" id="qe-prizeMoney" name="prizeMoney" min="0" step="1" placeholder="none">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold mb-1" for="qe-leaguePositionPot">Position Pot</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">£</span>
+                                <input type="number" class="form-control" id="qe-leaguePositionPot" name="leaguePositionPot" min="0" step="1" placeholder="none">
+                            </div>
                         </div>
                         {# ── Trophy row: selects left · live preview right ── #}
                         <div class="col-12">
@@ -600,6 +614,7 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
         document.getElementById('qe-leaguePositionPot').value = btn.dataset.leaguePositionPot || '';
         document.getElementById('qe-trophyImage').value       = btn.dataset.trophyImage  || '';
         document.getElementById('qe-trophyColour').value      = btn.dataset.trophyColour || '';
+        document.getElementById('qe-sponsorCount').value      = btn.dataset.sponsorCount || '';
         document.getElementById('qe-full-edit-link').href     = btn.dataset.fullEditUrl || '#';
         refreshTrophyPreview();
     });
