@@ -20,6 +20,7 @@ class AdminSecurityController extends AbstractController
             'error'         => $error,
         ]);
     }
+    
 
     #[Route('/admin/logout', name: 'admin_logout')]
     public function logout(): never
