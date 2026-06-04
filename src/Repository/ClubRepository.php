@@ -19,6 +19,23 @@ class ClubRepository extends ServiceEntityRepository
 
     public function findByUser(User $user): ?Club
     {
-        return $this->findOneBy(['user' => $user]);
+        return $this->createQueryBuilder('c')
+            ->where('c.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('c.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /** @return Club[] */
+    public function findAllByUser(User $user): array
+    {
+        return $this->createQueryBuilder('c')
+            ->where('c.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('c.createdAt', 'DESC')
+            ->getQuery()
+            ->getResult();
     }
 }

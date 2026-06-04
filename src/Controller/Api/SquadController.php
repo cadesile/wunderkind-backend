@@ -6,6 +6,7 @@ namespace App\Controller\Api;
 
 use App\Entity\User;
 use App\Enum\Tier;
+use App\Repository\ClubRepository;
 use App\Repository\PlayerRepository;
 use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,6 +23,7 @@ class SquadController extends AbstractController
 {
     public function __construct(
         private readonly PlayerRepository $playerRepository,
+        private readonly ClubRepository $clubRepository,
         private readonly EntityManagerInterface $em,
     ) {}
 
@@ -30,7 +32,7 @@ class SquadController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $user->getClub();
+        $club = $this->clubRepository->findByUser($user);
 
         if ($club === null) {
             return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);
@@ -107,7 +109,7 @@ class SquadController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $user->getClub();
+        $club = $this->clubRepository->findByUser($user);
 
         if ($club === null) {
             return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);

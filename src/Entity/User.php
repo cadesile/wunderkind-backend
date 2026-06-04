@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -26,8 +28,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'json')]
     private array $roles = [];
 
-    #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
-    private ?Club $club = null;
+    #[ORM\OneToMany(mappedBy: 'user', targetEntity: Club::class, cascade: ['persist', 'remove'])]
+    private Collection $clubs;
 
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $managerProfile = null;
@@ -46,6 +48,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->id        = new UuidV7();
         $this->email     = $email;
         $this->createdAt = new \DateTimeImmutable();
+        $this->clubs     = new ArrayCollection();
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -64,8 +67,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function eraseCredentials(): void {}
 
-    public function getClub(): ?Club { return $this->club; }
-    public function setClub(?Club $club): void { $this->club = $club; }
+    /** @return Collection<int, Club> */
+    public function getClubs(): Collection { return $this->clubs; }
 
     public function getManagerProfile(): ?array { return $this->managerProfile; }
     public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }

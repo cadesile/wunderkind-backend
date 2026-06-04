@@ -92,7 +92,7 @@ class Club
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
-    #[ORM\OneToOne(inversedBy: 'club')]
+    #[ORM\ManyToOne(inversedBy: 'clubs')]
     #[ORM\JoinColumn(nullable: false)]
     private User $user;
 

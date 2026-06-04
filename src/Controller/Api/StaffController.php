@@ -8,6 +8,7 @@ use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\StaffRole;
 use App\Enum\Tier;
+use App\Repository\ClubRepository;
 use App\Service\ClubInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,12 +21,14 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_CLUB')]
 class StaffController extends AbstractController
 {
+    public function __construct(private readonly ClubRepository $clubRepository) {}
+
     #[Route('', name: 'api_staff_index', methods: ['GET'])]
     public function index(Request $request): JsonResponse
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $user->getClub();
+        $club = $this->clubRepository->findByUser($user);
 
         if ($club === null) {
             return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);

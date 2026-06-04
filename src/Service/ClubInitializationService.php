@@ -60,15 +60,10 @@ class ClubInitializationService
      * Pulls entities from the pool. Throws \OverflowException if any pool is
      * insufficient — run app:generate-market-data to replenish before retrying.
      *
-     * @throws \RuntimeException   if the user already has an initialized club (has players)
      * @throws \OverflowException  if any entity pool has too few entries
      */
     public function initializeClub(User $user, string $clubName, ?string $country = null, ?array $managerProfile = null): Club
     {
-        if ($user->getClub() !== null) {
-            throw new \RuntimeException('Club is already initialized.');
-        }
-
         $config  = $this->starterConfigRepository->getConfig();
         $club = new Club($clubName, $user);
         $club->setBalance($config->getStartingBalance());

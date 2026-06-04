@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Dto\ClubInitRequest;
 use App\Entity\Investor;
 use App\Entity\User;
+use App\Repository\ClubRepository;
 use App\Service\ClubInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -17,6 +18,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/api/club')]
 class ClubController extends AbstractController
 {
+    public function __construct(private readonly ClubRepository $clubRepository) {}
+
     private const CITIES_BY_COUNTRY = [
         'EN' => [
             'Manchester', 'Liverpool', 'London', 'Birmingham', 'Leeds', 'Sheffield',
@@ -148,7 +151,7 @@ class ClubController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $user->getClub();
+        $club = $this->clubRepository->findByUser($user);
 
         if ($club === null) {
             return $this->json(['exists' => false, 'reason' => 'club_not_found'], Response::HTTP_NOT_FOUND);
@@ -163,7 +166,7 @@ class ClubController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $user->getClub();
+        $club = $this->clubRepository->findByUser($user);
 
         if ($club === null) {
             return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);
