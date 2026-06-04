@@ -157,6 +157,116 @@ class SyncController extends AbstractController
         ], Response::HTTP_OK);
     }
 
+    /**
+     * POST /api/forgot-password
+     * Sends a 6-digit reset code to the email address. Always returns 200 to
+     * prevent user enumeration — userId is only included when a code was sent.
+     */
+    #[Route('/forgot-password', name: 'api_forgot_password', methods: ['POST'])]
+    public function forgotPassword(
+        Request $request,
+        EntityManagerInterface $em,
+        EmailVerificationService $verificationService,
+    ): JsonResponse {
+        $data  = json_decode($request->getContent(), true);
+        $email = trim(strtolower($data['email'] ?? ''));
+
+        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+
+        if (!$user instanceof User || !$user->isVerified()) {
+            return $this->json(['message' => 'if_registered_code_sent'], Response::HTTP_OK);
+        }
+
+        $verificationService->sendPasswordResetEmail($user);
+
+        return $this->json([
+            'message' => 'if_registered_code_sent',
+            'userId'  => $user->getId()->toRfc4122(),
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * POST /api/reset-password
+     * Verifies the 6-digit code and sets the new password in one step.
+     * Sends a confirmation email on success.
+     */
+    #[Route('/reset-password', name: 'api_reset_password', methods: ['POST'])]
+    public function resetPassword(
+        Request $request,
+        EntityManagerInterface $em,
+        EmailVerificationService $verificationService,
+        UserPasswordHasherInterface $hasher,
+    ): JsonResponse {
+        $data        = json_decode($request->getContent(), true);
+        $userId      = $data['userId'] ?? '';
+        $code        = trim($data['code'] ?? '');
+        $newPassword = $data['newPassword'] ?? '';
+
+        $user = $em->getRepository(User::class)->find($userId);
+        if (!$user instanceof User || !$user->isVerified()) {
+            return $this->json(['error' => 'user_not_found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (strlen($newPassword) < 8) {
+            return $this->json([
+                'error'   => 'password_too_short',
+                'message' => 'Password must be at least 8 characters',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $result = $verificationService->verifyPasswordResetCode($user, $code);
+
+        if ($result !== 'ok') {
+            return match ($result) {
+                'expired'      => $this->json(['error' => 'expired'], Response::HTTP_UNPROCESSABLE_ENTITY),
+                'max_attempts' => $this->json(['error' => 'max_attempts'], Response::HTTP_TOO_MANY_REQUESTS),
+                default        => $this->json(['error' => 'invalid_code'], Response::HTTP_UNPROCESSABLE_ENTITY),
+            };
+        }
+
+        $user->setPassword($hasher->hashPassword($user, $newPassword));
+        $em->flush();
+
+        $verificationService->sendPasswordResetConfirmationEmail($user);
+
+        return $this->json(['message' => 'password_reset'], Response::HTTP_OK);
+    }
+
+    /**
+     * POST /api/resend-password-reset
+     * Re-sends a reset code. Rate-limited to once per 60 seconds.
+     */
+    #[Route('/resend-password-reset', name: 'api_resend_password_reset', methods: ['POST'])]
+    public function resendPasswordReset(
+        Request $request,
+        EntityManagerInterface $em,
+        EmailVerificationService $verificationService,
+        EmailVerificationRepository $verificationRepo,
+    ): JsonResponse {
+        $data   = json_decode($request->getContent(), true);
+        $userId = $data['userId'] ?? '';
+
+        $user = $em->getRepository(User::class)->find($userId);
+        if (!$user instanceof User || !$user->isVerified()) {
+            return $this->json(['error' => 'invalid_request'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $recent = $verificationRepo->findActiveForUser($user, \App\Enum\VerificationPurpose::PASSWORD_RESET);
+        if ($recent !== null && $recent->getCreatedAt() > new \DateTimeImmutable('-60 seconds')) {
+            return $this->json([
+                'error'      => 'rate_limited',
+                'retryAfter' => 60,
+            ], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        $verificationService->sendPasswordResetEmail($user);
+
+        return $this->json([
+            'message'   => 'code_resent',
+            'expiresIn' => 900,
+        ], Response::HTTP_OK);
+    }
+
     #[Route('/sync', name: 'api_sync', methods: ['POST'])]
     public function sync(
         #[MapRequestPayload] SyncRequest $syncRequest,

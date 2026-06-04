@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\EmailVerification;
 use App\Entity\User;
+use App\Enum\VerificationPurpose;
 use App\Repository\EmailVerificationRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Mailer\MailerInterface;
@@ -20,59 +21,95 @@ class EmailVerificationService
         private readonly string $mailerFromName,
     ) {}
 
-    /**
-     * Soft-expire any active verifications for this user, generate a new 6-digit
-     * code, persist it, and dispatch the verification email.
-     */
     public function sendVerificationEmail(User $user): void
     {
-        // Soft-expire existing active verifications
-        $existing = $this->verificationRepo->findActiveForUser($user);
-        if ($existing !== null) {
-            $existing->setExpiresAt(new \DateTimeImmutable());
-            $this->em->persist($existing);
-        }
+        $this->softExpireActive($user, VerificationPurpose::REGISTRATION);
 
-        $code = $this->generateCode();
-        $verification = new EmailVerification($user, $code);
+        $code         = $this->generateCode();
+        $verification = new EmailVerification($user, $code, VerificationPurpose::REGISTRATION);
         $this->em->persist($verification);
         $this->em->flush();
 
-        $email = (new Email())
-            ->from(new Address($this->mailerFrom, $this->mailerFromName))
-            ->to($user->getEmail())
-            ->subject('Your Wunderkind Factory verification code')
-            ->text(
-                "Your verification code is: {$code}\n\n" .
-                "This code expires in 15 minutes.\n\n" .
-                "If you didn't register for Wunderkind Factory, " .
-                "you can safely ignore this email."
-            );
+        $this->mailer->send(
+            $this->baseEmail($user)
+                ->subject('Your Wunderkind Factory verification code')
+                ->text(
+                    "Your verification code is: {$code}\n\n" .
+                    "This code expires in 15 minutes.\n\n" .
+                    "If you didn't register for Wunderkind Factory, " .
+                    "you can safely ignore this email."
+                )
+        );
+    }
 
-        $this->mailer->send($email);
+    public function sendPasswordResetEmail(User $user): void
+    {
+        $this->softExpireActive($user, VerificationPurpose::PASSWORD_RESET);
+
+        $code         = $this->generateCode();
+        $verification = new EmailVerification($user, $code, VerificationPurpose::PASSWORD_RESET);
+        $this->em->persist($verification);
+        $this->em->flush();
+
+        $this->mailer->send(
+            $this->baseEmail($user)
+                ->subject('Reset your Wunderkind Factory password')
+                ->text(
+                    "Your password reset code is: {$code}\n\n" .
+                    "This code expires in 15 minutes.\n\n" .
+                    "If you didn't request a password reset, " .
+                    "you can safely ignore this email."
+                )
+        );
+    }
+
+    public function sendPasswordResetConfirmationEmail(User $user): void
+    {
+        $this->mailer->send(
+            $this->baseEmail($user)
+                ->subject('Your Wunderkind Factory password has been changed')
+                ->text(
+                    "Your password has been successfully updated.\n\n" .
+                    "If you didn't make this change, please contact support immediately."
+                )
+        );
     }
 
     /**
-     * Validate a submitted code against the user's active verification.
+     * Validate a submitted registration code.
      *
      * @return 'ok'|'invalid'|'expired'|'max_attempts'
      */
     public function verifyCode(User $user, string $code): string
     {
-        $verification = $this->verificationRepo->findActiveForUser($user);
+        return $this->verifyForPurpose($user, $code, VerificationPurpose::REGISTRATION, function (EmailVerification $v, User $u): void {
+            $u->setIsVerified(true);
+            $u->setVerifiedAt(new \DateTimeImmutable());
+        });
+    }
+
+    /**
+     * Validate a submitted password-reset code.
+     *
+     * @return 'ok'|'invalid'|'expired'|'max_attempts'
+     */
+    public function verifyPasswordResetCode(User $user, string $code): string
+    {
+        return $this->verifyForPurpose($user, $code, VerificationPurpose::PASSWORD_RESET);
+    }
+
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param callable(EmailVerification, User): void $onSuccess  Side-effects on success.
+     * @return 'ok'|'invalid'|'expired'|'max_attempts'
+     */
+    private function verifyForPurpose(User $user, string $code, VerificationPurpose $purpose, ?callable $onSuccess = null): string
+    {
+        $verification = $this->verificationRepo->findActiveForUser($user, $purpose);
 
         if ($verification === null) {
-            // Check for expired/locked record
-            $any = $this->em->createQueryBuilder()
-                ->select('ev')
-                ->from(EmailVerification::class, 'ev')
-                ->where('ev.user = :user')
-                ->andWhere('ev.verifiedAt IS NULL')
-                ->setParameter('user', $user)
-                ->orderBy('ev.createdAt', 'DESC')
-                ->setMaxResults(1)
-                ->getQuery()
-                ->getOneOrNullResult();
+            $any = $this->verificationRepo->findLatestUnverifiedForUser($user, $purpose);
 
             if ($any !== null && $any->isLockedOut()) {
                 return 'max_attempts';
@@ -98,13 +135,29 @@ class EmailVerificationService
             return 'invalid';
         }
 
-        // Success
         $verification->markVerified();
-        $user->setIsVerified(true);
-        $user->setVerifiedAt(new \DateTimeImmutable());
+        if ($onSuccess !== null) {
+            $onSuccess($verification, $user);
+        }
         $this->em->flush();
 
         return 'ok';
+    }
+
+    private function softExpireActive(User $user, VerificationPurpose $purpose): void
+    {
+        $existing = $this->verificationRepo->findActiveForUser($user, $purpose);
+        if ($existing !== null) {
+            $existing->setExpiresAt(new \DateTimeImmutable());
+            $this->em->persist($existing);
+        }
+    }
+
+    private function baseEmail(User $user): Email
+    {
+        return (new Email())
+            ->from(new Address($this->mailerFrom, $this->mailerFromName))
+            ->to($user->getEmail());
     }
 
     private function generateCode(): string

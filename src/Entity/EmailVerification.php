@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\VerificationPurpose;
 use App\Repository\EmailVerificationRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
@@ -26,6 +27,9 @@ class EmailVerification
     #[ORM\Column(type: 'datetimetz_immutable')]
     private \DateTimeImmutable $expiresAt;
 
+    #[ORM\Column(type: 'string', length: 20, enumType: VerificationPurpose::class, options: ['default' => 'registration'])]
+    private VerificationPurpose $purpose;
+
     /** Number of failed attempts. Lockout after 3. */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $attempts = 0;
@@ -36,11 +40,12 @@ class EmailVerification
     #[ORM\Column(type: 'datetimetz_immutable')]
     private \DateTimeImmutable $createdAt;
 
-    public function __construct(User $user, string $code)
+    public function __construct(User $user, string $code, VerificationPurpose $purpose = VerificationPurpose::REGISTRATION)
     {
         $this->id        = new UuidV7();
         $this->user      = $user;
         $this->code      = $code;
+        $this->purpose   = $purpose;
         $this->expiresAt = new \DateTimeImmutable('+15 minutes');
         $this->createdAt = new \DateTimeImmutable();
     }
@@ -48,6 +53,7 @@ class EmailVerification
     public function getId(): UuidV7 { return $this->id; }
     public function getUser(): User { return $this->user; }
     public function getCode(): string { return $this->code; }
+    public function getPurpose(): VerificationPurpose { return $this->purpose; }
     public function getExpiresAt(): \DateTimeImmutable { return $this->expiresAt; }
     public function setExpiresAt(\DateTimeImmutable $expiresAt): void { $this->expiresAt = $expiresAt; }
     public function getAttempts(): int { return $this->attempts; }
