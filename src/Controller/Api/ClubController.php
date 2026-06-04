@@ -70,7 +70,7 @@ class ClubController extends AbstractController
         ],
     ];
 
-    private const SUFFIXES = [
+    private const SUFFIXES_BY_COUNTRY = [
         'EN' => [
             'FC', 'United', 'City', 'Athletic', 'Rovers', 'Town', 'Rangers', 
             'Wednesday', 'Albion', 'Wanderers', 'Vale', 'Orient', 'County', 
@@ -107,7 +107,7 @@ class ClubController extends AbstractController
     {
         $country = strtoupper($request->query->get('country', 'EN'));
         $cities  = self::CITIES_BY_COUNTRY[$country] ?? self::CITIES_BY_COUNTRY['EN'];
-        $suffixes  = self::SUFFIXES[$country] ?? self::SUFFIXES['EN'];
+        $suffixes  = self::SUFFIXES_BY_COUNTRY[$country] ?? self::SUFFIXES_BY_COUNTRY['EN'];
 
         return $this->json([
             'country'  => $country,
