@@ -1,0 +1,123 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<style>
+    .delete-card { max-width: 520px; margin: 2rem auto; }
+    .delete-warning {
+        display: none;
+        border-left: 3px solid var(--bs-danger);
+        background: rgba(var(--bs-danger-rgb), .07);
+        padding: .6rem .85rem;
+        margin-top: .75rem;
+        font-size: .82rem;
+    }
+    .delete-warning.visible { display: block; }
+    .other-club-item {
+        font-size: .78rem;
+        padding: .1rem 0;
+        color: var(--bs-secondary-color);
+        font-family: 'Courier New', monospace;
+    }
+</style>
+
+<div class="delete-card">
+    <div class="card border-danger border-opacity-50">
+        <div class="card-header d-flex align-items-center gap-2 py-2 bg-danger bg-opacity-10 border-danger border-opacity-25">
+            <i class="fa fa-trash text-danger"></i>
+            <span class="fw-semibold">Delete Club</span>
+        </div>
+        <div class="card-body">
+
+            {# Club + user summary #}
+            <div class="mb-3">
+                <div class="d-flex align-items-baseline gap-2 mb-1">
+                    <span class="text-muted small">Club</span>
+                    <span class="fw-semibold">{{ club.name }}</span>
+                    {% if club.country %}<span class="badge bg-secondary fw-normal" style="font-size:.65rem;">{{ club.country }}</span>{% endif %}
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="text-muted small">Owner</span>
+                    <span class="font-monospace small">{{ user.email }}</span>
+                </div>
+            </div>
+
+            <hr class="my-2">
+
+            {# Scope selector #}
+            <form method="POST" action="{{ path('admin_club_delete', { id: club.id }) }}" id="deleteForm">
+                <input type="hidden" name="_token" value="{{ csrf_token('delete_club_' ~ club.id) }}">
+                <input type="hidden" name="deleteUser" id="deleteUserInput" value="0">
+
+                <p class="small text-muted mb-2">What should be deleted?</p>
+
+                {# Option A — club only #}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="deleteScope" id="scopeClub"
+                           value="club" checked>
+                    <label class="form-check-label" for="scopeClub">
+                        <strong>This club only</strong>
+                        <span class="d-block text-muted small">Players, staff, sync records and leaderboard entries are removed. The user account is kept.</span>
+                    </label>
+                </div>
+
+                {# Option B — club + user #}
+                <div class="form-check mb-1">
+                    <input class="form-check-input border-danger" type="radio" name="deleteScope" id="scopeUser"
+                           value="user">
+                    <label class="form-check-label" for="scopeUser">
+                        <strong class="text-danger">Club + user account</strong>
+                        <span class="d-block text-muted small">
+                            Deletes the user account <strong>{{ user.email }}</strong> and all clubs they own.
+                        </span>
+                    </label>
+                </div>
+
+                {# Multi-club warning — shown only when "user" is selected #}
+                {% if otherClubs|length > 0 %}
+                <div class="delete-warning" id="otherClubsWarning">
+                    <i class="fa fa-triangle-exclamation text-danger me-1"></i>
+                    <strong>{{ otherClubs|length }} other club{{ otherClubs|length != 1 ? 's' : '' }} will also be deleted:</strong>
+                    <div class="mt-1">
+                        {% for c in otherClubs %}
+                            <div class="other-club-item"><i class="fa fa-caret-right fa-xs me-1"></i>{{ c.name }}{% if c.country %} ({{ c.country }}){% endif %}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <hr class="my-3">
+
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{{ ea_url().setController('App\\Controller\\Admin\\ClubCrudController').setAction('index') }}"
+                       class="btn btn-sm btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-sm btn-danger" id="confirmBtn">
+                        <i class="fa fa-trash fa-xs me-1"></i>
+                        <span id="confirmBtnLabel">Delete Club</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var scopeClub    = document.getElementById('scopeClub');
+    var scopeUser    = document.getElementById('scopeUser');
+    var warning      = document.getElementById('otherClubsWarning');
+    var deleteInput  = document.getElementById('deleteUserInput');
+    var btnLabel     = document.getElementById('confirmBtnLabel');
+
+    function update() {
+        var isUser = scopeUser && scopeUser.checked;
+        deleteInput.value = isUser ? '1' : '0';
+        if (warning) warning.classList.toggle('visible', isUser);
+        btnLabel.textContent = isUser ? 'Delete Club & User' : 'Delete Club';
+    }
+
+    if (scopeClub) scopeClub.addEventListener('change', update);
+    if (scopeUser) scopeUser.addEventListener('change', update);
+    update();
+}());
+</script>
+{% endblock %}

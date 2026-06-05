@@ -3,13 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Club;
-use App\Entity\Investor;
 use App\Entity\LeaderboardEntry;
-use App\Entity\MatchResult;
-use App\Entity\RefreshToken;
-use App\Entity\SeasonRecord;
-use App\Entity\SeasonSnapshot;
-use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,55 +30,16 @@ class ClubCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
+        $deleteAction = Action::new('confirmDelete', 'Delete', 'fa fa-trash')
+            ->linkToUrl(fn(Club $entity) => $this->generateUrl('admin_club_delete_info', ['id' => $entity->getId()]))
+            ->setHtmlAttributes(['data-delete-trigger' => '1', 'data-delete-mode' => 'club'])
+            ->setCssClass('btn btn-sm btn-outline-danger');
+
         return $actions
-            ->disable(Action::NEW, Action::EDIT)
-            ->add(Crud::PAGE_INDEX, Action::DETAIL);
-    }
-
-    public function deleteEntity(EntityManagerInterface $em, $entityInstance): void
-    {
-        /** @var Club $club */
-        $club  = $entityInstance;
-        $user  = $club->getUser();
-        $email = $user->getUserIdentifier();
-
-        // Delete records with FK to Club that have no Doctrine cascade
-        foreach ([MatchResult::class, SeasonRecord::class, SeasonSnapshot::class, Transfer::class] as $entityClass) {
-            $em->createQueryBuilder()
-                ->delete($entityClass, 'e')
-                ->where('e.club = :club')
-                ->setParameter('club', $club)
-                ->getQuery()->execute();
-        }
-
-        // Null out club FK on Investors and Sponsors — these are market-pool rows, keep them
-        $em->createQueryBuilder()
-            ->update(Investor::class, 'i')
-            ->set('i.club', ':null')
-            ->where('i.club = :club')
-            ->setParameter('null', null)
-            ->setParameter('club', $club)
-            ->getQuery()->execute();
-
-        $em->createQueryBuilder()
-            ->update(Sponsor::class, 's')
-            ->set('s.club', ':null')
-            ->where('s.club = :club')
-            ->setParameter('null', null)
-            ->setParameter('club', $club)
-            ->getQuery()->execute();
-
-        // Remove orphaned refresh tokens (stored by username string, no FK)
-        $em->createQueryBuilder()
-            ->delete(RefreshToken::class, 'rt')
-            ->where('rt.username = :email')
-            ->setParameter('email', $email)
-            ->getQuery()->execute();
-
-        // Remove User → Doctrine cascades to Club → Club cascades to players, staff,
-        // sync records, leaderboard entries, inbox messages
-        $em->remove($user);
-        $em->flush();
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->add(Crud::PAGE_INDEX, $deleteAction)
+            ->add(Crud::PAGE_DETAIL, $deleteAction);
     }
 
     /**

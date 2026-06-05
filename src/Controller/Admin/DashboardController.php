@@ -1318,4 +1318,5 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content');
         yield MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content');
     }
+
 }

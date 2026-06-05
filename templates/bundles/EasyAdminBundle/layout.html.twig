@@ -76,4 +76,146 @@
     }
 }());
 </script>
+
+{# ── Global delete confirmation modal ──────────────────────────────────────── #}
+<div class="modal fade" id="adminDeleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:500px;">
+        <div class="modal-content">
+            <form method="POST" id="adminDeleteForm" action="">
+                <input type="hidden" name="_token" id="adminDeleteToken" value="">
+                <input type="hidden" name="deleteUser" id="adminDeleteUserInput" value="0">
+                <div class="modal-header py-2" style="background:rgba(var(--bs-danger-rgb),.08);border-bottom-color:rgba(var(--bs-danger-rgb),.25);">
+                    <h6 class="modal-title fw-semibold mb-0 text-danger" id="adminDeleteModalTitle">
+                        <i class="fa fa-trash me-1"></i> Delete
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="adminDeleteModalBody">
+                    <div class="text-center py-3 text-muted small">
+                        <i class="fa fa-spinner fa-spin me-1"></i> Loading…
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger" id="adminDeleteConfirmBtn" disabled>
+                        <i class="fa fa-trash fa-xs me-1"></i>
+                        <span id="adminDeleteConfirmLabel">Delete</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modal      = document.getElementById('adminDeleteModal');
+    var form       = document.getElementById('adminDeleteForm');
+    var body       = document.getElementById('adminDeleteModalBody');
+    var titleEl    = document.getElementById('adminDeleteModalTitle');
+    var tokenInput = document.getElementById('adminDeleteToken');
+    var userInput  = document.getElementById('adminDeleteUserInput');
+    var confirmBtn = document.getElementById('adminDeleteConfirmBtn');
+    var confirmLbl = document.getElementById('adminDeleteConfirmLabel');
+    var bsModal    = null;
+
+    if (!modal) return;
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-delete-trigger]');
+        if (!btn) return;
+        e.preventDefault();
+
+        var infoUrl   = btn.href;
+        var deleteUrl = infoUrl.replace('/delete-info', '/delete');
+
+        body.innerHTML = '<div class="text-center py-3 text-muted small"><i class="fa fa-spinner fa-spin me-1"></i> Loading…</div>';
+        confirmBtn.disabled = true;
+        form.action = deleteUrl;
+        userInput.value = '0';
+
+        if (!bsModal) bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+
+        fetch(infoUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { renderBody(d, btn.dataset.deleteMode || 'club'); })
+            .catch(function () {
+                body.innerHTML = '<div class="text-danger small p-2">Failed to load details. Please try again.</div>';
+            });
+    });
+
+    function renderBody(d, mode) {
+        if (mode === 'user') { renderUserBody(d); } else { renderClubBody(d); }
+        tokenInput.value = d.csrfToken;
+        confirmBtn.disabled = false;
+    }
+
+    function renderClubBody(d) {
+        titleEl.innerHTML = '<i class="fa fa-trash me-1"></i> Delete Club';
+
+        var otherHtml = '';
+        if (d.otherClubs && d.otherClubs.length > 0) {
+            otherHtml = '<div id="adminDelOtherClubs" style="display:none;margin-top:.6rem;border-left:3px solid var(--bs-danger);background:rgba(var(--bs-danger-rgb),.06);padding:.5rem .75rem;">'
+                + '<div style="font-size:.78rem;font-weight:600;color:var(--bs-danger);margin-bottom:.25rem;"><i class="fa fa-triangle-exclamation me-1"></i>'
+                + d.otherClubs.length + ' other club' + (d.otherClubs.length !== 1 ? 's' : '') + ' will also be deleted:</div>'
+                + d.otherClubs.map(function (n) { return '<div style="font-size:.73rem;font-family:monospace;color:var(--bs-secondary-color);"><i class="fa fa-caret-right fa-xs me-1"></i>' + esc(n) + '</div>'; }).join('')
+                + '</div>';
+        }
+
+        body.innerHTML = '<div class="mb-3" style="font-size:.85rem;">'
+            + '<div class="d-flex gap-2 mb-1"><span class="text-muted" style="min-width:3rem;">Club</span><strong>' + esc(d.clubName) + '</strong></div>'
+            + '<div class="d-flex gap-2"><span class="text-muted" style="min-width:3rem;">Owner</span><span class="font-monospace">' + esc(d.userEmail) + '</span></div>'
+            + '</div><hr class="my-2">'
+            + '<p class="small text-muted mb-2">What should be deleted?</p>'
+            + '<div class="form-check mb-2"><input class="form-check-input" type="radio" name="deleteScope" id="delScopeClub" value="club" checked>'
+            + '<label class="form-check-label" for="delScopeClub"><strong>This club only</strong>'
+            + '<span class="d-block text-muted" style="font-size:.78rem;">Players, staff and records removed. User account kept.</span></label></div>'
+            + '<div class="form-check mb-1"><input class="form-check-input" type="radio" name="deleteScope" id="delScopeUser" value="user">'
+            + '<label class="form-check-label" for="delScopeUser"><strong class="text-danger">Club + user account</strong>'
+            + '<span class="d-block text-muted" style="font-size:.78rem;">Deletes <strong>' + esc(d.userEmail) + '</strong> and all clubs they own.</span></label></div>'
+            + otherHtml;
+
+        updateClubScope();
+        var rc = document.getElementById('delScopeClub');
+        var ru = document.getElementById('delScopeUser');
+        if (rc) rc.addEventListener('change', updateClubScope);
+        if (ru) ru.addEventListener('change', updateClubScope);
+    }
+
+    function updateClubScope() {
+        var ru = document.getElementById('delScopeUser');
+        var sel = ru && ru.checked;
+        userInput.value = sel ? '1' : '0';
+        confirmLbl.textContent = sel ? 'Delete Club & User' : 'Delete Club';
+        var warn = document.getElementById('adminDelOtherClubs');
+        if (warn) warn.style.display = sel ? 'block' : 'none';
+    }
+
+    function renderUserBody(d) {
+        titleEl.innerHTML = '<i class="fa fa-user-slash me-1"></i> Delete User';
+        userInput.value = '1';
+        confirmLbl.textContent = 'Delete User & All Clubs';
+
+        var clubsHtml = '';
+        if (d.clubs && d.clubs.length > 0) {
+            clubsHtml = '<div class="mb-3"><div class="small text-muted mb-1">All clubs will be permanently deleted:</div>'
+                + d.clubs.map(function (n) {
+                    return '<div style="font-size:.73rem;font-family:monospace;padding:.15rem .4rem;background:var(--bs-secondary-bg);border:1px solid var(--bs-border-color);margin-bottom:.2rem;">'
+                        + '<i class="fa fa-caret-right fa-xs me-1 text-danger"></i>' + esc(n) + '</div>';
+                }).join('') + '</div>';
+        }
+
+        body.innerHTML = '<div class="mb-2" style="font-size:.85rem;">'
+            + '<div class="d-flex gap-2"><span class="text-muted" style="min-width:3rem;">User</span><span class="font-monospace">' + esc(d.userEmail) + '</span></div>'
+            + '</div>' + clubsHtml
+            + '<div class="alert alert-danger py-2 small mb-0">'
+            + '<i class="fa fa-triangle-exclamation me-1"></i>This action is <strong>permanent and cannot be undone</strong>.</div>';
+    }
+
+    function esc(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+}());
+</script>
 {% endblock %}
