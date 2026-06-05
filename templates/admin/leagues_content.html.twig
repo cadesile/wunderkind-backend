@@ -562,61 +562,214 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     target.addEventListener('hide.bs.collapse',  function () { chevron.style.transform = 'rotate(-90deg)'; });
 });
 
-// Populate quick-edit modal from button data attributes
+// Quick-edit modal: populate + AJAX save
 (function () {
     var modal = document.getElementById('leagueQuickEditModal');
     if (!modal) return;
 
-    // Correct filter chains for black SVG silhouettes:
-    // brightness(0) → black, invert(1) → white, sepia+saturate+hue-rotate → target colour
     var COLOUR_FILTERS = {
         silver:      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
         gold:        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
         gold_silver: 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)',
     };
 
+    var TIER_COLORS = {
+        1: '#ffd700', 2: '#e0b020', 3: '#c0a060',
+        4: '#6c757d', 5: '#6c757d', 6: '#495057',
+        7: '#343a40', 8: '#198754',
+    };
+
+    // ── trophy preview in modal ──────────────────────────────────────────
     function refreshTrophyPreview() {
-        var slug    = document.getElementById('qe-trophyImage').value;
-        var colour  = document.getElementById('qe-trophyColour').value;
-        var panel   = document.getElementById('qe-trophy-panel');
-        var img     = document.getElementById('qe-trophy-preview');
-        var label   = document.getElementById('qe-trophy-label');
+        var slug   = document.getElementById('qe-trophyImage').value;
+        var colour = document.getElementById('qe-trophyColour').value;
+        var panel  = document.getElementById('qe-trophy-panel');
+        var img    = document.getElementById('qe-trophy-preview');
+        var label  = document.getElementById('qe-trophy-label');
 
         if (slug) {
-            img.src          = '/images/trophies/' + slug + '.svg';
-            img.style.filter = COLOUR_FILTERS[colour] || 'brightness(0) invert(0.15)';
-            label.textContent = slug.replace('trophy-', 'Trophy ') +
-                (colour ? '\n' + colour.replace('_', ' & ') : '');
+            img.src           = '/images/trophies/' + slug + '.svg';
+            img.style.filter  = COLOUR_FILTERS[colour] || 'brightness(0) invert(0.15)';
+            label.textContent = slug.replace('trophy-', 'Trophy ') + (colour ? '\n' + colour.replace('_', ' & ') : '');
             panel.classList.remove('empty');
         } else {
-            img.src          = '/images/trophies/trophy-1.svg';
-            img.style.filter = 'none';
+            img.src           = '/images/trophies/trophy-1.svg';
+            img.style.filter  = 'none';
             label.textContent = 'No trophy';
             panel.classList.add('empty');
         }
     }
-
     document.getElementById('qe-trophyImage').addEventListener('change', refreshTrophyPreview);
     document.getElementById('qe-trophyColour').addEventListener('change', refreshTrophyPreview);
 
-    modal.addEventListener('show.bs.modal', function (event) {
-        var btn = event.relatedTarget;
-        var id  = btn.dataset.leagueId;
+    // ── toast helper ─────────────────────────────────────────────────────
+    function showToast(msg, type) {
+        type = type || 'success';
+        var ct = document.getElementById('qe-toast-ct');
+        if (!ct) {
+            ct = document.createElement('div');
+            ct.id = 'qe-toast-ct';
+            ct.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            ct.style.zIndex = '9999';
+            document.body.appendChild(ct);
+        }
+        var t = document.createElement('div');
+        t.className = 'toast align-items-center text-bg-' + type + ' border-0';
+        t.setAttribute('role', 'alert');
+        t.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div>'
+            + '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+        ct.appendChild(t);
+        new bootstrap.Toast(t, { delay: 3000 }).show();
+        t.addEventListener('hidden.bs.toast', function () { t.remove(); });
+    }
 
-        document.getElementById('leagueQuickEditForm').action =
-            '/admin/leagues/' + id + '/quick-edit';
-        document.getElementById('qe-token').value             = btn.dataset.csrfToken  || '';
-        document.getElementById('qe-name').value              = btn.dataset.name        || '';
-        document.getElementById('qe-tier').value              = btn.dataset.tier        || '';
-        document.getElementById('qe-promotionSpots').value    = btn.dataset.promotionSpots   || '';
-        document.getElementById('qe-tvDeal').value            = btn.dataset.tvDeal      || '';
-        document.getElementById('qe-prizeMoney').value        = btn.dataset.prizeMoney  || '';
-        document.getElementById('qe-leaguePositionPot').value = btn.dataset.leaguePositionPot || '';
-        document.getElementById('qe-trophyImage').value       = btn.dataset.trophyImage  || '';
-        document.getElementById('qe-trophyColour').value      = btn.dataset.trophyColour || '';
-        document.getElementById('qe-sponsorCount').value      = btn.dataset.sponsorCount || '';
-        document.getElementById('qe-full-edit-link').href     = btn.dataset.fullEditUrl || '#';
+    // ── update card in-place after save ───────────────────────────────────
+    function insertBeforeFirst(card, el, selectors) {
+        for (var i = 0; i < selectors.length; i++) {
+            var ref = card.querySelector(selectors[i]);
+            if (ref) { card.insertBefore(el, ref); return; }
+        }
+        card.appendChild(el);
+    }
+
+    function fmt(pence) {
+        return '£' + Math.round(pence / 100).toLocaleString('en-GB');
+    }
+
+    function updateCard(card, lg, btn) {
+        // Tier badge
+        var tc = TIER_COLORS[lg.tier] || '#6c757d';
+        var badge = card.querySelector('.tier-badge');
+        if (badge) {
+            badge.textContent         = 'T' + lg.tier;
+            badge.style.background    = tc + '22';
+            badge.style.color         = tc;
+            badge.style.borderColor   = tc + '55';
+        }
+
+        // League name
+        var nameEl = card.querySelector('.league-name');
+        if (nameEl) { nameEl.textContent = lg.name; nameEl.title = lg.name; }
+
+        var cardHeader = card.querySelector('.league-card-header');
+
+        // Trophy row
+        var trophyRow = card.querySelector('.league-trophy-row');
+        if (lg.trophyImage) {
+            var filt   = COLOUR_FILTERS[lg.trophyColour] || 'brightness(0) invert(0.15)';
+            var tLabel = lg.trophyImage.replace('trophy-', 'Trophy ');
+            var cLabel = lg.trophyColour ? lg.trophyColour.replace('_', ' & ') : '';
+            if (trophyRow) {
+                trophyRow.querySelector('img').src          = '/images/trophies/' + lg.trophyImage + '.svg';
+                trophyRow.querySelector('img').style.filter = filt;
+                trophyRow.querySelector('.league-trophy-name').textContent = tLabel;
+                var cEl = trophyRow.querySelector('.league-trophy-colour');
+                if (cEl) {
+                    cEl.textContent = cLabel;
+                } else if (cLabel) {
+                    var s = document.createElement('span');
+                    s.className = 'league-trophy-colour';
+                    s.textContent = cLabel;
+                    trophyRow.querySelector('.league-trophy-meta').appendChild(s);
+                }
+            } else {
+                trophyRow = document.createElement('div');
+                trophyRow.className = 'league-trophy-row';
+                trophyRow.innerHTML = '<img class="league-trophy-img" src="/images/trophies/' + lg.trophyImage + '.svg" alt="Trophy" style="filter:' + filt + ';">'
+                    + '<div class="league-trophy-meta"><span class="league-trophy-name">' + tLabel + '</span>'
+                    + (cLabel ? '<span class="league-trophy-colour">' + cLabel + '</span>' : '') + '</div>';
+                insertBeforeFirst(card, trophyRow, ['.league-stats', '.league-sponsors', '.league-clubs', '.league-clubs-empty']);
+            }
+        } else if (trophyRow) {
+            trophyRow.remove();
+        }
+
+        // Stats chips
+        var statsEl  = card.querySelector('.league-stats');
+        var hasStats = lg.prizeMoney || lg.tvDeal || lg.leaguePositionPot || lg.promotionSpots;
+        if (hasStats) {
+            var h = '';
+            if (lg.prizeMoney)        h += '<div class="league-stat-chip"><span class="chip-label">Prize</span><span class="chip-val">' + fmt(lg.prizeMoney) + '</span></div>';
+            if (lg.tvDeal)            h += '<div class="league-stat-chip"><span class="chip-label">TV</span><span class="chip-val">' + fmt(lg.tvDeal) + '</span></div>';
+            if (lg.leaguePositionPot) h += '<div class="league-stat-chip"><span class="chip-label">Pos Pot</span><span class="chip-val">' + fmt(lg.leaguePositionPot) + '</span></div>';
+            if (lg.promotionSpots)    h += '<div class="league-stat-chip"><span class="chip-label">Up</span><span class="chip-val" style="color:#198754;">+' + lg.promotionSpots + '</span></div>';
+            if (statsEl) {
+                statsEl.innerHTML = h;
+            } else {
+                statsEl = document.createElement('div');
+                statsEl.className = 'league-stats';
+                statsEl.innerHTML = h;
+                insertBeforeFirst(card, statsEl, ['.league-sponsors', '.league-clubs', '.league-clubs-empty']);
+            }
+        } else if (statsEl) {
+            statsEl.remove();
+        }
+
+        // Refresh button data attributes so the next modal open shows fresh values
+        btn.dataset.name              = lg.name;
+        btn.dataset.tier              = lg.tier;
+        btn.dataset.promotionSpots    = lg.promotionSpots != null ? lg.promotionSpots : '';
+        btn.dataset.tvDeal            = lg.tvDeal            ? Math.round(lg.tvDeal / 100)            : '';
+        btn.dataset.prizeMoney        = lg.prizeMoney        ? Math.round(lg.prizeMoney / 100)        : '';
+        btn.dataset.leaguePositionPot = lg.leaguePositionPot ? Math.round(lg.leaguePositionPot / 100) : '';
+        btn.dataset.trophyImage       = lg.trophyImage  || '';
+        btn.dataset.trophyColour      = lg.trophyColour || '';
+        btn.dataset.sponsorCount      = lg.sponsorCount != null ? lg.sponsorCount : '';
+    }
+
+    // ── modal populate ────────────────────────────────────────────────────
+    var form       = document.getElementById('leagueQuickEditForm');
+    var saveBtn    = form.querySelector('[type="submit"]');
+    var currentBtn = null;
+
+    modal.addEventListener('show.bs.modal', function (event) {
+        currentBtn = event.relatedTarget;
+        var id = currentBtn.dataset.leagueId;
+
+        form.action = '/admin/leagues/' + id + '/quick-edit';
+        document.getElementById('qe-token').value             = currentBtn.dataset.csrfToken       || '';
+        document.getElementById('qe-name').value              = currentBtn.dataset.name             || '';
+        document.getElementById('qe-tier').value              = currentBtn.dataset.tier             || '';
+        document.getElementById('qe-promotionSpots').value    = currentBtn.dataset.promotionSpots   || '';
+        document.getElementById('qe-tvDeal').value            = currentBtn.dataset.tvDeal           || '';
+        document.getElementById('qe-prizeMoney').value        = currentBtn.dataset.prizeMoney       || '';
+        document.getElementById('qe-leaguePositionPot').value = currentBtn.dataset.leaguePositionPot|| '';
+        document.getElementById('qe-trophyImage').value       = currentBtn.dataset.trophyImage      || '';
+        document.getElementById('qe-trophyColour').value      = currentBtn.dataset.trophyColour     || '';
+        document.getElementById('qe-sponsorCount').value      = currentBtn.dataset.sponsorCount     || '';
+        document.getElementById('qe-full-edit-link').href     = currentBtn.dataset.fullEditUrl      || '#';
         refreshTrophyPreview();
+    });
+
+    // ── AJAX submit ───────────────────────────────────────────────────────
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin fa-xs me-1"></i>Saving…';
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(form),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                updateCard(currentBtn.closest('.league-card'), data.league, currentBtn);
+                bootstrap.Modal.getInstance(modal).hide();
+                showToast('League "' + data.league.name + '" updated.');
+            } else {
+                showToast(data.error || 'Save failed — please try again.', 'danger');
+            }
+        })
+        .catch(function () {
+            showToast('Network error — please try again.', 'danger');
+        })
+        .finally(function () {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fa fa-floppy-disk fa-xs me-1"></i>Save';
+        });
     });
 }());
 </script>

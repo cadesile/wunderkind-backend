@@ -1,67 +1,47 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-05-28 22:10:20 | Duration: 48s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
+> Generated: 2026-06-05 19:38:00 | Duration: 38s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Factory is a youth football academy management simulation focused on player development, personality management, and strategic academy operations. Built on Symfony and PostgreSQL, the project utilizes API Platform to deliver a secure, mobile-first REST API driven by a discrete "Weekly Tick" processing engine for game state transitions. The architecture leverages JWT authentication and EasyAdmin for robust back-office management within a containerized development and deployment environment.
+Wunderkind Backend is the server-side API for a mobile-first youth football academy management game, handling authentication, global leaderboards, legacy sync from client-authoritative gameplay, and economic simulation systems. Built on Symfony 8.0 with PHP 8.4, PostgreSQL 16, and API Platform v4, it follows a hybrid architecture where all core gameplay runs on-device while the backend enforces anti-cheat validation, persists aggregate state, and serves market/narrative data. The admin panel (EasyAdmin v5) provides operational oversight of players, staff, scouts, investors, sponsors, and game event templates.
 
 ---
 
 ## Document Context
 
-### [CLAUDE.md](CLAUDE.md)
-> AI Summary: CLAUDE.md provides essential guidance for the Wunderkind backend, detailing the Lando-based development environment, common Symfony and database commands, git branching workflows, and the project's client-side-driven architectural model.
 
-### [docs/event-guide.md](docs/event-guide.md)
-> AI Summary: The `event-guide.md` documentation details the configuration of event impacts for the Wunderkind Factory simulation, using a JSON-based mutation format that specifies target attribute paths and their corresponding numerical deltas. Architecturally, it defines a system where mutations are applied to player health, availability, and a core Personality Matrix, with the latter being strictly clamped between 1 and 20 by the `squadStore`. The guide documents how these specific targets integrate with simulation logic, such as `injuredWeeks` excluding players from XP gains and traits like `professionalism` acting as primary multipliers for training efficiency. It provides a standardized framework for modeling complex player behaviors and physical states, ensuring that all event-driven changes maintain structural integrity within the "Fat Client" architecture.
+**./**
+- [CLAUDE.md](CLAUDE.md)
 
-### [docs/frontend-integration.md](docs/frontend-integration.md)
-> AI Summary: I will start by activating the `using-superpowers` skill to ensure I adhere to all project-specific workflows and standards.
+**docs/**
+- [docs/event-guide.md](docs/event-guide.md)
+- [docs/frontend-integration.md](docs/frontend-integration.md)
+- [docs/frontend-spec-player-physical-personality.md](docs/frontend-spec-player-physical-personality.md)
 
-This integration guide outlines the architectural requirements for a React Native frontend to interact with the Wunderkind backend, mandating environment-based URL configuration and the use of a typed API client. It defines a robust authentication strategy using JWT tokens stored in MMKV, featuring automated registration, login, and specific error-handling logic for 401 and 403 status codes to ensure session persistence. The document also specifies a server-side liquid balance model that processes economic events—such as salaries, sponsor payments, and facility upgrades—to maintain the academy's financial state, including support for negative balances and debt tracking. Finally, it provides clear directives for UI integration, such as surfacing debt warnings and ensuring all requests utilize JSON with appropriate authorization headers.
+**docs/superpowers/plans/**
+- [docs/superpowers/plans/2026-04-14-npc-club-generation.md](docs/superpowers/plans/2026-04-14-npc-club-generation.md)
+- [docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md](docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md)
+- [docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md](docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md)
+- [docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md](docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md)
 
-### [docs/frontend-spec-player-physical-personality.md](docs/frontend-spec-player-physical-personality.md)
-> AI Summary: The "Frontend Spec — Player Physical & Personality Matrix" defines the data structures and display guidelines for player physical attributes and personality traits to ensure consistent representation across the application. It documents a key architectural decision where all values are generated server-side and sent to the client, with physical growth and aging logic handled exclusively on-device rather than through API synchronization. The specification details a standardized 1-20 scale for an eight-trait personality matrix and provides precise metric-to-imperial conversion logic for height and weight. Ultimately, the document ensures that the client remains a display layer that preserves the integrity of the server's generation ranges and centralized attribute management.
+**docs/superpowers/specs/**
+- [docs/superpowers/specs/2026-04-14-npc-club-generation-design.md](docs/superpowers/specs/2026-04-14-npc-club-generation-design.md)
+- [docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md](docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md)
 
-### [docs/superpowers/plans/2026-04-14-npc-club-generation.md](docs/superpowers/plans/2026-04-14-npc-club-generation.md)
-> AI Summary: I will read the full implementation plan to provide a detailed summary of its purpose and architectural decisions.
+**docs/**
+- [docs/wunderkind-backend-context.md](docs/wunderkind-backend-context.md)
 
-The implementation plan for the "Club Sim" expansion outlines the backend infrastructure for NPC club persistence, senior player pool generation, and a new "consumption" API for entity management. A core architectural decision is maintaining the backend as a stateless "producer" rather than a "tracker," where NPC clubs are stored as pure metadata without foreign key relationships to specific players. The plan consolidates senior and youth players into a single unified pool and introduces a `POST /api/market/consume` endpoint to allow the frontend to hard-delete entities upon acquisition. Built with Symfony 8 and Doctrine, this strategy ensures a decoupled system where the backend handles procedural generation while the frontend manages the lifecycle and ownership of claimed entities.
+**migrations/archive/**
+- [migrations/archive/README.md](migrations/archive/README.md)
 
-### [docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md](docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md)
-> AI Summary: This documentation outlines an implementation plan to introduce a dynamic configuration matrix in the `StarterConfig` that manages player ability ranges based on country and league tier. Architecturally, the plan decides to store this configuration matrix within a JSON column in the backend's `StarterConfig` entity rather than using complex relational tables. It details managing these settings through dynamically generated EasyAdmin form inputs that populate based on the distinct countries and tiers present in the database. Finally, it specifies updating the frontend `StarterConfig` types to consume the new payload and integrating the ranges into the backend's player generation logic to accurately constrain player attributes during world initialization.
+**./**
+- [README.md](README.md)
 
-### [docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md](docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md)
-> AI Summary: This document outlines an implementation plan for redesigning a monolithic `/api/initialize` endpoint into four distinct endpoints, making the application's initialization process chunked, retryable, and safe from timeouts. Architecturally, it introduces a shared `CountryWorldPackCache` to store pre-generated NPC squads by tier, which can be proactively pre-warmed via a new CLI command. The redesigned API flow breaks initialization into progressive phases, utilizing a `/starter` endpoint for initial squad assignment, followed by `/leagues` and `/league/{tier}` endpoints to incrementally build and cache the remaining world state. To support this decoupled design, the plan details the creation of several new caching services and entities alongside required updates to the existing `Club` entity and `InitializeController`.
-
-### [docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md](docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md)
-> AI Summary: I will read the specified documentation file to ensure I have the full context before providing the summary.
-
-The **Worldpack Cache Admin Implementation Plan** outlines the creation of a centralized administration interface within EasyAdmin to manage pre-generated NPC league packs stored as `CountryWorldPackCache` entries. Architecturally, the plan introduces a new `WorldPackController` to handle routes for listing, deleting, and regenerating cache data, supported by an optimized query method added to the `CountryWorldPackCacheRepository`. The user interface is built using a custom Twig template that provides a visual status grid and detail table, allowing administrators to monitor cache coverage across different tiers and countries. Additionally, the implementation integrates existing CLI commands directly into the web UI, enabling on-demand cache regeneration for specific countries while maintaining security through CSRF protection.
-
-### [docs/superpowers/specs/2026-04-14-npc-club-generation-design.md](docs/superpowers/specs/2026-04-14-npc-club-generation-design.md)
-> AI Summary: I will read the file `docs/superpowers/specs/2026-04-14-npc-club-generation-design.md` to provide an accurate and detailed summary.
-The `2026-04-14-npc-club-generation-design.md` spec outlines the implementation of `NpcClub` entities as persistent backend metadata—storing identity, tier-based facilities, and reputation—while deliberately avoiding direct foreign key relationships to players or staff. Architecturally, the backend maintains its "producer" role where NPC clubs are the exception to the transient nature of generated entities, though their squads remain dynamically assembled by the frontend using a newly introduced pool of senior players. The technical plan introduces a `NpcClubGenerationService` for automated tier-weighted creation, an extended `MarketPoolService` for senior player replenishment, and a new idempotent `consume` endpoint for hard-deleting claimed assets from the pool. Finally, the design expands the facility system with a "Stadium" category and adds specialized Admin UI tools for bulk generation and senior player management.
-
-### [docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md](docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md)
-> AI Summary: I will read the documentation file `docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md` to provide a complete and accurate summary.
-The `2026-05-12-initialize-endpoint-redesign.md` specification documents the transition of the monolithic `POST /api/initialize` endpoint into a decomposed, sequential workflow to resolve server-side timeouts and brittle retry behavior. The redesign splits world initialization into four distinct steps—assigning starter packs, fetching league metadata, and generating NPC squads per tier—allowing each phase to be independently retried and tracked via new state markers like `starterInitializedAt`. 
-
-Architecturally, the plan introduces a `CountryWorldPackCache` to store NPC squad data at the country-tier level, ensuring expensive generation logic runs only once per country rather than per club. This change is supported by a service-layer refactoring that extracts specialized logic into a `StarterPackService` and `WorldPackCacheService`, complemented by a new `WarmWorldPackCommand` for pre-warming the cache to further optimize the client experience.
-
-### [docs/wunderkind-backend-context.md](docs/wunderkind-backend-context.md)
-> AI Summary: I will start by activating the `using-superpowers` skill to ensure I follow the established workflows for this session.
-
-The `wunderkind-backend-context.md` file serves as the primary technical overview for the Wunderkind Factory, a football academy simulation built on Symfony 8.0, PHP 8.4, and PostgreSQL 16. Architecturally, it documents a service-oriented, API-driven system powered by API Platform that utilizes a discrete "weekly tick" engine to manage complex game state transitions, player personality matrices, and physical health markers. A critical architectural decision highlighted is the decoupled synchronization between the backend and a fat client, where standardized JSON mutation schemas and deterministic `SyncRequest` operations ensure consistency across simulation states and temporal state decay logic. The document also integrates various sub-contexts, such as environmental standards from `CLAUDE.md` and granular event processing rules from the `event-guide.md`, to provide a unified reference for the project's simulation and synchronization architecture.
-
-### [migrations/archive/README.md](migrations/archive/README.md)
-> AI Summary: This file explains that 29 MySQL-specific migrations have been archived and replaced by a single baseline migration following the project's transition to PostgreSQL.
-
-### [README.md](README.md)
-> AI Summary: The Wunderkind Factory is a mobile-first youth football academy management game built with Symfony and API Platform that focuses on navigating the "human element" of player development through a charming, retro-inspired interface.
+**scripts/global-context-generator/**
+- [scripts/global-context-generator/README.md](scripts/global-context-generator/README.md)
 
 ---
 
@@ -69,11 +49,11 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 
 | Category | Count |
 |---|---|
-| PHP files         | 312 |
-| Entities/Models   | 30 |
-| Controllers       | 43 |
-| Services          | 17 |
-| Migrations        | 104 |
+| PHP files         | 336 |
+| Entities/Models   | 32 |
+| Controllers       | 45 |
+| Services          | 18 |
+| Migrations        | 118 |
 
 ---
 
@@ -101,11 +81,16 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 - `gesdinet/jwt-refresh-token-bundle`: ^2.0
 - `lexik/jwt-authentication-bundle`: ^3.2
 - `nelmio/cors-bundle`: ^2.6
+- `nyholm/psr7`: ^1.8
 - `symfony/console`: 8.0.*
 - `symfony/dotenv`: 8.0.*
 - `symfony/flex`: ^2
 - `symfony/framework-bundle`: 8.0.*
+- `symfony/google-mailer`: 8.0.*
+- `symfony/http-client`: 8.0.*
+- `symfony/mailer`: 8.0.*
 - `symfony/monolog-bundle`: ^4.0
+- `symfony/resend-mailer`: 8.0.*
 - `symfony/runtime`: 8.0.*
 - `symfony/security-bundle`: 8.0.*
 - `symfony/uid`: 8.0.*
@@ -139,8 +124,10 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── framework.yaml
 │   │   ├── gesdinet_jwt_refresh_token.yaml
 │   │   ├── lexik_jwt_authentication.yaml
+│   │   ├── mailer.yaml
 │   │   ├── monolog.yaml
 │   │   ├── nelmio_cors.yaml
+│   │   ├── nyholm_psr7.yaml
 │   │   ├── property_info.yaml
 │   │   ├── routing.yaml
 │   │   ├── security.yaml
@@ -281,13 +268,28 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   ├── Version20260525000003.php
 │   ├── Version20260526231012.php
 │   ├── Version20260527091321.php
-│   └── Version20260527190328.php
+│   ├── Version20260527190328.php
+│   ├── Version20260528000001.php
+│   ├── Version20260529000001.php
+│   ├── Version20260529000002.php
+│   ├── Version20260529000003.php
+│   ├── Version20260530000001.php
+│   ├── Version20260531000001.php
+│   ├── Version20260531000002.php
+│   ├── Version20260601000001.php
+│   ├── Version20260602000001.php
+│   ├── Version20260602000002.php
+│   ├── Version20260603000001.php
+│   ├── Version20260603000002.php
+│   ├── Version20260604000001.php
+│   └── Version20260604231350.php
 ├── public
 │   ├── bundles
 │   │   ├── apiplatform
 │   │   └── easyadmin
 │   ├── images
 │   │   ├── trophies
+│   │   ├── logo.png
 │   │   └── logo.webp
 │   ├── screenshots
 │   │   ├── buildmyclub
@@ -340,10 +342,21 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── squad.png
 │   │   └── welcome.png
 │   ├── admin-login.css
+│   ├── admin-theme.css
+│   ├── favicon.ico
 │   ├── index.html
-│   └── index.php
+│   ├── index.php
+│   ├── logo-16.png
+│   ├── logo-180.png
+│   ├── logo-192.png
+│   ├── logo-32.png
+│   ├── logo-48.png
+│   ├── logo-512.png
+│   └── logo.png
 ├── scripts
-│   ├── generate_project_context.sh
+│   ├── global-context-generator
+│   │   ├── generate_project_context.sh
+│   │   └── README.md
 │   └── reset_and_seed.sh
 ├── src
 │   ├── ApiResource
@@ -354,6 +367,8 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── GenerateMarketPoolCommand.php
 │   │   ├── SeedArchetypesCommand.php
 │   │   ├── SeedGameEventsCommand.php
+│   │   ├── SeedMoraleEventsCommand.php
+│   │   ├── SeedPlayerEventsCommand.php
 │   │   ├── SetExistingClubBalancesCommand.php
 │   │   ├── WarmPoolCommand.php
 │   │   └── WarmWorldPackCommand.php
@@ -382,6 +397,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── Agent.php
 │   │   ├── Club.php
 │   │   ├── CountryWorldPackCache.php
+│   │   ├── EmailVerification.php
 │   │   ├── FacilityTemplate.php
 │   │   ├── GameConfig.php
 │   │   ├── GameEventTemplate.php
@@ -399,6 +415,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── PoolConfig.php
 │   │   ├── RefreshToken.php
 │   │   ├── Scout.php
+│   │   ├── SeasonRatingsSnapshot.php
 │   │   ├── SeasonRecord.php
 │   │   ├── SeasonSnapshot.php
 │   │   ├── Sponsor.php
@@ -427,9 +444,8 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── StaffRole.php
 │   │   ├── Tier.php
 │   │   ├── TransferType.php
-│   │   └── TrophyColour.php
-│   ├── EventSubscriber
-│   │   └── DomainSeparationSubscriber.php
+│   │   ├── TrophyColour.php
+│   │   └── VerificationPurpose.php
 │   ├── Form
 │   │   └── Type
 │   ├── Repository
@@ -437,6 +453,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── AgentRepository.php
 │   │   ├── ClubRepository.php
 │   │   ├── CountryWorldPackCacheRepository.php
+│   │   ├── EmailVerificationRepository.php
 │   │   ├── FacilityTemplateRepository.php
 │   │   ├── GameConfigRepository.php
 │   │   ├── GameEventTemplateRepository.php
@@ -451,6 +468,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── PlayerRepository.php
 │   │   ├── PoolConfigRepository.php
 │   │   ├── ScoutRepository.php
+│   │   ├── SeasonRatingsSnapshotRepository.php
 │   │   ├── SeasonRecordRepository.php
 │   │   ├── SeasonSnapshotRepository.php
 │   │   ├── SponsorRepository.php
@@ -458,10 +476,13 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 │   │   ├── StarterConfigRepository.php
 │   │   ├── TacticalAdvantageRepository.php
 │   │   └── TransferRepository.php
+│   ├── Security
+│   │   └── VerificationAwareAuthenticationSuccessHandler.php
 │   ├── Service
 │   │   ├── ClubInitializationService.php
 │   │   ├── ConfigImportExportService.php
 │   │   ├── EconomicService.php
+│   │   ├── EmailVerificationService.php
 │   │   ├── FixtureGenerationService.php
 │   │   ├── InboxService.php
 │   │   ├── LeagueImportExportService.php
@@ -552,7 +573,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 ├── README.md
 └── symfony.lock
 
-52 directories, 377 files
+53 directories, 412 files
 ```
 
 ---
@@ -629,6 +650,25 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     public function getTier(): int { return $this->tier; }
     public function getPayload(): array { return $this->payload; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
+```
+
+#### EmailVerification
+```php
+    private UuidV7 $id;
+    private User $user;
+    private string $code;
+    private \DateTimeImmutable $expiresAt;
+    private VerificationPurpose $purpose;
+    private int $attempts = 0;
+    private ?\DateTimeImmutable $verifiedAt = null;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(User $user, string $code, VerificationPurpose $purpose = VerificationPurpose::REGISTRATION)
+    public function getId(): UuidV7 { return $this->id; }
+    public function getUser(): User { return $this->user; }
+    public function getCode(): string { return $this->code; }
+    public function getPurpose(): VerificationPurpose { return $this->purpose; }
+    public function getExpiresAt(): \DateTimeImmutable { return $this->expiresAt; }
+    public function setExpiresAt(\DateTimeImmutable $expiresAt): void { $this->expiresAt = $expiresAt; }
 ```
 
 #### FacilityTemplate
@@ -775,12 +815,12 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     private ?ReputationTier $leagueReputationTier = null;
     private ?int $prizeMoney = null;
     private ?int $leaguePositionPot = null;
+    private int $sponsorCount = 0;
     private ?string $trophyImage = null;
     private ?TrophyColour $trophyColour = null;
     private Collection $leagueSponsors;
     private Collection $sponsors;
     private \DateTimeImmutable $createdAt;
-    public function __construct(string $country, int $tier, string $name)
 ```
 
 #### LeagueSponsor
@@ -930,6 +970,25 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
     public function getNationality(): ?string { return $this->nationality; }
     public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
+```
+
+#### SeasonRatingsSnapshot
+```php
+    private UuidV7 $id;
+    private int $season;
+    private int $weekNum;
+    private int $tier;
+    private string $clubId;
+    private string $clubName;
+    private int $overallRating;
+    private int $expectedPosition;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(
+    public function getId(): UuidV7 { return $this->id; }
+    public function getSeason(): int { return $this->season; }
+    public function getWeekNum(): int { return $this->weekNum; }
+    public function getTier(): int { return $this->tier; }
+    public function getClubId(): string { return $this->clubId; }
 ```
 
 #### SeasonRecord
@@ -1086,16 +1145,1071 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     private string $email;
     private string $password;
     private array $roles = [];
-    private ?Club $club = null;
+    private Collection $clubs;
     private ?array $managerProfile = null;
+    private bool $isVerified = false;
+    private ?\DateTimeImmutable $verifiedAt = null;
     private \DateTimeImmutable $createdAt;
     public function __construct(string $email)
     public function getId(): UuidV7 { return $this->id; }
     public function getEmail(): string { return $this->email; }
     public function setEmail(string $email): void { $this->email = $email; }
     public function getUserIdentifier(): string { return $this->email; }
+```
+
+
+---
+
+## Database Schema (Doctrine / PostgreSQL)
+
+**Migrations (latest 10):**
+
+- `Version20260530000001`
+  → ALTER TABLE game_config ADD COLUMN beta_request_email VARCHAR(255) DEFAULT NULL
+  → ALTER TABLE game_config ADD COLUMN recaptcha_site_key VARCHAR(255) DEFAULT NULL
+  → ALTER TABLE game_config ADD COLUMN recaptcha_secret_key VARCHAR(255) DEFAULT NULL
+- `Version20260531000001`
+  → ALTER TABLE game_config DROP COLUMN npc_club_balance_ranges
+- `Version20260531000002`
+  → ALTER TABLE game_config DROP COLUMN npc_facility_level_ranges
+- `Version20260601000001`
+  → ALTER TABLE game_config DROP COLUMN league_win_points
+- `Version20260602000001`
+  → ALTER TABLE game_config DROP COLUMN pyramid_news_frequency_weeks
+  → ALTER TABLE game_config DROP COLUMN pyramid_news_config
+- `Version20260602000002`
+  → CREATE INDEX idx_srs_season_tier ON season_ratings_snapshot (season, tier)
+  → DROP TABLE season_ratings_snapshot
+- `Version20260603000001`
+  → ALTER TABLE "user" ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT FALSE
+  → ALTER TABLE "user" ADD COLUMN verified_at TIMESTAMPTZ DEFAULT NULL
+  → DROP TABLE email_verification
+- `Version20260603000002`
+  → ALTER TABLE league ADD COLUMN sponsor_count SMALLINT NOT NULL DEFAULT 0
+  → ALTER TABLE league DROP COLUMN sponsor_count
+- `Version20260604000001`
+  → DROP INDEX IF EXISTS uniq_b8ee3872a76ed395
+  → CREATE UNIQUE INDEX uniq_b8ee3872a76ed395 ON club (user_id)
+- `Version20260604231350`
+  → DROP INDEX idx_email_verification_user
+  → ALTER TABLE email_verification ADD purpose VARCHAR(20) DEFAULT \
+  → COMMENT ON COLUMN email_verification.expires_at IS \
+
+**Entity column/relation map:**
+
+#### `Admin`
+```php
+    private UuidV7 $id;
+    private string $email;
+    private string $password;
+    private ?string $name = null;
+    private ?string $department = null;
+    private int $accessLevel = 1;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(string $email)
+        $this->id        = new UuidV7();
+        $this->email     = $email;
+        $this->createdAt = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getEmail(): string { return $this->email; }
+    public function setEmail(string $email): void { $this->email = $email; }
+    public function getUserIdentifier(): string { return $this->email; }
     public function getPassword(): string { return $this->password; }
     public function setPassword(string $password): void { $this->password = $password; }
+    public function getName(): ?string { return $this->name; }
+    public function setName(?string $name): void { $this->name = $name; }
+    public function getDepartment(): ?string { return $this->department; }
+    public function setDepartment(?string $department): void { $this->department = $department; }
+    public function getAccessLevel(): int { return $this->accessLevel; }
+    public function setAccessLevel(int $accessLevel): void { $this->accessLevel = $accessLevel; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+```
+
+#### `Agent`
+```php
+    private UuidV7 $id;
+    private string $name;
+    private int $reputation = 50;
+    private string $commissionRate = '10.00';
+    private ?\DateTimeImmutable $dob = null;
+    private ?string $nationality = null;
+    private array $judgements = [];
+    private int $experience = 0;
+    private int $rating = 50;
+    private Collection $players;
+    public function __construct(string $name)
+        $this->id      = new UuidV7();
+        $this->name    = $name;
+        $this->players = new ArrayCollection();
+    public function __toString(): string { return $this->name; }
+    public function getId(): UuidV7 { return $this->id; }
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): void { $this->name = $name; }
+    public function getReputation(): int { return $this->reputation; }
+    public function setReputation(int $reputation): void { $this->reputation = $reputation; }
+    public function getCommissionRate(): string { return $this->commissionRate; }
+    public function setCommissionRate(string $rate): void { $this->commissionRate = $rate; }
+    public function getPlayers(): Collection { return $this->players; }
+    public function getDob(): ?\DateTimeImmutable { return $this->dob; }
+    public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
+```
+
+#### `Club`
+```php
+    private UuidV7 $id;
+    private string $name;
+    private int $reputation = 0;
+    private int $totalCareerEarnings = 0;
+    private int $hallOfFamePoints = 0;
+    private int $lastSyncedWeek = 0;
+    private ?\DateTimeImmutable $lastSyncedAt = null;
+    private int $marketPoolSize = 20;
+    private int $financialYearStart = 4;
+    private ?string $country = null;
+    private ?string $abbreviation = null;
+    private ?\DateTimeImmutable $worldInitializedAt = null;
+    private ?\DateTimeImmutable $starterInitializedAt = null;
+    private ?string $paName = null;
+    private int $managerTemperament = 50;
+    private int $managerDiscipline = 50;
+    private int $managerAmbition = 50;
+    private int $balance = 0;
+    private ?array $managerProfile = null;
+    private \DateTimeImmutable $createdAt;
+    private User $user;
+    private Collection $players;
+    private Collection $staff;
+    private Collection $transfers;
+    private Collection $syncRecords;
+```
+
+#### `CountryWorldPackCache`
+```php
+    private UuidV7 $id;
+    private string $country;
+    private int $tier;
+    private array $payload;
+    private \DateTimeImmutable $generatedAt;
+    public function __construct(string $country, int $tier, array $payload)
+        $this->id          = new UuidV7();
+        $this->country     = $country;
+        $this->tier        = $tier;
+        $this->payload     = $payload;
+        $this->generatedAt = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getCountry(): string { return $this->country; }
+    public function getTier(): int { return $this->tier; }
+    public function getPayload(): array { return $this->payload; }
+    public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
+```
+
+#### `EmailVerification`
+```php
+    private UuidV7 $id;
+    private User $user;
+    private string $code;
+    private \DateTimeImmutable $expiresAt;
+    private VerificationPurpose $purpose;
+    private int $attempts = 0;
+    private ?\DateTimeImmutable $verifiedAt = null;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(User $user, string $code, VerificationPurpose $purpose = VerificationPurpose::REGISTRATION)
+        $this->id        = new UuidV7();
+        $this->user      = $user;
+        $this->code      = $code;
+        $this->purpose   = $purpose;
+        $this->expiresAt = new \DateTimeImmutable('+15 minutes');
+        $this->createdAt = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getUser(): User { return $this->user; }
+    public function getCode(): string { return $this->code; }
+    public function getPurpose(): VerificationPurpose { return $this->purpose; }
+    public function getExpiresAt(): \DateTimeImmutable { return $this->expiresAt; }
+    public function setExpiresAt(\DateTimeImmutable $expiresAt): void { $this->expiresAt = $expiresAt; }
+    public function getAttempts(): int { return $this->attempts; }
+    public function getVerifiedAt(): ?\DateTimeImmutable { return $this->verifiedAt; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+        return $this->expiresAt < new \DateTimeImmutable();
+```
+
+#### `FacilityTemplate`
+```php
+    private Uuid $id;
+    private string $slug;
+    private string $label;
+    private string $description;
+    private string $category;
+    private int $baseCost;
+    private int $weeklyUpkeepBase = 0;
+    private ?int $matchdayIncome = null;
+    private ?float $matchdayIncomeMultiplier = null;
+    private float $reputationBonus = 0.0;
+    private int $maxLevel = 5;
+    private float $decayBase = 2.0;
+    private array $gameplayEffects = [];
+    private int $baseConstructionWeeks = 4;
+    private int $sortOrder = 0;
+    private bool $isActive = true;
+    private \DateTimeImmutable $updatedAt;
+        string $slug = '',
+        string $label = '',
+        string $description = '',
+        string $category = 'TRAINING',
+        int $baseCost = 0,
+        $this->id          = new UuidV7();
+        $this->slug        = $slug;
+        $this->label       = $label;
+```
+
+#### `GameConfig`
+```php
+    private ?int $id = null;
+    private int $cliqueRelationshipThreshold = 20;
+    private int $cliqueSquadCapPercent = 30;
+    private int $cliqueMinTenureWeeks = 3;
+    private int $baseXP = 10;
+    private float $baseInjuryProbability = 0.05;
+    private int $regressionUpperThreshold = 14;
+    private int $regressionLowerThreshold = 7;
+    private float $reputationDeltaBase = 0.15;
+    private float $reputationDeltaFacilityMultiplier = 0.15;
+    private int $injuryMinorWeight = 60;
+    private int $injuryModerateWeight = 30;
+    private int $injurySeriousWeight = 10;
+    private float $potentialOvershootMax = 0.05;
+    private float $potentialDecayRate = 0.5;
+    private float $coachDevelopmentMaxMultiplier = 2.0;
+    private int $coachDevelopmentMinSpecialism = 20;
+    private float $coachDevelopmentStackingFactor = 0.3;
+    private float $coachMoraleInfluence = 0.5;
+    private int $attributeHardCap = 98;
+    private int $physicalDegradationAgeThreshold = 30;
+    private float $physicalDegradationRateMild = 0.1;
+    private float $physicalDegradationRateModerate = 0.2;
+    private float $physicalDegradationRateSevere = 0.4;
+    private float $physicalDegradationPersonalityScale = 0.2;
+```
+
+#### `GameEventTemplate`
+```php
+    private UuidV7 $id;
+    private string $slug;
+    private EventCategory $category;
+    private int $weight = 1;
+    private string $title;
+    private string $bodyTemplate;
+    private array $impacts = [];
+    private ?array $firingConditions = null;
+    private ?string $severity = null;
+    private bool $noInteract = false;
+    private ?array $chainedEvents = null;
+    private \DateTimeImmutable $createdAt;
+        string $slug = '',
+        EventCategory $category = EventCategory::PLAYER,
+        string $title = '',
+        string $bodyTemplate = '',
+        array $impacts = [],
+        int $weight = 1,
+        $this->id           = new UuidV7();
+        $this->slug         = $slug;
+        $this->category     = $category;
+        $this->title        = $title;
+        $this->bodyTemplate = $bodyTemplate;
+        $this->impacts      = $impacts;
+        $this->weight       = $weight;
+```
+
+#### `Guardian`
+```php
+    private UuidV7 $id;
+    private string $firstName;
+    private string $lastName;
+    private string $gender = 'male';
+    private ?\DateTimeImmutable $dateOfBirth = null;
+    private ?string $contactEmail = null;
+    private int $demandLevel = 5;
+    private int $loyaltyToClub = 50;
+    private Player $player;
+    public function __construct(string $firstName, string $lastName, Player $player, string $gender = 'male')
+        $this->id        = new UuidV7();
+        $this->firstName = $firstName;
+        $this->lastName  = $lastName;
+        $this->player    = $player;
+        $this->gender    = $gender;
+    public function getId(): UuidV7 { return $this->id; }
+    public function getFirstName(): string { return $this->firstName; }
+    public function setFirstName(string $firstName): void { $this->firstName = $firstName; }
+    public function getLastName(): string { return $this->lastName; }
+    public function setLastName(string $lastName): void { $this->lastName = $lastName; }
+    public function getFullName(): string { return "{$this->firstName} {$this->lastName}"; }
+    public function __toString(): string { return $this->getFullName(); }
+    public function getGender(): string { return $this->gender; }
+    public function setGender(string $gender): void { $this->gender = $gender; }
+    public function getDateOfBirth(): ?\DateTimeImmutable { return $this->dateOfBirth; }
+```
+
+#### `InboxMessage`
+```php
+    private UuidV7 $id;
+    private Club $club;
+    private MessageSenderType $senderType;
+    private string $senderName;
+    private string $subject;
+    private string $body;
+    private ?array $offerData = null;
+    private MessageStatus $status = MessageStatus::UNREAD;
+    private ?string $relatedEntityType = null;
+    private ?string $relatedEntityId = null;
+    private \DateTimeImmutable $createdAt;
+    private ?\DateTimeImmutable $respondedAt = null;
+        Club $club,
+        MessageSenderType $senderType,
+        string $senderName,
+        string $subject,
+        string $body,
+        $this->id         = new UuidV7();
+        $this->club    = $club;
+        $this->senderType = $senderType;
+        $this->senderName = $senderName;
+        $this->subject    = $subject;
+        $this->body       = $body;
+        $this->createdAt  = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+```
+
+#### `Investor`
+```php
+    private UuidV7 $id;
+    private string $company;
+    private ?string $nationality = null;
+    private CompanySize $size = CompanySize::MEDIUM;
+    private bool $isActive = true;
+    private ?Club $club = null;
+    private \DateTimeImmutable $createdAt;
+    private InvestorTier $tier = InvestorTier::ANGEL;
+    private int $investmentAmount = 0;
+    private string $percentageOwned = '5.00';
+    private ?\DateTimeImmutable $assignedAt = null;
+    private ?\DateTimeImmutable $investedAt = null;
+    private ?\DateTimeImmutable $lastPayoutAt = null;
+    public function __construct(string $company = '')
+        $this->id        = new UuidV7();
+        $this->company   = $company;
+        $this->createdAt = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getCompany(): string { return $this->company; }
+    public function setCompany(string $company): void { $this->company = $company; }
+    public function getNationality(): ?string { return $this->nationality; }
+    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
+    public function getSize(): CompanySize { return $this->size; }
+    public function setSize(CompanySize $size): void { $this->size = $size; }
+    public function isActive(): bool { return $this->isActive; }
+```
+
+#### `LeaderboardEntry`
+```php
+    private UuidV7 $id;
+    private Club $club;
+    private LeaderboardCategory $category;
+    private int $score = 0;
+    private string $period;
+    private ?int $rank = null;
+    private \DateTimeImmutable $updatedAt;
+    public function __construct(Club $club, LeaderboardCategory $category, string $period)
+        $this->id        = new UuidV7();
+        $this->club   = $club;
+        $this->category  = $category;
+        $this->period    = $period;
+        $this->updatedAt = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getClub(): Club { return $this->club; }
+    public function getCategory(): LeaderboardCategory { return $this->category; }
+    public function getCategoryValue(): string { return $this->category->value; }
+    public function getPeriod(): string { return $this->period; }
+    public function getScore(): int { return $this->score; }
+    public function setScore(int $score): void
+        $this->score     = $score;
+        $this->updatedAt = new \DateTimeImmutable();
+    public function getRank(): ?int { return $this->rank; }
+    public function setRank(?int $rank): void { $this->rank = $rank; }
+    public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
+```
+
+#### `League`
+```php
+    private UuidV7 $id;
+    private string $country;
+    private int $tier;
+    private string $name;
+    private ?int $promotionSpots = null;
+    private ?int $tvDeal = null;
+    private ?ReputationTier $leagueReputationTier = null;
+    private ?int $prizeMoney = null;
+    private ?int $leaguePositionPot = null;
+    private int $sponsorCount = 0;
+    private ?string $trophyImage = null;
+    private ?TrophyColour $trophyColour = null;
+    private Collection $leagueSponsors;
+    private Collection $sponsors;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(string $country, int $tier, string $name)
+        $this->id             = new UuidV7();
+        $this->country        = $country;
+        $this->tier           = $tier;
+        $this->name           = $name;
+        $this->leagueSponsors = new ArrayCollection();
+        $this->sponsors       = new ArrayCollection();
+        $this->createdAt      = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getCountry(): string { return $this->country; }
+```
+
+#### `LeagueSponsor`
+```php
+    private League $league;
+    private Sponsor $sponsor;
+    private int $rolledValue = 0;
+    public function __construct(League $league, Sponsor $sponsor, int $rolledValue = 0)
+        $this->league      = $league;
+        $this->sponsor     = $sponsor;
+        $this->rolledValue = $rolledValue;
+    public function getLeague(): League { return $this->league; }
+    public function getSponsor(): Sponsor { return $this->sponsor; }
+    public function getRolledValue(): int { return $this->rolledValue; }
+    public function setRolledValue(int $v): static { $this->rolledValue = $v; return $this; }
+```
+
+#### `MatchResult`
+```php
+    private UuidV7 $id;
+    private Club $club;
+    private int $goalsFor;
+    private int $goalsAgainst;
+    private int $week;
+    private int $season;
+    private ?string $fixtureId = null;
+    private ?string $opponentClubName = null;
+    private ?bool $isHome = null;
+    private ?int $homeGoals = null;
+    private ?int $awayGoals = null;
+    private ?int $round = null;
+    private ?\DateTimeImmutable $playedAt = null;
+    private int $yellowCards = 0;
+    private int $redCards = 0;
+    private \DateTimeImmutable $createdAt;
+        Club $club,
+        int $goalsFor,
+        int $goalsAgainst,
+        int $week,
+        int $season,
+        $this->id           = new UuidV7();
+        $this->club         = $club;
+        $this->goalsFor     = $goalsFor;
+        $this->goalsAgainst = $goalsAgainst;
+```
+
+#### `NpcClub`
+```php
+    private UuidV7 $id;
+    private string $name;
+    private string $country;
+    private int $tier;
+    private int $reputation;
+    private string $primaryColor;
+    private string $secondaryColor;
+    private ?string $abbreviation = null;
+    private ?string $stadiumName = null;
+    private int $balance;
+    private string $playingStyle = 'DIRECT';
+    private string $financialApproach = 'BALANCED';
+    private int $managerTemperament = 50;
+    private array $facilities;
+    private \DateTimeImmutable $createdAt;
+    private ?League $league = null;
+    private Formation $formation = Formation::F_442;
+        string $name,
+        string $country,
+        int $tier,
+        int $reputation,
+        string $primaryColor,
+        string $secondaryColor,
+        int $balance,
+        array $facilities,
+```
+
+#### `PersonalityProfile`
+```php
+    private int $determination = 10;
+    private int $professionalism = 10;
+    private int $ambition = 10;
+    private int $loyalty = 10;
+    private int $adaptability = 10;
+    private int $pressure = 10;
+    private int $temperament = 10;
+    private int $consistency = 10;
+    public function getDetermination(): int { return $this->determination; }
+    public function setDetermination(int $v): void { $this->determination = $this->clamp($v); }
+    public function getProfessionalism(): int { return $this->professionalism; }
+    public function setProfessionalism(int $v): void { $this->professionalism = $this->clamp($v); }
+    public function getAmbition(): int { return $this->ambition; }
+    public function setAmbition(int $v): void { $this->ambition = $this->clamp($v); }
+    public function getLoyalty(): int { return $this->loyalty; }
+    public function setLoyalty(int $v): void { $this->loyalty = $this->clamp($v); }
+    public function getAdaptability(): int { return $this->adaptability; }
+    public function setAdaptability(int $v): void { $this->adaptability = $this->clamp($v); }
+    public function getPressure(): int { return $this->pressure; }
+    public function setPressure(int $v): void { $this->pressure = $this->clamp($v); }
+    public function getTemperament(): int { return $this->temperament; }
+    public function setTemperament(int $v): void { $this->temperament = $this->clamp($v); }
+    public function getConsistency(): int { return $this->consistency; }
+    public function setConsistency(int $v): void { $this->consistency = $this->clamp($v); }
+    private function clamp(int $v): int
+```
+
+#### `Player`
+```php
+    private UuidV7 $id;
+    private string $firstName;
+    private string $lastName;
+    private \DateTimeImmutable $dateOfBirth;
+    private string $nationality;
+    private PlayerPosition $position;
+    private PlayerStatus $status = PlayerStatus::ACTIVE;
+    private RecruitmentSource $recruitmentSource;
+    private int $potential;
+    private int $currentAbility;
+    private int $contractValue = 0;
+    private PersonalityProfile $personality;
+    private ?Club $club = null;
+    private Collection $guardians;
+    private ?Agent $agent = null;
+    private Collection $siblings;
+    private int $pace = 0;
+    private int $technical = 0;
+    private int $vision = 0;
+    private int $power = 0;
+    private int $stamina = 0;
+    private int $heart = 0;
+    private int $height = 0;
+    private int $weight = 0;
+    private int $morale = 50;
+```
+
+#### `PlayerArchetype`
+```php
+    private ?int $id = null;
+    private string $name;
+    private string $description;
+    private array $traitMapping = [];
+    private \DateTimeImmutable $createdAt;
+    private \DateTimeImmutable $updatedAt;
+        string $name = '',
+        string $description = '',
+        array $traitMapping = [],
+        $this->name         = $name;
+        $this->description  = $description;
+        $this->traitMapping = $traitMapping;
+        $this->createdAt    = new \DateTimeImmutable();
+        $this->updatedAt    = new \DateTimeImmutable();
+    public function getId(): ?int { return $this->id; }
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): void { $this->name = $name; }
+    public function getDescription(): string { return $this->description; }
+    public function setDescription(string $description): void { $this->description = $description; }
+    public function getTraitMapping(): array { return $this->traitMapping; }
+    public function setTraitMapping(array $traitMapping): void { $this->traitMapping = $traitMapping; }
+        return json_encode($this->traitMapping, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    public function setTraitMappingJson(string $json): void
+        $decoded = json_decode($json, true);
+        $this->traitMapping = is_array($decoded) ? $decoded : [];
+```
+
+#### `PoolConfig`
+```php
+    private ?int $id = null;
+    private int $playerAgeMin = 12;
+    private int $playerAgeMax = 13;
+    private int $playerPotentialMin = 40;
+    private int $playerPotentialMax = 80;
+    private int $playerPotentialMean = 60;
+    private int $playerAbilityMin = 3;
+    private int $playerAbilityMax = 10;
+    private int $playerAttributeBudgetMin = 6;
+    private int $playerAttributeBudgetMax = 20;
+    private int $playerAgentChancePercent = 40;
+    private int $playerHeightMin = 145;
+    private int $playerHeightMax = 160;
+    private int $playerWeightMin = 38;
+    private int $playerWeightMax = 55;
+    private int $personalityTraitMin = 30;
+    private int $personalityTraitMax = 70;
+    private int $positionWeightGk = 8;
+    private int $positionWeightDef = 30;
+    private int $positionWeightMid = 38;
+    private int $positionWeightAtt = 24;
+    private int $coachAgeMin = 28;
+    private int $coachAgeMax = 60;
+    private int $coachAbilityMin = 40;
+    private int $coachAbilityMax = 75;
+```
+
+#### `RefreshToken`
+```php
+```
+
+#### `Scout`
+```php
+    private UuidV7 $id;
+    private string $name;
+    private ?\DateTimeImmutable $dob = null;
+    private ?string $nationality = null;
+    private array $judgements = [];
+    private int $experience = 0;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(string $name = '')
+        $this->id        = new UuidV7();
+        $this->name      = $name;
+        $this->createdAt = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): void { $this->name = $name; }
+    public function getDob(): ?\DateTimeImmutable { return $this->dob; }
+    public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
+    public function getNationality(): ?string { return $this->nationality; }
+    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
+    public function getJudgements(): array { return $this->judgements; }
+    public function setJudgements(array $judgements): void { $this->judgements = $judgements; }
+        return json_encode($this->judgements, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    public function setJudgementsJson(?string $json): void
+        $decoded = json_decode(trim($json ?? ''), true);
+        $this->judgements = is_array($decoded) ? $decoded : [];
+    public function getExperience(): int { return $this->experience; }
+```
+
+#### `SeasonRatingsSnapshot`
+```php
+    private UuidV7 $id;
+    private int $season;
+    private int $weekNum;
+    private int $tier;
+    private string $clubId;
+    private string $clubName;
+    private int $overallRating;
+    private int $expectedPosition;
+    private \DateTimeImmutable $createdAt;
+        int $season,
+        int $weekNum,
+        int $tier,
+        string $clubId,
+        string $clubName,
+        int $overallRating,
+        int $expectedPosition,
+        $this->id               = new UuidV7();
+        $this->season           = $season;
+        $this->weekNum          = $weekNum;
+        $this->tier             = $tier;
+        $this->clubId           = $clubId;
+        $this->clubName         = $clubName;
+        $this->overallRating    = $overallRating;
+        $this->expectedPosition = $expectedPosition;
+        $this->createdAt        = new \DateTimeImmutable();
+```
+
+#### `SeasonRecord`
+```php
+    private UuidV7 $id;
+    private Club $club;
+    private League $league;
+    private int $season;
+    private int $finalPosition;
+    private int $gamesPlayed;
+    private int $wins;
+    private int $draws;
+    private int $losses;
+    private int $goalsFor;
+    private int $goalsAgainst;
+    private int $points;
+    private bool $promoted;
+    private bool $relegated;
+    private \DateTimeImmutable $createdAt;
+        Club $club,
+        League $league,
+        int $season,
+        int $finalPosition,
+        int $gamesPlayed,
+        int $wins,
+        int $draws,
+        int $losses,
+        int $goalsFor,
+        int $goalsAgainst,
+```
+
+#### `SeasonSnapshot`
+```php
+    private UuidV7 $id;
+    private Club $club;
+    private int $season;
+    private string $country;
+    private array $snapshotData;
+    private \DateTimeImmutable $createdAt;
+        Club $club,
+        int $season,
+        string $country,
+        array $snapshotData,
+        $this->id           = new UuidV7();
+        $this->club      = $club;
+        $this->season       = $season;
+        $this->country      = $country;
+        $this->snapshotData = $snapshotData;
+        $this->createdAt    = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getClub(): Club { return $this->club; }
+    public function getSeason(): int { return $this->season; }
+    public function getCountry(): string { return $this->country; }
+    public function getSnapshotData(): array { return $this->snapshotData; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+```
+
+#### `Sponsor`
+```php
+    private UuidV7 $id;
+    private string $company;
+    private ?string $nationality = null;
+    private CompanySize $size = CompanySize::MEDIUM;
+    private bool $isActive = true;
+    private ?Club $club = null;
+    private \DateTimeImmutable $createdAt;
+    private int $monthlyPayment = 0;
+    private ?\DateTimeImmutable $contractStartDate = null;
+    private ?\DateTimeImmutable $contractEndDate = null;
+    private int $reputationMinThreshold = 0;
+    private ?int $reputationBonusThreshold = null;
+    private string $bonusMultiplier = '1.00';
+    private SponsorStatus $status = SponsorStatus::ACTIVE;
+    private ?int $earlyTerminationFee = null;
+    private ?\DateTimeImmutable $assignedAt = null;
+    private ?\DateTimeImmutable $lastPaymentAt = null;
+    public function __construct(string $company = '')
+        $this->id        = new UuidV7();
+        $this->company   = $company;
+        $this->createdAt = new \DateTimeImmutable();
+    public function __toString(): string { return $this->company; }
+    public function getId(): UuidV7 { return $this->id; }
+    public function getCompany(): string { return $this->company; }
+    public function setCompany(string $company): void { $this->company = $company; }
+```
+
+#### `Staff`
+```php
+    private UuidV7 $id;
+    private string $firstName;
+    private string $lastName;
+    private StaffRole $role;
+    private int $coachingAbility = 50;
+    private int $scoutingRange = 50;
+    private int $weeklySalary = 0;
+    private int $morale = 50;
+    private ?string $nationality = null;
+    private ?string $specialty = null;
+    private ?array $specialisms = null;
+    private ?Club $club = null;
+    private ?\DateTimeImmutable $dob = null;
+    private \DateTimeImmutable $hiredAt;
+        string $firstName = '',
+        string $lastName = '',
+        StaffRole $role = StaffRole::COACH,
+        ?Club $club = null,
+        $this->id        = new UuidV7();
+        $this->firstName = $firstName;
+        $this->lastName  = $lastName;
+        $this->role      = $role;
+        $this->club   = $club;
+        $this->hiredAt   = new \DateTimeImmutable();
+    public function getId(): UuidV7 { return $this->id; }
+```
+
+#### `StarterConfig`
+```php
+    private int $id = 1;
+    private int $startingBalance = 5_000_000;
+    private int $starterPlayerCount = 5;
+    private int $starterCoachCount = 1;
+    private int $starterScoutCount = 1;
+    private int $starterManagerCount = 1;
+    private int $starterDirectorOfFootballCount = 0;
+    private int $starterFacilityManagerCount = 0;
+    private int $starterChairmanCount = 1;
+    private string $starterSponsorTier = 'SMALL';
+    private string $starterClubTier = 'local';
+    private array $defaultFacilities = [];
+    private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
+    private array $enabledCountries = ['EN'];
+    private array $leagueAbilityRanges = [
+    private array $npcSquadConfig = [
+    private array $fanBaseRanges = [
+    private float $fanBasePromotionIncrease = 0.20;
+    private float $fanBaseRelegationDecrease = 0.10;
+    public function getId(): int { return $this->id; }
+    public function getStartingBalance(): int { return $this->startingBalance; }
+    public function setStartingBalance(int $v): static { $this->startingBalance = $v; return $this; }
+    public function getStartingBalancePounds(): int { return (int) round($this->startingBalance / 100); }
+    public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
+    public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
+```
+
+#### `SyncRecord`
+```php
+    private UuidV7 $id;
+    private Club $club;
+    private int $clientWeekNumber;
+    private \DateTimeImmutable $clientTimestamp;
+    private \DateTimeImmutable $serverTimestamp;
+    private array $payload = [];
+    private ?array $debugLog = null;
+    private bool $isValid = true;
+    private ?string $invalidReason = null;
+        Club $club,
+        int $clientWeekNumber,
+        \DateTimeImmutable $clientTimestamp,
+        array $payload,
+        $this->id               = new UuidV7();
+        $this->club          = $club;
+        $this->clientWeekNumber = $clientWeekNumber;
+        $this->clientTimestamp  = $clientTimestamp;
+        $this->serverTimestamp  = new \DateTimeImmutable();
+        $this->payload          = $payload;
+    public function getId(): UuidV7 { return $this->id; }
+    public function getClub(): Club { return $this->club; }
+    public function getClientWeekNumber(): int { return $this->clientWeekNumber; }
+    public function getClientTimestamp(): \DateTimeImmutable { return $this->clientTimestamp; }
+    public function getServerTimestamp(): \DateTimeImmutable { return $this->serverTimestamp; }
+    public function getPayload(): array { return $this->payload; }
+```
+
+#### `TacticalAdvantage`
+```php
+    private UuidV7 $id;
+    private PlayingStyle $style;
+    private PlayingStyle $opponentStyle;
+    private float $multiplier;
+        PlayingStyle $style = PlayingStyle::POSSESSION,
+        PlayingStyle $opponentStyle = PlayingStyle::DIRECT,
+        float $multiplier = 1.0
+        $this->id            = new UuidV7();
+        $this->style         = $style;
+        $this->opponentStyle = $opponentStyle;
+        $this->multiplier    = $multiplier;
+    public function getId(): UuidV7 { return $this->id; }
+    public function getStyle(): PlayingStyle { return $this->style; }
+    public function setStyle(PlayingStyle $style): void { $this->style = $style; }
+    public function getOpponentStyle(): PlayingStyle { return $this->opponentStyle; }
+    public function setOpponentStyle(PlayingStyle $opponentStyle): void { $this->opponentStyle = $opponentStyle; }
+    public function getMultiplier(): float { return $this->multiplier; }
+    public function setMultiplier(float $multiplier): void { $this->multiplier = $multiplier; }
+```
+
+#### `Transfer`
+```php
+    private UuidV7 $id;
+    private ?Player $player = null;
+    private ?Club $club = null;
+    private ?string $playerName = null;
+    private ?string $playerPosition = null;
+    private ?string $clubLeaving = null;
+    private string $destinationClubName;
+    private TransferType $type;
+    private int $fee = 0;
+    private int $agentCommission = 0;
+    private int $netProceeds = 0;
+    private int $developmentPoints = 0;
+    private int $reputationGained = 0;
+    private ?string $buyingClub = null;
+    private \DateTimeImmutable $occurredAt;
+    private ?\DateTimeImmutable $syncedAt = null;
+        ?Player $player,
+        ?Club $club,
+        string $destinationClubName,
+        TransferType $type,
+        \DateTimeImmutable $occurredAt,
+        $this->id                  = new UuidV7();
+        $this->player              = $player;
+        $this->club                = $club;
+        $this->destinationClubName = $destinationClubName;
+```
+
+#### `User`
+```php
+    private UuidV7 $id;
+    private string $email;
+    private string $password;
+    private array $roles = [];
+    private Collection $clubs;
+    private ?array $managerProfile = null;
+    private bool $isVerified = false;
+    private ?\DateTimeImmutable $verifiedAt = null;
+    private \DateTimeImmutable $createdAt;
+    public function __construct(string $email)
+        $this->id        = new UuidV7();
+        $this->email     = $email;
+        $this->createdAt = new \DateTimeImmutable();
+        $this->clubs     = new ArrayCollection();
+    public function getId(): UuidV7 { return $this->id; }
+    public function getEmail(): string { return $this->email; }
+    public function setEmail(string $email): void { $this->email = $email; }
+    public function getUserIdentifier(): string { return $this->email; }
+    public function getPassword(): string { return $this->password; }
+    public function setPassword(string $password): void { $this->password = $password; }
+    public function getRoles(): array { return array_unique($this->roles); }
+    public function setRoles(array $roles): void { $this->roles = $roles; }
+    public function getClubs(): Collection { return $this->clubs; }
+    public function getManagerProfile(): ?array { return $this->managerProfile; }
+    public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
+```
+
+
+---
+
+## Doctrine Entity Definitions
+
+#### `Admin`
+```php
+```
+
+#### `Agent`
+```php
+```
+
+#### `Club`
+```php
+```
+
+#### `CountryWorldPackCache`
+```php
+```
+
+#### `EmailVerification`
+```php
+```
+
+#### `FacilityTemplate`
+```php
+     * @var array<string, float>
+```
+
+#### `GameConfig`
+```php
+     * @var float[]
+     * @var array<string, string[]>
+     * @var array<array{min:int,max:int}>
+     * @var array<int, array<string, array{min: int, max: int}>>
+     * @var array<array{country: string, leagues: array<array{tier: int, min: int, max: int}>}>
+     * @var array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}>
+```
+
+#### `GameEventTemplate`
+```php
+     * @var array<int, array<string, mixed>>
+     * @var array<int, array<string, mixed>>|null
+```
+
+#### `Guardian`
+```php
+```
+
+#### `InboxMessage`
+```php
+```
+
+#### `Investor`
+```php
+```
+
+#### `LeaderboardEntry`
+```php
+```
+
+#### `League`
+```php
+```
+
+#### `LeagueSponsor`
+```php
+```
+
+#### `MatchResult`
+```php
+```
+
+#### `NpcClub`
+```php
+```
+
+#### `PersonalityProfile`
+```php
+```
+
+#### `Player`
+```php
+```
+
+#### `PlayerArchetype`
+```php
+     * @var array<string, mixed>
+```
+
+#### `PoolConfig`
+```php
+```
+
+#### `RefreshToken`
+```php
+```
+
+#### `Scout`
+```php
+```
+
+#### `SeasonRatingsSnapshot`
+```php
+```
+
+#### `SeasonRecord`
+```php
+```
+
+#### `SeasonSnapshot`
+```php
+```
+
+#### `Sponsor`
+```php
+```
+
+#### `Staff`
+```php
+```
+
+#### `StarterConfig`
+```php
+     * @var array<string, array{min: int, max: int}>
+```
+
+#### `SyncRecord`
+```php
+     * @var array<string, mixed>
+     * @var array<string, mixed>|null
+```
+
+#### `TacticalAdvantage`
+```php
+```
+
+#### `Transfer`
+```php
+```
+
+#### `User`
+```php
 ```
 
 
@@ -1188,6 +2302,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 ```php
     public function __construct(private EntityManagerInterface $em) {}
     public function configureActions(Actions $actions): Actions
+    public function deleteEntity(EntityManagerInterface $em, $entityInstance): void
     public function detail(AdminContext $context): Response
     public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
@@ -1388,9 +2503,20 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     public function __invoke(): JsonResponse
 ```
 
+#### BetaRequestController
+```php
+#[Route('/api')]
+    public function __construct(
+    #[Route('/beta-request', name: 'api_beta_request', methods: ['POST'])]
+    public function submit(Request $request): JsonResponse
+```
+
 #### ClubController
 ```php
 #[Route('/api/club')]
+    public function __construct(private readonly ClubRepository $clubRepository) {}
+    #[Route('/name-options', name: 'api_clubs_name_options', methods: ['GET'])]
+    public function nameOptions(Request $request): JsonResponse
     #[Route('/initialize', name: 'api_club_initialize', methods: ['POST'])]
     public function initialize(
     #[Route('/check', name: 'api_club_check', methods: ['GET'])]
@@ -1477,6 +2603,13 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     public function ensure(
 ```
 
+#### ScoutSearchController
+```php
+#[Route('/api/scout')]
+    #[Route('/search', name: 'api_scout_search', methods: ['GET'])]
+    public function search(Request $request, PlayerRepository $playerRepo): JsonResponse
+```
+
 #### SquadController
 ```php
 #[Route('/api/squad')]
@@ -1490,6 +2623,7 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 #### StaffController
 ```php
 #[Route('/api/staff')]
+    public function __construct(private readonly ClubRepository $clubRepository) {}
     #[Route('', name: 'api_staff_index', methods: ['GET'])]
     public function index(Request $request): JsonResponse
 ```
@@ -1544,6 +2678,16 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     public function login(): JsonResponse
     #[Route('/register', name: 'api_register', methods: ['POST'])]
     public function register(
+    #[Route('/verify-email', name: 'api_verify_email', methods: ['POST'])]
+    public function verifyEmail(
+    #[Route('/resend-verification', name: 'api_resend_verification', methods: ['POST'])]
+    public function resendVerification(
+    #[Route('/forgot-password', name: 'api_forgot_password', methods: ['POST'])]
+    public function forgotPassword(
+    #[Route('/reset-password', name: 'api_reset_password', methods: ['POST'])]
+    public function resetPassword(
+    #[Route('/resend-password-reset', name: 'api_resend_password_reset', methods: ['POST'])]
+    public function resendPasswordReset(
     #[Route('/sync', name: 'api_sync', methods: ['POST'])]
     public function sync(
 ```
@@ -1576,6 +2720,16 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
     public function processFinancialYearEnd(Club $club): array
     public function checkSponsorContracts(Club $club, int $currentReputation): void
     public function checkAgeOutPlayers(Club $club, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
+```
+
+#### EmailVerificationService
+```php
+    public function __construct(
+    public function sendVerificationEmail(User $user): void
+    public function sendPasswordResetEmail(User $user): void
+    public function sendPasswordResetConfirmationEmail(User $user): void
+    public function verifyCode(User $user, string $code): string
+    public function verifyPasswordResetCode(User $user, string $code): string
 ```
 
 #### FixtureGenerationService
@@ -1705,17 +2859,17 @@ The `wunderkind-backend-context.md` file serves as the primary technical overvie
 
 | Migration | Date |
 |---|---|
-| `Version20260516000001` | 20260516 |
-| `Version20260524000001` | 20260524 |
-| `Version20260524000002` | 20260524 |
-| `Version20260524000003` | 20260524 |
-| `Version20260525000001` | 20260525 |
-| `Version20260525000002` | 20260525 |
-| `Version20260525000003` | 20260525 |
-| `Version20260526231012` | 20260526 |
-| `Version20260527091321` | 20260527 |
-| `Version20260527190328` | 20260527 |
-_Showing latest 10 of 104 total._
+| `Version20260530000001` | 20260530 |
+| `Version20260531000001` | 20260531 |
+| `Version20260531000002` | 20260531 |
+| `Version20260601000001` | 20260601 |
+| `Version20260602000001` | 20260602 |
+| `Version20260602000002` | 20260602 |
+| `Version20260603000001` | 20260603 |
+| `Version20260603000002` | 20260603 |
+| `Version20260604000001` | 20260604 |
+| `Version20260604231350` | 20260604 |
+_Showing latest 10 of 118 total._
 
 ---
 
@@ -1731,6 +2885,9 @@ CORS_ALLOW_ORIGIN=***
 JWT_SECRET_KEY=***
 JWT_PUBLIC_KEY=***
 CLUB_STARTING_BALANCE=***
+MAILER_DSN=***
+MAILER_FROM=***
+MAILER_FROM_NAME=***
 ```
 
 ---
@@ -1749,42 +2906,43 @@ lando php bin/console cache:clear
 ## Recent Git Activity
 
 ```
-185938d prepopulate trophies
-40d3b84 prepopulate trophies
-f3eee7d tweak
-b0336cf added configurable trophy icons
-8861696 updated balance field size
-2bb8e4d clean up
-e9ca2a3 player + staff cron warmer
-ea61f71 up'd cron memory, and stopped data cache wipe out before gen
-8485cd7 chunked CLI cache rebuild
-f2834d2 fixed log reload error
-584f486 cache batch process
-ae22538 improved facilities management
-d462e92 improved facilities management
-b335438 improved facilities management
-04906ca cache worldpack
+f0e158e password recovery git
+73f140b club to user relationship
+9e135fe club to user relationship
+dca31dd force deploy
+4e30572 force deploy
+539fd00 force deploy
+5a14668 force deploy
+789610c force deploy
+9f32a11 force deploy
+520b252 chore: replace wunderkindfactory.com with buildmyclub.co.uk throughout
+828b77e added resend
+0552836 added resend
+8e76857 added variables to deploy
+3f70635 added email config
+918e878 chore: add global-context-generator as git submodule
 ```
 
 ---
 
 ## Architecture Notes
 
-- Repository Pattern (indicated by `src/Repository` and Doctrine integration)
-- Service Layer (indicated by the extensive list of domain services in `src/Service`)
-- Data Transfer Object (DTO) Pattern (indicated by `src/Dto`)
-- Event-Driven Architecture (indicated by `src/EventSubscriber`)
-- API Resource Pattern (indicated by `src/ApiResource`, typical of API Platform implementations)
+- **Repository Pattern** — every entity has a dedicated `*Repository` class encapsulating all query logic, keeping persistence concerns out of controllers and services
+- **Service Layer** — fat services (`SyncService`, `EconomicService`, `LeagueService`, `WorldInitializationService`) own business logic; controllers are thin HTTP adapters that delegate immediately
+- **DTO / Request Mapping** — `src/Dto/` holds validated input objects (e.g. `SyncRequest`) deserialized via Symfony's `#[MapRequestPayload]`, separating wire format from domain entities
+- **Command Pattern (CLI operations)** — `src/Command/` externalises admin/ops tasks (seeding, cleanup, import/export) as Symfony console commands rather than embedding them in request-path code
+- **Import/Export Service Decomposition** — dedicated `*ImportExportService` classes (`ConfigImportExportService`, `LeagueImportExportService`, `NarrativeImportExportService`) and a `WorldPackCacheService`/`StarterPackService` pair suggest a snapshot/portability subsystem isolated from the core sync and market services
 
 ---
 
 ## Current Development Focus
 
-* Expanding the trophy configuration and gamification logic, including the automation of SVG icon assignments and data prepopulation for new leagues.
-* Optimizing background tasks and cache warming strategies to handle memory constraints and improve the efficiency of large-scale data rebuilds.
-* Refining the EasyAdmin/CRUD interface for League management, including custom administrative controllers and resolving UI-specific errors like log reloads.
-* Managing complex database migrations and schema updates, particularly regarding financial field precision and the integration of new entity attributes.
+- **Password recovery & email verification flow** — `EmailVerification`, `VerificationPurpose` enum, and `EmailVerificationRepository` are all new; the token lifecycle (expiry, single-use enforcement, resend throttling) is error-prone and security-sensitive, making it a strong candidate for review and hardening.
+- **Club↔User data model restructuring** — three commits and changes across `Club`, `User`, `ClubRepository`, `ClubInitializationService`, and three API controllers suggest an in-progress relationship refactor; AI can help audit cascades, orphan handling, and API contract consistency across all affected endpoints.
+- **League management system** — `League` entity plus both a CRUD and a custom admin controller are active simultaneously; AI can help define clear boundaries between the two, prevent duplicate logic, and design the league-membership data model cleanly before it grows further.
+- **Domain separation & multi-tenancy routing** — `DomainSeparationSubscriber` alongside the domain rename suggests routing or firewall logic is being split by hostname; AI can help stress-test edge cases (redirects, CORS, JWT audience, cookie scope) before they cause auth regressions in production.
+- **Deployment stability** — six consecutive `force deploy` commits in a row points to a broken or fragile CI/CD pipeline; AI can help audit `docker-compose.prod.yml`, migration execution order, and the deploy script to eliminate the root cause rather than forcing pushes.
 
 ---
 
-> _AI summaries generated using **gemini**._
+> _AI summaries generated using **claude**._

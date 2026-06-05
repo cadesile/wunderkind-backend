@@ -20,6 +20,9 @@ class LeagueAdminController extends AbstractController
     public function quickEdit(Request $request, League $league): Response
     {
         if (!$this->isCsrfTokenValid('league_qe_' . $league->getId(), $request->request->get('_token'))) {
+            if ($request->isXmlHttpRequest()) {
+                return $this->json(['success' => false, 'error' => 'Invalid CSRF token.'], 403);
+            }
             $this->addFlash('danger', 'Invalid CSRF token.');
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_leagues_overview']));
         }
@@ -73,6 +76,24 @@ class LeagueAdminController extends AbstractController
         }
 
         $this->em->flush();
+
+        if ($request->isXmlHttpRequest()) {
+            return $this->json([
+                'success'          => true,
+                'league'           => [
+                    'id'               => (string) $league->getId(),
+                    'name'             => $league->getName(),
+                    'tier'             => $league->getTier(),
+                    'promotionSpots'   => $league->getPromotionSpots(),
+                    'tvDeal'           => $league->getTvDeal(),
+                    'prizeMoney'       => $league->getPrizeMoney(),
+                    'leaguePositionPot'=> $league->getLeaguePositionPot(),
+                    'trophyImage'      => $league->getTrophyImage(),
+                    'trophyColour'     => $league->getTrophyColour()?->value,
+                    'sponsorCount'     => $league->getSponsorCount(),
+                ],
+            ]);
+        }
 
         $this->addFlash('success', sprintf('League "%s" updated.', $league->getName()));
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_leagues_overview']));
