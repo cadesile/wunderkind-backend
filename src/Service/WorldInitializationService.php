@@ -187,11 +187,12 @@ class WorldInitializationService
             ? ['min' => (int) $configured['min'], 'max' => (int) $configured['max']]
             : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
 
-        $npcClubs     = $this->npcClubRepository->findByLeague($league);
-        $clubsData    = [];
-        $allClubIds   = [];
-        $npcPlayerIds = [];
-        $npcStaffIds  = [];
+        $npcClubs        = $this->npcClubRepository->findByLeague($league);
+        $clubsData       = [];
+        $allClubIds      = [];
+        $npcPlayerIds    = [];
+        $npcStaffIds     = [];
+        $assignedPlayerIds = []; // cross-club exclusion list — prevents the same pool player appearing in multiple rosters
 
         if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
             $allClubIds[] = (string) $club->getId();
@@ -210,23 +211,23 @@ class WorldInitializationService
                 $domesticCount = $posTotal - $foreignCount;
 
                 $domestic = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                    $abilityRange['min'], $abilityRange['max'], $position, $nationality, $domesticCount
+                    $abilityRange['min'], $abilityRange['max'], $position, $nationality, $domesticCount, $assignedPlayerIds
                 );
                 if (count($domestic) < $domesticCount) {
                     $deficit  = $domesticCount - count($domestic);
                     $extra    = $this->playerRepository->findForeignForWorldInitByPosition(
-                        $abilityRange['min'], $abilityRange['max'], '__none__', $position, $deficit
+                        $abilityRange['min'], $abilityRange['max'], '__none__', $position, $deficit, $assignedPlayerIds
                     );
                     $domestic = array_merge($domestic, $extra);
                 }
 
                 $foreign = $this->playerRepository->findForeignForWorldInitByPosition(
-                    $abilityRange['min'], $abilityRange['max'], $nationality, $position, $foreignCount
+                    $abilityRange['min'], $abilityRange['max'], $nationality, $position, $foreignCount, $assignedPlayerIds
                 );
                 if (count($foreign) < $foreignCount) {
                     $deficit = $foreignCount - count($foreign);
                     $extra   = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                        $abilityRange['min'], $abilityRange['max'], $position, $nationality, $deficit
+                        $abilityRange['min'], $abilityRange['max'], $position, $nationality, $deficit, $assignedPlayerIds
                     );
                     $foreign = array_merge($foreign, $extra);
                 }
@@ -234,16 +235,19 @@ class WorldInitializationService
                 $players = array_merge($players, $domestic, $foreign);
             }
 
-            // Doctrine identity map ensures same-player objects are identical references;
-            // array_unique with SORT_REGULAR safely deduplicates by object reference.
+            // Deduplicate within this club's own draw (domestic/foreign overlap edge case).
             $players  = array_values(array_unique($players, SORT_REGULAR));
             $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,  (int) $tierConf['managerCount']);
             $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,    (int) $tierConf['coachCount']);
             $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN, (int) $tierConf['chairmanCount']);
             $staff    = array_merge($managers, $coaches, $chairmen);
 
-            foreach ($players as $p) { $npcPlayerIds[] = (string) $p->getId(); }
-            foreach ($staff   as $s) { $npcStaffIds[]  = (string) $s->getId(); }
+            foreach ($players as $p) {
+                $id = (string) $p->getId();
+                $npcPlayerIds[]      = $id;
+                $assignedPlayerIds[] = $id; // exclude from all subsequent club draws
+            }
+            foreach ($staff as $s) { $npcStaffIds[] = (string) $s->getId(); }
 
             $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff);
         }
