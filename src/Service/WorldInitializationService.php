@@ -374,13 +374,18 @@ class WorldInitializationService
         // getPosition() returns PlayerPosition backed enum — use ->value
         $p = $player->getPersonality();
         return [
-            'id'            => (string) $player->getId(),
-            'firstName'     => $player->getFirstName(),
-            'lastName'      => $player->getLastName(),
-            'position'      => $player->getPosition()->value,
-            'nationality'   => $player->getNationality(),
-            'dateOfBirth'   => $player->getDateOfBirth()->format('Y-m-d'),
-            'contractValue' => $player->getContractValue(),
+            'id'                => (string) $player->getId(),
+            'firstName'         => $player->getFirstName(),
+            'lastName'          => $player->getLastName(),
+            'position'          => $player->getPosition()->value,
+            'nationality'       => $player->getNationality(),
+            'dateOfBirth'       => $player->getDateOfBirth()->format('Y-m-d'),
+            'contractValue'     => $player->getContractValue(),
+            'potential'         => $player->getPotential(),
+            'currentAbility'    => $player->getCurrentAbility(),
+            'morale'            => $player->getMorale(),
+            'recruitmentSource' => $player->getRecruitmentSource()->value,
+            'isActive'          => $player->getStatus()->value === 'active',
             'physical'    => [
                 'height' => $player->getHeight(),
                 'weight' => $player->getWeight(),
