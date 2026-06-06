@@ -6,6 +6,7 @@ use App\Dto\ClubInitRequest;
 use App\Entity\Investor;
 use App\Entity\User;
 use App\Repository\ClubRepository;
+use App\Repository\NpcClubRepository;
 use App\Service\ClubInitializationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -101,6 +102,20 @@ class ClubController extends AbstractController
             'Clube do Remo', 'Náutico', 'Juventude', 'Operário'
         ],
     ];
+
+    #[Route('/foreign', name: 'api_clubs_foreign', methods: ['GET'])]
+    public function foreignClubs(Request $request, NpcClubRepository $npcClubRepo): JsonResponse
+    {
+        $country      = strtoupper($request->query->get('country', 'EN'));
+        $limitPerTier = max(1, min(10, (int) $request->query->get('limit_per_tier', 3)));
+
+        $clubs = $npcClubRepo->findForeignClubs($country, $limitPerTier);
+
+        return $this->json([
+            'country' => $country,
+            'clubs'   => $clubs,
+        ]);
+    }
 
     #[Route('/name-options', name: 'api_clubs_name_options', methods: ['GET'])]
     public function nameOptions(Request $request): JsonResponse

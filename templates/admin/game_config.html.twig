@@ -465,6 +465,27 @@
                                    min="1" max="20" class="form-control">
                             <div class="form-text">Max players a scout can be assigned to simultaneously. Default: 5</div>
                         </div>
+                        <div class="col-md-3">
+                            <label for="scoutReportValidWeeks" class="form-label fw-semibold small">Scout Report Valid Weeks</label>
+                            <input type="number" id="scoutReportValidWeeks" name="scoutReportValidWeeks"
+                                   value="{{ config.scoutReportValidWeeks }}"
+                                   min="1" max="104" class="form-control">
+                            <div class="form-text">Weeks before scout report attributes begin to decay. Default: 26</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="scoutReportDecayRatePerWeek" class="form-label fw-semibold small">Attribute Decay Rate (per week)</label>
+                            <input type="number" id="scoutReportDecayRatePerWeek" name="scoutReportDecayRatePerWeek"
+                                   value="{{ config.scoutReportDecayRatePerWeek }}"
+                                   min="1" max="20" class="form-control">
+                            <div class="form-text">Noise added to each attribute per week of decay (0-100 scale). Default: 2</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="npcScoutRejectionCooldownWeeks" class="form-label fw-semibold small">Scout Rejection Cooldown (weeks)</label>
+                            <input type="number" id="npcScoutRejectionCooldownWeeks" name="npcScoutRejectionCooldownWeeks"
+                                   value="{{ config.npcScoutRejectionCooldownWeeks }}"
+                                   min="1" max="104" class="form-control">
+                            <div class="form-text">Weeks before a rejected scouting approach can be retried. Default: 52</div>
+                        </div>
                     </div>
 
                     <div class="mt-3">

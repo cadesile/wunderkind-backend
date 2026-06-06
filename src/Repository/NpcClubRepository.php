@@ -59,6 +59,40 @@ class NpcClubRepository extends ServiceEntityRepository
     }
 
     /**
+     * Returns NPC clubs whose country does NOT match the given country,
+     * up to $limitPerTier clubs per tier, in random order.
+     *
+     * @param string $excludeCountry Country code to exclude (e.g. 'EN')
+     * @param int    $limitPerTier   Max clubs to return per tier
+     * @return array<int, array{id: string, name: string, country: string, tier: int}>
+     */
+    public function findForeignClubs(string $excludeCountry, int $limitPerTier = 3): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            'SELECT id, name, country, tier FROM npc_club WHERE country != :country ORDER BY tier ASC, RANDOM()',
+            ['country' => $excludeCountry],
+        )->fetchAllAssociative();
+
+        // Group by tier and cap each tier at $limitPerTier entries.
+        $byTier = [];
+        foreach ($rows as $row) {
+            $tier = (int) $row['tier'];
+            if (!isset($byTier[$tier]) || count($byTier[$tier]) < $limitPerTier) {
+                $byTier[$tier][] = [
+                    'id'      => $row['id'],
+                    'name'    => $row['name'],
+                    'country' => $row['country'],
+                    'tier'    => $tier,
+                ];
+            }
+        }
+
+        // Flatten back to a single array sorted by tier.
+        ksort($byTier);
+        return array_merge(...array_values($byTier)) ?: [];
+    }
+
+    /**
      * Returns all clubs that have a league assigned, grouped by league UUID string.
      *
      * @return array<string, NpcClub[]>

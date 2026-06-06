@@ -276,6 +276,28 @@ class GameConfig
     private int $scoutMaxAssignments = 5;
 
     /**
+     * Number of weeks a full NPC scout report remains fully accurate
+     * before attribute decay begins. Default: 26 (half a season).
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $scoutReportValidWeeks = 26;
+
+    /**
+     * Amount of noise (0-100 scale) added to each attribute display
+     * per week of decay after scoutReportValidWeeks has passed.
+     * Default: 2 (each attribute drifts ±2 per week of decay).
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $scoutReportDecayRatePerWeek = 2;
+
+    /**
+     * Weeks before a rejected NPC player scouting approach
+     * can be retried. Default: 52 (one full season).
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $npcScoutRejectionCooldownWeeks = 52;
+
+    /**
      * Ascending probability breakpoints [p0, p1, p2, p3] for the weekly mission gem roll.
      * roll < p0 → 0 players; roll < p1 → 1; roll < p2 → 2; roll < p3 → 3; else → 4
      * Default: [0.25, 0.75, 0.85, 0.94]
@@ -496,6 +518,15 @@ class GameConfig
 
     public function getScoutMaxAssignments(): int { return $this->scoutMaxAssignments; }
     public function setScoutMaxAssignments(int $v): static { $this->scoutMaxAssignments = $v; return $this; }
+
+    public function getScoutReportValidWeeks(): int { return $this->scoutReportValidWeeks; }
+    public function setScoutReportValidWeeks(int $v): void { $this->scoutReportValidWeeks = $v; }
+
+    public function getScoutReportDecayRatePerWeek(): int { return $this->scoutReportDecayRatePerWeek; }
+    public function setScoutReportDecayRatePerWeek(int $v): void { $this->scoutReportDecayRatePerWeek = $v; }
+
+    public function getNpcScoutRejectionCooldownWeeks(): int { return $this->npcScoutRejectionCooldownWeeks; }
+    public function setNpcScoutRejectionCooldownWeeks(int $v): void { $this->npcScoutRejectionCooldownWeeks = $v; }
 
     /** @return float[] */
     public function getMissionGemRollThresholds(): array { return $this->missionGemRollThresholds; }

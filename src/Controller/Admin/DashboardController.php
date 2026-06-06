@@ -205,6 +205,15 @@ class DashboardController extends AbstractDashboardController
         $config->setScoutRevealWeeks((int) $request->request->get('scoutRevealWeeks', 2));
         $config->setScoutAbilityErrorRange((int) $request->request->get('scoutAbilityErrorRange', 30));
         $config->setScoutMaxAssignments((int) $request->request->get('scoutMaxAssignments', 5));
+        $config->setScoutReportValidWeeks(
+            (int) $request->request->get('scoutReportValidWeeks', 26)
+        );
+        $config->setScoutReportDecayRatePerWeek(
+            (int) $request->request->get('scoutReportDecayRatePerWeek', 2)
+        );
+        $config->setNpcScoutRejectionCooldownWeeks(
+            (int) $request->request->get('npcScoutRejectionCooldownWeeks', 52)
+        );
         $config->setMissionGemRollThresholds([
             (float) $request->request->get('gemThreshold0', 0.25),
             (float) $request->request->get('gemThreshold1', 0.75),
