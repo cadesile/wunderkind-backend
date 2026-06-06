@@ -23,6 +23,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
+use App\Repository\SyncRecordRepository;
 use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -40,6 +41,7 @@ class SyncService
         private readonly NpcClubRepository              $npcClubRepository,
         private readonly LeagueRepository               $leagueRepository,
         private readonly TacticalAdvantageRepository    $tacticalAdvantageRepository,
+        private readonly SyncRecordRepository           $syncRecordRepository,
         private readonly LoggerInterface                 $logger,
     ) {}
 
@@ -102,16 +104,19 @@ class SyncService
         }
         $this->em->persist($syncRecord);
 
-        // Anti-cheat: reject week rollbacks.
+        // Rollback detection: client sent a week behind the server's last recorded week.
+        // Accept the sync but flag it, then purge any superseded future records so
+        // the rollback becomes the new canonical timeline for this club.
         if ($request->weekNumber < $club->getLastSyncedWeek()) {
-            $syncRecord->markInvalid('week_rollback');
+            $syncRecord->markRollback();
+            // Flush the new record first so the DELETE doesn't also remove it.
             $this->em->flush();
-
-            return [
-                'accepted'    => false,
-                'reason'      => 'week_rollback',
-                'currentWeek' => $club->getLastSyncedWeek(),
-            ];
+            $this->syncRecordRepository->deleteByClubFromWeek($club, $request->weekNumber + 1);
+            $this->logger->info('sync.rollback', [
+                'clubId'       => (string) $club->getId(),
+                'fromWeek'     => $club->getLastSyncedWeek(),
+                'toWeek'       => $request->weekNumber,
+            ]);
         }
 
         // ── Club state update (fat-client authoritative) ───────────────────
@@ -349,6 +354,7 @@ class SyncService
 
         return [
             'accepted'          => true,
+            'isRollback'        => $syncRecord->isRollback(),
             'weekNumber'        => $request->weekNumber,
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,

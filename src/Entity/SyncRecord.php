@@ -10,7 +10,7 @@ use Symfony\Component\Uid\UuidV7;
  * Used for timestamp validation to prevent week-rollback exploits
  * against the global leaderboards.
  */
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: \App\Repository\SyncRecordRepository::class)]
 class SyncRecord
 {
     #[ORM\Id]
@@ -59,6 +59,10 @@ class SyncRecord
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $invalidReason = null;
 
+    /** True when the client sent a week number lower than the club's last synced week */
+    #[ORM\Column]
+    private bool $isRollback = false;
+
     public function __construct(
         Club $club,
         int $clientWeekNumber,
@@ -94,6 +98,10 @@ class SyncRecord
     }
 
     public function getInvalidReason(): ?string { return $this->invalidReason; }
+
+    public function isRollback(): bool { return $this->isRollback; }
+
+    public function markRollback(): void { $this->isRollback = true; }
 
     public function getPayloadJson(): string
     {
