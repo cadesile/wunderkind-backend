@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\Tier;
+use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,6 +26,21 @@ class ScoutSearchController extends AbstractController
         'national' => 'elite',
         'elite'    => null, // already at top — no tier above
     ];
+
+    #[Route('/foreign-clubs', name: 'api_scout_foreign_clubs', methods: ['GET'])]
+    public function foreignClubs(Request $request, NpcClubRepository $npcClubRepo): JsonResponse
+    {
+        $country      = strtoupper($request->query->get('country', 'EN'));
+        $rep          = $request->query->get('rep') ?: null;
+        $limitPerTier = max(1, min(10, (int) $request->query->get('limit_per_tier', 3)));
+
+        $clubs = $npcClubRepo->findForeignClubs($country, $rep, $limitPerTier);
+
+        return $this->json([
+            'country' => $country,
+            'clubs'   => $clubs,
+        ]);
+    }
 
     #[Route('/search', name: 'api_scout_search', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]

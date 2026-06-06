@@ -59,21 +59,35 @@ class NpcClubRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns NPC clubs whose country does NOT match the given country,
-     * up to $limitPerTier clubs per tier, in random order.
+     * Find NPC clubs NOT from the given country, optionally filtered by tier
+     * derived from a rep string.
      *
-     * @param string $excludeCountry Country code to exclude (e.g. 'EN')
-     * @param int    $limitPerTier   Max clubs to return per tier
+     * @param string      $excludeCountry Country code to exclude (e.g. 'EN')
+     * @param string|null $rep            'local'|'regional'|'national'|'elite'|null
+     * @param int         $limitPerTier   Max clubs per tier
      * @return array<int, array{id: string, name: string, country: string, tier: int}>
      */
-    public function findForeignClubs(string $excludeCountry, int $limitPerTier = 3): array
+    public function findForeignClubs(string $excludeCountry, ?string $rep = null, int $limitPerTier = 3): array
     {
-        $rows = $this->getEntityManager()->getConnection()->executeQuery(
-            'SELECT id, name, country, tier FROM npc_club WHERE country != :country ORDER BY tier ASC, RANDOM()',
-            ['country' => $excludeCountry],
-        )->fetchAllAssociative();
+        $tierMap = [
+            'elite'    => [1],
+            'national' => [2],
+            'regional' => [3],
+            'local'    => [4, 5],
+        ];
+        $tiers = ($rep !== null) ? ($tierMap[$rep] ?? null) : null;
 
-        // Group by tier and cap each tier at $limitPerTier entries.
+        if ($tiers !== null) {
+            $placeholders = implode(',', array_fill(0, count($tiers), '?'));
+            $params       = array_merge([$excludeCountry], $tiers);
+            $sql          = "SELECT id, name, country, tier FROM npc_club WHERE country != ? AND tier IN ({$placeholders}) ORDER BY tier ASC, RANDOM()";
+        } else {
+            $params = [$excludeCountry];
+            $sql    = 'SELECT id, name, country, tier FROM npc_club WHERE country != ? ORDER BY tier ASC, RANDOM()';
+        }
+
+        $rows = $this->getEntityManager()->getConnection()->executeQuery($sql, $params)->fetchAllAssociative();
+
         $byTier = [];
         foreach ($rows as $row) {
             $tier = (int) $row['tier'];
@@ -87,7 +101,6 @@ class NpcClubRepository extends ServiceEntityRepository
             }
         }
 
-        // Flatten back to a single array sorted by tier.
         ksort($byTier);
         return array_merge(...array_values($byTier)) ?: [];
     }

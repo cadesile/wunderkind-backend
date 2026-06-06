@@ -109,7 +109,7 @@ class ClubController extends AbstractController
         $country      = strtoupper($request->query->get('country', 'EN'));
         $limitPerTier = max(1, min(10, (int) $request->query->get('limit_per_tier', 3)));
 
-        $clubs = $npcClubRepo->findForeignClubs($country, $limitPerTier);
+        $clubs = $npcClubRepo->findForeignClubs($country, null, $limitPerTier);
 
         return $this->json([
             'country' => $country,
