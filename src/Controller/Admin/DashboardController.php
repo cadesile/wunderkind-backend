@@ -32,6 +32,9 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\HeaderUtils;
+use App\Enum\RecruitmentSource;
+use App\Enum\StaffRole;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -679,6 +682,96 @@ class DashboardController extends AbstractDashboardController
         }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
+    }
+
+    #[Route('/admin/pool-config/generate-chunk', name: 'admin_pool_generate_chunk', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function generatePoolChunk(Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid('generate_pool', $request->request->get('_token'))) {
+            return $this->json(['success' => false, 'message' => 'Invalid CSRF token.'], 403);
+        }
+
+        $type        = $request->request->get('type', '');
+        $nationality = $request->request->getString('nationality') ?: null;
+        $mode        = $request->request->get('mode', 'force');
+        $cfg         = $this->poolConfigRepository->getConfig();
+        $conn        = $this->em->getConnection();
+
+        $target = match ($type) {
+            'players'           => $cfg->getPlayerPoolTarget(),
+            'coaches'           => $cfg->getCoachPoolTarget(),
+            'managers'          => $cfg->getManagerPoolTarget(),
+            'directors'         => $cfg->getDirectorOfFootballPoolTarget(),
+            'facility_managers' => $cfg->getFacilityManagerPoolTarget(),
+            'chairmen'          => $cfg->getChairmanPoolTarget(),
+            'scouts'            => $cfg->getScoutPoolTarget(),
+            'agents'            => $cfg->getAgentPoolTarget(),
+            'sponsors'          => $cfg->getSponsorPoolTarget(),
+            'investors'         => $cfg->getInvestorPoolTarget(),
+            default             => 0,
+        };
+
+        $count = $target;
+        if ($mode === 'replenish') {
+            $current = match ($type) {
+                'players'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
+                'coaches'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
+                'managers'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
+                'directors'         => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
+                'facility_managers' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
+                'chairmen'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'chairman'"),
+                'scouts'            => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
+                'agents'            => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
+                'sponsors'          => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
+                'investors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
+                default             => 0,
+            };
+            $count = max(0, $target - $current);
+        }
+
+        if ($count <= 0) {
+            return $this->json(['success' => true, 'count' => 0, 'message' => 'Already at target.', 'skipped' => true]);
+        }
+
+        try {
+            match ($type) {
+                'players'           => $this->marketPoolService->generatePlayers($count, RecruitmentSource::YOUTH_INTAKE, $nationality),
+                'coaches'           => $this->marketPoolService->generateStaffForRole(StaffRole::COACH, $count, $nationality),
+                'managers'          => $this->marketPoolService->generateStaffForRole(StaffRole::MANAGER, $count, $nationality),
+                'directors'         => $this->marketPoolService->generateStaffForRole(StaffRole::DIRECTOR_OF_FOOTBALL, $count, $nationality),
+                'facility_managers' => $this->marketPoolService->generateStaffForRole(StaffRole::FACILITY_MANAGER, $count, $nationality),
+                'chairmen'          => $this->marketPoolService->generateStaffForRole(StaffRole::CHAIRMAN, $count, $nationality),
+                'scouts'            => $this->marketPoolService->generateScouts($count, $nationality),
+                'agents'            => $this->marketPoolService->generateAgents($count),
+                'sponsors'          => $this->marketPoolService->generateSponsors($count),
+                'investors'         => $this->marketPoolService->generateInvestors($count),
+                default             => throw new \InvalidArgumentException("Unknown pool type: {$type}"),
+            };
+        } catch (\Exception $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+
+        return $this->json(['success' => true, 'count' => $count, 'message' => "{$count} generated."]);
+    }
+
+    #[Route('/admin/pool-config/counts', name: 'admin_pool_counts', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function poolCountsJson(): JsonResponse
+    {
+        $conn = $this->em->getConnection();
+        return $this->json([
+            'players'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
+            'staffCoach'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
+            'staffManager'     => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
+            'staffDirector'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
+            'staffFacilityMgr' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
+            'staffChairman'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'chairman'"),
+            'scouts'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
+            'agents'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
+            'sponsors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
+            'investors'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
+        ]);
     }
 
     #[Route('/admin/pool-config/clear', name: 'admin_pool_clear', methods: ['POST'])]
