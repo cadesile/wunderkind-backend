@@ -321,6 +321,16 @@ class DashboardController extends AbstractDashboardController
         $config->setInvestorProbabilityNational((float) $request->request->get('investorProbabilityNational', 0.06));
         $config->setInvestorProbabilityElite((float) $request->request->get('investorProbabilityElite', 0.02));
 
+        // Sponsor & investor slot limits
+        $maxSponsorsByTier = json_decode((string) $request->request->get('maxSponsorsByTier', ''), true);
+        if (is_array($maxSponsorsByTier)) {
+            $config->setMaxSponsorsByTier($maxSponsorsByTier);
+        }
+        $maxInvestorsByTier = json_decode((string) $request->request->get('maxInvestorsByTier', ''), true);
+        if (is_array($maxInvestorsByTier)) {
+            $config->setMaxInvestorsByTier($maxInvestorsByTier);
+        }
+
         // Staff limits per club
         $config->setMaxCoachesPerClub((int) $request->request->get('maxCoachesPerClub', 15));
         $config->setMaxManagersPerClub((int) $request->request->get('maxManagersPerClub', 1));

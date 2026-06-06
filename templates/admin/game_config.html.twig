@@ -974,6 +974,28 @@
                 </div>
             </div>
 
+            {# ── Sponsor & Investor Limits ────────────────────────────────────────── #}
+            <div class="card mb-4 cfg-section" data-section-id="sponsor-investor-limits" data-group="club-dev">
+                <div class="card-header fw-semibold">Sponsor &amp; Investor Limits</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Maximum active contracts per reputation tier. Keys: <code>local</code>, <code>regional</code>, <code>national</code>, <code>elite</code>. Integer slot counts.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="maxSponsorsByTier" class="form-label fw-semibold small">Max Sponsors by Tier (JSON)</label>
+                            <textarea id="maxSponsorsByTier" name="maxSponsorsByTier"
+                                      rows="3" class="form-control font-monospace" style="font-size:.8rem;">{{ config.maxSponsorsByTier|json_encode }}</textarea>
+                            <div class="form-text">Default: <code>{"local":3,"regional":5,"national":7,"elite":10}</code></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="maxInvestorsByTier" class="form-label fw-semibold small">Max Investors by Tier (JSON)</label>
+                            <textarea id="maxInvestorsByTier" name="maxInvestorsByTier"
+                                      rows="3" class="form-control font-monospace" style="font-size:.8rem;">{{ config.maxInvestorsByTier|json_encode }}</textarea>
+                            <div class="form-text">Default: <code>{"local":3,"regional":5,"national":7,"elite":10}</code></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Facility Income ────────────────────────────────────────── #}
             <div class="card cfg-section" data-section-id="facility-income" data-group="facility-config">
                 <div class="card-header py-2 d-flex align-items-center gap-2">

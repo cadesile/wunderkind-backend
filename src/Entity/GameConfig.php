@@ -706,6 +706,40 @@ class GameConfig
     public function getInvestorProbabilityElite(): float { return $this->investorProbabilityElite; }
     public function setInvestorProbabilityElite(float $v): static { $this->investorProbabilityElite = $v; return $this; }
 
+    // ── Sponsor & Investor Limits ─────────────────────────────────────────
+
+    /**
+     * Maximum active sponsor contracts per reputation tier.
+     * Keys match ReputationTier string values.
+     * Default: local=3, regional=5, national=7, elite=10
+     */
+    #[ORM\Column(type: 'json')]
+    private array $maxSponsorsByTier = [
+        'local'    => 3,
+        'regional' => 5,
+        'national' => 7,
+        'elite'    => 10,
+    ];
+
+    /**
+     * Maximum active investors per reputation tier.
+     * Keys match ReputationTier string values.
+     * Default: local=3, regional=5, national=7, elite=10
+     */
+    #[ORM\Column(type: 'json')]
+    private array $maxInvestorsByTier = [
+        'local'    => 3,
+        'regional' => 5,
+        'national' => 7,
+        'elite'    => 10,
+    ];
+
+    public function getMaxSponsorsByTier(): array { return $this->maxSponsorsByTier; }
+    public function setMaxSponsorsByTier(array $v): void { $this->maxSponsorsByTier = $v; }
+
+    public function getMaxInvestorsByTier(): array { return $this->maxInvestorsByTier; }
+    public function setMaxInvestorsByTier(array $v): void { $this->maxInvestorsByTier = $v; }
+
     // ── Staff Limits Per Club ─────────────────────────────────────────────
 
     /** Maximum coaches (StaffRole::COACH) allowed at a single club. Default: 15 */

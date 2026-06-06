@@ -190,6 +190,10 @@ class GameConfigController extends AbstractController
             'signOnFeePercentMin'           => $config->getSignOnFeePercentMin(),
             'signOnFeePercentMax'           => $config->getSignOnFeePercentMax(),
 
+            // Sponsor & investor slot limits (by reputation tier)
+            'maxSponsorsByTier'  => $config->getMaxSponsorsByTier(),
+            'maxInvestorsByTier' => $config->getMaxInvestorsByTier(),
+
             // Sponsor & investor offer probabilities (by reputation tier)
             'sponsorProbabilityLocal'    => $config->getSponsorProbabilityLocal(),
             'sponsorProbabilityRegional' => $config->getSponsorProbabilityRegional(),
