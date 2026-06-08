@@ -27,6 +27,7 @@ services:
         arguments:
             $mailerFrom: '%env(MAILER_FROM)%'
             $mailerFromName: '%env(MAILER_FROM_NAME)%'
+            $projectDir: '%kernel.project_dir%'
 
     App\Security\VerificationAwareAuthenticationSuccessHandler:
         arguments:

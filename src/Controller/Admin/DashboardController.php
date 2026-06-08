@@ -1383,7 +1383,7 @@ class DashboardController extends AbstractDashboardController
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('<img src="/images/logo.png" alt="Wunderkind Factory" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;"> Wunderkind')
+            ->setTitle('<img src="/images/logo.png" alt="Build My Club" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;"> Build My Club')
             ->setFaviconPath('images/logo.png')
             ->renderContentMaximized();
     }

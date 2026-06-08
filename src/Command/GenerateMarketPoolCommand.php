@@ -38,7 +38,7 @@ class GenerateMarketPoolCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $io->title('Wunderkind Factory - Market Pool Generator');
+        $io->title('Build My Club - Market Pool Generator');
 
         if ($input->getOption('replenish')) {
             $io->text('Running pool replenishment...');

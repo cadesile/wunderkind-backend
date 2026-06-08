@@ -193,7 +193,7 @@ class GenerateMarketDataCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $io->title('Wunderkind Factory - Market Data Generator');
+        $io->title('Build My Club - Market Data Generator');
 
         $agentCount    = (int) $input->getOption('agents');
         $scoutCount    = (int) $input->getOption('scouts');
