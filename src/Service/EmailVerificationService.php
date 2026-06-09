@@ -99,6 +99,30 @@ class EmailVerificationService
         );
     }
 
+    public function sendBetaVerificationEmail(string $toEmail, string $code): void
+    {
+        $email = (new Email())
+            ->from(new Address($this->mailerFrom, $this->mailerFromName))
+            ->to($toEmail)
+            ->subject('Your Build My Club beta access code')
+            ->html($this->renderHtml(
+                'Beta Access Verification',
+                $this->verificationBlock($code),
+                "Enter this code to confirm your place on the beta list.<br><br>" .
+                "<span style='color:#9bb0c4;font-size:8px'>This code expires in <strong style='color:#E8CF59'>15 minutes</strong>. " .
+                "If you didn't request beta access, you can safely ignore this email.</span>"
+            ))
+            ->text(
+                "Your beta access verification code is: {$code}\n\n" .
+                "Enter this code to confirm your place on the beta list.\n\n" .
+                "This code expires in 15 minutes.\n\n" .
+                "If you didn't request beta access, you can safely ignore this email."
+            )
+            ->embedFromPath($this->logoPath(), 'logo', 'image/png');
+
+        $this->mailer->send($email);
+    }
+
     /**
      * Validate a submitted registration code.
      *
