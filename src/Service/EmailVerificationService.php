@@ -19,7 +19,7 @@ class EmailVerificationService
         private readonly EmailVerificationRepository $verificationRepo,
         private readonly string $mailerFrom,
         private readonly string $mailerFromName,
-        private readonly string $projectDir,
+        private readonly string $appUrl,
     ) {}
 
     public function sendVerificationEmail(User $user): void
@@ -45,7 +45,6 @@ class EmailVerificationService
                     "This code expires in 15 minutes.\n\n" .
                     "If you didn't register for Build My Club, you can safely ignore this email."
                 )
-                ->embedFromPath($this->logoPath(), 'logo', 'image/png')
         );
     }
 
@@ -72,7 +71,6 @@ class EmailVerificationService
                     "This code expires in 15 minutes.\n\n" .
                     "If you didn't request a password reset, you can safely ignore this email."
                 )
-                ->embedFromPath($this->logoPath(), 'logo', 'image/png')
         );
     }
 
@@ -95,7 +93,6 @@ class EmailVerificationService
                     "Your password has been successfully updated.\n\n" .
                     "If you didn't make this change, please contact support immediately."
                 )
-                ->embedFromPath($this->logoPath(), 'logo', 'image/png')
         );
     }
 
@@ -117,8 +114,7 @@ class EmailVerificationService
                 "Enter this code to confirm your place on the beta list.\n\n" .
                 "This code expires in 15 minutes.\n\n" .
                 "If you didn't request beta access, you can safely ignore this email."
-            )
-            ->embedFromPath($this->logoPath(), 'logo', 'image/png');
+            );
 
         $this->mailer->send($email);
     }
@@ -213,9 +209,9 @@ class EmailVerificationService
         return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     }
 
-    private function logoPath(): string
+    private function logoUrl(): string
     {
-        return $this->projectDir . '/public/images/logo.png';
+        return $this->appUrl . '/images/logo.png';
     }
 
     private function verificationBlock(string $code): string
@@ -231,6 +227,7 @@ class EmailVerificationService
 
     private function renderHtml(string $heading, string $body, string $footer): string
     {
+        $logoUrl = $this->logoUrl();
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -248,7 +245,7 @@ class EmailVerificationService
           <!-- Header -->
           <tr>
             <td style="padding:32px 24px;text-align:center;border-bottom:2px solid #E8CF59">
-              <img src="cid:logo" alt="Build My Club" width="80" height="80" style="display:block;margin:0 auto 12px">
+              <img src="{$logoUrl}" alt="Build My Club" width="80" height="80" style="display:block;margin:0 auto 12px">
               <p style="color:#E8CF59;font-size:11px;letter-spacing:3px;margin:0 0 4px;text-transform:uppercase;font-weight:bold">BUILD MY CLUB</p>
               <p style="color:#9bb0c4;font-size:7px;letter-spacing:2px;margin:0;text-transform:uppercase">Football Management Simulation</p>
             </td>
