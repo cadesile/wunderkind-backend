@@ -2,94 +2,97 @@
 
 namespace App\Controller\Api;
 
-use App\Repository\GameConfigRepository;
+use App\Entity\BetaRequest;
+use App\Repository\BetaRequestRepository;
+use App\Service\EmailVerificationService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api')]
 class BetaRequestController extends AbstractController
 {
-    private const RECAPTCHA_VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
-
     public function __construct(
-        private readonly GameConfigRepository $gameConfigRepository,
-        private readonly MailerInterface $mailer,
+        private readonly BetaRequestRepository $repo,
+        private readonly EntityManagerInterface $em,
+        private readonly EmailVerificationService $emailService,
     ) {}
 
     #[Route('/beta-request', name: 'api_beta_request', methods: ['POST'])]
     public function submit(Request $request): JsonResponse
     {
-        $config = $this->gameConfigRepository->getConfig();
-
-        $email          = trim((string) $request->request->get('email', ''));
-        $captchaToken   = (string) $request->request->get('g-recaptcha-response', '');
-        $secretKey      = $config->getRecaptchaSecretKey();
-        $recipientEmail = $config->getBetaRequestEmail();
+        $email = trim((string) $request->request->get('email', ''));
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->json(['error' => 'Invalid email address.'], Response::HTTP_BAD_REQUEST);
         }
 
-        // Verify reCAPTCHA only when a secret key is configured
-        if ($secretKey) {
-            if (empty($captchaToken)) {
-                return $this->json(['error' => 'CAPTCHA verification required.'], Response::HTTP_BAD_REQUEST);
-            }
-
-            $verified = $this->verifyCaptcha($secretKey, $captchaToken, $request->getClientIp());
-            if (!$verified) {
-                return $this->json(['error' => 'CAPTCHA verification failed. Please try again.'], Response::HTTP_BAD_REQUEST);
-            }
-        }
-
-        if (!$recipientEmail) {
-            // Silently succeed — no destination configured yet
+        // If this email already has a verified record, silently succeed — no re-entry needed
+        $latest = $this->repo->findLatestByEmail($email);
+        if ($latest !== null && $latest->isValid()) {
             return $this->json(['success' => true]);
         }
 
-        $message = (new Email())
-            ->from('admin@buildmyclub.co.uk')
-            ->to($recipientEmail)
-            ->subject('Beta Access Request — ' . $email)
-            ->text(implode("\n", [
-                'New beta access request received.',
-                '',
-                'Email: ' . $email,
-                'Submitted: ' . (new \DateTimeImmutable())->format('Y-m-d H:i:s T'),
-                'IP: ' . ($request->getClientIp() ?? 'unknown'),
-            ]));
+        // Expire any currently active (unverified) record so the new code is the only valid one
+        $active = $this->repo->findActiveByEmail($email);
+        if ($active !== null) {
+            $active->expire();
+        }
 
-        $this->mailer->send($message);
+        $code     = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $betaReq  = new BetaRequest($email, $code);
+        $this->em->persist($betaReq);
+        $this->em->flush();
+
+        $this->emailService->sendBetaVerificationEmail($email, $code);
 
         return $this->json(['success' => true]);
     }
 
-    private function verifyCaptcha(string $secret, string $token, ?string $ip): bool
+    #[Route('/beta-request/verify', name: 'api_beta_request_verify', methods: ['POST'])]
+    public function verify(Request $request): JsonResponse
     {
-        $context = stream_context_create([
-            'http' => [
-                'method'  => 'POST',
-                'header'  => 'Content-Type: application/x-www-form-urlencoded',
-                'content' => http_build_query([
-                    'secret'   => $secret,
-                    'response' => $token,
-                    'remoteip' => $ip ?? '',
-                ]),
-                'timeout' => 5,
-            ],
-        ]);
+        $email = trim((string) $request->request->get('email', ''));
+        $code  = trim((string) $request->request->get('code', ''));
 
-        $body = @file_get_contents(self::RECAPTCHA_VERIFY_URL, false, $context);
-        if ($body === false) {
-            return false;
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $code === '') {
+            return $this->json(['error' => 'Email and code are required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $data = json_decode($body, true);
-        return isset($data['success']) && $data['success'] === true;
+        $record = $this->repo->findActiveByEmail($email);
+
+        if ($record === null) {
+            $latest = $this->repo->findLatestByEmail($email);
+            if ($latest !== null && $latest->isLockedOut()) {
+                return $this->json(['error' => 'Too many attempts. Please request a new code.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            if ($latest !== null && $latest->isExpired()) {
+                return $this->json(['error' => 'Code has expired. Please request a new code.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            return $this->json(['error' => 'No active request found for this email.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($record->isLockedOut()) {
+            return $this->json(['error' => 'Too many attempts. Please request a new code.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($record->getCode() !== $code) {
+            $record->incrementAttempts();
+            $this->em->flush();
+            $remaining = 3 - $record->getAttempts();
+            return $this->json([
+                'error' => $remaining > 0
+                    ? "Incorrect code. {$remaining} attempt(s) remaining."
+                    : 'Too many attempts. Please request a new code.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $record->markVerified();
+        $this->em->flush();
+
+        return $this->json(['success' => true]);
     }
 }
