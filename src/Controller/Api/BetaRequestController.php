@@ -42,12 +42,17 @@ class BetaRequestController extends AbstractController
             $active->expire();
         }
 
-        $code     = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $betaReq  = new BetaRequest($email, $code);
+        $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $betaReq = new BetaRequest($email, $code);
         $this->em->persist($betaReq);
-        $this->em->flush();
 
-        $this->emailService->sendBetaVerificationEmail($email, $code);
+        try {
+            $this->emailService->sendBetaVerificationEmail($email, $code);
+        } catch (\Throwable) {
+            return $this->json(['error' => 'Failed to send verification email. Please try again.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        $this->em->flush();
 
         return $this->json(['success' => true]);
     }
