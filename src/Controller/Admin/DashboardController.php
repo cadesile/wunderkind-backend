@@ -15,6 +15,7 @@ use App\Service\EconomicService;
 use App\Service\LeagueImportExportService;
 use App\Service\MarketPoolService;
 use App\Service\NarrativeImportExportService;
+use App\Controller\Admin\BetaRequestCrudController;
 use App\Controller\Admin\LeagueCrudController;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
@@ -1395,6 +1396,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users');
         yield MenuItem::linkTo(ClubCrudController::class, 'Clubs', 'fa fa-school');
         yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
+        yield MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text');
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');
