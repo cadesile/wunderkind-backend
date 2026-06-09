@@ -1059,6 +1059,20 @@
         }
         .beta-submit:hover { background: #fff; box-shadow: 0 0 20px rgba(232,207,89,.4); }
         .beta-submit:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; }
+        .beta-resend {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            letter-spacing: 1px;
+            padding: 8px 0 0;
+            text-decoration: underline;
+            display: block;
+        }
+        .beta-resend:hover { color: var(--gold); }
+        .beta-success-msg { color: var(--mint); font-size: 9px; line-height: 2; text-align: center; padding: 16px 0; }
         .beta-msg {
             margin-top: 16px;
             font-family: 'VT323', monospace;
@@ -2077,14 +2091,36 @@
             <button class="beta-close" id="beta-close" aria-label="Close">✕ CLOSE</button>
         </div>
         <div class="beta-body">
-            <p>Enter your email address and we'll be in touch when a beta slot opens up.</p>
-            <form id="beta-form" novalidate>
-                <input type="email" id="beta-email" name="email" class="beta-input"
-                       placeholder="your@email.com" autocomplete="email" required>
-                <div class="beta-captcha" id="beta-captcha-wrap"></div>
-                <button type="submit" class="beta-submit" id="beta-submit">Submit Request</button>
-                <div class="beta-msg" id="beta-msg"></div>
-            </form>
+
+            <!-- Step 1: Email -->
+            <div id="beta-step-email">
+                <p>Enter your email address to receive a verification code.</p>
+                <form id="beta-form-email" novalidate>
+                    <input type="email" id="beta-email" name="email" class="beta-input"
+                           placeholder="your@email.com" autocomplete="email" required>
+                    <button type="submit" class="beta-submit" id="beta-submit-email">Send Code</button>
+                    <div class="beta-msg" id="beta-msg-email"></div>
+                </form>
+            </div>
+
+            <!-- Step 2: Code verification (hidden initially) -->
+            <div id="beta-step-code" style="display:none">
+                <p id="beta-code-hint">Enter the 6-digit code sent to your email.</p>
+                <form id="beta-form-code" novalidate>
+                    <input type="text" id="beta-code" name="code" class="beta-input"
+                           placeholder="000000" maxlength="6" autocomplete="one-time-code"
+                           inputmode="numeric" pattern="[0-9]{6}" required>
+                    <button type="submit" class="beta-submit" id="beta-submit-code">Verify Code</button>
+                    <div class="beta-msg" id="beta-msg-code"></div>
+                    <button type="button" class="beta-resend" id="beta-resend">Resend code</button>
+                </form>
+            </div>
+
+            <!-- Step 3: Success (hidden initially) -->
+            <div id="beta-step-success" style="display:none">
+                <p class="beta-success-msg">You're on the list! We'll be in touch when a slot opens.</p>
+            </div>
+
         </div>
     </div>
 </div>
@@ -2199,21 +2235,7 @@
                 note.textContent = 'Free to play. Works fully offline. No ads in gameplay.';
             }
 
-            // Inject reCAPTCHA if a site key is configured
-            if (data.recaptchaSiteKey) {
-                window.__recaptchaSiteKey = data.recaptchaSiteKey;
-                var s = document.createElement('script');
-                s.src = 'https://www.google.com/recaptcha/api.js';
-                s.async = true;
-                s.defer = true;
-                document.head.appendChild(s);
 
-                var wrap = document.getElementById('beta-captcha-wrap');
-                var div = document.createElement('div');
-                div.className = 'g-recaptcha';
-                div.setAttribute('data-sitekey', data.recaptchaSiteKey);
-                wrap.appendChild(div);
-            }
         })
         .catch(function () {
             document.getElementById('download-note').textContent = 'Download links temporarily unavailable. Please check back soon.';
@@ -2271,78 +2293,164 @@ function openBetaModal() {
 }
 
 (function () {
-    var overlay  = document.getElementById('beta-overlay');
-    var closeBtn = document.getElementById('beta-close');
-    var form     = document.getElementById('beta-form');
-    var emailEl  = document.getElementById('beta-email');
-    var submitEl = document.getElementById('beta-submit');
-    var msgEl    = document.getElementById('beta-msg');
+    var overlay       = document.getElementById('beta-overlay');
+    var closeBtn      = document.getElementById('beta-close');
+    var stepEmail     = document.getElementById('beta-step-email');
+    var stepCode      = document.getElementById('beta-step-code');
+    var stepSuccess   = document.getElementById('beta-step-success');
+    var formEmail     = document.getElementById('beta-form-email');
+    var formCode      = document.getElementById('beta-form-code');
+    var emailEl       = document.getElementById('beta-email');
+    var codeEl        = document.getElementById('beta-code');
+    var submitEmail   = document.getElementById('beta-submit-email');
+    var submitCode    = document.getElementById('beta-submit-code');
+    var msgEmail      = document.getElementById('beta-msg-email');
+    var msgCode       = document.getElementById('beta-msg-code');
+    var codeHint      = document.getElementById('beta-code-hint');
+    var resendBtn     = document.getElementById('beta-resend');
+    var pendingEmail  = '';
+
+    function resetModal() {
+        stepEmail.style.display   = '';
+        stepCode.style.display    = 'none';
+        stepSuccess.style.display = 'none';
+        formEmail.reset();
+        formCode.reset();
+        msgEmail.className = 'beta-msg';
+        msgEmail.textContent = '';
+        msgCode.className = 'beta-msg';
+        msgCode.textContent = '';
+        submitEmail.disabled = false;
+        submitEmail.textContent = 'Send Code';
+        submitCode.disabled = false;
+        submitCode.textContent = 'Verify Code';
+        pendingEmail = '';
+    }
 
     function closeBeta() {
         overlay.classList.remove('open');
         document.body.style.overflow = '';
+        resetModal();
+    }
+
+    function showMsg(el, text, type) {
+        el.textContent = text;
+        el.className = 'beta-msg ' + type;
     }
 
     closeBtn.addEventListener('click', closeBeta);
-    overlay.addEventListener('click', function (e) {
-        if (e.target === overlay) closeBeta();
-    });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeBeta(); });
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && overlay.classList.contains('open')) closeBeta();
     });
 
-    function showMsg(text, type) {
-        msgEl.textContent = text;
-        msgEl.className = 'beta-msg ' + type;
+    function sendCode(email, onSuccess, onError, onNetwork) {
+        var body = new FormData();
+        body.append('email', email);
+        fetch('/api/beta-request', { method: 'POST', body: body })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) { res.ok ? onSuccess(res.data) : onError(res.data); })
+            .catch(onNetwork);
     }
 
-    form.addEventListener('submit', function (e) {
+    // ── Step 1: Submit email ──────────────────────────────────────────────────
+    formEmail.addEventListener('submit', function (e) {
         e.preventDefault();
-
         var email = emailEl.value.trim();
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            showMsg('Please enter a valid email address.', 'error');
+            showMsg(msgEmail, 'Please enter a valid email address.', 'error');
             return;
         }
 
-        var captchaResponse = '';
-        if (typeof grecaptcha !== 'undefined') {
-            captchaResponse = grecaptcha.getResponse();
-            if (!captchaResponse) {
-                showMsg('Please complete the CAPTCHA.', 'error');
-                return;
+        submitEmail.disabled = true;
+        submitEmail.textContent = 'Sending…';
+        msgEmail.className = 'beta-msg';
+
+        sendCode(
+            email,
+            function () {
+                pendingEmail = email;
+                codeHint.textContent = 'Enter the 6-digit code sent to ' + email + '.';
+                stepEmail.style.display = 'none';
+                stepCode.style.display  = '';
+                codeEl.focus();
+            },
+            function (data) {
+                showMsg(msgEmail, data.error || 'Something went wrong.', 'error');
+                submitEmail.disabled = false;
+                submitEmail.textContent = 'Send Code';
+            },
+            function () {
+                showMsg(msgEmail, 'Network error. Please try again.', 'error');
+                submitEmail.disabled = false;
+                submitEmail.textContent = 'Send Code';
             }
+        );
+    });
+
+    // ── Step 2: Verify code ───────────────────────────────────────────────────
+    formCode.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var code = codeEl.value.trim();
+        if (!code || !/^\d{6}$/.test(code)) {
+            showMsg(msgCode, 'Please enter the 6-digit code.', 'error');
+            return;
         }
 
-        submitEl.disabled = true;
-        submitEl.textContent = 'Sending…';
-        msgEl.className = 'beta-msg';
+        submitCode.disabled = true;
+        submitCode.textContent = 'Verifying…';
+        msgCode.className = 'beta-msg';
 
         var body = new FormData();
-        body.append('email', email);
-        if (captchaResponse) body.append('g-recaptcha-response', captchaResponse);
+        body.append('email', pendingEmail);
+        body.append('code', code);
 
-        fetch('/api/beta-request', { method: 'POST', body: body })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    showMsg('Request received! We\'ll be in touch.', 'success');
-                    form.reset();
-                    if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
-                    submitEl.style.display = 'none';
+        fetch('/api/beta-request/verify', { method: 'POST', body: body })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) {
+                if (res.ok && res.data.success) {
+                    stepCode.style.display    = 'none';
+                    stepSuccess.style.display = '';
                 } else {
-                    showMsg(data.error || 'Something went wrong. Please try again.', 'error');
-                    submitEl.disabled = false;
-                    submitEl.textContent = 'Submit Request';
-                    if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+                    showMsg(msgCode, res.data.error || 'Something went wrong.', 'error');
+                    submitCode.disabled = false;
+                    submitCode.textContent = 'Verify Code';
                 }
             })
             .catch(function () {
-                showMsg('Network error. Please try again.', 'error');
-                submitEl.disabled = false;
-                submitEl.textContent = 'Submit Request';
-                if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+                showMsg(msgCode, 'Network error. Please try again.', 'error');
+                submitCode.disabled = false;
+                submitCode.textContent = 'Verify Code';
             });
+    });
+
+    // ── Resend ────────────────────────────────────────────────────────────────
+    resendBtn.addEventListener('click', function () {
+        if (!pendingEmail) return;
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Sending…';
+        msgCode.className = 'beta-msg';
+        formCode.reset();
+
+        sendCode(
+            pendingEmail,
+            function () {
+                showMsg(msgCode, 'New code sent!', 'success');
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend code';
+                codeEl.focus();
+            },
+            function (data) {
+                showMsg(msgCode, data.error || 'Could not resend. Please try again.', 'error');
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend code';
+            },
+            function () {
+                showMsg(msgCode, 'Network error. Please try again.', 'error');
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend code';
+            }
+        );
     });
 }());
 </script>
