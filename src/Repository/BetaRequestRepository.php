@@ -33,6 +33,7 @@ class BetaRequestRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('b')
             ->where('b.email = :email')
+            ->setParameter('email', $email)
             ->orderBy('b.createdAt', 'DESC')
             ->setMaxResults(1)
             ->getQuery()
