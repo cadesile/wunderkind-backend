@@ -146,12 +146,27 @@ class SyncRequest
      */
     public array $managerShifts = [];
 
+    public function setBalance(int|float $balance): void
+    {
+        $this->balance = (int) $balance;
+    }
+
+    public function setTotalCareerEarnings(int|float $totalCareerEarnings): void
+    {
+        $this->totalCareerEarnings = (int) $totalCareerEarnings;
+    }
+
     // ── v2 fields ─────────────────────────────────────────────────────────
 
     /**
      * Mean overall rating of all active players at sync time. Integer, rounded.
      */
     public int $squadAvgOvr = 0;
+
+    public function setSquadAvgOvr(int|float $squadAvgOvr): void
+    {
+        $this->squadAvgOvr = (int) $squadAvgOvr;
+    }
 
     /**
      * Last ≤5 league results, newest first. Values: 'W' | 'D' | 'L'.
