@@ -44,9 +44,10 @@ class PlayerBlueprintTest extends TestCase
     public function testCanEnrichWithNamedArgumentSpread(): void
     {
         $bp       = $this->makeBlueprint();
-        $enriched = new PlayerBlueprint(...(array) $bp, abilityTarget: 0.55, isProdigy: false);
+        $enriched = new PlayerBlueprint(...array_replace((array) $bp, ['abilityTarget' => 0.55, 'isProdigy' => false]));
 
         $this->assertSame(0.55, $enriched->abilityTarget);
+        $this->assertTrue($enriched->isProdigy !== true);
         $this->assertSame($bp->firstName, $enriched->firstName);
         $this->assertSame($bp->potential, $enriched->potential);
     }
