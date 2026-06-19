@@ -51,8 +51,7 @@ class PlayerGenerationService
         $heightBonus = (int) floor($this->normalise($height, 163, 211) * 15);
         $weight      = min(97, $baseWeight + $heightBonus);
 
-        $year = (int) date('Y') - $age;
-        $dob  = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, random_int(1, 12), random_int(1, 28)));
+        $dob = (new \DateTimeImmutable())->modify("-{$age} years");
 
         return new PlayerBlueprint(
             firstName:   $firstName,
@@ -128,6 +127,7 @@ class PlayerGenerationService
         $heart = min($cap, max(1, (int) round(($bp->loyalty + $bp->determination + $bp->pressure) / 60.0 * 100)));
 
         $currentAbility = (int) round(($pace + $technical + $vision + $power + $stamina + $heart) / 6);
+        $currentAbility = min($cap, $currentAbility);
 
         return new PlayerBlueprint(...array_replace((array) $bp, [
             'pace'           => $pace,

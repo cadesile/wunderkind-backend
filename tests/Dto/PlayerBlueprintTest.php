@@ -47,7 +47,7 @@ class PlayerBlueprintTest extends TestCase
         $enriched = new PlayerBlueprint(...array_replace((array) $bp, ['abilityTarget' => 0.55, 'isProdigy' => false]));
 
         $this->assertSame(0.55, $enriched->abilityTarget);
-        $this->assertTrue($enriched->isProdigy !== true);
+        $this->assertFalse($enriched->isProdigy);
         $this->assertSame($bp->firstName, $enriched->firstName);
         $this->assertSame($bp->potential, $enriched->potential);
     }
