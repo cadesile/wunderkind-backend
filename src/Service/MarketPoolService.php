@@ -144,6 +144,7 @@ class MarketPoolService
         private readonly NameGeneratorService   $nameGenerator,
         private readonly PoolConfigRepository   $poolConfigRepo,
         private readonly \App\Repository\GameConfigRepository $gameConfigRepo,
+        private readonly PlayerGenerationService $playerGen,
     ) {}
 
     // ── Generate ─────────────────────────────────────────────────────────────
@@ -156,63 +157,24 @@ class MarketPoolService
         $players = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $potential      = $this->bellCurveInt($cfg->getPlayerPotentialMin(), $cfg->getPlayerPotentialMax(), $cfg->getPlayerPotentialMean());
-            $currentAbility = random_int($cfg->getPlayerAbilityMin(), $cfg->getPlayerAbilityMax());
-            $age            = random_int($cfg->getPlayerAgeMin(), $cfg->getPlayerAgeMax());
-            $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();
-
-            // Complex name generation: mononyms, double-surnames, generational suffixes
-            ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
-
-            $player = new Player(
-                firstName:         $firstName,
-                lastName:          $lastName,
-                dateOfBirth:       $this->dobFromAge($age),
-                nationality:       $nat,
-                position:          $this->weightedPosition($cfg),
-                recruitmentSource: $source,
-                potential:         $potential,
-                currentAbility:    $currentAbility,
-                club:           null,
-            );
+            $position = $this->weightedPosition($cfg);
+            $player   = $this->playerGen->generate($position, $source, $nationality);
 
             $player->setStatus(PlayerStatus::ACTIVE);
+
             $gc          = $this->gameConfigRepo->getConfig();
-            $multipliers = $this->getWageMultiplier($currentAbility);
-            $baseWage    = $currentAbility * random_int($gc->getContractValueRandMin(), $gc->getContractValueRandMax());
+            $multipliers = $this->getWageMultiplier($player->getCurrentAbility());
+            $baseWage    = $player->getCurrentAbility() * random_int($gc->getContractValueRandMin(), $gc->getContractValueRandMax());
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
-
-            $attrBudget = $currentAbility * 6;
-            $attrs      = $this->distributeAttributes($player->getPosition(), $attrBudget);
-            $player->setPace($attrs['pace']);
-            $player->setTechnical($attrs['technical']);
-            $player->setVision($attrs['vision']);
-            $player->setPower($attrs['power']);
-            $player->setStamina($attrs['stamina']);
-            $player->setHeart($attrs['heart']);
-
-            $player->setHeight(random_int($cfg->getPlayerHeightMin(), $cfg->getPlayerHeightMax()));
-            $player->setWeight(random_int($cfg->getPlayerWeightMin(), $cfg->getPlayerWeightMax()));
 
             if (!empty($agents) && random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
                 $player->setAgent($agents[array_rand($agents)]);
             }
 
-            // Personality matrix - Unified 1-20 scale
-            $p = $player->getPersonality();
-            $p->setDetermination(random_int(6, 18));
-            $p->setProfessionalism(random_int(6, 18));
-            $p->setAmbition(random_int(4, 17));
-            $p->setLoyalty(random_int(6, 18));
-            $p->setAdaptability(random_int(5, 17));
-            $p->setPressure(random_int(4, 16));
-            $p->setTemperament(random_int(5, 17));
-            $p->setConsistency(random_int(6, 18));
+            // Guardian generation
+            $lastName = $player->getLastName();
+            $nat      = $player->getNationality();
 
-            // Guardian generation:
-            // 80% → two parents, male + female
-            // 10% → one parent, random gender
-            // 10% → two parents, same gender (both male or both female)
             $roll = random_int(1, 100);
             if ($roll <= 80) {
                 $genderPair = ['male', 'female'];
@@ -223,8 +185,6 @@ class MarketPoolService
                 $genderPair = [$sameGender, $sameGender];
             }
 
-            // Guardians inherit the player's family name. For mononym players (lastName = ''),
-            // generate an independent last name from the same nationality pool.
             $guardianLastName = $lastName !== ''
                 ? $lastName
                 : $this->nameGenerator->generateLastName($nat);
