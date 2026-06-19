@@ -174,6 +174,19 @@ class GameConfigController extends AbstractController
             'pyramidNewsFrequencyWeeks' => $config->getPyramidNewsFrequencyWeeks(),
             'pyramidNewsConfig'         => $config->getPyramidNewsConfig(),
 
+            // Player Development Schedule
+            'developmentTickFrequencyWeeks' => $config->getDevelopmentTickFrequencyWeeks(),
+
+            // Feature Cooldowns (weeks)
+            'addressSquadCooldownWeeks'      => $config->getAddressSquadCooldownWeeks(),
+            'fanEventCooldownWeeks'          => $config->getFanEventCooldownWeeks(),
+            'sponsorOfferCooldownWeeks'      => $config->getSponsorOfferCooldownWeeks(),
+            'investorOfferCooldownWeeks'     => $config->getInvestorOfferCooldownWeeks(),
+            'scoutReportCooldownWeeks'       => $config->getScoutReportCooldownWeeks(),
+            'youthIntakeCooldownWeeks'       => $config->getYouthIntakeCooldownWeeks(),
+            'playerInteractionCooldownWeeks' => $config->getPlayerInteractionCooldownWeeks(),
+            'staffMeetingCooldownWeeks'      => $config->getStaffMeetingCooldownWeeks(),
+
             // League finances
             'smallSponsorMin'               => $config->getSmallSponsorMin(),
             'smallSponsorMax'               => $config->getSmallSponsorMax(),

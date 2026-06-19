@@ -1456,6 +1456,76 @@ class GameConfig
     public function getLeagueWinPoints(): array { return $this->leagueWinPoints; }
     public function setLeagueWinPoints(array $v): static { $this->leagueWinPoints = $v; return $this; }
 
+    // ── Player Development Schedule ───────────────────────────────────────────
+
+    /**
+     * How many in-game weeks between each player development pass.
+     * Default: 1 (every week)
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
+    private int $developmentTickFrequencyWeeks = 1;
+
+    // ── Feature Cooldowns ─────────────────────────────────────────────────────
+
+    /** Weeks between Address Squad interactions. Default: 4 */
+    #[ORM\Column(type: 'integer', options: ['default' => 4])]
+    private int $addressSquadCooldownWeeks = 4;
+
+    /** Weeks between fan event triggers. Default: 2 */
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
+    private int $fanEventCooldownWeeks = 2;
+
+    /** Weeks before another sponsor offer can be generated. Default: 8 */
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
+    private int $sponsorOfferCooldownWeeks = 8;
+
+    /** Weeks before another investor offer can be generated. Default: 12 */
+    #[ORM\Column(type: 'integer', options: ['default' => 12])]
+    private int $investorOfferCooldownWeeks = 12;
+
+    /** Weeks between scout report requests. Default: 2 */
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
+    private int $scoutReportCooldownWeeks = 2;
+
+    /** Weeks between youth intake windows. Default: 12 */
+    #[ORM\Column(type: 'integer', options: ['default' => 12])]
+    private int $youthIntakeCooldownWeeks = 12;
+
+    /** Weeks between support/punish interactions per individual player. Default: 2 */
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
+    private int $playerInteractionCooldownWeeks = 2;
+
+    /** Weeks between staff meeting interactions. Default: 4 */
+    #[ORM\Column(type: 'integer', options: ['default' => 4])]
+    private int $staffMeetingCooldownWeeks = 4;
+
+    public function getDevelopmentTickFrequencyWeeks(): int { return $this->developmentTickFrequencyWeeks; }
+    public function setDevelopmentTickFrequencyWeeks(int $v): static { $this->developmentTickFrequencyWeeks = max(1, $v); return $this; }
+
+    public function getAddressSquadCooldownWeeks(): int { return $this->addressSquadCooldownWeeks; }
+    public function setAddressSquadCooldownWeeks(int $v): static { $this->addressSquadCooldownWeeks = max(1, $v); return $this; }
+
+    public function getFanEventCooldownWeeks(): int { return $this->fanEventCooldownWeeks; }
+    public function setFanEventCooldownWeeks(int $v): static { $this->fanEventCooldownWeeks = max(1, $v); return $this; }
+
+    public function getSponsorOfferCooldownWeeks(): int { return $this->sponsorOfferCooldownWeeks; }
+    public function setSponsorOfferCooldownWeeks(int $v): static { $this->sponsorOfferCooldownWeeks = max(1, $v); return $this; }
+
+    public function getInvestorOfferCooldownWeeks(): int { return $this->investorOfferCooldownWeeks; }
+    public function setInvestorOfferCooldownWeeks(int $v): static { $this->investorOfferCooldownWeeks = max(1, $v); return $this; }
+
+    public function getScoutReportCooldownWeeks(): int { return $this->scoutReportCooldownWeeks; }
+    public function setScoutReportCooldownWeeks(int $v): static { $this->scoutReportCooldownWeeks = max(1, $v); return $this; }
+
+    public function getYouthIntakeCooldownWeeks(): int { return $this->youthIntakeCooldownWeeks; }
+    public function setYouthIntakeCooldownWeeks(int $v): static { $this->youthIntakeCooldownWeeks = max(1, $v); return $this; }
+
+    public function getPlayerInteractionCooldownWeeks(): int { return $this->playerInteractionCooldownWeeks; }
+    public function setPlayerInteractionCooldownWeeks(int $v): static { $this->playerInteractionCooldownWeeks = max(1, $v); return $this; }
+
+    public function getStaffMeetingCooldownWeeks(): int { return $this->staffMeetingCooldownWeeks; }
+    public function setStaffMeetingCooldownWeeks(int $v): static { $this->staffMeetingCooldownWeeks = max(1, $v); return $this; }
+
     // ── Pyramid News ──────────────────────────────────────────────────────────
 
     #[ORM\Column(type: 'integer')]

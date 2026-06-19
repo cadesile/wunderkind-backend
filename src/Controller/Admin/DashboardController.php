@@ -418,6 +418,19 @@ class DashboardController extends AbstractDashboardController
             $config->setNpcClubBalanceRanges($balanceRanges);
         }
 
+        // Player Development Schedule
+        $config->setDevelopmentTickFrequencyWeeks((int) $request->request->get('developmentTickFrequencyWeeks', 1));
+
+        // Feature Cooldowns
+        $config->setAddressSquadCooldownWeeks((int) $request->request->get('addressSquadCooldownWeeks', 4));
+        $config->setFanEventCooldownWeeks((int) $request->request->get('fanEventCooldownWeeks', 2));
+        $config->setSponsorOfferCooldownWeeks((int) $request->request->get('sponsorOfferCooldownWeeks', 8));
+        $config->setInvestorOfferCooldownWeeks((int) $request->request->get('investorOfferCooldownWeeks', 12));
+        $config->setScoutReportCooldownWeeks((int) $request->request->get('scoutReportCooldownWeeks', 2));
+        $config->setYouthIntakeCooldownWeeks((int) $request->request->get('youthIntakeCooldownWeeks', 12));
+        $config->setPlayerInteractionCooldownWeeks((int) $request->request->get('playerInteractionCooldownWeeks', 2));
+        $config->setStaffMeetingCooldownWeeks((int) $request->request->get('staffMeetingCooldownWeeks', 4));
+
         // Pyramid News
         $config->setPyramidNewsFrequencyWeeks((int) $request->request->get('pyramidNewsFrequencyWeeks', 4));
         $pyramidNewsConfigJson = $request->request->get('pyramidNewsConfig', '{}');

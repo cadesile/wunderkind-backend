@@ -36,12 +36,18 @@ lando php bin/console lexik:jwt:generate-keypair --no-pass --overwrite
 # After adding/changing entities, generate a new migration
 lando php bin/console doctrine:migrations:diff
 
-# Seed data
+# Seed data (run in this order on a fresh DB)
 lando php bin/console app:seed-game-events        # narrative event templates
+lando php bin/console app:seed-player-events      # player event templates
+lando php bin/console app:seed:morale-events      # morale event templates
 lando php bin/console app:seed-archetypes         # player archetypes
 lando php bin/console app:generate-market-data    # agents, scouts, investors, sponsors
-lando php bin/console app:warm-pool               # pre-warm the market entity pool
-lando php bin/console app:warm-world-pack         # warm country/nationality data cache
+lando php bin/console app:market:generate         # generate market pool entities
+lando php bin/console app:pool:warm               # pre-warm the market entity pool
+lando php bin/console app:worldpack:warm          # warm country/nationality data cache
+
+# Admin
+lando php bin/console app:admin:create            # create a backend admin user
 
 # Debug
 lando php bin/console debug:router
@@ -66,9 +72,10 @@ Branch naming: `feat/`, `fix/`, `chore/` prefixes. Base branch is `master`.
 
 ### The Hybrid Model
 The server is **not** the game engine. Gameplay (Weekly Tick, training, aging, personality) runs entirely on-device. The API handles:
-1. **Legacy sync** — receives aggregate deltas, updates `Club` totals
+1. **Club sync** — receives aggregate deltas, updates `Club` totals
 2. **Anti-cheat** — rejects `weekNumber` rollbacks; every sync recorded in `SyncRecord` even if invalid
 3. **Leaderboards** — upserts `LeaderboardEntry` rows for `all-time` and current ISO week
+4. **World data** — serves league structures, NPC clubs, and market entities to clients
 
 ### Request Flow (POST /api/sync)
 ```
@@ -82,6 +89,17 @@ JWT firewall → SyncController::sync()
       → LeaderboardEntryRepository::findOrCreate() × 6
       → EconomicService: financial year-end + sponsor check + age-out
       → flush → return JSON
+```
+
+### World Initialization Flow
+When a client first boots (`POST /api/club/initialize`):
+```
+ClubController → ClubInitializationService::initializeClub()
+  → creates Club, sets paName + manager traits
+  → StarterPackService::initialize() → assigns starting players/staff/sponsors from pool
+  → LeagueService::assignClubToStarterLeague() → places club in country/tier league
+  → WorldInitializationService::buildLeaguesPack() → serializes full league pyramid
+  → WorldInitializationService::buildTierPack() → NPC clubs + fixtures for the club's tier
 ```
 
 ### Two Firewalls
@@ -127,7 +145,9 @@ return $this->redirectToRoute('admin_my_route');
 | `src/Command/` | Symfony console commands (seeding, market generation, cleanup) |
 | `src/Controller/Api/` | Thin HTTP layer — game client endpoints |
 | `src/Controller/Admin/` | EasyAdmin CRUD + custom admin routes |
+| `src/Form/Type/` | Custom Symfony form types (used in admin JSON field editors) |
 | `src/Security/` | Custom auth handlers (e.g. verification-aware success handler) |
+| `src/Doctrine/Function/` | Custom DQL functions (e.g. `RAND()`) |
 | `migrations/` | Doctrine migrations |
 | `config/jwt/` | RSA keypair (gitignored) |
 
@@ -137,20 +157,40 @@ return $this->redirectToRoute('admin_my_route');
 |---|---|---|---|
 | `POST` | `/api/register` | Public | Create user + club |
 | `POST` | `/api/login` | Public | JWT login → token |
+| `POST` | `/api/verify-email` | Public | Verify email address |
+| `POST` | `/api/resend-verification` | Public | Resend verification email |
+| `POST` | `/api/forgot-password` | Public | Trigger password reset flow |
+| `POST` | `/api/reset-password` | Public | Complete password reset |
+| `POST` | `/api/beta-request` | Public | Submit beta access request |
 | `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
 | `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
-| `GET` | `/api/market-data` | JWT | Agents, scouts, investors, sponsors |
+| `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
+| `POST` | `/api/market/assign` | JWT | Assign market entity to club |
+| `POST` | `/api/market/consume` | JWT | Consume/use a market entity |
 | `GET` | `/api/game-config` | JWT | Global game configuration values |
 | `GET` | `/api/events/templates` | JWT | Narrative event templates (cached 1hr) |
-| `GET/POST` | `/api/inbox` / `/api/inbox/{id}/respond` | JWT | Inbox offers |
-| `GET/POST` | `/api/finance` / `/api/finance/year-end` | JWT | Financial summary + year-end trigger |
-| `GET` | `/api/pool` | JWT | Market entity pool |
-| `POST` | `/api/market/assign` | JWT | Assign market entity to club |
+| `GET` | `/api/inbox` / `GET /api/inbox/{id}` | JWT | Inbox offers |
+| `POST` | `/api/inbox/{id}/accept` | JWT | Accept inbox offer |
+| `POST` | `/api/inbox/{id}/reject` | JWT | Reject inbox offer |
+| `GET` | `/api/finance/overview` | JWT | Financial summary |
+| `GET` | `/api/finance/investors` | JWT | Investor contracts |
+| `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
+| `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
+| `GET` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
 | `GET` | `/api/squad` | JWT | Player/staff squad data |
+| `POST` | `/api/squad/release/{id}` | JWT | Release a player |
+| `GET` | `/api/staff` | JWT | Staff list |
 | `GET` | `/api/archetypes` | JWT | Player archetypes |
-| `POST` | `/api/club/initialize` | JWT | Initialize a new club |
+| `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
+| `GET` | `/api/club/status` | JWT | Club initialization status |
+| `GET` | `/api/club/foreign` | JWT | Foreign clubs for scouting |
 | `GET` | `/api/starter-config` | JWT | League ability ranges |
-| `GET` | `/api/league` | JWT | League data |
+| `GET` | `/api/league` | JWT | Club's current league data |
+| `POST` | `/api/league/conclude-season` | JWT | Submit season results |
+| `GET` | `/api/league/season-history` | JWT | Historical season records |
+| `GET` | `/api/scout/search` | JWT | Search for players via scouts |
+| `GET` | `/api/leaderboard/transfers/top-sellers` | JWT | Transfer leaderboard |
+| `GET` | `/api/admin/stats` | JWT + ROLE_ADMIN | Backend stats |
 
 Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 
@@ -159,21 +199,34 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | Service | Responsibility |
 |---|---|
 | `SyncService` | Sync processing, anti-cheat, leaderboard upsert, manager trait shifts |
-| `EconomicService` | Financial year-end, sponsor contracts, age-out forced sales, player market value |
+| `EconomicService` | Financial year-end, sponsor contracts, age-out (hard-delete at 21), player market value |
 | `InboxService` | Generate and respond to inbox offers (sponsors, investors, agents) |
-| `MarketPoolService` | Generate and assign market entities (agents, scouts, investors, sponsors); wage scaling by rep |
+| `MarketPoolService` | Generate and assign market entities; wage scaling by reputation tier |
 | `MarketDataService` | Serve market data to the client |
-| `ClubInitializationService` | Initialize Club + starting squad/staff/market entities |
-| `LeagueService` | League fixture generation, season progression |
-| `WorldPackCacheService` | Country/nationality worldpack data cache |
-| `NameGeneratorService` | Procedural name generation for players/PA |
+| `ClubInitializationService` | Create Club entity, set paName + manager traits, abbreviation |
+| `StarterPackService` | Assign starting players/staff/sponsors from pool to a new club |
+| `PlayerGenerationService` | Procedurally generate a `Player` from archetype, position, and source |
+| `NpcClubGenerationService` | Generate NPC clubs with names, colors, facilities, and ability by tier |
+| `WorldInitializationService` | Build the full league pyramid + tier pack snapshot for a client |
+| `LeagueService` | Assign clubs to leagues, conclude seasons, roll league sponsors |
+| `FixtureGenerationService` | Generate match fixtures for a league season |
+| `TransferLeaderboardService` | Rank players by transfer fee across clubs |
+| `WorldPackCacheService` | Cache country/nationality worldpack data (`CountryWorldPackCache`) |
+| `NameGeneratorService` | Procedural name generation for players and PA personas |
+| `EmailVerificationService` | Send and validate email verification / password reset tokens |
 
 ## Key Entities (non-obvious fields)
 
-- **Club** — `reputation`, `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`, manager traits (`temperament`/`discipline`/`ambition` 0–100 clamped), `paName`, `financialYearStart`
-- **Player** — `position` (PlayerPosition enum), `status` (PlayerStatus enum), `recruitmentSource`, `currentAbility`, `potential`; embeds `PersonalityProfile` (8 traits 0–100: confidence/maturity/teamwork/leadership/ego/bravery/greed/loyalty); ManyToMany self-ref siblings; `ageOutWarningIssued`, `forcedSaleExecuted`
+- **Club** — `reputation`, `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`, manager traits (`temperament`/`discipline`/`ambition` 0–100 clamped setters), `paName`, `financialYearStart`, `balance`, `country`, `abbreviation`
+- **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; `ageOutWarningIssued`, `forcedSaleExecuted`
+- **PlayerArchetype** — defines trait mapping distributions used by `PlayerGenerationService`; `traitMapping` (json); seeded via `app:seed-archetypes`
+- **League** — `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
+- **NpcClub** — `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor`, `playingStyle`, `financialApproach`; grouped into leagues for the world pack
+- **FacilityTemplate** — canonical slug shared with frontend; `category` (TRAINING/MEDICAL/SCOUTING), `baseCost`, `weeklyUpkeepBase`, `matchdayIncome`, `matchdayIncomeMultiplier`; seeded via admin
 - **GameConfig** — singleton row; all global gameplay constants (XP rates, injury chances, wage multipliers, attendance formulas, etc.)
 - **StarterConfig** — singleton row; league player ability ranges + fan base growth curves; JSON dirty-check workaround applies here
 - **LeaderboardEntry** — UNIQUE(club, category, period); `rank_position` column (not `rank`)
 - **InboxMessage** — `senderType` (MessageSenderType), `offerData` (json), `status` (MessageStatus)
 - **Transfer** — fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server)
+- **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool
+- **SeasonRecord / SeasonSnapshot / SeasonRatingsSnapshot** — historical season data persisted at `conclude-season`

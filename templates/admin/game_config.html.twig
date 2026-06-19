@@ -20,13 +20,13 @@
                 Ungrouped sections (group: null) are standalone — clicked individually.
             #}
             {% set cfgGroups = [
-                {id: 'player-dev',      label: 'Player Development', icon: 'fa-chart-bar',           subs: 'Clique · Development · Coach · Physical · Retirement'},
+                {id: 'player-dev',      label: 'Player Development', icon: 'fa-chart-bar',           subs: 'Clique · Development · Coach · Physical · Retirement · Dev Tick'},
                 {id: 'transfer',        label: 'Transfers',          icon: 'fa-money-bill-transfer', subs: 'Transfer Market · Wages · Scouting'},
                 {id: 'match-settings',  label: 'Match Settings',     icon: 'fa-futbol',              subs: 'Injury · Playing Style · Cards'},
                 {id: 'league-config',   label: 'League Config',      icon: 'fa-trophy',              subs: 'Morale · Finances · NPC · Squad · Penalties · Trophy Points · Pyramid News'},
                 {id: 'facility-config', label: 'Facility Config',    icon: 'fa-building',            subs: 'Income · Construction'},
                 {id: 'event-config',    label: 'Event Config',       icon: 'fa-bolt',                subs: 'Incidents · Sacking · Guardian'},
-                {id: 'club-dev',        label: 'Club Development',   icon: 'fa-seedling',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium'},
+                {id: 'club-dev',        label: 'Club Development',   icon: 'fa-seedling',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium · Cooldowns'},
             ] %}
             {% set cfgSections = [
                 {id: 'clique',               label: 'Clique System',          group: 'player-dev'},
@@ -62,6 +62,8 @@
                 {id: 'wages',                label: 'Wages',                   group: 'transfer'},
                 {id: 'competition-history',  label: 'Competition History',     group: 'league-config'},
                 {id: 'pyramid-news',         label: 'Pyramid News',            group: 'league-config'},
+                {id: 'dev-tick',             label: 'Dev Tick Frequency',      group: 'player-dev'},
+                {id: 'cooldowns',            label: 'Feature Cooldowns',       group: 'club-dev'},
             ] %}
 
             <div class="d-flex flex-column gap-2" id="cfg-tab-nav">
@@ -1814,6 +1816,101 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Player Development Schedule ──────────────────────────── #}
+            <div class="card cfg-section" data-section-id="dev-tick" data-group="player-dev">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-clock text-muted"></i>
+                    <span class="fw-semibold small">Player Development</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controls how frequently the player development pass runs on the client.
+                        A value of 1 runs every week; 2 runs every other week, etc.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="developmentTickFrequencyWeeks" class="form-label fw-semibold small">Development Tick Frequency (weeks)</label>
+                            <input type="number" id="developmentTickFrequencyWeeks" name="developmentTickFrequencyWeeks"
+                                   value="{{ config.developmentTickFrequencyWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">How many in-game weeks between each development pass. Default: 1</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Feature Cooldowns ────────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="cooldowns" data-group="club-dev">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-hourglass-half text-muted"></i>
+                    <span class="fw-semibold small">Feature Cooldowns (weeks)</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Minimum in-game weeks between each use of these manager actions.
+                        All values must be at least 1.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="addressSquadCooldownWeeks" class="form-label fw-semibold small">Address Squad Cooldown</label>
+                            <input type="number" id="addressSquadCooldownWeeks" name="addressSquadCooldownWeeks"
+                                   value="{{ config.addressSquadCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 4</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="fanEventCooldownWeeks" class="form-label fw-semibold small">Fan Event Cooldown</label>
+                            <input type="number" id="fanEventCooldownWeeks" name="fanEventCooldownWeeks"
+                                   value="{{ config.fanEventCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 2</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="sponsorOfferCooldownWeeks" class="form-label fw-semibold small">Sponsor Offer Cooldown</label>
+                            <input type="number" id="sponsorOfferCooldownWeeks" name="sponsorOfferCooldownWeeks"
+                                   value="{{ config.sponsorOfferCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 8</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="investorOfferCooldownWeeks" class="form-label fw-semibold small">Investor Offer Cooldown</label>
+                            <input type="number" id="investorOfferCooldownWeeks" name="investorOfferCooldownWeeks"
+                                   value="{{ config.investorOfferCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 12</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="scoutReportCooldownWeeks" class="form-label fw-semibold small">Scout Report Cooldown</label>
+                            <input type="number" id="scoutReportCooldownWeeks" name="scoutReportCooldownWeeks"
+                                   value="{{ config.scoutReportCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 2</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="youthIntakeCooldownWeeks" class="form-label fw-semibold small">Youth Intake Cooldown</label>
+                            <input type="number" id="youthIntakeCooldownWeeks" name="youthIntakeCooldownWeeks"
+                                   value="{{ config.youthIntakeCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 12</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="playerInteractionCooldownWeeks" class="form-label fw-semibold small">Player Interaction Cooldown (support/punish)</label>
+                            <input type="number" id="playerInteractionCooldownWeeks" name="playerInteractionCooldownWeeks"
+                                   value="{{ config.playerInteractionCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 2</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="staffMeetingCooldownWeeks" class="form-label fw-semibold small">Staff Meeting Cooldown</label>
+                            <input type="number" id="staffMeetingCooldownWeeks" name="staffMeetingCooldownWeeks"
+                                   value="{{ config.staffMeetingCooldownWeeks }}"
+                                   min="1" class="form-control">
+                            <div class="form-text">Default: 4</div>
                         </div>
                     </div>
                 </div>
