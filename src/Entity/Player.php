@@ -167,6 +167,13 @@ class Player
     public function getDateOfBirth(): \DateTimeImmutable { return $this->dateOfBirth; }
     public function setDateOfBirth(\DateTimeImmutable $dob): void { $this->dateOfBirth = $dob; }
 
+    public function getAge(): int {
+        // diff() calculates the absolute difference between two DateTimeInterface objects
+        $interval = $this->getDateOfBirth()->diff(new \DateTimeImmutable("now"));
+        // Return the years from the calculated interval
+        return $interval->y;
+    }
+
     public function getNationality(): string { return $this->nationality; }
     public function setNationality(string $nationality): void { $this->nationality = $nationality; }
 

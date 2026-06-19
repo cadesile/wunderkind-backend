@@ -167,7 +167,18 @@ class MarketPoolService
             $baseWage    = $player->getCurrentAbility() * random_int($gc->getContractValueRandMin(), $gc->getContractValueRandMax());
             $player->setContractValue((int) ($baseWage * $multipliers['player']));
 
-            if (!empty($agents) && random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
+            $addAgent = false;
+
+            if (!empty($agents)) {
+                if($player->getAge() > 18){
+                    $addAgent = true;
+                }
+                else if (random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
+                    $addAgent = true;
+                }
+            }
+
+            if($addAgent){
                 $player->setAgent($agents[array_rand($agents)]);
             }
 
