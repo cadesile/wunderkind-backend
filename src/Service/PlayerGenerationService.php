@@ -6,6 +6,7 @@ use App\Dto\PlayerBlueprint;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
+use App\Repository\PoolConfigRepository;
 
 class PlayerGenerationService
 {
@@ -18,7 +19,8 @@ class PlayerGenerationService
     ];
 
     public function __construct(
-        private readonly NameGeneratorService $nameGenerator,
+        private readonly NameGeneratorService  $nameGenerator,
+        private readonly PoolConfigRepository  $poolConfigRepo,
     ) {}
 
     public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null): Player
@@ -37,8 +39,13 @@ class PlayerGenerationService
         $nat = $nationality ?? $this->nameGenerator->getRandomNationality();
         ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
 
-        $age       = random_int(16, 33);
-        $potential = random_int(1, 100);
+        $cfg       = $this->poolConfigRepo->getConfig();
+        $age       = random_int($cfg->getPlayerAgeMin(), $cfg->getPlayerAgeMax());
+        $potential = $this->bellCurveInt(
+            $cfg->getPlayerPotentialMin(),
+            $cfg->getPlayerPotentialMax(),
+            $cfg->getPlayerPotentialMean(),
+        );
 
         // Height: base range 163–203 cm; GKs receive an additional 3–8 cm upward bias
         $baseHeight = random_int(163, 203);
@@ -178,6 +185,22 @@ class PlayerGenerationService
     }
 
     // ── Shared helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Box-Muller normal distribution clamped to [min, max], centred on mean.
+     * σ is set so ~95% of raw draws fall within the configured range.
+     */
+    private function bellCurveInt(int $min, int $max, int $mean): int
+    {
+        $sigma = ($max - $min) / 4.0;
+
+        // Box-Muller: two independent uniform samples → one standard-normal value
+        $u1 = mt_rand(1, PHP_INT_MAX) / PHP_INT_MAX;
+        $u2 = mt_rand(1, PHP_INT_MAX) / PHP_INT_MAX;
+        $z  = sqrt(-2.0 * log($u1)) * cos(2.0 * M_PI * $u2);
+
+        return max($min, min($max, (int) round($mean + $z * $sigma)));
+    }
 
     private function normalise(int $value, int $min, int $max): float
     {
