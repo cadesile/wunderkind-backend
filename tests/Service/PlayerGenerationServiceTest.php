@@ -148,4 +148,42 @@ class PlayerGenerationServiceTest extends TestCase
             $this->markTestSkipped('Too few youth players generated; re-run for a statistically meaningful sample.');
         }
     }
+
+    public function testAllPersonalityTraitsAreWithin1To20(): void
+    {
+        $svc = $this->makeService();
+        for ($i = 0; $i < 30; $i++) {
+            $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
+            $p      = $player->getPersonality();
+            foreach ([
+                $p->getDetermination(), $p->getProfessionalism(), $p->getAmbition(),
+                $p->getLoyalty(), $p->getAdaptability(), $p->getPressure(),
+                $p->getTemperament(), $p->getConsistency(),
+            ] as $trait) {
+                $this->assertGreaterThanOrEqual(1, $trait);
+                $this->assertLessThanOrEqual(20, $trait);
+            }
+        }
+    }
+
+    public function testPersonalityTraitsCeilingRespectsPotential(): void
+    {
+        // Each trait must be <= ceil(20 * potential/100)
+        $svc = $this->makeService();
+        for ($i = 0; $i < 30; $i++) {
+            $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
+            $p      = $player->getPersonality();
+            $maxTrait = (int) ceil(20 * $player->getPotential() / 100);
+            foreach ([
+                $p->getDetermination(), $p->getProfessionalism(), $p->getAmbition(),
+                $p->getLoyalty(), $p->getAdaptability(), $p->getPressure(),
+                $p->getTemperament(), $p->getConsistency(),
+            ] as $trait) {
+                $this->assertLessThanOrEqual(
+                    $maxTrait, $trait,
+                    "Trait {$trait} must not exceed ceil(20 * {$player->getPotential()} / 100) = {$maxTrait}"
+                );
+            }
+        }
+    }
 }

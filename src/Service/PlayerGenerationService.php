@@ -89,15 +89,18 @@ class PlayerGenerationService
 
     private function buildPersonality(PlayerBlueprint $bp): PlayerBlueprint
     {
+        $maxPct = $bp->potential / 100.0;
+        $minPct = max(0.0, ($bp->potential - 30) / 100.0);
+
         return new PlayerBlueprint(...array_replace((array) $bp, [
-            'determination'  => 1,
-            'professionalism' => 1,
-            'ambition'        => 1,
-            'loyalty'         => 1,
-            'adaptability'    => 1,
-            'pressure'        => 1,
-            'temperament'     => 1,
-            'consistency'     => 1,
+            'determination'  => $this->randTrait($minPct, $maxPct),
+            'professionalism' => $this->randTrait($minPct, $maxPct),
+            'ambition'        => $this->randTrait($minPct, $maxPct),
+            'loyalty'         => $this->randTrait($minPct, $maxPct),
+            'adaptability'    => $this->randTrait($minPct, $maxPct),
+            'pressure'        => $this->randTrait($minPct, $maxPct),
+            'temperament'     => $this->randTrait($minPct, $maxPct),
+            'consistency'     => $this->randTrait($minPct, $maxPct),
         ]));
     }
 
