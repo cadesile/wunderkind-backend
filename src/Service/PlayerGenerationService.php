@@ -106,14 +106,37 @@ class PlayerGenerationService
 
     private function buildAttributes(PlayerBlueprint $bp): PlayerBlueprint
     {
+        $cap    = max(1, (int) floor($bp->abilityTarget * $bp->potential));
+        $posKey = $bp->position->value;
+        $fracs  = self::POSITION_ATTRIBUTE_FRACTIONS[$posKey] ?? self::POSITION_ATTRIBUTE_FRACTIONS['MID'];
+
+        $pace      = $this->randInCap($cap, $fracs['pace'][0], $fracs['pace'][1]);
+        $technical = $this->randInCap($cap, $fracs['technical'][0], $fracs['technical'][1]);
+        $vision    = $this->randInCap($cap, $fracs['vision'][0], $fracs['vision'][1]);
+
+        // Power: physical anchor (height + weight) + personality uplift (determination + professionalism)
+        $physBase   = ($this->normalise($bp->height, 163, 211) + $this->normalise($bp->weight, 60, 97)) / 2.0;
+        $physMod    = ($bp->determination + $bp->professionalism) / 40.0;
+        $power      = min($cap, max(1, (int) ceil(($physBase * 0.6 + $physMod * 0.4) * 100)));
+
+        // Stamina: lean/fit bias + mental fortitude (determination + pressure + temperament)
+        $stamPhys   = ((1.0 - $this->normalise($bp->weight, 60, 97)) * 0.5 + $this->normalise($bp->height, 163, 211) * 0.5);
+        $stamMod    = ($bp->determination + $bp->pressure + $bp->temperament) / 60.0;
+        $stamina    = min($cap, max(1, (int) ceil(($stamPhys * 0.5 + $stamMod * 0.5) * 100)));
+
+        // Heart: loyalty + determination + pressure scaled to 100, capped
+        $heart = min($cap, max(1, (int) round(($bp->loyalty + $bp->determination + $bp->pressure) / 60.0 * 100)));
+
+        $currentAbility = (int) round(($pace + $technical + $vision + $power + $stamina + $heart) / 6);
+
         return new PlayerBlueprint(...array_replace((array) $bp, [
-            'pace'           => 1,
-            'technical'      => 1,
-            'vision'         => 1,
-            'power'          => 1,
-            'stamina'        => 1,
-            'heart'          => 1,
-            'currentAbility' => 1,
+            'pace'           => $pace,
+            'technical'      => $technical,
+            'vision'         => $vision,
+            'power'          => $power,
+            'stamina'        => $stamina,
+            'heart'          => $heart,
+            'currentAbility' => $currentAbility,
         ]));
     }
 

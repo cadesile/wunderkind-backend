@@ -186,4 +186,62 @@ class PlayerGenerationServiceTest extends TestCase
             }
         }
     }
+
+    public function testCurrentAbilityIsAverageOfSixAttributes(): void
+    {
+        $svc = $this->makeService();
+        for ($i = 0; $i < 30; $i++) {
+            $player   = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
+            $expected = (int) round((
+                $player->getPace() + $player->getTechnical() + $player->getVision() +
+                $player->getPower() + $player->getStamina() + $player->getHeart()
+            ) / 6);
+            $this->assertSame($expected, $player->getCurrentAbility(),
+                'currentAbility must equal round(sum of 6 attributes / 6)');
+        }
+    }
+
+    public function testAllAttributesAreAtLeastOne(): void
+    {
+        $svc = $this->makeService();
+        for ($i = 0; $i < 30; $i++) {
+            $player = $svc->generate(PlayerPosition::ATTACKER, RecruitmentSource::SCOUTING_NETWORK);
+            $this->assertGreaterThanOrEqual(1, $player->getPace());
+            $this->assertGreaterThanOrEqual(1, $player->getTechnical());
+            $this->assertGreaterThanOrEqual(1, $player->getVision());
+            $this->assertGreaterThanOrEqual(1, $player->getPower());
+            $this->assertGreaterThanOrEqual(1, $player->getStamina());
+            $this->assertGreaterThanOrEqual(1, $player->getHeart());
+        }
+    }
+
+    public function testAllAttributesAreAtMost100(): void
+    {
+        $svc = $this->makeService();
+        for ($i = 0; $i < 30; $i++) {
+            $player = $svc->generate(PlayerPosition::GOALKEEPER, RecruitmentSource::SCOUTING_NETWORK);
+            $this->assertLessThanOrEqual(100, $player->getPace());
+            $this->assertLessThanOrEqual(100, $player->getTechnical());
+            $this->assertLessThanOrEqual(100, $player->getVision());
+            $this->assertLessThanOrEqual(100, $player->getPower());
+            $this->assertLessThanOrEqual(100, $player->getStamina());
+            $this->assertLessThanOrEqual(100, $player->getHeart());
+        }
+    }
+
+    public function testAttackerPaceAveragesHigherThanGkPace(): void
+    {
+        $svc     = $this->makeService();
+        $attPace = [];
+        $gkPace  = [];
+        for ($i = 0; $i < 60; $i++) {
+            $attPace[] = $svc->generate(PlayerPosition::ATTACKER,   RecruitmentSource::SCOUTING_NETWORK)->getPace();
+            $gkPace[]  = $svc->generate(PlayerPosition::GOALKEEPER, RecruitmentSource::SCOUTING_NETWORK)->getPace();
+        }
+        $this->assertGreaterThan(
+            array_sum($gkPace) / count($gkPace),
+            array_sum($attPace) / count($attPace),
+            'ATT average pace should exceed GK average pace'
+        );
+    }
 }
