@@ -126,8 +126,7 @@ class PlayerGenerationService
         // Heart: loyalty + determination + pressure scaled to 100, capped
         $heart = min($cap, max(1, (int) round(($bp->loyalty + $bp->determination + $bp->pressure) / 60.0 * 100)));
 
-        $currentAbility = (int) round(($pace + $technical + $vision + $power + $stamina + $heart) / 6);
-        $currentAbility = min($cap, $currentAbility);
+        $currentAbility = min($bp->potential, (int) round(($pace + $technical + $vision + $power + $stamina + $heart) / 6));
 
         return new PlayerBlueprint(...array_replace((array) $bp, [
             'pace'           => $pace,
