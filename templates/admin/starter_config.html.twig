@@ -230,22 +230,39 @@
                 <p class="text-muted small mb-3">Define the min/max ability for players generated for NPC clubs in each league tier. If missing, sensible tier-based defaults are used (e.g. Tier 1: 75-95, Tier 8: 10-25).</p>
                 
                 {% for country, tiers in dynamicLeagueTiers %}
-                    <h6 class="mt-3 small fw-bold text-uppercase text-muted">{{ country }} Leagues</h6>
-                    <div class="row g-2">
+                    <div class="d-flex align-items-center justify-content-between mt-3 mb-1">
+                        <h6 class="small fw-bold text-uppercase text-muted mb-0">{{ country }} Leagues</h6>
+                        <div class="d-flex gap-1">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary copy-ranges-btn"
+                                    data-country="{{ country }}"
+                                    style="font-size:.72rem;padding:.2rem .55rem;">
+                                <i class="fa fa-copy me-1"></i>Copy
+                            </button>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary paste-ranges-btn"
+                                    data-country="{{ country }}"
+                                    disabled
+                                    style="font-size:.72rem;padding:.2rem .55rem;">
+                                <i class="fa fa-paste me-1"></i>Paste
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-2" data-ranges-country="{{ country }}">
                         {% for tier in tiers %}
-                            <div class="col-md-3">
+                            <div class="col-md-3" data-tier="{{ tier }}">
                                 <label class="small fw-bold d-block mb-1">Tier {{ tier }}</label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">Min</span>
                                     <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][min]"
                                            class="form-control" placeholder="Min"
                                            value="{{ config.leagueAbilityRanges[country][tier]['min'] ?? '' }}"
-                                           min="1">
+                                           min="1" data-range="min">
                                     <span class="input-group-text">Max</span>
                                     <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][max]"
                                            class="form-control" placeholder="Max"
                                            value="{{ config.leagueAbilityRanges[country][tier]['max'] ?? '' }}"
-                                           min="1">
+                                           min="1" data-range="max">
                                 </div>
                             </div>
                         {% endfor %}
@@ -418,6 +435,95 @@
                 wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         });
+    })();
+
+    // ── League Ability Range copy / paste ────────────────────────────────────
+    (function () {
+        // clipboard: { fromCountry: string, tiers: { [tier]: { min: string, max: string } } } | null
+        let clipboard = null;
+
+        function readCountry(country) {
+            const container = document.querySelector(`[data-ranges-country="${country}"]`);
+            if (!container) return {};
+            const data = {};
+            container.querySelectorAll('[data-tier]').forEach(function (cell) {
+                const tier = cell.dataset.tier;
+                const min  = cell.querySelector('[data-range="min"]');
+                const max  = cell.querySelector('[data-range="max"]');
+                data[tier] = { min: min ? min.value : '', max: max ? max.value : '' };
+            });
+            return data;
+        }
+
+        function writeCountry(country, data) {
+            const container = document.querySelector(`[data-ranges-country="${country}"]`);
+            if (!container) return 0;
+            let applied = 0;
+            container.querySelectorAll('[data-tier]').forEach(function (cell) {
+                const tier = cell.dataset.tier;
+                if (!data[tier]) return;
+                const min = cell.querySelector('[data-range="min"]');
+                const max = cell.querySelector('[data-range="max"]');
+                if (min) { min.value = data[tier].min; }
+                if (max) { max.value = data[tier].max; }
+                applied++;
+            });
+            return applied;
+        }
+
+        function updatePasteButtons() {
+            document.querySelectorAll('.paste-ranges-btn').forEach(function (btn) {
+                if (!clipboard) {
+                    btn.disabled = true;
+                    btn.title    = '';
+                } else {
+                    const isSelf = btn.dataset.country === clipboard.fromCountry;
+                    btn.disabled = false;
+                    btn.title    = isSelf
+                        ? 'Re-paste copied values back into ' + clipboard.fromCountry
+                        : 'Paste values copied from ' + clipboard.fromCountry;
+                }
+            });
+        }
+
+        document.querySelectorAll('.copy-ranges-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const country = btn.dataset.country;
+                clipboard = { fromCountry: country, tiers: readCountry(country) };
+
+                // Visual feedback — briefly flash the button
+                btn.classList.add('btn-secondary');
+                btn.classList.remove('btn-outline-secondary');
+                btn.innerHTML = '<i class="fa fa-check me-1"></i>Copied';
+                setTimeout(function () {
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-outline-secondary');
+                    btn.innerHTML = '<i class="fa fa-copy me-1"></i>Copy';
+                }, 1200);
+
+                updatePasteButtons();
+            });
+        });
+
+        document.querySelectorAll('.paste-ranges-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (!clipboard) return;
+                const country = btn.dataset.country;
+                const count   = writeCountry(country, clipboard.tiers);
+
+                // Visual feedback
+                btn.classList.add('btn-primary');
+                btn.classList.remove('btn-outline-primary');
+                btn.innerHTML = '<i class="fa fa-check me-1"></i>Pasted ' + count + ' tier' + (count !== 1 ? 's' : '');
+                setTimeout(function () {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline-primary');
+                    btn.innerHTML = '<i class="fa fa-paste me-1"></i>Paste';
+                }, 1500);
+            });
+        });
+
+        updatePasteButtons();
     })();
     </script>
 {% endblock %}
