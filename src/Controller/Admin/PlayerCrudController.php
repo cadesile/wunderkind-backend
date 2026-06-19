@@ -122,10 +122,17 @@ class PlayerCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         // ── Index: flat list columns ──────────────────────────────────────────
-        yield IdField::new('id')->hideOnForm();
-        yield TextField::new('firstName');
-        yield TextField::new('lastName');
-        yield TextField::new('nationality');
+        yield TextField::new('firstName')->onlyOnIndex();
+        yield TextField::new('lastName')->onlyOnIndex();
+        yield TextField::new('nationality')->onlyOnIndex();
+        yield DateField::new('dateOfBirth', 'DOB')->setFormat('yyyy-MM-dd')->onlyOnIndex();
+        yield IntegerField::new('currentAbility', 'CA')->onlyOnIndex();
+        yield IntegerField::new('potential', 'PA')->onlyOnIndex();
+        yield IntegerField::new('height', 'Height')->onlyOnIndex();
+        yield IntegerField::new('weight', 'Weight')->onlyOnIndex();
+
+        // ── Detail-only fields ────────────────────────────────────────────────
+        yield IdField::new('id')->onlyOnDetail();
 
         yield ChoiceField::new('position')
             ->setChoices([
@@ -139,7 +146,8 @@ class PlayerCrudController extends AbstractCrudController
                 PlayerPosition::DEFENDER->value   => 'success',
                 PlayerPosition::MIDFIELDER->value => 'primary',
                 PlayerPosition::ATTACKER->value   => 'danger',
-            ]);
+            ])
+            ->hideOnIndex();
 
         yield ChoiceField::new('status')
             ->setChoices([
@@ -155,11 +163,12 @@ class PlayerCrudController extends AbstractCrudController
                 PlayerStatus::TRANSFERRED->value           => 'secondary',
                 PlayerStatus::TRANSFERRED_VIA_AGENT->value => 'secondary',
                 PlayerStatus::RETIRED->value               => 'secondary',
-            ]);
+            ])
+            ->hideOnIndex();
 
-        // Calculated overall — index only
         yield IntegerField::new('overall', 'Overall')
             ->hideOnForm()
+            ->hideOnIndex()
             ->setHelp('(pace+technical+vision+power+stamina+heart) / 6');
 
         yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
