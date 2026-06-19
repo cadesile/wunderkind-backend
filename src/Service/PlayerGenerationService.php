@@ -37,16 +37,33 @@ class PlayerGenerationService
         $nat = $nationality ?? $this->nameGenerator->getRandomNationality();
         ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
 
+        $age       = random_int(16, 33);
+        $potential = random_int(1, 100);
+
+        // Height: base range 163–203 cm; GKs receive an additional 3–8 cm upward bias
+        $baseHeight = random_int(163, 203);
+        $height     = ($position === PlayerPosition::GOALKEEPER)
+            ? min(211, $baseHeight + random_int(3, 8))
+            : $baseHeight;
+
+        // Weight: base 60–82 kg, correlated upward with height (up to +15 kg)
+        $baseWeight  = random_int(60, 82);
+        $heightBonus = (int) floor($this->normalise($height, 163, 211) * 15);
+        $weight      = min(97, $baseWeight + $heightBonus);
+
+        $year = (int) date('Y') - $age;
+        $dob  = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, random_int(1, 12), random_int(1, 28)));
+
         return new PlayerBlueprint(
             firstName:   $firstName,
             lastName:    $lastName,
             nationality: $nat,
-            age:         20,
-            dateOfBirth: new \DateTimeImmutable('2004-01-01'),
-            height:      175,
-            weight:      70,
+            age:         $age,
+            dateOfBirth: $dob,
+            height:      $height,
+            weight:      $weight,
             position:    $position,
-            potential:   0,
+            potential:   $potential,
             source:      $source,
         );
     }
