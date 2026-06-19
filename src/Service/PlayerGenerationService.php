@@ -70,7 +70,21 @@ class PlayerGenerationService
 
     private function buildAbilityTarget(PlayerBlueprint $bp): PlayerBlueprint
     {
-        return new PlayerBlueprint(...array_replace((array) $bp, ['abilityTarget' => 0.5, 'isProdigy' => false]));
+        $age       = $bp->age;
+        $isProdigy = false;
+
+        if ($age >= 18 && $age <= 23 && random_int(1, 100) <= 5) {
+            $isProdigy     = true;
+            $abilityTarget = $this->randFloat(0.85, 0.95);
+        } elseif ($age <= 21) {
+            $abilityTarget = $this->randFloat(0.30, 0.60);
+        } elseif ($age <= 25) {
+            $abilityTarget = $this->randFloat(0.60, 0.85);
+        } else {
+            $abilityTarget = $this->randFloat(0.85, 1.00);
+        }
+
+        return new PlayerBlueprint(...array_replace((array) $bp, ['abilityTarget' => $abilityTarget, 'isProdigy' => $isProdigy]));
     }
 
     private function buildPersonality(PlayerBlueprint $bp): PlayerBlueprint

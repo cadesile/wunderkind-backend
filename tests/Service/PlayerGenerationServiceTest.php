@@ -113,4 +113,39 @@ class PlayerGenerationServiceTest extends TestCase
         $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK, 'Spanish');
         $this->assertSame('Spanish', $player->getNationality());
     }
+
+    public function testCurrentAbilityNeverExceedsPotential(): void
+    {
+        $svc = $this->makeService();
+        for ($i = 0; $i < 50; $i++) {
+            $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
+            $this->assertLessThanOrEqual(
+                $player->getPotential(),
+                $player->getCurrentAbility(),
+                "currentAbility {$player->getCurrentAbility()} must not exceed potential {$player->getPotential()}"
+            );
+        }
+    }
+
+    public function testYoungPlayersHaveLowerAbilityRatio(): void
+    {
+        // Players aged 16–21 should average <= 60% of their potential for currentAbility
+        // (ability target caps at 60% for youth bracket)
+        $svc   = $this->makeService();
+        $ratios = [];
+        for ($i = 0; $i < 100; $i++) {
+            $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
+            $age    = (int) $player->getDateOfBirth()->diff(new \DateTimeImmutable())->y;
+            if ($age >= 16 && $age <= 21 && $player->getPotential() > 0) {
+                $ratios[] = $player->getCurrentAbility() / $player->getPotential();
+            }
+        }
+        if (count($ratios) >= 5) {
+            $avgRatio = array_sum($ratios) / count($ratios);
+            $this->assertLessThanOrEqual(0.65, $avgRatio,
+                'Youth players (16–21) should average <= 65% ability/potential ratio');
+        } else {
+            $this->markTestSkipped('Too few youth players generated; re-run for a statistically meaningful sample.');
+        }
+    }
 }
