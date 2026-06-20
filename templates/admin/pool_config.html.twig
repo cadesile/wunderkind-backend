@@ -542,17 +542,6 @@
                             </div>
                             <div class="form-text">Default: 12–13</div>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Current Ability Range</label>
-                            <div class="input-group">
-                                <input type="number" name="playerAbilityMin" value="{{ config.playerAbilityMin }}"
-                                       min="1" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="playerAbilityMax" value="{{ config.playerAbilityMax }}"
-                                       min="1" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 3–10</div>
-                        </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small">Potential Range (bell curve)</label>
                             <div class="row g-2">
@@ -572,17 +561,6 @@
                                     <div class="form-text">Mean. Default: 60</div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Attribute Budget Range</label>
-                            <div class="input-group">
-                                <input type="number" name="playerAttributeBudgetMin" value="{{ config.playerAttributeBudgetMin }}"
-                                       min="1" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="playerAttributeBudgetMax" value="{{ config.playerAttributeBudgetMax }}"
-                                       min="1" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Total points distributed across 6 stats. Default: 6–20</div>
                         </div>
                         <div class="col-md-3">
                             <label for="playerAgentChancePercent" class="form-label fw-semibold small">Agent Chance (%)</label>

@@ -12,6 +12,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 
 class ScoutCrudController extends AbstractCrudController
 {
@@ -38,8 +39,9 @@ class ScoutCrudController extends AbstractCrudController
         yield TextField::new('nationality');
         yield IntegerField::new('experience');
         yield TextareaField::new('judgementsJson', 'Judgements')
+            ->setFormType(TextareaType::class)
             ->setHelp('JSON object of scout judgement attributes. Invalid JSON is silently ignored on save.')
-            ->addCssClass('font-monospace')
+            ->setFormTypeOption('attr', ['rows' => 8, 'class' => 'font-monospace'])
             ->hideOnIndex();
     }
 }

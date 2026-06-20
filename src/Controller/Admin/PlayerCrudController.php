@@ -181,17 +181,7 @@ class PlayerCrudController extends AbstractCrudController
         yield DateField::new('dateOfBirth')->setFormat('yyyy-MM-dd')->setColumns(4)->hideOnIndex();
         yield TextField::new('nationality')->setColumns(4)->hideOnIndex();
 
-        yield ChoiceField::new('recruitmentSource')
-            ->setChoices([
-                'Scouting Network' => RecruitmentSource::SCOUTING_NETWORK,
-                'Coaching Find'    => RecruitmentSource::COACHING_FIND,
-                'Agent Offer'      => RecruitmentSource::AGENT_OFFER,
-                'Youth Request'    => RecruitmentSource::YOUTH_REQUEST,
-            ])
-            ->setColumns(4)
-            ->hideOnIndex();
-
-        // ── Panel: Ability ────────────────────────────────────────────────────
+// ── Panel: Ability ────────────────────────────────────────────────────
         yield FormField::addFieldset('Ability', 'fa fa-chart-bar')->hideOnIndex();
 
         yield IntegerField::new('potential')->setColumns(4)->hideOnIndex();
