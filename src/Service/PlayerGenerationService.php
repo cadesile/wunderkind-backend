@@ -58,7 +58,10 @@ class PlayerGenerationService
         $heightBonus = (int) floor($this->normalise($height, 163, 211) * 15);
         $weight      = min(97, $baseWeight + $heightBonus);
 
-        $dob = (new \DateTimeImmutable())->modify("-{$age} years");
+        $month = rand(1,12);
+        $day = rand(1,20);
+
+        $dob = (new \DateTimeImmutable())->modify("-{$age} years, -{$month} months, -{$day} days");
 
         return new PlayerBlueprint(
             firstName:   $firstName,
