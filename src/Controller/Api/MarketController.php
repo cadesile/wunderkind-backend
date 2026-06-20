@@ -38,30 +38,14 @@ class MarketController extends AbstractController
     // New endpoints
     // -------------------------------------------------------------------------
 
-    /** Maps the 2-letter club country code to its player nationality string. */
-    private const COUNTRY_TO_NATIONALITY = [
-        'EN' => 'English',
-        'IT' => 'Italian',
-        'DE' => 'German',
-        'ES' => 'Spanish',
-        'BR' => 'Brazilian',
-        'AR' => 'Argentine',
-        'NL' => 'Dutch',
-    ];
-
     #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]
     public function data(Request $request, MarketDataService $service): JsonResponse
     {
-        $countryCode = $request->query->get('country');
-        $nationality = $countryCode !== null
-            ? (self::COUNTRY_TO_NATIONALITY[$countryCode] ?? null)
-            : null;
-
         $tierParam = $request->query->get('tier');
         $tier      = $tierParam !== null ? Tier::tryFrom(strtolower($tierParam)) : null;
 
-        $response = $this->json($service->getMarketSnapshot($nationality, $tier));
+        $response = $this->json($service->getMarketSnapshot($tier));
         $response->setMaxAge(300); // 5-minute cache hint for client
         return $response;
     }
