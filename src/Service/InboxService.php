@@ -89,49 +89,6 @@ class InboxService
         return $message;
     }
 
-    public function sendAgeOutWarning(Player $player, int $weeksRemaining): InboxMessage
-    {
-        $club    = $player->getClub();
-        $playerName = $player->getFullName();
-
-        $message = new InboxMessage(
-            club:    $club,
-            senderType: MessageSenderType::SYSTEM,
-            senderName: 'Club System',
-            subject:    "Age-out warning: {$playerName}",
-            body:       "{$playerName} will be automatically transferred in {$weeksRemaining} week(s) when they turn 21. Consider negotiating a transfer now to maximise value.",
-        );
-        $message->setRelatedEntityType('player');
-        $message->setRelatedEntityId((string) $player->getId());
-
-        $this->em->persist($message);
-        $this->em->flush();
-
-        return $message;
-    }
-
-    public function sendForcedSaleNotification(Player $player, int $salePrice): InboxMessage
-    {
-        $club    = $player->getClub();
-        $playerName = $player->getFullName();
-        $formatted  = number_format($salePrice / 100, 2);
-
-        $message = new InboxMessage(
-            club:    $club,
-            senderType: MessageSenderType::SYSTEM,
-            senderName: 'Club System',
-            subject:    "Forced sale completed: {$playerName}",
-            body:       "{$playerName} has been automatically transferred for £{$formatted} after reaching age 21.",
-        );
-        $message->setRelatedEntityType('player');
-        $message->setRelatedEntityId((string) $player->getId());
-
-        $this->em->persist($message);
-        $this->em->flush();
-
-        return $message;
-    }
-
     public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
     {
         $message = new InboxMessage(
