@@ -241,7 +241,6 @@ class MarketPoolService
                 firstName: $first,
                 lastName:  $last,
                 role:      $role,
-                club:      null,
             );
 
             $member->setNationality($nat);
