@@ -26,6 +26,7 @@ use App\Repository\ScoutRepository;
 use App\Repository\SponsorRepository;
 use App\Repository\StaffRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Service\WorldInitializationService;
 
 class MarketPoolService
 {
@@ -145,6 +146,7 @@ class MarketPoolService
         private readonly PoolConfigRepository   $poolConfigRepo,
         private readonly \App\Repository\GameConfigRepository $gameConfigRepo,
         private readonly PlayerGenerationService $playerGen,
+        private readonly WorldInitializationService $worldInitializationService,
     ) {}
 
     // ── Generate ─────────────────────────────────────────────────────────────
@@ -441,59 +443,57 @@ class MarketPoolService
     // ── Assign ────────────────────────────────────────────────────────────────
 
     /**
-     * Assign a pool entity to an club.
+     * Assign a pool entity to a club.
      *
-     * Scout entities are a global reference pool and have no club assignment;
-     * the call succeeds as a no-op and the Scout entity is left unchanged.
+     * Player and Staff: builds a snapshot, deletes the entity from the pool, and returns the snapshot.
+     * Scout: no-op (global reference pool, frontend tracks locally). Returns null.
+     * Sponsor/Investor: sets club FK and assignedAt. Returns null.
      *
-     * @throws \RuntimeException if a Player/Staff/Investor/Sponsor is already assigned
+     * @return array|null Snapshot for Player/Staff; null for all other types.
+     * @throws \RuntimeException if a Sponsor/Investor is already assigned
      */
-    public function assignToClub(mixed $entity, Club $club): void
+    public function assignToClub(mixed $entity, Club $club): array|null
     {
         $now = new \DateTimeImmutable();
 
         if ($entity instanceof Player) {
-            if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Player is already assigned to an club.');
-            }
-            $entity->setClub($club);
+            $snapshot = $this->worldInitializationService->buildPlayerSnapshot($entity);
+            $this->em->remove($entity);
             $this->em->flush();
-            return;
+            return $snapshot;
         }
 
         if ($entity instanceof Staff) {
-            if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Staff member is already assigned to an club.');
-            }
-            $entity->setClub($club);
+            $snapshot = $this->worldInitializationService->buildStaffSnapshot($entity);
+            $this->em->remove($entity);
             $this->em->flush();
-            return;
+            return $snapshot;
         }
 
         if ($entity instanceof Scout) {
             // Scout is a global reference pool entity with no club assignment.
             // The frontend tracks hired scouts locally; no server-side state change needed.
-            return;
+            return null;
         }
 
         if ($entity instanceof Sponsor) {
             if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Sponsor is already assigned to an club.');
+                throw new \RuntimeException('Sponsor is already assigned to a club.');
             }
             $entity->setClub($club);
             $entity->setAssignedAt($now);
             $this->em->flush();
-            return;
+            return null;
         }
 
         if ($entity instanceof Investor) {
             if (!$entity->isInMarketPool()) {
-                throw new \RuntimeException('Investor is already assigned to an club.');
+                throw new \RuntimeException('Investor is already assigned to a club.');
             }
             $entity->setClub($club);
             $entity->setAssignedAt($now);
             $this->em->flush();
-            return;
+            return null;
         }
 
         throw new \InvalidArgumentException('Unknown entity type for assignment.');
