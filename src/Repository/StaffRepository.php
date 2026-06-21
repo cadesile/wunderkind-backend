@@ -2,7 +2,6 @@
 
 namespace App\Repository;
 
-use App\Entity\Club;
 use App\Entity\Staff;
 use App\Enum\StaffRole;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -21,8 +20,7 @@ class StaffRepository extends ServiceEntityRepository
      */
     public function findInPool(?StaffRole $role = null, int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
-        $qb = $this->createQueryBuilder('s')
-            ->where('s.club IS NULL');
+        $qb = $this->createQueryBuilder('s');
 
         if ($role !== null) {
             $qb->andWhere('s.role = :role')->setParameter('role', $role);
@@ -46,8 +44,7 @@ class StaffRepository extends ServiceEntityRepository
     public function countInPool(?StaffRole $role = null): int
     {
         $qb = $this->createQueryBuilder('s')
-            ->select('COUNT(s.id)')
-            ->where('s.club IS NULL');
+            ->select('COUNT(s.id)');
 
         if ($role !== null) {
             $qb->andWhere('s.role = :role')->setParameter('role', $role);
@@ -60,19 +57,12 @@ class StaffRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('s')
             ->select('COUNT(s.id)')
-            ->where('s.club IS NULL')
-            ->andWhere('s.nationality = :nat')
+            ->where('s.nationality = :nat')
             ->andWhere('s.role = :role')
             ->setParameter('nat', $nationality)
             ->setParameter('role', $role)
             ->getQuery()
             ->getSingleScalarResult();
-    }
-
-    /** @return Staff[] */
-    public function findByClub(Club $club): array
-    {
-        return $this->findBy(['club' => $club]);
     }
 
     /**
@@ -82,8 +72,7 @@ class StaffRepository extends ServiceEntityRepository
     public function findInPoolByRoleRandom(StaffRole $role, int $limit, ?string $nationality = null): array
     {
         $qb = $this->createQueryBuilder('s')
-            ->where('s.club IS NULL')
-            ->andWhere('s.role = :role')
+            ->where('s.role = :role')
             ->setParameter('role', $role);
 
         if ($nationality !== null) {

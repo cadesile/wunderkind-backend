@@ -2,7 +2,6 @@
 
 namespace App\Repository;
 
-use App\Entity\Club;
 use App\Entity\Guardian;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
@@ -25,7 +24,6 @@ class PlayerRepository extends ServiceEntityRepository
     public function findInPool(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
     {
         $qb = $this->createQueryBuilder('p')
-            ->where('p.club IS NULL')
             ->orderBy('p.createdAt', 'DESC')
             ->setMaxResults($limit);
 
@@ -51,7 +49,6 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
-            ->where('p.club IS NULL')
             ->getQuery()
             ->getSingleScalarResult();
     }
@@ -60,38 +57,12 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
-            ->where('p.club IS NULL')
-            ->andWhere('p.nationality = :nat')
+            ->where('p.nationality = :nat')
             ->setParameter('nat', $nationality)
             ->getQuery()
             ->getSingleScalarResult();
     }
 
-    /** @return Player[] */
-    public function findByClub(Club $club): array
-    {
-        return $this->findBy(['club' => $club]);
-    }
-
-    /**
-     * Returns players excluding all transferred statuses.
-     *
-     * @return Player[]
-     */
-    public function findActiveByClub(Club $club): array
-    {
-        return $this->createQueryBuilder('p')
-            ->where('p.club = :club')
-            ->andWhere('p.status NOT IN (:excluded)')
-            ->setParameter('club', $club)
-            ->setParameter('excluded', [
-                PlayerStatus::TRANSFERRED->value,
-                PlayerStatus::TRANSFERRED_VIA_AGENT->value,
-            ])
-            ->orderBy('p.lastName', 'ASC')
-            ->getQuery()
-            ->getResult();
-    }
 
     /**
      * Random pool draw filtered by ability range and position (any nationality).
@@ -104,8 +75,7 @@ class PlayerRepository extends ServiceEntityRepository
 
         return $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.club IS NULL')
-            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->where('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.position = :position')
             ->setParameter('min', $abilityMin)
             ->setParameter('max', $abilityMax)
@@ -125,8 +95,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.club IS NULL')
-            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->where('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.nationality = :nationality')
             ->setParameter('min', $abilityMin)
             ->setParameter('max', $abilityMax)
@@ -150,8 +119,7 @@ class PlayerRepository extends ServiceEntityRepository
 
         $qb = $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.club IS NULL')
-            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->where('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.position = :position')
             ->andWhere('p.nationality = :nationality')
             ->setParameter('min', $abilityMin)
@@ -182,8 +150,7 @@ class PlayerRepository extends ServiceEntityRepository
 
         $qb = $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.club IS NULL')
-            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->where('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.position = :position')
             ->andWhere('p.nationality != :nationality')
             ->setParameter('min', $abilityMin)
@@ -209,8 +176,7 @@ class PlayerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.club IS NULL')
-            ->andWhere('p.currentAbility BETWEEN :min AND :max')
+            ->where('p.currentAbility BETWEEN :min AND :max')
             ->andWhere('p.nationality != :nationality')
             ->setParameter('min', $abilityMin)
             ->setParameter('max', $abilityMax)
@@ -241,8 +207,7 @@ class PlayerRepository extends ServiceEntityRepository
 
         $qb = $this->createQueryBuilder('p')
             ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.club IS NULL')
-            ->andWhere('p.currentAbility BETWEEN :abilityMin AND :abilityMax')
+            ->where('p.currentAbility BETWEEN :abilityMin AND :abilityMax')
             ->setParameter('abilityMin', $abilityMin)
             ->setParameter('abilityMax', $abilityMax)
             ->orderBy('rand_order')
