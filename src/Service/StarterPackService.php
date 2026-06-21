@@ -8,7 +8,9 @@ use App\Entity\Club;
 use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Staff;
+use App\Entity\StarterConfig;
 use App\Enum\PlayerPosition;
+use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
@@ -28,6 +30,7 @@ class StarterPackService
         private readonly PoolConfigRepository       $poolConfigRepository,
         private readonly WorldInitializationService $worldInitializationService,
         private readonly EntityManagerInterface     $em,
+        private readonly MarketPoolService          $marketPoolService,
     ) {}
 
     /**
@@ -45,6 +48,8 @@ class StarterPackService
             ?? ['min' => 5, 'max' => 35];
         $ampRange       = ['min' => (int) $ampRangeRaw['min'], 'max' => (int) $ampRangeRaw['max']];
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
+
+        $this->prewarmPoolForClub($club, $starterConfig, $ampNationality);
 
         $poolConfig = $this->poolConfigRepository->getConfig();
         $posCounts  = $this->worldInitializationService->distributeByPosition(
@@ -106,6 +111,31 @@ class StarterPackService
                 $ampScouts
             ),
         ];
+    }
+
+    private function prewarmPoolForClub(Club $club, StarterConfig $config, string $nationality): void
+    {
+        $this->marketPoolService->generatePlayers(
+            $config->getStarterPlayerCount() * 2,
+            RecruitmentSource::YOUTH_INTAKE,
+            $nationality,
+        );
+
+        $staffRoles = [
+            [StaffRole::MANAGER,              $config->getStarterManagerCount()],
+            [StaffRole::COACH,                $config->getStarterCoachCount()],
+            [StaffRole::DIRECTOR_OF_FOOTBALL, $config->getStarterDirectorOfFootballCount()],
+            [StaffRole::FACILITY_MANAGER,     $config->getStarterFacilityManagerCount()],
+            [StaffRole::CHAIRMAN,             $config->getStarterChairmanCount()],
+        ];
+
+        foreach ($staffRoles as [$role, $count]) {
+            if ($count > 0) {
+                $this->marketPoolService->generateStaffForRole($role, $count, $nationality);
+            }
+        }
+
+        $this->marketPoolService->generateScouts($config->getStarterScoutCount(), $nationality);
     }
 
     private function fillStaffRole(StaffRole $role, int $limit, string $nationality): array
