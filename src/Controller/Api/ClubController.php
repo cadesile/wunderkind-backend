@@ -201,8 +201,6 @@ class ClubController extends AbstractController
             'weekNumber'          => $club->getLastSyncedWeek(),
             'totalCareerEarnings' => $club->getTotalCareerEarnings(),
             'hallOfFamePoints'    => $club->getHallOfFamePoints(),
-            'playerCount'         => $club->getPlayers()->count(),
-            'staffCount'          => $club->getStaff()->count(),
             'activeSponsors'      => $club->getActiveSponsors()->count(),
             'activeInvestors'     => $activeInvestorCount,
         ]);

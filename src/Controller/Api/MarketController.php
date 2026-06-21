@@ -89,8 +89,8 @@ class MarketController extends AbstractController
 
         // Verify entity is available in the pool (not already assigned)
         $inPool = match (true) {
-            $entity instanceof Player   => $entity->isInMarketPool(),
-            $entity instanceof Staff    => $entity->isInMarketPool(),
+            $entity instanceof Player   => true, // Players are deleted on assign; no club_id
+            $entity instanceof Staff    => true, // Staff are deleted on assign; no club_id
             $entity instanceof Sponsor  => $entity->isInMarketPool(),
             $entity instanceof Investor => $entity->isInMarketPool(),
             $entity instanceof Scout    => true, // Scouts are always available
@@ -102,12 +102,17 @@ class MarketController extends AbstractController
         }
 
         try {
-            $pool->assignToClub($entity, $club);
+            $snapshot = $pool->assignToClub($entity, $club);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
         }
 
-        return $this->json(['success' => true, 'entityId' => $dto->entityId]);
+        $response = ['success' => true, 'entityId' => $dto->entityId];
+        if ($snapshot !== null) {
+            $response['snapshot'] = $snapshot;
+        }
+
+        return $this->json($response);
     }
 
     #[Route('/consume', name: 'api_market_consume', methods: ['POST'])]
