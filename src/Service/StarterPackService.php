@@ -49,7 +49,7 @@ class StarterPackService
         $ampRange       = ['min' => (int) $ampRangeRaw['min'], 'max' => (int) $ampRangeRaw['max']];
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
-        $this->prewarmPoolForClub($club, $starterConfig, $ampNationality);
+        $this->prewarmPoolForClub($starterConfig, $ampNationality);
 
         $poolConfig = $this->poolConfigRepository->getConfig();
         $posCounts  = $this->worldInitializationService->distributeByPosition(
@@ -113,7 +113,7 @@ class StarterPackService
         ];
     }
 
-    private function prewarmPoolForClub(Club $club, StarterConfig $config, string $nationality): void
+    private function prewarmPoolForClub(StarterConfig $config, string $nationality): void
     {
         $this->marketPoolService->generatePlayers(
             $config->getStarterPlayerCount() * 2,
@@ -135,7 +135,9 @@ class StarterPackService
             }
         }
 
-        $this->marketPoolService->generateScouts($config->getStarterScoutCount(), $nationality);
+        if ($config->getStarterScoutCount() > 0) {
+            $this->marketPoolService->generateScouts($config->getStarterScoutCount(), $nationality);
+        }
     }
 
     private function fillStaffRole(StaffRole $role, int $limit, string $nationality): array
