@@ -162,7 +162,6 @@ class PlayerGenerationService
             recruitmentSource: $bp->source,
             potential:         $bp->potential,
             currentAbility:    $bp->currentAbility,
-            club:              null,
         );
 
         $player->setHeight($bp->height);

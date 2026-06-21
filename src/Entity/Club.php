@@ -96,12 +96,6 @@ class Club
     #[ORM\JoinColumn(nullable: false)]
     private User $user;
 
-    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Player::class, cascade: ['persist', 'remove'])]
-    private Collection $players;
-
-    #[ORM\OneToMany(mappedBy: 'club', targetEntity: Staff::class, cascade: ['persist', 'remove'])]
-    private Collection $staff;
-
     #[ORM\OneToMany(mappedBy: 'club', targetEntity: Transfer::class)]
     private Collection $transfers;
 
@@ -136,8 +130,6 @@ class Club
         $this->name               = $name;
         $this->user               = $user;
         $this->createdAt          = new \DateTimeImmutable();
-        $this->players            = new ArrayCollection();
-        $this->staff              = new ArrayCollection();
         $this->transfers          = new ArrayCollection();
         $this->syncRecords        = new ArrayCollection();
         $this->leaderboardEntries = new ArrayCollection();
@@ -224,8 +216,6 @@ class Club
 
     public function getUser(): User { return $this->user; }
 
-    public function getPlayers(): Collection { return $this->players; }
-    public function getStaff(): Collection { return $this->staff; }
     public function getTransfers(): Collection { return $this->transfers; }
     public function getSyncRecords(): Collection { return $this->syncRecords; }
     public function getLeaderboardEntries(): Collection { return $this->leaderboardEntries; }

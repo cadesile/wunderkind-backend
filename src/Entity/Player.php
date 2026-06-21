@@ -13,7 +13,6 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: PlayerRepository::class)]
 #[ORM\HasLifecycleCallbacks]
-#[ORM\Index(columns: ['club_id'], name: 'idx_player_club')]
 class Player
 {
     #[ORM\Id]
@@ -41,7 +40,6 @@ class Player
     #[ORM\Column(enumType: RecruitmentSource::class)]
     private RecruitmentSource $recruitmentSource;
 
-    // Hidden server-side attributes (not exposed to client as raw numbers)
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true])]
     private int $potential;
 
@@ -55,20 +53,12 @@ class Player
     #[ORM\Embedded(class: PersonalityProfile::class)]
     private PersonalityProfile $personality;
 
-    #[ORM\ManyToOne(inversedBy: 'players')]
-    #[ORM\JoinColumn(nullable: true)]
-    private ?Club $club = null;
-
     #[ORM\OneToMany(mappedBy: 'player', targetEntity: Guardian::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $guardians;
 
     #[ORM\ManyToOne(inversedBy: 'players')]
     private ?Agent $agent = null;
 
-    /**
-     * Siblings within the same club — losing one sibling triggers
-     * loyalty penalties for the remaining sibling(s).
-     */
     #[ORM\ManyToMany(targetEntity: self::class)]
     #[ORM\JoinTable(name: 'player_siblings')]
     private Collection $siblings;
@@ -105,15 +95,6 @@ class Player
     #[ORM\Column(type: 'integer')]
     private int $morale = 50;
 
-    #[ORM\Column(options: ['default' => false])]
-    private bool $ageOutWarningIssued = false;
-
-    #[ORM\Column(options: ['default' => false])]
-    private bool $forcedSaleExecuted = false;
-
-    #[ORM\Column(type: 'integer', nullable: true)]
-    private ?int $forcedSaleWeek = null;
-
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -129,7 +110,6 @@ class Player
         RecruitmentSource $recruitmentSource = RecruitmentSource::SCOUTING_NETWORK,
         int $potential = 0,
         int $currentAbility = 0,
-        ?Club $club = null,
     ) {
         $this->id                = new UuidV7();
         $this->firstName         = $firstName;
@@ -140,7 +120,6 @@ class Player
         $this->recruitmentSource = $recruitmentSource;
         $this->potential         = $potential;
         $this->currentAbility    = $currentAbility;
-        $this->club           = $club;
         $this->personality       = new PersonalityProfile();
         $this->guardians         = new ArrayCollection();
         $this->siblings          = new ArrayCollection();
@@ -168,10 +147,7 @@ class Player
     public function setDateOfBirth(\DateTimeImmutable $dob): void { $this->dateOfBirth = $dob; }
 
     public function getAge(): int {
-        // diff() calculates the absolute difference between two DateTimeInterface objects
-        $interval = $this->getDateOfBirth()->diff(new \DateTimeImmutable("now"));
-        // Return the years from the calculated interval
-        return $interval->y;
+        return (int) $this->getDateOfBirth()->diff(new \DateTimeImmutable("now"))->y;
     }
 
     public function getNationality(): string { return $this->nationality; }
@@ -233,11 +209,6 @@ class Player
 
     public function getPersonality(): PersonalityProfile { return $this->personality; }
 
-    public function isInMarketPool(): bool { return $this->club === null; }
-
-    public function getClub(): ?Club { return $this->club; }
-    public function setClub(?Club $club): void { $this->club = $club; }
-
     public function getGuardians(): Collection { return $this->guardians; }
 
     public function addGuardian(Guardian $guardian): void
@@ -265,25 +236,6 @@ class Player
             $sibling->addSibling($this);
         }
     }
-
-    public function isAgeOutWarningIssued(): bool { return $this->ageOutWarningIssued; }
-    public function setAgeOutWarningIssued(bool $issued): void { $this->ageOutWarningIssued = $issued; }
-
-    public function isForcedSaleExecuted(): bool { return $this->forcedSaleExecuted; }
-    public function setForcedSaleExecuted(bool $executed): void { $this->forcedSaleExecuted = $executed; }
-
-    public function getForcedSaleWeek(): ?int { return $this->forcedSaleWeek; }
-    public function setForcedSaleWeek(?int $week): void { $this->forcedSaleWeek = $week; }
-
-    public function getWeeksUntil21(int $currentWeek): int
-    {
-        if ($this->forcedSaleWeek === null) {
-            return PHP_INT_MAX;
-        }
-        return max(0, $this->forcedSaleWeek - $currentWeek);
-    }
-
-    public function isAssigned(): bool { return $this->club !== null; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }

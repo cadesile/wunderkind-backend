@@ -8,7 +8,6 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: StaffRepository::class)]
-#[ORM\Index(columns: ['club_id'], name: 'idx_staff_club')]
 class Staff
 {
     #[ORM\Id]
@@ -59,10 +58,6 @@ class Staff
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $specialisms = null;
 
-    #[ORM\ManyToOne(inversedBy: 'staff')]
-    #[ORM\JoinColumn(nullable: true)]
-    private ?Club $club = null;
-
     #[ORM\Column(type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $dob = null;
 
@@ -73,13 +68,11 @@ class Staff
         string $firstName = '',
         string $lastName = '',
         StaffRole $role = StaffRole::COACH,
-        ?Club $club = null,
     ) {
         $this->id        = new UuidV7();
         $this->firstName = $firstName;
         $this->lastName  = $lastName;
         $this->role      = $role;
-        $this->club   = $club;
         $this->hiredAt   = new \DateTimeImmutable();
     }
 
@@ -129,13 +122,6 @@ class Staff
         $decoded = json_decode($json, true);
         $this->specialisms = is_array($decoded) && !empty($decoded) ? $decoded : null;
     }
-
-    public function isInMarketPool(): bool { return $this->club === null; }
-
-    public function getClub(): ?Club { return $this->club; }
-    public function setClub(?Club $club): void { $this->club = $club; }
-
-    public function isAssigned(): bool { return $this->club !== null; }
 
     public function getDob(): ?\DateTimeImmutable { return $this->dob; }
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
