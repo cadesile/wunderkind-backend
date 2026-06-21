@@ -7,15 +7,12 @@ namespace App\Service;
 use App\Entity\Club;
 use App\Entity\GameConfig;
 use App\Entity\Player;
-use App\Entity\Transfer;
 use App\Enum\InvestorTier;
-use App\Enum\PlayerStatus;
 use App\Enum\SponsorStatus;
 use App\Repository\GameConfigRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\SponsorRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Psr\Log\LoggerInterface;
 
 class EconomicService
 {
@@ -25,7 +22,6 @@ class EconomicService
         private readonly InvestorRepository     $investorRepository,
         private readonly SponsorRepository      $sponsorRepository,
         private readonly GameConfigRepository   $gameConfigRepository,
-        private readonly LoggerInterface        $logger,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -107,7 +103,7 @@ class EconomicService
         $p = $player->getPersonality();
         $personalityFactor = 1 + (($p->getLoyalty() + $p->getProfessionalism() + $p->getDetermination()) / 60 - 0.5) * 0.2;
 
-        $reputationFactor = 1 + $player->getClub()?->getReputation() / 1000 ?? 0;
+        $reputationFactor = 1;
 
         return (int) round($baseValue * $abilityFactor * $potentialFactor * $ageFactor * $personalityFactor * $reputationFactor);
     }
@@ -180,83 +176,4 @@ class EconomicService
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Age-out checks
-    // -------------------------------------------------------------------------
-
-    public function checkAgeOutPlayers(Club $club, int $currentWeek, \DateTimeImmutable $clientTimestamp): void
-    {
-        $playersToDelete = [];
-
-        foreach ($club->getPlayers() as $player) {
-            if ($player->getStatus() !== PlayerStatus::ACTIVE) {
-                continue;
-            }
-
-            $age = $this->calculateAge($player->getDateOfBirth(), $clientTimestamp);
-
-            // Send warning when age is 20 and within 4 weeks of turning 21
-            if ($age === 20 && !$player->isAgeOutWarningIssued()) {
-                $weeksRemaining = $this->weeksUntilAge21($player->getDateOfBirth(), $clientTimestamp);
-                if ($weeksRemaining <= 4) {
-                    $this->inboxService->sendAgeOutWarning($player, $weeksRemaining);
-                    $player->setAgeOutWarningIssued(true);
-                }
-            }
-
-            // Hard delete at age 21 — collect for removal after iteration
-            if ($age >= 21 && !$player->isForcedSaleExecuted()) {
-                $this->inboxService->sendSystemNotification(
-                    $club,
-                    'Player Aged Out: ' . $player->getFullName(),
-                    sprintf(
-                        '%s has turned 21 and left the club. All records have been removed.',
-                        $player->getFullName()
-                    ),
-                    ['type' => 'age_out', 'player_id' => $player->getId()->toRfc4122()],
-                );
-                // Mark flag to prevent duplicate processing within same flush cycle
-                $player->setForcedSaleExecuted(true);
-                $playersToDelete[] = $player;
-            }
-        }
-
-        // Hard delete collected players — after the loop to avoid collection mutation issues
-        foreach ($playersToDelete as $player) {
-            // Remove transfers first (DB-level ON DELETE CASCADE also handles this, belt-and-braces)
-            $transfers = $this->em->getRepository(Transfer::class)->findBy(['player' => $player]);
-            foreach ($transfers as $transfer) {
-                $this->em->remove($transfer);
-            }
-
-            // Guardian is cascade: remove in Doctrine mapping, handled automatically
-            $this->em->remove($player);
-
-            $this->logger->info('Player aged out and permanently deleted', [
-                'player_id'  => $player->getId()->toRfc4122(),
-                'club_id' => $club->getId()->toRfc4122(),
-                'week'       => $currentWeek,
-            ]);
-        }
-
-        $this->em->flush();
-    }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    private function calculateAge(\DateTimeImmutable $dob, \DateTimeImmutable $currentDate): int
-    {
-        return (int) $currentDate->diff($dob)->y;
-    }
-
-    private function weeksUntilAge21(\DateTimeImmutable $dob, \DateTimeImmutable $currentDate): int
-    {
-        $age21Date = $dob->modify('+21 years');
-        if ($age21Date <= $currentDate) {
-            return 0;
-        }
-        return (int) ceil($currentDate->diff($age21Date)->days / 7);
-    }
 }

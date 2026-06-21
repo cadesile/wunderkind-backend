@@ -9,15 +9,14 @@ use App\Entity\Investor;
 use App\Entity\Player;
 use App\Entity\User;
 use App\Enum\PlayerPosition;
-use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use App\Service\EconomicService;
 use App\Service\InboxService;
+use App\Repository\GameConfigRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\SponsorRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
 
 class EconomicServiceTest extends TestCase
 {
@@ -29,9 +28,9 @@ class EconomicServiceTest extends TestCase
         $inboxService    = $this->createMock(InboxService::class);
         $investorRepo    = $this->createMock(InvestorRepository::class);
         $sponsorRepo     = $this->createMock(SponsorRepository::class);
-        $logger          = $this->createMock(LoggerInterface::class);
+        $gameConfigRepo  = $this->createMock(GameConfigRepository::class);
 
-        $this->service = new EconomicService($em, $inboxService, $investorRepo, $sponsorRepo, $logger);
+        $this->service = new EconomicService($em, $inboxService, $investorRepo, $sponsorRepo, $gameConfigRepo);
     }
 
     public function testCalculatePlayerMarketValueReturnsPositiveInt(): void
@@ -41,53 +40,6 @@ class EconomicServiceTest extends TestCase
 
         $this->assertIsInt($value);
         $this->assertGreaterThan(0, $value);
-    }
-
-    public function testAgeOutWarningTriggeredFourWeeksBefore(): void
-    {
-        // Player is 20 years and 49 weeks old (3 weeks from 21)
-        $player    = $this->makePlayer(age: 20, ability: 50, potential: 70);
-        $dob       = (new \DateTimeImmutable())->modify("-21 years +3 weeks");
-        $player->setDateOfBirth($dob);
-
-        $club   = $player->getClub();
-        $timestamp = new \DateTimeImmutable();
-
-        $inboxService = $this->createMock(InboxService::class);
-        $inboxService->expects($this->once())->method('sendAgeOutWarning');
-
-        $em           = $this->createMock(EntityManagerInterface::class);
-        $investorRepo = $this->createMock(InvestorRepository::class);
-        $sponsorRepo  = $this->createMock(SponsorRepository::class);
-        $logger       = $this->createMock(LoggerInterface::class);
-
-        $service = new EconomicService($em, $inboxService, $investorRepo, $sponsorRepo, $logger);
-        $service->checkAgeOutPlayers($club, 100, $timestamp);
-
-        $this->assertTrue($player->isAgeOutWarningIssued());
-    }
-
-    public function testForcedSaleExecutedAtForcedSaleWeek(): void
-    {
-        // Player is 21 years old
-        $player  = $this->makePlayer(age: 21, ability: 50, potential: 70);
-        $club = $player->getClub();
-
-        $inboxService = $this->createMock(InboxService::class);
-        $inboxService->expects($this->atLeastOnce())->method('sendSystemNotification');
-
-        $em = $this->createMock(EntityManagerInterface::class);
-        $em->expects($this->once())->method('remove')->with($player);
-        $em->expects($this->once())->method('flush');
-
-        $investorRepo = $this->createMock(InvestorRepository::class);
-        $sponsorRepo  = $this->createMock(SponsorRepository::class);
-        $logger       = $this->createMock(LoggerInterface::class);
-
-        $service = new EconomicService($em, $inboxService, $investorRepo, $sponsorRepo, $logger);
-        $service->checkAgeOutPlayers($club, 100, new \DateTimeImmutable());
-
-        $this->assertTrue($player->isForcedSaleExecuted());
     }
 
     public function testCannotExceedFiftyPercentOwnership(): void
@@ -121,11 +73,9 @@ class EconomicServiceTest extends TestCase
 
     private function makePlayer(int $age, int $ability, int $potential): Player
     {
-        $user    = new User('test@example.com');
-        $club = new Club('Test Club', $user);
-        $dob     = (new \DateTimeImmutable())->modify("-{$age} years");
+        $dob = (new \DateTimeImmutable())->modify("-{$age} years");
 
-        $player = new Player(
+        return new Player(
             firstName:         'Test',
             lastName:          'Player',
             dateOfBirth:       $dob,
@@ -134,10 +84,6 @@ class EconomicServiceTest extends TestCase
             recruitmentSource: RecruitmentSource::YOUTH_INTAKE,
             potential:         $potential,
             currentAbility:    $ability,
-            club:           $club,
         );
-        $club->getPlayers()->add($player);
-
-        return $player;
     }
 }

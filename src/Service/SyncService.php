@@ -166,7 +166,6 @@ class SyncService
         }
 
         $this->economicService->checkSponsorContracts($club, $club->getReputation());
-        $this->economicService->checkAgeOutPlayers($club, $request->weekNumber, $clientTimestamp);
 
         // ── Player attribute snapshots ────────────────────────────────────────
         if (!empty($request->players)) {
@@ -411,7 +410,7 @@ class SyncService
             }
 
             $player = $this->em->getRepository(Player::class)->find($data['playerId']);
-            if ($player === null || $player->getClub() !== $club) {
+            if ($player === null) {
                 continue;
             }
 
@@ -659,7 +658,7 @@ class SyncService
             $this->em->persist($transfer);
 
             // Update player status
-            if ($player !== null && $player->getClub() === $club) {
+            if ($player !== null) {
                 $player->setStatus(
                     $type === TransferType::AGENT_ASSISTED
                         ? PlayerStatus::TRANSFERRED_VIA_AGENT
