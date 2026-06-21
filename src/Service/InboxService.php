@@ -6,7 +6,6 @@ namespace App\Service;
 
 use App\Entity\Club;
 use App\Entity\InboxMessage;
-use App\Entity\Player;
 use App\Entity\User;
 use App\Enum\InvestorTier;
 use App\Enum\MessageSenderType;
@@ -65,31 +64,7 @@ class InboxService
         return $message;
     }
 
-    public function sendAgentSaleOffer(Player $player, array $offerData): InboxMessage
-    {
-        $club     = $player->getClub();
-        $agentName   = $offerData['agentName'] ?? 'Unknown Agent';
-        $playerName  = $player->getFullName();
-        $offerAmount = number_format(($offerData['offerAmount'] ?? 0) / 100, 2);
-
-        $message = new InboxMessage(
-            club:    $club,
-            senderType: MessageSenderType::AGENT,
-            senderName: $agentName,
-            subject:    "Transfer offer for {$playerName}",
-            body:       "{$agentName} has submitted a transfer offer of £{$offerAmount} for {$playerName}.",
-        );
-        $message->setOfferData($offerData);
-        $message->setRelatedEntityType('player');
-        $message->setRelatedEntityId((string) $player->getId());
-
-        $this->em->persist($message);
-        $this->em->flush();
-
-        return $message;
-    }
-
-    public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
+public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
     {
         $message = new InboxMessage(
             club:    $club,

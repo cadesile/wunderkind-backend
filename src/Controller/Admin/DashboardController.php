@@ -768,7 +768,6 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         $scouts    = $conn->executeStatement('DELETE FROM scout');
         $investors = $conn->executeStatement('DELETE FROM investor WHERE assigned_at IS NULL');
         $sponsors  = $conn->executeStatement('DELETE FROM sponsor WHERE assigned_at IS NULL');
-        $conn->executeStatement('UPDATE player SET agent_id = NULL WHERE agent_id IS NOT NULL');
         $agents    = $conn->executeStatement('DELETE FROM agent');
 
         $total = $players + $staff + $scouts + $investors + $sponsors + $agents;
