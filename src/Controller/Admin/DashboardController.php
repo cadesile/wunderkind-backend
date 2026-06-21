@@ -11,7 +11,6 @@ use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ConfigImportExportService;
-use App\Service\EconomicService;
 use App\Service\LeagueImportExportService;
 use App\Service\MarketPoolService;
 use App\Service\NarrativeImportExportService;
@@ -69,13 +68,13 @@ class DashboardController extends AbstractDashboardController
         $conn = $this->em->getConnection();
 
         $byNationality = $conn->fetchAllAssociative(
-            'SELECT nationality, COUNT(*) AS cnt FROM player WHERE club_id IS NULL GROUP BY nationality ORDER BY cnt DESC LIMIT 15'
+            'SELECT nationality, COUNT(*) AS cnt FROM player GROUP BY nationality ORDER BY cnt DESC LIMIT 15'
         );
         $byPosition = $conn->fetchAllAssociative(
-            'SELECT position, COUNT(*) AS cnt FROM player WHERE club_id IS NULL GROUP BY position ORDER BY cnt DESC'
+            'SELECT position, COUNT(*) AS cnt FROM player GROUP BY position ORDER BY cnt DESC'
         );
         $byAge = $conn->fetchAllAssociative(
-            'SELECT (EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM date_of_birth)) AS age, COUNT(*) AS cnt FROM player WHERE club_id IS NULL GROUP BY age ORDER BY age'
+            'SELECT (EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM date_of_birth)) AS age, COUNT(*) AS cnt FROM player GROUP BY age ORDER BY age'
         );
 
         return $this->render('admin/dashboard.html.twig', [
@@ -84,10 +83,8 @@ class DashboardController extends AbstractDashboardController
                 'academies'       => $this->em->getRepository(Club::class)->count([]),
                 'syncs'           => $this->em->getRepository(SyncRecord::class)->count([]),
                 'invalidSyncs'    => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
-                'poolPlayers'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE club_id IS NULL'),
-                'assignedPlayers' => (int) $conn->fetchOne('SELECT COUNT(*) FROM player WHERE club_id IS NOT NULL'),
-                'poolStaff'       => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NULL'),
-                'assignedStaff'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff WHERE club_id IS NOT NULL'),
+                'poolPlayers' => (int) $conn->fetchOne('SELECT COUNT(*) FROM player'),
+                'poolStaff'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff'),
             ],
             'charts' => [
                 'byNationality' => $byNationality,
@@ -548,16 +545,16 @@ class DashboardController extends AbstractDashboardController
         $conn = $this->em->getConnection();
 
         $poolCounts = [
-            'players'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
-            'staffCoach'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
-            'staffManager'        => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
-            'staffDirector'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
-            'staffFacilityMgr'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
-            'staffChairman'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'chairman'"),
-            'scouts'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
-            'sponsors'      => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
-            'investors'     => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
-            'agents'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
+            'players'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE recruitment_source = 'youth_intake'"),
+            'staffCoach'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'coach'"),
+            'staffManager'     => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'manager'"),
+            'staffDirector'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'director_of_football'"),
+            'staffFacilityMgr' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'facility_manager'"),
+            'staffChairman'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'chairman'"),
+            'scouts'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
+            'sponsors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
+            'investors'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
+            'agents'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
         ];
 
         return $this->render('admin/pool_config.html.twig', [
@@ -693,12 +690,12 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         $count = $target;
         if ($mode === 'replenish') {
             $current = match ($type) {
-                'players'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
-                'coaches'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
-                'managers'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
-                'directors'         => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
-                'facility_managers' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
-                'chairmen'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'chairman'"),
+                'players'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE recruitment_source = 'youth_intake'"),
+                'coaches'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'coach'"),
+                'managers'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'manager'"),
+                'directors'         => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'director_of_football'"),
+                'facility_managers' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'facility_manager'"),
+                'chairmen'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'chairman'"),
                 'scouts'            => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
                 'agents'            => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
                 'sponsors'          => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
@@ -739,12 +736,12 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
     {
         $conn = $this->em->getConnection();
         return $this->json([
-            'players'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE club_id IS NULL AND recruitment_source = 'youth_intake'"),
-            'staffCoach'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'coach'"),
-            'staffManager'     => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'manager'"),
-            'staffDirector'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'director_of_football'"),
-            'staffFacilityMgr' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'facility_manager'"),
-            'staffChairman'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE club_id IS NULL AND role = 'chairman'"),
+            'players'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE recruitment_source = 'youth_intake'"),
+            'staffCoach'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'coach'"),
+            'staffManager'     => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'manager'"),
+            'staffDirector'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'director_of_football'"),
+            'staffFacilityMgr' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'facility_manager'"),
+            'staffChairman'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'chairman'"),
             'scouts'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
             'agents'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
             'sponsors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
@@ -763,11 +760,11 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
 
         $conn = $this->em->getConnection();
 
-        // Delete guardians referencing unassigned players first (FK constraint)
-        $conn->executeStatement('DELETE FROM guardian WHERE player_id IN (SELECT id FROM player WHERE club_id IS NULL)');
+        // Delete guardians referencing players first (FK constraint)
+        $conn->executeStatement('DELETE FROM guardian WHERE player_id IN (SELECT id FROM player)');
 
-        $players   = $conn->executeStatement('DELETE FROM player WHERE club_id IS NULL');
-        $staff     = $conn->executeStatement('DELETE FROM staff WHERE club_id IS NULL');
+        $players   = $conn->executeStatement('DELETE FROM player');
+        $staff     = $conn->executeStatement('DELETE FROM staff');
         $scouts    = $conn->executeStatement('DELETE FROM scout');
         $investors = $conn->executeStatement('DELETE FROM investor WHERE assigned_at IS NULL');
         $sponsors  = $conn->executeStatement('DELETE FROM sponsor WHERE assigned_at IS NULL');
@@ -1208,25 +1205,14 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
 
     #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
-    public function triggerAge21Deletion(Request $request, EconomicService $economicService): Response
+    public function triggerAge21Deletion(Request $request): Response
     {
         if (!$this->isCsrfTokenValid('trigger_age21', $request->request->get('_csrf_token'))) {
             $this->addFlash('danger', 'Invalid CSRF token.');
             return $this->redirectToRoute('admin_settings');
         }
 
-        $academies      = $this->em->getRepository(Club::class)->findAll();
-        $processedCount = 0;
-        $deletedCount   = 0;
-
-        foreach ($academies as $club) {
-            $playersBefore = $club->getPlayers()->count();
-            $economicService->checkAgeOutPlayers($club, $club->getLastSyncedWeek(), new \DateTimeImmutable());
-            $deletedCount  += max(0, $playersBefore - $club->getPlayers()->count());
-            $processedCount++;
-        }
-
-        $this->addFlash('success', "Age-21 check run across {$processedCount} academies — {$deletedCount} player(s) removed.");
+        $this->addFlash('info', 'Age-21 deletion is now handled automatically during sync. Pool players are not club-owned and are deleted on consumption.');
         return $this->redirectToRoute('admin_settings');
     }
 

@@ -248,8 +248,7 @@ class WarmPoolCommand extends Command
     {
         return (int) $this->playerRepo->createQueryBuilder('p')
             ->select('COUNT(p.id)')
-            ->where('p.club IS NULL')
-            ->andWhere('p.nationality NOT IN (:nats)')
+            ->where('p.nationality NOT IN (:nats)')
             ->setParameter('nats', $exclude)
             ->getQuery()
             ->getSingleScalarResult();
@@ -260,8 +259,7 @@ class WarmPoolCommand extends Command
     {
         return (int) $this->staffRepo->createQueryBuilder('s')
             ->select('COUNT(s.id)')
-            ->where('s.club IS NULL')
-            ->andWhere('s.role = :role')
+            ->where('s.role = :role')
             ->andWhere('s.nationality NOT IN (:nats)')
             ->setParameter('role', $role)
             ->setParameter('nats', $exclude)
