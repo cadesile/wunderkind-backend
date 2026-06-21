@@ -64,7 +64,7 @@ class InboxService
         return $message;
     }
 
-public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
+    public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
     {
         $message = new InboxMessage(
             club:    $club,
