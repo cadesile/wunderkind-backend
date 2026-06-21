@@ -20,6 +20,11 @@ lando logs -s appserver              # tail app logs
 ## Common Commands
 
 ```bash
+# Tests
+lando php vendor/bin/phpunit --no-coverage                              # full suite
+lando php vendor/bin/phpunit tests/Service/SyncServiceTest.php --no-coverage  # single file
+lando php vendor/bin/phpunit --filter testMethodName --no-coverage      # single test
+
 # Cache
 lando php bin/console cache:clear
 
@@ -54,7 +59,7 @@ lando php bin/console debug:router
 lando php bin/console debug:firewall
 ```
 
-**PHPUnit is installed** (`phpunit.dist.xml` present) but test coverage is sparse — test stubs exist in `tests/`.
+Test coverage is sparse — 38 pre-existing errors in the suite are from stale test stubs unrelated to current code.
 
 ## Git Workflow
 
@@ -77,6 +82,14 @@ The server is **not** the game engine. Gameplay (Weekly Tick, training, aging, p
 3. **Leaderboards** — upserts `LeaderboardEntry` rows for `all-time` and current ISO week
 4. **World data** — serves league structures, NPC clubs, and market entities to clients
 
+### Pool Lifecycle (Player + Staff)
+The backend is a **data pool**. `Player` and `Staff` entities have **no club FK** — they exist in the DB as available pool data only. When a Player or Staff is consumed (starter pack or market assign), it is **immediately deleted** from the DB and a full snapshot is returned to the frontend, which stores it locally. The backend never tracks which players/staff a club owns.
+
+- `Player`/`Staff` in the DB = available pool. No `club_id`, no `assigned_at`.
+- Snapshots are built via `WorldInitializationService::buildPlayerSnapshot()` / `buildStaffSnapshot()` **before** the entity is removed.
+- `Sponsor` and `Investor` are **not** pool entities — they retain a `club_id` FK (financial contracts).
+- `Scout` has no club FK and is not deleted on assign.
+
 ### Request Flow (POST /api/sync)
 ```
 JWT firewall → SyncController::sync()
@@ -87,7 +100,7 @@ JWT firewall → SyncController::sync()
       → anti-cheat check → 409 if week < lastSyncedWeek
       → update Club aggregates + manager trait shifts
       → LeaderboardEntryRepository::findOrCreate() × 6
-      → EconomicService: financial year-end + sponsor check + age-out
+      → EconomicService: financial year-end + sponsor check
       → flush → return JSON
 ```
 
@@ -96,7 +109,7 @@ When a client first boots (`POST /api/club/initialize`):
 ```
 ClubController → ClubInitializationService::initializeClub()
   → creates Club, sets paName + manager traits
-  → StarterPackService::initialize() → assigns starting players/staff/sponsors from pool
+  → StarterPackService::initialize() → builds snapshots, deletes consumed Player/Staff from DB
   → LeagueService::assignClubToStarterLeague() → places club in country/tier league
   → WorldInitializationService::buildLeaguesPack() → serializes full league pyramid
   → WorldInitializationService::buildTierPack() → NPC clubs + fixtures for the club's tier
@@ -128,6 +141,7 @@ return $this->redirectToRoute('admin_my_route');
   ```php
   $em->getConnection()->executeStatement('UPDATE ... SET col = :val WHERE id = :id', ['val' => json_encode($data), 'id' => $id]);
   ```
+- **Player deduplication** — `StarterPackService` uses `spl_object_id()` (not `array_unique(SORT_REGULAR)`) to deduplicate pool results. Doctrine returns the same PHP object for the same DB row; `array_unique` with `==` comparison is unreliable on entity proxies.
 - **EasyAdmin admin grant**:
   ```bash
   lando psql -c "UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';"
@@ -165,7 +179,7 @@ return $this->redirectToRoute('admin_my_route');
 | `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
 | `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
 | `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
-| `POST` | `/api/market/assign` | JWT | Assign market entity to club |
+| `POST` | `/api/market/assign` | JWT | Assign market entity to club; Player/Staff returns `snapshot` key |
 | `POST` | `/api/market/consume` | JWT | Consume/use a market entity |
 | `GET` | `/api/game-config` | JWT | Global game configuration values |
 | `GET` | `/api/events/templates` | JWT | Narrative event templates (cached 1hr) |
@@ -177,9 +191,6 @@ return $this->redirectToRoute('admin_my_route');
 | `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
 | `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
 | `GET` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
-| `GET` | `/api/squad` | JWT | Player/staff squad data |
-| `POST` | `/api/squad/release/{id}` | JWT | Release a player |
-| `GET` | `/api/staff` | JWT | Staff list |
 | `GET` | `/api/archetypes` | JWT | Player archetypes |
 | `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
 | `GET` | `/api/club/status` | JWT | Club initialization status |
@@ -199,15 +210,15 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | Service | Responsibility |
 |---|---|
 | `SyncService` | Sync processing, anti-cheat, leaderboard upsert, manager trait shifts |
-| `EconomicService` | Financial year-end, sponsor contracts, age-out (hard-delete at 21), player market value |
-| `InboxService` | Generate and respond to inbox offers (sponsors, investors, agents) |
-| `MarketPoolService` | Generate and assign market entities; wage scaling by reputation tier |
+| `EconomicService` | Financial year-end, sponsor contracts, player market value |
+| `InboxService` | Generate and respond to inbox offers (sponsors, investors) |
+| `MarketPoolService` | Generate and assign market entities; Player/Staff assign deletes entity and returns snapshot |
 | `MarketDataService` | Serve market data to the client |
 | `ClubInitializationService` | Create Club entity, set paName + manager traits, abbreviation |
-| `StarterPackService` | Assign starting players/staff/sponsors from pool to a new club |
+| `StarterPackService` | Pull starting Player/Staff/Scout from pool; build snapshots; delete consumed Player/Staff |
 | `PlayerGenerationService` | Procedurally generate a `Player` from archetype, position, and source |
 | `NpcClubGenerationService` | Generate NPC clubs with names, colors, facilities, and ability by tier |
-| `WorldInitializationService` | Build the full league pyramid + tier pack snapshot for a client |
+| `WorldInitializationService` | Build the full league pyramid + tier pack snapshot for a client; snapshot builders for Player/Staff/Scout |
 | `LeagueService` | Assign clubs to leagues, conclude seasons, roll league sponsors |
 | `FixtureGenerationService` | Generate match fixtures for a league season |
 | `TransferLeaderboardService` | Rank players by transfer fee across clubs |
@@ -218,7 +229,8 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 ## Key Entities (non-obvious fields)
 
 - **Club** — `reputation`, `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`, manager traits (`temperament`/`discipline`/`ambition` 0–100 clamped setters), `paName`, `financialYearStart`, `balance`, `country`, `abbreviation`
-- **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; `ageOutWarningIssued`, `forcedSaleExecuted`
+- **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings. **No club FK** — pool entity, deleted on consume.
+- **Staff** — `role` (StaffRole), `coachingAbility`. **No club FK** — pool entity, deleted on consume.
 - **PlayerArchetype** — defines trait mapping distributions used by `PlayerGenerationService`; `traitMapping` (json); seeded via `app:seed-archetypes`
 - **League** — `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
 - **NpcClub** — `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor`, `playingStyle`, `financialApproach`; grouped into leagues for the world pack
@@ -227,6 +239,6 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **StarterConfig** — singleton row; league player ability ranges + fan base growth curves; JSON dirty-check workaround applies here
 - **LeaderboardEntry** — UNIQUE(club, category, period); `rank_position` column (not `rank`)
 - **InboxMessage** — `senderType` (MessageSenderType), `offerData` (json), `status` (MessageStatus)
-- **Transfer** — fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server)
+- **Transfer** — fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server); `player_id` is `ON DELETE SET NULL`
 - **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool
 - **SeasonRecord / SeasonSnapshot / SeasonRatingsSnapshot** — historical season data persisted at `conclude-season`
