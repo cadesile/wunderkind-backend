@@ -70,7 +70,9 @@
       "Bash(command -v convert)",
       "Bash(convert /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/logo-16.png /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/logo-32.png /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/favicon.ico)",
       "Bash(sips -s format webp /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-app/assets/logo_master.png --out /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/images/logo.webp)",
-      "Bash(cwebp /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-app/assets/logo_master.png -o /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/images/logo.webp -q 90)"
+      "Bash(cwebp /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-app/assets/logo_master.png -o /Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/public/images/logo.webp -q 90)",
+      "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/task-brief $PLAN *)",
+      "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package $BASE *)"
     ]
   }
 }
