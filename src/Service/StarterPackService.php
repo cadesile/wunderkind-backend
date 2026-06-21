@@ -8,7 +8,6 @@ use App\Entity\Club;
 use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Staff;
-use App\Entity\StarterConfig;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
 use App\Repository\PlayerRepository;
@@ -16,6 +15,7 @@ use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
+use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class StarterPackService
@@ -64,6 +64,16 @@ class StarterPackService
             $ampPlayers = array_merge($ampPlayers, $posPlayers);
         }
 
+        // Deduplicate using identity: Doctrine returns same PHP object for same row,
+        // and mock objects have unique spl_object_id values. Without dedup, double-remove throws.
+        $seen = [];
+        $ampPlayers = array_values(array_filter($ampPlayers, function(Player $p) use (&$seen) {
+            $id = spl_object_id($p);
+            if (isset($seen[$id])) return false;
+            $seen[$id] = true;
+            return true;
+        }));
+
         $ampStaff = array_merge(
             $this->fillStaffRole(StaffRole::MANAGER,              $starterConfig->getStarterManagerCount(),            $ampNationality),
             $this->fillStaffRole(StaffRole::COACH,                $starterConfig->getStarterCoachCount(),              $ampNationality),
@@ -77,6 +87,16 @@ class StarterPackService
             $deficit   = $starterConfig->getStarterScoutCount() - count($ampScouts);
             $ampScouts = array_merge($ampScouts, $this->scoutRepository->findInPool($deficit));
         }
+
+        // Deduplicate using identity: Doctrine returns same PHP object for same row,
+        // and mock objects have unique spl_object_id values.
+        $seen = [];
+        $ampScouts = array_values(array_filter($ampScouts, function(Scout $s) use (&$seen) {
+            $id = spl_object_id($s);
+            if (isset($seen[$id])) return false;
+            $seen[$id] = true;
+            return true;
+        }));
 
         // Build snapshots before deletion (entities must exist to serialise)
         $playerSnapshots = array_map(
