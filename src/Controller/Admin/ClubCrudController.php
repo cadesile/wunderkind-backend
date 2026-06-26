@@ -3,7 +3,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Club;
+use App\Entity\Investor;
 use App\Entity\LeaderboardEntry;
+use App\Entity\MatchResult;
+use App\Entity\SeasonRatingsSnapshot;
+use App\Entity\SeasonRecord;
+use App\Entity\SeasonSnapshot;
+use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use Doctrine\ORM\EntityManagerInterface;
@@ -12,7 +18,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -45,7 +50,6 @@ class ClubCrudController extends AbstractCrudController
     /**
      * Override EasyAdmin's detail action to render the custom club profile.
      * Runs inside EasyAdmin's context, so @EasyAdmin/layout.html.twig works correctly.
-     * The URL stays /admin/club/{uuid} — no separate controller or route needed.
      */
     public function detail(AdminContext $context): Response
     {
@@ -90,24 +94,58 @@ class ClubCrudController extends AbstractCrudController
         ]);
     }
 
+    /**
+     * Override deleteEntity so that batch delete runs FK cleanup before removal.
+     * EasyAdmin's batchDelete() calls $this->deleteEntity() for each selected club.
+     */
+    public function deleteEntity(EntityManagerInterface $entityManager, object $entityInstance): void
+    {
+        if (!$entityInstance instanceof Club) {
+            parent::deleteEntity($entityManager, $entityInstance);
+            return;
+        }
+
+        foreach ([Transfer::class, MatchResult::class, SeasonRecord::class, SeasonSnapshot::class, SeasonRatingsSnapshot::class] as $class) {
+            $entityManager->createQueryBuilder()
+                ->delete($class, 'e')
+                ->where('e.club = :club')
+                ->setParameter('club', $entityInstance)
+                ->getQuery()->execute();
+        }
+
+        foreach ([Investor::class => 'i', Sponsor::class => 's'] as $class => $alias) {
+            $entityManager->createQueryBuilder()
+                ->update($class, $alias)
+                ->set("{$alias}.club", ':null')
+                ->where("{$alias}.club = :club")
+                ->setParameter('null', null)
+                ->setParameter('club', $entityInstance)
+                ->getQuery()->execute();
+        }
+
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
+
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['createdAt' => 'DESC']);
+        return $crud
+            ->setDefaultSort(['createdAt' => 'DESC'])
+            ->overrideTemplate('crud/index', 'admin/club_index.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
     {
-        yield IdField::new('id')->hideOnForm();
-        yield TextField::new('name');
-        yield TextField::new('abbreviation')->setHelp('Up to 5 chars, e.g. MAN, BARCA');
-        yield TextField::new('country');
-        yield AssociationField::new('user');
-        yield IntegerField::new('reputation');
-        yield IntegerField::new('totalCareerEarnings')
-            ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—');
-        yield IntegerField::new('hallOfFamePoints');
-        yield IntegerField::new('lastSyncedWeek');
-        yield DateTimeField::new('lastSyncedAt')->setFormat('yyyy-MM-dd HH:mm')->setRequired(false);
-        yield DateTimeField::new('createdAt')->setFormat('yyyy-MM-dd HH:mm');
+        yield IdField::new('id')->hideOnForm()->onlyOnDetail();
+        yield TextField::new('name', 'Club Name');
+        yield TextField::new('country', 'Country');
+        yield TextField::new('user.email', 'User')
+            ->formatValue(fn($v, Club $c) => $c->getUser()->getEmail())
+            ->setSortable(false);
+        yield IntegerField::new('lastSyncedWeek', 'Last Sync Week');
+        yield DateTimeField::new('lastSyncedAt', 'Last Sync Date')
+            ->setFormat('yyyy-MM-dd HH:mm')
+            ->setRequired(false);
+        yield DateTimeField::new('createdAt', 'Created')
+            ->setFormat('yyyy-MM-dd HH:mm');
     }
 }

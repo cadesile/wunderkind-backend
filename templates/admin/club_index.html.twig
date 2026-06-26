@@ -1,0 +1,79 @@
+{% extends '@EasyAdmin/crud/index.html.twig' %}
+
+{% block body %}
+    {{ parent() }}
+
+    {# ── Bulk-delete confirmation modal ────────────────────────────────── #}
+    <div class="modal fade" id="batchDeleteConfirmModal" tabindex="-1"
+         aria-labelledby="batchDeleteModalLabel" aria-modal="true" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-danger border-opacity-50">
+                <div class="modal-header bg-danger bg-opacity-10 border-bottom border-danger border-opacity-25 py-2">
+                    <h5 class="modal-title text-danger fw-semibold" id="batchDeleteModalLabel">
+                        <i class="fa fa-triangle-exclamation me-2"></i>Delete selected clubs
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="mb-2">
+                        You are about to permanently delete
+                        <strong class="text-danger"><span id="batchDeleteCount">0</span>
+                        <span id="batchDeleteLabel">clubs</span></strong>.
+                    </p>
+                    <p class="text-muted small mb-0">
+                        <i class="fa fa-circle-info me-1"></i>
+                        All associated sync records, leaderboard entries, transfers, season history,
+                        and inbox messages will also be removed. This cannot be undone.
+                    </p>
+                </div>
+                <div class="modal-footer border-top border-danger border-opacity-25">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" id="confirmBatchDeleteBtn">
+                        <i class="fa fa-trash me-1"></i>
+                        <span id="confirmBatchDeleteLabel">Delete clubs</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        var form = document.querySelector('[data-ea-bulk-action-form]');
+        if (!form) return;
+
+        var confirmed = false;
+
+        form.addEventListener('submit', function (e) {
+            var actionInput = document.getElementById('batchActionName');
+            if (!actionInput || actionInput.value !== 'batchDelete') return;
+            if (confirmed) return; // second pass — let it submit
+
+            e.preventDefault();
+
+            var checked = form.querySelectorAll('input[name="batchActionEntityIds[]"]:checked');
+            var count   = checked.length;
+
+            document.getElementById('batchDeleteCount').textContent = count;
+            document.getElementById('batchDeleteLabel').textContent = count === 1 ? 'club' : 'clubs';
+            document.getElementById('confirmBatchDeleteLabel').textContent = count === 1 ? 'Delete club' : 'Delete ' + count + ' clubs';
+
+            var modal = new bootstrap.Modal(document.getElementById('batchDeleteConfirmModal'));
+            modal.show();
+
+            document.getElementById('confirmBatchDeleteBtn').addEventListener('click', function () {
+                confirmed = true;
+                modal.hide();
+                // requestSubmit fires the submit event again; this time confirmed=true so we skip preventDefault
+                if (form.requestSubmit) {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
+            }, { once: true });
+        });
+    }());
+    </script>
+{% endblock %}

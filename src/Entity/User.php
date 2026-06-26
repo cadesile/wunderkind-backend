@@ -40,6 +40,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
     private ?\DateTimeImmutable $verifiedAt = null;
 
+    #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
+    private ?\DateTimeImmutable $lastLoginAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -78,6 +81,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getVerifiedAt(): ?\DateTimeImmutable { return $this->verifiedAt; }
     public function setVerifiedAt(?\DateTimeImmutable $verifiedAt): void { $this->verifiedAt = $verifiedAt; }
+
+    public function getLastLoginAt(): ?\DateTimeImmutable { return $this->lastLoginAt; }
+    public function setLastLoginAt(?\DateTimeImmutable $lastLoginAt): void { $this->lastLoginAt = $lastLoginAt; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

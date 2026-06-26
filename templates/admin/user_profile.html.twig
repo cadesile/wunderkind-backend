@@ -1,0 +1,149 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-3 mt-1">
+
+    {# ── Breadcrumb ─────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <a href="{{ ea_url().setController('App\\Controller\\Admin\\UserCrudController') }}"
+           class="text-muted text-decoration-none small">
+            <i class="fa fa-arrow-left me-1"></i> Back to Users
+        </a>
+    </div>
+
+    {# ── Header ──────────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="background:linear-gradient(135deg,var(--bs-body-bg) 0%,var(--bs-tertiary-bg) 100%);">
+            <div class="card-body py-3 px-4">
+                <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+
+                    <div class="d-flex align-items-center gap-3">
+                        {# Avatar: first letter of the email username #}
+                        <div class="d-flex align-items-center justify-content-center rounded-2 fw-bold text-white"
+                             style="width:52px;height:52px;font-size:1.2rem;background:var(--bs-primary);flex-shrink:0;"
+                             aria-hidden="true">
+                            {{ user.email|split('@')[0]|slice(0,1)|upper }}
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-1 lh-1">{{ user.email }}</h4>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                {# ── Verification pill (finding 10: prominent badge) ── #}
+                                {% if user.isVerified %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                        <i class="fa fa-circle-check me-1" aria-hidden="true"></i>Verified
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                                        <i class="fa fa-circle-exclamation me-1" aria-hidden="true"></i>Unverified
+                                    </span>
+                                {% endif %}
+                                <span class="text-muted small">
+                                    <i class="fa fa-calendar me-1" aria-hidden="true"></i>
+                                    Joined {{ user.createdAt|date('d M Y') }}
+                                </span>
+                                {% if user.lastLoginAt %}
+                                    <span class="text-muted small">
+                                        <i class="fa fa-clock me-1" aria-hidden="true"></i>
+                                        Last login {{ user.lastLoginAt|date('d M Y, H:i') }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
+                            {{ clubs|length }} club{{ clubs|length != 1 ? 's' : '' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Clubs Table ─────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-bottom d-flex align-items-center justify-content-between py-2 px-4">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa fa-school text-muted" aria-hidden="true"></i>
+                    <span class="fw-semibold">Clubs</span>
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ clubs|length }}</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if clubs is empty %}
+                    <div class="text-center py-5">
+                        <i class="fa fa-school fa-2x text-muted mb-3 d-block" aria-hidden="true"></i>
+                        <p class="text-muted mb-0">No clubs associated with this account.</p>
+                    </div>
+                {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle" role="table">
+                            <thead class="table-light">
+                                <tr>
+                                    {# finding 7: hide low-priority columns on mobile #}
+                                    <th class="ps-4 d-none d-md-table-cell">Manager Name</th>
+                                    <th>Club Name</th>
+                                    <th class="d-none d-sm-table-cell">Country</th>
+                                    <th class="d-none d-lg-table-cell">Last Sync Week</th>
+                                    <th class="d-none d-md-table-cell">Last Sync Date</th>
+                                    <th class="d-none d-lg-table-cell">Created</th>
+                                    <th class="text-end pe-3"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for club in clubs %}
+                                    {% set mgr = club.managerProfile %}
+                                    {% set clubUrl = ea_url().setController('App\\Controller\\Admin\\ClubCrudController').setAction('detail').setEntityId(club.id) %}
+                                    {# finding 6: whole row is clickable #}
+                                    <tr style="cursor:pointer;" onclick="window.location='{{ clubUrl }}'">
+                                        <td class="ps-4 d-none d-md-table-cell">
+                                            {% if mgr and mgr.name is defined and mgr.name %}
+                                                {{ mgr.name }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="fw-semibold">{{ club.name }}</td>
+                                        <td class="d-none d-sm-table-cell">
+                                            {% if club.country %}
+                                                {{ club.country }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="d-none d-lg-table-cell">
+                                            {% if club.lastSyncedWeek > 0 %}
+                                                Week {{ club.lastSyncedWeek }}
+                                            {% else %}
+                                                <span class="text-muted">Never</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="d-none d-md-table-cell">
+                                            {% if club.lastSyncedAt %}
+                                                {{ club.lastSyncedAt|date('d M Y, H:i') }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="d-none d-lg-table-cell text-muted small">{{ club.createdAt|date('d M Y') }}</td>
+                                        <td class="text-end pe-3" onclick="event.stopPropagation()">
+                                            <a href="{{ clubUrl }}"
+                                               class="btn btn-sm btn-outline-secondary"
+                                               aria-label="View {{ club.name }}">
+                                                <i class="fa fa-eye me-1" aria-hidden="true"></i> View
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -8,7 +8,7 @@
 
 {% macro result_badge(r) %}
     <span class="fw-bold d-inline-flex align-items-center justify-content-center rounded-1"
-          style="width:26px;height:26px;font-size:.7rem;letter-spacing:0;
+          style="width:26px;height:26px;font-size:.75rem;letter-spacing:0;
                  background:{{ r == 'W' ? '#198754' : (r == 'D' ? '#6c757d' : '#dc3545') }};color:#fff;">
         {{ r }}
     </span>
@@ -21,7 +21,7 @@
     <div class="col-12">
         <a href="{{ ea_url().setController('App\\Controller\\Admin\\ClubCrudController') }}"
            class="text-muted text-decoration-none small">
-            <i class="fa fa-arrow-left me-1"></i> Back to Academies
+            <i class="fa fa-arrow-left me-1"></i> Back to Clubs
         </a>
     </div>
 
@@ -91,11 +91,11 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body py-3 text-center">
-                <div class="text-warning mb-2"><i class="fa fa-star fa-lg"></i></div>
-                <div class="text-muted small mb-1">Reputation</div>
+                <div class="text-warning mb-2"><i class="fa fa-star fa-lg" aria-hidden="true"></i></div>
                 <div class="fs-3 fw-bold">{{ club.reputation|number_format }}</div>
+                <div class="text-muted small mt-1">Reputation</div>
                 {% if payload.squadAvgOvr is defined and payload.squadAvgOvr > 0 %}
-                    <div class="text-muted mt-1" style="font-size:.7rem;">Avg OVR <strong>{{ payload.squadAvgOvr }}</strong></div>
+                    <div class="text-muted mt-1" style="font-size:.75rem;">Avg OVR <strong>{{ payload.squadAvgOvr }}</strong></div>
                 {% endif %}
             </div>
         </div>
@@ -103,14 +103,14 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body py-3 text-center">
-                <div class="text-primary mb-2"><i class="fa fa-sterling-sign fa-lg"></i></div>
-                <div class="text-muted small mb-1">Balance</div>
+                <div class="text-primary mb-2"><i class="fa fa-sterling-sign fa-lg" aria-hidden="true"></i></div>
                 <div class="fs-3 fw-bold {{ club.balance < 0 ? 'text-danger' : '' }}"
                      title="£{{ (club.balance / 100)|number_format(0, '.', ',') }}">
                     {{ fmt_currency(club.balance) }}
                 </div>
+                <div class="text-muted small mt-1">Balance</div>
                 {% if club.balance < 0 %}
-                    <div class="text-danger mt-1" style="font-size:.7rem;"><i class="fa fa-triangle-exclamation me-1"></i>In debt</div>
+                    <div class="text-danger mt-1" style="font-size:.75rem;"><i class="fa fa-triangle-exclamation me-1" aria-hidden="true"></i>In debt</div>
                 {% endif %}
             </div>
         </div>
@@ -118,22 +118,21 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body py-3 text-center">
-                <div class="text-success mb-2"><i class="fa fa-chart-line fa-lg"></i></div>
-                <div class="text-muted small mb-1">Career Earnings</div>
+                <div class="text-success mb-2"><i class="fa fa-chart-line fa-lg" aria-hidden="true"></i></div>
                 <div class="fs-3 fw-bold"
                      title="£{{ (club.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
                     {{ fmt_currency(club.totalCareerEarnings) }}
                 </div>
+                <div class="text-muted small mt-1">Career Earnings</div>
             </div>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body py-3 text-center">
-                <div class="text-warning mb-2"><i class="fa fa-trophy fa-lg"></i></div>
-                <div class="text-muted small mb-1">Hall of Fame</div>
+                <div class="text-warning mb-2"><i class="fa fa-trophy fa-lg" aria-hidden="true"></i></div>
                 <div class="fs-3 fw-bold text-warning">{{ club.hallOfFamePoints|number_format }}</div>
-                <div class="text-muted mt-1" style="font-size:.7rem;">HoF pts</div>
+                <div class="text-muted small mt-1">Hall of Fame</div>
             </div>
         </div>
     </div>
@@ -144,7 +143,7 @@
     {% if latestValidSync and (form|length > 0 or sr|length > 0) %}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
-            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-success);padding-left:.5rem;">
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
             Season at a Glance
         </h6>
     </div>
@@ -159,30 +158,30 @@
                 <div class="row g-0 text-center mb-3">
                     <div class="col">
                         <div class="fw-bold fs-4 text-success">{{ sr.wins ?? 0 }}</div>
-                        <div class="text-muted" style="font-size:.7rem;">W</div>
+                        <div class="text-muted" style="font-size:.75rem;">W</div>
                     </div>
                     <div class="col">
                         <div class="fw-bold fs-4 text-secondary">{{ sr.draws ?? 0 }}</div>
-                        <div class="text-muted" style="font-size:.7rem;">D</div>
+                        <div class="text-muted" style="font-size:.75rem;">D</div>
                     </div>
                     <div class="col">
                         <div class="fw-bold fs-4 text-danger">{{ sr.losses ?? 0 }}</div>
-                        <div class="text-muted" style="font-size:.7rem;">L</div>
+                        <div class="text-muted" style="font-size:.75rem;">L</div>
                     </div>
                     <div class="col border-start">
                         <div class="fw-bold fs-4">{{ (sr.goalsFor ?? 0) }}:{{ (sr.goalsAgainst ?? 0) }}</div>
-                        <div class="text-muted" style="font-size:.7rem;">GF:GA</div>
+                        <div class="text-muted" style="font-size:.75rem;">GF:GA</div>
                     </div>
                     <div class="col border-start">
                         {% set gd = (sr.goalsFor ?? 0) - (sr.goalsAgainst ?? 0) %}
                         <div class="fw-bold fs-4 {{ gd >= 0 ? 'text-success' : 'text-danger' }}">
                             {{ gd >= 0 ? '+' : '' }}{{ gd }}
                         </div>
-                        <div class="text-muted" style="font-size:.7rem;">GD</div>
+                        <div class="text-muted" style="font-size:.75rem;">GD</div>
                     </div>
                     <div class="col border-start">
                         <div class="fw-bold fs-4 text-primary">{{ sr.points ?? 0 }}</div>
-                        <div class="text-muted" style="font-size:.7rem;">Pts</div>
+                        <div class="text-muted" style="font-size:.75rem;">Pts</div>
                     </div>
                 </div>
                 {% else %}
@@ -192,7 +191,7 @@
                 {# Form strip #}
                 {% if form|length > 0 %}
                 <div class="border-top pt-3">
-                    <div class="text-muted mb-2" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600;">
+                    <div class="text-muted mb-2" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600;">
                         Form <span class="fw-normal">(most recent first)</span>
                     </div>
                     <div class="d-flex gap-1">
@@ -260,7 +259,7 @@
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
-            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-primary);padding-left:.5rem;">
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
             Latest Sync Snapshot
         </h6>
     </div>
@@ -270,7 +269,7 @@
             <div class="card-header py-2 bg-transparent border-bottom d-flex align-items-center justify-content-between">
                 <span class="fw-semibold small"><i class="fa fa-rotate me-1 text-muted"></i> Week {{ payload.weekNumber ?? club.lastSyncedWeek }} snapshot</span>
                 {% if latestValidSync %}
-                    <span class="text-muted" style="font-size:.7rem;">
+                    <span class="text-muted" style="font-size:.75rem;">
                         received {{ latestValidSync.serverTimestamp|date('d M Y H:i') }}
                     </span>
                 {% endif %}
@@ -306,7 +305,7 @@
                     {# Facility levels #}
                     {% if payload.facilityLevels is defined and payload.facilityLevels|length > 0 %}
                         <hr class="my-3">
-                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
+                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.75rem;">
                             <i class="fa fa-building me-1"></i> Facilities
                         </div>
                         <div class="d-flex flex-wrap gap-2">
@@ -321,7 +320,7 @@
                     {# Recent signings (v2) #}
                     {% if payload.signings is defined and payload.signings|length > 0 %}
                         <hr class="my-3">
-                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
+                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.75rem;">
                             <i class="fa fa-right-to-bracket me-1"></i> Signings This Week
                         </div>
                         <div class="d-flex flex-column gap-1">
@@ -345,7 +344,7 @@
                     {# Manager shifts #}
                     {% if payload.managerShifts is defined and payload.managerShifts|length > 0 %}
                         <hr class="my-3">
-                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.7rem;">
+                        <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:.06em;font-size:.75rem;">
                             <i class="fa fa-person-walking me-1"></i> Manager Shifts
                         </div>
                         <div class="d-flex flex-wrap gap-2">
@@ -391,8 +390,10 @@
                         <span><i class="fa {{ trait.icon }} text-{{ trait.color }} me-1"></i> {{ trait.label }}</span>
                         <span class="fw-semibold">{{ trait.value }}</span>
                     </div>
-                    <div class="progress" style="height:5px;border-radius:2px;">
-                        <div class="progress-bar bg-{{ trait.color }}" style="width:{{ trait.value }}%"></div>
+                    <div class="progress" style="height:10px;border-radius:4px;">
+                        <div class="progress-bar bg-{{ trait.color }}" role="progressbar"
+                             style="width:{{ trait.value }}%"
+                             aria-valuenow="{{ trait.value }}" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                 </div>
                 {% endfor %}
@@ -405,7 +406,7 @@
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
-            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-info);padding-left:.5rem;">
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
             Transfer History
         </h6>
     </div>
@@ -476,7 +477,7 @@
     {% if leaderboardEntries|length > 0 %}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
-            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-warning);padding-left:.5rem;">
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
             Leaderboard Standings
         </h6>
     </div>
@@ -545,7 +546,7 @@
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
             style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-danger);padding-left:.5rem;">
             Debug Diagnostics
-            <span class="text-muted fw-normal ms-1" style="font-size:.7rem;">(last {{ debugLogs|length }} debug syncs)</span>
+            <span class="text-muted fw-normal ms-1" style="font-size:.75rem;">(last {{ debugLogs|length }} debug syncs)</span>
         </h6>
     </div>
 
@@ -584,7 +585,7 @@
                 <div class="fs-4 fw-bold {{ tickMs > 3000 ? 'text-danger' : (tickMs > 1500 ? 'text-warning' : '') }}">
                     {{ tickMs != -1 ? tickMs ~ ' ms' : '—' }}
                 </div>
-                <div class="text-muted mt-1" style="font-size:.7rem;">{{ latestLog.platform ?? '—' }}</div>
+                <div class="text-muted mt-1" style="font-size:.75rem;">{{ latestLog.platform ?? '—' }}</div>
             </div>
         </div>
     </div>
@@ -596,7 +597,7 @@
                 <div class="fs-4 fw-bold {{ totalKb > 4500 ? 'text-danger' : (totalKb > 3000 ? 'text-warning' : '') }}">
                     {{ totalKb != -1 ? totalKb|number_format(1) ~ ' KB' : '—' }}
                 </div>
-                <div class="text-muted mt-1" style="font-size:.7rem;">{{ sqlite.keyCount ?? '—' }} keys total</div>
+                <div class="text-muted mt-1" style="font-size:.75rem;">{{ sqlite.keyCount ?? '—' }} keys total</div>
             </div>
         </div>
     </div>
@@ -608,7 +609,7 @@
                 <div class="fs-4 fw-bold {{ fsTotalKb > 2000 ? 'text-warning' : '' }}">
                     {{ fsTotalKb != -1 ? fsTotalKb|number_format(1) ~ ' KB' : '—' }}
                 </div>
-                <div class="text-muted mt-1" style="font-size:.7rem;">{{ fs.directories is defined ? fs.directories|length ~ ' dirs' : '—' }}</div>
+                <div class="text-muted mt-1" style="font-size:.75rem;">{{ fs.directories is defined ? fs.directories|length ~ ' dirs' : '—' }}</div>
             </div>
         </div>
     </div>
@@ -620,7 +621,7 @@
                 <div class="fs-4 fw-bold {{ playerAppKeyCount > 500 ? 'text-danger' : (playerAppKeyCount > 200 ? 'text-warning' : '') }}">
                     {{ playerAppKeyCount != -1 ? playerAppKeyCount : '—' }}
                 </div>
-                <div class="text-muted mt-1" style="font-size:.7rem;">should drop at season end</div>
+                <div class="text-muted mt-1" style="font-size:.75rem;">should drop at season end</div>
             </div>
         </div>
     </div>
@@ -643,7 +644,7 @@
                     <tbody>
                         {% for entry in sqlite.topKeys %}
                         <tr>
-                            <td class="small" style="font-family:monospace;font-size:.7rem;word-break:break-all;">{{ entry.key }}</td>
+                            <td class="small" style="font-family:monospace;font-size:.75rem;word-break:break-all;">{{ entry.key }}</td>
                             <td class="small text-end fw-semibold {{ entry.kb > 100 ? 'text-danger' : (entry.kb > 50 ? 'text-warning' : '') }}">
                                 {{ entry.kb|number_format(1) }}
                             </td>
@@ -678,7 +679,7 @@
                     <tbody>
                         {% for dir in fs.directories %}
                         <tr>
-                            <td class="small" style="font-family:monospace;font-size:.7rem;">{{ dir.dir }}</td>
+                            <td class="small" style="font-family:monospace;font-size:.75rem;">{{ dir.dir }}</td>
                             <td class="small text-end text-muted">{{ dir.fileCount }}</td>
                             <td class="small text-end fw-semibold {{ dir.totalKb > 500 ? 'text-warning' : '' }}">
                                 {{ dir.totalKb|number_format(1) }}
@@ -756,9 +757,9 @@
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
-            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-secondary);padding-left:.5rem;">
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
             Sync Log
-            <span class="text-muted fw-normal ms-1" style="font-size:.7rem;">(last {{ syncRecords|length }})</span>
+            <span class="text-muted fw-normal ms-1" style="font-size:.75rem;">(last {{ syncRecords|length }})</span>
         </h6>
     </div>
     <div class="col-12">
