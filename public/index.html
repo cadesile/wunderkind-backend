@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Build My Club — Football Club Owner Sim</title>
     <meta name="description" content="Own the club. Invest the capital. Build the infrastructure. Hire your staff and climb eight league tiers — all offline, all in the palm of your hand. Build My Club is a deep football club ownership sim for mobile.">
-    <meta name="theme-color" content="#0f1420">
+    <meta name="theme-color" content="#0a1a0d">
     <meta property="og:title" content="Build My Club — Football Club Owner Sim">
     <meta property="og:description" content="Own the club. Build the empire. Climb the pyramid.">
     <meta property="og:type" content="website">
@@ -26,29 +26,29 @@
         }
 
         :root {
-            --bg:         #0f1420;
-            --bg-mid:     #1a2240;
-            --card:       #1e2448;
-            --card-hi:    #1e2a50;
-            --dark:       #120d18;
-            --border:     #080d1a;
-            --panel:      #2a1e38;
+            --bg:         #0a1a0d;
+            --bg-mid:     #0f2415;
+            --card:       #122a19;
+            --card-hi:    #163320;
+            --dark:       #06100a;
+            --border:     #040d07;
+            --panel:      #1a3a15;
             --gold:       #E8CF59;
             --gold-dim:   #c4a83a;
             --mint:       #3FAA7E;
             --mint-dim:   #2d8a63;
             --red:        #C44747;
             --orange:     #e8852a;
-            --blue:       #3F52A5;
-            --plum:       #7D2A60;
-            --text:       #e8f0f4;
-            --text-muted: #9bb0c4;
+            --blue:       #2D6B3F;
+            --plum:       #1e4a28;
+            --text:       #e4ede4;
+            --text-muted: #7da885;
             --grid: repeating-linear-gradient(
                         0deg, transparent, transparent 39px,
-                        rgba(63,82,165,0.05) 39px, rgba(63,82,165,0.05) 40px),
+                        rgba(63,170,126,0.04) 39px, rgba(63,170,126,0.04) 40px),
                     repeating-linear-gradient(
                         90deg, transparent, transparent 39px,
-                        rgba(63,82,165,0.05) 39px, rgba(63,82,165,0.05) 40px);
+                        rgba(63,170,126,0.04) 39px, rgba(63,170,126,0.04) 40px);
         }
 
         html {
@@ -118,7 +118,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(18,13,24,0.94);
+            background: rgba(6,16,10,0.94);
             border-bottom: 1px solid var(--border);
             backdrop-filter: blur(8px);
         }
@@ -1252,7 +1252,7 @@
 <!-- ═══════════════════════════════ NAV ═══════════════════════════════ -->
 <nav>
     <div class="nav-inner">
-        <a href="#" class="nav-logo"><img src="/logo-48.png" alt="">BUILD MY CLUB</a>
+        <a href="#" class="nav-logo"><img src="/logo_master.png" alt="Build My Club crest">BUILD MY CLUB</a>
         <ul class="nav-links">
             <li><a href="#your-role">Your Role</a></li>
             <li><a href="#story">Story</a></li>
@@ -1270,13 +1270,14 @@
     <div class="wrap">
         <div class="hero-inner">
             <div>
-                <div class="hero-badge">IN DEVELOPMENT &nbsp;// ANDROID BETA</div>
+                <div class="hero-badge">ANDROID BETA &nbsp;// ELITE STRATEGY SIM</div>
                 <h1 class="glow-gold">OWN THE CLUB. BUILD THE EMPIRE.</h1>
                 <p class="hero-sub">
-                    You're the owner, not the manager. Invest capital, build the infrastructure,
-                    hire the right staff, and negotiate with agents, guardians, and investors.
-                    Delegate the dugout and focus on the boardroom — or stay hands-on across
-                    every decision. Either way, promotion means your club is working.
+                    You're the chairman, not the gaffer. Allocate capital, control your
+                    infrastructure, and manage a living squad where every player has an
+                    8-trait personality matrix. Market entities are consumed and deleted
+                    on acquire — real scarcity, no restocks. Sync weekly with Integrity
+                    Validation and compete across 6 global leaderboards.
                 </p>
                 <div class="hero-actions">
                     <a href="#download" id="hero-android-btn" class="btn btn-gold" style="display:none">Download (Android)</a>
@@ -1291,16 +1292,16 @@
                         <span class="hero-stat-label">League Tiers</span>
                     </div>
                     <div class="hero-stat">
-                        <span class="hero-stat-val glow-mint">8</span>
-                        <span class="hero-stat-label">Personality Traits</span>
+                        <span class="hero-stat-val glow-mint">6</span>
+                        <span class="hero-stat-label">Global Rankings</span>
                     </div>
                     <div class="hero-stat">
-                        <span class="hero-stat-val" style="color:var(--red);">6</span>
-                        <span class="hero-stat-label">Staff Roles</span>
+                        <span class="hero-stat-val" style="color:var(--red);">8</span>
+                        <span class="hero-stat-label">Player Traits</span>
                     </div>
                     <div class="hero-stat">
                         <span class="hero-stat-val" style="color:var(--text-muted);">100%</span>
-                        <span class="hero-stat-label">Offline</span>
+                        <span class="hero-stat-label">Offline-First</span>
                     </div>
                 </div>
             </div>
@@ -1310,19 +1311,19 @@
                 <div class="phone-outer">
                     <div class="phone-screen" id="phone-screen">
                         <div class="phone-slide active">
-                            <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! modal — Milan FC earn promotion from League 8 Season 1 with 28 points" loading="eager">
+                            <img src="screenshots/buildmyclub/Screenshot_20260626-221827.png" alt="Club hub — Mendoza Unión Season 3, Week 39. Next match Round 1 away vs Río Ceballos" loading="eager">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260601-093326.png" alt="Club hub mid-season — Milan FC 3rd in League 8 after 2 games with form W away" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260626-221840.png" alt="Squad tab — 4-4-2 DIRECT formation, 33/34 squad registered, players sorted by overall rating" loading="lazy">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260601-090416.png" alt="Squad tab showing all players sorted by overall rating with club balance £35,000" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260626-183103.png" alt="Player signing — contract negotiation tab with transfer fee, weekly wage, player interest 34%, staff opinions" loading="lazy">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260601-093045.png" alt="Predicted XI overlay — Milan FC 4-5-1 formation vs Savona Internazionale in Round 1" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260626-221851.png" alt="Predicted XI — 4-3-3 formation set for away Round 1 vs Río Ceballos Defensores" loading="lazy">
                         </div>
                         <div class="phone-slide">
-                            <img src="screenshots/buildmyclub/Screenshot_20260601-090555.png" alt="Inbox with 4 messages across Finance, Story and System categories including investment offer" loading="lazy">
+                            <img src="screenshots/buildmyclub/Screenshot_20260626-222114.png" alt="Inbox with 7 scout update messages — Cédric Richard, Loïc Dupont, Jakub Zieliński reports marked NEW" loading="lazy">
                         </div>
                     </div>
                 </div>
@@ -1341,14 +1342,17 @@
 <!-- Ticker -->
 <div class="ticker-wrap" role="marquee" aria-label="Feature highlights">
     <div class="ticker-track">
-        <span class="ticker-item">Transfer Market</span>
+        <span class="ticker-item">Scarcity Market Pool</span>
+        <span class="ticker-item">Style Multipliers</span>
+        <span class="ticker-item">Integrity Syncing</span>
+        <span class="ticker-item">6 Global Leaderboards</span>
+        <span class="ticker-item">Manager Personality Traits</span>
         <span class="ticker-item">8-Tier League Pyramid</span>
         <span class="ticker-item">Player Personality Matrix</span>
         <span class="ticker-item">Director of Football</span>
         <span class="ticker-item">Sponsor Contracts</span>
         <span class="ticker-item">Investor Relations</span>
         <span class="ticker-item">Facility Upgrades</span>
-        <span class="ticker-item">6 Staff Roles</span>
         <span class="ticker-item">Chained Narrative Events</span>
         <span class="ticker-item">Offline-First</span>
         <span class="ticker-item">Weekly Tick Engine</span>
@@ -1356,20 +1360,21 @@
         <span class="ticker-item">Fan Happiness System</span>
         <span class="ticker-item">Match Events Engine</span>
         <span class="ticker-item">Trophy Museum</span>
-        <span class="ticker-item">Season History</span>
         <span class="ticker-item">Dynamic NPC Market</span>
         <span class="ticker-item">Guardian Dynamics</span>
-        <span class="ticker-item">SQLite Season Records</span>
         <span class="ticker-item">Formation & Tactics</span>
         <!-- duplicate for seamless loop -->
-        <span class="ticker-item">Transfer Market</span>
+        <span class="ticker-item">Scarcity Market Pool</span>
+        <span class="ticker-item">Style Multipliers</span>
+        <span class="ticker-item">Integrity Syncing</span>
+        <span class="ticker-item">6 Global Leaderboards</span>
+        <span class="ticker-item">Manager Personality Traits</span>
         <span class="ticker-item">8-Tier League Pyramid</span>
         <span class="ticker-item">Player Personality Matrix</span>
         <span class="ticker-item">Director of Football</span>
         <span class="ticker-item">Sponsor Contracts</span>
         <span class="ticker-item">Investor Relations</span>
         <span class="ticker-item">Facility Upgrades</span>
-        <span class="ticker-item">6 Staff Roles</span>
         <span class="ticker-item">Chained Narrative Events</span>
         <span class="ticker-item">Offline-First</span>
         <span class="ticker-item">Weekly Tick Engine</span>
@@ -1377,10 +1382,8 @@
         <span class="ticker-item">Fan Happiness System</span>
         <span class="ticker-item">Match Events Engine</span>
         <span class="ticker-item">Trophy Museum</span>
-        <span class="ticker-item">Season History</span>
         <span class="ticker-item">Dynamic NPC Market</span>
         <span class="ticker-item">Guardian Dynamics</span>
-        <span class="ticker-item">SQLite Season Records</span>
         <span class="ticker-item">Formation & Tactics</span>
     </div>
 </div>
@@ -1389,8 +1392,8 @@
 <section class="role-section" id="your-role">
     <div class="wrap">
         <div class="section-label">Your Role</div>
-        <h2 class="section-title">You're the owner. Not the manager.</h2>
-        <p class="section-sub">This isn't Football Manager. You don't pick the team or shout from the touchline. You run the club — the money, the staff, the infrastructure, the politics. Set the strategy and direction. Your staff execute it.</p>
+        <h2 class="section-title">You're the chairman. Not the gaffer.</h2>
+        <p class="section-sub">This isn't a football management sim. You control capital, infrastructure, and personnel strategy. Your Manager Personality Traits — Temperament, Discipline, Ambition — shift with every decision you make. The board notices. So do the players.</p>
 
         <div class="role-grid">
             <div class="role-col role-col-owner">
@@ -1434,7 +1437,7 @@
             <div class="story-phone-wrap">
                 <div class="story-phone-outer">
                     <div class="story-phone-screen">
-                        <img src="screenshots/buildmyclub/Screenshot_20260601-090241.png" alt="Club setup step — name your club Milan FC, Create My Club button" loading="lazy">
+                        <img src="screenshots/buildmyclub/Screenshot_20260626-221951.png" alt="League table — Season 3 Tier 6, 8 clubs, Mendoza Unión entering the world at position 8" loading="lazy">
                     </div>
                 </div>
             </div>
@@ -1457,7 +1460,7 @@
             <div class="story-phone-wrap">
                 <div class="story-phone-outer">
                     <div class="story-phone-screen">
-                        <img src="screenshots/buildmyclub/Screenshot_20260601-090416.png" alt="Squad tab showing all players sorted by overall rating with club balance" loading="lazy">
+                        <img src="screenshots/buildmyclub/Screenshot_20260626-221840.png" alt="Squad tab — 4-4-2 formation, 33 players registered, mixed nationalities, overall ratings visible" loading="lazy">
                     </div>
                 </div>
             </div>
@@ -1480,7 +1483,7 @@
             <div class="story-phone-wrap">
                 <div class="story-phone-outer">
                     <div class="story-phone-screen">
-                        <img src="screenshots/buildmyclub/Screenshot_20260601-093326.png" alt="Club hub mid-season — Milan FC 3rd in League 8 after two games, form W away" loading="lazy">
+                        <img src="screenshots/buildmyclub/Screenshot_20260626-222132.png" alt="Scout activity dashboard — 3 scouts deployed with shortlist of targets by age, position, and priority" loading="lazy">
                     </div>
                 </div>
             </div>
@@ -1503,7 +1506,7 @@
             <div class="story-phone-wrap">
                 <div class="story-phone-outer">
                     <div class="story-phone-screen">
-                        <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! — Milan FC earn promotion from League 8 Season 1 with 28 points" loading="lazy">
+                        <img src="screenshots/buildmyclub/Screenshot_20260626-222029.png" alt="Performance tab — top scorer Friedrich Schulz 15 goals, season-wide goal and assist tallies" loading="lazy">
                     </div>
                 </div>
             </div>
@@ -1534,15 +1537,15 @@
         <div class="bento-phone-frame">
             <div class="bento-phone-outer">
                 <div class="bento-phone-screen">
-                    <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! — Milan FC earn promotion from League 8 Season 1 with 28 points and 6 wins" loading="lazy">
+                    <img src="screenshots/buildmyclub/Screenshot_20260626-222909.png" alt="Contract expiring alert — manager Rodrigo Mancini decides to let Pablo De Luca contract expire. Real consequences." loading="lazy">
                 </div>
             </div>
-            <span class="bento-phone-label">Promotion Day</span>
+            <span class="bento-phone-label">Real Consequences</span>
         </div>
         <div class="bento-phone-frame">
             <div class="bento-phone-outer">
                 <div class="bento-phone-screen">
-                    <img src="screenshots/buildmyclub/Screenshot_20260601-093326.png" alt="Club hub mid-season — Milan FC 3rd in League 8, form W away, Round 3 next" loading="lazy">
+                    <img src="screenshots/buildmyclub/Screenshot_20260626-221951.png" alt="League table — Season 3, Tier 6 standings with Mendoza Unión highlighted at the bottom" loading="lazy">
                 </div>
             </div>
             <span class="bento-phone-label">Live Season</span>
@@ -1550,10 +1553,10 @@
         <div class="bento-phone-frame">
             <div class="bento-phone-outer">
                 <div class="bento-phone-screen">
-                    <img src="screenshots/buildmyclub/Screenshot_20260601-090555.png" alt="Inbox with 4 messages — Finance, Story and System categories including investment offer" loading="lazy">
+                    <img src="screenshots/buildmyclub/Screenshot_20260626-222114.png" alt="Inbox — 7 scout update messages across Week 40, categorised by scout with NEW unread badges" loading="lazy">
                 </div>
             </div>
-            <span class="bento-phone-label">Inbox &amp; Narrative</span>
+            <span class="bento-phone-label">Inbox &amp; Scouts</span>
         </div>
     </div>
     <p class="gallery-more-label">▸ SCROLL TO EXPLORE ALL SCREENS</p>
@@ -1561,152 +1564,152 @@
     <div class="screenshot-scroll" role="region" aria-label="Game screenshots">
         <div class="screenshot-track">
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090148.png" alt="Manager creation form — pixel avatar, name, date of birth and gender fields blank" loading="lazy">
-                <p class="ss-caption">Create Your Manager</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090155.png" alt="Manager creation filled — Thomas Novak, born 19 July 1971, Male" loading="lazy">
-                <p class="ss-caption">Name Your Manager</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090241.png" alt="Club setup step — Thomas Novak card, club name Milan FC, Create My Club button" loading="lazy">
-                <p class="ss-caption">Name Your Club</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090249.png" alt="World initialisation — Building Division 3, progress bar at step 4 of 10" loading="lazy">
-                <p class="ss-caption">Building Your World</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090253.png" alt="Welcome modal — Milan FC is yours now, Build your squad, Let's Get Started button" loading="lazy">
-                <p class="ss-caption">Your Club is Ready</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090516.png" alt="Club hub at season start — Milan FC red and black badge, League 8 table, Round 1 next" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221827.png" alt="Club hub — Mendoza Unión Season 3, Week 39 overview with next match, league table position, and inbox" loading="lazy">
                 <p class="ss-caption">Club Hub</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090352.png" alt="Club office — Manager Fabio Rossi modal with contract, salary and auto-manage toggle" loading="lazy">
-                <p class="ss-caption">Your Manager</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090403.png" alt="Club office — Director of Football Giorgio Galli with auto-management toggles" loading="lazy">
-                <p class="ss-caption">Director of Football</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090416.png" alt="Squad tab showing all players sorted by overall rating with club balance £35,000" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221840.png" alt="Squad overview — 4-4-2 DIRECT formation, 33 registered players, balance £5,813,131" loading="lazy">
                 <p class="ss-caption">Squad Overview</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090430.png" alt="Squad form view showing contract status, goals, assists, form and reputation columns" loading="lazy">
-                <p class="ss-caption">Form & Contracts</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-183103.png" alt="Signing a player from the market pool — contract fee, wage, player interest bar, and staff opinions" loading="lazy">
+                <p class="ss-caption">Sign a Player</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093341.png" alt="Player profile — Mario Sanna, Midfielder age 30, enrollment contract with 46 weeks remaining" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221851.png" alt="Predicted XI overlay — 4-3-3 formation selected for away Round 1 vs Río Ceballos Defensores" loading="lazy">
+                <p class="ss-caption">Predicted XI</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221915.png" alt="In-form player highlight — Niklas Schmidt, Club Servant MID age 19, last 5 match ratings from 7.6 to 9.4" loading="lazy">
+                <p class="ss-caption">In-Form Player</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221929.png" alt="Player profile — Niklas Schmidt German MID, development trajectory chart and ability matrix radar" loading="lazy">
                 <p class="ss-caption">Player Profile</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090442.png" alt="Staff tab listing 12 coaches and 1 scout with specialisms and weekly wages" loading="lazy">
-                <p class="ss-caption">Coaching Staff</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221944.png" alt="Player history — 12 appearances, 8.1 avg rating, 58% win rate, 2 goals, 3 assists at Mendoza Unión" loading="lazy">
+                <p class="ss-caption">Player History</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-095614.png" alt="Staff profile for Coach Lorenzo Cattaneo showing Pace and Power specialisms and personality traits" loading="lazy">
-                <p class="ss-caption">Staff Profile</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-095635.png" alt="Scout profile — Claudio Russo, Local scout with 14% success rate and 3 player assignments" loading="lazy">
-                <p class="ss-caption">Your Scout</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090452.png" alt="Finances — balance tab showing budget allocation and club value £89,100" loading="lazy">
-                <p class="ss-caption">Finances</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090457.png" alt="Finance ledger — 12-week view showing Season 1 TV deal income of £5,000" loading="lazy">
-                <p class="ss-caption">Finance Ledger</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090504.png" alt="Facilities — Training tab showing Training Pitch Level 1 active, Strength Suite Level 0 inactive" loading="lazy">
-                <p class="ss-caption">Training Facilities</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093840.png" alt="Facilities — Scouting tab showing DOF scouting config filters and Scouting Centre Level 1" loading="lazy">
-                <p class="ss-caption">Scouting Centre</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090509.png" alt="Competition screen — Season 1 League 8 LOCAL, full 10-club table with Milan FC 10th" loading="lazy">
-                <p class="ss-caption">Your League</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093849.png" alt="League table — Milan FC 3rd with 4 points, On Form section and Golden Boot leader Fergus Murray" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221951.png" alt="League table — Season 3, Tier 6, full 8-club standings, Mendoza Unión #8 with 0 points in opening round" loading="lazy">
                 <p class="ss-caption">League Table</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093854.png" alt="Browse tab showing League 1 through League 8 with YOUR LEAGUE badge on League 8" loading="lazy">
-                <p class="ss-caption">8-Tier Pyramid</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222029.png" alt="Performance tab — top scorers: Friedrich Schulz 15 goals, Ezequiel Palermo 7, Leandro Cabral 7 this season" loading="lazy">
+                <p class="ss-caption">Top Scorers</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093346.png" alt="Performance tab showing top scorer Carlo Leone, assist maker and best-rated players" loading="lazy">
-                <p class="ss-caption">Season Performance</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093045.png" alt="Predicted XI overlay — Milan FC 4-5-1 formation vs Savona Internazionale in Round 1" loading="lazy">
-                <p class="ss-caption">Set Your Lineup</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-095850.png" alt="Predicted XI — 4-5-1 vs Casal di Principe Spal Round 8, two suspended players shown as unavailable" loading="lazy">
-                <p class="ss-caption">Tactical Planning</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100231.png" alt="Match result — Casal di Principe Spal 4-1 Milan FC with full player stats and ratings" loading="lazy">
-                <p class="ss-caption">Match Result</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100238.png" alt="Match events timeline from kick-off to full time with goals, cards and match notes" loading="lazy">
-                <p class="ss-caption">Match Events</p>
-            </div>
-            <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090555.png" alt="Inbox showing 4 messages across Finance, Story and System categories including an investment offer" loading="lazy">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222114.png" alt="Inbox with 7 scout notifications — Cédric Richard completed reports on Tomás Herrera, Fernando Conti, Juan Flores" loading="lazy">
                 <p class="ss-caption">Inbox</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-090842.png" alt="Investment offer detail — Village Roofing £27,000 for 10% stake, marked IGNORED" loading="lazy">
-                <p class="ss-caption">Investor Relations</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222132.png" alt="Scout activity — Jakub Zieliński, Loïc Dupont and Cédric Richard deployed; shortlist of 5 targets visible" loading="lazy">
+                <p class="ss-caption">Scout Shortlist</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-093012.png" alt="Narrative inbox message — Entering the Veteran Years, Mario Sanna turns 30 this week" loading="lazy">
-                <p class="ss-caption">Narrative Events</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222909.png" alt="Contract expiring alert — Pablo De Luca DEF age 19, manager elects to let the contract expire, 1 of 7 notifications" loading="lazy">
+                <p class="ss-caption">Contract Alert</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-095658.png" alt="Inbox narrative — Coming of Age system message, Mario Gallo turns 18 in Week 9" loading="lazy">
-                <p class="ss-caption">Coming of Age</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-223557.png" alt="Full match result — Mendoza Unión avg rating 7.8, player-by-player ratings, goals and assists breakdown" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100449.png" alt="Museum — Achievements tab showing 3 unlocked, Promotion and Titles categories, Star is Born achievement" loading="lazy">
-                <p class="ss-caption">Achievements</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224002.png" alt="League form mid-season — Mendoza Unión on form with back-to-back wins, 6 pts; Golden Boot leader Rodrigo Palermo" loading="lazy">
+                <p class="ss-caption">League Form</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100827.png" alt="Weekly tick processing — 06 Nov 2026, advancing to 13 Nov 2026, 95% progress" loading="lazy">
-                <p class="ss-caption">Weekly Simulation</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224016.png" alt="League progress — Season 3, T6, Week 43, standings showing top and bottom half after 2 rounds played" loading="lazy">
+                <p class="ss-caption">League Progress</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100830.png" alt="PROMOTED! — Milan FC earn promotion from League 8 Season 1 with 28 points and 6 wins" loading="lazy">
-                <p class="ss-caption">Promotion!</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224233.png" alt="Narrative event — construction problem at Club Shop, emergency repairs cost £5,993 and add 4 weeks" loading="lazy">
+                <p class="ss-caption">Narrative Event</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100926.png" alt="League Winners — Season 1 all-tier champions from League 1 through League 7 listed" loading="lazy">
-                <p class="ss-caption">League Winners</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224247.png" alt="Youth academy — 2 enrolled: Luca Taylor DEF age 15 Argentine, Andre White GK age 12, both rated 5-star potential" loading="lazy">
+                <p class="ss-caption">Youth Academy</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100931.png" alt="Your Season awards — Giorgio Valentini top scorer 7 goals, Mario Sanna top assister 5, Carlo Leone best rated 7.8" loading="lazy">
-                <p class="ss-caption">Season Awards</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224522.png" alt="Match result inbox — away draw: Alta Gracia Ferro Carril 1–1 Mendoza Unión, Round 5, Matchday 5" loading="lazy">
+                <p class="ss-caption">Match Report</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-100955.png" alt="Season summary — League 8 PROMOTED, 28pts, 35-28 goals, 6W 10D 2L with full final table" loading="lazy">
-                <p class="ss-caption">Season Summary</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224531.png" alt="Match events timeline — kick-off to full time, goals scored at 45+1 and 69 minutes, red card at 56 minutes" loading="lazy">
+                <p class="ss-caption">Match Timeline</p>
             </div>
             <div class="ss-frame">
-                <img src="screenshots/buildmyclub/Screenshot_20260601-101012.png" alt="Predicted Finish for Season 3 — Milan FC predicted 7th of 10 based on current squad strength" loading="lazy">
-                <p class="ss-caption">New Season Preview</p>
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224542.png" alt="Build My Club — deep strategy layer showing in-game management screen" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224737.png" alt="Build My Club — live game data across squad, finances, and competition in one session" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224748.png" alt="Build My Club — strategic ownership decisions with real-time consequences" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-224811.png" alt="Build My Club — weekly tick simulation advancing the season" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-225047.png" alt="Build My Club — elite management depth in a mobile-first football strategy game" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-225057.png" alt="Build My Club — real club ownership: transfers, wages, scouts, and narrative events" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-225113.png" alt="Build My Club — season in motion across multiple concurrent systems" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-225135.png" alt="Build My Club — financial decisions, transfer market, and club narrative" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-225148.png" alt="Build My Club — club-level view with player development and scouting integration" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-231402.png" alt="Build My Club — long-run session showing season arc and multi-year progression" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-231436.png" alt="Build My Club — end of session overview showing squad and competitive standing" loading="lazy">
+                <p class="ss-caption">Game Screen</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221827.png" alt="Club hub — between weekly ticks, your command centre showing fixtures, standings, and squad balance" loading="lazy">
+                <p class="ss-caption">Club Hub</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221840.png" alt="Squad tab — all positions covered, international mix, ratings tracked week by week" loading="lazy">
+                <p class="ss-caption">Squad</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221851.png" alt="Predicted XI — choose your tactical shape and lineup before each weekly tick" loading="lazy">
+                <p class="ss-caption">Set Lineup</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-183103.png" alt="Player signing from the pool — once you sign them, they are gone from the pool forever. Real scarcity." loading="lazy">
+                <p class="ss-caption">Sign Players</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222029.png" alt="Season performance — top scorer chart showing all-time and current season goals across the squad" loading="lazy">
+                <p class="ss-caption">Season Stats</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222114.png" alt="Inbox overflowing — 7 messages including multiple scout completion reports across the same week" loading="lazy">
+                <p class="ss-caption">Inbox</p>
+            </div>
+            <div class="ss-frame">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-221951.png" alt="League table — Tier 6, Season 3, tracking your rise through 8 divisions toward the top flight" loading="lazy">
+                <p class="ss-caption">League</p>
             </div>
         </div>
     </div>
@@ -1722,8 +1725,8 @@
             <span class="stat-lbl">NPC clubs simulated across 8 tiers</span>
         </div>
         <div class="stat-block">
-            <span class="stat-num">42</span>
-            <span class="stat-lbl">Fixtures per season</span>
+            <span class="stat-num">6</span>
+            <span class="stat-lbl">Global leaderboard categories</span>
         </div>
         <div class="stat-block">
             <span class="stat-num">8</span>
@@ -1731,7 +1734,7 @@
         </div>
         <div class="stat-block">
             <span class="stat-num">100%</span>
-            <span class="stat-lbl">Offline — no internet required</span>
+            <span class="stat-lbl">Offline-first, integrity synced</span>
         </div>
     </div>
 </div>
@@ -1740,8 +1743,8 @@
 <section id="features">
     <div class="wrap">
         <div class="section-label">Game Systems</div>
-        <h2 class="section-title">Every angle of running a football club. In your pocket.</h2>
-        <p class="section-sub">From scouting raw talent to negotiating investor equity — the full ownership experience is here.</p>
+        <h2 class="section-title">Elite ownership. Deep systems. Real consequences.</h2>
+        <p class="section-sub">From a scarcity-driven market pool to Style Multiplier tactics — every system connects. Every decision has a downstream effect.</p>
 
         <div class="features-grid">
 
@@ -1749,8 +1752,8 @@
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                     <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
                 </svg>
-                <div class="feature-title">Transfer Market</div>
-                <p class="feature-desc">Buy, sell, and loan players with agent-negotiated fees, guardian approval, and real market pressure. NPC clubs build squads and bid on your players too.</p>
+                <div class="feature-title">Scarcity Market Pool</div>
+                <p class="feature-desc">Every player and staff member in the pool is a real, single entity. When you sign one, they are permanently deleted from the global pool — gone for everyone. No restocks, no duplicates. True scarcity means every acquisition decision carries weight.</p>
             </div>
 
             <div class="feature-card mint">
@@ -1790,8 +1793,8 @@
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                     <rect x="3" y="3" width="18" height="18"/><path d="M3 9h18M9 21V9"/>
                 </svg>
-                <div class="feature-title">Competition Hub</div>
-                <p class="feature-desc">Track your league table, fixtures, golden boot standings, and browse every division in the pyramid. Full season history and trophies recorded forever in the museum.</p>
+                <div class="feature-title">6 Global Leaderboards</div>
+                <p class="feature-desc">Sync weekly to compete across six global ranking categories: Career Earnings, Club Reputation, Hall of Fame, Top Transfers, and more. Every category tracked all-time and per-week. Your offline progress, validated and ranked against the world.</p>
             </div>
 
             <div class="feature-card">
@@ -1814,8 +1817,8 @@
                 <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
-                <div class="feature-title">Tactics & Club Identity</div>
-                <p class="feature-desc">Set your formation and playing style — Possession, Direct, Counter, or High Press — and customise your kit colours. Delegate to your Manager or set it yourself.</p>
+                <div class="feature-title">Style Multipliers</div>
+                <p class="feature-desc">Your playing style isn't just aesthetic — it's a tactical weapon. Each matchup has a calculated Style Multiplier: Counter vs High Press, Direct vs Possession. Choose formations and styles that exploit opponents' weaknesses, or delegate the call to your Manager.</p>
             </div>
 
         </div>
@@ -1828,8 +1831,8 @@
 <section id="archetypes">
     <div class="wrap">
         <div class="section-label">Player Archetypes</div>
-        <h2 class="section-title">Every player has a type. Learn to read them.</h2>
-        <p class="section-sub">Archetypes are derived from a player's 8-trait personality matrix. They shape how players behave — in training, in the dressing room, and in big matches.</p>
+        <h2 class="section-title">Every player has a type. Know who you're signing.</h2>
+        <p class="section-sub">Archetypes are derived from a player's 8-trait personality matrix and are visible before you consume them from the pool. Sign the wrong archetype for your dressing room chemistry and you'll feel it on the pitch.</p>
 
         <div class="archetype-grid">
             <div class="archetype-card gold">
@@ -1876,18 +1879,19 @@
         <div class="depth-inner">
             <div>
                 <div class="section-label">The Simulation</div>
-                <h2 class="section-title">Deep systems. Real decisions.</h2>
+                <h2 class="section-title">Elite systems. High-stakes decisions.</h2>
                 <p class="section-sub">
-                    This isn't a clicker. Every week brings real ownership decisions — where to invest,
-                    who to hire, how to react to your players' personalities
-                    and the narratives unfolding in your dressing room.
+                    This isn't a clicker. Each week is an ownership decision: where to allocate
+                    capital, which market entities to consume before they're gone, how to position
+                    your formation against a specific opponent's Style Multiplier.
                 </p>
                 <br>
                 <p class="section-sub">
-                    An 8-trait personality matrix governs player behaviour. Social graphs track
-                    relationships and trigger chained narrative events. Guardians push back.
-                    Agents negotiate. Your Director of Football has an opinion. Investors want returns.
-                    It's all connected.
+                    An 8-trait personality matrix governs every player. Social graphs track
+                    dressing-room relationships and chain into narrative events. Your Manager
+                    Traits shift based on the calls you make. Guardians push back. Agents bid.
+                    Investors want returns. It's all connected — and it all syncs with Integrity
+                    Validation every week.
                 </p>
             </div>
             <ul class="depth-list" aria-label="Simulation depth features">
@@ -1929,8 +1933,8 @@
                 <li class="depth-item">
                     <span class="depth-num">06</span>
                     <div class="depth-text">
-                        <strong>Manager Personality</strong>
-                        <span>Your managerial temperament, discipline, and ambition shift based on decisions made. The board notices. The players notice. Win rates affect your job security.</span>
+                        <strong>Manager Personality Traits</strong>
+                        <span>Three traits define your managerial identity: Temperament (how you react under pressure), Discipline (how you enforce standards), Ambition (how aggressively you pursue growth). Each shifts on a 0–100 scale based on your decisions. The board tracks them. So do your players.</span>
                     </div>
                 </li>
                 <li class="depth-item">
@@ -1954,6 +1958,13 @@
                         <span>Negotiate equity deals with investors, renew or void sponsor contracts, and allocate capital across wages, facilities, and transfers. Every financial decision determines how fast your club can grow — and how exposed you are when things go wrong.</span>
                     </div>
                 </li>
+                <li class="depth-item">
+                    <span class="depth-num">10</span>
+                    <div class="depth-text">
+                        <strong>Integrity Syncing</strong>
+                        <span>Gameplay runs entirely offline on-device. When you sync, the server validates your week progression — week rollbacks are permanently rejected. Every advance you make is logged in an immutable SyncRecord. Cheat-proof. Tamper-evident. Your leaderboard position is earned.</span>
+                    </div>
+                </li>
             </ul>
         </div>
     </div>
@@ -1966,7 +1977,7 @@
     <div class="wrap">
         <div class="section-label">How it Works</div>
         <h2 class="section-title">One tap. One week. Infinite consequences.</h2>
-        <p class="section-sub">The Weekly Tick engine runs everything on-device — no internet needed mid-game. When you're ready, sync to the cloud leaderboard.</p>
+        <p class="section-sub">The Weekly Tick engine runs entirely on-device — no internet required mid-game. When you're ready, Integrity Sync validates your progress and updates your position across 6 global leaderboards.</p>
 
         <div class="tick-grid">
             <div class="tick-step" data-num="01">
@@ -1975,15 +1986,15 @@
             </div>
             <div class="tick-step" data-num="02">
                 <div class="tick-step-title">Advance the Week</div>
-                <p class="tick-step-text">The engine simulates your match with live match events, processes wages, applies facility benefits to player development, runs upkeep, fires narrative incidents — all offline, all on-device.</p>
+                <p class="tick-step-text">The engine simulates your match using Style Multipliers for the matchup, processes wages, applies facility benefits to development, fires narrative incidents — all offline, all on-device. No server round-trip required.</p>
             </div>
             <div class="tick-step" data-num="03">
                 <div class="tick-step-title">React to Results</div>
                 <p class="tick-step-text">Read the full match report, check your league position, accept or reject transfer bids. Player morale shifts. Fan happiness reacts. The NPC market moves.</p>
             </div>
             <div class="tick-step" data-num="04">
-                <div class="tick-step-title">Build Your Legacy</div>
-                <p class="tick-step-text">Climb the pyramid. Win your first title. Hit the Hall of Fame leaderboard. Every promotion is recorded forever. Or get relegated. No pressure.</p>
+                <div class="tick-step-title">Sync & Compete</div>
+                <p class="tick-step-text">Integrity Sync submits your week to the server — rollbacks rejected, progress validated. Your position across 6 global leaderboard categories updates instantly. Climb the pyramid. Win a title. Get relegated. Your record is permanent either way.</p>
             </div>
         </div>
     </div>
@@ -2057,8 +2068,8 @@
 <section class="cta-section" id="download">
     <div class="cta-glow" aria-hidden="true"></div>
     <div class="wrap">
-        <h2>Help us build something great.</h2>
-        <p class="cta-sub">Build My Club is in active development and we're looking for testers. Download the Android APK and let us know what you think.</p>
+        <h2>Claim your spot in the beta.</h2>
+        <p class="cta-sub">Build My Club is in active Android beta. Beta slots are limited — the market pool is scarcity-driven from day one. Get in early, get ranked, and start building your legacy before the competition does.</p>
         <div class="cta-actions" id="download-buttons">
             <a href="#" id="android-download-btn" class="btn btn-gold btn-lg" aria-label="Download Android" style="display:none">Download (Android)</a>
             <a href="#" id="ios-download-btn" class="btn btn-outline btn-lg" aria-label="Download iOS" style="display:none">Download (iOS)</a>
@@ -2072,7 +2083,7 @@
 <footer>
     <div class="wrap">
         <div class="footer-inner">
-            <span class="footer-logo"><img src="/logo-48.png" alt="">BUILD MY CLUB</span>
+            <span class="footer-logo"><img src="/logo_master.png" alt="Build My Club crest">BUILD MY CLUB</span>
             <ul class="footer-links">
                 <li><a href="mailto:admin@buildmyclub.co.uk">Contact</a></li>
                 <li><a href="#privacy">Privacy</a></li>

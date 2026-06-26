@@ -80,7 +80,8 @@
       "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package 34f3bf9def699d16f1a61806ef13e5ea81a7f79e *)",
       "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package 0dc0284b22ce4881dd6befaeededa20064603014 *)",
       "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package f649274c93af81238ba3d2d7eb998d79c76ad2ca *)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(read f *)"
     ]
   }
 }

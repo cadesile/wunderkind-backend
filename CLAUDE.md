@@ -178,7 +178,9 @@ return $this->redirectToRoute('admin_my_route');
 | `POST` | `/api/beta-request` | Public | Submit beta access request |
 | `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
 | `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
+| `GET` | `/api/app-links` | Public | App store / deep link URLs |
 | `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
+| `GET` | `/api/market/legacy` | JWT | Legacy market data format |
 | `POST` | `/api/market/assign` | JWT | Assign market entity to club; Player/Staff returns `snapshot` key |
 | `POST` | `/api/market/consume` | JWT | Consume/use a market entity |
 | `GET` | `/api/game-config` | JWT | Global game configuration values |
@@ -186,21 +188,27 @@ return $this->redirectToRoute('admin_my_route');
 | `GET` | `/api/inbox` / `GET /api/inbox/{id}` | JWT | Inbox offers |
 | `POST` | `/api/inbox/{id}/accept` | JWT | Accept inbox offer |
 | `POST` | `/api/inbox/{id}/reject` | JWT | Reject inbox offer |
+| `POST` | `/api/inbox/{id}/read` | JWT | Mark inbox message as read |
 | `GET` | `/api/finance/overview` | JWT | Financial summary |
 | `GET` | `/api/finance/investors` | JWT | Investor contracts |
 | `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
 | `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
-| `GET` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
+| `POST` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
 | `GET` | `/api/archetypes` | JWT | Player archetypes |
 | `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
 | `GET` | `/api/club/status` | JWT | Club initialization status |
+| `GET` | `/api/club/check` | JWT | Check if club exists for current user |
 | `GET` | `/api/club/foreign` | JWT | Foreign clubs for scouting |
+| `GET` | `/api/club/name-options` | JWT | Generated club name options |
 | `GET` | `/api/starter-config` | JWT | League ability ranges |
 | `GET` | `/api/league` | JWT | Club's current league data |
 | `POST` | `/api/league/conclude-season` | JWT | Submit season results |
 | `GET` | `/api/league/season-history` | JWT | Historical season records |
+| `GET` | `/api/league/season-history/{season}` | JWT | Season record detail |
 | `GET` | `/api/scout/search` | JWT | Search for players via scouts |
-| `GET` | `/api/leaderboard/transfers/top-sellers` | JWT | Transfer leaderboard |
+| `GET` | `/api/scout/foreign-clubs` | JWT | NPC clubs available for scout searches |
+| `GET` | `/api/leaderboard/transfers/top-sellers` | JWT | Top transfer seller leaderboard |
+| `GET` | `/api/leaderboard/transfers/most-valuable` | JWT | Most valuable players leaderboard |
 | `GET` | `/api/admin/stats` | JWT + ROLE_ADMIN | Backend stats |
 
 Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
@@ -225,6 +233,9 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `WorldPackCacheService` | Cache country/nationality worldpack data (`CountryWorldPackCache`) |
 | `NameGeneratorService` | Procedural name generation for players and PA personas |
 | `EmailVerificationService` | Send and validate email verification / password reset tokens |
+| `ConfigImportExportService` | Export/import `GameConfig`, `StarterConfig`, and `PoolConfig` rows as JSON |
+| `LeagueImportExportService` | Export/import `League` + `NpcClub` world data (used for admin-driven world pack management) |
+| `NarrativeImportExportService` | Export/import event templates, facility templates, player archetypes, and `TacticalAdvantage` rows |
 
 ## Key Entities (non-obvious fields)
 
@@ -240,5 +251,9 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **LeaderboardEntry** — UNIQUE(club, category, period); `rank_position` column (not `rank`)
 - **InboxMessage** — `senderType` (MessageSenderType), `offerData` (json), `status` (MessageStatus)
 - **Transfer** — fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server); `player_id` is `ON DELETE SET NULL`
+- **MatchResult** — per-club match record; `goalsFor`, `goalsAgainst`, `week`, `season`, `fixtureId` (unique), `opponentClubName`, `isHome`, `homeGoals`, `awayGoals`, `round`, `playedAt`, `yellowCards`; FK to `Club`
+- **TacticalAdvantage** — matchup table row: `style` vs `opponentStyle` (both `PlayingStyle`) → `multiplier` (float); seeded via `NarrativeImportExportService`
+- **Admin** — separate admin user entity (`UserInterface`); `email`, `password`, `name`, `department`, `accessLevel`; always `ROLE_ADMIN`; created via `app:admin:create`
+- **BetaRequest** — beta-access waitlist entry; `email`, `code`, `valid`, `attempts`, `expiresAt`, `verifiedAt`; verified via `/api/beta-request/verify`
 - **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool
 - **SeasonRecord / SeasonSnapshot / SeasonRatingsSnapshot** — historical season data persisted at `conclude-season`
