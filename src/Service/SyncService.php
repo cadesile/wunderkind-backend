@@ -142,6 +142,13 @@ class SyncService
             $this->applyManagerShifts($club, $request->managerShifts);
         }
 
+        // Record tutorial completion exactly once — never overwrite an existing timestamp.
+        if ($request->tutorialCompletedAt !== null && $club->getTutorialCompletedAt() === null) {
+            try {
+                $club->setTutorialCompletedAt(new \DateTimeImmutable($request->tutorialCompletedAt));
+            } catch (\Exception) { /* malformed timestamp — ignore */ }
+        }
+
         // ── Leaderboard upserts ───────────────────────────────────────────────
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
@@ -359,14 +366,15 @@ class SyncService
             'facilityTemplates' => $facilityTemplates,
             'dividendPaidPence' => $dividendPaidPence,
             'club'              => [
-                'id'                  => (string) $club->getId(),
-                'reputation'          => $club->getReputation(),
-                'totalCareerEarnings' => $club->getTotalCareerEarnings(),
-                'hallOfFamePoints'    => $club->getHallOfFamePoints(),
-                'balance'             => $club->getBalance(),
-                'hasDebt'             => $club->hasDebt(),
-                'formation'           => $club->getFormation()->value,
-                'manager'             => [
+                'id'                   => (string) $club->getId(),
+                'reputation'           => $club->getReputation(),
+                'totalCareerEarnings'  => $club->getTotalCareerEarnings(),
+                'hallOfFamePoints'     => $club->getHallOfFamePoints(),
+                'balance'              => $club->getBalance(),
+                'hasDebt'              => $club->hasDebt(),
+                'formation'            => $club->getFormation()->value,
+                'tutorialCompletedAt'  => $club->getTutorialCompletedAt()?->format(\DateTimeInterface::ATOM),
+                'manager'              => [
                     'temperament' => $club->getManagerTemperament(),
                     'discipline'  => $club->getManagerDiscipline(),
                     'ambition'    => $club->getManagerAmbition(),

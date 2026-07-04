@@ -235,6 +235,12 @@ class SyncRequest
     }
 
     /**
+     * ISO 8601 timestamp of when the client completed the first-launch tutorial.
+     * Sent once; server records it idempotently and never overwrites with null.
+     */
+    public ?string $tutorialCompletedAt = null;
+
+    /**
      * Optional debug diagnostics — only present when gameConfig.debugLoggingEnabled === true on the client.
      * Stored verbatim on SyncRecord; never fails validation if absent.
      * A value of -1 on any numeric field means the scan failed — treat as unavailable, not zero.

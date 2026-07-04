@@ -203,6 +203,7 @@ class ClubController extends AbstractController
             'hallOfFamePoints'    => $club->getHallOfFamePoints(),
             'activeSponsors'      => $club->getActiveSponsors()->count(),
             'activeInvestors'     => $activeInvestorCount,
+            'tutorialCompletedAt' => $club->getTutorialCompletedAt()?->format(\DateTimeInterface::ATOM),
         ]);
     }
 }
