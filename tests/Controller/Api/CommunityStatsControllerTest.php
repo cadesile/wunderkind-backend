@@ -8,47 +8,48 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class CommunityStatsControllerTest extends WebTestCase
 {
-    public function testMostTransfersRequiresAuth(): void
+    public function testMostTransfersIsPubliclyAccessible(): void
     {
         $client = static::createClient();
         $client->request('GET', '/api/stats/most-transfers');
 
-        $this->assertResponseStatusCodeSame(401);
+        $this->assertResponseStatusCodeSame(200);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertArrayHasKey('period', $data);
+        $this->assertArrayHasKey('results', $data);
     }
 
-    public function testMostDevelopmentRequiresAuth(): void
+    public function testMostDevelopmentIsPubliclyAccessible(): void
     {
         $client = static::createClient();
         $client->request('GET', '/api/stats/most-development');
 
-        $this->assertResponseStatusCodeSame(401);
+        $this->assertResponseStatusCodeSame(200);
     }
 
-    public function testMostSeasonsRequiresAuth(): void
+    public function testMostSeasonsIsPubliclyAccessible(): void
     {
         $client = static::createClient();
         $client->request('GET', '/api/stats/most-seasons');
 
-        $this->assertResponseStatusCodeSame(401);
+        $this->assertResponseStatusCodeSame(200);
     }
 
-    public function testMostTrophiesRequiresAuth(): void
+    public function testMostTrophiesIsPubliclyAccessible(): void
     {
         $client = static::createClient();
         $client->request('GET', '/api/stats/most-trophies');
 
-        $this->assertResponseStatusCodeSame(401);
+        $this->assertResponseStatusCodeSame(200);
     }
 
-    public function testInvalidPeriodReturns400OrUnauthorized(): void
+    public function testInvalidPeriodReturns400(): void
     {
         $client = static::createClient();
+        $client->request('GET', '/api/stats/most-transfers?period=bogus');
 
-        // Integration test: inject a valid JWT via HTTP_AUTHORIZATION header
-        $client->request('GET', '/api/stats/most-transfers?period=bogus', [], [], ['HTTP_AUTHORIZATION' => 'Bearer test-token']);
-
-        // Without a real token this will 401; integration test would inject valid JWT
-        $statusCode = $client->getResponse()->getStatusCode();
-        $this->assertContains($statusCode, [400, 401]);
+        $this->assertResponseStatusCodeSame(400);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertArrayHasKey('error', $data);
     }
 }
