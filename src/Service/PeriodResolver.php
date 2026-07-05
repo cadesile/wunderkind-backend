@@ -62,15 +62,21 @@ class PeriodResolver
         // DQL's NullComparisonExpression doesn't accept an arbitrary subselect
         // on its left side, so "(subquery) IS NULL" isn't valid DQL. Express
         // "club has no SeasonRecord" via NOT EXISTS instead.
+        //
+        // Subquery aliases are namespaced ("__period_*") because the outer
+        // query this filter is applied to can itself be a SeasonRecord query
+        // aliased "sr" (e.g. SeasonRecordRepository::getMostSeasonsByClub) —
+        // a plain "sr"/"sr2" alias here would collide with the outer alias
+        // and DQL would reject the query as "'sr' is already defined".
         $existsSub = $this->em->createQueryBuilder()
-            ->select('sr2.id')
-            ->from(SeasonRecord::class, 'sr2')
-            ->where("sr2.club = {$clubAlias}.id");
+            ->select('__period_sr_exists.id')
+            ->from(SeasonRecord::class, '__period_sr_exists')
+            ->where("__period_sr_exists.club = {$clubAlias}.id");
 
         $maxSub = $this->em->createQueryBuilder()
-            ->select('MAX(sr.createdAt)')
-            ->from(SeasonRecord::class, 'sr')
-            ->where("sr.club = {$clubAlias}.id");
+            ->select('MAX(__period_sr_max.createdAt)')
+            ->from(SeasonRecord::class, '__period_sr_max')
+            ->where("__period_sr_max.club = {$clubAlias}.id");
 
         $qb->andWhere(new Orx([
             "NOT EXISTS ({$existsSub->getDQL()})",
