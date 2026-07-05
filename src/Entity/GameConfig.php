@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\StatCategory;
 use App\Repository\GameConfigRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -1555,4 +1556,13 @@ class GameConfig
 
     public function getPyramidNewsConfig(): array { return $this->pyramidNewsConfig; }
     public function setPyramidNewsConfig(array $v): static { $this->pyramidNewsConfig = $v; return $this; }
+
+    // ── Social Posting ───────────────────────────────────────────────────
+
+    /** Last StatCategory posted by app:post-community-stat, for round-robin advancement. Null before the first run. */
+    #[ORM\Column(type: 'string', enumType: StatCategory::class, nullable: true)]
+    private ?StatCategory $lastPostedStatCategory = null;
+
+    public function getLastPostedStatCategory(): ?StatCategory { return $this->lastPostedStatCategory; }
+    public function setLastPostedStatCategory(?StatCategory $v): static { $this->lastPostedStatCategory = $v; return $this; }
 }
