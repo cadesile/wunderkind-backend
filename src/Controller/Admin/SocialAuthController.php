@@ -7,12 +7,14 @@ use App\Enum\SocialPlatform;
 use App\Repository\SocialAccountConnectionRepository;
 use App\Service\TokenEncryptionService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 #[Route('/admin/social')]
@@ -28,6 +30,7 @@ class SocialAuthController extends AbstractController
         private readonly SocialAccountConnectionRepository $connectionRepository,
         private readonly TokenEncryptionService $tokenEncryption,
         private readonly HttpClientInterface $httpClient,
+        private readonly LoggerInterface $logger,
         private readonly string $facebookAppId,
         private readonly string $facebookAppSecret,
         private readonly string $facebookRedirectUri,
@@ -133,7 +136,8 @@ class SocialAuthController extends AbstractController
             );
             $pages = $pagesResponse->toArray()['data'] ?? [];
         } catch (\Throwable $e) {
-            $this->addFlash('danger', 'Facebook connection failed: ' . $e->getMessage());
+            $this->logSocialAuthError('Facebook', $e);
+            $this->addFlash('danger', 'Facebook connection failed. Check application logs for details.');
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
         }
 
@@ -253,7 +257,8 @@ class SocialAuthController extends AbstractController
             ]);
             $userData = $userResponse->toArray()['data'] ?? [];
         } catch (\Throwable $e) {
-            $this->addFlash('danger', 'X connection failed: ' . $e->getMessage());
+            $this->logSocialAuthError('X', $e);
+            $this->addFlash('danger', 'X connection failed. Check application logs for details.');
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
         }
 
@@ -276,6 +281,35 @@ class SocialAuthController extends AbstractController
 
         $this->addFlash('success', sprintf('Connected X account @%s.', $username));
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+    }
+
+    // ── Shared error logging ─────────────────────────────────────────────
+
+    /**
+     * Logs OAuth failures server-side instead of surfacing them to the
+     * browser. HttpExceptionInterface's own getMessage() embeds the full
+     * request URL — which for Facebook's GET-based token exchange includes
+     * client_secret/code as query params — so we deliberately log the HTTP
+     * status and response body instead of the exception message for those.
+     * Other exceptions (our own RuntimeExceptions) never embed request
+     * URLs, so their message is safe to log directly.
+     */
+    private function logSocialAuthError(string $platform, \Throwable $e): void
+    {
+        $context = ['exception_class' => $e::class];
+
+        if ($e instanceof HttpExceptionInterface) {
+            $context['status_code'] = $e->getResponse()->getStatusCode();
+            try {
+                $context['response_body'] = $e->getResponse()->getContent(false);
+            } catch (\Throwable) {
+                // Transport-level failures (e.g. connection reset) may not have a readable body.
+            }
+        } else {
+            $context['message'] = $e->getMessage();
+        }
+
+        $this->logger->error("{$platform} OAuth connection failed", $context);
     }
 
     // ── Shared persistence ───────────────────────────────────────────────
