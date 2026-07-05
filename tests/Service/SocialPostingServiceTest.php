@@ -119,4 +119,40 @@ class SocialPostingServiceTest extends TestCase
             $this->assertSame(0, $httpClient->getRequestsCount(), 'Must not call the HTTP client for an over-length X post.');
         }
     }
+
+    public function testDecryptFailureOnFacebookIsWrappedInSocialPostingException(): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $logger = new RecordingTestLogger();
+        $service = new SocialPostingService($this->encryptionService(), $httpClient, $logger);
+
+        // Create a connection with garbage ciphertext that will fail to decrypt.
+        $badConnection = new SocialAccountConnection(SocialPlatform::FACEBOOK, 'Test Page', 'page-123', 'not-valid-base64-ciphertext');
+
+        $this->expectException(SocialPostingException::class);
+
+        try {
+            $service->post($badConnection, 'some text');
+        } finally {
+            $this->assertSame(0, $httpClient->getRequestsCount(), 'Must not call HTTP client when decrypt fails.');
+        }
+    }
+
+    public function testDecryptFailureOnTwitterIsWrappedInSocialPostingException(): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $logger = new RecordingTestLogger();
+        $service = new SocialPostingService($this->encryptionService(), $httpClient, $logger);
+
+        // Create a connection with garbage ciphertext that will fail to decrypt.
+        $badConnection = new SocialAccountConnection(SocialPlatform::TWITTER, '@testfc', 'user-456', 'malformed!!!ciphertext');
+
+        $this->expectException(SocialPostingException::class);
+
+        try {
+            $service->post($badConnection, 'some text');
+        } finally {
+            $this->assertSame(0, $httpClient->getRequestsCount(), 'Must not call HTTP client when decrypt fails.');
+        }
+    }
 }

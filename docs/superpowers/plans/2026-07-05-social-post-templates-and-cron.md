@@ -1541,20 +1541,8 @@ git commit -m "feat: add admin CRUD for SocialPostTemplate"
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/Controller/Admin/SocialAuthControllerTest.php` (reusing its existing `loginAsAdmin()`/`seedSession()`/`countConnections()` private helpers — no new helpers needed except one for templates):
+Append to `tests/Controller/Admin/SocialAuthControllerTest.php` (reusing its existing `loginAsAdmin()`/`seedSession()`/`countConnections()` private helpers). `MockHttpClient` isn't wired into this `WebTestCase` today, so these tests deliberately don't attempt to verify a successful live publish — that path (decrypt token, call the platform API, handle the response) is already covered by `tests/Service/SocialPostingServiceTest.php`. What's tested here is the admin action's own logic: CSRF checks, missing template/connection handling, and that preview never calls the posting service. Add one new helper:
 ```php
-    private function countPostAttempts(KernelBrowser $client): int
-    {
-        // MockHttpClient isn't wired in this WebTestCase today, so publish-success
-        // is verified indirectly via the flash message + a real SocialAccountConnection
-        // fixture pointed at a platform with no real network reachability is out of
-        // scope here — success-path posting is already covered by
-        // tests/Service/SocialPostingServiceTest.php. These tests cover the admin
-        // action's own logic: CSRF, missing template/connection handling, and that
-        // preview never calls the posting service.
-        return 0;
-    }
-
     private function createTemplate(KernelBrowser $client, \App\Enum\StatCategory $category, \App\Enum\SocialPlatform $platform, string $body): \App\Entity\SocialPostTemplate
     {
         $em = self::getContainer()->get(EntityManagerInterface::class);

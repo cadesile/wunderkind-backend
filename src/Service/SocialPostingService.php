@@ -33,10 +33,10 @@ class SocialPostingService
 
     private function postToFacebook(SocialAccountConnection $connection, string $text): void
     {
-        $accessToken = $this->tokenEncryption->decrypt($connection->getAccessToken());
-        $pageId      = $connection->getExternalAccountId();
+        $pageId = $connection->getExternalAccountId();
 
         try {
+            $accessToken = $this->tokenEncryption->decrypt($connection->getAccessToken());
             $response = $this->httpClient->request(
                 'POST',
                 'https://graph.facebook.com/' . self::FB_GRAPH_VERSION . "/{$pageId}/feed",
@@ -65,9 +65,8 @@ class SocialPostingService
             ));
         }
 
-        $accessToken = $this->tokenEncryption->decrypt($connection->getAccessToken());
-
         try {
+            $accessToken = $this->tokenEncryption->decrypt($connection->getAccessToken());
             $response = $this->httpClient->request('POST', 'https://api.twitter.com/2/tweets', [
                 'auth_bearer' => $accessToken,
                 'json'        => ['text' => $text],
