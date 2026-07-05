@@ -58,6 +58,13 @@ jobs:
             MAILER_DSN=${{ secrets.STAGE_MAILER_DSN }}
             MAILER_FROM=${{ secrets.STAGE_MAILER_FROM }}
             MAILER_FROM_NAME="${{ secrets.STAGE_MAILER_FROM_NAME }}"
+            SOCIAL_TOKEN_ENCRYPTION_KEY="${{ secrets.STAGE_SOCIAL_TOKEN_ENCRYPTION_KEY }}"
+            FACEBOOK_APP_ID="${{ secrets.STAGE_FACEBOOK_APP_ID }}"
+            FACEBOOK_APP_SECRET="${{ secrets.STAGE_FACEBOOK_APP_SECRET }}"
+            FACEBOOK_REDIRECT_URI="${{ secrets.STAGE_FACEBOOK_REDIRECT_URI }}"
+            TWITTER_CLIENT_ID="${{ secrets.STAGE_TWITTER_CLIENT_ID }}"
+            TWITTER_CLIENT_SECRET="${{ secrets.STAGE_TWITTER_CLIENT_SECRET }}"
+            TWITTER_REDIRECT_URI="${{ secrets.STAGE_TWITTER_REDIRECT_URI }}"
             EOF
 
             docker compose -f docker-compose.staging.yml pull
