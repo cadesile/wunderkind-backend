@@ -1245,6 +1245,96 @@
             .bento-phones { grid-template-columns: 1fr; }
             .bento-phone-frame:nth-child(n+2) { display: none; }
         }
+
+        /* ════════════════════════════════
+           COMMUNITY STATS SECTION
+        ════════════════════════════════ */
+        .period-tabs {
+            display: flex;
+            gap: 8px;
+            margin: 32px 0 8px;
+            flex-wrap: wrap;
+        }
+        .period-tab {
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            background: var(--card);
+            transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .period-tab:hover { border-color: var(--mint); color: var(--text); }
+        .period-tab.active { border-color: var(--gold); color: var(--gold); background: var(--card-hi); }
+
+        .lb-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            margin-top: 32px;
+        }
+        .lb-card { background: var(--card); padding: 22px 20px; }
+        .lb-card-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--gold);
+            margin-bottom: 4px;
+            line-height: 1.6;
+        }
+        .lb-card-sub {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .lb-list { list-style: none; display: flex; flex-direction: column; min-height: 40px; }
+        .lb-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 0;
+            border-top: 1px solid var(--border);
+        }
+        .lb-item:first-child { border-top: none; }
+        .lb-rank {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--gold);
+            min-width: 18px;
+        }
+        .lb-name {
+            font-family: 'VT323', monospace;
+            font-size: 17px;
+            color: var(--text);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .lb-value {
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--mint);
+        }
+        .lb-empty, .lb-loading, .lb-error {
+            font-family: 'VT323', monospace;
+            font-size: 17px;
+            color: var(--text-muted);
+            padding: 9px 0;
+        }
+        .lb-error { color: var(--red); }
+
+        @media (max-width: 900px) {
+            .lb-grid-2 { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -2064,6 +2154,72 @@
 
 <hr class="divider">
 
+<!-- ═══════════════════════════════ COMMUNITY STATS ═══════════════════════════════ -->
+<section id="community-stats">
+    <div class="wrap" style="padding-bottom:0;">
+        <div class="section-label">Community</div>
+        <h2 class="section-title">The community, right now.</h2>
+        <p class="section-sub">Live activity across every club in the pyramid — pulled straight from the server.</p>
+    </div>
+</section>
+
+<div class="stats-band">
+    <div class="wrap stats-inner">
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-transfers">--</span>
+            <span class="stat-lbl">Transfers (top 10 clubs)</span>
+        </div>
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-development">--</span>
+            <span class="stat-lbl">Development points (top 10 clubs)</span>
+        </div>
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-seasons">--</span>
+            <span class="stat-lbl">Seasons completed (top 10 clubs)</span>
+        </div>
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-trophies">--</span>
+            <span class="stat-lbl">Titles won (top 10 clubs)</span>
+        </div>
+    </div>
+</div>
+
+<section>
+    <div class="wrap">
+        <div class="period-tabs" id="cs-period-tabs" role="tablist" aria-label="Leaderboard period">
+            <div class="period-tab active" data-period="week" role="tab" aria-selected="true">Week</div>
+            <div class="period-tab" data-period="month" role="tab" aria-selected="false">Month</div>
+            <div class="period-tab" data-period="season" role="tab" aria-selected="false">Season</div>
+            <div class="period-tab" data-period="all" role="tab" aria-selected="false">All Time</div>
+        </div>
+
+        <div class="lb-grid-2">
+            <div class="lb-card">
+                <div class="lb-card-title">MOST TRANSFERS</div>
+                <div class="lb-card-sub">clubs</div>
+                <ul class="lb-list" id="cs-list-transfers"><li class="lb-loading">Loading…</li></ul>
+            </div>
+            <div class="lb-card">
+                <div class="lb-card-title">MOST DEVELOPMENT</div>
+                <div class="lb-card-sub">CA points gained</div>
+                <ul class="lb-list" id="cs-list-development"><li class="lb-loading">Loading…</li></ul>
+            </div>
+            <div class="lb-card">
+                <div class="lb-card-title">MOST SEASONS</div>
+                <div class="lb-card-sub">seasons completed</div>
+                <ul class="lb-list" id="cs-list-seasons"><li class="lb-loading">Loading…</li></ul>
+            </div>
+            <div class="lb-card">
+                <div class="lb-card-title">MOST TROPHIES</div>
+                <div class="lb-card-sub">titles won</div>
+                <ul class="lb-list" id="cs-list-trophies"><li class="lb-loading">Loading…</li></ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">
+
 <!-- ═══════════════════════════════ CTA ═══════════════════════════════ -->
 <section class="cta-section" id="download">
     <div class="cta-glow" aria-hidden="true"></div>
@@ -2462,6 +2618,80 @@ function openBetaModal() {
             }
         );
     });
+}());
+</script>
+
+<script>
+(function () {
+    var ENDPOINTS = {
+        transfers:   '/api/stats/most-transfers',
+        development: '/api/stats/most-development',
+        seasons:     '/api/stats/most-seasons',
+        trophies:    '/api/stats/most-trophies',
+    };
+
+    var tabs = document.querySelectorAll('#cs-period-tabs .period-tab');
+    if (!tabs.length) return;
+
+    function renderList(listEl, results) {
+        listEl.innerHTML = '';
+        if (!results.length) {
+            listEl.innerHTML = '<li class="lb-empty">No data yet — be the first</li>';
+            return;
+        }
+        results.forEach(function (row) {
+            var li = document.createElement('li');
+            li.className = 'lb-item';
+            var rank = String(row.rank).padStart(2, '0');
+            li.innerHTML =
+                '<span class="lb-rank">' + rank + '</span>' +
+                '<span class="lb-name"></span>' +
+                '<span class="lb-value"></span>';
+            li.querySelector('.lb-name').textContent = row.clubName;
+            li.querySelector('.lb-value').textContent = row.value;
+            listEl.appendChild(li);
+        });
+    }
+
+    function sumValues(results) {
+        return results.reduce(function (total, row) { return total + row.value; }, 0);
+    }
+
+    function loadPeriod(period) {
+        Object.keys(ENDPOINTS).forEach(function (key) {
+            var listEl = document.getElementById('cs-list-' + key);
+            var statEl = document.getElementById('cs-stat-' + key);
+            listEl.innerHTML = '<li class="lb-loading">Loading…</li>';
+
+            fetch(ENDPOINTS[key] + '?period=' + encodeURIComponent(period) + '&limit=5')
+                .then(function (res) {
+                    if (!res.ok) throw new Error('bad response');
+                    return res.json();
+                })
+                .then(function (data) {
+                    renderList(listEl, data.results);
+                    if (statEl) statEl.textContent = sumValues(data.results);
+                })
+                .catch(function () {
+                    listEl.innerHTML = '<li class="lb-error">Unavailable</li>';
+                    if (statEl) statEl.textContent = '--';
+                });
+        });
+    }
+
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            tabs.forEach(function (t) {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
+            tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
+            loadPeriod(tab.dataset.period);
+        });
+    });
+
+    loadPeriod('week');
 }());
 </script>
 </body>
