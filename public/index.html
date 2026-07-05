@@ -2663,7 +2663,7 @@ function openBetaModal() {
             var statEl = document.getElementById('cs-stat-' + key);
             listEl.innerHTML = '<li class="lb-loading">Loading…</li>';
 
-            fetch(ENDPOINTS[key] + '?period=' + encodeURIComponent(period) + '&limit=5')
+            fetch(ENDPOINTS[key] + '?period=' + encodeURIComponent(period) + '&limit=10')
                 .then(function (res) {
                     if (!res.ok) throw new Error('bad response');
                     return res.json();
