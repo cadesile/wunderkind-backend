@@ -17,6 +17,7 @@ use App\Service\MarketPoolService;
 use App\Service\NarrativeImportExportService;
 use App\Controller\Admin\BetaRequestCrudController;
 use App\Controller\Admin\LeagueCrudController;
+use App\Controller\Admin\SocialPostTemplateCrudController;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
 use App\Service\LeagueService;
@@ -1394,6 +1395,8 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
+        yield MenuItem::section('Social');
+        yield MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post Templates', 'fa fa-file-signature');
         yield MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
