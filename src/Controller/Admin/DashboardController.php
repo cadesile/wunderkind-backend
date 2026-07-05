@@ -10,6 +10,7 @@ use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\SocialAccountConnectionRepository;
+use App\Repository\SocialPostTemplateRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
@@ -62,6 +63,7 @@ class DashboardController extends AbstractDashboardController
         private WorldPackCacheService            $worldPackCacheService,
         private \App\Repository\FacilityTemplateRepository $facilityTemplateRepository,
         private SocialAccountConnectionRepository $socialAccountConnectionRepository,
+        private SocialPostTemplateRepository $socialPostTemplateRepository,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -136,8 +138,82 @@ class DashboardController extends AbstractDashboardController
     public function socialConnections(): Response
     {
         return $this->render('admin/social_connections.html.twig', [
-            'connections' => $this->socialAccountConnectionRepository->findAllOrdered(),
+            'connections'      => $this->socialAccountConnectionRepository->findAllOrdered(),
+            'templates'        => $this->socialPostTemplateRepository->findAllOrdered(),
+            'previewTemplate'  => null,
+            'previewText'      => null,
+            'previewRequested' => false,
         ]);
+    }
+
+    #[Route('/admin/social/test/preview', name: 'admin_social_test_preview', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function socialTestPreview(Request $request, \App\Service\SocialPostRenderer $renderer): Response
+    {
+        if (!$this->isCsrfTokenValid('social_test_preview', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+        }
+
+        $template = $this->socialPostTemplateRepository->find($request->request->get('templateId'));
+        if ($template === null) {
+            $this->addFlash('danger', 'Template not found.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+        }
+
+        $previewText = $renderer->render($template);
+
+        return $this->render('admin/social_connections.html.twig', [
+            'connections'      => $this->socialAccountConnectionRepository->findAllOrdered(),
+            'templates'        => $this->socialPostTemplateRepository->findAllOrdered(),
+            'previewTemplate'  => $template,
+            'previewText'      => $previewText,
+            'previewRequested' => true,
+        ]);
+    }
+
+    #[Route('/admin/social/test/publish', name: 'admin_social_test_publish', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function socialTestPublish(Request $request, \App\Service\SocialPostingService $postingService): Response
+    {
+        if (!$this->isCsrfTokenValid('social_test_publish', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+        }
+
+        $template = $this->socialPostTemplateRepository->find($request->request->get('templateId'));
+        $text     = (string) $request->request->get('renderedText', '');
+
+        if ($template === null || $text === '') {
+            $this->addFlash('danger', 'Nothing to publish — preview a template first.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+        }
+
+        $targets = array_filter(
+            $this->socialAccountConnectionRepository->findAllActive(),
+            fn (\App\Entity\SocialAccountConnection $c) => $c->getPlatform() === $template->getPlatform(),
+        );
+
+        if (empty($targets)) {
+            $this->addFlash('warning', "No active {$template->getPlatform()->value} connections to publish to.");
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+        }
+
+        $posted = 0;
+        foreach ($targets as $connection) {
+            try {
+                $postingService->post($connection, $text);
+                $posted++;
+            } catch (\App\Exception\SocialPostingException $e) {
+                $this->addFlash('danger', "Failed to publish to {$connection->getDisplayName()}: {$e->getMessage()}");
+            }
+        }
+
+        if ($posted > 0) {
+            $this->addFlash('success', "Published to {$posted} connection(s).");
+        }
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
     }
 
     // ── Settings ──────────────────────────────────────────────────────────

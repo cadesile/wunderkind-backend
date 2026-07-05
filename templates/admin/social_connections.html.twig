@@ -88,5 +88,70 @@
         </div>
     </div>
 
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-flask text-muted"></i>
+                <span class="fw-semibold small">Test Post</span>
+            </div>
+            <div class="card-body">
+                {#
+                    This form must POST through EasyAdmin's own entry point
+                    (/admin?routeName=...) rather than directly to the named
+                    route. socialTestPreview() renders this same
+                    @EasyAdmin-extending template inline (unlike the other
+                    custom actions on this page, which only ever redirect) —
+                    the `ea` Twig context used by @EasyAdmin/layout.html.twig
+                    is only populated by AdminRouterSubscriber for requests
+                    that pass through the dashboard's own route, so a direct
+                    POST to admin_social_test_preview would blow up with
+                    "i18n on null" (see CLAUDE.md's EasyAdmin Custom Routes
+                    gotcha — same root cause, just also applicable here for
+                    an action that renders rather than redirects).
+                #}
+                <form method="POST" action="{{ path('admin', {routeName: 'admin_social_test_preview'}) }}" class="row g-2 align-items-end">
+                    <input type="hidden" name="_token" value="{{ csrf_token('social_test_preview') }}">
+                    <div class="col-auto">
+                        <label class="form-label small mb-0">Template</label>
+                        <select name="templateId" class="form-select form-select-sm">
+                            {% for template in templates %}
+                                <option value="{{ template.id }}">
+                                    {{ template.category.value }} / {{ template.platform.value }} / {{ template.period.value }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Preview</button>
+                    </div>
+                </form>
+
+                {% if previewRequested and previewText is not null %}
+                    <div class="alert alert-info mt-3 mb-2">
+                        <strong>Rendered preview ({{ previewTemplate.category.value }} / {{ previewTemplate.platform.value }}):</strong>
+                        <p class="mb-0 mt-1">{{ previewText }}</p>
+                        {% if previewTemplate.platform.value == 'twitter' %}
+                            <small class="text-muted">{{ previewText|length }} / 280 characters</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="alert alert-warning small mb-2">
+                        This will publish a REAL post to the connected {{ previewTemplate.platform.value }} account(s). This cannot be undone.
+                    </div>
+
+                    <form method="POST" action="{{ path('admin_social_test_publish') }}"
+                          onsubmit="return confirm('Publish this post live to the real connected account? This cannot be undone.');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('social_test_publish') }}">
+                        <input type="hidden" name="templateId" value="{{ previewTemplate.id }}">
+                        <input type="hidden" name="renderedText" value="{{ previewText }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Publish Now</button>
+                    </form>
+                {% elseif previewRequested %}
+                    <div class="alert alert-secondary mt-3 mb-0 small">No leaderboard data currently available for this category/period — nothing would be posted.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
