@@ -149,7 +149,7 @@ git commit -m "Make /api/stats/* publicly accessible for the landing page"
 - Modify: `public/index.html` (CSS in the `<style>` block, HTML section, and a new `<script>` block)
 
 **Interfaces:**
-- Consumes: `GET /api/stats/most-transfers|most-development|most-seasons|most-trophies?period={week|month|season|all}&limit=5` → `{ period: string, results: [{ clubId: string, clubName: string, value: int, rank: int }] }` (from Task 1; already public)
+- Consumes: `GET /api/stats/most-transfers|most-development|most-seasons|most-trophies?period={week|month|season|all}&limit=10` → `{ period: string, results: [{ clubId: string, clubName: string, value: int, rank: int }] }` (from Task 1; already public). `limit=10` matches the stat-band's "(top 10 clubs)" label and the approved design's "sum of top-10 results" contract — this must stay in sync with the labels in Step 2.
 - Produces: DOM element IDs `cs-stat-transfers|development|seasons|trophies` (stat band numbers) and `cs-list-transfers|development|seasons|trophies` (leaderboard `<ul>` elements) — used only within this task's own JS, no other task depends on them
 
 - [ ] **Step 1: Add the new CSS rules**
@@ -425,7 +425,7 @@ Replace it with (adding a new, separate `<script>` block — do not merge into t
             var statEl = document.getElementById('cs-stat-' + key);
             listEl.innerHTML = '<li class="lb-loading">Loading…</li>';
 
-            fetch(ENDPOINTS[key] + '?period=' + encodeURIComponent(period) + '&limit=5')
+            fetch(ENDPOINTS[key] + '?period=' + encodeURIComponent(period) + '&limit=10')
                 .then(function (res) {
                     if (!res.ok) throw new Error('bad response');
                     return res.json();
