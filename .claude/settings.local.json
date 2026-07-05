@@ -81,7 +81,9 @@
       "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package 0dc0284b22ce4881dd6befaeededa20064603014 *)",
       "Bash(/Users/courtneyadesile/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package f649274c93af81238ba3d2d7eb998d79c76ad2ca *)",
       "Bash(gh pr *)",
-      "Bash(read f *)"
+      "Bash(read f *)",
+      "Bash(mkdir -p /Users/courtneyadesile/.claude/plans 2>&1; echo done)",
+      "Bash(cat > *)"
     ]
   }
 }
