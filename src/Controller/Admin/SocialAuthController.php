@@ -23,7 +23,7 @@ class SocialAuthController extends AbstractController
 {
     private const FB_GRAPH_VERSION     = 'v19.0';
     private const FB_OAUTH_SCOPES      = 'pages_show_list,pages_manage_posts,pages_read_engagement';
-    private const TWITTER_OAUTH_SCOPES = 'tweet.write users.read offline.access';
+    private const TWITTER_OAUTH_SCOPES = 'tweet.read tweet.write users.read offline.access';
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -251,13 +251,6 @@ class SocialAuthController extends AbstractController
             $accessToken  = (string) $tokenData['access_token'];
             $refreshToken = isset($tokenData['refresh_token']) ? (string) $tokenData['refresh_token'] : null;
             $expiresIn    = isset($tokenData['expires_in']) ? (int) $tokenData['expires_in'] : null;
-
-            // TEMPORARY DEBUG — REMOVE AFTER DIAGNOSIS. Logs the real user-context
-            // access token so it can be tested manually outside this app, to isolate
-            // whether a 403 on /2/users/me is an X account/plan issue or a bug in
-            // how this code makes the request. Access tokens are sensitive — do not
-            // leave this logging in place longer than needed for diagnosis.
-            $this->logger->debug('TEMP DEBUG: twitter access token for manual testing', ['access_token' => $accessToken]);
 
             $userResponse = $this->httpClient->request('GET', 'https://api.twitter.com/2/users/me', [
                 'auth_bearer' => $accessToken,
