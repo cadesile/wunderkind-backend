@@ -9,6 +9,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
+use App\Repository\SocialAccountConnectionRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
@@ -59,6 +60,7 @@ class DashboardController extends AbstractDashboardController
         private CountryWorldPackCacheRepository  $worldPackCacheRepository,
         private WorldPackCacheService            $worldPackCacheService,
         private \App\Repository\FacilityTemplateRepository $facilityTemplateRepository,
+        private SocialAccountConnectionRepository $socialAccountConnectionRepository,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -124,6 +126,17 @@ class DashboardController extends AbstractDashboardController
 
         $this->addFlash('success', 'App links saved.');
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_app_links']));
+    }
+
+    // ── Social Account Connections ──────────────────────────────────────────
+
+    #[Route('/admin/social', name: 'admin_social_connections')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function socialConnections(): Response
+    {
+        return $this->render('admin/social_connections.html.twig', [
+            'connections' => $this->socialAccountConnectionRepository->findAllOrdered(),
+        ]);
     }
 
     // ── Settings ──────────────────────────────────────────────────────────
@@ -1381,6 +1394,7 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
+        yield MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
         yield MenuItem::section('Market');

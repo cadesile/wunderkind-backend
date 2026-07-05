@@ -1,0 +1,92 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Social Account Connections</h5>
+        <p class="text-muted small mb-0">Connect Facebook Pages and X (Twitter) accounts the backend can post to later. Tokens are encrypted at rest.</p>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-plug text-muted"></i>
+                <span class="fw-semibold small">Connect a New Account</span>
+            </div>
+            <div class="card-body d-flex gap-2">
+                <a href="{{ path('admin_social_facebook_connect') }}" class="btn btn-primary btn-sm">
+                    <i class="fa-brands fa-facebook me-1"></i> Connect Facebook Page
+                </a>
+                <a href="{{ path('admin_social_twitter_connect') }}" class="btn btn-dark btn-sm">
+                    <i class="fa-brands fa-x-twitter me-1"></i> Connect X Account
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-list text-muted"></i>
+                <span class="fw-semibold small">Connected Accounts</span>
+            </div>
+            <div class="card-body p-0">
+                {% if connections is empty %}
+                    <p class="text-muted small p-3 mb-0">No accounts connected yet.</p>
+                {% else %}
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Platform</th>
+                                <th>Account</th>
+                                <th>Status</th>
+                                <th>Connected</th>
+                                <th>Last Refreshed</th>
+                                <th>Token Expires</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for connection in connections %}
+                                <tr>
+                                    <td>
+                                        {% if connection.platform.value == 'facebook' %}
+                                            <i class="fa-brands fa-facebook text-primary me-1"></i> Facebook
+                                        {% else %}
+                                            <i class="fa-brands fa-x-twitter me-1"></i> X (Twitter)
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold">{{ connection.displayName }}</span>
+                                        <span class="text-muted small d-block font-monospace">{{ connection.externalAccountId }}</span>
+                                    </td>
+                                    <td>
+                                        {% if connection.active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Disconnected</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small text-muted">{{ connection.connectedAt ? connection.connectedAt|date('Y-m-d H:i') : '—' }}</td>
+                                    <td class="small text-muted">{{ connection.lastRefreshedAt ? connection.lastRefreshedAt|date('Y-m-d H:i') : '—' }}</td>
+                                    <td class="small text-muted">{{ connection.tokenExpiresAt ? connection.tokenExpiresAt|date('Y-m-d H:i') : 'Never' }}</td>
+                                    <td class="text-end">
+                                        {% if connection.active %}
+                                        <form method="POST" action="{{ path('admin_social_disconnect', {id: connection.id}) }}" class="d-inline">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('social_disconnect') }}">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Disconnect {{ connection.displayName }}?');">Disconnect</button>
+                                        </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

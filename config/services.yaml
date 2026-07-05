@@ -29,6 +29,19 @@ services:
             $mailerFromName: '%env(MAILER_FROM_NAME)%'
             $appUrl: '%env(APP_URL)%'
 
+    App\Service\TokenEncryptionService:
+        arguments:
+            $socialTokenEncryptionKey: '%env(SOCIAL_TOKEN_ENCRYPTION_KEY)%'
+
+    App\Controller\Admin\SocialAuthController:
+        arguments:
+            $facebookAppId: '%env(FACEBOOK_APP_ID)%'
+            $facebookAppSecret: '%env(FACEBOOK_APP_SECRET)%'
+            $facebookRedirectUri: '%env(FACEBOOK_REDIRECT_URI)%'
+            $twitterClientId: '%env(TWITTER_CLIENT_ID)%'
+            $twitterClientSecret: '%env(TWITTER_CLIENT_SECRET)%'
+            $twitterRedirectUri: '%env(TWITTER_REDIRECT_URI)%'
+
     App\Security\VerificationAwareAuthenticationSuccessHandler:
         arguments:
             $decorated: '@lexik_jwt_authentication.handler.authentication_success'
