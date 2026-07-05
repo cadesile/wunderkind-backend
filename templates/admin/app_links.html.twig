@@ -66,6 +66,37 @@
 
         <div class="card mt-4">
             <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-share-nodes text-muted"></i>
+                <span class="fw-semibold small">Social Profile Links</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label for="facebookPageUrl" class="form-label fw-semibold">
+                            <i class="fa-brands fa-facebook text-primary me-1"></i> Facebook Page
+                        </label>
+                        <input type="url" id="facebookPageUrl" name="facebookPageUrl"
+                               value="{{ config.facebookPageUrl ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="https://facebook.com/yourpage">
+                        <div class="form-text">Shown on the landing page and returned by <code>GET /api/app-links</code> and <code>GET /api/game-config</code>. Blank = link hidden.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="xProfileUrl" class="form-label fw-semibold">
+                            <i class="fa-brands fa-x-twitter me-1"></i> X Profile
+                        </label>
+                        <input type="url" id="xProfileUrl" name="xProfileUrl"
+                               value="{{ config.xProfileUrl ?? '' }}"
+                               class="form-control font-monospace"
+                               placeholder="https://x.com/yourhandle">
+                        <div class="form-text">Same as above. Blank = link hidden.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-envelope text-muted"></i>
                 <span class="fw-semibold small">Beta Access Requests</span>
             </div>

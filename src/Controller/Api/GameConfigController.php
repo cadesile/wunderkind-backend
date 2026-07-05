@@ -142,6 +142,10 @@ class GameConfigController extends AbstractController
             // Developer / Debug
             'debugLoggingEnabled'               => $config->isDebugLoggingEnabled(),
 
+            // App links (also exposed publicly via GET /api/app-links)
+            'facebookPageUrl' => $config->getFacebookPageUrl(),
+            'xProfileUrl'     => $config->getXProfileUrl(),
+
             // Wage multiplier tiers
             'wageMultiplierTiers'    => $config->getWageMultiplierTiers(),
             'contractValueRandMin'   => $config->getContractValueRandMin(),

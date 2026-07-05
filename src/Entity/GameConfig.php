@@ -1031,6 +1031,18 @@ class GameConfig
     public function getIosDownloadUrl(): ?string { return $this->iosDownloadUrl; }
     public function setIosDownloadUrl(?string $v): static { $this->iosDownloadUrl = $v ?: null; return $this; }
 
+    #[ORM\Column(nullable: true)]
+    private ?string $facebookPageUrl = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?string $xProfileUrl = null;
+
+    public function getFacebookPageUrl(): ?string { return $this->facebookPageUrl; }
+    public function setFacebookPageUrl(?string $v): static { $this->facebookPageUrl = $v ?: null; return $this; }
+
+    public function getXProfileUrl(): ?string { return $this->xProfileUrl; }
+    public function setXProfileUrl(?string $v): static { $this->xProfileUrl = $v ?: null; return $this; }
+
     /** Email address that receives beta access request notifications. */
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $betaRequestEmail = null;
