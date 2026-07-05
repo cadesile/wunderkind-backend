@@ -139,6 +139,11 @@
                         This will publish a REAL post to the connected {{ previewTemplate.platform.value }} account(s). This cannot be undone.
                     </div>
 
+                    {# Hit directly (not via admin?routeName=...) is safe only because socialTestPublish()
+                       always redirects and never renders Twig. If it ever gains a render path
+                       (e.g. an error page instead of a redirect), route this through
+                       path('admin', {routeName: 'admin_social_test_publish'}) like the preview
+                       form above, or it will hit the same "i18n on null" EasyAdmin gap. #}
                     <form method="POST" action="{{ path('admin_social_test_publish') }}"
                           onsubmit="return confirm('Publish this post live to the real connected account? This cannot be undone.');">
                         <input type="hidden" name="_token" value="{{ csrf_token('social_test_publish') }}">
