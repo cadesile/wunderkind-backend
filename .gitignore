@@ -19,3 +19,6 @@
 ###< phpunit/phpunit ###
 .worktrees/
 .worktrees/
+
+# Superpowers brainstorming companion artifacts
+.superpowers/
