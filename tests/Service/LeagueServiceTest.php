@@ -18,7 +18,8 @@ class LeagueServiceTest extends TestCase
         $em         = $this->createStub(EntityManagerInterface::class);
         $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
-        return new LeagueService($repo, $em, $configRepo);
+        $fixtureGenerationService = $this->createStub(\App\Service\FixtureGenerationService::class);
+        return new LeagueService($repo, $em, $configRepo, $fixtureGenerationService);
     }
 
     public function testGenerateLeaguesSkipsExisting(): void

@@ -2,15 +2,24 @@
 // tests/Service/PlayerGenerationServiceTest.php
 namespace App\Tests\Service;
 
+use App\Entity\PoolConfig;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
+use App\Repository\PoolConfigRepository;
 use App\Service\NameGeneratorService;
 use App\Service\PlayerGenerationService;
 use PHPUnit\Framework\TestCase;
 
 class PlayerGenerationServiceTest extends TestCase
 {
+    private function makePoolConfigRepo(): PoolConfigRepository
+    {
+        $repo = $this->createStub(PoolConfigRepository::class);
+        $repo->method('getConfig')->willReturn(new PoolConfig());
+        return $repo;
+    }
+
     private function makeService(): PlayerGenerationService
     {
         $nameGen = $this->createMock(NameGeneratorService::class);
@@ -19,7 +28,7 @@ class PlayerGenerationServiceTest extends TestCase
             'firstName' => 'Test',
             'lastName'  => 'Player',
         ]);
-        return new PlayerGenerationService($nameGen);
+        return new PlayerGenerationService($nameGen, $this->makePoolConfigRepo());
     }
 
     public function testGenerateReturnsPlayerInstance(): void
@@ -60,7 +69,20 @@ class PlayerGenerationServiceTest extends TestCase
 
     public function testAgeIsWithinRange(): void
     {
-        $svc = $this->makeService();
+        // Age is sourced from PoolConfig (default is a youth-intake range like
+        // 12-13), so this test sets an explicit range to verify generation
+        // honors whatever PoolConfig specifies, rather than pinning to
+        // whichever default happens to be configured today.
+        $nameGen = $this->createMock(NameGeneratorService::class);
+        $nameGen->method('getRandomNationality')->willReturn('English');
+        $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Test', 'lastName' => 'Player']);
+
+        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
+        $poolConfigRepo->method('getConfig')->willReturn(
+            (new PoolConfig())->setPlayerAgeMin(16)->setPlayerAgeMax(33)
+        );
+
+        $svc = new PlayerGenerationService($nameGen, $poolConfigRepo);
         for ($i = 0; $i < 30; $i++) {
             $player = $svc->generate(PlayerPosition::DEFENDER, RecruitmentSource::SCOUTING_NETWORK);
             $age    = (int) $player->getDateOfBirth()->diff(new \DateTimeImmutable())->y;
@@ -108,7 +130,7 @@ class PlayerGenerationServiceTest extends TestCase
         $nameGen = $this->createMock(NameGeneratorService::class);
         $nameGen->method('getRandomNationality')->willReturn('English');
         $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Carlos', 'lastName' => 'Ruiz']);
-        $svc = new PlayerGenerationService($nameGen);
+        $svc = new PlayerGenerationService($nameGen, $this->makePoolConfigRepo());
 
         $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK, 'Spanish');
         $this->assertSame('Spanish', $player->getNationality());

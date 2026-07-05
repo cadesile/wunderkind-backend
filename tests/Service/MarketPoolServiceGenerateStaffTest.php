@@ -15,17 +15,16 @@ class MarketPoolServiceGenerateStaffTest extends TestCase
         $this->assertInstanceOf(StaffRole::class, StaffRole::from('manager'));
     }
 
-    public function testAllSixNonScoutRolesAreDistinct(): void
+    public function testAllFiveRolesAreDistinct(): void
     {
         $roles = [
             StaffRole::COACH,
-            StaffRole::ASSISTANT_COACH,
             StaffRole::MANAGER,
             StaffRole::DIRECTOR_OF_FOOTBALL,
             StaffRole::FACILITY_MANAGER,
             StaffRole::CHAIRMAN,
         ];
 
-        $this->assertCount(6, array_unique(array_map(fn($r) => $r->value, $roles)));
+        $this->assertCount(5, array_unique(array_map(fn($r) => $r->value, $roles)));
     }
 }

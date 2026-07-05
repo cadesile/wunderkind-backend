@@ -25,7 +25,10 @@ class NpcClubGenerationServiceLeagueTest extends TestCase
         $leagueService->expects($this->exactly(2))
             ->method('assignClubToLeague');
 
-        $service = new NpcClubGenerationService($em, $facilityRepo, $npcClubRepo, $leagueService);
+        $gameConfigRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
+        $gameConfigRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
+
+        $service = new NpcClubGenerationService($em, $facilityRepo, $npcClubRepo, $leagueService, $gameConfigRepo);
         $clubs   = $service->generateClubs(2, 4, 'EN');
 
         $this->assertCount(2, $clubs);

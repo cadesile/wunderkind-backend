@@ -27,7 +27,10 @@ class NpcClubGenerationServiceTest extends TestCase
 
         $repo->method('findBy')->willReturn($templates);
 
-        return new NpcClubGenerationService($em, $repo, $clubRepo, $this->createStub(LeagueService::class));
+        $gameConfigRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
+        $gameConfigRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
+
+        return new NpcClubGenerationService($em, $repo, $clubRepo, $this->createStub(LeagueService::class), $gameConfigRepo);
     }
 
     public function testGeneratesCorrectCount(): void

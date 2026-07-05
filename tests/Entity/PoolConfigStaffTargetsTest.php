@@ -11,7 +11,6 @@ class PoolConfigStaffTargetsTest extends TestCase
     {
         $cfg = new PoolConfig();
         $this->assertSame(10,  $cfg->getCoachPoolTarget());
-        $this->assertSame(5,   $cfg->getAssistantCoachPoolTarget());
         $this->assertSame(5,   $cfg->getManagerPoolTarget());
         $this->assertSame(2,   $cfg->getDirectorOfFootballPoolTarget());
         $this->assertSame(3,   $cfg->getFacilityManagerPoolTarget());
@@ -21,13 +20,11 @@ class PoolConfigStaffTargetsTest extends TestCase
     public function testSetters(): void
     {
         $cfg = new PoolConfig();
-        $cfg->setAssistantCoachPoolTarget(50);
         $cfg->setManagerPoolTarget(25);
         $cfg->setDirectorOfFootballPoolTarget(10);
         $cfg->setFacilityManagerPoolTarget(15);
         $cfg->setChairmanPoolTarget(5);
 
-        $this->assertSame(50, $cfg->getAssistantCoachPoolTarget());
         $this->assertSame(25, $cfg->getManagerPoolTarget());
         $this->assertSame(10, $cfg->getDirectorOfFootballPoolTarget());
         $this->assertSame(15, $cfg->getFacilityManagerPoolTarget());

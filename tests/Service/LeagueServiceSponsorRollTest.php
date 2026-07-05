@@ -32,7 +32,8 @@ class LeagueServiceSponsorRollTest extends TestCase
         $em         = $this->createStub(EntityManagerInterface::class);
         $configRepo = $this->createStub(GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn($this->makeConfig(10000, 50000));
-        return new LeagueService($repo, $em, $configRepo);
+        $fixtureGenerationService = $this->createStub(\App\Service\FixtureGenerationService::class);
+        return new LeagueService($repo, $em, $configRepo, $fixtureGenerationService);
     }
 
     public function testRollLeagueSponsorsUpdatesRolledValueWithinRange(): void
