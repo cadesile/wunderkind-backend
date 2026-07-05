@@ -46,6 +46,7 @@ lando php bin/console app:seed-game-events        # narrative event templates
 lando php bin/console app:seed-player-events      # player event templates
 lando php bin/console app:seed:morale-events      # morale event templates
 lando php bin/console app:seed-archetypes         # player archetypes
+lando php bin/console app:seed-social-post-templates  # social media post templates
 lando php bin/console app:generate-market-data    # agents, scouts, investors, sponsors
 lando php bin/console app:market:generate         # generate market pool entities
 lando php bin/console app:pool:warm               # pre-warm the market entity pool
