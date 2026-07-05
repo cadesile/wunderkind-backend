@@ -1473,11 +1473,11 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
+        yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
+        yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
         yield MenuItem::section('Social');
         yield MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post Templates', 'fa fa-file-signature');
         yield MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections');
-        yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
-        yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
         yield MenuItem::section('Market');
         yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
         yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
