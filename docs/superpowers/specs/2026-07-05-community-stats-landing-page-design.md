@@ -54,7 +54,7 @@ Labelled explicitly as "top 10 clubs" — this is an honest sum of what's displa
 
 **Period tabs** — new small component, 4 pill-style buttons (Week / Month / Season / All Time) mapping to `period=week|month|season|all`. Default active: Week. Clicking a tab re-fetches all 4 endpoints with the new period and re-renders the stat band + all 4 cards.
 
-**Leaderboard grid — Option B (approved via mockup)** — a 2×2 grid of larger cards (`.lb-grid-2`), each showing up to 5 ranked rows. One card per endpoint: Most Transfers, Most Development, Most Seasons, Most Trophies. Each row: rank number (gold, Press Start 2P, matches `.depth-num` convention), club name (VT323, truncates with ellipsis if long), value (Space Mono bold, mint).
+**Leaderboard grid — Option B (approved via mockup)** — a 2×2 grid of larger cards (`.lb-grid-2`), each showing up to 10 ranked rows (matching the stat band's "top 10 clubs" sum — same `limit=10` fetch feeds both). One card per endpoint: Most Transfers, Most Development, Most Seasons, Most Trophies. Each row: rank number (gold, Press Start 2P, matches `.depth-num` convention), club name (VT323, truncates with ellipsis if long), value (Space Mono bold, mint).
 
 New CSS classes needed (added to the existing `<style>` block, following its naming and BEM-ish conventions): `.period-tab(.active)`, `.lb-grid-2`, `.lb-card`, `.lb-card-title`, `.lb-card-sub`, `.lb-list`, `.lb-item`, `.lb-rank`, `.lb-name`, `.lb-value`. Responsive: `.lb-grid-2` collapses to a single column under the existing `900px`/`600px` breakpoints, matching how `.features-grid`/`.archetype-grid` already collapse.
 
