@@ -70,4 +70,22 @@ class TokenEncryptionServiceTest extends TestCase
         $this->expectException(\RuntimeException::class);
         new TokenEncryptionService(base64_encode('too-short'));
     }
+
+    public function testKeyWithTrailingNewlineIsAccepted(): void
+    {
+        // A common artifact of copying a generated key into a secrets
+        // manager or shell heredoc — must not be treated as invalid.
+        $service = new TokenEncryptionService($this->makeKey() . "\n");
+
+        $encrypted = $service->encrypt('a-token');
+        $this->assertSame('a-token', $service->decrypt($encrypted));
+    }
+
+    public function testKeyWithSurroundingWhitespaceIsAccepted(): void
+    {
+        $service = new TokenEncryptionService("  " . $this->makeKey() . "  \n");
+
+        $encrypted = $service->encrypt('a-token');
+        $this->assertSame('a-token', $service->decrypt($encrypted));
+    }
 }

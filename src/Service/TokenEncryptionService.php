@@ -16,6 +16,11 @@ class TokenEncryptionService
 
     public function __construct(string $socialTokenEncryptionKey)
     {
+        // Trim whitespace/newlines — a common artifact of pasting a generated
+        // key into a secrets manager or shell heredoc. Never legitimately
+        // part of a base64 key, so trimming can't weaken it.
+        $socialTokenEncryptionKey = trim($socialTokenEncryptionKey);
+
         if ($socialTokenEncryptionKey === '') {
             throw new \RuntimeException(
                 'SOCIAL_TOKEN_ENCRYPTION_KEY is not set. Generate one with: '
