@@ -34,4 +34,10 @@ class SocialAccountConnectionRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return SocialAccountConnection[] */
+    public function findAllActive(): array
+    {
+        return $this->findBy(['isActive' => true]);
+    }
 }
