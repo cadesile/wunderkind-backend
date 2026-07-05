@@ -7,6 +7,7 @@ use App\Enum\StatCategory;
 use App\Enum\StatsPeriod;
 use App\Repository\SocialPostTemplateRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Uid\UuidV7;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -14,6 +15,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: SocialPostTemplateRepository::class)]
 #[ORM\Table(name: 'social_post_template')]
 #[ORM\UniqueConstraint(name: 'uq_social_post_template_category_platform', columns: ['category', 'platform'])]
+#[UniqueEntity(
+    fields: ['category', 'platform'],
+    message: 'A template for this category and platform already exists.',
+)]
 class SocialPostTemplate
 {
     #[ORM\Id]
@@ -44,9 +49,9 @@ class SocialPostTemplate
     private \DateTimeImmutable $updatedAt;
 
     public function __construct(
-        StatCategory $category,
-        SocialPlatform $platform,
-        StatsPeriod $period,
+        StatCategory $category = StatCategory::MOST_TRANSFERS,
+        SocialPlatform $platform = SocialPlatform::FACEBOOK,
+        StatsPeriod $period = StatsPeriod::ALL,
         string $bodyTemplate = '',
     ) {
         $this->id           = new UuidV7();

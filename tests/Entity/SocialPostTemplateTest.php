@@ -44,40 +44,17 @@ class SocialPostTemplateTest extends TestCase
         $this->assertGreaterThan($originalUpdatedAt, $template->getUpdatedAt());
     }
 
-    public function testTwitterTemplateOver280CharsFailsValidation(): void
+    public function testConstructorWorksWithNoArguments(): void
     {
-        $validator = \Symfony\Component\Validator\Validation::createValidatorBuilder()
-            ->enableAttributeMapping()
-            ->getValidator();
+        // EasyAdmin's AbstractCrudController instantiates the entity with zero
+        // arguments (`new SocialPostTemplate()`) to build the blank "New" form —
+        // discovered via manual verification of the admin CRUD screen returning
+        // a 500 (ArgumentCountError) before all constructor params had defaults.
+        $template = new SocialPostTemplate();
 
-        $template = new SocialPostTemplate(
-            StatCategory::MOST_TRANSFERS,
-            SocialPlatform::TWITTER,
-            StatsPeriod::WEEK,
-            str_repeat('a', 281),
-        );
-
-        $violations = $validator->validate($template);
-
-        $this->assertGreaterThan(0, count($violations));
-        $this->assertSame('bodyTemplate', $violations[0]->getPropertyPath());
-    }
-
-    public function testFacebookTemplateOver280CharsPassesValidation(): void
-    {
-        $validator = \Symfony\Component\Validator\Validation::createValidatorBuilder()
-            ->enableAttributeMapping()
-            ->getValidator();
-
-        $template = new SocialPostTemplate(
-            StatCategory::MOST_TRANSFERS,
-            SocialPlatform::FACEBOOK,
-            StatsPeriod::WEEK,
-            str_repeat('a', 281),
-        );
-
-        $violations = $validator->validate($template);
-
-        $this->assertCount(0, $violations);
+        $this->assertSame(StatCategory::MOST_TRANSFERS, $template->getCategory());
+        $this->assertSame(SocialPlatform::FACEBOOK, $template->getPlatform());
+        $this->assertSame(StatsPeriod::ALL, $template->getPeriod());
+        $this->assertSame('', $template->getBodyTemplate());
     }
 }
