@@ -4,7 +4,9 @@ namespace App\Repository;
 
 use App\Entity\Club;
 use App\Entity\Transfer;
+use App\Enum\StatsPeriod;
 use App\Enum\TransferType;
+use App\Service\PeriodResolver;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -55,4 +57,33 @@ class TransferRepository extends ServiceEntityRepository
             ->getSingleScalarResult() ?? 0);
     }
 
+    /** @return array<array{clubId: string, clubName: string, value: int|string}> */
+    public function getMostTransfersByClub(StatsPeriod $period, int $limit, PeriodResolver $resolver): array
+    {
+        $qb = $this->createQueryBuilder('t')
+            ->select('c.id as clubId, c.name as clubName, COUNT(t.id) as value')
+            ->innerJoin('t.club', 'c')
+            ->groupBy('c.id')
+            ->orderBy('value', 'DESC')
+            ->setMaxResults($limit);
+
+        $resolver->applyPeriodFilter($qb, $period, 't', 'occurredAt', 'c');
+
+        return $qb->getQuery()->getArrayResult();
+    }
+
+    /** @return array<array{clubId: string, clubName: string, value: int|string}> */
+    public function getMostDevelopmentByClub(StatsPeriod $period, int $limit, PeriodResolver $resolver): array
+    {
+        $qb = $this->createQueryBuilder('t')
+            ->select('c.id as clubId, c.name as clubName, SUM(t.developmentPoints) as value')
+            ->innerJoin('t.club', 'c')
+            ->groupBy('c.id')
+            ->orderBy('value', 'DESC')
+            ->setMaxResults($limit);
+
+        $resolver->applyPeriodFilter($qb, $period, 't', 'occurredAt', 'c');
+
+        return $qb->getQuery()->getArrayResult();
+    }
 }
