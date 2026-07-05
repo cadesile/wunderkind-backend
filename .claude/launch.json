@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wunderkind-backend",
+      "runtimeExecutable": "lando",
+      "runtimeArgs": ["logs", "-s", "appserver"],
+      "port": 52100,
+      "autoPort": false
+    }
+  ]
+}
