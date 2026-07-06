@@ -46,4 +46,40 @@ class ClubControllerTest extends WebTestCase
         $this->assertNotEmpty($data['cities']);
         $this->assertContains('London', $data['cities']);
     }
+
+    public function testNameOptionsCitiesAndSuffixesAreAlphabetized(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/club/name-options?country=EN');
+
+        $this->assertResponseStatusCodeSame(200);
+        $data = json_decode($client->getResponse()->getContent(), true);
+
+        $sortedCities = $data['cities'];
+        usort($sortedCities, fn ($a, $b) => strcmp($a, $b));
+        $this->assertSame($sortedCities, $data['cities'], 'Expected cities to already be alphabetically sorted');
+
+        $sortedSuffixes = $data['suffixes'];
+        usort($sortedSuffixes, fn ($a, $b) => strcmp($a, $b));
+        $this->assertSame($sortedSuffixes, $data['suffixes'], 'Expected suffixes to already be alphabetically sorted');
+    }
+
+    public function testNameOptionsSortsAccentedCharactersCorrectly(): void
+    {
+        // Plain byte-order sort() would push 'Ávila' (multi-byte UTF-8) past
+        // every single-byte ASCII entry, including 'Zaragoza' — a locale-aware
+        // sort places it with its unaccented neighbors ('Avilés' etc.) instead.
+        $client = static::createClient();
+        $client->request('GET', '/api/club/name-options?country=ES');
+
+        $this->assertResponseStatusCodeSame(200);
+        $data = json_decode($client->getResponse()->getContent(), true);
+
+        $avilaIndex     = array_search('Ávila', $data['cities'], true);
+        $zaragozaIndex  = array_search('Zaragoza', $data['cities'], true);
+
+        $this->assertNotFalse($avilaIndex);
+        $this->assertNotFalse($zaragozaIndex);
+        $this->assertLessThan($zaragozaIndex, $avilaIndex, "'Ávila' should sort before 'Zaragoza' under Spanish collation");
+    }
 }

@@ -20,6 +20,23 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/api/club')]
 class ClubController extends AbstractController
 {
+    // Locale used to alphabetize name-options results per country, so accented
+    // characters (e.g. Spanish "Ávila") sort next to their unaccented
+    // neighbors instead of at the end of the list (PHP's plain sort() sorts
+    // by raw UTF-8 byte value, which pushes multi-byte accented letters past
+    // all plain ASCII ones).
+    private const LOCALE_BY_COUNTRY = [
+        'ES' => 'es_ES',
+        'EN' => 'en_GB',
+        'DE' => 'de_DE',
+        'IT' => 'it_IT',
+        'FR' => 'fr_FR',
+        'BR' => 'pt_BR',
+        'AR' => 'es_AR',
+        'NL' => 'nl_NL',
+        'PT' => 'pt_PT',
+    ];
+
     public function __construct(private readonly ClubRepository $clubRepository) {}
 
     #[Route('/foreign', name: 'api_clubs_foreign', methods: ['GET'])]
@@ -43,11 +60,26 @@ class ClubController extends AbstractController
         $cities   = $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN');
         $suffixes = $npcClubGenerationService->getSuffixes($country) ?: $npcClubGenerationService->getSuffixes('EN');
 
+        $locale = self::LOCALE_BY_COUNTRY[$country] ?? 'en_GB';
+
         return $this->json([
             'country'  => $country,
-            'cities'   => $cities,
-            'suffixes' => $suffixes,
+            'cities'   => $this->sortAlphabetically($cities, $locale),
+            'suffixes' => $this->sortAlphabetically($suffixes, $locale),
         ]);
+    }
+
+    /** @param string[] $values @return string[] */
+    private function sortAlphabetically(array $values, string $locale): array
+    {
+        $collator = \Collator::create($locale);
+        if ($collator !== null) {
+            $collator->sort($values);
+        } else {
+            sort($values, SORT_STRING | SORT_FLAG_CASE);
+        }
+
+        return array_values($values);
     }
 
     #[Route('/initialize', name: 'api_club_initialize', methods: ['POST'])]
