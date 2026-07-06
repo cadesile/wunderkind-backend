@@ -686,6 +686,18 @@ class NpcClubGenerationService
         private readonly GameConfigRepository        $gameConfigRepository,
     ) {}
 
+    /** @return string[] */
+    public function getPlaceNames(string $countryCode): array
+    {
+        return self::PLACE_NAMES_BY_COUNTRY[$countryCode] ?? [];
+    }
+
+    /** @return string[] */
+    public function getSuffixes(string $countryCode): array
+    {
+        return self::SUFFIXES_BY_COUNTRY[$countryCode] ?? [];
+    }
+
     /** @return NpcClub[] */
     public function generateClubs(int $count, int $tier, string $country, bool $deleteExisting = false): array
     {

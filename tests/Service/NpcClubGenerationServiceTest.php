@@ -89,4 +89,45 @@ class NpcClubGenerationServiceTest extends TestCase
             $this->assertNotEmpty($club->getName());
         }
     }
+
+    public function testGetPlaceNamesReturnsKnownCountryData(): void
+    {
+        $service = $this->makeService();
+        $places  = $service->getPlaceNames('ES');
+
+        $this->assertNotEmpty($places);
+        $this->assertContains('Madrid', $places);
+        $this->assertContains('Barcelona', $places);
+    }
+
+    public function testGetPlaceNamesReturnsEmptyArrayForUnknownCountry(): void
+    {
+        $service = $this->makeService();
+        $this->assertSame([], $service->getPlaceNames('XX'));
+    }
+
+    public function testGetSuffixesReturnsKnownCountryData(): void
+    {
+        $service  = $this->makeService();
+        $suffixes = $service->getSuffixes('EN');
+
+        $this->assertNotEmpty($suffixes);
+        $this->assertContains('FC', $suffixes);
+        $this->assertContains('United', $suffixes);
+    }
+
+    public function testGetSuffixesReturnsEmptyArrayForUnknownCountry(): void
+    {
+        $service = $this->makeService();
+        $this->assertSame([], $service->getSuffixes('XX'));
+    }
+
+    public function testGetPlaceNamesCoversAllNineGenerationCapableCountries(): void
+    {
+        $service = $this->makeService();
+        foreach (['ES', 'EN', 'DE', 'IT', 'FR', 'BR', 'AR', 'NL', 'PT'] as $country) {
+            $this->assertNotEmpty($service->getPlaceNames($country), "Expected place names for {$country}");
+            $this->assertNotEmpty($service->getSuffixes($country), "Expected suffixes for {$country}");
+        }
+    }
 }
