@@ -356,14 +356,20 @@
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-3">Controls which countries are available when a player creates a new club. Only enable countries with complete league and club data.</p>
+                {# Kept in sync with the country dropdowns on the "Generate" screen
+                   (admin_npc_clubs_content: Generate Clubs / Generate League Structure) —
+                   those are the only countries the league/club generation process actually
+                   supports, so this list must match exactly. #}
                 {% set allCountries = [
-                    {code: 'EN', label: 'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿'},
-                    {code: 'IT', label: 'Italy 🇮🇹'},
-                    {code: 'DE', label: 'Germany 🇩🇪'},
                     {code: 'ES', label: 'Spain 🇪🇸'},
+                    {code: 'EN', label: 'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿'},
+                    {code: 'DE', label: 'Germany 🇩🇪'},
+                    {code: 'IT', label: 'Italy 🇮🇹'},
+                    {code: 'FR', label: 'France 🇫🇷'},
                     {code: 'BR', label: 'Brazil 🇧🇷'},
                     {code: 'AR', label: 'Argentina 🇦🇷'},
-                    {code: 'NL', label: 'Netherlands 🇳🇱'}
+                    {code: 'NL', label: 'Netherlands 🇳🇱'},
+                    {code: 'PT', label: 'Portugal 🇵🇹'}
                 ] %}
                 {% for country in allCountries %}
                     <div class="form-check">
