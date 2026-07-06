@@ -1269,20 +1269,22 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
             $byCountry[$row['country']][$row['tier']] = true;
         }
 
-        $enabledCodes    = $this->starterConfigRepository->getConfig()->getEnabledCountries();
-        $allCountryNames = [
-            'EN' => 'England',     'IT' => 'Italy',        'DE' => 'Germany',
-            'ES' => 'Spain',       'BR' => 'Brazil',       'AR' => 'Argentina',
-            'NL' => 'Netherlands', 'FR' => 'France',       'PT' => 'Portugal',
-            'NG' => 'Nigeria',     'GH' => 'Ghana',        'JP' => 'Japan',
-            'KR' => 'South Korea', 'SE' => 'Sweden',       'DK' => 'Denmark',
-            'IE' => 'Ireland',     'CI' => 'Ivory Coast',  'SN' => 'Senegal',
-            'CN' => 'China',
+        // Matches the country dropdowns on the "Generate" screen
+        // (admin_npc_clubs_content: Generate Clubs / Generate League Structure) —
+        // cache warming only makes sense for countries the league/club generation
+        // process can actually build, independent of StarterConfig's
+        // player-facing "enabled countries" toggle.
+        $enabledCountries = [
+            'ES' => 'Spain',
+            'EN' => 'England',
+            'DE' => 'Germany',
+            'IT' => 'Italy',
+            'FR' => 'France',
+            'BR' => 'Brazil',
+            'AR' => 'Argentina',
+            'NL' => 'Netherlands',
+            'PT' => 'Portugal',
         ];
-        $enabledCountries = array_intersect_key(
-            $allCountryNames,
-            array_flip($enabledCodes)
-        );
 
         return $this->render('admin/worldpack_cache.html.twig', [
             'entries'          => $entries,
