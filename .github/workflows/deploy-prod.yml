@@ -77,6 +77,8 @@ jobs:
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-player-events
             docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:seed-social-post-templates
+            docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console assets:install --symlink
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console cache:clear
