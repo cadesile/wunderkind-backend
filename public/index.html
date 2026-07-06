@@ -741,6 +741,27 @@
         }
         .footer-links a:hover { color: var(--text); }
 
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .social-links {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .social-icon {
+            display: inline-flex;
+            color: var(--text-muted);
+            transition: color 0.15s;
+        }
+        .social-icon:hover { color: var(--gold); }
+        .social-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
         /* ════════════════════════════════
            RESPONSIVE
         ════════════════════════════════ */
@@ -1351,7 +1372,17 @@
             <li><a href="#depth">The Sim</a></li>
             <li><a href="#leagues">Leagues</a></li>
         </ul>
-        <a href="#download" class="btn btn-gold">Download</a>
+        <div class="nav-actions">
+            <span class="social-links">
+                <a href="#" id="nav-facebook-link" class="social-icon" aria-label="Facebook" target="_blank" rel="noopener" style="display:none">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879v-6.988h-2.54v-2.891h2.54V9.845c0-2.508 1.493-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562v1.877h2.773l-.443 2.891h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                </a>
+                <a href="#" id="nav-x-link" class="social-icon" aria-label="X (Twitter)" target="_blank" rel="noopener" style="display:none">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+            </span>
+            <a href="#download" class="btn btn-gold">Download</a>
+        </div>
     </div>
 </nav>
 
@@ -2243,6 +2274,14 @@
                 <li><a href="mailto:admin@buildmyclub.co.uk">Contact</a></li>
                 <li><a href="#privacy">Privacy</a></li>
             </ul>
+            <span class="social-links">
+                <a href="#" id="footer-facebook-link" class="social-icon" aria-label="Facebook" target="_blank" rel="noopener" style="display:none">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879v-6.988h-2.54v-2.891h2.54V9.845c0-2.508 1.493-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562v1.877h2.773l-.443 2.891h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                </a>
+                <a href="#" id="footer-x-link" class="social-icon" aria-label="X (Twitter)" target="_blank" rel="noopener" style="display:none">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+            </span>
             <span class="footer-copy">&copy; 2026 Build My Club. All rights reserved.</span>
         </div>
     </div>
@@ -2389,6 +2428,20 @@
 
             if (data.android || data.ios) {
                 heroGenericBtn.style.display = 'none';
+            }
+
+            if (data.facebook) {
+                document.getElementById('nav-facebook-link').href = data.facebook;
+                document.getElementById('nav-facebook-link').style.display = '';
+                document.getElementById('footer-facebook-link').href = data.facebook;
+                document.getElementById('footer-facebook-link').style.display = '';
+            }
+
+            if (data.x) {
+                document.getElementById('nav-x-link').href = data.x;
+                document.getElementById('nav-x-link').style.display = '';
+                document.getElementById('footer-x-link').href = data.x;
+                document.getElementById('footer-x-link').style.display = '';
             }
 
             var missing = [];
