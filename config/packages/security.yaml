@@ -66,6 +66,7 @@ security:
         - { path: ^/api/forgot-password,       roles: PUBLIC_ACCESS }
         - { path: ^/api/reset-password,        roles: PUBLIC_ACCESS }
         - { path: ^/api/resend-password-reset, roles: PUBLIC_ACCESS }
+        - { path: ^/api/club/name-options,        roles: PUBLIC_ACCESS }
         - { path: ^/api/club/foreign,            roles: PUBLIC_ACCESS }
         - { path: ^/api/scout/foreign-clubs,     roles: PUBLIC_ACCESS }
         - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
