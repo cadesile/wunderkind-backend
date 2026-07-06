@@ -8,33 +8,42 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class ClubControllerTest extends WebTestCase
 {
-    public function testNameOptionsRequiresAuth(): void
+    public function testNameOptionsIsPubliclyAccessible(): void
     {
         $client = static::createClient();
         $client->request('GET', '/api/club/name-options?country=ES');
 
-        $this->assertResponseStatusCodeSame(401);
+        $this->assertResponseStatusCodeSame(200);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertSame('ES', $data['country']);
+        $this->assertContains('Madrid', $data['cities']);
+        $this->assertContains('Barcelona', $data['cities']);
+        $this->assertNotEmpty($data['suffixes']);
     }
 
-    public function testNameOptionsReturnsExpectedShapeWhenAuthenticated(): void
+    public function testNameOptionsCoversAllNineGenerationCapableCountries(): void
     {
         $client = static::createClient();
 
-        // No real JWT-minting test infrastructure exists in this codebase yet
-        // (see tests/Controller/Api/FinanceControllerTest.php for the same
-        // established pattern) — this confirms the auth gate is in place and,
-        // IF a valid token were supplied, documents the expected response shape.
-        $client->request('GET', '/api/club/name-options?country=ES', [], [], ['HTTP_AUTHORIZATION' => 'Bearer test-token']);
+        foreach (['ES', 'EN', 'DE', 'IT', 'FR', 'BR', 'AR', 'NL', 'PT'] as $country) {
+            $client->request('GET', "/api/club/name-options?country={$country}");
 
-        $statusCode = $client->getResponse()->getStatusCode();
-        $this->assertContains($statusCode, [200, 401]);
-
-        if ($statusCode === 200) {
+            $this->assertResponseStatusCodeSame(200);
             $data = json_decode($client->getResponse()->getContent(), true);
-            $this->assertArrayHasKey('country', $data);
-            $this->assertArrayHasKey('cities', $data);
-            $this->assertArrayHasKey('suffixes', $data);
-            $this->assertContains('Madrid', $data['cities']);
+            $this->assertNotEmpty($data['cities'], "Expected cities for {$country}");
+            $this->assertNotEmpty($data['suffixes'], "Expected suffixes for {$country}");
         }
+    }
+
+    public function testNameOptionsFallsBackToEnglandForUnsupportedCountry(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/club/name-options?country=XX');
+
+        $this->assertResponseStatusCodeSame(200);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertSame('XX', $data['country']);
+        $this->assertNotEmpty($data['cities']);
+        $this->assertContains('London', $data['cities']);
     }
 }
