@@ -1126,6 +1126,40 @@ class GameConfig
         return $this->npcFacilityLevelRanges[$bandIndex][$slug] ?? null;
     }
 
+    // ── NPC Squad Config ──────────────────────────────────────────────────
+
+    /**
+     * Per-tier configuration for NPC squad composition and recruitment balance.
+     * Array of 8 entries indexed 0–7 (index 0 = tier 1, index 7 = tier 8).
+     * Each entry: { squadMin, squadMax, managers, coaches, chairmen, foreignPercent }
+     *
+     * @var array<int, array{squadMin: int, squadMax: int, managers: int, coaches: int, chairmen: int, foreignPercent: int}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcSquadConfig = [
+        ['squadMin' => 35, 'squadMax' => 40, 'managers' => 1, 'coaches' => 11, 'chairmen' => 1, 'foreignPercent' => 56],
+        ['squadMin' => 30, 'squadMax' => 35, 'managers' => 1, 'coaches' => 9,  'chairmen' => 1, 'foreignPercent' => 45],
+        ['squadMin' => 30, 'squadMax' => 35, 'managers' => 1, 'coaches' => 8,  'chairmen' => 1, 'foreignPercent' => 18],
+        ['squadMin' => 30, 'squadMax' => 35, 'managers' => 1, 'coaches' => 7,  'chairmen' => 1, 'foreignPercent' => 11],
+        ['squadMin' => 30, 'squadMax' => 35, 'managers' => 1, 'coaches' => 7,  'chairmen' => 1, 'foreignPercent' => 6],
+        ['squadMin' => 25, 'squadMax' => 30, 'managers' => 1, 'coaches' => 7,  'chairmen' => 1, 'foreignPercent' => 6],
+        ['squadMin' => 25, 'squadMax' => 30, 'managers' => 1, 'coaches' => 5,  'chairmen' => 1, 'foreignPercent' => 3],
+        ['squadMin' => 22, 'squadMax' => 28, 'managers' => 1, 'coaches' => 5,  'chairmen' => 1, 'foreignPercent' => 0],
+    ];
+
+    /** @return array<int, array{squadMin: int, squadMax: int, managers: int, coaches: int, chairmen: int, foreignPercent: int}> */
+    public function getNpcSquadConfig(): array { return $this->npcSquadConfig; }
+
+    /** @param array<int, array{squadMin: int, squadMax: int, managers: int, coaches: int, chairmen: int, foreignPercent: int}> $v */
+    public function setNpcSquadConfig(array $v): static { $this->npcSquadConfig = $v; return $this; }
+
+    /** Returns the squad config entry for a given tier (1–8), falling back to tier-8 defaults. */
+    public function getNpcSquadConfigForTier(int $tier): array
+    {
+        $idx = max(0, min(7, $tier - 1));
+        return $this->npcSquadConfig[$idx] ?? $this->npcSquadConfig[7];
+    }
+
     // ── Squad Configuration ───────────────────────────────────────────────
 
     /** Minimum number of players required in a club's active squad. Default: 11 */

@@ -226,6 +226,9 @@ class GameConfigController extends AbstractController
 
             'staffRoles' => array_column(\App\Enum\StaffRole::cases(), 'value'),
 
+            // NPC Squad Config — per-tier squad composition and recruitment balance
+            'npcSquadConfig' => $config->getNpcSquadConfig(),
+
             // Facility templates — defines per-level gameplay effects for each facility type.
             // Client applies these during the weekly tick on top of the GameConfig baselines above.
             'facilityTemplates' => array_map(
