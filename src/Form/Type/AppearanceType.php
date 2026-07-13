@@ -67,6 +67,15 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults(['data_class' => null]);
+
+        // The `appearance` entity property is a Doctrine `json` (array) column, so
+        // EasyAdmin auto-configures the field as an array/collection field and
+        // injects CollectionType options (allow_add, allow_delete, delete_empty,
+        // entry_options, entry_type) into whatever form type is set via
+        // ->setFormType(), including this one. AppearanceType is a compound form,
+        // not a collection, so these options are meaningless here — just accept
+        // and ignore them so OptionsResolver doesn't reject them as undefined.
+        $resolver->setDefined(['allow_add', 'allow_delete', 'delete_empty', 'entry_options', 'entry_type']);
     }
 
     /**
