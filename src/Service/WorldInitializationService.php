@@ -447,6 +447,7 @@ class WorldInitializationService
             'nationality' => $scout->getNationality() ?? '',
             'experience'  => $scout->getExperience(),
             'judgements'  => $scout->getJudgements(),
+            'appearance'  => $scout->getAppearance(),
         ];
     }
 

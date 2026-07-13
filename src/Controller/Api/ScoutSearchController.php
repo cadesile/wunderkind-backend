@@ -166,6 +166,7 @@ class ScoutSearchController extends AbstractController
                 'height' => $p->getHeight(),
                 'weight' => $p->getWeight(),
             ],
+            'appearance'        => $p->getAppearance(),
             'agent'             => $p->getAgent() ? [
                 'id'             => $p->getAgent()->getId()->toRfc4122(),
                 'name'           => $p->getAgent()->getName(),

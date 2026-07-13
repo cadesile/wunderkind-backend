@@ -14,7 +14,7 @@ final class Version20260713194158 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return '';
+        return 'Add nullable appearance json column to player, staff, scout, agent';
     }
 
     public function up(Schema $schema): void
