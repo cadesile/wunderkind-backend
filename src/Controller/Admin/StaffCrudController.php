@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Staff;
 use App\Enum\StaffRole;
+use App\Form\Type\AppearanceType;
 use App\Repository\ClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -17,6 +18,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
@@ -37,7 +40,9 @@ class StaffCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['lastName' => 'ASC']);
+        return $crud
+            ->setDefaultSort(['lastName' => 'ASC'])
+            ->addFormTheme('admin/form/appearance_theme.html.twig');
     }
 
     public function createEntity(string $entityFqcn): Staff
@@ -135,5 +140,12 @@ class StaffCrudController extends AbstractCrudController
         yield AssociationField::new('club')->hideOnIndex();
 
         yield DateTimeField::new('hiredAt')->hideOnForm()->hideOnIndex();
+
+        // ── Panel: Appearance ─────────────────────────────────────────────────
+        yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
+
+        yield Field::new('appearance')
+            ->setFormType(AppearanceType::class)
+            ->onlyOnForms();
     }
 }

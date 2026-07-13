@@ -1,0 +1,52 @@
+{# Custom widget for AppearanceType: dropdowns + live SVG preview.
+   Included from templates/admin/form/appearance_theme.html.twig's
+   `appearance_widget` block, so `form` here refers to the AppearanceType
+   FormView (its children are skinTone, hairStyle, hairColor, accessory,
+   facialHair, faceShape, eyeShape, noseType, kitTrim, jerseyVariant). #}
+<div class="appearance-editor" data-appearance-editor>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="row">
+                {% for child in form.children %}
+                    <div class="col-md-6 mb-2">
+                        {{ form_row(child) }}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="col-md-4 text-center">
+            <div data-appearance-preview
+                 style="width:160px;height:160px;margin:0 auto;background:#fff;border:3px solid #333;"></div>
+            <small class="text-muted">Live preview</small>
+        </div>
+    </div>
+</div>
+
+<script src="{{ asset('admin/avatar-compositor.js') }}"></script>
+<script>
+(function () {
+    var root = document.currentScript.closest('[data-appearance-editor]')
+        || document.querySelector('[data-appearance-editor]');
+    if (!root) return;
+    var preview = root.querySelector('[data-appearance-preview]');
+
+    function val(name) {
+        var el = root.querySelector('[id$="_' + name + '"]');
+        return el ? el.value : '';
+    }
+    function render() {
+        if (typeof window.composeAvatarSvg !== 'function') return;
+        var appearance = {
+            skinTone: val('skinTone'), hairStyle: val('hairStyle'), hairColor: val('hairColor'),
+            accessory: val('accessory') || null, kitTrim: val('kitTrim'), facialHair: val('facialHair'),
+            faceShape: val('faceShape'), eyeShape: val('eyeShape'), noseType: val('noseType'),
+            jerseyVariant: parseInt(val('jerseyVariant') || '1', 10)
+        };
+        var kitHex = appearance.kitTrim || '#3a8fd4';
+        preview.innerHTML = window.composeAvatarSvg(appearance, 70, kitHex, 160);
+    }
+    root.addEventListener('change', render);
+    root.addEventListener('input', render);
+    render();
+})();
+</script>

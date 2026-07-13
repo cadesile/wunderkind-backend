@@ -3,11 +3,14 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Scout;
+use App\Form\Type\AppearanceType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
@@ -28,7 +31,9 @@ class ScoutCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['name' => 'ASC']);
+        return $crud
+            ->setDefaultSort(['name' => 'ASC'])
+            ->addFormTheme('admin/form/appearance_theme.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
@@ -43,5 +48,12 @@ class ScoutCrudController extends AbstractCrudController
             ->setHelp('JSON object of scout judgement attributes. Invalid JSON is silently ignored on save.')
             ->setFormTypeOption('attr', ['rows' => 8, 'class' => 'font-monospace'])
             ->hideOnIndex();
+
+        // ── Panel: Appearance ─────────────────────────────────────────────────
+        yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
+
+        yield Field::new('appearance')
+            ->setFormType(AppearanceType::class)
+            ->onlyOnForms();
     }
 }

@@ -6,6 +6,7 @@ use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
+use App\Form\Type\AppearanceType;
 use App\Repository\PlayerRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -22,6 +23,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -51,7 +53,8 @@ class PlayerCrudController extends AbstractCrudController
     {
         return parent::configureCrud($crud)
             ->setDefaultSort(['lastName' => 'ASC'])
-            ->overrideTemplate('crud/index', 'admin/player_index.html.twig');
+            ->overrideTemplate('crud/index', 'admin/player_index.html.twig')
+            ->addFormTheme('admin/form/appearance_theme.html.twig');
     }
 
     public function index(AdminContext $context): KeyValueStore|Response
@@ -193,5 +196,12 @@ class PlayerCrudController extends AbstractCrudController
 
         yield AssociationField::new('agent')->setRequired(false)->setColumns(6)->hideOnIndex();
         yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
+
+        // ── Panel: Appearance ─────────────────────────────────────────────────
+        yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
+
+        yield Field::new('appearance')
+            ->setFormType(AppearanceType::class)
+            ->onlyOnForms();
     }
 }

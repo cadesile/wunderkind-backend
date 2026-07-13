@@ -1,0 +1,12 @@
+{# Form theme for App\Form\Type\AppearanceType.
+   AppearanceType's block prefix is "appearance" (StringUtil::fqcnToBlockPrefix
+   strips the "Type" suffix and snake_cases "Appearance" -> "appearance"), so
+   Symfony/EasyAdmin look for a block named "appearance_widget" when rendering
+   this compound field's widget. Registered per-controller via:
+     $crud->addFormTheme('admin/form/appearance_theme.html.twig')
+   This block fully replaces the default compound-widget rendering (which
+   would just loop form_rows over the children) with the dropdowns + live
+   SVG preview markup. #}
+{% block appearance_widget %}
+    {{ include('admin/field/appearance.html.twig') }}
+{% endblock appearance_widget %}

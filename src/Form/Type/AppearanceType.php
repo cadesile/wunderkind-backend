@@ -69,12 +69,19 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
         $resolver->setDefaults(['data_class' => null]);
     }
 
-    /** @param \BackedEnum[] $cases @return array<string,string> label=>value */
+    /**
+     * Build label=>value choices from the enum CASE NAME (not the value) — for
+     * SkinTone the values are hex codes, so labels sourced from ->value would
+     * render as raw hex. Case names give readable labels for every enum, e.g.
+     * DARK_BROWN -> "Dark Brown", VERY_LIGHT -> "Very Light".
+     *
+     * @param \BackedEnum[] $cases @return array<string,string> label=>value
+     */
     private function enumChoices(array $cases): array
     {
         $out = [];
         foreach ($cases as $c) {
-            $out[ucwords(str_replace('_', ' ', (string) $c->value))] = $c->value;
+            $out[ucwords(strtolower(str_replace('_', ' ', $c->name)))] = $c->value;
         }
         return $out;
     }
