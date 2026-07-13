@@ -49,6 +49,7 @@ class MarketDataService
             'weeklySalary'    => $s->getWeeklySalary(),
             'morale'          => $s->getMorale(),
             'specialisms'     => $s->getSpecialisms() ?? [],
+            'appearance'      => $s->getAppearance(),
         ];
     }
 
@@ -62,6 +63,7 @@ class MarketDataService
             'rating'         => $a->getRating(),
             'tier'           => Tier::fromScore($a->getRating())->value,
             'commissionRate' => $a->getCommissionRate(),
+            'appearance'     => $a->getAppearance(),
         ];
     }
 
@@ -75,6 +77,7 @@ class MarketDataService
             'experience'  => $s->getExperience(),
             'tier'        => Tier::fromScore($s->getExperience())->value,
             'judgements'  => $s->getJudgements(),
+            'appearance'  => $s->getAppearance(),
         ];
     }
 

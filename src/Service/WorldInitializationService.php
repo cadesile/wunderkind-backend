@@ -406,6 +406,7 @@ class WorldInitializationService
                 'temperament'     => $p->getTemperament(),
                 'consistency'     => $p->getConsistency(),
             ],
+            'appearance' => $player->getAppearance(),
         ];
     }
 
@@ -420,6 +421,7 @@ class WorldInitializationService
             'coachingAbility' => $staff->getCoachingAbility(),
             'nationality'     => $staff->getNationality() ?? '',
             'specialisms'     => $staff->getSpecialisms() ?? [],
+            'appearance'      => $staff->getAppearance(),
         ];
     }
 
