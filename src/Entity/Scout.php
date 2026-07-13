@@ -31,6 +31,10 @@ class Scout
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
+    /** Avatar appearance (frontend Appearance shape). Null until generated/backfilled. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $appearance = null;
+
     public function __construct(string $name = '')
     {
         $this->id        = new UuidV7();
@@ -67,4 +71,7 @@ class Scout
     public function setExperience(int $experience): void { $this->experience = $experience; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public function getAppearance(): ?array { return $this->appearance; }
+    public function setAppearance(?array $appearance): void { $this->appearance = $appearance; }
 }

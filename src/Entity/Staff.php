@@ -64,6 +64,10 @@ class Staff
     #[ORM\Column]
     private \DateTimeImmutable $hiredAt;
 
+    /** Avatar appearance (frontend Appearance shape). Null until generated/backfilled. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $appearance = null;
+
     public function __construct(
         string $firstName = '',
         string $lastName = '',
@@ -127,4 +131,7 @@ class Staff
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
 
     public function getHiredAt(): \DateTimeImmutable { return $this->hiredAt; }
+
+    public function getAppearance(): ?array { return $this->appearance; }
+    public function setAppearance(?array $appearance): void { $this->appearance = $appearance; }
 }

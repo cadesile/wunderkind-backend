@@ -101,6 +101,10 @@ class Player
     #[ORM\Column]
     private \DateTimeImmutable $updatedAt;
 
+    /** Avatar appearance (frontend Appearance shape). Null until generated/backfilled. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $appearance = null;
+
     public function __construct(
         string $firstName = '',
         string $lastName = '',
@@ -239,4 +243,7 @@ class Player
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
+
+    public function getAppearance(): ?array { return $this->appearance; }
+    public function setAppearance(?array $appearance): void { $this->appearance = $appearance; }
 }

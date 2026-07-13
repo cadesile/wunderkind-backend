@@ -44,6 +44,10 @@ class Agent
     #[ORM\OneToMany(mappedBy: 'agent', targetEntity: Player::class)]
     private Collection $players;
 
+    /** Avatar appearance (frontend Appearance shape). Null until generated/backfilled. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $appearance = null;
+
     public function __construct(string $name)
     {
         $this->id      = new UuidV7();
@@ -80,4 +84,7 @@ class Agent
 
     public function getRating(): int { return $this->rating; }
     public function setRating(int $rating): void { $this->rating = $rating; }
+
+    public function getAppearance(): ?array { return $this->appearance; }
+    public function setAppearance(?array $appearance): void { $this->appearance = $appearance; }
 }
