@@ -6,7 +6,6 @@ use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
-use App\Repository\ClubRepository;
 use App\Repository\PlayerRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -16,7 +15,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
-use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,7 +31,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 class PlayerCrudController extends AbstractCrudController
 {
     public function __construct(
-        private readonly ClubRepository $clubRepository,
         private readonly PlayerRepository $playerRepository,
     ) {}
 
@@ -66,31 +63,6 @@ class PlayerCrudController extends AbstractCrudController
         return $responseParameters;
     }
 
-    /**
-     * Player constructor requires several mandatory args — supply sensible
-     * defaults so EasyAdmin can instantiate the form before the user fills it in.
-     */
-    public function createEntity(string $entityFqcn): Player
-    {
-        $club = $this->clubRepository->findOneBy([]);
-
-        if ($club === null) {
-            throw new \RuntimeException('No Club exists yet. Register a user first.');
-        }
-
-        return new Player(
-            firstName: '',
-            lastName: '',
-            dateOfBirth: new \DateTimeImmutable('-16 years'),
-            nationality: '',
-            position: PlayerPosition::MIDFIELDER,
-            recruitmentSource: RecruitmentSource::SCOUTING_NETWORK,
-            potential: 50,
-            currentAbility: 50,
-            club: $club,
-        );
-    }
-
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
@@ -113,7 +85,6 @@ class PlayerCrudController extends AbstractCrudController
                 'Agent Offer'      => RecruitmentSource::AGENT_OFFER,
                 'Youth Request'    => RecruitmentSource::YOUTH_REQUEST,
             ]))
-            ->add(EntityFilter::new('club'))
             ->add(TextFilter::new('nationality'))
             ->add(NumericFilter::new('currentAbility'))
             ->add(NumericFilter::new('potential'));
@@ -220,7 +191,6 @@ class PlayerCrudController extends AbstractCrudController
         // ── Panel: Associations ───────────────────────────────────────────────
         yield FormField::addFieldset('Associations', 'fa fa-link')->hideOnIndex();
 
-        yield AssociationField::new('club')->setColumns(6)->hideOnIndex();
         yield AssociationField::new('agent')->setRequired(false)->setColumns(6)->hideOnIndex();
         yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
     }
