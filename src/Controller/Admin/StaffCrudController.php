@@ -5,17 +5,14 @@ namespace App\Controller\Admin;
 use App\Entity\Staff;
 use App\Enum\StaffRole;
 use App\Form\Type\AppearanceType;
-use App\Repository\ClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
-use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
@@ -26,8 +23,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class StaffCrudController extends AbstractCrudController
 {
-    public function __construct(private readonly ClubRepository $clubRepository) {}
-
     public static function getEntityFqcn(): string
     {
         return Staff::class;
@@ -45,22 +40,6 @@ class StaffCrudController extends AbstractCrudController
             ->addFormTheme('admin/form/appearance_theme.html.twig');
     }
 
-    public function createEntity(string $entityFqcn): Staff
-    {
-        $club = $this->clubRepository->findOneBy([]);
-
-        if ($club === null) {
-            throw new \RuntimeException('No Club exists yet. Register a user first.');
-        }
-
-        return new Staff(
-            firstName: '',
-            lastName: '',
-            role: StaffRole::COACH,
-            club: $club,
-        );
-    }
-
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
@@ -71,7 +50,6 @@ class StaffCrudController extends AbstractCrudController
                 'Facility Manager'     => StaffRole::FACILITY_MANAGER,
                 'Chairman'             => StaffRole::CHAIRMAN,
             ]))
-            ->add(EntityFilter::new('club'))
             ->add(TextFilter::new('nationality'))
             ->add(NumericFilter::new('coachingAbility'))
             ->add(NumericFilter::new('scoutingRange'))
@@ -136,8 +114,6 @@ class StaffCrudController extends AbstractCrudController
             ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) . ' / wk' : '—')
             ->setHelp('Weekly salary in pence — £1,000 = 100,000')
             ->hideOnIndex();
-
-        yield AssociationField::new('club')->hideOnIndex();
 
         yield DateTimeField::new('hiredAt')->hideOnForm()->hideOnIndex();
 
