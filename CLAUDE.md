@@ -60,7 +60,21 @@ lando php bin/console debug:router
 lando php bin/console debug:firewall
 ```
 
-Test coverage is sparse — 38 pre-existing errors in the suite are from stale test stubs unrelated to current code.
+## Testing
+
+- Unit tests (`PHPUnit\Framework\TestCase`) run in-memory and need no DB.
+- **Functional / `WebTestCase` / `KernelTestCase` tests use a SEPARATE database, `wunderkind_test`** (env `test`, which skips `.env.local` — so it does **not** share the dev DB). This DB is created via `doctrine:schema:create`, not migrations, so its migration metadata starts empty and it **drifts** whenever a migration adds a column that `schema:create` didn't originally build. Symptom: `column "x" does not exist` errors in functional tests only. Reconcile it:
+  ```bash
+  # See the drift, then apply missing columns to the test DB:
+  lando php bin/console doctrine:schema:update --dump-sql --env=test
+  # After the schema matches entities, mark all migrations applied so metadata is truthful:
+  lando php bin/console doctrine:migrations:sync-metadata-storage --env=test
+  lando php bin/console doctrine:migrations:version --add --all --no-interaction --env=test
+  # Verify:
+  lando php bin/console doctrine:migrations:up-to-date --env=test
+  lando psql -d wunderkind_test -c "<sql>"   # inspect the test DB directly
+  ```
+- **Admin functional-test login** — the `admin` firewall uses a Doctrine `EntityUserProvider` that re-fetches the user by email on every request, so an in-memory-only `Admin` is silently treated as unauthenticated. Persist a real `Admin` first, then `$client->loginUser($admin, 'admin')` (see `tests/Controller/Admin/SocialAuthControllerTest.php`).
 
 ## Git Workflow
 
@@ -116,6 +130,18 @@ ClubController → ClubInitializationService::initializeClub()
   → WorldInitializationService::buildTierPack() → NPC clubs + fixtures for the club's tier
 ```
 
+### Avatar Appearance (backend-owned)
+`Player`, `Staff`, `Scout`, `Agent` each carry a nullable `appearance` json column holding the frontend `Appearance` shape (10 keys: `skinTone, hairStyle, hairColor, accessory, kitTrim, facialHair, faceShape, eyeShape, noseType, jerseyVariant`). The backend owns generation:
+- `AppearanceGeneratorService` is a deterministic PHP port of the frontend `generateAppearance(id, role, age)` — same `(id, role, age)` always yields the same avatar. The `App\Enum\Appearance\*` enums are the single source of truth shared by the generator and the admin dropdowns.
+- `AppearanceLifecycleSubscriber` (Doctrine `prePersist`) auto-fills `appearance` for any of the four entity types persisted without one, so **every** creation path is covered centrally (don't hook individual construction sites). `app:backfill-appearances` fills pre-existing rows.
+- `appearance` is emitted verbatim (a passthrough of `getAppearance()`) in every player/staff/scout/agent serializer — `buildPlayerSnapshot`/`buildStaffSnapshot`/`buildScoutSnapshot`, `MarketDataService::serialize{Coach,Scout,Agent}`, and `ScoutSearchController::serializePlayer`. The emitted object is a drop-in for the frontend `Appearance`; a null (un-backfilled) value is safe — the frontend falls back to its own generator.
+
+### Player↔Agent Association (world pack)
+`Player` has a nullable `?Agent $agent` FK (a **many-players-to-one-agent** relationship — one agent represents several players). Agents are a persistent shared pool (never deleted on consume, unlike Player/Staff). Agent surfacing:
+- `buildPlayerSnapshot` nests the agent under each player via `Agent::toSnapshotArray()` (`{id, name, commissionRate}` or `null`) — the single shared agent shape, also used by `ScoutSearchController::serializePlayer`. Don't re-inline that array.
+- At world-pack generation (`buildLeaguesPack`/`buildTierPack`), `WorldInitializationService::assignAgents($players, $agents)` **reassigns every NPC-club player** a random agent from the loaded pool (`AgentRepository::findAll()`) before the player is snapshotted and deleted — following the same structural nesting used for player↔club/staff↔club (there is no player↔club FK; association is the snapshot nesting).
+- Agent pool size is `PoolConfig::agentPoolTarget` (default 100), driving generation/replenishment in `MarketPoolService`. `MarketPoolService::generatePlayers` also assigns pool players a random agent at generation time; the world-pack pass reassigns.
+
 ### Two Firewalls
 - **`api`** — stateless JWT, covers `/api/*`; role `ROLE_CLUB` for game clients
 - **`admin`** — session form_login, covers `/admin`; role `ROLE_ADMIN`
@@ -149,6 +175,7 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
   ```bash
   lando psql -c "UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';"
   ```
+- **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
 
 ## Source Layout
 
@@ -228,6 +255,7 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `ClubInitializationService` | Create Club entity, set paName + manager traits, abbreviation |
 | `StarterPackService` | Pull starting Player/Staff/Scout from pool; build snapshots; delete consumed Player/Staff |
 | `PlayerGenerationService` | Procedurally generate a `Player` from archetype, position, and source |
+| `AppearanceGeneratorService` | Deterministic avatar generation (port of frontend `generateAppearance`); paired with `AppearanceLifecycleSubscriber` (prePersist auto-fill) — see Avatar Appearance above |
 | `NpcClubGenerationService` | Generate NPC clubs with names, colors, facilities, and ability by tier |
 | `WorldInitializationService` | Build the full league pyramid + tier pack snapshot for a client; snapshot builders for Player/Staff/Scout |
 | `LeagueService` | Assign clubs to leagues, conclude seasons, roll league sponsors |
@@ -243,8 +271,9 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 ## Key Entities (non-obvious fields)
 
 - **Club** — `reputation`, `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`, manager traits (`temperament`/`discipline`/`ambition` 0–100 clamped setters), `paName`, `financialYearStart`, `balance`, `country`, `abbreviation`
-- **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings. **No club FK** — pool entity, deleted on consume.
-- **Staff** — `role` (StaffRole), `coachingAbility`. **No club FK** — pool entity, deleted on consume.
+- **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; nullable `?Agent $agent` FK (many players → one agent; assigned in `MarketPoolService` and reassigned at world-pack generation; surfaced in every player snapshot — see Player↔Agent Association); `appearance` json (see Avatar Appearance). **No club FK** — pool entity, deleted on consume.
+- **Staff** — `role` (StaffRole), `coachingAbility`; `appearance` json. **No club FK** — pool entity, deleted on consume.
+- **Scout / Agent** — pool entities (`Scout` no club FK, not deleted on assign); both carry `appearance` json. Note `Scout`/`Agent` use a single `name` field, not `firstName`/`lastName`.
 - **PlayerArchetype** — defines trait mapping distributions used by `PlayerGenerationService`; `traitMapping` (json); seeded via `app:seed-archetypes`
 - **League** — `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
 - **NpcClub** — `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor`, `playingStyle`, `financialApproach`; grouped into leagues for the world pack

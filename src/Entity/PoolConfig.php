@@ -215,9 +215,9 @@ class PoolConfig
     #[ORM\Column(type: 'integer')]
     private int $investorPoolTarget = 5;
 
-    /** Minimum agents before auto-replenishment. Batch size for manual generate. Default: 20 */
+    /** Minimum agents before auto-replenishment. Batch size for manual generate. Default: 100 */
     #[ORM\Column(type: 'integer')]
-    private int $agentPoolTarget = 20;
+    private int $agentPoolTarget = 100;
 
     // ── Getters / Setters ──────────────────────────────────────────────────
 

@@ -5,11 +5,41 @@ declare(strict_types=1);
 namespace App\Tests\Controller\Api;
 
 use App\Controller\Api\ScoutSearchController;
+use App\Entity\Agent;
 use App\Entity\Player;
 use PHPUnit\Framework\TestCase;
 
 class ScoutSearchControllerTest extends TestCase
 {
+    private function serialize(Player $player): array
+    {
+        $controller = (new \ReflectionClass(ScoutSearchController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(ScoutSearchController::class, 'serializePlayer');
+        $method->setAccessible(true);
+        return $method->invoke($controller, $player);
+    }
+
+    public function testSerializePlayerNestsAgentUsingSharedShape(): void
+    {
+        $agent = new Agent('Jorge Mendes');
+        $agent->setCommissionRate('9.50');
+        $player = new Player('A', 'B');
+        $player->setAgent($agent);
+
+        $result = $this->serialize($player);
+
+        $this->assertArrayHasKey('agent', $result);
+        $this->assertSame($agent->toSnapshotArray(), $result['agent']);
+    }
+
+    public function testSerializePlayerAgentIsNullWhenNone(): void
+    {
+        $result = $this->serialize(new Player('A', 'B'));
+
+        $this->assertArrayHasKey('agent', $result);
+        $this->assertNull($result['agent']);
+    }
+
     public function testSerializePlayerIncludesAppearanceVerbatim(): void
     {
         $appearance = [

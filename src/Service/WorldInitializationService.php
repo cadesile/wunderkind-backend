@@ -15,6 +15,8 @@ use App\Entity\Staff;
 use App\Enum\CompanySize;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
+use App\Entity\Agent;
+use App\Repository\AgentRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
@@ -44,6 +46,7 @@ class WorldInitializationService
         private readonly LeagueRepository         $leagueRepository,
         private readonly NpcClubRepository        $npcClubRepository,
         private readonly PlayerRepository         $playerRepository,
+        private readonly AgentRepository          $agentRepository,
         private readonly ScoutRepository          $scoutRepository,
         private readonly StaffRepository          $staffRepository,
         private readonly StarterConfigRepository  $starterConfigRepository,
@@ -70,6 +73,7 @@ class WorldInitializationService
 
         $poolConfig   = $this->poolConfigRepository->getConfig();
         $gameConfig   = $this->gameConfigRepository->getConfig();
+        $agents       = $this->agentRepository->findAll(); // shared agent pool — many players may reference one
         $leagues      = $this->leagueRepository->findByCountry($country);
         $leaguesData       = [];
         $npcPlayerIds      = [];
@@ -138,6 +142,7 @@ class WorldInitializationService
 
                 // Deduplicate within this club's own draw (domestic/foreign overlap edge case).
                 $players  = array_values(array_unique($players, SORT_REGULAR));
+                $this->assignAgents($players, $agents); // associate agents before snapshotting + deletion
                 $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,   (int) $tierConf['managerCount']);
                 $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,     (int) $tierConf['coachCount']);
                 $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,  (int) $tierConf['chairmanCount']);
@@ -177,6 +182,7 @@ class WorldInitializationService
         $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
         $poolConfig    = $this->poolConfigRepository->getConfig();
         $gameConfig    = $this->gameConfigRepository->getConfig();
+        $agents        = $this->agentRepository->findAll(); // shared agent pool — many players may reference one
 
         $league = $this->leagueRepository->findByCountryAndTier($country, $tier);
         if ($league === null) {
@@ -241,6 +247,7 @@ class WorldInitializationService
 
             // Deduplicate within this club's own draw (domestic/foreign overlap edge case).
             $players  = array_values(array_unique($players, SORT_REGULAR));
+            $this->assignAgents($players, $agents); // associate agents before snapshotting + deletion
             $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,  (int) $tierConf['managerCount']);
             $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,    (int) $tierConf['coachCount']);
             $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN, (int) $tierConf['chairmanCount']);
@@ -368,6 +375,26 @@ class WorldInitializationService
         ];
     }
 
+    /**
+     * Reassigns each player a random agent from the available agent pool. Multiple
+     * players may reference the same agent — a many-to-one relationship is the
+     * intended shape (one agent represents several players). No-op when the pool is
+     * empty. Called at world-pack generation time, before players are snapshotted
+     * and deleted, so the in-memory FK is read straight into the snapshot with no flush.
+     *
+     * @param Player[] $players
+     * @param Agent[]  $agents
+     */
+    public function assignAgents(array $players, array $agents): void
+    {
+        if ($agents === []) {
+            return;
+        }
+        foreach ($players as $player) {
+            $player->setAgent($agents[array_rand($agents)]);
+        }
+    }
+
     public function buildPlayerSnapshot(Player $player): array
     {
         // getPersonality() returns PersonalityProfile (embedded object)
@@ -407,6 +434,7 @@ class WorldInitializationService
                 'consistency'     => $p->getConsistency(),
             ],
             'appearance' => $player->getAppearance(),
+            'agent'      => $player->getAgent()?->toSnapshotArray(),
         ];
     }
 
