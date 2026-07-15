@@ -91,7 +91,11 @@ class PlayerAppearanceEditPageTest extends WebTestCase
                 $crawler->filter('[data-appearance-preview]')->count(),
                 "live preview container should be present on the {$adminSlug} edit page",
             );
-            $this->assertStringContainsString('admin/avatar-compositor.js', $html);
+            // The compositor asset must live OUTSIDE public/admin/, otherwise the
+            // public/admin/ directory shadows the EasyAdmin /admin route at the
+            // nginx static layer and every /admin page 403s. Guard both facts.
+            $this->assertStringContainsString('assets/avatar-compositor.js', $html);
+            $this->assertStringNotContainsString('admin/avatar-compositor.js', $html);
             $this->assertGreaterThan(
                 0,
                 $crawler->filter('select[id$="_skinTone"]')->count(),
