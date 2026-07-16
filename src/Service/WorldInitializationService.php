@@ -81,6 +81,16 @@ class WorldInitializationService
         $assignedPlayerIds = []; // cross-club exclusion list — prevents the same pool player appearing in multiple rosters
         $nationality       = ClubInitializationService::countryToNationality($country) ?? $country;
 
+        // Bound the agent pool to ~worldPackPlayersPerAgent players per agent across the whole
+        // country pack. Pre-pass estimates total NPC players (clubs × average squad per tier).
+        $estimatedPlayers = 0.0;
+        foreach ($leagues as $estLeague) {
+            $estTierConf       = $npcConfig[(string) $estLeague->getTier()] ?? $this->defaultTierConfig($estLeague->getTier());
+            $avgSquad          = ((int) $estTierConf['playerMin'] + (int) $estTierConf['playerMax']) / 2;
+            $estimatedPlayers += count($this->npcClubRepository->findByLeague($estLeague)) * $avgSquad;
+        }
+        $agents = $this->selectBoundedAgentPool($agents, (int) ceil($estimatedPlayers), $starterConfig->getWorldPackPlayersPerAgent());
+
         foreach ($leagues as $league) {
             $tier         = $league->getTier();
             $tierKey      = (string) $tier;
@@ -198,6 +208,13 @@ class WorldInitializationService
             : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
 
         $npcClubs        = $this->npcClubRepository->findByLeague($league);
+
+        // Bound the agent pool to ~worldPackPlayersPerAgent players per agent for this tier,
+        // so distinct agents surfaced don't scale with the whole pool.
+        $avgSquad  = ((int) $tierConf['playerMin'] + (int) $tierConf['playerMax']) / 2;
+        $estimated = (int) ceil(count($npcClubs) * $avgSquad);
+        $agents    = $this->selectBoundedAgentPool($agents, $estimated, $starterConfig->getWorldPackPlayersPerAgent());
+
         $clubsData       = [];
         $allClubIds      = [];
         $npcPlayerIds    = [];
@@ -393,6 +410,27 @@ class WorldInitializationService
         foreach ($players as $player) {
             $player->setAgent($agents[array_rand($agents)]);
         }
+    }
+
+    /**
+     * Returns a random subset of the agent pool sized so that, once players are
+     * distributed across it, each agent represents ~$playersPerAgent players
+     * (target = ceil($estimatedPlayers / $playersPerAgent), never more than the
+     * pool holds). This is what keeps a world pack from surfacing one agent per
+     * player: `assignAgents` then draws from this bounded subset, not the whole pool.
+     * No-op on an empty pool or a non-positive estimate.
+     *
+     * @param Agent[] $agents
+     * @return Agent[]
+     */
+    public function selectBoundedAgentPool(array $agents, int $estimatedPlayers, int $playersPerAgent): array
+    {
+        if ($agents === [] || $estimatedPlayers <= 0) {
+            return $agents;
+        }
+        $target = min(count($agents), max(1, (int) ceil($estimatedPlayers / max(1, $playersPerAgent))));
+        shuffle($agents);
+        return array_slice($agents, 0, $target);
     }
 
     public function buildPlayerSnapshot(Player $player): array

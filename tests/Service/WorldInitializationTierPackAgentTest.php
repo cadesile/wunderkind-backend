@@ -79,9 +79,10 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
             $this->em->persist(new Staff('Staff', $role->value, $role));
         }
 
-        // Exactly 2 agents → with ~14 players per club, sharing is guaranteed.
-        foreach (['Agent One', 'Agent Two'] as $agentName) {
-            $agent = new Agent($agentName);
+        // A LARGE agent pool (50) — the world pack must NOT spread players across all
+        // of them; it should bound to ~players/worldPackPlayersPerAgent.
+        for ($i = 0; $i < 50; $i++) {
+            $agent = new Agent("Agent $i");
             $agent->setCommissionRate('10.00');
             $this->em->persist($agent);
             $this->track($agent);
@@ -120,11 +121,21 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
         }
 
         $this->assertTrue($sawPopulatedClub);
-        // Many-to-one: fewer distinct agents than players → at least one agent shared across 2+ players.
-        $this->assertLessThan(
-            count($agentIdsAcrossAllPlayers),
-            count(array_unique($agentIdsAcrossAllPlayers)),
-            'at least one agent must be shared across 2+ players in the generated pack',
+
+        $totalPlayers = count($agentIdsAcrossAllPlayers);
+        $distinct     = count(array_unique($agentIdsAcrossAllPlayers));
+
+        // Many-to-one: fewer distinct agents than players → agents are shared.
+        $this->assertLessThan($totalPlayers, $distinct, 'agents must be shared across players');
+
+        // Bounded: distinct agents track ~players / worldPackPlayersPerAgent (default 12),
+        // NOT the 50-strong pool. Before the fix this would be ~min(50, totalPlayers).
+        $ratio            = 12;
+        $expectedMaxAgents = (int) ceil($totalPlayers / $ratio) + 1; // +1 slack (subset sized on estimate)
+        $this->assertLessThanOrEqual(
+            $expectedMaxAgents,
+            $distinct,
+            "distinct agents ($distinct) should be bounded to ~players/$ratio, not the whole pool of 50",
         );
     }
 

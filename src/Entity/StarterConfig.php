@@ -27,6 +27,13 @@ class StarterConfig
     #[ORM\Column(type: 'integer')]
     private int $starterPlayerCount = 5;
 
+    /**
+     * World-pack agent distribution: target NPC players per agent. The world pack
+     * bounds the distinct agents it uses to ceil(estimatedPlayers / this). Default: 12.
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $worldPackPlayersPerAgent = 12;
+
     /** Number of coaches assigned to a starter club. Default: 1 */
     #[ORM\Column(type: 'integer')]
     private int $starterCoachCount = 1;
@@ -185,6 +192,9 @@ class StarterConfig
 
     public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
     public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }
+
+    public function getWorldPackPlayersPerAgent(): int { return $this->worldPackPlayersPerAgent; }
+    public function setWorldPackPlayersPerAgent(int $v): static { $this->worldPackPlayersPerAgent = $v; return $this; }
 
     public function getStarterCoachCount(): int { return $this->starterCoachCount; }
     public function setStarterCoachCount(int $v): static { $this->starterCoachCount = $v; return $this; }
