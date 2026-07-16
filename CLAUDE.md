@@ -138,7 +138,7 @@ ClubController → ClubInitializationService::initializeClub()
 
 ### Player↔Agent Association (world pack)
 `Player` has a nullable `?Agent $agent` FK (a **many-players-to-one-agent** relationship — one agent represents several players). Agents are a persistent shared pool (never deleted on consume, unlike Player/Staff). Agent surfacing:
-- `buildPlayerSnapshot` nests the agent under each player via `Agent::toSnapshotArray()` (`{id, name, commissionRate}` or `null`) — the single shared agent shape, also used by `ScoutSearchController::serializePlayer`. Don't re-inline that array.
+- `buildPlayerSnapshot` nests the agent under each player via `Agent::toSnapshotArray()` (`{id, name, commissionRate, reputation, experience, rating, nationality, dateOfBirth}` or `null`; excludes the internal `judgements`) — the single shared agent shape, also used by `ScoutSearchController::serializePlayer`. Don't re-inline that array.
 - At world-pack generation (`buildLeaguesPack`/`buildTierPack`), `WorldInitializationService::assignAgents($players, $agents)` **reassigns every NPC-club player** a random agent from the loaded pool (`AgentRepository::findAll()`) before the player is snapshotted and deleted — following the same structural nesting used for player↔club/staff↔club (there is no player↔club FK; association is the snapshot nesting).
 - Agent pool size is `PoolConfig::agentPoolTarget` (default 100), driving generation/replenishment in `MarketPoolService`. `MarketPoolService::generatePlayers` also assigns pool players a random agent at generation time; the world-pack pass reassigns.
 

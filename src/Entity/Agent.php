@@ -63,11 +63,12 @@ class Agent
     public function setName(string $name): void { $this->name = $name; }
 
     /**
-     * Minimal agent shape nested under a player in snapshots — the same shape
-     * ScoutSearchController::serializePlayer surfaces. Shared so the agent
-     * serialization lives in one place.
+     * Full agent record nested under a player in snapshots — the single shared
+     * agent shape, also used by ScoutSearchController::serializePlayer. Shared so
+     * the agent serialization lives in one place. (Excludes `judgements`, the
+     * agent's internal assessment values.)
      *
-     * @return array{id: string, name: string, commissionRate: string}
+     * @return array{id: string, name: string, commissionRate: string, reputation: int, experience: int, rating: int, nationality: ?string, dateOfBirth: ?string}
      */
     public function toSnapshotArray(): array
     {
@@ -75,6 +76,11 @@ class Agent
             'id'             => $this->id->toRfc4122(),
             'name'           => $this->name,
             'commissionRate' => $this->commissionRate,
+            'reputation'     => $this->reputation,
+            'experience'     => $this->experience,
+            'rating'         => $this->rating,
+            'nationality'    => $this->nationality,
+            'dateOfBirth'    => $this->dob?->format('Y-m-d'),
         ];
     }
 
