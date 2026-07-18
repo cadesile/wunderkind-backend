@@ -5,6 +5,7 @@ namespace App\Tests\Service;
 use App\Entity\Club;
 use App\Entity\Investor;
 use App\Entity\League;
+use App\Entity\LeaderboardEntry;
 use App\Entity\MatchResult;
 use App\Entity\SeasonRatingsSnapshot;
 use App\Entity\SeasonRecord;
@@ -13,6 +14,7 @@ use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use App\Entity\User;
+use App\Enum\LeaderboardCategory;
 use App\Enum\TransferType;
 use App\Service\AccountDeletionService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -38,7 +40,8 @@ class AccountDeletionServiceTest extends KernelTestCase
         $club = new Club('Doomed FC', $user);
         $this->em->persist($club);
 
-        $league = new League('zz', 8, 'Del Test League');
+        $uniqueCountry = chr(97 + mt_rand(0, 25)) . chr(97 + mt_rand(0, 25));
+        $league = new League($uniqueCountry, 8, 'Del Test League');
         $this->em->persist($league);
 
         $investor = new Investor('Inv Co');
@@ -51,9 +54,10 @@ class AccountDeletionServiceTest extends KernelTestCase
 
         $this->em->persist(new MatchResult($club, 2, 1, 3, 1));
         $this->em->persist(new SeasonRecord($club, $league, 1, 4, 10, 5, 3, 2, 12, 8, 18, false, false));
-        $this->em->persist(new SeasonSnapshot($club, 1, 'zz', ['x' => 1]));
+        $this->em->persist(new SeasonSnapshot($club, 1, $uniqueCountry, ['x' => 1]));
         $this->em->persist(new SeasonRatingsSnapshot(1, 1, 8, (string) $club->getId(), 'Doomed FC', 50, 4));
         $this->em->persist(new SyncRecord($club, 5, new \DateTimeImmutable(), ['w' => 5]));
+        $this->em->persist(new LeaderboardEntry($club, LeaderboardCategory::CAREER_EARNINGS, 'all-time'));
 
         $transfer = new Transfer(null, $club, 'Some Club', TransferType::SALE, new \DateTimeImmutable());
         $this->em->persist($transfer);
@@ -72,7 +76,7 @@ class AccountDeletionServiceTest extends KernelTestCase
         $this->assertNull($this->em->find(Club::class, $clubId), 'club should be deleted');
 
         // Every FK-blocking dependent gone (count rows still pointing at the club id).
-        foreach (['Investor', 'Sponsor', 'MatchResult', 'SeasonRecord', 'SeasonSnapshot', 'SyncRecord'] as $entity) {
+        foreach (['Investor', 'Sponsor', 'MatchResult', 'SeasonRecord', 'SeasonSnapshot', 'SyncRecord', 'LeaderboardEntry'] as $entity) {
             $count = (int) $this->em->createQuery(
                 "SELECT COUNT(e) FROM App\\Entity\\{$entity} e WHERE IDENTITY(e.club) = :cid"
             )->setParameter('cid', $clubId)->getSingleScalarResult();

@@ -208,6 +208,7 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
 | `POST` | `/api/reset-password` | Public | Complete password reset |
 | `POST` | `/api/beta-request` | Public | Submit beta access request |
 | `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
+| `POST` | `/api/account/delete` | JWT | Permanently delete the caller's account + all owned clubs and their data |
 | `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
 | `GET` | `/api/app-links` | Public | App store / deep link URLs |
 | `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
