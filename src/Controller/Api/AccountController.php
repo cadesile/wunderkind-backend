@@ -4,6 +4,7 @@ namespace App\Controller\Api;
 
 use App\Entity\User;
 use App\Service\AccountDeletionService;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,14 +16,15 @@ class AccountController extends AbstractController
 {
     #[Route('/delete', name: 'api_account_delete', methods: ['POST'])]
     #[IsGranted('ROLE_CLUB')]
-    public function delete(AccountDeletionService $accountDeletionService): JsonResponse
+    public function delete(AccountDeletionService $accountDeletionService, LoggerInterface $logger): JsonResponse
     {
         /** @var User $user */
         $user = $this->getUser();
 
         try {
             $accountDeletionService->deleteAccount($user);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $logger->error('Account deletion failed', ['userId' => (string) $user->getId(), 'exception' => $e]);
             return $this->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 

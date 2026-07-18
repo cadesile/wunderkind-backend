@@ -119,4 +119,19 @@ class AccountDeletionServiceTest extends KernelTestCase
         $this->assertNull($this->em->find(Club::class, $idA));
         $this->assertNull($this->em->find(Club::class, $idB));
     }
+
+    public function testDeletesUserWithNoClubs(): void
+    {
+        $user = new User('no-clubs-' . uniqid() . '@example.com');
+        $user->setPassword('x');
+        $user->setRoles([User::ROLE_CLUB]);
+        $this->em->persist($user);
+        $this->em->flush();
+        $userId = $user->getId();
+
+        self::getContainer()->get(AccountDeletionService::class)->deleteAccount($user);
+        $this->em->clear();
+
+        $this->assertNull($this->em->find(User::class, $userId));
+    }
 }

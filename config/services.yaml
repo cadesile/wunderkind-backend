@@ -33,12 +33,6 @@ services:
         arguments:
             $socialTokenEncryptionKey: '%env(SOCIAL_TOKEN_ENCRYPTION_KEY)%'
 
-    # Not yet wired into a controller (account-delete endpoint lands in a later task), so the
-    # container's unused-service removal pass would otherwise strip it — needed for direct
-    # retrieval in tests and, soon, in AccountController.
-    App\Service\AccountDeletionService:
-        public: true
-
     App\Controller\Admin\SocialAuthController:
         arguments:
             $facebookAppId: '%env(FACEBOOK_APP_ID)%'
