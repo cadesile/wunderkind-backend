@@ -65,22 +65,28 @@ Then, once every club's blocking dependents are gone:
 Use `$em->wrapInTransaction(fn () => ...)` (or begin/commit/rollback) so any failure
 rolls the whole thing back.
 
-### Completeness guard (implementation step)
+### Completeness guard — verified against the live schema
 
-The blocking-dependent list above was derived by reading the entities. Before
-finalizing the service, verify it against the **authoritative** schema — every FK
-whose referenced table is `club` (and `user`) and its `delete_rule`:
+Every FK referencing `club`/`user` and its `delete_rule` (from `information_schema`):
 
-```sql
-SELECT tc.table_name, kcu.column_name, rc.delete_rule
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
-WHERE tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name IN ('club_id','user_id');
-```
+| Table | Column | delete_rule | Handled by |
+|---|---|---|---|
+| `investor` | club_id | NO ACTION | **step 1 DQL** |
+| `sponsor` | club_id | NO ACTION | **step 1 DQL** |
+| `match_result` | club_id | NO ACTION | **step 1 DQL** |
+| `season_record` | club_id | NO ACTION | **step 1 DQL** |
+| `season_snapshot` | club_id | NO ACTION | **step 1 DQL** |
+| `sync_record` | club_id | NO ACTION | ORM `cascade: remove` (deleted before club) |
+| `leaderboard_entry` | club_id | NO ACTION | ORM `cascade: remove` |
+| `inbox_message` | club_id | CASCADE | DB + ORM cascade |
+| `transfer` | club_id | SET NULL | DB (history retained) |
+| `club` | user_id | NO ACTION | ORM `User.clubs` `cascade: remove` |
+| `email_verification` | user_id | CASCADE | DB cascade (auto) |
 
-Any FK with `delete_rule = NO ACTION`/`RESTRICT` that isn't ORM-cascaded must be
-added to step 1. (Run once the command classifier is available.)
+`season_ratings_snapshot` has a **non-FK** `club_id` string column (not in the list
+above) → included in step 1 for data cleanliness. The five NO-ACTION, non-cascaded
+club dependents in step 1 are confirmed complete; everything else is handled by ORM
+cascade, DB cascade, or SET NULL via `em->remove($user)`.
 
 ## Token behaviour
 
