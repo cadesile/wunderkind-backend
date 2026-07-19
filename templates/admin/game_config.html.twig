@@ -1162,6 +1162,13 @@
                                    min="1" class="form-control">
                             <div class="form-text">Multiplier used to calculate stadium capacity from fan base. Default: 100</div>
                         </div>
+                        <div class="col-md-3">
+                            <label for="seasonTicketHolderPercent" class="form-label fw-semibold small">Season Ticket Holders %</label>
+                            <input type="number" id="seasonTicketHolderPercent" name="seasonTicketHolderPercent"
+                                   value="{{ config.seasonTicketHolderPercent }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Percentage of matchday attendance made up of season-ticket holders (0–100). Default: 60</div>
+                        </div>
                     </div>
                 </div>
             </div>

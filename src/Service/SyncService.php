@@ -275,6 +275,7 @@ class SyncService
             'leaguePlayerAbilityRanges'     => $gameConfig->getLeaguePlayerAbilityRanges(),
             'managerDividendPercent'        => $gameConfig->getManagerDividendPercent(),
             'transferBudgetPercent'         => $gameConfig->getTransferBudgetPercent(),
+            'seasonTicketHolderPercent'     => $gameConfig->getSeasonTicketHolderPercent(),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -340,6 +341,7 @@ class SyncService
             'leaguePlayerAbilityRanges'     => [],
             'managerDividendPercent'        => 5.0,
             'transferBudgetPercent'         => 20.0,
+            'seasonTicketHolderPercent'     => 60,
         ];
 
         $facilityTemplates = array_map(

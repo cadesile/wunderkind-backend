@@ -153,6 +153,7 @@ class GameConfigController extends AbstractController
 
             // Capacity calculation
             'capacityCalculation' => $config->getCapacityCalculation(),
+            'seasonTicketHolderPercent' => $config->getSeasonTicketHolderPercent(),
 
             // Cards & Discipline
             'yellowCardBaseChance'            => $config->getYellowCardBaseChance(),

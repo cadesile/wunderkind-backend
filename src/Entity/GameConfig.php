@@ -1363,6 +1363,18 @@ class GameConfig
     public function getCapacityCalculation(): int { return $this->capacityCalculation; }
     public function setCapacityCalculation(int $v): static { $this->capacityCalculation = max(1, $v); return $this; }
 
+    // ── Season Ticket Holders (Club Development) ──────────────────────────
+
+    /**
+     * Percentage of matchday attendance made up of season-ticket holders.
+     * Range 0–100. Default: 60
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 60, 'unsigned' => true])]
+    private int $seasonTicketHolderPercent = 60;
+
+    public function getSeasonTicketHolderPercent(): int { return $this->seasonTicketHolderPercent; }
+    public function setSeasonTicketHolderPercent(int $v): static { $this->seasonTicketHolderPercent = max(0, min(100, $v)); return $this; }
+
     // ── Manager Dividend & Transfer Budget ───────────────────────────────────
 
     /** Percentage of season profit paid to the manager as a personal dividend at financial year end. Default: 5.0 */

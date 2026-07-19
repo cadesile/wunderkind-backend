@@ -321,6 +321,7 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreSiblingMoralePenalty((int) $request->request->get('guardianIgnoreSiblingMoralePenalty', 5));
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
         $config->setNonMatchFacilityIncomePercent((int) $request->request->get('nonMatchFacilityIncomePercent', 0));
+        $config->setSeasonTicketHolderPercent((int) $request->request->get('seasonTicketHolderPercent', 60));
 
         // Facility construction
         $config->setConstructionTimeMultiplier((float) $request->request->get('constructionTimeMultiplier', 1.0));
