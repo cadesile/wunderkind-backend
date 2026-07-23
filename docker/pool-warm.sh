@@ -7,7 +7,10 @@
 
 COUNTRIES="EN IT DE ES BR AR NL FR PT NG GH JP KR SE DK IE CI SN CN"
 CONSOLE=/var/www/html/bin/console
-PHP="php -d memory_limit=256M"
+# Run as www-data (the php-fpm runtime user) — crond runs this as root by default,
+# and a root-run PHP process would create new var/cache/prod entries as root,
+# which php-fpm workers then can't write to.
+PHP="su-exec www-data php -d memory_limit=256M"
 
 log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*"; }
 

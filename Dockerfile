@@ -8,6 +8,7 @@ RUN apk add --no-cache \
     icu-dev \
     oniguruma-dev \
     supervisor \
+    su-exec \
     && docker-php-ext-install \
         pdo \
         pdo_pgsql \
