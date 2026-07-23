@@ -128,6 +128,26 @@ class Club
     #[ORM\Column(enumType: Formation::class, options: ['default' => '4-4-2'])]
     private Formation $formation = Formation::F_442;
 
+    /** Latest fan base size snapshot from sync attendance data */
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    private int $fanCount = 0;
+
+    /** Latest fan sentiment snapshot (signed range, e.g. -100..100) */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $fanSentiment = 0;
+
+    /** Latest fan morale snapshot (0-100) */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 0])]
+    private int $fanMorale = 0;
+
+    /** Most recent non-null weekly attendance figure reported by the client */
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    private int $lastWeeklyAttendance = 0;
+
+    /** Running accumulator of weekly attendance across the season — source for the 'fanatics' leaderboard */
+    #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
+    private int $totalSeasonAttendance = 0;
+
     public function __construct(string $name, User $user)
     {
         $this->id                 = new UuidV7();
@@ -272,4 +292,30 @@ class Club
 
     public function getFormation(): Formation { return $this->formation; }
     public function setFormation(Formation $v): static { $this->formation = $v; return $this; }
+
+    public function getFanCount(): int { return $this->fanCount; }
+    public function getFanSentiment(): int { return $this->fanSentiment; }
+    public function getFanMorale(): int { return $this->fanMorale; }
+    public function getLastWeeklyAttendance(): int { return $this->lastWeeklyAttendance; }
+    public function getTotalSeasonAttendance(): int { return $this->totalSeasonAttendance; }
+
+    /**
+     * Applies the latest attendance/fan snapshot from a sync payload.
+     * fanCount/fanSentiment/fanMorale are authoritative snapshots (latest wins, like reputation/balance).
+     * weeklyAttendance, when present, also accumulates into the season total that backs the 'fanatics' leaderboard.
+     *
+     * @param array{fanCount?: int, fanSentiment?: int, fanMorale?: int, weeklyAttendance?: int|null} $attendance
+     */
+    public function applyAttendanceSnapshot(array $attendance): void
+    {
+        $this->fanCount     = (int) ($attendance['fanCount'] ?? $this->fanCount);
+        $this->fanSentiment = (int) ($attendance['fanSentiment'] ?? $this->fanSentiment);
+        $this->fanMorale    = (int) ($attendance['fanMorale'] ?? $this->fanMorale);
+
+        $weeklyAttendance = $attendance['weeklyAttendance'] ?? null;
+        if ($weeklyAttendance !== null) {
+            $this->lastWeeklyAttendance = (int) $weeklyAttendance;
+            $this->totalSeasonAttendance += (int) $weeklyAttendance;
+        }
+    }
 }

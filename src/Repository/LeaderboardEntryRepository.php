@@ -15,6 +15,21 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
         parent::__construct($registry, LeaderboardEntry::class);
     }
 
+    /** All entries for a category/period, ordered by score descending (full result — used for ranking passes and cache hydration). */
+    public function findAllOrderedByScore(LeaderboardCategory $category, string $period): array
+    {
+        return $this->createQueryBuilder('e')
+            ->join('e.club', 'c')
+            ->addSelect('c')
+            ->where('e.category = :category')
+            ->andWhere('e.period = :period')
+            ->setParameter('category', $category)
+            ->setParameter('period', $period)
+            ->orderBy('e.score', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return LeaderboardEntry[] */
     public function findTopByPeriod(LeaderboardCategory $category, string $period, int $limit = 50): array
     {

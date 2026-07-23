@@ -1,0 +1,64 @@
+# Project Structure
+
+```
+bin/
+config/
+  jwt/
+  packages/
+  routes/
+docker/
+docs/
+  api/
+  superpowers/
+    plans/
+    specs/
+migrations/
+  archive/
+public/
+  assets/
+  images/
+    trophies/
+  screenshots/
+    buildmyclub/
+scripts/
+  global-context-generator/
+src/
+  ApiResource/
+  Command/
+  Controller/
+    Admin/
+    Api/
+  Doctrine/
+    Function/
+  Dto/
+  Entity/
+  Enum/
+    Appearance/
+  EventSubscriber/
+  Exception/
+  Form/
+    Type/
+  Repository/
+  Security/
+  Service/
+    Appearance/
+templates/
+  admin/
+    field/
+    form/
+  bundles/
+    EasyAdminBundle/
+tests/
+  Command/
+  Controller/
+    Admin/
+    Api/
+  Dto/
+  Entity/
+  Enum/
+  Form/
+  Repository/
+  Service/
+    Appearance/
+translations/
+```

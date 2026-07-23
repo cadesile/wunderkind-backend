@@ -17,12 +17,14 @@ use App\Enum\LeaderboardCategory;
 use App\Enum\PlayerStatus;
 use App\Enum\StaffRole;
 use App\Enum\TransferType;
+use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
+use App\Repository\PlayerCareerStatRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -42,6 +44,8 @@ class SyncService
         private readonly LeagueRepository               $leagueRepository,
         private readonly TacticalAdvantageRepository    $tacticalAdvantageRepository,
         private readonly SyncRecordRepository           $syncRecordRepository,
+        private readonly ClubFacilityRepository         $clubFacilityRepository,
+        private readonly PlayerCareerStatRepository     $playerCareerStatRepository,
         private readonly LoggerInterface                 $logger,
     ) {}
 
@@ -149,14 +153,38 @@ class SyncService
             } catch (\Exception) { /* malformed timestamp — ignore */ }
         }
 
+        // Fan/attendance snapshot — backs the 'fanatics' leaderboard.
+        $club->applyAttendanceSnapshot($request->attendance);
+
+        // Facility levels — backs the 'empire_index' leaderboard (computed by LeaderboardCalculationService, not here).
+        if (!empty($request->facilityLevels)) {
+            $this->processFacilityLevels($club, $request->facilityLevels);
+        }
+
+        // Player season stats — back the 'golden_boot'/'playmaker' leaderboards (computed by LeaderboardCalculationService, not here).
+        if (!empty($request->playerStats)) {
+            $this->processPlayerCareerStats($club, $request->playerStats);
+        }
+
         // ── Leaderboard upserts ───────────────────────────────────────────────
+        // Only the "cheap" categories (plain Club scalar reads) are upserted on every
+        // sync. empire_index/golden_boot/playmaker require cross-table aggregation and
+        // are computed only by LeaderboardCalculationService (CLI command / cache-miss path).
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
-        foreach ([LeaderboardCategory::CAREER_EARNINGS, LeaderboardCategory::CLUB_REPUTATION, LeaderboardCategory::HALL_OF_FAME] as $category) {
+        $cheapCategories = [
+            LeaderboardCategory::CAREER_EARNINGS,
+            LeaderboardCategory::CLUB_REPUTATION,
+            LeaderboardCategory::HALL_OF_FAME,
+            LeaderboardCategory::FANATICS,
+        ];
+
+        foreach ($cheapCategories as $category) {
             $score = match ($category) {
                 LeaderboardCategory::CAREER_EARNINGS    => $club->getTotalCareerEarnings(),
                 LeaderboardCategory::CLUB_REPUTATION => $club->getReputation(),
                 LeaderboardCategory::HALL_OF_FAME       => $club->getHallOfFamePoints(),
+                LeaderboardCategory::FANATICS            => $club->getTotalSeasonAttendance(),
             };
 
             foreach (['all-time', $isoWeek] as $period) {
@@ -433,6 +461,45 @@ class SyncService
             if (isset($data['height']))    { $player->setHeight((int) $data['height']); }
             if (isset($data['weight']))    { $player->setWeight((int) $data['weight']); }
             if (isset($data['morale']))    { $player->setMorale((int) $data['morale']); }
+        }
+    }
+
+    /**
+     * Upserts ClubFacility rows from the client's facility-level snapshot.
+     *
+     * @param array<string, int> $facilityLevels keyed by facility slug
+     */
+    private function processFacilityLevels(Club $club, array $facilityLevels): void
+    {
+        foreach ($facilityLevels as $slug => $level) {
+            $facility = $this->clubFacilityRepository->findOrCreate($club, (string) $slug);
+            $facility->setLevel((int) $level);
+        }
+    }
+
+    /**
+     * Upserts PlayerCareerStat rows from the client's season-to-date player stats.
+     * playerStats is a cumulative snapshot (not a per-tick delta), so this overwrites
+     * rather than accumulates — replaying a sync can't double-count.
+     *
+     * @param array<array{playerId: string, playerName?: string, appearances: int, goals: int, assists: int, averageRating: float}> $playerStats
+     */
+    private function processPlayerCareerStats(Club $club, array $playerStats): void
+    {
+        foreach ($playerStats as $data) {
+            if (empty($data['playerId'])) {
+                continue;
+            }
+
+            $playerName = $data['playerName'] ?? $data['playerId'];
+
+            $stat = $this->playerCareerStatRepository->findOrCreate($club, (string) $data['playerId'], (string) $playerName);
+            $stat->applySnapshot(
+                (int) ($data['appearances'] ?? 0),
+                (int) ($data['goals'] ?? 0),
+                (int) ($data['assists'] ?? 0),
+                (string) $playerName,
+            );
         }
     }
 

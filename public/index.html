@@ -1356,6 +1356,149 @@
         @media (max-width: 900px) {
             .lb-grid-2 { grid-template-columns: 1fr; }
         }
+
+        /* ════════════════════════════════
+           GLOBAL LEADERBOARDS SECTION
+        ════════════════════════════════ */
+        .lbg-tabs {
+            display: flex;
+            gap: 8px;
+            margin: 32px 0 0;
+            flex-wrap: wrap;
+        }
+        .lbg-tab {
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 10px 16px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            background: var(--card);
+            transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .lbg-tab:hover { border-color: var(--mint); color: var(--text); }
+        .lbg-tab:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+        .lbg-tab.active { border-color: var(--gold); color: var(--gold); background: var(--card-hi); }
+
+        .lbg-panel {
+            border: 1px solid var(--border);
+            background: var(--card);
+            margin-top: 24px;
+            min-height: 0;
+        }
+        .lbg-panel-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+        .lbg-panel-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: var(--gold);
+            line-height: 1.6;
+        }
+        .lbg-panel-sub {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .lbg-list { list-style: none; min-height: 220px; }
+        .lbg-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+        }
+        .lbg-row:first-child { border-top: none; }
+        .lbg-row-rank {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: var(--gold);
+            min-width: 28px;
+        }
+        .lbg-row.rank-1 .lbg-row-rank { color: var(--gold); text-shadow: 0 0 10px rgba(232,207,89,.5); }
+        .lbg-row.rank-2 .lbg-row-rank { color: #cfd6c9; }
+        .lbg-row.rank-3 .lbg-row-rank { color: #c98a4b; }
+        .lbg-row-main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .lbg-row-name {
+            font-family: 'VT323', monospace;
+            font-size: 19px;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .lbg-row-tag {
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: var(--mint);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .lbg-row-value {
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--mint);
+            white-space: nowrap;
+        }
+        .lbg-empty, .lbg-error {
+            font-family: 'VT323', monospace;
+            font-size: 18px;
+            color: var(--text-muted);
+            padding: 32px 24px;
+            text-align: center;
+        }
+        .lbg-error { color: var(--red); }
+
+        .lbg-skel-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+        }
+        .lbg-skel-row:first-child { border-top: none; }
+        .lbg-skel {
+            background: var(--card-hi);
+            animation: lbg-pulse 1.3s ease-in-out infinite;
+        }
+        .lbg-skel-rank { width: 20px; height: 12px; }
+        .lbg-skel-main { flex: 1; height: 14px; max-width: 220px; }
+        .lbg-skel-value { width: 48px; height: 14px; }
+        @keyframes lbg-pulse {
+            0%, 100% { opacity: 0.35; }
+            50%      { opacity: 0.7; }
+        }
+
+        @media (max-width: 600px) {
+            .lbg-row-value { font-size: 12px; }
+            .lbg-panel-head { padding: 16px 20px; }
+            .lbg-row, .lbg-skel-row { padding: 10px 20px; gap: 12px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .lbg-skel { animation: none; opacity: 0.5; }
+        }
     </style>
 </head>
 <body>
@@ -1371,6 +1514,7 @@
             <li><a href="#features">Features</a></li>
             <li><a href="#depth">The Sim</a></li>
             <li><a href="#leagues">Leagues</a></li>
+            <li><a href="#leaderboards">Leaderboards</a></li>
         </ul>
         <div class="nav-actions">
             <span class="social-links">
@@ -1398,7 +1542,7 @@
                     infrastructure, and manage a living squad where every player has an
                     8-trait personality matrix. Market entities are consumed and deleted
                     on acquire — real scarcity, no restocks. Sync weekly with Integrity
-                    Validation and compete across 6 global leaderboards.
+                    Validation and compete across 7 global leaderboards.
                 </p>
                 <div class="hero-actions">
                     <a href="#download" id="hero-android-btn" class="btn btn-gold" style="display:none">Download (Android)</a>
@@ -1846,7 +1990,7 @@
             <span class="stat-lbl">NPC clubs simulated across 8 tiers</span>
         </div>
         <div class="stat-block">
-            <span class="stat-num">6</span>
+            <span class="stat-num">7</span>
             <span class="stat-lbl">Global leaderboard categories</span>
         </div>
         <div class="stat-block">
@@ -2097,7 +2241,7 @@
     <div class="wrap">
         <div class="section-label">How it Works</div>
         <h2 class="section-title">One tap. One week. Infinite consequences.</h2>
-        <p class="section-sub">The Weekly Tick engine runs entirely on-device — no internet required mid-game. When you're ready, Integrity Sync validates your progress and updates your position across 6 global leaderboards.</p>
+        <p class="section-sub">The Weekly Tick engine runs entirely on-device — no internet required mid-game. When you're ready, Integrity Sync validates your progress and updates your position across 7 global leaderboards.</p>
 
         <div class="tick-grid">
             <div class="tick-step" data-num="01">
@@ -2114,7 +2258,7 @@
             </div>
             <div class="tick-step" data-num="04">
                 <div class="tick-step-title">Sync & Compete</div>
-                <p class="tick-step-text">Integrity Sync submits your week to the server — rollbacks rejected, progress validated. Your position across 6 global leaderboard categories updates instantly. Climb the pyramid. Win a title. Get relegated. Your record is permanent either way.</p>
+                <p class="tick-step-text">Integrity Sync submits your week to the server — rollbacks rejected, progress validated. Your position across 7 global leaderboard categories updates instantly. Climb the pyramid. Win a title. Get relegated. Your record is permanent either way.</p>
             </div>
         </div>
     </div>
@@ -2244,6 +2388,39 @@
                 <div class="lb-card-sub">titles won</div>
                 <ul class="lb-list" id="cs-list-trophies"><li class="lb-loading">Loading…</li></ul>
             </div>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════ GLOBAL LEADERBOARDS ═══════════════════════════════ -->
+<section id="leaderboards">
+    <div class="wrap">
+        <div class="section-label">Rankings</div>
+        <h2 class="section-title">Global leaderboards.</h2>
+        <p class="section-sub">Every club in the pyramid, ranked. Reputation, silverware, top scorers, empire-building — 7 categories, updated live from Integrity Sync.</p>
+
+        <div class="lbg-tabs" id="lbg-tabs" role="tablist" aria-label="Leaderboard category">
+            <div class="lbg-tab active" data-category="hall_of_fame"    role="tab" aria-selected="true"  tabindex="0">Hall of Fame</div>
+            <div class="lbg-tab"        data-category="club_reputation" role="tab" aria-selected="false" tabindex="-1">Reputation</div>
+            <div class="lbg-tab"        data-category="career_earnings" role="tab" aria-selected="false" tabindex="-1">Career Earnings</div>
+            <div class="lbg-tab"        data-category="golden_boot"     role="tab" aria-selected="false" tabindex="-1">Golden Boot</div>
+            <div class="lbg-tab"        data-category="playmaker"       role="tab" aria-selected="false" tabindex="-1">Playmaker</div>
+            <div class="lbg-tab"        data-category="empire_index"    role="tab" aria-selected="false" tabindex="-1">Empire Index</div>
+            <div class="lbg-tab"        data-category="fanatics"        role="tab" aria-selected="false" tabindex="-1">Fanatics</div>
+        </div>
+
+        <div class="lbg-panel">
+            <div class="lbg-panel-head">
+                <div class="lbg-panel-title" id="lbg-panel-title">HALL OF FAME</div>
+                <div class="lbg-panel-sub" id="lbg-panel-sub">all-time · HoF points</div>
+            </div>
+            <ul class="lbg-list" id="lbg-list" aria-live="polite">
+                <li class="lbg-skel-row"><span class="lbg-skel lbg-skel-rank"></span><span class="lbg-skel lbg-skel-main"></span><span class="lbg-skel lbg-skel-value"></span></li>
+                <li class="lbg-skel-row"><span class="lbg-skel lbg-skel-rank"></span><span class="lbg-skel lbg-skel-main"></span><span class="lbg-skel lbg-skel-value"></span></li>
+                <li class="lbg-skel-row"><span class="lbg-skel lbg-skel-rank"></span><span class="lbg-skel lbg-skel-main"></span><span class="lbg-skel lbg-skel-value"></span></li>
+            </ul>
         </div>
     </div>
 </section>
@@ -2744,6 +2921,145 @@ function openBetaModal() {
     });
 
     loadPeriod('week');
+}());
+</script>
+
+<script>
+(function () {
+    var tabsEl = document.getElementById('lbg-tabs');
+    if (!tabsEl) return;
+
+    var listEl  = document.getElementById('lbg-list');
+    var titleEl = document.getElementById('lbg-panel-title');
+    var subEl   = document.getElementById('lbg-panel-sub');
+    var tabs    = Array.prototype.slice.call(tabsEl.querySelectorAll('.lbg-tab'));
+
+    var CATEGORIES = {
+        hall_of_fame:     { label: 'Hall of Fame',     unit: 'HoF points',        format: 'int' },
+        club_reputation:  { label: 'Reputation',       unit: 'reputation points', format: 'int' },
+        career_earnings:  { label: 'Career Earnings',  unit: 'lifetime earnings', format: 'currency' },
+        golden_boot:      { label: 'Golden Boot',      unit: 'goals · top scorer',   format: 'int' },
+        playmaker:        { label: 'Playmaker',        unit: 'assists · top provider', format: 'int' },
+        empire_index:     { label: 'Empire Index',     unit: 'facility levels',   format: 'int' },
+        fanatics:         { label: 'Fanatics',         unit: 'season attendance', format: 'int' },
+    };
+
+    var PAGE_SIZE  = 10;
+    var loaded     = {};   // category -> true once fetched at least once
+    var activeReq  = 0;    // guards against out-of-order responses when switching tabs fast
+    var hasBooted  = false;
+
+    function formatValue(value, format) {
+        if (format === 'currency') {
+            return '£' + Math.round(value / 100).toLocaleString('en-GB');
+        }
+        return Number(value).toLocaleString('en-GB');
+    }
+
+    function skeletonRows() {
+        var html = '';
+        for (var i = 0; i < 3; i++) {
+            html += '<li class="lbg-skel-row">' +
+                '<span class="lbg-skel lbg-skel-rank"></span>' +
+                '<span class="lbg-skel lbg-skel-main"></span>' +
+                '<span class="lbg-skel lbg-skel-value"></span></li>';
+        }
+        return html;
+    }
+
+    function renderEntries(entries, format) {
+        listEl.innerHTML = '';
+        if (!entries.length) {
+            listEl.innerHTML = '<li class="lbg-empty">No clubs ranked yet — be the first</li>';
+            return;
+        }
+        entries.forEach(function (entry) {
+            var li = document.createElement('li');
+            li.className = 'lbg-row rank-' + entry.rank;
+            li.innerHTML =
+                '<span class="lbg-row-rank">' + String(entry.rank).padStart(2, '0') + '</span>' +
+                '<span class="lbg-row-main">' +
+                    '<span class="lbg-row-name"></span>' +
+                    (entry.displayLabel ? '<span class="lbg-row-tag"></span>' : '') +
+                '</span>' +
+                '<span class="lbg-row-value"></span>';
+            li.querySelector('.lbg-row-name').textContent = entry.clubName;
+            if (entry.displayLabel) {
+                li.querySelector('.lbg-row-tag').textContent = entry.displayLabel;
+            }
+            li.querySelector('.lbg-row-value').textContent = formatValue(entry.score, format);
+            listEl.appendChild(li);
+        });
+    }
+
+    function loadCategory(category) {
+        var meta = CATEGORIES[category];
+        if (!meta) return;
+
+        titleEl.textContent = meta.label.toUpperCase();
+        subEl.textContent   = 'all-time · ' + meta.unit;
+        listEl.innerHTML    = skeletonRows();
+
+        var requestId = ++activeReq;
+
+        fetch('/api/leaderboard/' + encodeURIComponent(category) + '?period=all-time&pageSize=' + PAGE_SIZE)
+            .then(function (res) {
+                if (!res.ok) throw new Error('bad response');
+                return res.json();
+            })
+            .then(function (data) {
+                if (requestId !== activeReq) return; // a newer tab switch superseded this request
+                loaded[category] = true;
+                renderEntries(data.entries || [], meta.format);
+            })
+            .catch(function () {
+                if (requestId !== activeReq) return;
+                listEl.innerHTML = '<li class="lbg-error">Leaderboard unavailable — try again shortly</li>';
+            });
+    }
+
+    function activateTab(tab, focusTab) {
+        tabs.forEach(function (t) {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+            t.setAttribute('tabindex', '-1');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        tab.setAttribute('tabindex', '0');
+        if (focusTab) tab.focus();
+        loadCategory(tab.dataset.category);
+    }
+
+    tabs.forEach(function (tab, i) {
+        tab.addEventListener('click', function () { activateTab(tab, false); });
+        tab.addEventListener('keydown', function (e) {
+            var targetIndex = null;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') targetIndex = (i + 1) % tabs.length;
+            if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   targetIndex = (i - 1 + tabs.length) % tabs.length;
+            if (targetIndex !== null) {
+                e.preventDefault();
+                activateTab(tabs[targetIndex], true);
+            }
+        });
+    });
+
+    // Lazy-load: only fetch once the section actually scrolls into view.
+    var section = document.getElementById('leaderboards');
+    if ('IntersectionObserver' in window && section) {
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting && !hasBooted) {
+                    hasBooted = true;
+                    loadCategory('hall_of_fame');
+                    observer.disconnect();
+                }
+            });
+        }, { rootMargin: '200px' });
+        observer.observe(section);
+    } else {
+        loadCategory('hall_of_fame');
+    }
 }());
 </script>
 </body>

@@ -218,6 +218,9 @@ class NarrativeImportExportService
         $template->setSortOrder((int) ($row['sortOrder'] ?? 0));
         $template->setIsActive((bool) ($row['isActive'] ?? true));
         $template->setGameplayEffects((array) ($row['gameplayEffects'] ?? []));
+        if (array_key_exists('imagePath', $row)) {
+            $template->setImagePath($row['imagePath'] !== null ? basename((string) $row['imagePath']) : null);
+        }
         $template->touch();
 
         return $created;

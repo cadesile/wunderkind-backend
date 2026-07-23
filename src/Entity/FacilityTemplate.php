@@ -95,6 +95,10 @@ class FacilityTemplate
     #[ORM\Column(options: ['default' => true])]
     private bool $isActive = true;
 
+    /** Path to the facility image, relative to /uploads/facilities, e.g. 'technical_zone.png'. Null if none uploaded. */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $imagePath = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $updatedAt;
 
@@ -181,6 +185,9 @@ class FacilityTemplate
     public function isActive(): bool { return $this->isActive; }
     public function setIsActive(bool $isActive): void { $this->isActive = $isActive; }
 
+    public function getImagePath(): ?string { return $this->imagePath; }
+    public function setImagePath(?string $imagePath): void { $this->imagePath = $imagePath; }
+
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
     public function setUpdatedAt(\DateTimeImmutable $updatedAt): void { $this->updatedAt = $updatedAt; }
 
@@ -204,6 +211,7 @@ class FacilityTemplate
             'gameplayEffects'          => $this->gameplayEffects,
             'sortOrder'                => $this->sortOrder,
             'isActive'                 => $this->isActive,
+            'imagePath'                => $this->imagePath !== null ? '/uploads/facilities/' . $this->imagePath : null,
         ];
     }
 }

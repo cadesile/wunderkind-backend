@@ -22,3 +22,7 @@
 
 # Superpowers brainstorming companion artifacts
 .superpowers/
+
+# Uploaded facility images (runtime data, not source)
+/public/uploads/facilities/*
+!/public/uploads/facilities/.gitkeep

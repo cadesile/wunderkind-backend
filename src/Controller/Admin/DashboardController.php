@@ -1332,6 +1332,28 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         return $this->redirectToRoute('admin_settings');
     }
 
+    #[Route('/admin/developer-tools/generate-leaderboards', name: 'admin_generate_leaderboards', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function generateLeaderboards(Request $request, KernelInterface $kernel): Response
+    {
+        if (!$this->isCsrfTokenValid('generate_leaderboards', $request->request->get('_csrf_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
+        }
+
+        $application = new Application($kernel);
+        $application->setAutoExit(false);
+
+        $input  = new ArrayInput(['command' => 'app:leaderboards:generate']);
+        $output = new BufferedOutput();
+        $application->run($input, $output);
+
+        $this->addFlash('success', 'Leaderboard generation executed.');
+        $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
+    }
+
     #[Route('/admin/developer-tools/reset-database', name: 'admin_reset_database', methods: ['GET'])]
     #[IsGranted('ROLE_ADMIN')]
     public function resetDatabase(): Response

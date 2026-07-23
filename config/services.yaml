@@ -8,6 +8,7 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     app.club_starting_balance: '%env(int:CLUB_STARTING_BALANCE)%'
+    app.leaderboard_cache_ttl: '%env(int:LEADERBOARD_CACHE_TTL)%'
 
 services:
     # default configuration for services in *this* file
@@ -45,3 +46,8 @@ services:
     App\Security\VerificationAwareAuthenticationSuccessHandler:
         arguments:
             $decorated: '@lexik_jwt_authentication.handler.authentication_success'
+
+    App\Service\LeaderboardCalculationService:
+        arguments:
+            $leaderboardCache: '@app.leaderboard_cache'
+            $leaderboardCacheTtl: '%app.leaderboard_cache_ttl%'

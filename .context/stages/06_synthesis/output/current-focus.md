@@ -1,0 +1,7 @@
+# Current Development Focus
+
+- Account deletion feature built end-to-end this session: design doc (`3d5bba7 docs: design for account deletion endpoint`), FK verification against live schema (`dd8fff7 docs: verify account-deletion FK teardown against live schema`), implementation plan (`402c052 docs: implementation plan for account deletion endpoint`), service (`9ff7324 feat: AccountDeletionService — delete user, clubs, and all club dependents`), endpoint (`5e0bd89 feat: POST /api/account/delete endpoint`), and docs (`d4d0c86 docs: document POST /api/account/delete; cover LeaderboardEntry deletion`), touching `src/Controller/Api/AccountController.php`, `docs/api/account-delete.md`, `tests/Controller/Api/AccountControllerTest.php`, and `tests/Service/AccountDeletionServiceTest.php`.
+- Account deletion hardening follow-up: `63807e5 refactor: drop redundant service registration, log deletion failures, cover zero-club user` and `759a64d docs: frontend API spec for POST /api/account/delete`, with a service registration change in `config/services.yaml`.
+- Game config work: `1d4eb4a added season ticket 80% game config`, touching `src/Entity/GameConfig.php`, `src/Controller/Api/GameConfigController.php`, and `templates/admin/game_config.html.twig`.
+- Schema migration added for account deletion: `migrations/Version20260719000000.php`.
+- World-pack agent balancing fix: `4fc2b96 fix: bound world-pack agents to a players-per-agent ratio`, touching `src/Service/SyncService.php`.

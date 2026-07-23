@@ -69,7 +69,7 @@ security:
         - { path: ^/api/club/name-options,        roles: PUBLIC_ACCESS }
         - { path: ^/api/club/foreign,            roles: PUBLIC_ACCESS }
         - { path: ^/api/scout/foreign-clubs,     roles: PUBLIC_ACCESS }
-        - { path: ^/api/leaderboard/transfers, roles: PUBLIC_ACCESS }
+        - { path: ^/api/leaderboard, roles: PUBLIC_ACCESS }
         - { path: ^/api/stats,                 roles: PUBLIC_ACCESS }
         - { path: ^/api/app-links,             roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,           roles: PUBLIC_ACCESS }

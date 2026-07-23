@@ -1,0 +1,274 @@
+{
+  "version": 1,
+  "generated_at": "2026-07-21T21:51:10.190Z",
+  "generator_version": "2.0.0",
+  "generator_commit": "514a55f",
+  "project": {
+    "name": "wunderkind-backend",
+    "stack": "symfony 8.0 · PHP 8.4 · postgres:16"
+  },
+  "parsed_markdown": {
+    ".claude/skills/ui-ux-pro-max/SKILL.md": {
+      "sha256": "07b87b8998b51b9c234df031e31aa2a85cf86abeaa05efd984c2f66ca7f06d68",
+      "mtime": "2026-03-25T23:51:30.359Z",
+      "summary": "stages/05_documentation/output/summaries/claude-skills-ui-ux-pro-max-skill.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "CLAUDE.md": {
+      "sha256": "dd7ddb961c1dce3025e703c289ea6827818a52562cc596d6735cb396a6345aad",
+      "mtime": "2026-07-21T14:15:25.659Z",
+      "summary": "stages/05_documentation/output/summaries/claude.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "README.md": {
+      "sha256": "acf62628374c07954c75138df47a3672292b01bb5c29f979df8958de8f364325",
+      "mtime": "2026-05-12T08:10:13.415Z",
+      "summary": "stages/05_documentation/output/summaries/readme.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/api/account-delete.md": {
+      "sha256": "9d70a83ae4e26b0c0aa1579966e419173eb4f6770b9d52c54502497ba49e2e18",
+      "mtime": "2026-07-18T09:40:04.125Z",
+      "summary": "stages/05_documentation/output/summaries/docs-api-account-delete.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/api/community-stats.md": {
+      "sha256": "a5151907102e602a34e0166f3c1975df6055a079e0f55b30111cd2b6840aae7b",
+      "mtime": "2026-07-05T13:48:14.630Z",
+      "summary": "stages/05_documentation/output/summaries/docs-api-community-stats.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/event-guide.md": {
+      "sha256": "2f5f1bbb293e4afcf2d54c5986327159b99f712353a9bd3abbaa174fff5b60af",
+      "mtime": "2026-03-24T13:56:53.566Z",
+      "summary": "stages/05_documentation/output/summaries/docs-event-guide.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/frontend-integration.md": {
+      "sha256": "67bb710265b29214c2f62d20963cf0578ad0da69fff17ffd03957f964732e5fb",
+      "mtime": "2026-04-19T17:44:43.124Z",
+      "summary": "stages/05_documentation/output/summaries/docs-frontend-integration.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/frontend-spec-player-physical-personality.md": {
+      "sha256": "b8c4fcd4762556672aa025af111a46c81597b9eae8c3f0da9dc843107ac65179",
+      "mtime": "2026-05-10T21:06:57.302Z",
+      "summary": "stages/05_documentation/output/summaries/docs-frontend-spec-player-physical-personality.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-04-14-npc-club-generation.md": {
+      "sha256": "15cd8c31a569645c7210e24a248b26dc24f5c667e59071a1e3d3642bc5ceafd7",
+      "mtime": "2026-04-17T22:51:14.851Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-04-14-npc-club-generation.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md": {
+      "sha256": "3be13e3b9bab50d118264508f6d06d1e9a98651512713c9cb863803deb8e6a06",
+      "mtime": "2026-04-19T10:39:04.593Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-04-18-admin-starter-config-league-ability-ranges.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-05-12-initialize-endpoint-redesign.md": {
+      "sha256": "655156cb0f271d50b05f1cd1827c27e4517adbd9a21ce9c72975fd605866adc4",
+      "mtime": "2026-05-12T21:40:26.496Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-05-12-initialize-endpoint-redesign.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-05-18-worldpack-cache-admin.md": {
+      "sha256": "fccceb39bfe61f486495849a8102f68e7a3ab9650aeb9c4b0ba561c6da542409",
+      "mtime": "2026-05-18T20:12:14.781Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-05-18-worldpack-cache-admin.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-06-08-beta-request-queue.md": {
+      "sha256": "32d99622b33a3c8cc8002cbd73661aed3929dd524572d720abd624debff6a08f",
+      "mtime": "2026-06-09T10:16:37.811Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-06-08-beta-request-queue.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-06-18-player-generation-pipeline.md": {
+      "sha256": "1fea86885ebf57c2c6273e54a6bbb47870e05e3f6f0d7cd027eeb270f119e660",
+      "mtime": "2026-06-18T22:49:55.225Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-06-18-player-generation-pipeline.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-06-21-club-init-pool-prewarm.md": {
+      "sha256": "320648a15ab9279d3e24199720ca300510ea851d43e0cccd90b542e6a5b2e0af",
+      "mtime": "2026-06-21T12:16:50.723Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-06-21-club-init-pool-prewarm.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-06-21-remove-player-staff-club-fk.md": {
+      "sha256": "b7dfa6e51e4bd85a109501d523701f9c13914ac62b63f841c833646767754910",
+      "mtime": "2026-06-21T13:47:21.416Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-06-21-remove-player-staff-club-fk.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-07-05-community-stats-landing-page.md": {
+      "sha256": "d2cadbd4f40051dc857fd0aaeaae90bfca5a479446b28a206c0825573c6dc028",
+      "mtime": "2026-07-05T13:48:14.631Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-07-05-community-stats-landing-page.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-07-05-social-post-templates-and-cron.md": {
+      "sha256": "a2cd7e0b08a368356c4265b0fb2233ab2d4c0fd006f32aeb707108cf1b1d6f71",
+      "mtime": "2026-07-05T21:39:12.673Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-07-05-social-post-templates-and-cron.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-07-06-club-name-options-canonical-source.md": {
+      "sha256": "19b3de5f31b8d2b8b0b10409cec0457ceb1d4d90b04140cc94730afc53554feb",
+      "mtime": "2026-07-06T14:49:08.985Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-07-06-club-name-options-canonical-source.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-07-13-backend-appearance.md": {
+      "sha256": "eabe2248cec85579326a1d53380d8ada6b21e9f19f649ad27acd23155cbc9f4d",
+      "mtime": "2026-07-13T19:14:47.530Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-07-13-backend-appearance.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/plans/2026-07-16-account-deletion-endpoint.md": {
+      "sha256": "6f7ddd1576f22ef15559ac232d5ad7deb0167788419d333ff8fa27ac244b3dff",
+      "mtime": "2026-07-18T09:04:27.566Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-07-16-account-deletion-endpoint.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-04-14-npc-club-generation-design.md": {
+      "sha256": "335130ddca7d6b0ddefe82e6e9b3be3e0b6795ffb98380d2b788846ea6d7ec27",
+      "mtime": "2026-04-13T23:16:55.572Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-04-14-npc-club-generation-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-05-12-initialize-endpoint-redesign.md": {
+      "sha256": "e875d27be3c10bdf3f0c3ef1f0be54d22b6f16558c75677dc97c17896f92b278",
+      "mtime": "2026-05-12T21:31:24.755Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-05-12-initialize-endpoint-redesign.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-06-18-player-generation-pipeline-design.md": {
+      "sha256": "74c5657c63b68b024406bff2ed0be20166484d2203fc9db19dfd60cbe7fddcd4",
+      "mtime": "2026-06-18T22:41:45.501Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-06-18-player-generation-pipeline-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-06-21-club-init-pool-prewarm-design.md": {
+      "sha256": "d3d2006fc264ccc20eac7535fec266b5584e389f2400bd854b6d9374c309a819",
+      "mtime": "2026-06-21T12:14:02.746Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-06-21-club-init-pool-prewarm-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-06-21-remove-player-staff-club-fk-design.md": {
+      "sha256": "27a045922d5c95b0ddf54f4d14f7452fd5e6b032d44b1ae3bcfa2c2a624b812d",
+      "mtime": "2026-06-21T13:22:37.238Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-06-21-remove-player-staff-club-fk-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-07-05-community-stats-landing-page-design.md": {
+      "sha256": "cff8485146081048650436ca9e37e42ba2fa559904657597326fe2d1a783e92c",
+      "mtime": "2026-07-05T13:48:14.632Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-07-05-community-stats-landing-page-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-07-06-club-name-options-canonical-source-design.md": {
+      "sha256": "fa0c57d4892f503d81eebda0d5d58515ecd142d79f779acf74716583891ffbf1",
+      "mtime": "2026-07-06T14:49:08.987Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-07-06-club-name-options-canonical-source-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-07-13-backend-appearance-design.md": {
+      "sha256": "8301cdde7a057035872afa3e64d75581552e57648f582f839ca0471c18a2c52a",
+      "mtime": "2026-07-13T19:08:14.412Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-07-13-backend-appearance-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/superpowers/specs/2026-07-16-account-deletion-endpoint-design.md": {
+      "sha256": "308bf8a1787d8b36cce9f77a83d67feee071d06da412db78faaa7a08f29219e5",
+      "mtime": "2026-07-18T08:55:38.730Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-07-16-account-deletion-endpoint-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/wunderkind-backend-context.md": {
+      "sha256": "69f0f94404f463aaea7e2ce910352ab83297271406309782feab276359965961",
+      "mtime": "2026-06-19T22:21:45.025Z",
+      "summary": "stages/05_documentation/output/summaries/docs-wunderkind-backend-context.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "migrations/archive/README.md": {
+      "sha256": "4b49c73040390165737c5c0433c284aec344a01c64b22f6dba44f53fe27c5797",
+      "mtime": "2026-03-26T20:50:08.169Z",
+      "summary": "stages/05_documentation/output/summaries/migrations-archive-readme.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "scripts/global-context-generator/README.md": {
+      "sha256": "8a0748eaa5a2295af685fc1f17600e2b755708064a54cba7de54b54be81cafdb",
+      "mtime": "2026-06-03T13:48:50.472Z",
+      "summary": "stages/05_documentation/output/summaries/scripts-global-context-generator-readme.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-07-21T21:26:02.039Z"
+    }
+  },
+  "stages": {
+    "01_overview": {
+      "last_run": "2026-07-21T21:51:10.190Z"
+    },
+    "02_architecture": {
+      "last_run": "2026-07-21T21:51:10.190Z"
+    },
+    "03_data": {
+      "last_run": "2026-07-21T21:51:10.190Z",
+      "extraction": {
+        "schema.md": "static-regex-scan",
+        "entities.md": "static-regex-scan",
+        "migrations.md": "static-regex-scan"
+      }
+    },
+    "04_interfaces": {
+      "last_run": "2026-07-21T21:51:10.190Z",
+      "extraction": {
+        "routes.md": "static-regex-fallback (live debug:router/route:list not attempted by this generator)",
+        "controllers.md": "static-regex-scan",
+        "services.md": "static-regex-scan",
+        "api-spec.md": "unavailable"
+      }
+    },
+    "05_documentation": {
+      "last_run": "2026-07-21T21:51:10.190Z"
+    },
+    "06_synthesis": {
+      "last_run": "2026-07-21T21:51:10.190Z"
+    }
+  }
+}

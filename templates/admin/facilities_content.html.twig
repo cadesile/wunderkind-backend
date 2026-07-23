@@ -453,8 +453,9 @@ select.fac-input { cursor: pointer; }
                     <span class="fac-no-effects">No gameplay effects configured</span>
                 {% else %}
                     {% for key, val in effects %}
-                        <span class="fac-effect-chip" title="{{ key }}: {{ val }}">
-                            {{ key|replace({'PerLevel': '/lvl', 'Multiplier': '×', 'Delta': 'Δ', 'Growth': '+', 'Bonus': '+'}) }}: {{ val }}
+                        {% set displayVal = val is iterable ? val|join(', ') : val %}
+                        <span class="fac-effect-chip" title="{{ key }}: {{ displayVal }}">
+                            {{ key|replace({'PerLevel': '/lvl', 'Multiplier': '×', 'Delta': 'Δ', 'Growth': '+', 'Bonus': '+'}) }}: {{ displayVal }}
                         </span>
                     {% endfor %}
                 {% endif %}

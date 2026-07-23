@@ -1,5 +1,16 @@
 # CLAUDE.md
 
+
+<!-- context-generator: start -->
+## Project Context
+
+This project has a structured `.context/` folder for AI agent context (ICM format).
+**Read `.context/CONTEXT.md` first** — it is the stage router that tells you which output
+files are relevant to your task. Do not load the entire folder; use the router to scope what you read.
+
+Regenerate with: `node generate_project_context.js`
+<!-- context-generator: end -->
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Dev Environment

@@ -53,6 +53,28 @@
         </div>
     </div>
 
+    {# Generate Leaderboards #}
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title fw-semibold small">
+                    <i class="fa fa-ranking-star text-secondary me-1"></i> Generate Leaderboards
+                </h6>
+                <p class="card-text text-muted small">
+                    Recalculates all leaderboard scores and ranks (empire index, golden boot, playmaker, etc.) and invalidates the leaderboard cache — the same process the cron job runs every 5 minutes.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                <form method="POST" action="{{ path('admin_generate_leaderboards') }}" class="d-inline" onsubmit="return confirmAction(this, 'Recalculate all leaderboard scores and ranks now?')">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('generate_leaderboards') }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">
+                        <i class="fa fa-play me-1"></i> Run Generate
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     {# Nuclear Reset #}
     <div class="col-md-4">
         <div class="card h-100 border-danger">

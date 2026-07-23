@@ -37,6 +37,10 @@ class LeaderboardEntry
     #[ORM\Column(name: 'rank_position', type: 'integer', nullable: true, options: ['unsigned' => true])]
     private ?int $rank = null;
 
+    /** Optional display string, e.g. the top scorer's name for golden_boot/playmaker. Null for other categories. */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $displayLabel = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $updatedAt;
 
@@ -64,6 +68,9 @@ class LeaderboardEntry
 
     public function getRank(): ?int { return $this->rank; }
     public function setRank(?int $rank): void { $this->rank = $rank; }
+
+    public function getDisplayLabel(): ?string { return $this->displayLabel; }
+    public function setDisplayLabel(?string $displayLabel): void { $this->displayLabel = $displayLabel; }
 
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 }

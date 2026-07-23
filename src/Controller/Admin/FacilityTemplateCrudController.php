@@ -10,11 +10,13 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\Form\Extension\Core\Type\MoneyType;
+use Symfony\Component\Validator\Constraints\Image;
 
 class FacilityTemplateCrudController extends AbstractCrudController
 {
@@ -200,6 +202,17 @@ class FacilityTemplateCrudController extends AbstractCrudController
                 </table>
                 <p class="mt-1 text-muted" style="font-size:0.8rem">Baselines (<em>baseXP</em>, <em>baseInjuryProbability</em>, <em>scoutAbilityErrorRange</em>, <em>scoutRevealWeeks</em>) are configured in Admin → Game Config.</p>
             HTML)
+            ->hideOnIndex();
+        yield ImageField::new('imagePath', 'Image')
+            ->setBasePath('/uploads/facilities')
+            ->setUploadDir('public/uploads/facilities')
+            ->setUploadedFileNamePattern('[slug]-[contenthash].[extension]')
+            ->setFileConstraints(new Image(
+                maxSize: '2M',
+                mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+                mimeTypesMessage: 'Please upload a valid PNG, JPG, or WebP image (max 2MB).',
+            ))
+            ->setHelp('Image shown for this facility in the app. PNG/JPG/WebP, max 2MB.')
             ->hideOnIndex();
         yield IntegerField::new('sortOrder')
             ->setHelp('Display order in the facilities screen (ascending)');

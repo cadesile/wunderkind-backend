@@ -1,0 +1,3 @@
+# Project Overview
+
+The Wunderkind Factory backend is a Symfony 8 (PHP 8.4+) API powering a mobile-first football academy management sim, exposing its domain through API Platform with JWT-based authentication (separate user and admin providers) and EasyAdmin for back-office management. Data is persisted via Doctrine ORM against PostgreSQL, with Doctrine Migrations managing schema evolution. The architecture centers on a weekly "tick" simulation loop (training, injuries, behavioral incidents) layered over service classes handling domain logic like account deletion cascades, leaderboard entries, and world-pack agent allocation.

@@ -83,7 +83,12 @@
       "Bash(gh pr *)",
       "Bash(read f *)",
       "Bash(mkdir -p /Users/courtneyadesile/.claude/plans 2>&1; echo done)",
-      "Bash(cat > *)"
+      "Bash(cat > *)",
+      "Bash(xargs -I{} stat -f \"%m %N\" {})",
+      "Bash(awk ' *)",
+      "Bash(awk *)",
+      "Bash(rm -f /tmp/admin_cookies.txt)",
+      "Read(//tmp/**)"
     ]
   }
 }
