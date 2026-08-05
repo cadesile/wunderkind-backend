@@ -229,7 +229,7 @@ git commit -m "feat: add CitySize enum and region/citySize/populationSize/isCapi
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `GameConfig::getNpcClubSizeWeights(): array`, `setNpcClubSizeWeights(array): static`, `getNpcClubSizeWeightsForTier(int $tier): array` returning `['big' => float, 'medium' => float, 'small' => float]` — used by `NpcClubGenerationService` in Task 6.
+- Produces: `GameConfig::getNpcClubSizeWeights(): array`, `setNpcClubSizeWeights(array): static`, `getNpcClubSizeWeightsForTier(int $tier): array` returning `['big' => float, 'medium' => float, 'small' => float]` — used by `NpcClubGenerationService` in Task 7.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -471,7 +471,7 @@ git commit -m "feat: migrate npc_club and game_config schema for city-size weigh
 
 **Interfaces:**
 - Consumes: nothing new from earlier tasks (this task only touches data + read accessors).
-- Produces: `NpcClubGenerationService::getPlaceNames(string $countryCode): array` (unchanged signature/behavior — flat `string[]` of names, for API/back-compat), `getPlaceData(string $countryCode): array` (new — returns the full curated rows `{name, population_size, region, is_capital?}`), `classifyPlaces(array $places): array` (new **public** method for testability — returns the same rows with an added `city_size` key holding a `CitySize` enum instance).
+- Produces: `NpcClubGenerationService::getPlaceNames(string $countryCode): array` (unchanged signature/behavior — flat `string[]` of names, for API/back-compat), `getPlaceData(string $countryCode): array` (new — returns the full curated rows `{name, population_size, region, is_capital?}`), `classifyPlaces(array $places): array` (new **public** method for testability — returns the same rows with an added `city_size` key holding a `CitySize` enum instance), `ALL_PLACE_NAMES_BY_COUNTRY` (new **private const** — verbatim copy of today's original flat per-country name lists, preserved so Task 5 can expose the non-curated names as extra name-option choices without losing any of the game's existing name variety).
 
 **Curation note:** each country's list below is a hand-curated set of ~40 real, well-known cities/towns with reasonably accurate population figures and correct administrative regions (scaled down from the ~100/country target discussed during brainstorming, to keep this plan self-contained with verified-plausible data rather than deferring to open-ended research — flagged to the user as a follow-up if more variety is wanted later).
 
@@ -548,9 +548,13 @@ Replace the contents of `tests/Service/NpcClubGenerationServiceTest.php`'s data-
 Run: `lando php vendor/bin/phpunit tests/Service/NpcClubGenerationServiceTest.php --no-coverage`
 Expected: FAIL — `getPlaceData()`/`classifyPlaces()` undefined.
 
-- [ ] **Step 3: Replace `PLACE_NAMES_BY_COUNTRY` with curated structured data**
+- [ ] **Step 3: Preserve the original flat lists as `ALL_PLACE_NAMES_BY_COUNTRY` before overwriting `PLACE_NAMES_BY_COUNTRY`**
 
-In `src/Service/NpcClubGenerationService.php`, replace the entire `PLACE_NAMES_BY_COUNTRY` constant (lines 18–595) with:
+Task 5 needs every place name that existed before this feature — not just the curated ~40/country — so players can still pick a name from the game's full historical pool, even though NPC generation only draws from the curated set. Before touching `PLACE_NAMES_BY_COUNTRY`, copy its **current** contents (the existing flat `string[]` per country, lines 18–595 of `src/Service/NpcClubGenerationService.php` as it stands today) verbatim into a new constant, renamed to `ALL_PLACE_NAMES_BY_COUNTRY`, immediately above where `PLACE_NAMES_BY_COUNTRY` is defined. Do not change, trim, or reformat a single entry — this is a straight copy-and-rename of the existing `'ES' => [...], 'EN' => [...], 'DE' => [...], 'IT' => [...], 'FR' => [...], 'BR' => [...], 'AR' => [...], 'NL' => [...], 'PT' => [...]` block that is already in the file, just under the new name `ALL_PLACE_NAMES_BY_COUNTRY`.
+
+- [ ] **Step 4: Replace `PLACE_NAMES_BY_COUNTRY` with curated structured data**
+
+Now, separately from the `ALL_PLACE_NAMES_BY_COUNTRY` constant just added in Step 3, replace the entire **original** `PLACE_NAMES_BY_COUNTRY` constant (lines 18–595 of the file as it stood before Step 3) with the new curated, structured version:
 
 ```php
     // ── Place names & metadata by ISO country code ──────────────────────────
@@ -937,11 +941,11 @@ In `src/Service/NpcClubGenerationService.php`, replace the entire `PLACE_NAMES_B
     ];
 ```
 
-- [ ] **Step 4: Split the flat `SUFFIXES` constants (needed by `getSuffixes` in this task; full prestige/generic split lands in Task 5)**
+- [ ] **Step 5: Split the flat `SUFFIXES` constants (needed by `getSuffixes` in this task; full prestige/generic split lands in Task 6)**
 
-For now, leave `SUFFIXES_BY_COUNTRY` (lines 599–645 of the original file) and `SUFFIXES` (line 597) **in place** — Task 5 replaces them. This task only touches `PLACE_NAMES_BY_COUNTRY` and the two new methods below.
+For now, leave `SUFFIXES_BY_COUNTRY` (lines 599–645 of the original file) and `SUFFIXES` (line 597) **in place** — Task 6 replaces them. This task only touches `PLACE_NAMES_BY_COUNTRY`, the new `ALL_PLACE_NAMES_BY_COUNTRY`, and the two new methods below.
 
-- [ ] **Step 5: Add `getPlaceData` and `classifyPlaces`, update `getPlaceNames`**
+- [ ] **Step 6: Add `getPlaceData` and `classifyPlaces`, update `getPlaceNames`**
 
 Replace the existing `getPlaceNames` method (around line 690) with:
 
@@ -992,21 +996,166 @@ Replace the existing `getPlaceNames` method (around line 690) with:
     }
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 7: Run tests to verify they pass**
 
 Run: `lando php vendor/bin/phpunit tests/Service/NpcClubGenerationServiceTest.php --no-coverage`
 Expected: PASS — all existing tests (including `testGetPlaceNamesReturnsKnownCountryData` which checks for `Madrid`/`Barcelona`) plus the 4 new ones.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/Service/NpcClubGenerationService.php tests/Service/NpcClubGenerationServiceTest.php
-git commit -m "feat: curate place data with population/region/capital metadata and add classifyPlaces"
+git commit -m "feat: curate place data with population/region/capital metadata, preserve originals, add classifyPlaces"
 ```
 
 ---
 
-### Task 5: Split suffixes into prestige/generic pools
+### Task 5: Remaining place names exposed via `/api/club/name-options`
+
+**Files:**
+- Modify: `src/Service/NpcClubGenerationService.php`
+- Modify: `src/Controller/Api/ClubController.php`
+- Test: `tests/Service/NpcClubGenerationServiceTest.php`
+- Test: `tests/Controller/Api/ClubControllerNameOptionsTest.php`
+
+**Interfaces:**
+- Consumes: `ALL_PLACE_NAMES_BY_COUNTRY` and `getPlaceNames()` (Task 4).
+- Produces: `NpcClubGenerationService::getRemainingPlaceNames(string $countryCode): array` (new — every name in `ALL_PLACE_NAMES_BY_COUNTRY[$countryCode]` that is **not** one of the curated `getPlaceNames($countryCode)` entries, per country). `ClubController::nameOptions()` merges curated + remaining names into the single `cities` array it already returns, so the response shape is unchanged — no frontend change needed. Filtering stays strictly per-country: a request for `country=EN` only ever returns English names (curated + remaining), never names from another country's list.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `tests/Service/NpcClubGenerationServiceTest.php`, before the final `}`:
+
+```php
+
+    public function testGetRemainingPlaceNamesExcludesCuratedNames(): void
+    {
+        $service   = $this->makeService();
+        $curated   = $service->getPlaceNames('EN');
+        $remaining = $service->getRemainingPlaceNames('EN');
+
+        $this->assertNotEmpty($remaining);
+        foreach ($curated as $name) {
+            $this->assertNotContains($name, $remaining, "Curated name '{$name}' should not also appear in remaining");
+        }
+    }
+
+    public function testGetRemainingPlaceNamesContainsNonCuratedOriginalCities(): void
+    {
+        $service   = $this->makeService();
+        $remaining = $service->getRemainingPlaceNames('EN');
+
+        // 'Prestwich' was in the original EN list but is not one of the ~40 curated entries.
+        $this->assertContains('Prestwich', $remaining);
+    }
+
+    public function testGetRemainingPlaceNamesIsFilteredPerCountry(): void
+    {
+        $service = $this->makeService();
+
+        $en = $service->getRemainingPlaceNames('EN');
+        $es = $service->getRemainingPlaceNames('ES');
+
+        $this->assertNotContains('Sevilla', $en);
+        $this->assertNotContains('Manchester', $es);
+    }
+
+    public function testGetRemainingPlaceNamesReturnsEmptyArrayForUnknownCountry(): void
+    {
+        $service = $this->makeService();
+        $this->assertSame([], $service->getRemainingPlaceNames('XX'));
+    }
+```
+
+Create `tests/Controller/Api/ClubControllerNameOptionsTest.php` (following the existing unit-test-with-stubs style used elsewhere in this controller's test suite — check `tests/Controller/Api/ScoutSearchControllerTest.php` for the request/response assertion pattern if one exists; otherwise use a plain Symfony `WebTestCase` hitting the route):
+
+```php
+<?php
+
+namespace App\Tests\Controller\Api;
+
+use App\Service\NpcClubGenerationService;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Request;
+use App\Controller\Api\ClubController;
+use App\Repository\ClubRepository;
+
+class ClubControllerNameOptionsTest extends TestCase
+{
+    public function testNameOptionsMergesCuratedAndRemainingCities(): void
+    {
+        $clubRepo = $this->createStub(ClubRepository::class);
+        $controller = new ClubController($clubRepo);
+
+        $npcService = $this->createMock(NpcClubGenerationService::class);
+        $npcService->method('getPlaceNames')->with('EN')->willReturn(['Manchester', 'Liverpool']);
+        $npcService->method('getRemainingPlaceNames')->with('EN')->willReturn(['Prestwich', 'Belper']);
+        $npcService->method('getSuffixes')->with('EN')->willReturn(['FC', 'United']);
+
+        $request = new Request(['country' => 'EN']);
+        $response = $controller->nameOptions($request, $npcService);
+        $data = json_decode($response->getContent(), true);
+
+        $this->assertContains('Manchester', $data['cities']);
+        $this->assertContains('Liverpool', $data['cities']);
+        $this->assertContains('Prestwich', $data['cities']);
+        $this->assertContains('Belper', $data['cities']);
+    }
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `lando php vendor/bin/phpunit tests/Service/NpcClubGenerationServiceTest.php tests/Controller/Api/ClubControllerNameOptionsTest.php --no-coverage`
+Expected: FAIL — `getRemainingPlaceNames()` undefined; `nameOptions()` doesn't yet merge remaining names.
+
+- [ ] **Step 3: Add `getRemainingPlaceNames`**
+
+In `src/Service/NpcClubGenerationService.php`, add this method next to `getPlaceData`:
+
+```php
+    /** @return string[] every name from the original full list that isn't in the curated generation pool */
+    public function getRemainingPlaceNames(string $countryCode): array
+    {
+        $curated = $this->getPlaceNames($countryCode);
+        $all     = self::ALL_PLACE_NAMES_BY_COUNTRY[$countryCode] ?? [];
+
+        return array_values(array_diff($all, $curated));
+    }
+```
+
+- [ ] **Step 4: Merge remaining names into `ClubController::nameOptions`**
+
+In `src/Controller/Api/ClubController.php`, replace:
+
+```php
+        $cities   = $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN');
+```
+
+with:
+
+```php
+        $cities   = array_merge(
+            $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN'),
+            $npcClubGenerationService->getRemainingPlaceNames($country) ?: $npcClubGenerationService->getRemainingPlaceNames('EN'),
+        );
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `lando php vendor/bin/phpunit tests/Service/NpcClubGenerationServiceTest.php tests/Controller/Api/ClubControllerNameOptionsTest.php --no-coverage`
+Expected: PASS — all tests, including the 4 new `getRemainingPlaceNames` tests and the controller merge test.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/Service/NpcClubGenerationService.php src/Controller/Api/ClubController.php tests/Service/NpcClubGenerationServiceTest.php tests/Controller/Api/ClubControllerNameOptionsTest.php
+git commit -m "feat: expose non-curated place names as extra name-options choices, filtered per country"
+```
+
+---
+
+### Task 6: Split suffixes into prestige/generic pools
 
 **Files:**
 - Modify: `src/Service/NpcClubGenerationService.php`
@@ -1179,14 +1328,14 @@ git commit -m "feat: split suffixes into prestige/generic pools by city size"
 
 ---
 
-### Task 6: Weighted place selection replaces uniform `array_rand`
+### Task 7: Weighted place selection replaces uniform `array_rand`
 
 **Files:**
 - Modify: `src/Service/NpcClubGenerationService.php`
 - Test: `tests/Service/NpcClubGenerationServiceTest.php`
 
 **Interfaces:**
-- Consumes: `GameConfig::getNpcClubSizeWeightsForTier(int $tier): array` (Task 2), `classifyPlaces()` (Task 4), `pickSuffixForCitySize()` (Task 5).
+- Consumes: `GameConfig::getNpcClubSizeWeightsForTier(int $tier): array` (Task 2), `classifyPlaces()` (Task 4), `pickSuffixForCitySize()` (Task 6).
 - Produces: `NpcClubGenerationService::pickWeightedPlace(array $classifiedPlaces, array $weights): array` (new **public** method for testability) — `$weights` is `['big' => float, 'medium' => float, 'small' => float]`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1394,7 +1543,7 @@ Replace the body of `generateClubs` with:
     }
 ```
 
-Note: `reputationForTier`/`balanceForTier` signatures change to accept `$citySize` — that lands in Task 7. For this task's tests to pass, temporarily keep them accepting a second unused parameter (Task 7 fills in the real skew logic):
+Note: `reputationForTier`/`balanceForTier` signatures change to accept `$citySize` — that lands in Task 8. For this task's tests to pass, temporarily keep them accepting a second unused parameter (Task 8 fills in the real skew logic):
 
 ```php
     private function reputationForTier(int $tier, \App\Enum\CitySize $citySize): int
@@ -1427,14 +1576,14 @@ git commit -m "feat: replace uniform place selection with tier-weighted city-siz
 
 ---
 
-### Task 7: Reputation/balance city-size skew
+### Task 8: Reputation/balance city-size skew
 
 **Files:**
 - Modify: `src/Service/NpcClubGenerationService.php`
 - Test: `tests/Service/NpcClubGenerationServiceTest.php`
 
 **Interfaces:**
-- Consumes: `reputationForTier`/`balanceForTier` signatures from Task 6.
+- Consumes: `reputationForTier`/`balanceForTier` signatures from Task 7.
 - Produces: `NpcClubGenerationService::skewRange(int $min, int $max, \App\Enum\CitySize $citySize): array` (new **public** method, returns `[int $min, int $max]` for `random_int()`).
 
 - [ ] **Step 1: Write the failing tests**
@@ -1502,7 +1651,7 @@ Expected: FAIL — `skewRange()` undefined.
 
 - [ ] **Step 3: Add `skewRange` and wire it into `reputationForTier`/`balanceForTier`**
 
-Add the new method and replace the two temporary methods from Task 6:
+Add the new method and replace the two temporary methods from Task 7:
 
 ```php
     /** @return array{0:int,1:int} */
@@ -1554,7 +1703,7 @@ git commit -m "feat: skew reputation/balance rolls toward city size within each 
 
 ---
 
-### Task 8: Admin-editable size-weight table
+### Task 9: Admin-editable size-weight table
 
 **Files:**
 - Modify: `src/Controller/Admin/DashboardController.php`
@@ -1668,22 +1817,23 @@ git commit -m "feat: add admin-editable NPC club size weight table"
 
 ---
 
-### Task 9: Full regression pass
+### Task 10: Full regression pass
 
 **Files:** none (verification only)
 
 - [ ] **Step 1: Run the full unit test suite**
 
 Run: `lando php vendor/bin/phpunit --no-coverage`
-Expected: all tests pass, including every file touched across Tasks 1–7 and pre-existing tests that construct `NpcClub` (`NpcClubTest`, `NpcClubLeagueFieldTest`, `SyncServiceLeagueTest`, `LeagueServiceTest`, `WorldInitializationTierPackAgentTest`, `NpcClubGenerationServiceLeagueTest`, `NpcClubCrudControllerTest`).
+Expected: all tests pass, including every file touched across Tasks 1–9 and pre-existing tests that construct `NpcClub` (`NpcClubTest`, `NpcClubLeagueFieldTest`, `SyncServiceLeagueTest`, `LeagueServiceTest`, `WorldInitializationTierPackAgentTest`, `NpcClubGenerationServiceLeagueTest`, `NpcClubCrudControllerTest`).
 
-- [ ] **Step 2: Verify the `/api/club/name-options` contract is unchanged**
+- [ ] **Step 2: Verify the `/api/club/name-options` response shape and per-country filtering**
 
-Run: `lando php bin/console debug:router api_clubs_name_options` to confirm the route still exists, then start the app and hit it:
+Run: `lando php bin/console debug:router api_clubs_name_options` to confirm the route still exists, then start the app and hit it for two different countries:
 ```bash
-curl -s "http://localhost/api/club/name-options?country=EN" -H "Authorization: Bearer <token>" | head -c 500
+curl -s "http://localhost/api/club/name-options?country=EN" -H "Authorization: Bearer <token>" | head -c 800
+curl -s "http://localhost/api/club/name-options?country=ES" -H "Authorization: Bearer <token>" | head -c 800
 ```
-Expected: JSON with `cities` as a flat array of city-name strings (e.g. `"London"`, `"Manchester"`) and `suffixes` as a flat array of suffix strings (e.g. `"United"`, `"FC"`) — unchanged shape from before this feature.
+Expected: for `EN`, `cities` is a flat array containing both curated names (e.g. `"London"`, `"Manchester"`) and remaining names from the original list (e.g. `"Prestwich"`, `"Belper"`) — a strictly larger list than before this feature, still just England names, no Spanish names mixed in. `suffixes` unchanged (`"United"`, `"FC"`, etc.). Repeat for `ES` and confirm no English names (e.g. `"Manchester"`) appear in the Spanish response.
 
 - [ ] **Step 3: Regenerate a sample of NPC clubs and spot-check via psql**
 
@@ -1708,3 +1858,4 @@ If clean, no commit needed — proceed to finishing-a-development-branch.
 ## Summary of Deviations from the Approved Spec (flag to user)
 
 - **Curated place count**: spec discussed "~100 per country"; this plan ships **~40 real, verified places per country** to keep the plan self-contained with concrete, checkable data rather than open-ended research placeholders. More places can be added later by extending `PLACE_NAMES_BY_COUNTRY` following the same format — the classification/weighting logic scales automatically.
+- **Remaining place names (added after initial plan approval, Task 5)**: the original flat per-country lists (all names not in the curated ~40) are preserved verbatim as `ALL_PLACE_NAMES_BY_COUNTRY` and exposed via a new `getRemainingPlaceNames()` method, merged into the existing `cities` array in `/api/club/name-options`. This means players can still name their own club after any city from the game's full original pool, even though NPC generation only ever draws from the curated, population/region-tagged set. Filtering stays strictly per-country. `region`/`population_size`/`is_capital` metadata is **not** added to these remaining names in this plan — per direction, that can follow later if wanted.
