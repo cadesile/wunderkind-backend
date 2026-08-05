@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\CitySize;
 use App\Enum\Formation;
 use App\Repository\NpcClubRepository;
 use Doctrine\ORM\Mapping as ORM;
@@ -54,6 +55,18 @@ class NpcClub
     #[ORM\Column(type: 'json')]
     private array $facilities;
 
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $region = null;
+
+    #[ORM\Column(enumType: CitySize::class, options: ['default' => 'MEDIUM'])]
+    private CitySize $citySize = CitySize::MEDIUM;
+
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $populationSize = 0;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $isCapital = false;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -73,6 +86,10 @@ class NpcClub
         string $secondaryColor,
         int $balance,
         array $facilities,
+        ?string $region = null,
+        CitySize $citySize = CitySize::MEDIUM,
+        int $populationSize = 0,
+        bool $isCapital = false,
     ) {
         $this->id             = new UuidV7();
         $this->name           = $name;
@@ -83,6 +100,10 @@ class NpcClub
         $this->secondaryColor = $secondaryColor;
         $this->balance        = $balance;
         $this->facilities     = $facilities;
+        $this->region         = $region;
+        $this->citySize       = $citySize;
+        $this->populationSize = $populationSize;
+        $this->isCapital      = $isCapital;
         $this->createdAt      = new \DateTimeImmutable();
     }
 
@@ -137,6 +158,18 @@ class NpcClub
         $this->facilities = json_decode($v, true) ?? [];
         return $this;
     }
+
+    public function getRegion(): ?string { return $this->region; }
+    public function setRegion(?string $v): static { $this->region = $v; return $this; }
+
+    public function getCitySize(): CitySize { return $this->citySize; }
+    public function setCitySize(CitySize $v): static { $this->citySize = $v; return $this; }
+
+    public function getPopulationSize(): int { return $this->populationSize; }
+    public function setPopulationSize(int $v): static { $this->populationSize = $v; return $this; }
+
+    public function isCapital(): bool { return $this->isCapital; }
+    public function setIsCapital(bool $v): static { $this->isCapital = $v; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
