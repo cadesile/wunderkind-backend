@@ -1126,6 +1126,47 @@ class GameConfig
         return $this->npcFacilityLevelRanges[$bandIndex][$slug] ?? null;
     }
 
+    // ── NPC Club Size Weights ──────────────────────────────────────────────
+
+    /**
+     * Weighting (%) of BIG/MEDIUM/SMALL city picks, anchored at tier 1 and tier 8.
+     * Tiers 2–7 linearly interpolate between the two anchor rows.
+     * Percentages need not sum to 100 — the consumer normalizes.
+     * @var array{tier1: array{big:int,medium:int,small:int}, tier8: array{big:int,medium:int,small:int}}
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcClubSizeWeights = [
+        'tier1' => ['big' => 70, 'medium' => 25, 'small' => 5],
+        'tier8' => ['big' => 5,  'medium' => 25, 'small' => 70],
+    ];
+
+    /** @return array{tier1: array{big:int,medium:int,small:int}, tier8: array{big:int,medium:int,small:int}} */
+    public function getNpcClubSizeWeights(): array { return $this->npcClubSizeWeights; }
+
+    /** @param array{tier1: array{big:int,medium:int,small:int}, tier8: array{big:int,medium:int,small:int}} $v */
+    public function setNpcClubSizeWeights(array $v): static { $this->npcClubSizeWeights = $v; return $this; }
+
+    /**
+     * Interpolated {big, medium, small} weight percentages for a given tier (1–8, clamped).
+     * @return array{big:float,medium:float,small:float}
+     */
+    public function getNpcClubSizeWeightsForTier(int $tier): array
+    {
+        $tier    = max(1, min(8, $tier));
+        $tier1   = $this->npcClubSizeWeights['tier1'] ?? ['big' => 70, 'medium' => 25, 'small' => 5];
+        $tier8   = $this->npcClubSizeWeights['tier8'] ?? ['big' => 5, 'medium' => 25, 'small' => 70];
+        $fraction = ($tier - 1) / 7;
+
+        $result = [];
+        foreach (['big', 'medium', 'small'] as $bucket) {
+            $start = (float) ($tier1[$bucket] ?? 0);
+            $end   = (float) ($tier8[$bucket] ?? 0);
+            $result[$bucket] = $start + $fraction * ($end - $start);
+        }
+
+        return $result;
+    }
+
     // ── NPC Squad Config ──────────────────────────────────────────────────
 
     /**
