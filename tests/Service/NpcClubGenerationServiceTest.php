@@ -130,4 +130,65 @@ class NpcClubGenerationServiceTest extends TestCase
             $this->assertNotEmpty($service->getSuffixes($country), "Expected suffixes for {$country}");
         }
     }
+
+    public function testGetPlaceDataReturnsStructuredRows(): void
+    {
+        $service = $this->makeService();
+        $places  = $service->getPlaceData('EN');
+
+        $this->assertNotEmpty($places);
+        $first = $places[0];
+        $this->assertArrayHasKey('name', $first);
+        $this->assertArrayHasKey('population_size', $first);
+        $this->assertArrayHasKey('region', $first);
+    }
+
+    public function testGetPlaceDataMarksExactlyOneCapitalPerCountry(): void
+    {
+        $service = $this->makeService();
+        foreach (['ES', 'EN', 'DE', 'IT', 'FR', 'BR', 'AR', 'NL', 'PT'] as $country) {
+            $capitals = array_filter($service->getPlaceData($country), fn(array $p) => $p['is_capital'] ?? false);
+            $this->assertCount(1, $capitals, "Expected exactly one capital for {$country}");
+        }
+    }
+
+    public function testClassifyPlacesForcesCapitalToBig(): void
+    {
+        $service = $this->makeService();
+        $classified = $service->classifyPlaces([
+            ['name' => 'Capital', 'population_size' => 1000, 'region' => 'R', 'is_capital' => true],
+            ['name' => 'Big', 'population_size' => 900000, 'region' => 'R'],
+            ['name' => 'Mid', 'population_size' => 50000, 'region' => 'R'],
+            ['name' => 'Small', 'population_size' => 1000, 'region' => 'R'],
+        ]);
+
+        $bySize = [];
+        foreach ($classified as $p) {
+            $bySize[$p['name']] = $p['city_size'];
+        }
+
+        $this->assertSame(\App\Enum\CitySize::BIG, $bySize['Capital']);
+    }
+
+    public function testClassifyPlacesBucketsByPopulationPercentile(): void
+    {
+        $service = $this->makeService();
+        // 10 places, population 100..1000 descending — top 20% (2) BIG, bottom 50% (5) SMALL, rest MEDIUM.
+        $places = [];
+        for ($i = 10; $i >= 1; $i--) {
+            $places[] = ['name' => "City{$i}", 'population_size' => $i * 100, 'region' => 'R'];
+        }
+
+        $classified = $service->classifyPlaces($places);
+        $bySize = [];
+        foreach ($classified as $p) {
+            $bySize[$p['name']] = $p['city_size'];
+        }
+
+        $this->assertSame(\App\Enum\CitySize::BIG, $bySize['City10']);
+        $this->assertSame(\App\Enum\CitySize::BIG, $bySize['City9']);
+        $this->assertSame(\App\Enum\CitySize::SMALL, $bySize['City1']);
+        $this->assertSame(\App\Enum\CitySize::SMALL, $bySize['City5']);
+        $this->assertSame(\App\Enum\CitySize::MEDIUM, $bySize['City6']);
+    }
 }
