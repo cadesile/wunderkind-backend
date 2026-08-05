@@ -20,7 +20,7 @@ final class Version20260806120000 extends AbstractMigration
         $this->addSql("ALTER TABLE npc_club ADD city_size VARCHAR(255) DEFAULT 'MEDIUM' NOT NULL");
         $this->addSql('ALTER TABLE npc_club ADD population_size BIGINT DEFAULT 0 NOT NULL');
         $this->addSql('ALTER TABLE npc_club ADD is_capital BOOLEAN DEFAULT false NOT NULL');
-        $this->addSql("ALTER TABLE game_config ADD npc_club_size_weights JSONB NOT NULL DEFAULT '{\"tier1\":{\"big\":70,\"medium\":25,\"small\":5},\"tier8\":{\"big\":5,\"medium\":25,\"small\":70}}'");
+        $this->addSql("ALTER TABLE game_config ADD npc_club_size_weights JSON NOT NULL DEFAULT '{\"tier1\":{\"big\":70,\"medium\":25,\"small\":5},\"tier8\":{\"big\":5,\"medium\":25,\"small\":70}}'");
     }
 
     public function down(Schema $schema): void
