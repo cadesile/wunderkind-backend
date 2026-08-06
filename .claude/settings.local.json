@@ -88,7 +88,8 @@
       "Bash(awk ' *)",
       "Bash(awk *)",
       "Bash(rm -f /tmp/admin_cookies.txt)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(cd *)"
     ]
   }
 }
