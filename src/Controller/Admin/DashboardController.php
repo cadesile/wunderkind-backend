@@ -14,7 +14,6 @@ use App\Repository\SocialPostTemplateRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
-use App\Service\MarketPoolService;
 use App\Service\NarrativeImportExportService;
 use App\Controller\Admin\BetaRequestCrudController;
 use App\Controller\Admin\LeagueCrudController;
@@ -35,9 +34,6 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\HeaderUtils;
-use App\Enum\RecruitmentSource;
-use App\Enum\StaffRole;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -53,7 +49,6 @@ class DashboardController extends AbstractDashboardController
         private GameConfigRepository $gameConfigRepository,
         private StarterConfigRepository $starterConfigRepository,
         private PoolConfigRepository $poolConfigRepository,
-        private MarketPoolService $marketPoolService,
         private PlayerRepository $playerRepository,
         private NpcClubGenerationService $npcClubGenerationService,
         private NpcClubRepository $npcClubRepository,
@@ -627,246 +622,6 @@ class DashboardController extends AbstractDashboardController
 
         $this->addFlash('success', 'Starter config saved.');
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_starter_config']));
-    }
-
-    // ── Pool Config ───────────────────────────────────────────────────────
-
-    #[Route('/admin/pool-config', name: 'admin_pool_config')]
-    #[IsGranted('ROLE_ADMIN')]
-    public function poolConfig(): Response
-    {
-        $conn = $this->em->getConnection();
-
-        $poolCounts = [
-            'players'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE recruitment_source = 'youth_intake'"),
-            'staffCoach'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'coach'"),
-            'staffManager'     => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'manager'"),
-            'staffDirector'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'director_of_football'"),
-            'staffFacilityMgr' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'facility_manager'"),
-            'staffChairman'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'chairman'"),
-            'scouts'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
-            'sponsors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
-            'investors'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
-            'agents'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
-        ];
-
-        return $this->render('admin/pool_config.html.twig', [
-            'config'     => $this->poolConfigRepository->getConfig(),
-            'poolCounts' => $poolCounts,
-        ]);
-    }
-
-    #[Route('/admin/pool-config/save', name: 'admin_pool_config_save', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function savePoolConfig(Request $request): Response
-    {
-        if (!$this->isCsrfTokenValid('save_pool_config', $request->request->get('_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
-        }
-
-        $config = $this->poolConfigRepository->getConfig();
-
-        // Player generation
-        $config->setPlayerAgeMin((int) $request->request->get('playerAgeMin', 12));
-        $config->setPlayerAgeMax((int) $request->request->get('playerAgeMax', 13));
-        $config->setPlayerPotentialMin((int) $request->request->get('playerPotentialMin', 40));
-        $config->setPlayerPotentialMax((int) $request->request->get('playerPotentialMax', 80));
-        $config->setPlayerPotentialMean((int) $request->request->get('playerPotentialMean', 60));
-$config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentChancePercent', 40));
-        $config->setPlayerHeightMin((int) $request->request->get('playerHeightMin', 145));
-        $config->setPlayerHeightMax((int) $request->request->get('playerHeightMax', 160));
-        $config->setPlayerWeightMin((int) $request->request->get('playerWeightMin', 38));
-        $config->setPlayerWeightMax((int) $request->request->get('playerWeightMax', 55));
-        $config->setPersonalityTraitMin((int) $request->request->get('personalityTraitMin', 30));
-        $config->setPersonalityTraitMax((int) $request->request->get('personalityTraitMax', 70));
-
-        // Position weighting
-        $config->setPositionWeightGk((int) $request->request->get('positionWeightGk', 8));
-        $config->setPositionWeightDef((int) $request->request->get('positionWeightDef', 30));
-        $config->setPositionWeightMid((int) $request->request->get('positionWeightMid', 38));
-        $config->setPositionWeightAtt((int) $request->request->get('positionWeightAtt', 24));
-
-        // Coach generation
-        $config->setCoachAgeMin((int) $request->request->get('coachAgeMin', 28));
-        $config->setCoachAgeMax((int) $request->request->get('coachAgeMax', 60));
-        $config->setCoachAbilityMin((int) $request->request->get('coachAbilityMin', 40));
-        $config->setCoachAbilityMax((int) $request->request->get('coachAbilityMax', 75));
-
-        // Scout generation
-        $config->setScoutAgeMin((int) $request->request->get('scoutAgeMin', 28));
-        $config->setScoutAgeMax((int) $request->request->get('scoutAgeMax', 40));
-        $config->setScoutExperienceMin((int) $request->request->get('scoutExperienceMin', 0));
-        $config->setScoutExperienceMax((int) $request->request->get('scoutExperienceMax', 10));
-        $config->setScoutJudgementMin((int) $request->request->get('scoutJudgementMin', 40));
-        $config->setScoutJudgementMax((int) $request->request->get('scoutJudgementMax', 80));
-
-        // Agent generation
-        $config->setAgentReputationMin((int) $request->request->get('agentReputationMin', 30));
-        $config->setAgentReputationMax((int) $request->request->get('agentReputationMax', 70));
-        $config->setAgentAgeMin((int) $request->request->get('agentAgeMin', 30));
-        $config->setAgentAgeMax((int) $request->request->get('agentAgeMax', 60));
-
-        // Pool targets
-        $config->setPlayerPoolTarget((int) $request->request->get('playerPoolTarget', 50));
-        $config->setCoachPoolTarget((int) $request->request->get('coachPoolTarget', 10));
-        $config->setManagerPoolTarget((int) $request->request->get('managerPoolTarget', 5));
-        $config->setDirectorOfFootballPoolTarget((int) $request->request->get('directorOfFootballPoolTarget', 2));
-        $config->setFacilityManagerPoolTarget((int) $request->request->get('facilityManagerPoolTarget', 3));
-        $config->setChairmanPoolTarget((int) $request->request->get('chairmanPoolTarget', 2));
-        $config->setScoutPoolTarget((int) $request->request->get('scoutPoolTarget', 5));
-        $config->setSponsorPoolTarget((int) $request->request->get('sponsorPoolTarget', 10));
-        $config->setInvestorPoolTarget((int) $request->request->get('investorPoolTarget', 5));
-        $config->setAgentPoolTarget((int) $request->request->get('agentPoolTarget', 20));
-
-        $this->em->flush();
-
-        $this->addFlash('success', 'Pool config saved.');
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
-    }
-
-    #[Route('/admin/pool-config/generate', name: 'admin_pool_generate', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function generatePool(Request $request): Response
-    {
-        if (!$this->isCsrfTokenValid('generate_pool', $request->request->get('_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
-        }
-
-        $mode = $request->request->get('mode', 'replenish');
-
-        if ($mode === 'force') {
-            $nationality = $request->request->getString('nationality') ?: null;
-            $generated = $this->marketPoolService->forceGeneratePool($nationality);
-            $this->addFlash('success', 'Force generated: ' . implode(', ', $generated) . '.');
-        } else {
-            $generated = $this->marketPoolService->replenishPool();
-            if (empty($generated)) {
-                $this->addFlash('info', 'All pools are already at or above their targets — nothing generated.');
-            } else {
-                $this->addFlash('success', 'Replenished: ' . implode(', ', $generated) . '.');
-            }
-        }
-
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
-    }
-
-    #[Route('/admin/pool-config/generate-chunk', name: 'admin_pool_generate_chunk', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function generatePoolChunk(Request $request): JsonResponse
-    {
-        if (!$this->isCsrfTokenValid('generate_pool', $request->request->get('_token'))) {
-            return $this->json(['success' => false, 'message' => 'Invalid CSRF token.'], 403);
-        }
-
-        $type        = $request->request->get('type', '');
-        $nationality = $request->request->getString('nationality') ?: null;
-        $mode        = $request->request->get('mode', 'force');
-        $cfg         = $this->poolConfigRepository->getConfig();
-        $conn        = $this->em->getConnection();
-
-        $target = match ($type) {
-            'players'           => $cfg->getPlayerPoolTarget(),
-            'coaches'           => $cfg->getCoachPoolTarget(),
-            'managers'          => $cfg->getManagerPoolTarget(),
-            'directors'         => $cfg->getDirectorOfFootballPoolTarget(),
-            'facility_managers' => $cfg->getFacilityManagerPoolTarget(),
-            'chairmen'          => $cfg->getChairmanPoolTarget(),
-            'scouts'            => $cfg->getScoutPoolTarget(),
-            'agents'            => $cfg->getAgentPoolTarget(),
-            'sponsors'          => $cfg->getSponsorPoolTarget(),
-            'investors'         => $cfg->getInvestorPoolTarget(),
-            default             => 0,
-        };
-
-        $count = $target;
-        if ($mode === 'replenish') {
-            $current = match ($type) {
-                'players'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE recruitment_source = 'youth_intake'"),
-                'coaches'           => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'coach'"),
-                'managers'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'manager'"),
-                'directors'         => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'director_of_football'"),
-                'facility_managers' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'facility_manager'"),
-                'chairmen'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'chairman'"),
-                'scouts'            => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
-                'agents'            => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
-                'sponsors'          => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
-                'investors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
-                default             => 0,
-            };
-            $count = max(0, $target - $current);
-        }
-
-        if ($count <= 0) {
-            return $this->json(['success' => true, 'count' => 0, 'message' => 'Already at target.', 'skipped' => true]);
-        }
-
-        try {
-            match ($type) {
-                'players'           => $this->marketPoolService->generatePlayers($count, RecruitmentSource::YOUTH_INTAKE, $nationality),
-                'coaches'           => $this->marketPoolService->generateStaffForRole(StaffRole::COACH, $count, $nationality),
-                'managers'          => $this->marketPoolService->generateStaffForRole(StaffRole::MANAGER, $count, $nationality),
-                'directors'         => $this->marketPoolService->generateStaffForRole(StaffRole::DIRECTOR_OF_FOOTBALL, $count, $nationality),
-                'facility_managers' => $this->marketPoolService->generateStaffForRole(StaffRole::FACILITY_MANAGER, $count, $nationality),
-                'chairmen'          => $this->marketPoolService->generateStaffForRole(StaffRole::CHAIRMAN, $count, $nationality),
-                'scouts'            => $this->marketPoolService->generateScouts($count, $nationality),
-                'agents'            => $this->marketPoolService->generateAgents($count),
-                'sponsors'          => $this->marketPoolService->generateSponsors($count),
-                'investors'         => $this->marketPoolService->generateInvestors($count),
-                default             => throw new \InvalidArgumentException("Unknown pool type: {$type}"),
-            };
-        } catch (\Exception $e) {
-            return $this->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-
-        return $this->json(['success' => true, 'count' => $count, 'message' => "{$count} generated."]);
-    }
-
-    #[Route('/admin/pool-config/counts', name: 'admin_pool_counts', methods: ['GET'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function poolCountsJson(): JsonResponse
-    {
-        $conn = $this->em->getConnection();
-        return $this->json([
-            'players'          => (int) $conn->fetchOne("SELECT COUNT(*) FROM player WHERE recruitment_source = 'youth_intake'"),
-            'staffCoach'       => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'coach'"),
-            'staffManager'     => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'manager'"),
-            'staffDirector'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'director_of_football'"),
-            'staffFacilityMgr' => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'facility_manager'"),
-            'staffChairman'    => (int) $conn->fetchOne("SELECT COUNT(*) FROM staff WHERE role = 'chairman'"),
-            'scouts'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM scout'),
-            'agents'           => (int) $conn->fetchOne('SELECT COUNT(*) FROM agent'),
-            'sponsors'         => (int) $conn->fetchOne('SELECT COUNT(*) FROM sponsor WHERE club_id IS NULL'),
-            'investors'        => (int) $conn->fetchOne('SELECT COUNT(*) FROM investor WHERE club_id IS NULL'),
-        ]);
-    }
-
-    #[Route('/admin/pool-config/clear', name: 'admin_pool_clear', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function clearPool(Request $request): Response
-    {
-        if (!$this->isCsrfTokenValid('clear_pool', $request->request->get('_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
-        }
-
-        $conn = $this->em->getConnection();
-
-        // Delete guardians referencing players first (FK constraint)
-        $conn->executeStatement('DELETE FROM guardian WHERE player_id IN (SELECT id FROM player)');
-
-        $players   = $conn->executeStatement('DELETE FROM player');
-        $staff     = $conn->executeStatement('DELETE FROM staff');
-        $scouts    = $conn->executeStatement('DELETE FROM scout');
-        $investors = $conn->executeStatement('DELETE FROM investor WHERE assigned_at IS NULL');
-        $sponsors  = $conn->executeStatement('DELETE FROM sponsor WHERE assigned_at IS NULL');
-        $agents    = $conn->executeStatement('DELETE FROM agent');
-
-        $total = $players + $staff + $scouts + $investors + $sponsors + $agents;
-        $this->addFlash('success', "Pool cleared — {$total} entities removed ({$players} players, {$staff} staff, {$scouts} scouts, {$investors} investors, {$sponsors} sponsors, {$agents} agents).");
-
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_pool_config']));
     }
 
     // ── Narrative Content ─────────────────────────────────────────────────
@@ -1522,7 +1277,9 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         yield MenuItem::section('Configuration');
         yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
         yield MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config');
-        yield MenuItem::linkToRoute('Pool Config', 'fa fa-layer-group', 'admin_pool_config');
+        yield MenuItem::linkToRoute('Player Pool Config', 'fa fa-person-running', 'admin_player_pool_config');
+        yield MenuItem::linkToRoute('Staff Pool Config', 'fa fa-users', 'admin_staff_pool_config');
+        yield MenuItem::linkToRoute('Investor Pool Config', 'fa fa-handshake', 'admin_investor_pool_config');
         yield MenuItem::linkToRoute('Worldpack Cache', 'fa fa-database', 'admin_worldpack_cache');
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
         yield MenuItem::section('System');

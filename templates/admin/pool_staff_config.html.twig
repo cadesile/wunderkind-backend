@@ -1,0 +1,572 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Staff Pool Config</h5>
+        <p class="text-muted small mb-0">Controls all random ranges, probability weights, and pool size targets used when generating staff (coaches, managers, directors of football, facility managers, chairmen) and scouts. Changes apply to the next generation run.</p>
+    </div>
+
+    {# ── Pool Status & Generate ──────────────────────────────────────── #}
+    <div class="col-12">
+    <style>
+    .pool-stat-card {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 12px 10px 10px;
+        text-align: center;
+        transition: border-color .18s;
+    }
+    .pool-stat-card:hover { border-color: var(--bs-border-color-translucent); }
+    .pool-stat-count { font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
+    .pool-stat-target { font-size: .75rem; color: var(--bs-secondary-color); }
+    .pool-stat-label { font-size: .7rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .pool-progress { height: 3px; border-radius: 2px; background: var(--bs-border-color); overflow: hidden; margin-top: 7px; }
+    .pool-progress-bar { height: 100%; border-radius: 2px; transition: width .4s ease; }
+
+    .nat-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 500;
+        border: 1px solid var(--bs-border-color); background: transparent;
+        color: var(--bs-secondary-color); cursor: pointer; transition: all .15s;
+        user-select: none;
+    }
+    .nat-chip:hover { border-color: var(--bs-primary); color: var(--bs-primary); }
+    .nat-chip.active {
+        background: rgba(var(--bs-primary-rgb), .15);
+        border-color: var(--bs-primary); color: var(--bs-primary);
+    }
+    .nat-chip.active::after { content: '×'; margin-left: 2px; font-size: .8rem; opacity: .7; }
+
+    .job-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 7px 10px; border-radius: 6px;
+        font-size: .8rem; transition: background .15s;
+    }
+    .job-row:nth-child(odd) { background: rgba(255,255,255,.03); }
+    .job-icon { width: 16px; text-align: center; flex-shrink: 0; }
+    .job-label { flex: 1; font-family: monospace; }
+    .job-status { font-size: .72rem; color: var(--bs-secondary-color); }
+    .job-count { font-size: .72rem; font-family: monospace; font-weight: 600; min-width: 60px; text-align: right; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin .8s linear infinite; display: inline-block; }
+
+    .activity-log {
+        max-height: 200px; overflow-y: auto; font-size: .75rem; font-family: monospace;
+        background: rgba(0,0,0,.2); border-radius: 6px; padding: 8px 10px;
+        border: 1px solid var(--bs-border-color);
+    }
+    .log-entry { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--bs-secondary-color); flex-shrink: 0; }
+    .log-label { flex: 1; }
+    .log-count { font-weight: 600; min-width: 70px; text-align: right; }
+
+    .btn-pool-action {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 16px; border-radius: 6px; font-size: .8rem; font-weight: 600;
+        border: 1px solid; cursor: pointer; transition: all .18s; white-space: nowrap;
+    }
+    .btn-pool-action:disabled { opacity: .45; cursor: not-allowed; }
+    </style>
+
+        <div class="card border-primary-subtle">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-users text-muted fa-sm"></i>
+                <span class="fw-semibold small">Pool Status &amp; Generate</span>
+            </div>
+            <div class="card-body pb-3">
+
+                {# ── Status Grid ────────────────────────────────────────── #}
+                {% set poolItems = [
+                    { key: 'coaches',          label: 'Coaches',       icon: 'chalkboard-user',   count: poolCounts.staffCoach,       target: config.coachPoolTarget },
+                    { key: 'managers',         label: 'Managers',      icon: 'person-chalkboard', count: poolCounts.staffManager,     target: config.managerPoolTarget },
+                    { key: 'directors',        label: 'Directors',     icon: 'user-tie',          count: poolCounts.staffDirector,    target: config.directorOfFootballPoolTarget },
+                    { key: 'facility_managers',label: 'Facility Mgrs', icon: 'building',          count: poolCounts.staffFacilityMgr, target: config.facilityManagerPoolTarget },
+                    { key: 'chairmen',         label: 'Chairmen',      icon: 'crown',             count: poolCounts.staffChairman,    target: config.chairmanPoolTarget },
+                    { key: 'scouts',           label: 'Scouts',        icon: 'binoculars',        count: poolCounts.scouts,           target: config.scoutPoolTarget },
+                ] %}
+                <div class="row g-2 mb-3">
+                    {% for item in poolItems %}
+                    {% set pct = item.target > 0 ? min(100, (item.count / item.target * 100)|round) : 100 %}
+                    {% set barColor = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444') %}
+                    <div class="col-6 col-sm-4 col-md-2">
+                        <div class="pool-stat-card" data-pool-key="{{ item.key }}">
+                            <i class="fa fa-{{ item.icon }} fa-sm" style="color:var(--bs-secondary-color)"></i>
+                            <div class="pool-stat-count">
+                                <span class="js-count" data-key="{{ item.key }}">{{ item.count }}</span>
+                            </div>
+                            <div class="pool-stat-target">/ {{ item.target }}</div>
+                            <div class="pool-stat-label">{{ item.label }}</div>
+                            <div class="pool-progress">
+                                <div class="pool-progress-bar js-bar" data-key="{{ item.key }}" data-target="{{ item.target }}"
+                                     style="width:{{ pct }}%;background:{{ barColor }}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {# ── Nationality Multi-Select ─────────────────────────── #}
+                <div class="mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fa fa-flag fa-sm text-muted"></i>
+                        <span class="fw-semibold small">Nationality</span>
+                        <span class="text-muted" style="font-size:.7rem;">— applies to Force Add only · replenish uses random</span>
+                    </div>
+                    <div id="nat-chips" class="d-flex flex-wrap gap-1">
+                        <button type="button" class="nat-chip active" data-nat="">Random</button>
+                        {% for nat in ['English','Spanish','French','German','Brazilian','Portuguese','Nigerian','Ghanaian','Japanese','South Korean','Argentine','Dutch','Italian','Swedish','Danish','Irish','Ivorian','Senegalese','Chinese','Polish'] %}
+                        <button type="button" class="nat-chip" data-nat="{{ nat }}">{{ nat }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# ── Action Buttons ───────────────────────────────────── #}
+                <div class="d-flex gap-2 flex-wrap align-items-center mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
+                    <button id="btn-replenish" class="btn-pool-action"
+                            style="border-color:var(--bs-primary);color:var(--bs-primary);"
+                            title="Only generates for pools below their configured target">
+                        <i class="fa fa-arrow-up fa-sm"></i> Replenish to Targets
+                    </button>
+                    <button id="btn-force" class="btn-pool-action"
+                            style="border-color:#f59e0b;color:#f59e0b;"
+                            title="Generates the full target count for every type, for each selected nationality">
+                        <i class="fa fa-bolt fa-sm"></i> Force Add Batch
+                    </button>
+                    <button id="btn-clear" class="btn-pool-action ms-auto"
+                            style="border-color:var(--bs-danger);color:var(--bs-danger);"
+                            title="Permanently removes ALL unassigned staff and scouts">
+                        <i class="fa fa-trash fa-sm"></i> Clear All Staff &amp; Scouts
+                    </button>
+                    {# Hidden clear form target #}
+                    <form id="form-clear" method="POST" action="{{ path('admin_staff_pool_clear') }}" class="d-none">
+                        <input type="hidden" name="_token" value="{{ csrf_token('clear_staff_pool') }}">
+                    </form>
+                </div>
+
+                {# ── Progress Panel ───────────────────────────────────── #}
+                <div id="progress-panel" class="d-none mb-3">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fa fa-list-check fa-sm text-muted"></i>
+                        <span class="fw-semibold small">Batch Progress</span>
+                        <span id="progress-summary" class="text-muted ms-1" style="font-size:.72rem;"></span>
+                    </div>
+                    <div id="progress-jobs" class="d-flex flex-column"></div>
+                </div>
+
+                {# ── Activity Log ─────────────────────────────────────── #}
+                <div id="activity-section" class="d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-1 pt-2" style="border-top:1px solid var(--bs-border-color)">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa fa-terminal fa-sm text-muted"></i>
+                            <span class="fw-semibold small">Activity Log</span>
+                            <span class="text-muted" style="font-size:.7rem;">— since page load</span>
+                        </div>
+                        <button type="button" onclick="document.getElementById('activity-log').innerHTML='';document.getElementById('activity-section').classList.add('d-none');"
+                                class="btn btn-link btn-sm p-0 text-muted" style="font-size:.7rem;">clear</button>
+                    </div>
+                    <div id="activity-log" class="activity-log"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const CSRF    = '{{ csrf_token("generate_staff_pool") }}';
+        const CHUNK_URL  = '{{ path("admin_staff_pool_generate_chunk") }}';
+        const COUNTS_URL = '{{ path("admin_staff_pool_counts") }}';
+
+        const TYPES = [
+            { key: 'coaches',           label: 'Coaches',       supportsNat: true },
+            { key: 'managers',          label: 'Managers',      supportsNat: true },
+            { key: 'directors',         label: 'Directors',     supportsNat: true },
+            { key: 'facility_managers', label: 'Facility Mgrs', supportsNat: true },
+            { key: 'chairmen',          label: 'Chairmen',      supportsNat: true },
+            { key: 'scouts',            label: 'Scouts',        supportsNat: true },
+        ];
+
+        // ── Nationality chips ─────────────────────────────────────────
+        document.getElementById('nat-chips').addEventListener('click', function (e) {
+            const chip = e.target.closest('.nat-chip');
+            if (!chip) return;
+            const nat = chip.dataset.nat;
+            const allChips = [...this.querySelectorAll('.nat-chip')];
+
+            if (nat === '') {
+                allChips.forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+            } else {
+                const randomChip = this.querySelector('[data-nat=""]');
+                if (chip.classList.contains('active')) {
+                    chip.classList.remove('active');
+                    if (!allChips.some(c => c.dataset.nat !== '' && c.classList.contains('active'))) {
+                        randomChip.classList.add('active');
+                    }
+                } else {
+                    randomChip.classList.remove('active');
+                    chip.classList.add('active');
+                }
+            }
+        });
+
+        function getSelectedNats() {
+            return [...document.querySelectorAll('#nat-chips .nat-chip.active')]
+                .filter(c => c.dataset.nat !== '')
+                .map(c => c.dataset.nat);
+        }
+
+        // ── Job queue builder ─────────────────────────────────────────
+        function buildJobs(mode) {
+            const nats = (mode === 'force') ? getSelectedNats() : [];
+            const jobs = [];
+            for (const type of TYPES) {
+                if (type.supportsNat && nats.length > 0) {
+                    for (const nat of nats) {
+                        jobs.push({ type: type.key, label: type.label + ' · ' + nat, nationality: nat, mode });
+                    }
+                } else {
+                    jobs.push({ type: type.key, label: type.label, nationality: null, mode });
+                }
+            }
+            return jobs;
+        }
+
+        // ── Progress rendering ────────────────────────────────────────
+        function renderJobs(jobs) {
+            const container = document.getElementById('progress-jobs');
+            container.innerHTML = '';
+            jobs.forEach((job, i) => {
+                const row = document.createElement('div');
+                row.className = 'job-row';
+                row.id = 'job-' + i;
+                row.innerHTML = `<span class="job-icon" id="ji-${i}">
+                    <i class="fa fa-clock fa-xs" style="color:var(--bs-secondary-color)"></i>
+                </span>
+                <span class="job-label">${esc(job.label)}</span>
+                <span class="job-status" id="js-${i}">queued</span>
+                <span class="job-count" id="jc-${i}"></span>`;
+                container.appendChild(row);
+            });
+        }
+
+        function setJobRunning(i) {
+            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-circle-notch fa-xs spin" style="color:var(--bs-primary)"></i>';
+            document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-primary)">running…</span>';
+        }
+
+        function setJobDone(i, count, skipped) {
+            if (skipped) {
+                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-minus fa-xs" style="color:var(--bs-secondary-color)"></i>';
+                document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-secondary-color)">at target</span>';
+            } else {
+                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-check fa-xs" style="color:#22c55e"></i>';
+                document.getElementById('js-' + i).innerHTML = '<span style="color:#22c55e">done</span>';
+                document.getElementById('jc-' + i).textContent = '+' + count;
+            }
+        }
+
+        function setJobError(i, msg) {
+            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-xmark fa-xs" style="color:var(--bs-danger)"></i>';
+            document.getElementById('js-' + i).innerHTML = `<span style="color:var(--bs-danger)">${esc(msg)}</span>`;
+        }
+
+        // ── Activity log ──────────────────────────────────────────────
+        function addLogEntry(label, count, mode, status) {
+            const section = document.getElementById('activity-section');
+            const log     = document.getElementById('activity-log');
+            section.classList.remove('d-none');
+
+            const now = new Date();
+            const ts  = String(now.getHours()).padStart(2,'0') + ':' +
+                        String(now.getMinutes()).padStart(2,'0') + ':' +
+                        String(now.getSeconds()).padStart(2,'0');
+
+            const statusHtml = status === 'ok'
+                ? `<span style="color:#22c55e">✓</span>`
+                : status === 'skip'
+                    ? `<span style="color:var(--bs-secondary-color)">–</span>`
+                    : `<span style="color:var(--bs-danger)">✕</span>`;
+
+            const countHtml = count > 0
+                ? `<span class="log-count" style="color:#22c55e">+${count}</span>`
+                : `<span class="log-count" style="color:var(--bs-secondary-color)">${status === 'skip' ? 'at target' : 'err'}</span>`;
+
+            const modeTag = `<span style="color:var(--bs-secondary-color);font-size:.65rem;">(${mode})</span>`;
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">${ts}</span>${statusHtml}<span class="log-label">${esc(label)}</span>${countHtml}${modeTag}`;
+            log.insertBefore(entry, log.firstChild);
+        }
+
+        // ── Count refresh ─────────────────────────────────────────────
+        async function refreshCounts() {
+            try {
+                const res  = await fetch(COUNTS_URL);
+                const data = await res.json();
+
+                const keyMap = {
+                    staffCoach:       'coaches',
+                    staffManager:     'managers',
+                    staffDirector:    'directors',
+                    staffFacilityMgr: 'facility_managers',
+                    staffChairman:    'chairmen',
+                    scouts:           'scouts',
+                };
+
+                document.querySelectorAll('.js-bar').forEach(bar => {
+                    const poolKey = bar.dataset.key;
+                    const target  = parseInt(bar.dataset.target, 10);
+
+                    const countKey = Object.keys(keyMap).find(k => keyMap[k] === poolKey);
+                    if (!countKey || !(countKey in data)) return;
+
+                    const count = data[countKey];
+                    const pct   = target > 0 ? Math.min(100, Math.round(count / target * 100)) : 100;
+                    const color = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444');
+
+                    bar.style.width    = pct + '%';
+                    bar.style.background = color;
+
+                    const countEl = document.querySelector('.js-count[data-key="' + poolKey + '"]');
+                    if (countEl) countEl.textContent = count;
+                });
+            } catch (_) { /* silent */ }
+        }
+
+        // ── Main run ──────────────────────────────────────────────────
+        function setButtons(disabled) {
+            ['btn-replenish','btn-force','btn-clear'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = disabled;
+            });
+        }
+
+        async function runJobs(jobs) {
+            const panel = document.getElementById('progress-panel');
+            const summary = document.getElementById('progress-summary');
+            renderJobs(jobs);
+            panel.classList.remove('d-none');
+            setButtons(true);
+
+            let done = 0, generated = 0;
+            summary.textContent = `0 / ${jobs.length} complete`;
+
+            for (let i = 0; i < jobs.length; i++) {
+                const job = jobs[i];
+                setJobRunning(i);
+
+                const body = new URLSearchParams({
+                    _token:      CSRF,
+                    type:        job.type,
+                    nationality: job.nationality || '',
+                    mode:        job.mode,
+                });
+
+                try {
+                    const res  = await fetch(CHUNK_URL, { method: 'POST', body });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        setJobDone(i, data.count || 0, !!data.skipped);
+                        generated += (data.count || 0);
+                        addLogEntry(job.label, data.count || 0, job.mode, data.skipped ? 'skip' : 'ok');
+                    } else {
+                        setJobError(i, data.message || 'Error');
+                        addLogEntry(job.label, 0, job.mode, 'error');
+                    }
+                } catch (err) {
+                    setJobError(i, 'Network error');
+                    addLogEntry(job.label, 0, job.mode, 'error');
+                }
+
+                done++;
+                summary.textContent = `${done} / ${jobs.length} complete · ${generated} generated`;
+
+                const el = document.getElementById('job-' + Math.min(i + 1, jobs.length - 1));
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }
+
+            summary.textContent = `${jobs.length} / ${jobs.length} complete · ${generated} total generated`;
+            await refreshCounts();
+            setButtons(false);
+        }
+
+        // ── Button handlers ───────────────────────────────────────────
+        document.getElementById('btn-replenish').addEventListener('click', function () {
+            if (!confirm('Replenish all staff/scout pools to their configured targets?')) return;
+            runJobs(buildJobs('replenish'));
+        });
+
+        document.getElementById('btn-force').addEventListener('click', function () {
+            const nats = getSelectedNats();
+            const natLabel = nats.length ? nats.join(', ') : 'random nationalities';
+            if (!confirm('Force-add the full target batch for all staff/scout types?\nNationalities: ' + natLabel)) return;
+            runJobs(buildJobs('force'));
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', function () {
+            if (!confirm('Permanently delete ALL unassigned staff and scout pool data?\nThis cannot be undone.')) return;
+            document.getElementById('form-clear').submit();
+        });
+
+        // ── Utility ───────────────────────────────────────────────────
+        function esc(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+    }());
+    </script>
+
+    {# ── Config Form ─────────────────────────────────────────────────── #}
+    <div class="col-12">
+    <form method="POST" action="{{ path('admin_staff_pool_config_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_staff_pool_config') }}">
+        <div class="d-flex flex-column gap-4">
+
+            {# ── Pool Targets ────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-bullseye text-muted"></i>
+                    <span class="fw-semibold small">Pool Targets</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Minimum unassigned count before auto-replenishment triggers. Also used as the batch size for manual generation.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label for="coachPoolTarget" class="form-label fw-semibold small">Coaches</label>
+                            <input type="number" id="coachPoolTarget" name="coachPoolTarget"
+                                   value="{{ config.coachPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 10</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="managerPoolTarget" class="form-label fw-semibold small">Managers</label>
+                            <input type="number" id="managerPoolTarget" name="managerPoolTarget"
+                                   value="{{ config.managerPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 5</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="directorOfFootballPoolTarget" class="form-label fw-semibold small">Directors</label>
+                            <input type="number" id="directorOfFootballPoolTarget" name="directorOfFootballPoolTarget"
+                                   value="{{ config.directorOfFootballPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 2</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="facilityManagerPoolTarget" class="form-label fw-semibold small">Facility Mgrs</label>
+                            <input type="number" id="facilityManagerPoolTarget" name="facilityManagerPoolTarget"
+                                   value="{{ config.facilityManagerPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 3</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="chairmanPoolTarget" class="form-label fw-semibold small">Chairmen</label>
+                            <input type="number" id="chairmanPoolTarget" name="chairmanPoolTarget"
+                                   value="{{ config.chairmanPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 2</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="scoutPoolTarget" class="form-label fw-semibold small">Scouts</label>
+                            <input type="number" id="scoutPoolTarget" name="scoutPoolTarget"
+                                   value="{{ config.scoutPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Coaches (ranges apply to all staff roles) ──────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-chalkboard-user text-muted"></i>
+                    <span class="fw-semibold small">Staff — Age &amp; Ability</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Applies to all 5 staff roles (coaches, managers, directors of football, facility managers, chairmen).</p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="coachAgeMin" value="{{ config.coachAgeMin }}"
+                                       min="18" max="80" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="coachAgeMax" value="{{ config.coachAgeMax }}"
+                                       min="18" max="80" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 28–60</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Ability Range</label>
+                            <div class="input-group">
+                                <input type="number" name="coachAbilityMin" value="{{ config.coachAbilityMin }}"
+                                       min="1" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="coachAbilityMax" value="{{ config.coachAbilityMax }}"
+                                       min="1" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Coaching ability &amp; scouting range. Default: 40–75</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Scouts ───────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-binoculars text-muted"></i>
+                    <span class="fw-semibold small">Scouts</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutAgeMin" value="{{ config.scoutAgeMin }}"
+                                       min="18" max="80" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutAgeMax" value="{{ config.scoutAgeMax }}"
+                                       min="18" max="80" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 28–40</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Experience Range (years)</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutExperienceMin" value="{{ config.scoutExperienceMin }}"
+                                       min="0" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutExperienceMax" value="{{ config.scoutExperienceMax }}"
+                                       min="0" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 0–10</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Judgement Range</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutJudgementMin" value="{{ config.scoutJudgementMin }}"
+                                       min="0" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutJudgementMax" value="{{ config.scoutJudgementMax }}"
+                                       min="0" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">All 5 judgement categories. Default: 40–80</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>{# /gap wrapper #}
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary btn-sm">Save Staff Pool Config</button>
+        </div>
+    </form>
+    </div>
+
+</div>
+{% endblock %}

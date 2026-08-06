@@ -4,8 +4,8 @@
 <div class="row g-4 mt-1">
 
     <div class="col-12">
-        <h5 class="fw-semibold mb-0">Pool Config</h5>
-        <p class="text-muted small mb-0">Controls all random ranges, probability weights, and pool size targets used when generating players, staff, scouts, and agents. Changes apply to the next generation run.</p>
+        <h5 class="fw-semibold mb-0">Player Pool Config</h5>
+        <p class="text-muted small mb-0">Controls all random ranges, probability weights, and the pool size target used when generating players. Changes apply to the next generation run.</p>
     </div>
 
     {# ── Pool Status & Generate ──────────────────────────────────────── #}
@@ -75,23 +75,14 @@
 
         <div class="card border-primary-subtle">
             <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-layer-group text-muted fa-sm"></i>
+                <i class="fa fa-person-running text-muted fa-sm"></i>
                 <span class="fw-semibold small">Pool Status &amp; Generate</span>
             </div>
             <div class="card-body pb-3">
 
                 {# ── Status Grid ────────────────────────────────────────── #}
                 {% set poolItems = [
-                    { key: 'players',          label: 'Players',      icon: 'person-running',    count: poolCounts.players,          target: config.playerPoolTarget },
-                    { key: 'coaches',          label: 'Coaches',      icon: 'chalkboard-user',   count: poolCounts.staffCoach,        target: config.coachPoolTarget },
-                    { key: 'managers',         label: 'Managers',     icon: 'person-chalkboard', count: poolCounts.staffManager,      target: config.managerPoolTarget },
-                    { key: 'directors',        label: 'Directors',    icon: 'user-tie',          count: poolCounts.staffDirector,     target: config.directorOfFootballPoolTarget },
-                    { key: 'facility_managers',label: 'Facility Mgrs',icon: 'building',          count: poolCounts.staffFacilityMgr,  target: config.facilityManagerPoolTarget },
-                    { key: 'chairmen',         label: 'Chairmen',     icon: 'crown',             count: poolCounts.staffChairman,     target: config.chairmanPoolTarget },
-                    { key: 'scouts',           label: 'Scouts',       icon: 'binoculars',        count: poolCounts.scouts,            target: config.scoutPoolTarget },
-                    { key: 'agents',           label: 'Agents',       icon: 'handshake',         count: poolCounts.agents,            target: config.agentPoolTarget },
-                    { key: 'sponsors',         label: 'Sponsors',     icon: 'star',              count: poolCounts.sponsors,          target: config.sponsorPoolTarget },
-                    { key: 'investors',        label: 'Investors',    icon: 'chart-line',        count: poolCounts.investors,         target: config.investorPoolTarget },
+                    { key: 'players', label: 'Players', icon: 'person-running', count: poolCounts.players, target: config.playerPoolTarget },
                 ] %}
                 <div class="row g-2 mb-3">
                     {% for item in poolItems %}
@@ -133,22 +124,22 @@
                 <div class="d-flex gap-2 flex-wrap align-items-center mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
                     <button id="btn-replenish" class="btn-pool-action"
                             style="border-color:var(--bs-primary);color:var(--bs-primary);"
-                            title="Only generates for pools below their configured target">
-                        <i class="fa fa-arrow-up fa-sm"></i> Replenish to Targets
+                            title="Only generates if the pool is below its configured target">
+                        <i class="fa fa-arrow-up fa-sm"></i> Replenish to Target
                     </button>
                     <button id="btn-force" class="btn-pool-action"
                             style="border-color:#f59e0b;color:#f59e0b;"
-                            title="Generates the full target count for every type, for each selected nationality">
+                            title="Generates the full target count, for each selected nationality">
                         <i class="fa fa-bolt fa-sm"></i> Force Add Batch
                     </button>
                     <button id="btn-clear" class="btn-pool-action ms-auto"
                             style="border-color:var(--bs-danger);color:var(--bs-danger);"
-                            title="Permanently removes ALL unassigned pool data">
-                        <i class="fa fa-trash fa-sm"></i> Clear All Data
+                            title="Permanently removes ALL unassigned pool players">
+                        <i class="fa fa-trash fa-sm"></i> Clear All Players
                     </button>
                     {# Hidden clear form target #}
-                    <form id="form-clear" method="POST" action="{{ path('admin_pool_clear') }}" class="d-none">
-                        <input type="hidden" name="_token" value="{{ csrf_token('clear_pool') }}">
+                    <form id="form-clear" method="POST" action="{{ path('admin_player_pool_clear') }}" class="d-none">
+                        <input type="hidden" name="_token" value="{{ csrf_token('clear_player_pool') }}">
                     </form>
                 </div>
 
@@ -182,23 +173,12 @@
 
     <script>
     (function () {
-        const CSRF    = '{{ csrf_token("generate_pool") }}';
-        const CLEAR_CSRF = '{{ csrf_token("clear_pool") }}';
-        const CHUNK_URL  = '{{ path("admin_pool_generate_chunk") }}';
-        const COUNTS_URL = '{{ path("admin_pool_counts") }}';
-        const CLEAR_URL  = '{{ path("admin_pool_clear") }}';
+        const CSRF    = '{{ csrf_token("generate_player_pool") }}';
+        const CHUNK_URL  = '{{ path("admin_player_pool_generate_chunk") }}';
+        const COUNTS_URL = '{{ path("admin_player_pool_counts") }}';
 
         const TYPES = [
-            { key: 'players',           label: 'Players',       supportsNat: true  },
-            { key: 'coaches',           label: 'Coaches',       supportsNat: true  },
-            { key: 'managers',          label: 'Managers',      supportsNat: true  },
-            { key: 'directors',         label: 'Directors',     supportsNat: true  },
-            { key: 'facility_managers', label: 'Facility Mgrs', supportsNat: true  },
-            { key: 'chairmen',          label: 'Chairmen',      supportsNat: true  },
-            { key: 'scouts',            label: 'Scouts',        supportsNat: true  },
-            { key: 'agents',            label: 'Agents',        supportsNat: false },
-            { key: 'sponsors',          label: 'Sponsors',      supportsNat: false },
-            { key: 'investors',         label: 'Investors',     supportsNat: false },
+            { key: 'players', label: 'Players', supportsNat: true },
         ];
 
         // ── Nationality chips ─────────────────────────────────────────
@@ -323,25 +303,12 @@
                 const res  = await fetch(COUNTS_URL);
                 const data = await res.json();
 
-                const keyMap = {
-                    players:          'players',
-                    staffCoach:       'coaches',
-                    staffManager:     'managers',
-                    staffDirector:    'directors',
-                    staffFacilityMgr: 'facility_managers',
-                    staffChairman:    'chairmen',
-                    scouts:           'scouts',
-                    agents:           'agents',
-                    sponsors:         'sponsors',
-                    investors:        'investors',
-                };
+                const keyMap = { players: 'players' };
 
-                // Get targets from the current DOM bar elements
                 document.querySelectorAll('.js-bar').forEach(bar => {
                     const poolKey = bar.dataset.key;
                     const target  = parseInt(bar.dataset.target, 10);
 
-                    // Find the data key in counts response
                     const countKey = Object.keys(keyMap).find(k => keyMap[k] === poolKey);
                     if (!countKey || !(countKey in data)) return;
 
@@ -407,7 +374,6 @@
                 done++;
                 summary.textContent = `${done} / ${jobs.length} complete · ${generated} generated`;
 
-                // Scroll the running row into view
                 const el = document.getElementById('job-' + Math.min(i + 1, jobs.length - 1));
                 if (el) el.scrollIntoView({ block: 'nearest' });
             }
@@ -419,19 +385,19 @@
 
         // ── Button handlers ───────────────────────────────────────────
         document.getElementById('btn-replenish').addEventListener('click', function () {
-            if (!confirm('Replenish all pools to their configured targets?')) return;
+            if (!confirm('Replenish the player pool to its configured target?')) return;
             runJobs(buildJobs('replenish'));
         });
 
         document.getElementById('btn-force').addEventListener('click', function () {
             const nats = getSelectedNats();
             const natLabel = nats.length ? nats.join(', ') : 'random nationalities';
-            if (!confirm('Force-add the full target batch for all entity types?\nNationalities: ' + natLabel)) return;
+            if (!confirm('Force-add the full target batch of players?\nNationalities: ' + natLabel)) return;
             runJobs(buildJobs('force'));
         });
 
         document.getElementById('btn-clear').addEventListener('click', function () {
-            if (!confirm('Permanently delete ALL unassigned pool data?\nThis cannot be undone.')) return;
+            if (!confirm('Permanently delete ALL unassigned player pool data?\nThis cannot be undone.')) return;
             document.getElementById('form-clear').submit();
         });
 
@@ -444,15 +410,15 @@
 
     {# ── Config Form ─────────────────────────────────────────────────── #}
     <div class="col-12">
-    <form method="POST" action="{{ path('admin_pool_config_save') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('save_pool_config') }}">
+    <form method="POST" action="{{ path('admin_player_pool_config_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_player_pool_config') }}">
         <div class="d-flex flex-column gap-4">
 
-            {# ── Pool Targets ────────────────────────────────────────── #}
+            {# ── Pool Target ─────────────────────────────────────────── #}
             <div class="card">
                 <div class="card-header py-2 d-flex align-items-center gap-2">
                     <i class="fa fa-bullseye text-muted"></i>
-                    <span class="fw-semibold small">Pool Targets</span>
+                    <span class="fw-semibold small">Pool Target</span>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">
@@ -464,60 +430,6 @@
                             <input type="number" id="playerPoolTarget" name="playerPoolTarget"
                                    value="{{ config.playerPoolTarget }}" min="1" class="form-control">
                             <div class="form-text">Default: 50</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="coachPoolTarget" class="form-label fw-semibold small">Coaches</label>
-                            <input type="number" id="coachPoolTarget" name="coachPoolTarget"
-                                   value="{{ config.coachPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 10</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="managerPoolTarget" class="form-label fw-semibold small">Managers</label>
-                            <input type="number" id="managerPoolTarget" name="managerPoolTarget"
-                                   value="{{ config.managerPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 5</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="directorOfFootballPoolTarget" class="form-label fw-semibold small">Directors</label>
-                            <input type="number" id="directorOfFootballPoolTarget" name="directorOfFootballPoolTarget"
-                                   value="{{ config.directorOfFootballPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 2</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="facilityManagerPoolTarget" class="form-label fw-semibold small">Facility Mgrs</label>
-                            <input type="number" id="facilityManagerPoolTarget" name="facilityManagerPoolTarget"
-                                   value="{{ config.facilityManagerPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 3</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="chairmanPoolTarget" class="form-label fw-semibold small">Chairmen</label>
-                            <input type="number" id="chairmanPoolTarget" name="chairmanPoolTarget"
-                                   value="{{ config.chairmanPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 2</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="scoutPoolTarget" class="form-label fw-semibold small">Scouts</label>
-                            <input type="number" id="scoutPoolTarget" name="scoutPoolTarget"
-                                   value="{{ config.scoutPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 5</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="sponsorPoolTarget" class="form-label fw-semibold small">Sponsors</label>
-                            <input type="number" id="sponsorPoolTarget" name="sponsorPoolTarget"
-                                   value="{{ config.sponsorPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 10</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="agentPoolTarget" class="form-label fw-semibold small">Agents</label>
-                            <input type="number" id="agentPoolTarget" name="agentPoolTarget"
-                                   value="{{ config.agentPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 20</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="investorPoolTarget" class="form-label fw-semibold small">Investors</label>
-                            <input type="number" id="investorPoolTarget" name="investorPoolTarget"
-                                   value="{{ config.investorPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 5</div>
                         </div>
                     </div>
                 </div>
@@ -658,123 +570,10 @@
                 </div>
             </div>
 
-            {# ── Coaches ──────────────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-chalkboard-user text-muted"></i>
-                    <span class="fw-semibold small">Coaches</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Age Range</label>
-                            <div class="input-group">
-                                <input type="number" name="coachAgeMin" value="{{ config.coachAgeMin }}"
-                                       min="18" max="80" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="coachAgeMax" value="{{ config.coachAgeMax }}"
-                                       min="18" max="80" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 28–60</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Ability Range</label>
-                            <div class="input-group">
-                                <input type="number" name="coachAbilityMin" value="{{ config.coachAbilityMin }}"
-                                       min="1" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="coachAbilityMax" value="{{ config.coachAbilityMax }}"
-                                       min="1" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Coaching ability &amp; scouting range. Default: 40–75</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Scouts ───────────────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-binoculars text-muted"></i>
-                    <span class="fw-semibold small">Scouts</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Age Range</label>
-                            <div class="input-group">
-                                <input type="number" name="scoutAgeMin" value="{{ config.scoutAgeMin }}"
-                                       min="18" max="80" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="scoutAgeMax" value="{{ config.scoutAgeMax }}"
-                                       min="18" max="80" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 28–40</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Experience Range (years)</label>
-                            <div class="input-group">
-                                <input type="number" name="scoutExperienceMin" value="{{ config.scoutExperienceMin }}"
-                                       min="0" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="scoutExperienceMax" value="{{ config.scoutExperienceMax }}"
-                                       min="0" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 0–10</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Judgement Range</label>
-                            <div class="input-group">
-                                <input type="number" name="scoutJudgementMin" value="{{ config.scoutJudgementMin }}"
-                                       min="0" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="scoutJudgementMax" value="{{ config.scoutJudgementMax }}"
-                                       min="0" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">All 5 judgement categories. Default: 40–80</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Agents ───────────────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-handshake text-muted"></i>
-                    <span class="fw-semibold small">Agents</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Age Range</label>
-                            <div class="input-group">
-                                <input type="number" name="agentAgeMin" value="{{ config.agentAgeMin }}"
-                                       min="18" max="80" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="agentAgeMax" value="{{ config.agentAgeMax }}"
-                                       min="18" max="80" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 30–60</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Reputation Range</label>
-                            <div class="input-group">
-                                <input type="number" name="agentReputationMin" value="{{ config.agentReputationMin }}"
-                                       min="0" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="agentReputationMax" value="{{ config.agentReputationMax }}"
-                                       min="0" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Drives commission rate and rating. Default: 30–70</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>{# /gap wrapper #}
 
         <div class="mt-4">
-            <button type="submit" class="btn btn-primary btn-sm">Save Pool Config</button>
+            <button type="submit" class="btn btn-primary btn-sm">Save Player Pool Config</button>
         </div>
     </form>
     </div>

@@ -1,0 +1,425 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Investor Pool Config</h5>
+        <p class="text-muted small mb-0">Controls the random ranges and pool size targets used when generating agents, sponsors, and investors. Changes apply to the next generation run.</p>
+    </div>
+
+    {# ── Pool Status & Generate ──────────────────────────────────────── #}
+    <div class="col-12">
+    <style>
+    .pool-stat-card {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 12px 10px 10px;
+        text-align: center;
+        transition: border-color .18s;
+    }
+    .pool-stat-card:hover { border-color: var(--bs-border-color-translucent); }
+    .pool-stat-count { font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
+    .pool-stat-target { font-size: .75rem; color: var(--bs-secondary-color); }
+    .pool-stat-label { font-size: .7rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .pool-progress { height: 3px; border-radius: 2px; background: var(--bs-border-color); overflow: hidden; margin-top: 7px; }
+    .pool-progress-bar { height: 100%; border-radius: 2px; transition: width .4s ease; }
+
+    .job-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 7px 10px; border-radius: 6px;
+        font-size: .8rem; transition: background .15s;
+    }
+    .job-row:nth-child(odd) { background: rgba(255,255,255,.03); }
+    .job-icon { width: 16px; text-align: center; flex-shrink: 0; }
+    .job-label { flex: 1; font-family: monospace; }
+    .job-status { font-size: .72rem; color: var(--bs-secondary-color); }
+    .job-count { font-size: .72rem; font-family: monospace; font-weight: 600; min-width: 60px; text-align: right; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin .8s linear infinite; display: inline-block; }
+
+    .activity-log {
+        max-height: 200px; overflow-y: auto; font-size: .75rem; font-family: monospace;
+        background: rgba(0,0,0,.2); border-radius: 6px; padding: 8px 10px;
+        border: 1px solid var(--bs-border-color);
+    }
+    .log-entry { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--bs-secondary-color); flex-shrink: 0; }
+    .log-label { flex: 1; }
+    .log-count { font-weight: 600; min-width: 70px; text-align: right; }
+
+    .btn-pool-action {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 16px; border-radius: 6px; font-size: .8rem; font-weight: 600;
+        border: 1px solid; cursor: pointer; transition: all .18s; white-space: nowrap;
+    }
+    .btn-pool-action:disabled { opacity: .45; cursor: not-allowed; }
+    </style>
+
+        <div class="card border-primary-subtle">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-handshake text-muted fa-sm"></i>
+                <span class="fw-semibold small">Pool Status &amp; Generate</span>
+            </div>
+            <div class="card-body pb-3">
+
+                {# ── Status Grid ────────────────────────────────────────── #}
+                {% set poolItems = [
+                    { key: 'agents',    label: 'Agents',    icon: 'handshake',  count: poolCounts.agents,    target: config.agentPoolTarget },
+                    { key: 'sponsors',  label: 'Sponsors',  icon: 'star',       count: poolCounts.sponsors,  target: config.sponsorPoolTarget },
+                    { key: 'investors', label: 'Investors', icon: 'chart-line', count: poolCounts.investors, target: config.investorPoolTarget },
+                ] %}
+                <div class="row g-2 mb-3">
+                    {% for item in poolItems %}
+                    {% set pct = item.target > 0 ? min(100, (item.count / item.target * 100)|round) : 100 %}
+                    {% set barColor = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444') %}
+                    <div class="col-6 col-sm-4 col-md-2">
+                        <div class="pool-stat-card" data-pool-key="{{ item.key }}">
+                            <i class="fa fa-{{ item.icon }} fa-sm" style="color:var(--bs-secondary-color)"></i>
+                            <div class="pool-stat-count">
+                                <span class="js-count" data-key="{{ item.key }}">{{ item.count }}</span>
+                            </div>
+                            <div class="pool-stat-target">/ {{ item.target }}</div>
+                            <div class="pool-stat-label">{{ item.label }}</div>
+                            <div class="pool-progress">
+                                <div class="pool-progress-bar js-bar" data-key="{{ item.key }}" data-target="{{ item.target }}"
+                                     style="width:{{ pct }}%;background:{{ barColor }}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {# Note: agents/sponsors/investors generation is not nationality-aware, so no nationality selector here. #}
+
+                {# ── Action Buttons ───────────────────────────────────── #}
+                <div class="d-flex gap-2 flex-wrap align-items-center mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
+                    <button id="btn-replenish" class="btn-pool-action"
+                            style="border-color:var(--bs-primary);color:var(--bs-primary);"
+                            title="Only generates for pools below their configured target">
+                        <i class="fa fa-arrow-up fa-sm"></i> Replenish to Targets
+                    </button>
+                    <button id="btn-force" class="btn-pool-action"
+                            style="border-color:#f59e0b;color:#f59e0b;"
+                            title="Generates the full target count for every type">
+                        <i class="fa fa-bolt fa-sm"></i> Force Add Batch
+                    </button>
+                    <button id="btn-clear" class="btn-pool-action ms-auto"
+                            style="border-color:var(--bs-danger);color:var(--bs-danger);"
+                            title="Permanently removes ALL unassigned agents, sponsors, and investors">
+                        <i class="fa fa-trash fa-sm"></i> Clear All Investor Data
+                    </button>
+                    {# Hidden clear form target #}
+                    <form id="form-clear" method="POST" action="{{ path('admin_investor_pool_clear') }}" class="d-none">
+                        <input type="hidden" name="_token" value="{{ csrf_token('clear_investor_pool') }}">
+                    </form>
+                </div>
+
+                {# ── Progress Panel ───────────────────────────────────── #}
+                <div id="progress-panel" class="d-none mb-3">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fa fa-list-check fa-sm text-muted"></i>
+                        <span class="fw-semibold small">Batch Progress</span>
+                        <span id="progress-summary" class="text-muted ms-1" style="font-size:.72rem;"></span>
+                    </div>
+                    <div id="progress-jobs" class="d-flex flex-column"></div>
+                </div>
+
+                {# ── Activity Log ─────────────────────────────────────── #}
+                <div id="activity-section" class="d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-1 pt-2" style="border-top:1px solid var(--bs-border-color)">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa fa-terminal fa-sm text-muted"></i>
+                            <span class="fw-semibold small">Activity Log</span>
+                            <span class="text-muted" style="font-size:.7rem;">— since page load</span>
+                        </div>
+                        <button type="button" onclick="document.getElementById('activity-log').innerHTML='';document.getElementById('activity-section').classList.add('d-none');"
+                                class="btn btn-link btn-sm p-0 text-muted" style="font-size:.7rem;">clear</button>
+                    </div>
+                    <div id="activity-log" class="activity-log"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const CSRF    = '{{ csrf_token("generate_investor_pool") }}';
+        const CHUNK_URL  = '{{ path("admin_investor_pool_generate_chunk") }}';
+        const COUNTS_URL = '{{ path("admin_investor_pool_counts") }}';
+
+        const TYPES = [
+            { key: 'agents',    label: 'Agents' },
+            { key: 'sponsors',  label: 'Sponsors' },
+            { key: 'investors', label: 'Investors' },
+        ];
+
+        // ── Job queue builder (no nationality support for this group) ──
+        function buildJobs(mode) {
+            return TYPES.map(type => ({ type: type.key, label: type.label, nationality: null, mode }));
+        }
+
+        // ── Progress rendering ────────────────────────────────────────
+        function renderJobs(jobs) {
+            const container = document.getElementById('progress-jobs');
+            container.innerHTML = '';
+            jobs.forEach((job, i) => {
+                const row = document.createElement('div');
+                row.className = 'job-row';
+                row.id = 'job-' + i;
+                row.innerHTML = `<span class="job-icon" id="ji-${i}">
+                    <i class="fa fa-clock fa-xs" style="color:var(--bs-secondary-color)"></i>
+                </span>
+                <span class="job-label">${esc(job.label)}</span>
+                <span class="job-status" id="js-${i}">queued</span>
+                <span class="job-count" id="jc-${i}"></span>`;
+                container.appendChild(row);
+            });
+        }
+
+        function setJobRunning(i) {
+            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-circle-notch fa-xs spin" style="color:var(--bs-primary)"></i>';
+            document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-primary)">running…</span>';
+        }
+
+        function setJobDone(i, count, skipped) {
+            if (skipped) {
+                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-minus fa-xs" style="color:var(--bs-secondary-color)"></i>';
+                document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-secondary-color)">at target</span>';
+            } else {
+                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-check fa-xs" style="color:#22c55e"></i>';
+                document.getElementById('js-' + i).innerHTML = '<span style="color:#22c55e">done</span>';
+                document.getElementById('jc-' + i).textContent = '+' + count;
+            }
+        }
+
+        function setJobError(i, msg) {
+            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-xmark fa-xs" style="color:var(--bs-danger)"></i>';
+            document.getElementById('js-' + i).innerHTML = `<span style="color:var(--bs-danger)">${esc(msg)}</span>`;
+        }
+
+        // ── Activity log ──────────────────────────────────────────────
+        function addLogEntry(label, count, mode, status) {
+            const section = document.getElementById('activity-section');
+            const log     = document.getElementById('activity-log');
+            section.classList.remove('d-none');
+
+            const now = new Date();
+            const ts  = String(now.getHours()).padStart(2,'0') + ':' +
+                        String(now.getMinutes()).padStart(2,'0') + ':' +
+                        String(now.getSeconds()).padStart(2,'0');
+
+            const statusHtml = status === 'ok'
+                ? `<span style="color:#22c55e">✓</span>`
+                : status === 'skip'
+                    ? `<span style="color:var(--bs-secondary-color)">–</span>`
+                    : `<span style="color:var(--bs-danger)">✕</span>`;
+
+            const countHtml = count > 0
+                ? `<span class="log-count" style="color:#22c55e">+${count}</span>`
+                : `<span class="log-count" style="color:var(--bs-secondary-color)">${status === 'skip' ? 'at target' : 'err'}</span>`;
+
+            const modeTag = `<span style="color:var(--bs-secondary-color);font-size:.65rem;">(${mode})</span>`;
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">${ts}</span>${statusHtml}<span class="log-label">${esc(label)}</span>${countHtml}${modeTag}`;
+            log.insertBefore(entry, log.firstChild);
+        }
+
+        // ── Count refresh ─────────────────────────────────────────────
+        async function refreshCounts() {
+            try {
+                const res  = await fetch(COUNTS_URL);
+                const data = await res.json();
+
+                const keyMap = { agents: 'agents', sponsors: 'sponsors', investors: 'investors' };
+
+                document.querySelectorAll('.js-bar').forEach(bar => {
+                    const poolKey = bar.dataset.key;
+                    const target  = parseInt(bar.dataset.target, 10);
+
+                    const countKey = Object.keys(keyMap).find(k => keyMap[k] === poolKey);
+                    if (!countKey || !(countKey in data)) return;
+
+                    const count = data[countKey];
+                    const pct   = target > 0 ? Math.min(100, Math.round(count / target * 100)) : 100;
+                    const color = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444');
+
+                    bar.style.width    = pct + '%';
+                    bar.style.background = color;
+
+                    const countEl = document.querySelector('.js-count[data-key="' + poolKey + '"]');
+                    if (countEl) countEl.textContent = count;
+                });
+            } catch (_) { /* silent */ }
+        }
+
+        // ── Main run ──────────────────────────────────────────────────
+        function setButtons(disabled) {
+            ['btn-replenish','btn-force','btn-clear'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = disabled;
+            });
+        }
+
+        async function runJobs(jobs) {
+            const panel = document.getElementById('progress-panel');
+            const summary = document.getElementById('progress-summary');
+            renderJobs(jobs);
+            panel.classList.remove('d-none');
+            setButtons(true);
+
+            let done = 0, generated = 0;
+            summary.textContent = `0 / ${jobs.length} complete`;
+
+            for (let i = 0; i < jobs.length; i++) {
+                const job = jobs[i];
+                setJobRunning(i);
+
+                const body = new URLSearchParams({
+                    _token:      CSRF,
+                    type:        job.type,
+                    nationality: job.nationality || '',
+                    mode:        job.mode,
+                });
+
+                try {
+                    const res  = await fetch(CHUNK_URL, { method: 'POST', body });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        setJobDone(i, data.count || 0, !!data.skipped);
+                        generated += (data.count || 0);
+                        addLogEntry(job.label, data.count || 0, job.mode, data.skipped ? 'skip' : 'ok');
+                    } else {
+                        setJobError(i, data.message || 'Error');
+                        addLogEntry(job.label, 0, job.mode, 'error');
+                    }
+                } catch (err) {
+                    setJobError(i, 'Network error');
+                    addLogEntry(job.label, 0, job.mode, 'error');
+                }
+
+                done++;
+                summary.textContent = `${done} / ${jobs.length} complete · ${generated} generated`;
+
+                const el = document.getElementById('job-' + Math.min(i + 1, jobs.length - 1));
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }
+
+            summary.textContent = `${jobs.length} / ${jobs.length} complete · ${generated} total generated`;
+            await refreshCounts();
+            setButtons(false);
+        }
+
+        // ── Button handlers ───────────────────────────────────────────
+        document.getElementById('btn-replenish').addEventListener('click', function () {
+            if (!confirm('Replenish agents/sponsors/investors to their configured targets?')) return;
+            runJobs(buildJobs('replenish'));
+        });
+
+        document.getElementById('btn-force').addEventListener('click', function () {
+            if (!confirm('Force-add the full target batch for agents, sponsors, and investors?')) return;
+            runJobs(buildJobs('force'));
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', function () {
+            if (!confirm('Permanently delete ALL unassigned agents, sponsors, and investors?\nThis cannot be undone.')) return;
+            document.getElementById('form-clear').submit();
+        });
+
+        // ── Utility ───────────────────────────────────────────────────
+        function esc(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+    }());
+    </script>
+
+    {# ── Config Form ─────────────────────────────────────────────────── #}
+    <div class="col-12">
+    <form method="POST" action="{{ path('admin_investor_pool_config_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_investor_pool_config') }}">
+        <div class="d-flex flex-column gap-4">
+
+            {# ── Pool Targets ────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-bullseye text-muted"></i>
+                    <span class="fw-semibold small">Pool Targets</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Minimum unassigned count before auto-replenishment triggers. Also used as the batch size for manual generation.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label for="agentPoolTarget" class="form-label fw-semibold small">Agents</label>
+                            <input type="number" id="agentPoolTarget" name="agentPoolTarget"
+                                   value="{{ config.agentPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 20</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="sponsorPoolTarget" class="form-label fw-semibold small">Sponsors</label>
+                            <input type="number" id="sponsorPoolTarget" name="sponsorPoolTarget"
+                                   value="{{ config.sponsorPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 10</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="investorPoolTarget" class="form-label fw-semibold small">Investors</label>
+                            <input type="number" id="investorPoolTarget" name="investorPoolTarget"
+                                   value="{{ config.investorPoolTarget }}" min="1" class="form-control">
+                            <div class="form-text">Default: 5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Agents ───────────────────────────────────────────────── #}
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-handshake text-muted"></i>
+                    <span class="fw-semibold small">Agents</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Age Range</label>
+                            <div class="input-group">
+                                <input type="number" name="agentAgeMin" value="{{ config.agentAgeMin }}"
+                                       min="18" max="80" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="agentAgeMax" value="{{ config.agentAgeMax }}"
+                                       min="18" max="80" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Default: 30–60</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Reputation Range</label>
+                            <div class="input-group">
+                                <input type="number" name="agentReputationMin" value="{{ config.agentReputationMin }}"
+                                       min="0" max="100" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="agentReputationMax" value="{{ config.agentReputationMax }}"
+                                       min="0" max="100" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">Drives commission rate and rating. Default: 30–70</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>{# /gap wrapper #}
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary btn-sm">Save Investor Pool Config</button>
+        </div>
+    </form>
+    </div>
+
+</div>
+{% endblock %}
