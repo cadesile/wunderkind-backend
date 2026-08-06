@@ -139,6 +139,57 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
         );
     }
 
+    public function testGeneratedTierPackClubSnapshotIncludesCitySizeFields(): void
+    {
+        $league = new League(self::COUNTRY, self::TIER, 'City Size Test League');
+        $this->em->persist($league);
+        $this->track($league);
+
+        $npc = new NpcClub(
+            'Gamma FC', self::COUNTRY, self::TIER, 20, '#111111', '#eeeeee', 1_000_000, [],
+            region: 'Test Region',
+            citySize: \App\Enum\CitySize::BIG,
+            populationSize: 500_000,
+            isCapital: true,
+        );
+        $npc->setLeague($league);
+        $this->em->persist($npc);
+        $this->track($npc);
+
+        foreach (PlayerPosition::cases() as $position) {
+            $p = new Player('Pool', $position->value, new \DateTimeImmutable('-17 years'), self::COUNTRY, $position);
+            $p->setCurrentAbility(17);
+            $p->setPotential(25);
+            $this->em->persist($p);
+        }
+
+        foreach ([StaffRole::MANAGER, StaffRole::COACH, StaffRole::CHAIRMAN] as $role) {
+            $this->em->persist(new Staff('Staff', $role->value, $role));
+        }
+
+        $user = new User('citysize-tierpack-test@example.com');
+        $user->setPassword('x');
+        $this->em->persist($user);
+        $this->track($user);
+        $club = new Club('Human Club 2', $user);
+        $this->em->persist($club);
+        $this->track($club);
+
+        $this->em->flush();
+
+        /** @var WorldInitializationService $svc */
+        $svc  = self::getContainer()->get(WorldInitializationService::class);
+        $pack = $svc->buildTierPack($club, self::COUNTRY, self::TIER);
+
+        $this->assertNotEmpty($pack['clubs']);
+        $clubSnap = $pack['clubs'][0];
+
+        $this->assertSame('Test Region', $clubSnap['region']);
+        $this->assertSame('BIG', $clubSnap['citySize']);
+        $this->assertSame(500_000, $clubSnap['populationSize']);
+        $this->assertTrue($clubSnap['isCapital']);
+    }
+
     private function track(object $entity): void
     {
         $this->cleanup[] = $entity;

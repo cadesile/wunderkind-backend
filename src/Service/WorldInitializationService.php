@@ -382,6 +382,10 @@ class WorldInitializationService
             'secondaryColor' => $club->getSecondaryColor(),
             'stadiumName'    => $club->getStadiumName(),
             'facilities'     => $club->getFacilities(),
+            'region'         => $club->getRegion(),
+            'citySize'       => $club->getCitySize()->value,
+            'populationSize' => $club->getPopulationSize(),
+            'isCapital'      => $club->isCapital(),
             'personality'    => [
                 'playingStyle'       => $club->getPlayingStyle(),
                 'financialApproach'  => $club->getFinancialApproach(),
