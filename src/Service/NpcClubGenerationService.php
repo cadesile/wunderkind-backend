@@ -1316,12 +1316,25 @@ class NpcClubGenerationService
         return sprintf($format, $place);
     }
 
+    /** @return array{0:int,1:int} */
+    public function skewRange(int $min, int $max, \App\Enum\CitySize $citySize): array
+    {
+        $span = $max - $min;
+
+        return match ($citySize) {
+            \App\Enum\CitySize::BIG    => [min($max, $min + (int) round($span * 0.33)), $max],
+            \App\Enum\CitySize::SMALL  => [$min, max($min, $min + (int) round($span * 0.66))],
+            \App\Enum\CitySize::MEDIUM => [$min, $max],
+        };
+    }
+
     private function reputationForTier(int $tier, \App\Enum\CitySize $citySize): int
     {
         // tier 1 → 70–90, tier 8 → 5–20 (linear interpolation)
-        $minRep = (int) round(70 - ($tier - 1) * (65 / 7));
-        $maxRep = (int) round(90 - ($tier - 1) * (70 / 7));
-        return random_int(max(1, $minRep), max(1, $maxRep));
+        $minRep = max(1, (int) round(70 - ($tier - 1) * (65 / 7)));
+        $maxRep = max(1, (int) round(90 - ($tier - 1) * (70 / 7)));
+        [$min, $max] = $this->skewRange($minRep, $maxRep, $citySize);
+        return random_int($min, $max);
     }
 
     private function balanceForTier(int $tier, \App\Enum\CitySize $citySize): int
@@ -1329,7 +1342,8 @@ class NpcClubGenerationService
         $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier);
         $min   = max(0, (int) $range['min']);
         $max   = max($min, (int) $range['max']);
-        return random_int($min, $max);
+        [$skewMin, $skewMax] = $this->skewRange($min, $max, $citySize);
+        return random_int($skewMin, $skewMax);
     }
 
     /** @return string[] [primaryColor, secondaryColor] */

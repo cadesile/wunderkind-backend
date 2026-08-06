@@ -339,4 +339,55 @@ class NpcClubGenerationServiceTest extends TestCase
         // Default tier-8 weight is 70% SMALL — with 80 clubs, expect a clear majority to be SMALL.
         $this->assertGreaterThan(40, $smallCount);
     }
+
+    public function testSkewRangeBigNarrowsToUpperTwoThirds(): void
+    {
+        $service = $this->makeService();
+        [$min, $max] = $service->skewRange(0, 90, \App\Enum\CitySize::BIG);
+
+        $this->assertSame(30, $min);
+        $this->assertSame(90, $max);
+    }
+
+    public function testSkewRangeSmallNarrowsToLowerTwoThirds(): void
+    {
+        $service = $this->makeService();
+        [$min, $max] = $service->skewRange(0, 90, \App\Enum\CitySize::SMALL);
+
+        $this->assertSame(0, $min);
+        $this->assertSame(59, $max);
+    }
+
+    public function testSkewRangeMediumIsUnchanged(): void
+    {
+        $service = $this->makeService();
+        [$min, $max] = $service->skewRange(10, 90, \App\Enum\CitySize::MEDIUM);
+
+        $this->assertSame(10, $min);
+        $this->assertSame(90, $max);
+    }
+
+    public function testBigCityClubsTrendTowardTopOfTierReputationRange(): void
+    {
+        $service = $this->makeService();
+        // Force every place BIG by giving classifyPlaces a single-place list won't work since
+        // generateClubs re-classifies internally; instead assert the aggregate average is higher
+        // than the plain midpoint, using tier 3 (a mid-range tier with room to move).
+        $clubs = $service->generateClubs(60, 3, 'ES');
+
+        $bigReps   = [];
+        $smallReps = [];
+        foreach ($clubs as $club) {
+            if ($club->getCitySize() === \App\Enum\CitySize::BIG) $bigReps[] = $club->getReputation();
+            if ($club->getCitySize() === \App\Enum\CitySize::SMALL) $smallReps[] = $club->getReputation();
+        }
+
+        if (count($bigReps) > 0 && count($smallReps) > 0) {
+            $avgBig   = array_sum($bigReps) / count($bigReps);
+            $avgSmall = array_sum($smallReps) / count($smallReps);
+            $this->assertGreaterThan($avgSmall, $avgBig);
+        } else {
+            $this->markTestSkipped('No BIG/SMALL clubs generated in this run to compare.');
+        }
+    }
 }
