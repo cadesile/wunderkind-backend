@@ -65,7 +65,7 @@ class NpcClubRepository extends ServiceEntityRepository
      * @param string      $excludeCountry Country code to exclude (e.g. 'EN')
      * @param string|null $rep            'local'|'regional'|'national'|'elite'|null
      * @param int         $limitPerTier   Max clubs per tier
-     * @return array<int, array{id: string, name: string, country: string, tier: int}>
+     * @return array<int, array{id: string, name: string, country: string, tier: int, region: ?string, citySize: string, populationSize: int, isCapital: bool}>
      */
     public function findForeignClubs(string $excludeCountry, ?string $rep = null, int $limitPerTier = 3): array
     {
@@ -77,13 +77,14 @@ class NpcClubRepository extends ServiceEntityRepository
         ];
         $tiers = ($rep !== null) ? ($tierMap[$rep] ?? null) : null;
 
+        $columns = 'id, name, country, tier, region, city_size, population_size, is_capital';
         if ($tiers !== null) {
             $placeholders = implode(',', array_fill(0, count($tiers), '?'));
             $params       = array_merge([$excludeCountry], $tiers);
-            $sql          = "SELECT id, name, country, tier FROM npc_club WHERE country != ? AND tier IN ({$placeholders}) ORDER BY tier ASC, RANDOM()";
+            $sql          = "SELECT {$columns} FROM npc_club WHERE country != ? AND tier IN ({$placeholders}) ORDER BY tier ASC, RANDOM()";
         } else {
             $params = [$excludeCountry];
-            $sql    = 'SELECT id, name, country, tier FROM npc_club WHERE country != ? ORDER BY tier ASC, RANDOM()';
+            $sql    = "SELECT {$columns} FROM npc_club WHERE country != ? ORDER BY tier ASC, RANDOM()";
         }
 
         $rows = $this->getEntityManager()->getConnection()->executeQuery($sql, $params)->fetchAllAssociative();
@@ -93,10 +94,14 @@ class NpcClubRepository extends ServiceEntityRepository
             $tier = (int) $row['tier'];
             if (!isset($byTier[$tier]) || count($byTier[$tier]) < $limitPerTier) {
                 $byTier[$tier][] = [
-                    'id'      => $row['id'],
-                    'name'    => $row['name'],
-                    'country' => $row['country'],
-                    'tier'    => $tier,
+                    'id'             => $row['id'],
+                    'name'           => $row['name'],
+                    'country'        => $row['country'],
+                    'tier'           => $tier,
+                    'region'         => $row['region'],
+                    'citySize'       => $row['city_size'],
+                    'populationSize' => (int) $row['population_size'],
+                    'isCapital'      => (bool) $row['is_capital'],
                 ];
             }
         }
