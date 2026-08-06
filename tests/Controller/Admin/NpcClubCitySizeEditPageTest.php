@@ -14,7 +14,9 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 /**
  * Proves the region/citySize/populationSize/isCapital fields added to NpcClub
  * actually render on its EasyAdmin edit page, and that submitting the form
- * persists the new values.
+ * persists the new values. `region` renders as a dropdown of distinct region
+ * values already in use (NpcClubRepository::findDistinctRegions()), not free
+ * text, so both tests select an option rather than typing a value.
  */
 class NpcClubCitySizeEditPageTest extends WebTestCase
 {
@@ -31,6 +33,17 @@ class NpcClubCitySizeEditPageTest extends WebTestCase
             $em->flush();
         }
         $client->loginUser($admin, 'admin');
+    }
+
+    /** Finds an <option> by its exact visible label text and returns its `value` attribute. */
+    private function optionValueByLabel(\Symfony\Component\DomCrawler\Crawler $select, string $label): ?string
+    {
+        foreach ($select->filter('option') as $option) {
+            if (trim($option->textContent) === $label) {
+                return $option->getAttribute('value');
+            }
+        }
+        return null;
     }
 
     public function testEditPageRendersCitySizeFields(): void
@@ -55,12 +68,16 @@ class NpcClubCitySizeEditPageTest extends WebTestCase
 
             $this->assertResponseIsSuccessful();
 
-            $this->assertGreaterThan(0, $crawler->filter('input[id$="_region"]')->count(), 'region field should render');
+            $regionSelect = $crawler->filter('select[id$="_region"]');
+            $this->assertGreaterThan(0, $regionSelect->count(), 'region field should render as a dropdown');
             $this->assertGreaterThan(0, $crawler->filter('select[id$="_citySize"]')->count(), 'citySize field should render');
             $this->assertGreaterThan(0, $crawler->filter('input[id$="_populationSize"]')->count(), 'populationSize field should render');
             $this->assertGreaterThan(0, $crawler->filter('input[id$="_isCapital"]')->count(), 'isCapital field should render');
 
-            $this->assertSame('Greater London', $crawler->filter('input[id$="_region"]')->attr('value'));
+            $this->assertNotNull(
+                $this->optionValueByLabel($regionSelect, 'Greater London'),
+                'the region dropdown should include the club\'s own region as an option',
+            );
             $this->assertSame('8982000', $crawler->filter('input[id$="_populationSize"]')->attr('value'));
         } finally {
             $em->remove($em->getRepository(NpcClub::class)->find($id));
@@ -73,7 +90,17 @@ class NpcClubCitySizeEditPageTest extends WebTestCase
         $client = static::createClient();
         $this->loginAsAdmin($client);
 
-        $em   = self::getContainer()->get(EntityManagerInterface::class);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        // A second, unrelated club whose region ("Test Target Region") we'll select
+        // from the dropdown for the club under edit — proves the dropdown is
+        // sourced from *existing* region values, not free text.
+        $regionSource = new NpcClub(
+            'Region Source FC', 'EN', 4, 40, '#111111', '#eeeeee', 1_000_000, [],
+            region: 'Test Target Region',
+        );
+        $em->persist($regionSource);
+
         $club = new NpcClub('Test City FC 2', 'EN', 4, 40, '#111111', '#eeeeee', 1_000_000, []);
         $em->persist($club);
         $em->flush();
@@ -82,28 +109,27 @@ class NpcClubCitySizeEditPageTest extends WebTestCase
         try {
             $crawler = $client->request('GET', "/admin/npc-club/{$id}/edit");
 
-            $fields = $crawler->filter('input[id$="_region"], select[id$="_citySize"], input[id$="_populationSize"], input[id$="_isCapital"]');
+            $fields = $crawler->filter('select[id$="_region"], select[id$="_citySize"], input[id$="_populationSize"], input[id$="_isCapital"]');
             $this->assertGreaterThanOrEqual(4, $fields->count(), 'expected all 4 new fields present on the form before submitting');
 
             $form = $crawler->filter('#edit-NpcClub-form')->form();
 
-            $regionName         = $crawler->filter('input[id$="_region"]')->attr('name');
-            $citySizeName       = $crawler->filter('select[id$="_citySize"]')->attr('name');
+            $regionSelect       = $crawler->filter('select[id$="_region"]');
+            $citySizeSelect     = $crawler->filter('select[id$="_citySize"]');
+            $regionName         = $regionSelect->attr('name');
+            $citySizeName       = $citySizeSelect->attr('name');
             $populationSizeName = $crawler->filter('input[id$="_populationSize"]')->attr('name');
             $isCapitalName      = $crawler->filter('input[id$="_isCapital"]')->attr('name');
 
-            // ChoiceField renders index-based option values ("0"/"1"/"2" for Big/Medium/Small),
-            // not the enum's own backed value — select by matching the option's label text.
-            $smallOptionValue = null;
-            foreach ($crawler->filter('select[id$="_citySize"]')->filter('option') as $option) {
-                if (trim($option->textContent) === 'Small') {
-                    $smallOptionValue = $option->getAttribute('value');
-                    break;
-                }
-            }
+            // Both ChoiceFields render index-based option values, not the underlying
+            // string/enum value — select by matching each option's label text.
+            $regionOptionValue = $this->optionValueByLabel($regionSelect, 'Test Target Region');
+            $this->assertNotNull($regionOptionValue, 'expected "Test Target Region" as a region dropdown option');
+
+            $smallOptionValue = $this->optionValueByLabel($citySizeSelect, 'Small');
             $this->assertNotNull($smallOptionValue, 'expected a "Small" option in the citySize dropdown');
 
-            $form[$regionName]         = 'Test Region';
+            $form[$regionName]         = $regionOptionValue;
             $form[$citySizeName]       = $smallOptionValue;
             $form[$populationSizeName] = '12345';
             $form->offsetSet($isCapitalName, true);
@@ -115,16 +141,18 @@ class NpcClubCitySizeEditPageTest extends WebTestCase
             $em->clear();
             /** @var NpcClub $reloaded */
             $reloaded = $em->getRepository(NpcClub::class)->find($id);
-            $this->assertSame('Test Region', $reloaded->getRegion());
+            $this->assertSame('Test Target Region', $reloaded->getRegion());
             $this->assertSame(CitySize::SMALL, $reloaded->getCitySize());
             $this->assertSame(12345, $reloaded->getPopulationSize());
             $this->assertTrue($reloaded->isCapital());
         } finally {
-            $managed = $em->getRepository(NpcClub::class)->find($id);
-            if ($managed !== null) {
-                $em->remove($managed);
-                $em->flush();
+            foreach ([$id, (string) $regionSource->getId()] as $cleanupId) {
+                $managed = $em->getRepository(NpcClub::class)->find($cleanupId);
+                if ($managed !== null) {
+                    $em->remove($managed);
+                }
             }
+            $em->flush();
         }
     }
 }

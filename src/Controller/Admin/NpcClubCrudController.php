@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\NpcClub;
 use App\Enum\CitySize;
+use App\Repository\NpcClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
@@ -18,6 +19,8 @@ use Symfony\Component\Form\Extension\Core\Type\MoneyType;
 
 class NpcClubCrudController extends AbstractCrudController
 {
+    public function __construct(private readonly NpcClubRepository $npcClubRepository) {}
+
     public static function getEntityFqcn(): string
     {
         return NpcClub::class;
@@ -51,8 +54,14 @@ class NpcClubCrudController extends AbstractCrudController
         yield TextField::new('stadiumName')
             ->setHelp('Optional stadium name, e.g. Estadio El Cid')
             ->hideOnIndex();
-        yield TextField::new('region')
-            ->setHelp('City\'s subnational region, e.g. Greater Manchester, Catalonia')
+        $regions = $this->npcClubRepository->findDistinctRegions();
+        yield ChoiceField::new('region')
+            ->setChoices(array_combine($regions, $regions))
+            ->setFormTypeOptions([
+                'required'    => false,
+                'placeholder' => '-- Not set --',
+            ])
+            ->setHelp('City\'s subnational region — drawn from regions already in use, e.g. Greater Manchester, Catalonia')
             ->hideOnIndex();
         yield ChoiceField::new('citySize')
             ->setChoices([

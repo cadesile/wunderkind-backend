@@ -58,6 +58,19 @@ class NpcClubRepository extends ServiceEntityRepository
         return $this->findBy(['league' => $league]);
     }
 
+    /** @return string[] distinct, non-null region values currently in use, alphabetically sorted */
+    public function findDistinctRegions(): array
+    {
+        $rows = $this->createQueryBuilder('c')
+            ->select('DISTINCT c.region')
+            ->where('c.region IS NOT NULL')
+            ->orderBy('c.region', 'ASC')
+            ->getQuery()
+            ->getScalarResult();
+
+        return array_column($rows, 'region');
+    }
+
     /**
      * Find NPC clubs NOT from the given country, optionally filtered by tier
      * derived from a rep string.
