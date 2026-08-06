@@ -1,10 +1,11 @@
 # API Spec — NPC Club City-Size Fields
 
-Adds four fields to every NPC club object returned in the world pack: `region`,
-`citySize`, `populationSize`, `isCapital`. These describe the real-world city an
-NPC club is named after and drive how the backend already biases that club's
-naming, tier placement, and reputation/balance — this spec covers what the
-client now receives, not how the backend generates it.
+Adds four fields to every NPC club object returned by the backend — in the
+world pack and in the foreign/scouting club lookups: `region`, `citySize`,
+`populationSize`, `isCapital`. These describe the real-world city an NPC club
+is named after and drive how the backend already biases that club's naming,
+tier placement, and reputation/balance — this spec covers what the client now
+receives, not how the backend generates it.
 
 ## Where this shows up
 
@@ -34,6 +35,19 @@ Each entry in `data.clubs[]` is one NPC club. The fields below are **new**;
 every other key on the club object (`id`, `name`, `abbreviation`, `reputation`,
 `startingBalance`, `primaryColor`, `secondaryColor`, `stadiumName`,
 `facilities`, `personality`, `players`, `staff`) is unchanged.
+
+The same four fields are also returned by:
+
+```
+GET /api/club/foreign
+GET /api/scout/foreign-clubs
+```
+
+Both wrap `NpcClubRepository::findForeignClubs()` and return a flatter shape —
+each entry in the response's `clubs[]` array is `{id, name, country, tier,
+region, citySize, populationSize, isCapital}` (no `players`/`staff`/
+`facilities`/etc., since these endpoints are lightweight opponent/scouting
+lookups, not full club snapshots).
 
 ## New fields
 
@@ -107,7 +121,12 @@ fields as descriptive/flavor data, not something to poll for freshness.
   scouting/opponent screens); `region` is display-only city context (e.g. "London
   United — Greater London"); `populationSize` is not expected to be shown
   directly to players in its raw form, but is available if useful.
-- **Not yet available:** the narrower `GET /api/club/foreign` endpoint (used
-  for scouting opponent lookups) still only returns `id`/`name`/`country`/`tier`
-  — these new fields are not present there. Ask if that endpoint should be
-  extended too; it wasn't in scope for this change.
+- **Foreign-clubs example row** (`GET /api/club/foreign` / `GET /api/scout/foreign-clubs`):
+  ```json
+  { "id": "0197f3b2-...", "name": "London United", "country": "EN", "tier": 1,
+    "region": "Greater London", "citySize": "BIG", "populationSize": 8982000, "isCapital": true }
+  ```
+  Same defaults/backfill and caching caveats apply here as to the world pack —
+  these endpoints query live DB state directly (not the worldpack cache), so
+  they're **not** subject to the caching caveat above; they always reflect the
+  latest generated data.
