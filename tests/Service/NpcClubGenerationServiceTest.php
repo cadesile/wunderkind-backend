@@ -229,4 +229,57 @@ class NpcClubGenerationServiceTest extends TestCase
         $service = $this->makeService();
         $this->assertSame([], $service->getRemainingPlaceNames('XX'));
     }
+
+    public function testGetSuffixesStillReturnsBothPrestigeAndGenericWords(): void
+    {
+        $service  = $this->makeService();
+        $suffixes = $service->getSuffixes('EN');
+
+        // Prestige word
+        $this->assertContains('United', $suffixes);
+        // Generic word
+        $this->assertContains('FC', $suffixes);
+    }
+
+    public function testPickSuffixForCitySizeBigAlwaysUsesPrestigePool(): void
+    {
+        $service  = $this->makeService();
+        $prestige = ['United', 'City'];
+        $generic  = ['Town', 'Rovers'];
+
+        for ($i = 0; $i < 20; $i++) {
+            $picked = $service->pickSuffixForCitySize(\App\Enum\CitySize::BIG, $prestige, $generic);
+            $this->assertContains($picked, $prestige);
+        }
+    }
+
+    public function testPickSuffixForCitySizeSmallAlwaysUsesGenericPool(): void
+    {
+        $service  = $this->makeService();
+        $prestige = ['United', 'City'];
+        $generic  = ['Town', 'Rovers'];
+
+        for ($i = 0; $i < 20; $i++) {
+            $picked = $service->pickSuffixForCitySize(\App\Enum\CitySize::SMALL, $prestige, $generic);
+            $this->assertContains($picked, $generic);
+        }
+    }
+
+    public function testPickSuffixForCitySizeMediumUsesEitherPool(): void
+    {
+        $service  = $this->makeService();
+        $prestige = ['United'];
+        $generic  = ['Town'];
+        $seenPrestige = false;
+        $seenGeneric  = false;
+
+        for ($i = 0; $i < 40; $i++) {
+            $picked = $service->pickSuffixForCitySize(\App\Enum\CitySize::MEDIUM, $prestige, $generic);
+            if ($picked === 'United') $seenPrestige = true;
+            if ($picked === 'Town') $seenGeneric = true;
+        }
+
+        $this->assertTrue($seenPrestige, 'Expected at least one prestige pick across 40 MEDIUM rolls');
+        $this->assertTrue($seenGeneric, 'Expected at least one generic pick across 40 MEDIUM rolls');
+    }
 }

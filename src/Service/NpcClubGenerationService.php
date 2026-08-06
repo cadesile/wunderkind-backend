@@ -977,53 +977,54 @@ class NpcClubGenerationService
         ],
     ];
 
-    private const SUFFIXES = ['FC', 'CF', 'Athletic', 'United', 'City', 'Rovers', 'Town', 'SC', 'Deportivo', 'Wanderers'];
+    private const PRESTIGE_SUFFIXES_BY_COUNTRY = [
+        'ES' => ['Real', 'Atlético', 'Deportivo', 'Sporting', 'RCD', 'Racing', 'Levante', 'Hércules', 'Condal', 'Europa'],
+        'EN' => ['United', 'City', 'Athletic', 'Albion', 'Villa', 'Wednesday', 'Forest', 'Rangers', 'Spurs', 'Dons'],
+        'DE' => ['1. FC', 'VfB', 'VfL', 'Eintracht', 'Borussia', 'Hertha', 'Fortuna', 'Dynamo', 'Union', 'Viktoria'],
+        'IT' => ['AC', 'AS', 'Internazionale', 'Real', 'Atalanta', 'Genoa', 'Samp', 'Bari', 'Palermo', 'Hellas'],
+        'FR' => ['Olympique', 'Racing', 'Girondins', 'Red Star', 'Stade', 'AS', 'RC', 'OGC', 'Sporting', 'Étoile'],
+        'BR' => ['Grêmio', 'Atlético', 'Botafogo', 'Real', 'América', 'Nacional', 'Independente', 'Remo', 'Paysandu', 'Esporte Clube'],
+        'AR' => ['Racing', 'Independiente', 'Estudiantes', 'Talleres', 'Belgrano', 'Huracán', 'Central', 'Gimnasia', 'Banfield', 'Club Atlético'],
+        'NL' => ['AZ', 'Vitesse', 'Twente', 'Willem', 'Heracles', 'Fortuna', 'Sparta', 'Roda', 'Excelsior', 'Go Ahead'],
+        'PT' => ['FC', 'SC', 'Sporting Clube', 'Vitória', 'Boavista', 'Nacional', 'Académica', 'Marítimo', 'Gil Vicente', 'Os Belenenses'],
+    ];
 
-    private const SUFFIXES_BY_COUNTRY = [
+    private const GENERIC_SUFFIXES_BY_COUNTRY = [
         'ES' => [
-            'CF', 'CD', 'UD', 'SD', 'Real', 'Atlético', 'Deportivo', 'Sporting', 'RCD', 'AD',
-            'Racing', 'Recreativo', 'Gimnástic', 'Unión', 'Cultural', 'Rayo', 'Burgos', 'Poli', 'CDI', 'RCE',
-            'Arenas', 'Europa', 'Condal', 'Levante', 'Hércules', 'Alcoyano', 'Mensajero', 'Izarra', 'Sestao', 'Castilla'
+            'CF', 'CD', 'UD', 'SD', 'AD', 'Recreativo', 'Gimnástic', 'Unión', 'Cultural', 'Rayo',
+            'Burgos', 'Poli', 'CDI', 'RCE', 'Arenas', 'Alcoyano', 'Mensajero', 'Izarra', 'Sestao', 'Castilla',
         ],
         'EN' => [
-            'FC', 'United', 'City', 'Town', 'Rovers', 'Wanderers', 'Athletic', 'Albion', 'County', 'Villa',
-            'North End', 'Alexandra', 'Harriers', 'Orient', 'Argyle', 'Wednesday', 'Forest', 'Rangers', 'Stanley', 'Dons',
-            'Diamonds', 'Miners', 'Warriors', 'Knights', 'Spurs', 'Heaths', 'Bridge', 'Vale', 'Park', 'Port'
+            'FC', 'Town', 'Rovers', 'Wanderers', 'County', 'North End', 'Alexandra', 'Harriers', 'Orient', 'Argyle',
+            'Stanley', 'Diamonds', 'Miners', 'Warriors', 'Knights', 'Heaths', 'Bridge', 'Vale', 'Park', 'Port',
         ],
         'DE' => [
-            'SV', '1. FC', 'SpVgg', 'TSV', 'VfB', 'VfL', 'SC', 'Eintracht', 'Fortuna', 'Borussia',
-            'Arminia', 'Germania', 'Preußen', 'Hansa', 'Viktoria', 'Wacker', 'Kickers', 'Sportfreunde', 'TuS', 'FSV',
-            'Union', 'Dynamo', 'Hertha', 'Rot-Weiß', 'Schwarz-Weiß', 'Blau-Weiß', 'Phönix', 'Stahl', 'Chemie', 'Lokomotive'
+            'SV', 'SpVgg', 'TSV', 'SC', 'Arminia', 'Germania', 'Preußen', 'Hansa', 'Wacker', 'Kickers',
+            'Sportfreunde', 'TuS', 'FSV', 'Rot-Weiß', 'Schwarz-Weiß', 'Blau-Weiß', 'Phönix', 'Stahl', 'Chemie', 'Lokomotive',
         ],
         'IT' => [
-            'AC', 'AS', 'FC', 'US', 'Polisportiva', 'Virtus', 'Calcio', 'Hellas', 'Unione Sportiva', 'SS',
-            'Genoa', 'Pro', 'Samp', 'Atalanta', 'Internazionale', 'Chievo', 'Bari', 'Palermo', 'Spal', 'Piacenza',
-            'Vigor', 'Libertas', 'Città di', 'Audace', 'Olimpia', 'Sangiovannese', 'Real', 'Borgo', 'Aquila', 'Grifone'
+            'FC', 'US', 'Polisportiva', 'Virtus', 'Calcio', 'Unione Sportiva', 'SS', 'Pro', 'Chievo', 'Spal',
+            'Piacenza', 'Vigor', 'Libertas', 'Città di', 'Audace', 'Olimpia', 'Sangiovannese', 'Borgo', 'Aquila', 'Grifone',
         ],
         'FR' => [
-            'AS', 'FC', 'Olympique', 'RC', 'Stade', 'US', 'ES', 'Girondins', 'SC', 'OGC',
-            'Amiens', 'Étoile', 'Racing', 'Red Star', 'Sporting', 'Toulousain', 'Mousquetaires', 'Lorientais', 'Nimois', 'Brestois',
-            'Aigles', 'Azur', 'Lumière', 'Nord', 'Sud', 'Montagnards', 'Vignerons', 'Corsica', 'Rhodaniens', 'Alpins'
+            'FC', 'US', 'ES', 'SC', 'Amiens', 'Toulousain', 'Mousquetaires', 'Lorientais', 'Nimois', 'Brestois',
+            'Aigles', 'Azur', 'Lumière', 'Nord', 'Sud', 'Montagnards', 'Vignerons', 'Corsica', 'Rhodaniens', 'Alpins',
         ],
         'BR' => [
-            'EC', 'AC', 'SC', 'FC', 'CR', 'Esporte Clube', 'Grêmio', 'Atlético', 'Sociedade Esportiva', 'Botafogo',
-            'Nacional', 'Comercial', 'Ferroviária', 'XV de', 'Independente', 'Operário', 'Sampaio', 'Remo', 'Paysandu', 'América',
-            'Paulista', 'Carioca', 'Mineiro', 'Gaúcho', 'Nordeste', 'Luso', 'Real', 'União', 'Juventude', 'Vila Nova'
+            'EC', 'AC', 'SC', 'FC', 'CR', 'Sociedade Esportiva', 'Comercial', 'Ferroviária', 'XV de', 'Operário',
+            'Sampaio', 'Paulista', 'Carioca', 'Mineiro', 'Gaúcho', 'Nordeste', 'Luso', 'União', 'Juventude', 'Vila Nova',
         ],
         'AR' => [
-            'CA', 'Club Atlético', 'Social y Deportivo', 'AC', 'CSD', 'Gimnasia', 'Unión', 'Sportivo', 'Racing', 'Estudiantes',
-            'Defensores de', 'Ferro Carril', 'Talleres', 'Central', 'Huracán', 'Patria', 'Chacarita', 'Almagro', 'Arsenal', 'Independiente',
-            'Belgrano', 'Sarmiento', 'Mitre', 'Douglas Haig', 'Guaraní', 'Crucero', 'Aldosivi', 'Patronato', 'Banfield', 'Lanús'
+            'CA', 'Social y Deportivo', 'AC', 'CSD', 'Unión', 'Sportivo', 'Defensores de', 'Ferro Carril', 'Patria', 'Chacarita',
+            'Almagro', 'Arsenal', 'Sarmiento', 'Mitre', 'Douglas Haig', 'Guaraní', 'Crucero', 'Aldosivi', 'Patronato', 'Lanús',
         ],
         'NL' => [
-            'FC', 'SV', 'SC', 'AZ', 'VV', 'Jong', 'Sparta', 'Excelsior', 'Fortuna', 'Go Ahead',
-            'Willem', 'Heracles', 'Vitesse', 'Heerenveen', 'Twente', 'Graafschap', 'Cambuur', 'Roda', 'Telstar', 'Volendam',
-            'Unitas', 'Quick', 'Harkemase', 'IJsselmeervogels', 'Spakenburg', 'Katwijk', 'Noordwijk', 'Koninklijke', 'Blauw Wit', 'Zeeburgia'
+            'FC', 'SV', 'SC', 'VV', 'Jong', 'Heerenveen', 'Graafschap', 'Cambuur', 'Telstar', 'Volendam',
+            'Unitas', 'Quick', 'Harkemase', 'IJsselmeervogels', 'Spakenburg', 'Katwijk', 'Noordwijk', 'Koninklijke', 'Blauw Wit', 'Zeeburgia',
         ],
         'PT' => [
-            'FC', 'SC', 'CD', 'GD', 'Clube', 'União', 'Académica', 'Vitória', 'Boavista', 'Os Belenenses',
-            'Sporting Clube', 'Marítimo', 'Nacional', 'Gil Vicente', 'Paços de Ferreira', 'Moreirense', 'Arouca', 'Tondela', 'Farense', 'Olhanense',
-            'Leixões', 'Varzim', 'Mafra', 'Covilhã', 'Feirense', 'Penafiel', 'Desportivo', 'Lusitano', 'Campomaiorense', 'Beira-Mar'
+            'CD', 'GD', 'Clube', 'União', 'Paços de Ferreira', 'Moreirense', 'Arouca', 'Tondela', 'Farense', 'Olhanense',
+            'Leixões', 'Varzim', 'Mafra', 'Covilhã', 'Feirense', 'Penafiel', 'Desportivo', 'Lusitano', 'Campomaiorense', 'Beira-Mar',
         ],
     ];
 
@@ -1126,7 +1127,22 @@ class NpcClubGenerationService
     /** @return string[] */
     public function getSuffixes(string $countryCode): array
     {
-        return self::SUFFIXES_BY_COUNTRY[$countryCode] ?? [];
+        return array_merge(
+            self::PRESTIGE_SUFFIXES_BY_COUNTRY[$countryCode] ?? [],
+            self::GENERIC_SUFFIXES_BY_COUNTRY[$countryCode] ?? [],
+        );
+    }
+
+    /** @param string[] $prestige @param string[] $generic */
+    public function pickSuffixForCitySize(\App\Enum\CitySize $citySize, array $prestige, array $generic): string
+    {
+        $pool = match ($citySize) {
+            \App\Enum\CitySize::BIG    => $prestige,
+            \App\Enum\CitySize::SMALL  => $generic,
+            \App\Enum\CitySize::MEDIUM => random_int(0, 1) === 0 ? $prestige : $generic,
+        };
+
+        return $pool[array_rand($pool)];
     }
 
     /** @return NpcClub[] */
@@ -1137,7 +1153,7 @@ class NpcClubGenerationService
         $bandIndex  = $this->getBandIndexForTier($tier);
         $levelBand  = self::FACILITY_LEVELS[$bandIndex];
         $placeNames = $this->getPlaceNames($country) ?: ['Capital', 'Northern', 'Southern', 'Eastern', 'Western', 'Central'];
-        $suffixes   = self::SUFFIXES_BY_COUNTRY[$country];
+        $suffixes   = $this->getSuffixes($country);
         $usedNames  = [];
         $clubs      = [];
 
