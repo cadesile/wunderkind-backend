@@ -1081,6 +1081,15 @@ class NpcClubGenerationService
         return self::PLACE_NAMES_BY_COUNTRY[$countryCode] ?? [];
     }
 
+    /** @return string[] every name from the original full list that isn't in the curated generation pool */
+    public function getRemainingPlaceNames(string $countryCode): array
+    {
+        $curated = $this->getPlaceNames($countryCode);
+        $all     = self::ALL_PLACE_NAMES_BY_COUNTRY[$countryCode] ?? [];
+
+        return array_values(array_diff($all, $curated));
+    }
+
     /**
      * Ranks places by population_size (descending) and tags each with a CitySize:
      * top 20% => BIG, bottom 50% => SMALL, remaining middle 30% => MEDIUM.

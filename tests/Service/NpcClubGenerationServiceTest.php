@@ -191,4 +191,42 @@ class NpcClubGenerationServiceTest extends TestCase
         $this->assertSame(\App\Enum\CitySize::SMALL, $bySize['City5']);
         $this->assertSame(\App\Enum\CitySize::MEDIUM, $bySize['City6']);
     }
+
+    public function testGetRemainingPlaceNamesExcludesCuratedNames(): void
+    {
+        $service   = $this->makeService();
+        $curated   = $service->getPlaceNames('EN');
+        $remaining = $service->getRemainingPlaceNames('EN');
+
+        $this->assertNotEmpty($remaining);
+        foreach ($curated as $name) {
+            $this->assertNotContains($name, $remaining, "Curated name '{$name}' should not also appear in remaining");
+        }
+    }
+
+    public function testGetRemainingPlaceNamesContainsNonCuratedOriginalCities(): void
+    {
+        $service   = $this->makeService();
+        $remaining = $service->getRemainingPlaceNames('EN');
+
+        // 'Prestwich' was in the original EN list but is not one of the ~40 curated entries.
+        $this->assertContains('Prestwich', $remaining);
+    }
+
+    public function testGetRemainingPlaceNamesIsFilteredPerCountry(): void
+    {
+        $service = $this->makeService();
+
+        $en = $service->getRemainingPlaceNames('EN');
+        $es = $service->getRemainingPlaceNames('ES');
+
+        $this->assertNotContains('Sevilla', $en);
+        $this->assertNotContains('Manchester', $es);
+    }
+
+    public function testGetRemainingPlaceNamesReturnsEmptyArrayForUnknownCountry(): void
+    {
+        $service = $this->makeService();
+        $this->assertSame([], $service->getRemainingPlaceNames('XX'));
+    }
 }

@@ -57,7 +57,10 @@ class ClubController extends AbstractController
     public function nameOptions(Request $request, NpcClubGenerationService $npcClubGenerationService): JsonResponse
     {
         $country  = strtoupper($request->query->get('country', 'EN'));
-        $cities   = $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN');
+        $cities   = array_merge(
+            $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN'),
+            $npcClubGenerationService->getRemainingPlaceNames($country) ?: $npcClubGenerationService->getRemainingPlaceNames('EN'),
+        );
         $suffixes = $npcClubGenerationService->getSuffixes($country) ?: $npcClubGenerationService->getSuffixes('EN');
 
         $locale = self::LOCALE_BY_COUNTRY[$country] ?? 'en_GB';
