@@ -249,55 +249,64 @@
                             <i class="fa fa-save me-1"></i>Save Facility Ranges
                         </button>
                     </form>
-
-                    <hr class="my-4">
-                    <h6 class="mb-2">City Size Weighting</h6>
-                    <p class="text-muted small mb-3">
-                        Controls how likely a BIG/MEDIUM/SMALL city is to be picked when generating a club
-                        for a given tier. Tier 1 and Tier 8 are the anchors — tiers 2–7 interpolate
-                        linearly between them. Values are percentages and don't need to sum to 100.
-                    </p>
-                    <form method="POST" action="{{ path('admin_npc_clubs_save_size_weights') }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('npc_size_weights') }}">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-3 small align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-3">Tier</th>
-                                        <th class="text-center">Big %</th>
-                                        <th class="text-center">Medium %</th>
-                                        <th class="text-center">Small %</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for row in ['tier1', 'tier8'] %}
-                                        <tr>
-                                            <td class="ps-3 fw-semibold">{{ row == 'tier1' ? 'Tier 1' : 'Tier 8' }}</td>
-                                            <td class="text-center p-1">
-                                                <input type="number" name="sizeWeights[{{ row }}][big]"
-                                                       value="{{ gameConfig.npcClubSizeWeights[row].big ?? 0 }}" min="0" max="100"
-                                                       class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
-                                            </td>
-                                            <td class="text-center p-1">
-                                                <input type="number" name="sizeWeights[{{ row }}][medium]"
-                                                       value="{{ gameConfig.npcClubSizeWeights[row].medium ?? 0 }}" min="0" max="100"
-                                                       class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
-                                            </td>
-                                            <td class="text-center p-1">
-                                                <input type="number" name="sizeWeights[{{ row }}][small]"
-                                                       value="{{ gameConfig.npcClubSizeWeights[row].small ?? 0 }}" min="0" max="100"
-                                                       class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="fa fa-save me-1"></i>Save Size Weights
-                        </button>
-                    </form>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── City Size Weighting ───────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-city text-success"></i>
+                <span class="fw-semibold small">City Size Weighting</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Controls how likely a BIG/MEDIUM/SMALL city is to be picked when generating a club
+                    for a given tier. Tier 1 and Tier 8 are the anchors — tiers 2–7 interpolate
+                    linearly between them. Values are percentages and don't need to sum to 100.
+                </p>
+                <form method="POST" action="{{ path('admin_npc_clubs_save_size_weights') }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('npc_size_weights') }}">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-3 small align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Tier</th>
+                                    <th class="text-center">Big %</th>
+                                    <th class="text-center">Medium %</th>
+                                    <th class="text-center">Small %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in ['tier1', 'tier8'] %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold">{{ row == 'tier1' ? 'Tier 1' : 'Tier 8' }}</td>
+                                        <td class="text-center p-1">
+                                            <input type="number" name="sizeWeights[{{ row }}][big]"
+                                                   value="{{ gameConfig.npcClubSizeWeights[row].big ?? 0 }}" min="0" max="100"
+                                                   class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
+                                        </td>
+                                        <td class="text-center p-1">
+                                            <input type="number" name="sizeWeights[{{ row }}][medium]"
+                                                   value="{{ gameConfig.npcClubSizeWeights[row].medium ?? 0 }}" min="0" max="100"
+                                                   class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
+                                        </td>
+                                        <td class="text-center p-1">
+                                            <input type="number" name="sizeWeights[{{ row }}][small]"
+                                                   value="{{ gameConfig.npcClubSizeWeights[row].small ?? 0 }}" min="0" max="100"
+                                                   class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fa fa-save me-1"></i>Save Size Weights
+                    </button>
+                </form>
             </div>
         </div>
     </div>

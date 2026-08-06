@@ -59,7 +59,7 @@ class ClubController extends AbstractController
         $country  = strtoupper($request->query->get('country', 'EN'));
         $cities   = array_merge(
             $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN'),
-            $npcClubGenerationService->getRemainingPlaceNames($country) ?: $npcClubGenerationService->getRemainingPlaceNames('EN'),
+            $npcClubGenerationService->getRemainingPlaceNames($country),
         );
         $suffixes = $npcClubGenerationService->getSuffixes($country) ?: $npcClubGenerationService->getSuffixes('EN');
 

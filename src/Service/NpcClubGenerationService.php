@@ -1088,7 +1088,7 @@ class NpcClubGenerationService
         $curated = $this->getPlaceNames($countryCode);
         $all     = self::ALL_PLACE_NAMES_BY_COUNTRY[$countryCode] ?? [];
 
-        return array_values(array_diff($all, $curated));
+        return array_values(array_unique(array_diff($all, $curated)));
     }
 
     /**
