@@ -282,4 +282,61 @@ class NpcClubGenerationServiceTest extends TestCase
         $this->assertTrue($seenPrestige, 'Expected at least one prestige pick across 40 MEDIUM rolls');
         $this->assertTrue($seenGeneric, 'Expected at least one generic pick across 40 MEDIUM rolls');
     }
+
+    public function testPickWeightedPlaceAlwaysReturnsAPlace(): void
+    {
+        $service = $this->makeService();
+        $classified = $service->classifyPlaces([
+            ['name' => 'Big', 'population_size' => 900000, 'region' => 'R'],
+            ['name' => 'Small', 'population_size' => 1000, 'region' => 'R'],
+        ]);
+
+        $picked = $service->pickWeightedPlace($classified, ['big' => 70, 'medium' => 25, 'small' => 5]);
+        $this->assertContains($picked['name'], ['Big', 'Small']);
+    }
+
+    public function testPickWeightedPlaceFavorsBigBucketWhenWeighted(): void
+    {
+        $service = $this->makeService();
+        $classified = $service->classifyPlaces([
+            ['name' => 'Big', 'population_size' => 900000, 'region' => 'R'],
+            ['name' => 'Small', 'population_size' => 1000, 'region' => 'R'],
+        ]);
+
+        $bigCount = 0;
+        for ($i = 0; $i < 200; $i++) {
+            $picked = $service->pickWeightedPlace($classified, ['big' => 95, 'medium' => 4, 'small' => 1]);
+            if ($picked['name'] === 'Big') $bigCount++;
+        }
+
+        $this->assertGreaterThan(150, $bigCount, 'Expected the heavily-weighted BIG bucket to dominate picks');
+    }
+
+    public function testGenerateClubsAtTier1SkewsTowardBigCities(): void
+    {
+        $service = $this->makeService();
+        $clubs   = $service->generateClubs(80, 1, 'ES');
+
+        $bigCount = 0;
+        foreach ($clubs as $club) {
+            if ($club->getCitySize() === \App\Enum\CitySize::BIG) $bigCount++;
+        }
+
+        // Default tier-1 weight is 70% BIG — with 80 clubs, expect a clear majority to be BIG.
+        $this->assertGreaterThan(40, $bigCount);
+    }
+
+    public function testGenerateClubsAtTier8SkewsTowardSmallCities(): void
+    {
+        $service = $this->makeService();
+        $clubs   = $service->generateClubs(80, 8, 'ES');
+
+        $smallCount = 0;
+        foreach ($clubs as $club) {
+            if ($club->getCitySize() === \App\Enum\CitySize::SMALL) $smallCount++;
+        }
+
+        // Default tier-8 weight is 70% SMALL — with 80 clubs, expect a clear majority to be SMALL.
+        $this->assertGreaterThan(40, $smallCount);
+    }
 }

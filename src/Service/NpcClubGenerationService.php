@@ -1152,23 +1152,34 @@ class NpcClubGenerationService
         $slugs      = $this->getActiveFacilitySlugs();
         $bandIndex  = $this->getBandIndexForTier($tier);
         $levelBand  = self::FACILITY_LEVELS[$bandIndex];
-        $placeNames = $this->getPlaceNames($country) ?: ['Capital', 'Northern', 'Southern', 'Eastern', 'Western', 'Central'];
-        $suffixes   = $this->getSuffixes($country);
-        $usedNames  = [];
-        $clubs      = [];
+        $placeData  = self::PLACE_NAMES_BY_COUNTRY[$country] ?? [
+            ['name' => 'Capital', 'population_size' => 500000, 'region' => 'Central', 'is_capital' => true],
+            ['name' => 'Northern', 'population_size' => 100000, 'region' => 'North'],
+            ['name' => 'Southern', 'population_size' => 100000, 'region' => 'South'],
+            ['name' => 'Eastern', 'population_size' => 100000, 'region' => 'East'],
+            ['name' => 'Western', 'population_size' => 100000, 'region' => 'West'],
+            ['name' => 'Central', 'population_size' => 100000, 'region' => 'Central'],
+        ];
+        $classifiedPlaces = $this->classifyPlaces($placeData);
+        $prestigeSuffixes = self::PRESTIGE_SUFFIXES_BY_COUNTRY[$country] ?? ['FC'];
+        $genericSuffixes  = self::GENERIC_SUFFIXES_BY_COUNTRY[$country] ?? ['FC'];
+        $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier($tier);
+        $usedNames        = [];
+        $clubs            = [];
 
         if ($deleteExisting) {
             $this->npcClubRepo->deleteByCountryAndTier($country, $tier);
         }
 
         for ($i = 0; $i < $count; $i++) {
-            [$name, $place] = $this->generateName($placeNames, $usedNames, $suffixes);
+            [$name, $place] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights);
             $usedNames[]    = $name;
-            $reputation     = $this->reputationForTier($tier);
-            $balance        = $this->balanceForTier($tier);
+            $citySize       = $place['city_size'];
+            $reputation     = $this->reputationForTier($tier, $citySize);
+            $balance        = $this->balanceForTier($tier, $citySize);
             $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
             $colors         = $this->pickColorPair();
-            $stadiumName    = $this->generateStadiumName($place, $country);
+            $stadiumName    = $this->generateStadiumName($place['name'], $country);
 
             $club = new NpcClub(
                 name:           $name,
@@ -1179,6 +1190,10 @@ class NpcClubGenerationService
                 secondaryColor: $colors[1],
                 balance:        $balance,
                 facilities:     $facilities,
+                region:         $place['region'] ?? null,
+                citySize:       $citySize,
+                populationSize: (int) ($place['population_size'] ?? 0),
+                isCapital:      (bool) ($place['is_capital'] ?? false),
             );
             $club->setStadiumName($stadiumName);
             $club->setPlayingStyle($this->playingStyleForTier($tier));
@@ -1192,6 +1207,42 @@ class NpcClubGenerationService
 
         $this->em->flush();
         return $clubs;
+    }
+
+    /**
+     * Weighted random pick across classified places. Weight for a place =
+     * (tier's % for its city_size bucket) / (count of places in that bucket),
+     * so weight is spread evenly within a bucket.
+     *
+     * @param array<array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}> $classifiedPlaces
+     * @param array{big:float,medium:float,small:float} $weights
+     * @return array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}
+     */
+    public function pickWeightedPlace(array $classifiedPlaces, array $weights): array
+    {
+        $bucketCounts = ['big' => 0, 'medium' => 0, 'small' => 0];
+        foreach ($classifiedPlaces as $place) {
+            $bucketCounts[strtolower($place['city_size']->value)]++;
+        }
+
+        $cumulative = [];
+        $total = 0.0;
+        foreach ($classifiedPlaces as $i => $place) {
+            $bucket = strtolower($place['city_size']->value);
+            $count  = max(1, $bucketCounts[$bucket]);
+            $weight = max(0.0001, (float) ($weights[$bucket] ?? 0)) / $count;
+            $total += $weight;
+            $cumulative[$i] = $total;
+        }
+
+        $roll = (mt_rand() / mt_getrandmax()) * $total;
+        foreach ($cumulative as $i => $upperBound) {
+            if ($roll <= $upperBound) {
+                return $classifiedPlaces[$i];
+            }
+        }
+
+        return $classifiedPlaces[array_key_last($classifiedPlaces)];
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -1238,14 +1289,20 @@ class NpcClubGenerationService
         return $facilities;
     }
 
-    /** @return array{string, string} [name, place] */
-    private function generateName(array $placeNames, array $usedNames, array $suffixes): array
+    /**
+     * @param array<array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}> $classifiedPlaces
+     * @param string[] $prestigeSuffixes
+     * @param string[] $genericSuffixes
+     * @param array{big:float,medium:float,small:float} $weights
+     * @return array{0:string,1:array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}}
+     */
+    private function generateName(array $classifiedPlaces, array $usedNames, array $prestigeSuffixes, array $genericSuffixes, array $weights): array
     {
         $attempts = 0;
         do {
-            $place  = $placeNames[array_rand($placeNames)];
-            $suffix = $suffixes[array_rand($suffixes)];
-            $name   = "{$place} {$suffix}";
+            $place  = $this->pickWeightedPlace($classifiedPlaces, $weights);
+            $suffix = $this->pickSuffixForCitySize($place['city_size'], $prestigeSuffixes, $genericSuffixes);
+            $name   = "{$place['name']} {$suffix}";
             $attempts++;
         } while (in_array($name, $usedNames, true) && $attempts < 50);
 
@@ -1259,7 +1316,7 @@ class NpcClubGenerationService
         return sprintf($format, $place);
     }
 
-    private function reputationForTier(int $tier): int
+    private function reputationForTier(int $tier, \App\Enum\CitySize $citySize): int
     {
         // tier 1 → 70–90, tier 8 → 5–20 (linear interpolation)
         $minRep = (int) round(70 - ($tier - 1) * (65 / 7));
@@ -1267,7 +1324,7 @@ class NpcClubGenerationService
         return random_int(max(1, $minRep), max(1, $maxRep));
     }
 
-    private function balanceForTier(int $tier): int
+    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize): int
     {
         $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier);
         $min   = max(0, (int) $range['min']);
