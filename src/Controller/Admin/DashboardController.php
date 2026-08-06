@@ -1065,6 +1065,35 @@ $config->setPlayerAgentChancePercent((int) $request->request->get('playerAgentCh
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
     }
 
+    #[Route('/admin/npc-clubs/save-size-weights', name: 'admin_npc_clubs_save_size_weights', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function saveNpcClubSizeWeights(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('npc_size_weights', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+        }
+
+        $gameConfig = $this->gameConfigRepository->getConfig();
+        $raw        = $request->request->all('sizeWeights');
+
+        $weights = [];
+        foreach (['tier1', 'tier8'] as $row) {
+            $rowData = $raw[$row] ?? [];
+            $weights[$row] = [
+                'big'    => max(0, (int) ($rowData['big'] ?? 0)),
+                'medium' => max(0, (int) ($rowData['medium'] ?? 0)),
+                'small'  => max(0, (int) ($rowData['small'] ?? 0)),
+            ];
+        }
+
+        $gameConfig->setNpcClubSizeWeights($weights);
+        $this->em->flush();
+
+        $this->addFlash('success', 'City size weights saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
+    }
+
     #[Route('/admin/leagues/overview', name: 'admin_leagues_overview')]
     #[IsGranted('ROLE_ADMIN')]
     public function leaguesOverview(): Response
