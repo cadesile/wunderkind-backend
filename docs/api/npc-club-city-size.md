@@ -97,18 +97,23 @@ change. In practice, most NPC clubs get regenerated periodically via the admin
 treat `region: null` / `populationSize: 0` as a valid, expected "no data yet"
 state, not an error.
 
-## Caching caveat — worldpack cache does not auto-refresh
+## Caching caveat — applies to the world pack only
 
-World packs are cached per `(country, tier)` and are **not** automatically
-invalidated when NPC clubs are regenerated in the admin panel. If a country's
-tier pack was already cached (by any player completing world init for that
-country/tier) before an admin regenerates that country's NPC clubs, the
-cached pack keeps serving the old snapshot — including old `region`/`citySize`
-values — until an admin manually clears it (`WorldPackController`'s delete
-action, or `app:worldpack:warm --force`). This is existing, unchanged cache
-behavior; it isn't specific to these new fields, but it means the client can't
-assume every club it receives reflects the latest backend state — treat these
-fields as descriptive/flavor data, not something to poll for freshness.
+World packs (`POST /api/initialize/league/{tier}`) are cached per `(country,
+tier)` and are **not** automatically invalidated when NPC clubs are
+regenerated in the admin panel. If a country's tier pack was already cached
+(by any player completing world init for that country/tier) before an admin
+regenerates that country's NPC clubs, the cached pack keeps serving the old
+snapshot — including old `region`/`citySize` values — until an admin manually
+clears it (`WorldPackController`'s delete action, or `app:worldpack:warm
+--force`). This is existing, unchanged cache behavior; it isn't specific to
+these new fields, but it means the client can't assume every world-pack club
+it receives reflects the latest backend state — treat these fields as
+descriptive/flavor data there, not something to poll for freshness.
+
+`GET /api/club/foreign` and `GET /api/scout/foreign-clubs` are **not**
+affected — they query `NpcClub` rows directly on every request (no cache
+layer), so they always reflect whatever was most recently generated.
 
 ## Client integration notes
 
@@ -121,12 +126,6 @@ fields as descriptive/flavor data, not something to poll for freshness.
   scouting/opponent screens); `region` is display-only city context (e.g. "London
   United — Greater London"); `populationSize` is not expected to be shown
   directly to players in its raw form, but is available if useful.
-- **Foreign-clubs example row** (`GET /api/club/foreign` / `GET /api/scout/foreign-clubs`):
-  ```json
-  { "id": "0197f3b2-...", "name": "London United", "country": "EN", "tier": 1,
-    "region": "Greater London", "citySize": "BIG", "populationSize": 8982000, "isCapital": true }
-  ```
-  Same defaults/backfill and caching caveats apply here as to the world pack —
-  these endpoints query live DB state directly (not the worldpack cache), so
-  they're **not** subject to the caching caveat above; they always reflect the
-  latest generated data.
+- **Foreign/scouting endpoints** carry the same defaults/backfill behavior
+  described above (see "Where this shows up" for their exact response shape)
+  but are exempt from the caching caveat (see above).
