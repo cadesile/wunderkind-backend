@@ -48,6 +48,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
 
 RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
+RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 
 EXPOSE 80 443
 
