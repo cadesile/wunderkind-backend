@@ -4,6 +4,7 @@ namespace App\Controller\Api;
 
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
+use App\Service\FacilityImageResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -14,6 +15,7 @@ class GameConfigController extends AbstractController
     public function __construct(
         private readonly GameConfigRepository      $gameConfigRepository,
         private readonly FacilityTemplateRepository $facilityTemplateRepository,
+        private readonly FacilityImageResolver       $facilityImageResolver,
     ) {}
 
     #[Route('/game-config', name: 'api_game_config', methods: ['GET'])]
@@ -233,33 +235,9 @@ class GameConfigController extends AbstractController
             // Facility templates — defines per-level gameplay effects for each facility type.
             // Client applies these during the weekly tick on top of the GameConfig baselines above.
             'facilityTemplates' => array_map(
-                fn($ft) => [...$ft->toArray(), 'images' => $this->resolveFacilityImages($ft->getSlug())],
+                fn($ft) => [...$ft->toArray(), 'images' => $this->facilityImageResolver->resolve($ft->getSlug())],
                 $this->facilityTemplateRepository->getActiveTemplates()
             ),
         ]);
-    }
-
-    /**
-     * Scans public/images/facilities/<slug>/ for level_<N>.png files and returns
-     * a [level => url] map. Only levels with an actual file on disk are included.
-     *
-     * @return array<string, string>
-     */
-    private function resolveFacilityImages(string $slug): array
-    {
-        $dir = $this->getParameter('kernel.project_dir') . '/public/images/facilities/' . $slug;
-        if (!is_dir($dir)) {
-            return [];
-        }
-
-        $images = [];
-        foreach (glob($dir . '/level_*.png') ?: [] as $path) {
-            if (preg_match('/level_(\d+)\.png$/', $path, $m)) {
-                $images[$m[1]] = '/images/facilities/' . $slug . '/level_' . $m[1] . '.png';
-            }
-        }
-        ksort($images, SORT_NUMERIC);
-
-        return $images;
     }
 }

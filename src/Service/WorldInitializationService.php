@@ -15,6 +15,7 @@ use App\Entity\Staff;
 use App\Enum\CompanySize;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
+use App\Enum\Tier;
 use App\Entity\Agent;
 use App\Repository\AgentRepository;
 use App\Repository\GameConfigRepository;
@@ -487,9 +488,14 @@ class WorldInitializationService
             'id'              => (string) $staff->getId(),
             'firstName'       => $staff->getFirstName(),
             'lastName'        => $staff->getLastName(),
-            'role'            => $staff->getRole()->value,
-            'coachingAbility' => $staff->getCoachingAbility(),
+            'dateOfBirth'     => $staff->getDob()?->format('Y-m-d'),
             'nationality'     => $staff->getNationality() ?? '',
+            'role'            => $staff->getRole()->value,
+            'tier'            => Tier::fromScore($staff->getCoachingAbility())->value,
+            'coachingAbility' => $staff->getCoachingAbility(),
+            'scoutingRange'   => $staff->getScoutingRange(),
+            'weeklySalary'    => $staff->getWeeklySalary(),
+            'morale'          => $staff->getMorale(),
             'specialisms'     => $staff->getSpecialisms() ?? [],
             'appearance'      => $staff->getAppearance(),
         ];
@@ -514,8 +520,10 @@ class WorldInitializationService
         return [
             'id'          => (string) $scout->getId(),
             'name'        => $scout->getName(),
+            'dateOfBirth' => $scout->getDob()?->format('Y-m-d'),
             'nationality' => $scout->getNationality() ?? '',
             'experience'  => $scout->getExperience(),
+            'tier'        => Tier::fromScore($scout->getExperience())->value,
             'judgements'  => $scout->getJudgements(),
             'appearance'  => $scout->getAppearance(),
         ];

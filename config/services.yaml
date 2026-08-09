@@ -51,3 +51,7 @@ services:
         arguments:
             $leaderboardCache: '@app.leaderboard_cache'
             $leaderboardCacheTtl: '%app.leaderboard_cache_ttl%'
+
+    App\Service\FacilityImageResolver:
+        arguments:
+            $projectDir: '%kernel.project_dir%'

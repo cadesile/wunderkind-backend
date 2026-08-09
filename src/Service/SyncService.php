@@ -47,6 +47,7 @@ class SyncService
         private readonly ClubFacilityRepository         $clubFacilityRepository,
         private readonly PlayerCareerStatRepository     $playerCareerStatRepository,
         private readonly LoggerInterface                 $logger,
+        private readonly FacilityImageResolver           $facilityImageResolver,
     ) {}
 
     /**
@@ -373,7 +374,7 @@ class SyncService
         ];
 
         $facilityTemplates = array_map(
-            fn ($t) => $t->toArray(),
+            fn ($t) => [...$t->toArray(), 'images' => $this->facilityImageResolver->resolve($t->getSlug())],
             $this->facilityTemplateRepository->getActiveTemplates(),
         );
 

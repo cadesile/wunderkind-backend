@@ -24,6 +24,18 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 class SyncController extends AbstractController
 {
     /**
+     * Domain used for device-bound guest accounts (see GuestAuthService).
+     * Accounts registered under this domain are auto-verified since the
+     * address is synthetic and can never receive a real verification email.
+     */
+    private const GUEST_EMAIL_DOMAIN = '@guest.buildmyclub.local';
+
+    private static function isGuestEmail(string $email): bool
+    {
+        return str_ends_with($email, self::GUEST_EMAIL_DOMAIN);
+    }
+
+    /**
      * POST /api/login — handled by the json_login firewall authenticator.
      * This method is never reached; the security layer intercepts first.
      */
@@ -55,9 +67,11 @@ class SyncController extends AbstractController
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        $isGuest = self::isGuestEmail($email);
+
         $existing = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existing !== null) {
-            if (!$existing->isVerified()) {
+            if (!$existing->isVerified() && !$isGuest) {
                 // Resend code — allows retry if the verification email was lost
                 $verificationService->sendVerificationEmail($existing);
                 return $this->json([
@@ -75,6 +89,19 @@ class SyncController extends AbstractController
 
         if (!empty($data['manager']) && is_array($data['manager'])) {
             $user->setManagerProfile($data['manager']);
+        }
+
+        if ($isGuest) {
+            // Synthetic address — can never receive a real verification email.
+            $user->setIsVerified(true);
+            $user->setVerifiedAt(new \DateTimeImmutable());
+            $em->persist($user);
+            $em->flush();
+
+            return $this->json([
+                'message' => 'ok',
+                'userId'  => $user->getId()->toRfc4122(),
+            ], Response::HTTP_CREATED);
         }
 
         $em->persist($user);
