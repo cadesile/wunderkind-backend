@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Build My Club — Football Club Owner Sim</title>
-    <meta name="description" content="Own the club. Invest the capital. Build the infrastructure. Hire your staff and climb eight league tiers — all offline, all in the palm of your hand. Build My Club is a deep football club ownership sim for mobile.">
-    <meta name="theme-color" content="#0a1a0d">
-    <meta property="og:title" content="Build My Club — Football Club Owner Sim">
-    <meta property="og:description" content="Own the club. Build the empire. Climb the pyramid.">
+    <title>Build My Club — Football Chairman Game</title>
+    <meta name="description" content="Build My Club is a football chairman game for mobile — own the club, invest the capital, build the infrastructure, and climb eight league tiers offline. If you love games like Football Manager mobile, this is the offline football sim built for you.">
+    <meta name="theme-color" content="#0d2e28">
+    <meta property="og:title" content="Build My Club — Football Chairman Game">
+    <meta property="og:description" content="Own the club. Build the empire. Climb the pyramid. A mobile football club management game built for tactical depth.">
     <meta property="og:type" content="website">
     <meta property="og:image" content="/logo-512.png">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -26,29 +26,29 @@
         }
 
         :root {
-            --bg:         #0a1a0d;
-            --bg-mid:     #0f2415;
-            --card:       #122a19;
-            --card-hi:    #163320;
-            --dark:       #06100a;
-            --border:     #040d07;
-            --panel:      #1a3a15;
-            --gold:       #E8CF59;
-            --gold-dim:   #c4a83a;
+            --bg:         #0d2e28;
+            --bg-mid:     #123a33;
+            --card:       #1d5c52;
+            --card-hi:    #226b5f;
+            --dark:       #081f1a;
+            --border:     #051512;
+            --panel:      #17493f;
+            --gold:       #f5c842;
+            --gold-dim:   #c9a134;
             --mint:       #3FAA7E;
             --mint-dim:   #2d8a63;
             --red:        #C44747;
             --orange:     #e8852a;
-            --blue:       #2D6B3F;
-            --plum:       #1e4a28;
+            --blue:       #1a5c2a;
+            --plum:       #16402f;
             --text:       #e4ede4;
-            --text-muted: #7da885;
+            --text-muted: #7dac9f;
             --grid: repeating-linear-gradient(
                         0deg, transparent, transparent 39px,
-                        rgba(63,170,126,0.04) 39px, rgba(63,170,126,0.04) 40px),
+                        rgba(29,92,82,0.10) 39px, rgba(29,92,82,0.10) 40px),
                     repeating-linear-gradient(
                         90deg, transparent, transparent 39px,
-                        rgba(63,170,126,0.04) 39px, rgba(63,170,126,0.04) 40px);
+                        rgba(29,92,82,0.10) 39px, rgba(29,92,82,0.10) 40px);
         }
 
         html {
@@ -99,9 +99,9 @@
         section { padding: 80px 0; }
 
         /* ── Glow utilities ── */
-        .glow-gold  { text-shadow: 0 0 18px rgba(232,207,89,.55), 0 0 40px rgba(232,207,89,.25); }
+        .glow-gold  { text-shadow: 0 0 18px rgba(245,200,66,.55), 0 0 40px rgba(245,200,66,.25); }
         .glow-mint  { text-shadow: 0 0 18px rgba(63,170,126,.55), 0 0 40px rgba(63,170,126,.25); }
-        .box-glow-gold { box-shadow: 0 0 0 1px var(--gold), 0 0 24px rgba(232,207,89,.2); }
+        .box-glow-gold { box-shadow: 0 0 0 1px var(--gold), 0 0 24px rgba(245,200,66,.2); }
         .box-glow-mint { box-shadow: 0 0 0 1px var(--mint), 0 0 24px rgba(63,170,126,.15); }
 
         /* ── Divider ── */
@@ -118,7 +118,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(6,16,10,0.94);
+            background: rgba(5,21,18,0.94);
             border-bottom: 1px solid var(--border);
             backdrop-filter: blur(8px);
         }
@@ -138,7 +138,7 @@
             font-family: 'Press Start 2P', monospace;
             font-size: 9px;
             color: var(--gold);
-            text-shadow: 0 0 12px rgba(232,207,89,.5);
+            text-shadow: 0 0 12px rgba(245,200,66,.5);
             letter-spacing: 0.05em;
             text-decoration: none;
         }
@@ -176,7 +176,7 @@
         .btn-gold:hover {
             background: #fff;
             color: #0f1420;
-            box-shadow: 0 0 20px rgba(232,207,89,.4);
+            box-shadow: 0 0 20px rgba(245,200,66,.4);
         }
         .btn-outline {
             background: transparent;
@@ -196,12 +196,17 @@
             padding: 96px 0 80px;
             position: relative;
             overflow: hidden;
+            background-image: linear-gradient(rgba(13,46,40,0.88), rgba(13,46,40,0.94)), url('images/backgrounds/stadium-floodlights.png');
+            background-size: cover;
+            background-position: center top;
         }
         .hero-inner {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 64px;
             align-items: center;
+            position: relative;
+            z-index: 1;
         }
         .hero-badge {
             display: inline-block;
@@ -216,7 +221,7 @@
         .hero h1 {
             font-size: clamp(14px, 2.2vw, 22px);
             color: var(--gold);
-            text-shadow: 0 0 24px rgba(232,207,89,.45), 0 0 60px rgba(232,207,89,.2);
+            text-shadow: 0 0 24px rgba(245,200,66,.45), 0 0 60px rgba(245,200,66,.2);
             margin-bottom: 24px;
             line-height: 1.7;
         }
@@ -265,7 +270,7 @@
         .phone-outer {
             border: 3px solid var(--gold);
             box-shadow: 0 0 0 1px var(--gold-dim),
-                        0 0 40px rgba(232,207,89,.2),
+                        0 0 40px rgba(245,200,66,.2),
                         inset 0 0 20px rgba(0,0,0,.5);
             background: #120d18;
             padding: 12px 8px;
@@ -572,6 +577,13 @@
             align-items: start;
         }
         .leagues-inner > * { min-width: 0; }
+        .match-ticker-visual {
+            margin-top: 56px;
+            border: 3px solid var(--border);
+            background: var(--dark);
+        }
+        .match-ticker-visual img { width: 100%; display: block; }
+        .match-ticker-visual .ss-caption { padding: 12px 0; }
 
         /* ════════════════════════════════
            LEAGUE PYRAMID
@@ -645,7 +657,7 @@
             font-family: 'Press Start 2P', monospace;
             font-size: clamp(14px, 2vw, 20px);
             color: var(--gold);
-            text-shadow: 0 0 20px rgba(232,207,89,.4);
+            text-shadow: 0 0 20px rgba(245,200,66,.4);
             display: block;
             margin-bottom: 8px;
         }
@@ -671,13 +683,13 @@
             transform: translate(-50%, -50%);
             width: 600px;
             height: 300px;
-            background: radial-gradient(ellipse, rgba(232,207,89,.08) 0%, transparent 70%);
+            background: radial-gradient(ellipse, rgba(245,200,66,.08) 0%, transparent 70%);
             pointer-events: none;
         }
         .cta-section h2 {
             font-size: clamp(12px, 2vw, 20px);
             color: var(--gold);
-            text-shadow: 0 0 30px rgba(232,207,89,.4);
+            text-shadow: 0 0 30px rgba(245,200,66,.4);
             margin-bottom: 20px;
         }
         .cta-sub {
@@ -821,7 +833,7 @@
         }
         .ss-frame:hover img {
             border-color: var(--gold);
-            box-shadow: 0 0 24px rgba(232,207,89,.2);
+            box-shadow: 0 0 24px rgba(245,200,66,.2);
         }
         .ss-caption {
             font-family: 'Space Mono', monospace;
@@ -903,6 +915,16 @@
         @media (max-width: 600px) {
             .role-grid { grid-template-columns: 1fr; }
         }
+        .role-visual {
+            width: 220px;
+            margin: 40px auto 0;
+        }
+        .role-visual img {
+            width: 100%;
+            display: block;
+            border: 3px solid var(--border);
+        }
+        .role-visual .ss-caption { margin-top: 12px; }
 
         /* ── Reduced motion ── */
         @media (prefers-reduced-motion: reduce) {
@@ -919,7 +941,7 @@
             position: fixed;
             inset: 0;
             z-index: 10000;
-            background: rgba(18, 13, 24, 0.94);
+            background: rgba(8, 24, 21, 0.94);
             backdrop-filter: blur(4px);
             align-items: center;
             justify-content: center;
@@ -929,7 +951,7 @@
         .privacy-modal {
             background: var(--card);
             border: 1px solid var(--border);
-            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(232,207,89,.1);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(245,200,66,.1);
             max-width: 680px;
             width: 100%;
             max-height: 85vh;
@@ -1004,7 +1026,7 @@
             position: fixed;
             inset: 0;
             z-index: 10000;
-            background: rgba(18, 13, 24, 0.94);
+            background: rgba(8, 24, 21, 0.94);
             backdrop-filter: blur(4px);
             align-items: center;
             justify-content: center;
@@ -1014,7 +1036,7 @@
         .beta-modal {
             background: var(--card);
             border: 1px solid var(--gold-dim);
-            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(232,207,89,.1);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(245,200,66,.1);
             max-width: 480px;
             width: 100%;
         }
@@ -1077,7 +1099,7 @@
             transition: background 0.15s, box-shadow 0.15s;
             line-height: 1;
         }
-        .beta-submit:hover { background: #fff; box-shadow: 0 0 20px rgba(232,207,89,.4); }
+        .beta-submit:hover { background: #fff; box-shadow: 0 0 20px rgba(245,200,66,.4); }
         .beta-submit:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; }
         .beta-resend {
             background: none;
@@ -1104,6 +1126,69 @@
         .beta-msg.error   { color: var(--red);  display: block; }
 
         /* ════════════════════════════════
+           FACILITIES SECTION
+        ════════════════════════════════ */
+        .facilities-section {
+            background-image: linear-gradient(rgba(13,46,40,0.88), rgba(13,46,40,0.9)), url('images/backgrounds/pitch-texture.png');
+            background-size: cover;
+            background-position: center;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .facilities-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 40px;
+        }
+        .facility-card {
+            background: rgba(13,46,40,0.85);
+            border: 3px solid var(--border);
+        }
+        .facility-card img {
+            width: 100%;
+            display: block;
+            border-bottom: 3px solid var(--border);
+        }
+        .facility-card-body { padding: 20px 20px 24px; }
+        .facility-card-name {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            color: var(--gold);
+            margin-bottom: 10px;
+            letter-spacing: 0.03em;
+        }
+        .facility-card-desc {
+            font-size: 12.5px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+        @media (max-width: 800px) {
+            .facilities-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ════════════════════════════════
+           STAFF CONSENSUS SECTION
+        ════════════════════════════════ */
+        .consensus-section {
+            background-image: linear-gradient(rgba(13,46,40,0.88), rgba(13,46,40,0.92)), url('images/backgrounds/crowd-action.png');
+            background-size: cover;
+            background-position: center;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .consensus-inner {
+            display: grid;
+            grid-template-columns: 1fr 260px;
+            gap: 56px;
+            align-items: start;
+        }
+        .consensus-inner .role-visual { width: 100%; margin: 0; }
+        @media (max-width: 800px) {
+            .consensus-inner { grid-template-columns: 1fr; }
+        }
+
+        /* ════════════════════════════════
            STORY / JOURNEY SECTION
         ════════════════════════════════ */
         .story-section { padding: 0; border-top: 1px solid var(--border); }
@@ -1113,7 +1198,7 @@
             padding: 72px 0;
             transition: background 0.25s;
         }
-        .story-step:hover { background: rgba(30,36,72,0.45); }
+        .story-step:hover { background: rgba(23,73,63,0.45); }
         .story-inner {
             max-width: 1100px;
             margin: 0 auto;
@@ -1131,12 +1216,12 @@
             border: 3px solid var(--border);
             background: var(--dark);
             padding: 10px 7px;
-            box-shadow: 0 0 0 1px rgba(232,207,89,.12), 0 0 32px rgba(0,0,0,.5);
+            box-shadow: 0 0 0 1px rgba(245,200,66,.12), 0 0 32px rgba(0,0,0,.5);
             transition: box-shadow 0.3s, border-color 0.3s;
         }
         .story-step:hover .story-phone-outer {
             border-color: var(--gold-dim);
-            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 40px rgba(232,207,89,.18);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 40px rgba(245,200,66,.18);
         }
         .story-phone-screen {
             width: 220px;
@@ -1227,7 +1312,7 @@
         }
         .bento-phone-frame:hover .bento-phone-outer {
             border-color: var(--gold-dim);
-            box-shadow: 0 0 32px rgba(232,207,89,.15);
+            box-shadow: 0 0 32px rgba(245,200,66,.15);
         }
         .bento-phone-screen {
             aspect-ratio: 9/20;
@@ -1428,7 +1513,7 @@
             color: var(--gold);
             min-width: 28px;
         }
-        .lbg-row.rank-1 .lbg-row-rank { color: var(--gold); text-shadow: 0 0 10px rgba(232,207,89,.5); }
+        .lbg-row.rank-1 .lbg-row-rank { color: var(--gold); text-shadow: 0 0 10px rgba(245,200,66,.5); }
         .lbg-row.rank-2 .lbg-row-rank { color: #cfd6c9; }
         .lbg-row.rank-3 .lbg-row-rank { color: #c98a4b; }
         .lbg-row-main {
@@ -1509,6 +1594,7 @@
         <a href="#" class="nav-logo"><img src="/logo_master.png" alt="Build My Club crest">BUILD MY CLUB</a>
         <ul class="nav-links">
             <li><a href="#your-role">Your Role</a></li>
+            <li><a href="#facilities">Facilities</a></li>
             <li><a href="#story">Story</a></li>
             <li><a href="#screenshots">Screens</a></li>
             <li><a href="#features">Features</a></li>
@@ -1524,6 +1610,9 @@
                 <a href="#" id="nav-x-link" class="social-icon" aria-label="X (Twitter)" target="_blank" rel="noopener" style="display:none">
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                 </a>
+                <a href="https://www.youtube.com/@BuildMyClub" class="social-icon" aria-label="YouTube" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.016 3.016 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814ZM9.545 15.568V8.432L15.818 12l-6.273 3.568Z"/></svg>
+                </a>
             </span>
             <a href="#download" class="btn btn-gold">Download</a>
         </div>
@@ -1538,11 +1627,11 @@
                 <div class="hero-badge">ANDROID BETA &nbsp;// ELITE STRATEGY SIM</div>
                 <h1 class="glow-gold">OWN THE CLUB. BUILD THE EMPIRE.</h1>
                 <p class="hero-sub">
-                    You're the chairman, not the gaffer. Allocate capital, control your
-                    infrastructure, and manage a living squad where every player has an
-                    8-trait personality matrix. Market entities are consumed and deleted
-                    on acquire — real scarcity, no restocks. Sync weekly with Integrity
-                    Validation and compete across 7 global leaderboards.
+                    The retro pixel-art football chairman game built for tactical depth.
+                    No matchday hands-on — just pure strategy, infrastructure, and heavy
+                    decisions on mobile. Allocate capital, build out your facilities, and
+                    manage a living squad where every player has an 8-trait personality
+                    matrix. Sync weekly and compete across 7 global leaderboards.
                 </p>
                 <div class="hero-actions">
                     <a href="#download" id="hero-android-btn" class="btn btn-gold" style="display:none">Download (Android)</a>
@@ -1658,7 +1747,7 @@
     <div class="wrap">
         <div class="section-label">Your Role</div>
         <h2 class="section-title">You're the chairman. Not the gaffer.</h2>
-        <p class="section-sub">This isn't a football management sim. You control capital, infrastructure, and personnel strategy. Your Manager Personality Traits — Temperament, Discipline, Ambition — shift with every decision you make. The board notices. So do the players.</p>
+        <p class="section-sub">Delegate matchday tactics to your manager and scouting to your Director of Football. Your job is the bigger picture: balancing multi-million pound budgets, expanding state-of-the-art facilities, negotiating brutal player contracts, and managing board expectations. Your Manager Personality Traits — Temperament, Discipline, Ambition — shift with every decision you make. The board notices. So do the players.</p>
 
         <div class="role-grid">
             <div class="role-col role-col-owner">
@@ -1685,6 +1774,44 @@
         </div>
 
         <p class="role-footer">Delegate everything to your DoF and Manager and focus on the boardroom — or override every decision yourself. The level of involvement is always your choice. Promotion means your decisions worked, not just your tactics.</p>
+
+        <figure class="role-visual">
+            <img src="screenshots/buildmyclub/Screenshot_20260626-183103.png" alt="Transfer contract screen — signing offer with fee, weekly wage, player interest, and conflicting staff opinions from Manager, Scout, and Director of Football">
+            <p class="ss-caption">Staff Don't Always Agree</p>
+        </figure>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════ FACILITIES ═══════════════════════════════ -->
+<section class="facilities-section" id="facilities">
+    <div class="wrap">
+        <div class="section-label">Infrastructure</div>
+        <h2 class="section-title">Brick by brick: isometric club development</h2>
+        <p class="section-sub">Transform a local pitch into a world-class sporting complex. Construct Hydro Pools to slash recovery times, build out your Tactical Room to sharpen matchday preparation, or expand your Youth Academy to develop the next generation. Every construction project carries time, budget, and delay risks.</p>
+
+        <div class="facilities-grid">
+            <div class="facility-card">
+                <img src="images/facilities/hydro_pool/level_3.png" alt="Hydro Pool facility — isometric pixel-art recovery and rehabilitation complex">
+                <div class="facility-card-body">
+                    <div class="facility-card-name">Hydro Pool</div>
+                    <p class="facility-card-desc">Cuts recovery times after matches and hard training blocks, keeping your squad fresher for longer.</p>
+                </div>
+            </div>
+            <div class="facility-card">
+                <img src="images/facilities/tactical_room/level_3.png" alt="Tactical Room facility — isometric pixel-art coaching and preparation building">
+                <div class="facility-card-body">
+                    <div class="facility-card-name">Tactical Room</div>
+                    <p class="facility-card-desc">Sharpens matchday preparation and helps your Manager get more out of your Style Multiplier matchups.</p>
+                </div>
+            </div>
+            <div class="facility-card">
+                <img src="images/facilities/youth_academy/level_3.png" alt="Youth Academy facility — isometric pixel-art development complex for young players">
+                <div class="facility-card-body">
+                    <div class="facility-card-name">Youth Academy</div>
+                    <p class="facility-card-desc">Enrol young prospects and develop the next generation of your squad from the ground up.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -2144,20 +2271,24 @@
         <div class="depth-inner">
             <div>
                 <div class="section-label">The Simulation</div>
-                <h2 class="section-title">Elite systems. High-stakes decisions.</h2>
+                <h2 class="section-title">8-trait personality matrix &amp; dressing room drama</h2>
                 <p class="section-sub">
-                    This isn't a clicker. Each week is an ownership decision: where to allocate
-                    capital, which market entities to consume before they're gone, how to position
-                    your formation against a specific opponent's Style Multiplier.
+                    Players aren't just numbers. An 8-trait matrix — including Determination,
+                    Ambition, Temperament, and Pressure — drives real behaviour. Deal with
+                    toxic wonderkids demanding moves, guardian inbox demands, and squad cliques
+                    that can ruin dressing room morale.
                 </p>
                 <br>
                 <p class="section-sub">
-                    An 8-trait personality matrix governs every player. Social graphs track
-                    dressing-room relationships and chain into narrative events. Your Manager
-                    Traits shift based on the calls you make. Guardians push back. Agents bid.
-                    Investors want returns. It's all connected — and it all syncs with Integrity
-                    Validation every week.
+                    Social graphs track dressing-room relationships and chain into narrative
+                    events. Your Manager Traits shift based on the calls you make. Guardians
+                    push back. Agents bid. Investors want returns. It's all connected — and it
+                    all syncs with Integrity Validation every week.
                 </p>
+                <figure class="role-visual" style="margin:32px 0 0;">
+                    <img src="screenshots/buildmyclub/Screenshot_20260626-221929.png" alt="Player profile — Ability Matrix radar chart with PAC, TEC, VIS, POW, STA, HRT axes">
+                    <p class="ss-caption">6-Point Ability Matrix</p>
+                </figure>
             </div>
             <ul class="depth-list" aria-label="Simulation depth features">
                 <li class="depth-item">
@@ -2272,17 +2403,18 @@
         <div class="leagues-inner">
             <div>
                 <div class="section-label">The League System</div>
-                <h2 class="section-title">Eight tiers. One goal. Get to the top.</h2>
+                <h2 class="section-title">8 league tiers. 176 clubs. One ascent.</h2>
                 <p class="section-sub">
-                    Every new club starts in the bottom tier. 22 clubs per division.
-                    A full 42-game season — home and away against everyone.
-                    Promotion spots are earned, not given.
+                    Start at the bottom of an 8-tier league pyramid — 22 clubs per division,
+                    a full 42-game season home and away against everyone. Track live match
+                    updates on the 2D matchday pitch at 1x, 2x, or 4x speed, or skip straight
+                    to the result.
                 </p>
                 <br>
                 <p class="section-sub" style="color: var(--text-muted);">
-                    Browse every league in the pyramid from the Competition Hub.
-                    NPC clubs have fully simulated squads, staff, finances, and tactics.
-                    Beating them means building something real.
+                    Watch rival AI clubs manage their own budgets, scout talent, and compete
+                    on global leaderboards. NPC clubs have fully simulated squads, staff,
+                    finances, and tactics. Beating them means building something real.
                 </p>
             </div>
             <div>
@@ -2322,6 +2454,32 @@
                 </div>
                 <p class="pyramid-label">176 NPC clubs · Brazil launch · more countries coming</p>
             </div>
+        </div>
+
+        <figure class="match-ticker-visual">
+            <img src="images/match-ticker.gif" alt="2D matchday pitch — live match ticker with 1x/2x/4x speed controls, minute counter, live commentary, and running scoreline">
+            <p class="ss-caption">Live Matchday Ticker — 1x / 2x / 4x</p>
+        </figure>
+    </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════ STAFF CONSENSUS ═══════════════════════════════ -->
+<section class="consensus-section" id="consensus">
+    <div class="wrap">
+        <div class="section-label">Scouting &amp; Transfers</div>
+        <h2 class="section-title">Multi-perspective scouting &amp; agent dynamics</h2>
+        <div class="consensus-inner">
+            <div>
+                <p class="section-sub">Never buy blind. Gather conflicting feedback from your Manager, Scout, and Director of Football before making an offer. Navigate agent personalities, sign-on fees, and squad role expectations to build a championship-winning squad without going bankrupt.</p>
+                <br>
+                <p class="section-sub" style="color: var(--text-muted);">Every scout works their own shortlist against the transfer list and free agent pool in parallel. Compare their reports, weigh conflicting staff opinions, and decide who's worth the fee.</p>
+            </div>
+            <figure class="role-visual">
+                <img src="screenshots/buildmyclub/Screenshot_20260626-222132.png" alt="Scout activity and shortlist — transfer list of 102 players, 270 free agents, three scouts deployed with a combined shortlist of prospects">
+                <p class="ss-caption">Scout Shortlist</p>
+            </figure>
         </div>
     </div>
 </section>
@@ -2431,8 +2589,8 @@
 <section class="cta-section" id="download">
     <div class="cta-glow" aria-hidden="true"></div>
     <div class="wrap">
-        <h2>Claim your spot in the beta.</h2>
-        <p class="cta-sub">Build My Club is in active Android beta. Beta slots are limited — the market pool is scarcity-driven from day one. Get in early, get ranked, and start building your legacy before the competition does.</p>
+        <h2>Ready to take the chair?</h2>
+        <p class="cta-sub">Start your journey at the bottom of the pyramid today. Build My Club is in active Android beta — beta slots are limited, and the market pool is scarcity-driven from day one. Get in early, get ranked, and start building your legacy before the competition does.</p>
         <div class="cta-actions" id="download-buttons">
             <a href="#" id="android-download-btn" class="btn btn-gold btn-lg" aria-label="Download Android" style="display:none">Download (Android)</a>
             <a href="#" id="ios-download-btn" class="btn btn-outline btn-lg" aria-label="Download iOS" style="display:none">Download (iOS)</a>
@@ -2457,6 +2615,9 @@
                 </a>
                 <a href="#" id="footer-x-link" class="social-icon" aria-label="X (Twitter)" target="_blank" rel="noopener" style="display:none">
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+                <a href="https://www.youtube.com/@BuildMyClub" class="social-icon" aria-label="YouTube" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.016 3.016 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814ZM9.545 15.568V8.432L15.818 12l-6.273 3.568Z"/></svg>
                 </a>
             </span>
             <span class="footer-copy">&copy; 2026 Build My Club. All rights reserved.</span>
