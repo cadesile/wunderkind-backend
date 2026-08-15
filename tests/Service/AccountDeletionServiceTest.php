@@ -24,10 +24,47 @@ class AccountDeletionServiceTest extends KernelTestCase
 {
     private EntityManagerInterface $em;
 
+    /**
+     * Everything this test persisted, in creation order, removed again in
+     * tearDown. Most of it is deleted by AccountDeletionService itself, but the
+     * League is not — it belongs to no club — and it carries a
+     * uq_league_country_tier UNIQUE (country, tier) constraint over only 676
+     * possible two-letter codes. Leaving it behind meant every green run
+     * consumed one more code at tier 8 until the suite started erroring here at
+     * random (71 rows had accumulated before this was fixed).
+     *
+     * @var object[]
+     */
+    private array $cleanup = [];
+
     protected function setUp(): void
     {
         self::bootKernel();
         $this->em = self::getContainer()->get(EntityManagerInterface::class);
+    }
+
+    protected function tearDown(): void
+    {
+        // Reverse creation order so dependents go before what they reference
+        // (SeasonRecord before its League). Rows the service already deleted
+        // resolve to null and are skipped — which is why this stays correct
+        // whether the test passed, failed an assertion, or threw part-way.
+        foreach (array_reverse($this->cleanup) as $entity) {
+            $managed = $this->em->find($entity::class, $entity->getId());
+            if ($managed !== null) {
+                $this->em->remove($managed);
+            }
+        }
+        $this->cleanup = [];
+        $this->em->flush();
+        parent::tearDown();
+    }
+
+    /** Persists $entity and registers it for removal in tearDown. */
+    private function persist(object $entity): void
+    {
+        $this->em->persist($entity);
+        $this->cleanup[] = $entity;
     }
 
     public function testDeletesUserClubsAndAllDependents(): void
@@ -35,32 +72,32 @@ class AccountDeletionServiceTest extends KernelTestCase
         $user = new User('delete-me-' . uniqid() . '@example.com');
         $user->setPassword('x');
         $user->setRoles([User::ROLE_CLUB]);
-        $this->em->persist($user);
+        $this->persist($user);
 
         $club = new Club('Doomed FC', $user);
-        $this->em->persist($club);
+        $this->persist($club);
 
         $uniqueCountry = chr(97 + mt_rand(0, 25)) . chr(97 + mt_rand(0, 25));
         $league = new League($uniqueCountry, 8, 'Del Test League');
-        $this->em->persist($league);
+        $this->persist($league);
 
         $investor = new Investor('Inv Co');
         $investor->setClub($club);
-        $this->em->persist($investor);
+        $this->persist($investor);
 
         $sponsor = new Sponsor('Spn Co');
         $sponsor->setClub($club);
-        $this->em->persist($sponsor);
+        $this->persist($sponsor);
 
-        $this->em->persist(new MatchResult($club, 2, 1, 3, 1));
-        $this->em->persist(new SeasonRecord($club, $league, 1, 4, 10, 5, 3, 2, 12, 8, 18, false, false));
-        $this->em->persist(new SeasonSnapshot($club, 1, $uniqueCountry, ['x' => 1]));
-        $this->em->persist(new SeasonRatingsSnapshot(1, 1, 8, (string) $club->getId(), 'Doomed FC', 50, 4));
-        $this->em->persist(new SyncRecord($club, 5, new \DateTimeImmutable(), ['w' => 5]));
-        $this->em->persist(new LeaderboardEntry($club, LeaderboardCategory::CAREER_EARNINGS, 'all-time'));
+        $this->persist(new MatchResult($club, 2, 1, 3, 1));
+        $this->persist(new SeasonRecord($club, $league, 1, 4, 10, 5, 3, 2, 12, 8, 18, false, false));
+        $this->persist(new SeasonSnapshot($club, 1, $uniqueCountry, ['x' => 1]));
+        $this->persist(new SeasonRatingsSnapshot(1, 1, 8, (string) $club->getId(), 'Doomed FC', 50, 4));
+        $this->persist(new SyncRecord($club, 5, new \DateTimeImmutable(), ['w' => 5]));
+        $this->persist(new LeaderboardEntry($club, LeaderboardCategory::CAREER_EARNINGS, 'all-time'));
 
         $transfer = new Transfer(null, $club, 'Some Club', TransferType::SALE, new \DateTimeImmutable());
-        $this->em->persist($transfer);
+        $this->persist($transfer);
 
         $this->em->flush();
 
@@ -100,14 +137,14 @@ class AccountDeletionServiceTest extends KernelTestCase
         $user = new User('multi-' . uniqid() . '@example.com');
         $user->setPassword('x');
         $user->setRoles([User::ROLE_CLUB]);
-        $this->em->persist($user);
+        $this->persist($user);
 
         $clubA = new Club('Club A', $user);
         $clubB = new Club('Club B', $user);
-        $this->em->persist($clubA);
-        $this->em->persist($clubB);
-        $invA = new Investor('A'); $invA->setClub($clubA); $this->em->persist($invA);
-        $invB = new Investor('B'); $invB->setClub($clubB); $this->em->persist($invB);
+        $this->persist($clubA);
+        $this->persist($clubB);
+        $invA = new Investor('A'); $invA->setClub($clubA); $this->persist($invA);
+        $invB = new Investor('B'); $invB->setClub($clubB); $this->persist($invB);
         $this->em->flush();
 
         $idA = $clubA->getId();
@@ -125,7 +162,7 @@ class AccountDeletionServiceTest extends KernelTestCase
         $user = new User('no-clubs-' . uniqid() . '@example.com');
         $user->setPassword('x');
         $user->setRoles([User::ROLE_CLUB]);
-        $this->em->persist($user);
+        $this->persist($user);
         $this->em->flush();
         $userId = $user->getId();
 
