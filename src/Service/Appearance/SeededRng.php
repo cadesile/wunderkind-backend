@@ -38,6 +38,33 @@ final class SeededRng
         return $arr[(int) floor($this->next() * count($arr))];
     }
 
+    /**
+     * Weighted pick over $arr using integer $weights (parallel, same length).
+     * Consumes exactly one next() — same as pick() — so swapping one for the
+     * other leaves every downstream draw in the stream untouched.
+     *
+     * @param list<mixed> $arr
+     * @param list<int>   $weights
+     */
+    public function weightedPick(array $arr, array $weights): mixed
+    {
+        $total = array_sum($weights);
+        if ($total <= 0) {
+            return $this->pick($arr);
+        }
+
+        $roll = $this->next() * $total;
+        $acc  = 0;
+        foreach ($weights as $i => $weight) {
+            $acc += $weight;
+            if ($roll < $acc) {
+                return $arr[$i];
+            }
+        }
+
+        return $arr[array_key_last($arr)];
+    }
+
     public function chance(float $probability): bool
     {
         return $this->next() < $probability;

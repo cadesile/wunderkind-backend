@@ -91,6 +91,53 @@ class PlayerGenerationServiceTest extends TestCase
         }
     }
 
+    /**
+     * The DOB must encode exactly the age that was drawn. Pinning min == max
+     * makes any drift visible: the old `-N years, -M months, -D days` form
+     * pushed players up to 13 months past their drawn age.
+     */
+    public function testDateOfBirthEncodesExactlyTheDrawnAge(): void
+    {
+        $svc = $this->makeServiceWithAgeRange(20, 20);
+
+        for ($i = 0; $i < 100; $i++) {
+            $player = $svc->generate(PlayerPosition::DEFENDER, RecruitmentSource::SCOUTING_NETWORK);
+            $age    = (int) $player->getDateOfBirth()->diff(new \DateTimeImmutable())->y;
+            $this->assertSame(20, $age, 'DOB must yield exactly the drawn age');
+        }
+    }
+
+    /** Birthdays must spread across the calendar, not cluster on one date. */
+    public function testDateOfBirthSpreadsAcrossMonthsAndDays(): void
+    {
+        $svc = $this->makeServiceWithAgeRange(20, 20);
+
+        $months = [];
+        $days   = [];
+        for ($i = 0; $i < 200; $i++) {
+            $dob = $svc->generate(PlayerPosition::DEFENDER, RecruitmentSource::SCOUTING_NETWORK)->getDateOfBirth();
+            $months[$dob->format('m')] = true;
+            $days[$dob->format('d')]   = true;
+        }
+
+        $this->assertCount(12, $months, 'DOBs should cover every month');
+        $this->assertGreaterThanOrEqual(20, count($days), 'DOBs should cover a wide spread of days');
+    }
+
+    private function makeServiceWithAgeRange(int $min, int $max): PlayerGenerationService
+    {
+        $nameGen = $this->createMock(NameGeneratorService::class);
+        $nameGen->method('getRandomNationality')->willReturn('English');
+        $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Test', 'lastName' => 'Player']);
+
+        $repo = $this->createStub(PoolConfigRepository::class);
+        $repo->method('getConfig')->willReturn(
+            (new PoolConfig())->setPlayerAgeMin($min)->setPlayerAgeMax($max)
+        );
+
+        return new PlayerGenerationService($nameGen, $repo);
+    }
+
     public function testHeightIsWithinRange(): void
     {
         $svc = $this->makeService();
