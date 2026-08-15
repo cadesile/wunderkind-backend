@@ -1273,6 +1273,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll');
         yield MenuItem::linkToRoute('Facility Templates', 'fa fa-building', 'admin_facilities_overview');
         yield MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater');
+        yield MenuItem::linkTo(ExcursionCrudController::class, 'Excursions', 'fa fa-bus');
         yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content');
         yield MenuItem::section('Configuration');
         yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
