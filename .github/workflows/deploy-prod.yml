@@ -90,6 +90,14 @@ jobs:
             # backfill; run the command by hand only if a backlog builds up.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console assets:install --symlink
-            docker compose -f docker-compose.prod.yml exec -T app \
-              php bin/console cache:clear
+            # NOTE: no cache:clear here, deliberately. `up -d` recreates the
+            # container from the new image, so jwt-entrypoint.sh has already run
+            # `cache:warmup --env=prod` as www-data for this exact code. Running
+            # cache:clear afterwards would (a) be redundant, (b) rebuild the
+            # cache as ROOT — `exec` does not drop privileges — which is the
+            # permission bug jwt-entrypoint.sh documents, and (c) clear+rewarm is
+            # the peak-memory step of the deploy: it got SIGKILLed (exit 137) by
+            # the host OOM killer on 2026-08-15. Nothing above invalidates the
+            # compiled container: migrations change schema, seeds change data,
+            # assets:install writes symlinks under public/.
             docker image prune -a -f --filter "until=24h"
