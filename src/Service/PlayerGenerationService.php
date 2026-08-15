@@ -58,10 +58,13 @@ class PlayerGenerationService
         $heightBonus = (int) floor($this->normalise($height, 163, 211) * 15);
         $weight      = min(97, $baseWeight + $heightBonus);
 
-        $month = rand(1,12);
-        $day = rand(1,20);
-
-        $dob = (new \DateTimeImmutable())->modify("-{$age} years, -{$month} months, -{$day} days");
+        // Birthday: uniformly random within the 12-month window that yields
+        // exactly $age today. Capped at 364 days so a leap year can't tip the
+        // player into the next year of age.
+        $daysSinceBirthday = random_int(0, 364);
+        $dob = (new \DateTimeImmutable('today'))
+            ->modify("-{$age} years")
+            ->modify("-{$daysSinceBirthday} days");
 
         return new PlayerBlueprint(
             firstName:   $firstName,

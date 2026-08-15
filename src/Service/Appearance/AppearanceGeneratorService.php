@@ -2,12 +2,15 @@
 namespace App\Service\Appearance;
 
 use App\Enum\Appearance\AppearanceRole;
+use App\Enum\Appearance\WorldRegion;
 
 /**
  * Faithful PHP port of generateAppearance() from
- * wunderkind-app/src/engine/appearance.ts. Deterministic from (id, role, age).
- * Emits the 10 rendered fields only (dead fields expression/earSize/eyebrowStyle
- * are omitted). faceShape/eyeShape are emitted as their frontend defaults.
+ * wunderkind-app/src/engine/appearance.ts. Deterministic from (id, role, age)
+ * plus an optional nationality, which biases skin tone towards the distribution
+ * of the corresponding WorldRegion. Emits the 10 rendered fields only (dead
+ * fields expression/earSize/eyebrowStyle are omitted). faceShape/eyeShape are
+ * emitted as their frontend defaults.
  */
 final class AppearanceGeneratorService
 {
@@ -17,12 +20,17 @@ final class AppearanceGeneratorService
     private const STAFF_TRIMS = ['#4a5568', '#2d3748', '#374151', '#1e3a5f'];
 
     /** @return array<string, mixed> */
-    public function generate(string $id, AppearanceRole $role, int $age): array
+    public function generate(string $id, AppearanceRole $role, int $age, ?string $nationality = null): array
     {
         $rng = new SeededRng(SeededRng::hashId($id));
 
-        // Skin tone
-        $skinTone = $rng->pick(self::SKIN_TONES);
+        // Skin tone — weighted by world region when the nationality is known,
+        // uniform otherwise. Both paths consume exactly one RNG draw, so every
+        // field below is unaffected by whether a nationality was supplied.
+        $region   = WorldRegion::fromNationality($nationality);
+        $skinTone = $region === null
+            ? $rng->pick(self::SKIN_TONES)
+            : $rng->weightedPick(self::SKIN_TONES, array_values($region->skinToneWeights()));
 
         // Hair style — older staff skews smart/bald
         if ($age > 45) {

@@ -45,6 +45,56 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         $this->assertSame(['skinTone' => '#000000'], $player->getAppearance());
     }
 
+    public function testFillPassesNationalityThroughToTheGenerator(): void
+    {
+        // West Africa's table gives 99% weight to the two darkest tones, so a
+        // Nigerian player landing there proves nationality reached the generator.
+        $player = new Player();
+        $player->setNationality('Nigerian');
+        $this->sub->fill($player);
+
+        $this->assertContains($player->getAppearance()['skinTone'], ['#c47d4a', '#8b4c1e', '#5c2d0a']);
+    }
+
+    // ── refreshSkinTone ───────────────────────────────────────────────────────
+
+    public function testRefreshSkinToneRewritesOnlySkinTone(): void
+    {
+        $player = new Player();
+        $player->setNationality('Nigerian');
+        $this->sub->fill($player);
+        $before = $player->getAppearance();
+
+        // Simulate a legacy row whose tone predates the region table.
+        $player->setAppearance(array_replace($before, ['skinTone' => '#f5dcc8']));
+
+        $this->assertTrue($this->sub->refreshSkinTone($player));
+
+        $this->assertSame($before, $player->getAppearance());
+    }
+
+    public function testRefreshSkinToneReportsNoChangeWhenAlreadyCorrect(): void
+    {
+        $player = new Player();
+        $player->setNationality('Nigerian');
+        $this->sub->fill($player);
+
+        $this->assertFalse($this->sub->refreshSkinTone($player));
+    }
+
+    public function testRefreshSkinToneSkipsRowsWithoutAnAppearance(): void
+    {
+        $player = new Player();
+        $this->assertFalse($this->sub->refreshSkinTone($player));
+        $this->assertNull($player->getAppearance());
+    }
+
+    public function testRefreshSkinToneIgnoresUnrelatedEntities(): void
+    {
+        $club = new Club('Test FC', new User('owner@example.com'));
+        $this->assertFalse($this->sub->refreshSkinTone($club));
+    }
+
     public function testIgnoresUnrelatedEntities(): void
     {
         // Club requires a name + owning User in its constructor (unlike the

@@ -46,8 +46,52 @@ final class AppearanceLifecycleSubscriber
 
         [$role, $age] = $this->roleAndAge($entity);
         $entity->setAppearance(
-            $this->generator->generate((string) $entity->getId(), $role, $age)
+            $this->generator->generate(
+                (string) $entity->getId(),
+                $role,
+                $age,
+                $entity->getNationality(),
+            )
         );
+    }
+
+    /**
+     * Recomputes just the `skinTone` of an entity that already has an
+     * appearance, leaving the other nine fields untouched. Used to roll the
+     * region-weighted distribution over rows generated before it existed, so
+     * existing avatars keep their hair, accessory and kit.
+     *
+     * @return bool True when the tone actually changed.
+     */
+    public function refreshSkinTone(object $entity): bool
+    {
+        if (!$entity instanceof Player
+            && !$entity instanceof Staff
+            && !$entity instanceof Scout
+            && !$entity instanceof Agent) {
+            return false;
+        }
+
+        $appearance = $entity->getAppearance();
+        if ($appearance === null) {
+            return false;
+        }
+
+        [$role, $age] = $this->roleAndAge($entity);
+        $skinTone = $this->generator->generate(
+            (string) $entity->getId(),
+            $role,
+            $age,
+            $entity->getNationality(),
+        )['skinTone'];
+
+        if (($appearance['skinTone'] ?? null) === $skinTone) {
+            return false;
+        }
+
+        $entity->setAppearance(array_replace($appearance, ['skinTone' => $skinTone]));
+
+        return true;
     }
 
     /** @return array{0: AppearanceRole, 1: int} */
