@@ -82,13 +82,12 @@ jobs:
             # preserves artwork uploaded through the admin.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-excursions
-            # Fills `appearance` for any Player/Staff/Scout/Agent row that lacks
-            # one. Touches only rows WHERE appearance IS NULL, so it is cheap on
-            # every deploy. It does NOT re-weight existing avatars by world
-            # region — that is `--regenerate-skin-tone`, a one-time full-table
-            # pass deliberately kept out of the deploy (see CLAUDE.md).
-            docker compose -f docker-compose.prod.yml exec -T app \
-              php bin/console app:backfill-appearances
+            # NOTE: app:backfill-appearances is deliberately NOT run here. It
+            # hydrates every matching row in one findBy(), which exhausted the
+            # 128MB container limit on prod's 36,569 appearance-less Staff rows
+            # and aborted the deploy. Appearance is filled on persist by
+            # AppearanceLifecycleSubscriber, so freshly generated pools need no
+            # backfill; run the command by hand only if a backlog builds up.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console assets:install --symlink
             docker compose -f docker-compose.prod.yml exec -T app \
