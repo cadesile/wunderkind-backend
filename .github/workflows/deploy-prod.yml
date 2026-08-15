@@ -78,6 +78,17 @@ jobs:
               php bin/console app:seed-player-events
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-social-post-templates
+            # Upserts the excursion catalogue by slug — safe to re-run, and
+            # preserves artwork uploaded through the admin.
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:seed-excursions
+            # Fills `appearance` for any Player/Staff/Scout/Agent row that lacks
+            # one. Touches only rows WHERE appearance IS NULL, so it is cheap on
+            # every deploy. It does NOT re-weight existing avatars by world
+            # region — that is `--regenerate-skin-tone`, a one-time full-table
+            # pass deliberately kept out of the deploy (see CLAUDE.md).
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:backfill-appearances
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console assets:install --symlink
             docker compose -f docker-compose.prod.yml exec -T app \
