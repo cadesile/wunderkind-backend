@@ -6,6 +6,8 @@ namespace App\Service;
 
 use App\Entity\Club;
 use App\Entity\User;
+use App\Exception\ClubNameTakenException;
+use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -52,6 +54,7 @@ class ClubInitializationService
     public function __construct(
         private readonly EntityManagerInterface  $em,
         private readonly StarterConfigRepository $starterConfigRepository,
+        private readonly NpcClubRepository       $npcClubRepository,
     ) {}
 
     /**
@@ -60,10 +63,18 @@ class ClubInitializationService
      * Pulls entities from the pool. Throws \OverflowException if any pool is
      * insufficient — run app:generate-market-data to replenish before retrying.
      *
-     * @throws \OverflowException  if any entity pool has too few entries
+     * @throws \OverflowException        if any entity pool has too few entries
+     * @throws ClubNameTakenException    if an NPC club in the same country already uses this name
      */
     public function initializeClub(User $user, string $clubName, ?string $country = null, ?array $managerProfile = null): Club
     {
+        // The user picks their name from the same place/suffix pools the NPC
+        // generator uses, so without this the pyramid can contain two clubs
+        // with an identical name.
+        if ($country !== null && $this->npcClubRepository->clubNameExists($clubName, $country)) {
+            throw new ClubNameTakenException($clubName);
+        }
+
         $config  = $this->starterConfigRepository->getConfig();
         $club = new Club($clubName, $user);
         $club->setBalance($config->getStartingBalance());

@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Dto\ClubInitRequest;
 use App\Entity\Investor;
 use App\Entity\User;
+use App\Exception\ClubNameTakenException;
 use App\Repository\ClubRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\ClubInitializationService;
@@ -54,8 +55,11 @@ class ClubController extends AbstractController
     }
 
     #[Route('/name-options', name: 'api_clubs_name_options', methods: ['GET'])]
-    public function nameOptions(Request $request, NpcClubGenerationService $npcClubGenerationService): JsonResponse
-    {
+    public function nameOptions(
+        Request $request,
+        NpcClubGenerationService $npcClubGenerationService,
+        NpcClubRepository $npcClubRepo,
+    ): JsonResponse {
         $country  = strtoupper($request->query->get('country', 'EN'));
         $cities   = array_merge(
             $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN'),
@@ -69,6 +73,11 @@ class ClubController extends AbstractController
             'country'  => $country,
             'cities'   => $this->sortAlphabetically($cities, $locale),
             'suffixes' => $this->sortAlphabetically($suffixes, $locale),
+            // Names already used by NPC clubs in this country. The client hides
+            // the city/suffix combinations that would collide, so the user
+            // cannot pick a name that already exists in their pyramid.
+            // Deliberately unsorted — this is a matching set, not a display list.
+            'takenNames' => $npcClubRepo->findNamesByCountry($country),
         ]);
     }
 
@@ -103,6 +112,12 @@ class ClubController extends AbstractController
 
         try {
             $club = $service->initializeClub($user, $dto->clubName, $dto->country, $managerProfile);
+        } catch (ClubNameTakenException $e) {
+            // Distinct from the 409 below, which means "this user already has a club".
+            return $this->json(
+                ['error' => 'club_name_taken', 'message' => $e->getMessage()],
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
         }

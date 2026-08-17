@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\League;
 use App\Entity\NpcClub;
+use App\Service\ClubNameNormalizer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -56,6 +57,26 @@ class NpcClubRepository extends ServiceEntityRepository
     public function findByLeague(League $league): array
     {
         return $this->findBy(['league' => $league]);
+    }
+
+    /** @return string[] every NPC club name in the given country, across all tiers */
+    public function findNamesByCountry(string $country): array
+    {
+        return $this->createQueryBuilder('c')
+            ->select('c.name')
+            ->where('c.country = :country')
+            ->setParameter('country', $country)
+            ->getQuery()
+            ->getSingleColumnResult();
+    }
+
+    /**
+     * True if an NPC club in this country already uses this name, compared on
+     * the normalised form (case/accent/whitespace insensitive).
+     */
+    public function clubNameExists(string $name, string $country): bool
+    {
+        return ClubNameNormalizer::isTaken($name, $this->findNamesByCountry($country));
     }
 
     /** @return string[] distinct, non-null region values currently in use, alphabetically sorted */
