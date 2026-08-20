@@ -1,29 +1,33 @@
 # Knowledge Gaps
 
-## Routes and API spec extraction unverified
-**Question:** `04_interfaces/routes.md` and `controllers.md` were built via `static-regex-fallback` (per the provenance table, live `debug:router`/`route:list` was not run) and `api-spec.md` is marked `unavailable` — do the documented routes/controllers accurately reflect what's actually registered, including any attribute-based or dynamically-loaded routes the regex scan could miss?
-**Why it matters:** Any consumer relying on this context for endpoint behavior (auth, request/response shape) is working from an unverified static guess rather than the actual routing table.
+## Migration rollback footprint
+**Question:** Multiple recent migrations (`Version20260626000001`, `Version20260704000001`, `Version20260716000000`, `Version20260719000000`) show a column being both added and dropped within the same migration file — is this an artifact of the extraction/regex scan, or do these migrations genuinely add-then-drop the same column in production?
+**Why it matters:** If real, `User.lastLoginAt`, `Club.tutorialCompletedAt`, `starter_config.world_pack_players_per_agent`, and `game_config.season_ticket_holder_percent` would not persist as expected, silently breaking any code (e.g. `Club` entity's `tutorialCompletedAt` field, `03_data/entities.md`) that relies on those columns existing.
 
-## `TacticalAdvantage.multiplier` business rule
-**Question:** What determines the `multiplier` value for a given `style`/`opponentStyle` pairing (e.g. `POSSESSION` vs `DIRECT` defaults to `1.0`), and is there a canonical matrix of all style combinations that should exist?
-**Why it matters:** `TacticalAdvantage` has no hand-written notes and the entity only shows constructor defaults — an engineer changing match-simulation logic can't tell if `1.0` is a "no advantage" placeholder or a real balancing value without external confirmation.
+## schema.md extraction reliability
+**Question:** `03_data/schema.md` is flagged `ai-call-failed (existing content retained)` in the provenance table — how stale is the retained content, and which tables/columns might be missing or outdated relative to the actual current schema?
+**Why it matters:** Any decisions about `GameConfig`, `LeagueSponsor`, `TacticalAdvantage`, or `User` fields based on this doc risk being wrong since it wasn't freshly regenerated.
 
-## `LeagueSponsor.rolledValue` semantics
-**Question:** What does "rolled" mean for `rolledValue` (bigint, default 0) — is it re-randomized periodically, accumulated, or set once per league/sponsor pairing — and what process writes to it?
-**Why it matters:** No purpose note exists for `LeagueSponsor`; without knowing the update trigger, a bug fix or migration touching sponsor revenue could silently break whatever "rolling" logic currently governs it.
+## api-spec.md unavailable
+**Question:** `04_interfaces/api-spec.md` extraction is marked `unavailable` — is there no OpenAPI/API-spec source in the repo, or did the extraction step fail to locate one?
+**Why it matters:** Without this, there's no verified contract for API consumers (e.g. frontend or `/api/beta-request/verify` per `entities.md`'s `BetaRequest`), and routes.md/controllers.md content can't be cross-checked against a formal spec.
 
-## `social_account_connection.access_token` / `refresh_token` storage
-**Question:** Are `access_token` and `refresh_token` (both `TEXT NOT NULL`/`TEXT DEFAULT NULL` in `Version20260705141806`) encrypted at rest, or stored as plaintext OAuth tokens?
-**Why it matters:** If unencrypted, this is a security-sensitive gap — plaintext long-lived OAuth tokens for connected social platforms in the DB is a real exposure risk that isn't visible from the schema alone.
+## state.md has no source material
+**Question:** `03_data/state.md` is `ai-no-relevant-files-found` — is game/session state tracked entirely through entities like `GameConfig`, `Club`, `Agent` (with the new `appearance` JSON column), or is there a missing state-machine/workflow layer not captured by this generator?
+**Why it matters:** Entities like `Club` carry state-like fields (`tutorialCompletedAt`, `worldInitializedAt`, `starterInitializedAt`, `lastSyncedAt`) suggesting an implicit state machine that isn't documented anywhere.
 
-## `game_config.npc_squad_config` JSON shape
-**Question:** `Version20260707203954` adds `npc_squad_config JSON` then immediately sets it `NOT NULL` with no default shown — what schema/shape does this JSON blob follow, and what was the backfill value for existing rows when the column went from nullable to required?
-**Why it matters:** A required JSON column with an unclear shape and an in-migration nullability flip is a common source of runtime `null`/malformed-JSON errors if the app-layer contract isn't documented.
+## Social media integration intent
+**Question:** `Version20260705141806` and `Version20260705202249` add `social_account_connection` and `social_post_template` tables (with OAuth-style `access_token`/`refresh_token` storage), and `Version20260705211313` adds `facebook_page_url`/`x_profile_url` to `game_config` — what's the business purpose (automated social posting per club? per league?) and is `access_token`/`refresh_token` encrypted at rest?
+**Why it matters:** Storing raw OAuth tokens in a `TEXT` column (`social_account_connection.access_token`) is a security-sensitive design choice that isn't explained or verified anywhere in the extracted content.
 
-## `Club.managerProfile` vs `Club.managerTemperament/Discipline/Ambition`
-**Question:** `Club` has both a `?array $managerProfile` JSON blob and discrete `managerTemperament`/`managerDiscipline`/`managerAmbition` int fields — is `managerProfile` a legacy/duplicate representation of the same traits, or does it hold different data?
-**Why it matters:** Two competing representations of "manager" state on the same entity risks code reading/writing the stale one; the field note only documents the clamped int setters, not `managerProfile`'s role.
+## `npc_squad_config` JSON semantics
+**Question:** `Version20260707203954` adds `game_config.npc_squad_config` as JSON `NOT NULL` with no default shown — what shape/schema does this JSON take, and what migration path populated existing rows before the `NOT NULL` constraint was enforced?
+**Why it matters:** Since `GameConfig` is described as a singleton row (`entities.md`), a `NOT NULL` JSON column added after the row already exists implies a backfill step that isn't documented, risking a broken deploy if reproduced elsewhere.
 
-## `season_ticket_holder_percent` default rationale
-**Question:** `Version20260719000000` adds `game_config.season_ticket_holder_percent SMALLINT DEFAULT 60 NOT NULL` — is 60% a tuned game-balance constant, and does changing it require corresponding changes to revenue/attendance calculations elsewhere?
-**Why it matters:** It's a very recent (2026-07-19) migration with no accompanying entity note; anyone adjusting game economy balance needs to know whether this value is safe to tweak in isolation.
+## `hallOfFamePoints` / `reputation` invariants enforcement point
+**Question:** `entities.md`'s field note states `hallOfFamePoints` is `max(current, incoming)` and `reputation` floors at 0 — are these invariants enforced only in application-layer setters, or also at the database level (check constraints)?
+**Why it matters:** `Club.hallOfFamePoints`/`reputation` are plain `int` columns in `schema.md` with no DB constraints shown, so any code path that sets these fields directly (bypassing the described setters) could violate the invariant undetected.
+
+## EasyAdmin JSON field workaround scope
+**Question:** The `Agent` entity's field note describes a workaround for EasyAdmin auto-configuring `json` columns as `CollectionType` — does this same issue apply to the newly added `appearance` JSON columns on `Player` and `Scout` (`Version20260713194158`), or were those admin forms built differently?
+**Why it matters:** If `Player`/`Scout` admin CRUD forms weren't given the same `configureOptions()` tolerance and form-theme treatment as `Agent`, editing those entities in EasyAdmin could throw the same `"options ... do not exist"` error.

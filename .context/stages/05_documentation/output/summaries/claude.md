@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> Title: CLAUDE.md · 3030 words · parsed 2026-07-21T21:26:02.039Z
+> Title: CLAUDE.md · 3165 words · parsed 2026-08-20T22:28:10.476Z
 
 ## Outline
 - Project Context
@@ -24,4 +24,6 @@
 - Key Entities (non-obvious fields)
 
 ## Summary
-This CLAUDE.md documents a Symfony/PHP backend for a football management game with a hybrid client-server architecture — gameplay runs on-device, while the server handles club sync, anti-cheat, leaderboards, and world data. An agent should read it before running any dev commands (all PHP work happens inside Lando containers), before writing or debugging tests (especially functional tests, which hit a separate `wunderkind_test` DB prone to schema drift), and before modifying entities like Player/Staff, since the pool lifecycle model (no club FK, deleted-on-assign) is non-obvious from code alone. It also sets git workflow conventions (feature branches off `master`, no direct commits).
+This project's CLAUDE.md is a build/environment guide, not a task requiring skills — it's a Lando-based PHP/Symfony backend for a game called "Wunderkind." Direct summary:
+
+This file documents the backend for a mobile game's hybrid client-server architecture: gameplay logic runs on-device, while the Symfony/PostgreSQL API only handles club sync, anti-cheat, leaderboards, and serving world/market data. It also notes a critical footgun — the functional-test database (`wunderkind_test`) is built via `schema:create` rather than migrations, so it drifts from the dev DB and needs manual reconciliation. An AI agent should read this before running any PHP command (all must go through `lando`), writing/running tests, or touching the Player/Staff "pool" model, where entities have no club FK and are deleted from the DB the moment they're assigned to a club.

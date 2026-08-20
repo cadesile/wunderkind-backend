@@ -3,6 +3,7 @@
 #### `AccountDeletionService`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(private readonly EntityManagerInterface $em) {}
     public function deleteAccount(User $user): void
@@ -11,6 +12,7 @@ public function __construct(private readonly EntityManagerInterface $em) {}
 #### `AppearanceGeneratorService`
 
 > **Purpose:** Deterministic avatar generation (port of frontend `generateAppearance`); paired with `AppearanceLifecycleSubscriber` (prePersist auto-fill) — see Avatar Appearance above
+
 ```php
 public function generate(string $id, AppearanceRole $role, int $age): array
 ```
@@ -18,6 +20,7 @@ public function generate(string $id, AppearanceRole $role, int $age): array
 #### `SeededRng`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(int $seed)
     public function next(): float
@@ -28,6 +31,7 @@ public function __construct(int $seed)
 #### `ClubInitializationService`
 
 > **Purpose:** Create Club entity, set paName + manager traits, abbreviation
+
 ```php
 public function __construct(
     public function initializeClub(User $user, string $clubName, ?string $country = null, ?array $managerProfile = null): Club
@@ -37,6 +41,7 @@ public function __construct(
 #### `CommunityStatsService`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     public function getMostTransfers(StatsPeriod $period, int $limit): array
@@ -48,6 +53,7 @@ public function __construct(
 #### `ConfigImportExportService`
 
 > **Purpose:** Export/import `GameConfig`, `StarterConfig`, and `PoolConfig` rows as JSON
+
 ```php
 public function __construct(
     public function export(): array
@@ -57,6 +63,7 @@ public function __construct(
 #### `EconomicService`
 
 > **Purpose:** Financial year-end, sponsor contracts, player market value
+
 ```php
 public function __construct(
     public function generateSponsorOffer(Club $club): array
@@ -69,6 +76,7 @@ public function __construct(
 #### `EmailVerificationService`
 
 > **Purpose:** Send and validate email verification / password reset tokens
+
 ```php
 public function __construct(
     public function sendVerificationEmail(User $user): void
@@ -82,6 +90,7 @@ public function __construct(
 #### `FixtureGenerationService`
 
 > **Purpose:** Generate match fixtures for a league season
+
 ```php
 public function generate(array $clubIds): array
 ```
@@ -89,6 +98,7 @@ public function generate(array $clubIds): array
 #### `InboxService`
 
 > **Purpose:** Generate and respond to inbox offers (sponsors, investors)
+
 ```php
 public function __construct(
     public function sendSponsorOffer(Club $club, array $offerData): InboxMessage
@@ -101,6 +111,7 @@ public function __construct(
 #### `LeagueImportExportService`
 
 > **Purpose:** Export/import `League` + `NpcClub` world data (used for admin-driven world pack management)
+
 ```php
 public function __construct(
     public function export(): array
@@ -111,6 +122,7 @@ public function __construct(
 #### `LeagueService`
 
 > **Purpose:** Assign clubs to leagues, conclude seasons, roll league sponsors
+
 ```php
 public function __construct(
     public function generateLeaguesForCountry(string $country): array
@@ -123,6 +135,7 @@ public function __construct(
 #### `MarketDataService`
 
 > **Purpose:** Serve market data to the client
+
 ```php
 public function __construct(private readonly MarketPoolService $pool) {}
     public function getMarketSnapshot(?Tier $tier = null): MarketDataResponse
@@ -131,6 +144,7 @@ public function __construct(private readonly MarketPoolService $pool) {}
 #### `MarketPoolService`
 
 > **Purpose:** Generate and assign market entities; Player/Staff assign deletes entity and returns snapshot
+
 ```php
 public function __construct(
     public function generatePlayers(int $count, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
@@ -149,6 +163,7 @@ public function __construct(
 #### `NameGeneratorService`
 
 > **Purpose:** Procedural name generation for players and PA personas
+
 ```php
 public function generateName(string $nationality): string
     public function generatePlayerName(string $nationality): array
@@ -160,6 +175,7 @@ public function generateName(string $nationality): string
 #### `NarrativeImportExportService`
 
 > **Purpose:** Export/import event templates, facility templates, player archetypes, and `TacticalAdvantage` rows
+
 ```php
 public function __construct(
     public function export(): array
@@ -170,6 +186,7 @@ public function __construct(
 #### `NpcClubGenerationService`
 
 > **Purpose:** Generate NPC clubs with names, colors, facilities, and ability by tier
+
 ```php
 public function __construct(
     public function getPlaceNames(string $countryCode): array
@@ -180,6 +197,7 @@ public function __construct(
 #### `PeriodResolver`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     public function applyPeriodFilter(
@@ -188,6 +206,7 @@ public function __construct(
 #### `PlayerGenerationService`
 
 > **Purpose:** Procedurally generate a `Player` from archetype, position, and source
+
 ```php
 public function __construct(
     public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null): Player
@@ -196,6 +215,7 @@ public function __construct(
 #### `SocialPostRenderer`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(private readonly CommunityStatsService $statsService)
     public function render(SocialPostTemplate $template): ?string
@@ -204,6 +224,7 @@ public function __construct(private readonly CommunityStatsService $statsService
 #### `SocialPostingService`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     public function post(SocialAccountConnection $connection, string $text): void
@@ -212,6 +233,7 @@ public function __construct(
 #### `StarterPackService`
 
 > **Purpose:** Pull starting Player/Staff/Scout from pool; build snapshots; delete consumed Player/Staff
+
 ```php
 public function __construct(
     public function initialize(Club $club): array
@@ -220,6 +242,7 @@ public function __construct(
 #### `SyncService`
 
 > **Purpose:** Sync processing, anti-cheat, leaderboard upsert, manager trait shifts
+
 ```php
 public function __construct(
     public function process(User $user, SyncRequest $request): array
@@ -228,6 +251,7 @@ public function __construct(
 #### `TokenEncryptionService`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(string $socialTokenEncryptionKey)
     public function encrypt(string $plaintext): string
@@ -237,6 +261,7 @@ public function __construct(string $socialTokenEncryptionKey)
 #### `TransferLeaderboardService`
 
 > **Purpose:** Rank players by transfer fee across clubs
+
 ```php
 public function __construct(
     public function getTopSellers(string $period = 'week', int $limit = 10): array
@@ -246,6 +271,7 @@ public function __construct(
 #### `WorldInitializationService`
 
 > **Purpose:** Build the full league pyramid + tier pack snapshot for a client; snapshot builders for Player/Staff/Scout
+
 ```php
 public function __construct(
     public function buildLeaguesPack(Club $club, string $country): array
@@ -261,6 +287,7 @@ public function __construct(
 #### `WorldPackCacheService`
 
 > **Purpose:** Cache country/nationality worldpack data (`CountryWorldPackCache`)
+
 ```php
 public function __construct(
     public function getOrBuild(string $country, int $tier, callable $generator): array

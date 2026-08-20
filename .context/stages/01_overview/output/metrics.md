@@ -2,7 +2,7 @@
 
 | Category | Count |
 |---|---|
-| PHP files | 433 |
-| Entities/Models | 35 |
-| Controllers | 49 |
-| Services | 27 |
+| PHP files | 464 |
+| Entities/Models | 38 |
+| Controllers | 52 |
+| Services | 30 |

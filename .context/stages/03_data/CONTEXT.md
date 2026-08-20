@@ -1,13 +1,13 @@
 # Stage 03_data
 
 ## Inputs
-- source: src/Entity
+- source: AI-discovered data-model paths (see 04_interfaces' discovery pass)
 - source: migrations / schema files
 
 ## Process
-Extracted the data layer for symfony: schema, entity definitions, and migrations.
+Extracted the data layer for symfony via AI discovery+generation: schema, entity definitions, store shapes, and migrations.
 
 ## Outputs
-- output/schema.md — Database Schema (Doctrine / PostgreSQL)
-- output/entities.md — Doctrine Entity Definitions
+- output/schema.md — Database Schema (symfony / PostgreSQL)
+- output/entities.md — symfony Entity Definitions
 - output/migrations.md — latest migrations

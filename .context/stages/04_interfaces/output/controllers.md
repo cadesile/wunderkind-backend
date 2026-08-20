@@ -3,6 +3,7 @@
 #### `AdminCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -12,6 +13,7 @@ public function configureActions(Actions $actions): Actions
 #### `AgentCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -21,6 +23,7 @@ public function configureActions(Actions $actions): Actions
 #### `BetaRequestCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -31,6 +34,7 @@ public function configureActions(Actions $actions): Actions
 #### `ClubCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(private EntityManagerInterface $em) {}
     public function configureActions(Actions $actions): Actions
@@ -43,6 +47,7 @@ public function __construct(private EntityManagerInterface $em) {}
 #### `DashboardController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     public function index(): Response
@@ -69,6 +74,7 @@ public function __construct(
 #### `DeleteAdminController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     #[Route('/admin/clubs/{id}/delete-info', name: 'admin_club_delete_info', methods: ['GET'])]
@@ -84,6 +90,7 @@ public function __construct(
 #### `FacilityAdminController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(private EntityManagerInterface $em) {}
     #[Route('/admin/facilities/{id}/quick-edit', name: 'admin_facility_quick_edit', methods: ['POST'])]
@@ -93,6 +100,7 @@ public function __construct(private EntityManagerInterface $em) {}
 #### `FacilityTemplateCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
@@ -101,6 +109,7 @@ public function configureCrud(Crud $crud): Crud
 #### `GameEventTemplateCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
@@ -109,6 +118,7 @@ public function configureCrud(Crud $crud): Crud
 #### `GuardianCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -118,6 +128,7 @@ public function configureActions(Actions $actions): Actions
 #### `InvestorCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -127,6 +138,7 @@ public function configureActions(Actions $actions): Actions
 #### `LeaderboardEntryCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -136,6 +148,7 @@ public function configureActions(Actions $actions): Actions
 #### `LeagueAdminController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(private EntityManagerInterface $em) {}
     #[Route('/admin/leagues/{id}/quick-edit', name: 'admin_league_quick_edit', methods: ['POST'])]
@@ -145,6 +158,7 @@ public function __construct(private EntityManagerInterface $em) {}
 #### `LeagueCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureCrud(Crud $crud): Crud
     public function configureFilters(Filters $filters): Filters
@@ -154,6 +168,7 @@ public function configureCrud(Crud $crud): Crud
 #### `NpcClubCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
@@ -162,6 +177,7 @@ public function configureCrud(Crud $crud): Crud
 #### `PlayerArchetypeCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -171,6 +187,7 @@ public function configureActions(Actions $actions): Actions
 #### `PlayerCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     public function configureActions(Actions $actions): Actions
@@ -183,6 +200,7 @@ public function __construct(
 #### `ScoutCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -192,6 +210,7 @@ public function configureActions(Actions $actions): Actions
 #### `SocialAuthController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/admin/social')]
     public function __construct(
@@ -210,6 +229,7 @@ public function configureActions(Actions $actions): Actions
 #### `SocialPostTemplateCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureCrud(Crud $crud): Crud
     public function configureFields(string $pageName): iterable
@@ -218,6 +238,7 @@ public function configureCrud(Crud $crud): Crud
 #### `SponsorCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -227,6 +248,7 @@ public function configureActions(Actions $actions): Actions
 #### `StaffCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -237,6 +259,7 @@ public function configureActions(Actions $actions): Actions
 #### `SyncRecordCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -246,6 +269,7 @@ public function configureActions(Actions $actions): Actions
 #### `TacticalAdvantageCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureFields(string $pageName): iterable
 ```
@@ -253,6 +277,7 @@ public function configureFields(string $pageName): iterable
 #### `TransferCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -262,6 +287,7 @@ public function configureActions(Actions $actions): Actions
 #### `UserCrudController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function configureActions(Actions $actions): Actions
     public function configureCrud(Crud $crud): Crud
@@ -272,6 +298,7 @@ public function configureActions(Actions $actions): Actions
 #### `WorldPackController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 public function __construct(
     #[Route('/admin/worldpack-cache/delete/{id}', name: 'admin_worldpack_delete_entry', methods: ['POST'])]
@@ -287,6 +314,7 @@ public function __construct(
 #### `AdminSecurityController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/admin/login', name: 'admin_login')]
     public function login(AuthenticationUtils $authenticationUtils): Response
@@ -297,6 +325,7 @@ public function __construct(
 #### `AccountController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/account')]
     #[Route('/delete', name: 'api_account_delete', methods: ['POST'])]
@@ -306,6 +335,7 @@ public function __construct(
 #### `AdminController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/admin')]
     #[Route('/stats', name: 'api_admin_stats', methods: ['GET'])]
@@ -315,6 +345,7 @@ public function __construct(
 #### `AppLinksController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api')]
     public function __construct(
@@ -325,6 +356,7 @@ public function __construct(
 #### `ArchetypeController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/archetypes', name: 'api_archetypes', methods: ['GET'])]
     public function __construct(
@@ -334,6 +366,7 @@ public function __construct(
 #### `BetaRequestController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api')]
     public function __construct(
@@ -346,6 +379,7 @@ public function __construct(
 #### `ClubController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/club')]
     public function __construct(private readonly ClubRepository $clubRepository) {}
@@ -364,6 +398,7 @@ public function __construct(
 #### `CommunityStatsController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/stats')]
     public function __construct(
@@ -380,6 +415,7 @@ public function __construct(
 #### `EventController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/events')]
     public function __construct(
@@ -390,6 +426,7 @@ public function __construct(
 #### `FinanceController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/finance')]
     public function __construct(
@@ -406,6 +443,7 @@ public function __construct(
 #### `GameConfigController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api')]
     public function __construct(
@@ -416,6 +454,7 @@ public function __construct(
 #### `InboxController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/inbox')]
     public function __construct(
@@ -434,6 +473,7 @@ public function __construct(
 #### `LeagueController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/league')]
     public function __construct(
@@ -448,6 +488,7 @@ public function __construct(
 #### `MarketController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/market')]
     #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
@@ -463,6 +504,7 @@ public function __construct(
 #### `PoolController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/pool')]
     #[Route('/ensure', name: 'api_pool_ensure', methods: ['POST'])]
@@ -472,6 +514,7 @@ public function __construct(
 #### `ScoutSearchController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/scout')]
     #[Route('/foreign-clubs', name: 'api_scout_foreign_clubs', methods: ['GET'])]
@@ -483,6 +526,7 @@ public function __construct(
 #### `StarterConfigController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api')]
     public function __construct(
@@ -493,6 +537,7 @@ public function __construct(
 #### `TransferLeaderboardController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/leaderboard/transfers')]
     public function __construct(
@@ -505,6 +550,7 @@ public function __construct(
 #### `HomeController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/', name: 'home', methods: ['GET'])]
     public function index(): BinaryFileResponse
@@ -513,6 +559,7 @@ public function __construct(
 #### `InitializeController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api/initialize')]
     public function __construct(
@@ -527,6 +574,7 @@ public function __construct(
 #### `LeaderboardController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api')]
     #[Route('/leaderboard/{category}', name: 'api_leaderboard', methods: ['GET'])]
@@ -536,6 +584,7 @@ public function __construct(
 #### `SyncController`
 
 > _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
+
 ```php
 #[Route('/api')]
     #[Route('/login', name: 'api_login', methods: ['POST'])]

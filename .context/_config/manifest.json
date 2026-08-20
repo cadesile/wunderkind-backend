@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "generated_at": "2026-07-21T21:51:10.190Z",
+  "generated_at": "2026-08-20T22:29:39.095Z",
   "generator_version": "2.0.0",
-  "generator_commit": "514a55f",
+  "generator_commit": "9974510",
   "project": {
     "name": "wunderkind-backend",
     "stack": "symfony 8.0 · PHP 8.4 · postgres:16"
@@ -16,11 +16,11 @@
       "parsed_at": "2026-07-21T21:26:02.039Z"
     },
     "CLAUDE.md": {
-      "sha256": "dd7ddb961c1dce3025e703c289ea6827818a52562cc596d6735cb396a6345aad",
-      "mtime": "2026-07-21T14:15:25.659Z",
+      "sha256": "0db8c0d92b250af995fc67b384ea2510ae9d4ac0f441f59150167fb8e3f5b0f4",
+      "mtime": "2026-08-15T20:48:54.355Z",
       "summary": "stages/05_documentation/output/summaries/claude.md",
       "ai_summarized": true,
-      "parsed_at": "2026-07-21T21:26:02.039Z"
+      "parsed_at": "2026-08-20T22:28:10.476Z"
     },
     "README.md": {
       "sha256": "acf62628374c07954c75138df47a3672292b01bb5c29f979df8958de8f364325",
@@ -42,6 +42,20 @@
       "summary": "stages/05_documentation/output/summaries/docs-api-community-stats.md",
       "ai_summarized": true,
       "parsed_at": "2026-07-21T21:26:02.039Z"
+    },
+    "docs/api/leaderboard.md": {
+      "sha256": "b237c1888d91a13f662a7d0b9acfe98948e16eb65a99043f0eb9491eeabe98c3",
+      "mtime": "2026-07-23T21:54:23.060Z",
+      "summary": "stages/05_documentation/output/summaries/docs-api-leaderboard.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-08-20T22:28:10.476Z"
+    },
+    "docs/api/npc-club-city-size.md": {
+      "sha256": "f0d28d46171fe1841b94ecb3633d8e771e4e1c6f29c652c599353e732f9628ec",
+      "mtime": "2026-08-06T11:02:02.094Z",
+      "summary": "stages/05_documentation/output/summaries/docs-api-npc-club-city-size.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-08-20T22:28:10.476Z"
     },
     "docs/event-guide.md": {
       "sha256": "2f5f1bbb293e4afcf2d54c5986327159b99f712353a9bd3abbaa174fff5b60af",
@@ -155,6 +169,13 @@
       "ai_summarized": true,
       "parsed_at": "2026-07-21T21:26:02.039Z"
     },
+    "docs/superpowers/plans/2026-08-06-npc-club-city-size-weighting.md": {
+      "sha256": "4bc0b9bf06eae279650d26c7c1b65835d9eaf0443d1f5c05d8311a0613e35e80",
+      "mtime": "2026-08-06T10:11:23.607Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-plans-2026-08-06-npc-club-city-size-weighting.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-08-20T22:28:10.476Z"
+    },
     "docs/superpowers/specs/2026-04-14-npc-club-generation-design.md": {
       "sha256": "335130ddca7d6b0ddefe82e6e9b3be3e0b6795ffb98380d2b788846ea6d7ec27",
       "mtime": "2026-04-13T23:16:55.572Z",
@@ -218,6 +239,13 @@
       "ai_summarized": true,
       "parsed_at": "2026-07-21T21:26:02.039Z"
     },
+    "docs/superpowers/specs/2026-08-06-npc-club-city-size-weighting-design.md": {
+      "sha256": "f3dfbcbd86d63015ead731be62d5dec0bb0040ba811ba74188c5982b8f2918f5",
+      "mtime": "2026-08-06T10:11:23.607Z",
+      "summary": "stages/05_documentation/output/summaries/docs-superpowers-specs-2026-08-06-npc-club-city-size-weighting-design.md",
+      "ai_summarized": true,
+      "parsed_at": "2026-08-20T22:28:10.476Z"
+    },
     "docs/wunderkind-backend-context.md": {
       "sha256": "69f0f94404f463aaea7e2ce910352ab83297271406309782feab276359965961",
       "mtime": "2026-06-19T22:21:45.025Z",
@@ -242,33 +270,56 @@
   },
   "stages": {
     "01_overview": {
-      "last_run": "2026-07-21T21:51:10.190Z"
+      "last_run": "2026-08-20T22:29:39.095Z"
     },
     "02_architecture": {
-      "last_run": "2026-07-21T21:51:10.190Z"
+      "last_run": "2026-08-20T22:29:39.095Z"
     },
     "03_data": {
-      "last_run": "2026-07-21T21:51:10.190Z",
+      "last_run": "2026-08-20T22:29:39.095Z",
       "extraction": {
-        "schema.md": "static-regex-scan",
-        "entities.md": "static-regex-scan",
+        "schema.md": "ai-call-failed (existing content retained)",
+        "entities.md": "ai-generated",
+        "state.md": "ai-no-relevant-files-found",
         "migrations.md": "static-regex-scan"
+      },
+      "ai_cache": {
+        "schema.md": null,
+        "entities.md": {
+          "source_hash": "84e544081a875876f4e7da46e236078d2a261ca2b61f6c50831f0ee03bd2b6ff",
+          "last_reviewed_at": "2026-08-20T22:25:20.066Z"
+        },
+        "state.md": null
       }
     },
     "04_interfaces": {
-      "last_run": "2026-07-21T21:51:10.190Z",
+      "last_run": "2026-08-20T22:29:39.095Z",
       "extraction": {
-        "routes.md": "static-regex-fallback (live debug:router/route:list not attempted by this generator)",
-        "controllers.md": "static-regex-scan",
-        "services.md": "static-regex-scan",
+        "routes.md": "ai-generated",
+        "controllers.md": "ai-generated",
+        "services.md": "ai-generated",
         "api-spec.md": "unavailable"
+      },
+      "ai_cache": {
+        "routes.md": {
+          "source_hash": "70c04bc4632ae640e642c39969734319b3efc16d81d11b5e29bfea5c6ebd24bb",
+          "last_reviewed_at": "2026-08-20T22:27:20.152Z"
+        },
+        "controllers.md": {
+          "source_hash": "70c04bc4632ae640e642c39969734319b3efc16d81d11b5e29bfea5c6ebd24bb",
+          "last_reviewed_at": "2026-08-20T22:27:20.161Z"
+        },
+        "services.md": {
+          "source_hash": "ec4fa306982186387f9dc01c85ef5ecb76577b6f48e3ad847ec4215e8119ff2c",
+          "last_reviewed_at": "2026-08-20T22:27:20.193Z"
+        }
       }
     },
     "05_documentation": {
-      "last_run": "2026-07-21T21:51:10.190Z"
+      "last_run": "2026-08-20T22:29:39.095Z"
     },
     "06_synthesis": {
-      "last_run": "2026-07-21T21:51:10.190Z"
+      "last_run": "2026-08-20T22:29:39.095Z"
     }
   }
 }

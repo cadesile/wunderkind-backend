@@ -1,7 +1,11 @@
 # Architecture Notes
 
-- Domain/world-simulation layer separated from generic auth/platform entities — GameConfig, GameEventTemplate, FacilityTemplate, StarterConfig, PoolConfig, TacticalAdvantage, PlayerArchetype model simulation rules, distinct from Admin, Guardian, RefreshToken, EmailVerification which handle account/auth concerns.
-- Service layer separating business logic from controllers — ClubInitializationService, WorldInitializationService, PlayerGenerationService, NpcClubGenerationService, StarterPackService, EconomicService, FixtureGenerationService in src/Service, called from src/Controller and src/Controller/Api.
-- Import/export facade services for config and content — ConfigImportExportService, LeagueImportExportService, NarrativeImportExportService form a distinct family for serializing/deserializing domain data.
-- Caching layer for expensive generated/world data — CountryWorldPackCache and WorldPackCacheService pair an entity with a dedicated service to manage cached "world pack" data.
-- Custom Doctrine extensions — src/Doctrine and src/Doctrine/Function directories indicate custom DQL functions or Doctrine type/behavior extensions beyond the standard ORM setup.
+- **Import/Export services** — ConfigImportExportService, LeagueImportExportService, NarrativeImportExportService in src/Service handle serialization of domain data (config, leagues, narrative) as a distinct concern from the entities themselves.
+
+- **Template + generator pairing** — FacilityTemplate, GameEventTemplate, SocialPostTemplate entities are paired with generator/renderer services (NpcClubGenerationService, PlayerGenerationService, NameGeneratorService, AppearanceGeneratorService, SocialPostRenderer) that instantiate content from templates.
+
+- **Appearance subsystem isolation** — src/Service/Appearance and src/Enum/Appearance directories, plus AppearanceGeneratorService and FacilityImageResolver, group appearance-related logic separately from the general Service/Enum namespaces.
+
+- **API resource/entity separation** — src/ApiResource and src/Dto (with src/Dto/Leaderboard) exist alongside src/Entity, separating API-facing representations (e.g. LeaderboardEntry-related DTOs) from persistence entities.
+
+- **Admin-scoped controllers** — src/Controller/Admin is split out from src/Controller, and an Admin entity exists separately from User, indicating a distinct administrative access layer.

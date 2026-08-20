@@ -1,3 +1,5 @@
+# Database Schema (symfony / PostgreSQL)
+
 # Database Schema (Doctrine / PostgreSQL)
 
 **Migrations (latest 10):**

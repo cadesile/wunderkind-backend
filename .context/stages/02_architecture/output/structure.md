@@ -17,9 +17,27 @@ migrations/
 public/
   assets/
   images/
+    backgrounds/
+    facilities/
+      advanced_scouting/
+      biometric_hub/
+      hydro_pool/
+      kinetic_lab/
+      neuro_shed/
+      physio_clinic/
+      scouting_center/
+      strength_suite/
+      tactical_room/
+      technical_zone/
+      training_pitch/
+      youth_academy/
+      zenith_sanctuary/
     trophies/
   screenshots/
     buildmyclub/
+  uploads/
+    excursions/
+    facilities/
 scripts/
   global-context-generator/
 src/
@@ -31,6 +49,7 @@ src/
   Doctrine/
     Function/
   Dto/
+    Leaderboard/
   Entity/
   Enum/
     Appearance/
@@ -56,6 +75,7 @@ tests/
   Dto/
   Entity/
   Enum/
+    Appearance/
   Form/
   Repository/
   Service/

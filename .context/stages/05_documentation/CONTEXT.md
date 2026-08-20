@@ -5,7 +5,7 @@
 - reference: _config/manifest.json (parse ledger)
 
 ## Process
-Indexed 33 markdown files; parsed 0, skipped 33 unchanged (ledger), removed 0 stale.
+Indexed 37 markdown files; parsed 5, skipped 32 unchanged (ledger), removed 0 stale.
 
 ## Outputs
 - output/index.md — all project markdown files, grouped by directory

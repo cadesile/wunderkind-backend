@@ -10,6 +10,8 @@
 **docs/api/**
 - [docs/api/account-delete.md](../../../../docs/api/account-delete.md) — [digest](summaries/docs-api-account-delete.md)
 - [docs/api/community-stats.md](../../../../docs/api/community-stats.md) — [digest](summaries/docs-api-community-stats.md)
+- [docs/api/leaderboard.md](../../../../docs/api/leaderboard.md) — [digest](summaries/docs-api-leaderboard.md)
+- [docs/api/npc-club-city-size.md](../../../../docs/api/npc-club-city-size.md) — [digest](summaries/docs-api-npc-club-city-size.md)
 
 **docs/**
 - [docs/event-guide.md](../../../../docs/event-guide.md) — [digest](summaries/docs-event-guide.md)
@@ -30,6 +32,7 @@
 - [docs/superpowers/plans/2026-07-06-club-name-options-canonical-source.md](../../../../docs/superpowers/plans/2026-07-06-club-name-options-canonical-source.md) — [digest](summaries/docs-superpowers-plans-2026-07-06-club-name-options-canonical-source.md)
 - [docs/superpowers/plans/2026-07-13-backend-appearance.md](../../../../docs/superpowers/plans/2026-07-13-backend-appearance.md) — [digest](summaries/docs-superpowers-plans-2026-07-13-backend-appearance.md)
 - [docs/superpowers/plans/2026-07-16-account-deletion-endpoint.md](../../../../docs/superpowers/plans/2026-07-16-account-deletion-endpoint.md) — [digest](summaries/docs-superpowers-plans-2026-07-16-account-deletion-endpoint.md)
+- [docs/superpowers/plans/2026-08-06-npc-club-city-size-weighting.md](../../../../docs/superpowers/plans/2026-08-06-npc-club-city-size-weighting.md) — [digest](summaries/docs-superpowers-plans-2026-08-06-npc-club-city-size-weighting.md)
 
 **docs/superpowers/specs/**
 - [docs/superpowers/specs/2026-04-14-npc-club-generation-design.md](../../../../docs/superpowers/specs/2026-04-14-npc-club-generation-design.md) — [digest](summaries/docs-superpowers-specs-2026-04-14-npc-club-generation-design.md)
@@ -41,6 +44,7 @@
 - [docs/superpowers/specs/2026-07-06-club-name-options-canonical-source-design.md](../../../../docs/superpowers/specs/2026-07-06-club-name-options-canonical-source-design.md) — [digest](summaries/docs-superpowers-specs-2026-07-06-club-name-options-canonical-source-design.md)
 - [docs/superpowers/specs/2026-07-13-backend-appearance-design.md](../../../../docs/superpowers/specs/2026-07-13-backend-appearance-design.md) — [digest](summaries/docs-superpowers-specs-2026-07-13-backend-appearance-design.md)
 - [docs/superpowers/specs/2026-07-16-account-deletion-endpoint-design.md](../../../../docs/superpowers/specs/2026-07-16-account-deletion-endpoint-design.md) — [digest](summaries/docs-superpowers-specs-2026-07-16-account-deletion-endpoint-design.md)
+- [docs/superpowers/specs/2026-08-06-npc-club-city-size-weighting-design.md](../../../../docs/superpowers/specs/2026-08-06-npc-club-city-size-weighting-design.md) — [digest](summaries/docs-superpowers-specs-2026-08-06-npc-club-city-size-weighting-design.md)
 
 **docs/**
 - [docs/wunderkind-backend-context.md](../../../../docs/wunderkind-backend-context.md) — [digest](summaries/docs-wunderkind-backend-context.md)

@@ -2,6 +2,8 @@
 
 _Extracted via static scan of `#[Route(...)]` attributes — run `bin/console debug:router` for the live, resolved route table._
 
+Note: `config/routes/easyadmin.yaml` and the EasyAdmin CRUD controllers (`AdminCrudController`, `AgentCrudController`, `BetaRequestCrudController`, `ClubCrudController`) shown here don't add static rows — EasyAdmin generates their routes dynamically via the `easyadmin.routes` loader rather than `#[Route(...)]` attributes, so they aren't visible to a static scan.
+
 | Method | Path | Controller#action |
 |---|---|---|
 | ANY | `/admin/app-links` | `DashboardController::appLinks` |
