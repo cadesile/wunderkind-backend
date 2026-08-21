@@ -56,7 +56,7 @@ lando php bin/console doctrine:migrations:diff
 lando php bin/console app:seed-game-events        # narrative event templates
 lando php bin/console app:seed-player-events      # player event templates
 lando php bin/console app:seed:morale-events      # morale event templates
-lando php bin/console app:seed-archetypes         # player archetypes
+lando php bin/console app:seed-archetypes         # 20 curated archetypes (10 positive, 10 negative)
 lando php bin/console app:seed-social-post-templates  # social media post templates
 lando php bin/console app:generate-market-data    # agents, scouts, investors, sponsors
 lando php bin/console app:market:generate         # generate market pool entities
@@ -238,7 +238,7 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
 | `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
 | `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
 | `POST` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
-| `GET` | `/api/archetypes` | JWT | Player archetypes |
+| `GET` | `/api/archetypes` | Public | Curated archetype catalogue (10 positive + 10 negative); ETag/`versionHash` cached |
 | `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
 | `GET` | `/api/club/status` | JWT | Club initialization status |
 | `GET` | `/api/club/check` | JWT | Check if club exists for current user |
@@ -268,7 +268,7 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `MarketDataService` | Serve market data to the client |
 | `ClubInitializationService` | Create Club entity, set paName + manager traits, abbreviation |
 | `StarterPackService` | Pull starting Player/Staff/Scout from pool; build snapshots; delete consumed Player/Staff |
-| `PlayerGenerationService` | Procedurally generate a `Player` from archetype, position, and source |
+| `PlayerGenerationService` | Procedurally generate a `Player` from position and source, including its `PersonalityProfile`. (Despite the name it does **not** read `PlayerArchetype` — archetypes are classified client-side.) |
 | `AppearanceGeneratorService` | Deterministic avatar generation (port of frontend `generateAppearance`); paired with `AppearanceLifecycleSubscriber` (prePersist auto-fill) — see Avatar Appearance above |
 | `NpcClubGenerationService` | Generate NPC clubs with names, colors, facilities, and ability by tier |
 | `WorldInitializationService` | Build the full league pyramid + tier pack snapshot for a client; snapshot builders for Player/Staff/Scout |
@@ -288,7 +288,7 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; nullable `?Agent $agent` FK (many players → one agent; assigned in `MarketPoolService` and reassigned at world-pack generation; surfaced in every player snapshot — see Player↔Agent Association); `appearance` json (see Avatar Appearance). **No club FK** — pool entity, deleted on consume.
 - **Staff** — `role` (StaffRole), `coachingAbility`; `appearance` json. **No club FK** — pool entity, deleted on consume.
 - **Scout / Agent** — pool entities (`Scout` no club FK, not deleted on assign); both carry `appearance` json. Note `Scout`/`Agent` use a single `name` field, not `firstName`/`lastName`.
-- **PlayerArchetype** — defines trait mapping distributions used by `PlayerGenerationService`; `traitMapping` (json); seeded via `app:seed-archetypes`
+- **PlayerArchetype** — curated catalogue of 20 personality archetypes, `polarity` (`ArchetypePolarity`: positive/negative, 10 each) + unique `slug` + `traitWeights` (json). Classification is **client-side**: the backend is a definitions catalogue only — there is no archetype FK on `Player`, and the client resolves one positive and one negative per player. `traitWeights.formula` keys must be exactly the eight `PersonalityProfile` fields and weights are **signed** (positive = "High trait", negative = "Low trait", absolute values sum to 1.0); traits are stored 1–20 and the client normalises to 0–100 before comparing to `threshold`. Seeded via `app:seed-archetypes` (truncates first), which now runs on both deploys.
 - **League** — `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
 - **NpcClub** — `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor`, `playingStyle`, `financialApproach`; grouped into leagues for the world pack
 - **FacilityTemplate** — canonical slug shared with frontend; `category` (TRAINING/MEDICAL/SCOUTING), `baseCost`, `weeklyUpkeepBase`, `matchdayIncome`, `matchdayIncomeMultiplier`; seeded via admin

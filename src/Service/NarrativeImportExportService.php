@@ -8,6 +8,7 @@ use App\Entity\FacilityTemplate;
 use App\Entity\GameEventTemplate;
 use App\Entity\PlayerArchetype;
 use App\Entity\TacticalAdvantage;
+use App\Enum\ArchetypePolarity;
 use App\Enum\EventCategory;
 use App\Enum\PlayingStyle;
 use App\Repository\FacilityTemplateRepository;
@@ -19,7 +20,7 @@ use Symfony\Component\Uid\UuidV7;
 
 class NarrativeImportExportService
 {
-    private const EXPORT_VERSION = 1;
+    private const EXPORT_VERSION = 2;
 
     public function __construct(
         private readonly GameEventTemplateRepository $eventTemplateRepository,
@@ -68,10 +69,12 @@ class NarrativeImportExportService
     private function exportPlayerArchetypes(): array
     {
         return array_map(fn (PlayerArchetype $a) => [
+            'slug'         => $a->getSlug(),
             'name'         => $a->getName(),
             'description'  => $a->getDescription(),
-            'traitMapping' => $a->getTraitMapping(),
-        ], $this->archetypeRepository->findBy([], ['name' => 'ASC']));
+            'polarity'     => $a->getPolarity()->value,
+            'traitWeights' => $a->getTraitWeights(),
+        ], $this->archetypeRepository->findBy([], ['polarity' => 'ASC', 'slug' => 'ASC']));
     }
 
     private function exportTacticalAdvantages(): array
@@ -140,7 +143,7 @@ class NarrativeImportExportService
                     ? $result['created']++
                     : $result['updated']++;
             } catch (\Throwable $e) {
-                $result['errors'][] = 'playerArchetype[' . ($row['name'] ?? '?') . ']: ' . $e->getMessage();
+                $result['errors'][] = 'playerArchetype[' . ($row['slug'] ?? $row['name'] ?? '?') . ']: ' . $e->getMessage();
             }
         }
 
@@ -229,10 +232,22 @@ class NarrativeImportExportService
     /** @return bool true = created, false = updated */
     private function upsertPlayerArchetype(array $row): bool
     {
-        $name = trim($row['name'] ?? '');
-        if ($name === '') throw new \InvalidArgumentException('Missing name.');
+        // Match on slug, not name: slug is the stable machine identity, and name-matching is
+        // why re-importing a pre-2026-08 export duplicated rows instead of updating them.
+        $slug = trim($row['slug'] ?? '');
+        if ($slug === '') throw new \InvalidArgumentException('Missing slug.');
 
-        $archetype = $this->archetypeRepository->findOneBy(['name' => $name]);
+        $rawPolarity = $row['polarity'] ?? '';
+        $polarity    = ArchetypePolarity::tryFrom(is_string($rawPolarity) ? $rawPolarity : '');
+        if ($polarity === null) {
+            throw new \InvalidArgumentException(sprintf(
+                'Archetype "%s" has an invalid polarity "%s" — expected "positive" or "negative".',
+                $slug,
+                is_scalar($rawPolarity) ? (string) $rawPolarity : gettype($rawPolarity),
+            ));
+        }
+
+        $archetype = $this->archetypeRepository->findBySlug($slug);
         $created   = $archetype === null;
 
         if ($created) {
@@ -240,9 +255,12 @@ class NarrativeImportExportService
             $this->em->persist($archetype);
         }
 
-        $archetype->setName($name);
+        $archetype->setSlug($slug);
+        $archetype->setName(trim($row['name'] ?? '') ?: $slug);
         $archetype->setDescription($row['description'] ?? '');
-        $archetype->setTraitMapping($row['traitMapping'] ?? []);
+        $archetype->setPolarity($polarity);
+        // `traitMapping` is the pre-v2 key name — accepted so older exports still load.
+        $archetype->setTraitWeights($row['traitWeights'] ?? $row['traitMapping'] ?? []);
 
         return $created;
     }

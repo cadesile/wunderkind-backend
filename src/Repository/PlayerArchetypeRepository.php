@@ -19,21 +19,29 @@ class PlayerArchetypeRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns all archetypes ordered by name, alongside an MD5 version hash.
-     * The hash is derived from each archetype's name + traitMapping, so the client
-     * can detect when definitions have changed and invalidate its local cache.
+     * Returns all archetypes grouped by polarity, alongside an MD5 version hash.
+     *
+     * The hash covers every field the client consumes — slug, polarity, description and
+     * traitWeights — so any catalogue edit invalidates the client cache. (Description was
+     * previously omitted, which meant copy fixes shipped but never reached cached clients.)
      *
      * @return array{archetypes: PlayerArchetype[], versionHash: string}
      */
     public function findAllWithVersionHash(): array
     {
         $archetypes = $this->createQueryBuilder('a')
-            ->orderBy('a.name', 'ASC')
+            ->orderBy('a.polarity', 'ASC')
+            ->addOrderBy('a.slug', 'ASC')
             ->getQuery()
             ->getResult();
 
         $hashInput = implode('|', array_map(
-            fn (PlayerArchetype $a) => $a->getName() . ':' . json_encode($a->getTraitMapping()),
+            fn (PlayerArchetype $a) => implode(':', [
+                $a->getSlug(),
+                $a->getPolarity()->value,
+                $a->getDescription(),
+                json_encode($a->getTraitWeights()),
+            ]),
             $archetypes,
         ));
 
@@ -41,6 +49,11 @@ class PlayerArchetypeRepository extends ServiceEntityRepository
             'archetypes'  => $archetypes,
             'versionHash' => md5($hashInput),
         ];
+    }
+
+    public function findBySlug(string $slug): ?PlayerArchetype
+    {
+        return $this->findOneBy(['slug' => $slug]);
     }
 
     public function findByName(string $name): ?PlayerArchetype
