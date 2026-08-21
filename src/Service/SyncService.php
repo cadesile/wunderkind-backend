@@ -29,6 +29,7 @@ use App\Repository\SyncRecordRepository;
 use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Uid\Uuid;
 
 class SyncService
 {
@@ -448,7 +449,7 @@ class SyncService
                 continue;
             }
 
-            $player = $this->em->getRepository(Player::class)->find($data['playerId']);
+            $player = $this->findPlayerByClientId($data['playerId']);
             if ($player === null) {
                 continue;
             }
@@ -710,7 +711,7 @@ class SyncService
         foreach ($transfers as $dto) {
             $player = null;
             if (!empty($dto->playerId)) {
-                $player = $this->em->getRepository(Player::class)->find($dto->playerId);
+                $player = $this->findPlayerByClientId($dto->playerId);
             }
 
             $type = TransferType::tryFrom($dto->type) ?? TransferType::SALE;
@@ -757,7 +758,7 @@ class SyncService
         foreach ($signings as $signing) {
             $player = null;
             if (!empty($signing['playerId'])) {
-                $player = $this->em->getRepository(Player::class)->find($signing['playerId']);
+                $player = $this->findPlayerByClientId($signing['playerId']);
             }
 
             $fromClub = $signing['fromClub'] ?? null;
@@ -821,5 +822,27 @@ class SyncService
                 'threshold'         => 500,
             ]));
         }
+    }
+
+    /**
+     * Resolves a pool Player from a client-supplied identifier, or null.
+     *
+     * Player::$id is a uuid column, but signings/transfers/updates carry ids the client
+     * generated for players it already owns — pool rows are deleted the moment they're signed
+     * (see MarketPoolService::assignToClub), so those ids are arbitrary strings, exactly as
+     * PlayerCareerStat::$playerId documents. Passing one straight to find() made Doctrine's
+     * UuidType throw a ConversionException, which SyncController does not catch: the whole
+     * sync 500'd and every transfer, match result and career stat in the payload was lost.
+     *
+     * Every caller already treats a null player as "no pool row" and falls back to the
+     * denormalised name/position on the Transfer, so degrading to null is safe.
+     */
+    private function findPlayerByClientId(mixed $id): ?Player
+    {
+        if (!is_string($id) || $id === '' || !Uuid::isValid($id)) {
+            return null;
+        }
+
+        return $this->em->getRepository(Player::class)->find($id);
     }
 }

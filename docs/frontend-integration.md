@@ -526,8 +526,12 @@ Response `200`:
 
 ---
 
-### `GET /api/archetypes` — JWT required (`ROLE_CLUB`)
-Returns all 30 player archetypes with their weighted trait formulas. The client uses these to classify players based on their personality profile. Use `versionHash` to detect seed data changes and invalidate your local cache.
+### `GET /api/archetypes` — Public (no JWT)
+Returns the curated catalogue of 20 player archetypes — **10 positive and 10 negative** — with
+their weighted trait formulas. The client resolves a **dual report** per player: one best-match
+positive archetype and one best-match negative archetype. Use `versionHash` (also served as an
+`ETag`) to detect catalogue changes and invalidate your local cache; a conditional request with
+`If-None-Match` returns `304`.
 
 Response `200`:
 ```json
@@ -535,26 +539,48 @@ Response `200`:
   "archetypes": [
     {
       "id": 1,
-      "name": "The Captain-in-Waiting",
-      "description": "Scouting-report flavour text.",
-      "traitMapping": {
+      "slug": "standard_bearer",
+      "name": "Standard Bearer",
+      "description": "Sets the training standard and XP floor for the whole squad; anchors dressing-room morale during losing runs.",
+      "polarity": "positive",
+      "traitWeights": {
         "formula": {
-          "leadership": 0.4,
-          "teamwork": 0.35,
-          "confidence": 0.25
+          "professionalism": 0.5,
+          "determination": 0.5
         },
-        "threshold": 72
+        "threshold": 65
       }
     }
   ],
   "versionHash": "md5hex"
 }
 ```
-- `traitMapping.formula` — weighted map of personality trait keys to weights; weights sum to 1.0
-- `traitMapping.threshold` — minimum weighted score (0–100) for a player to match this archetype
-- `versionHash` — MD5 of all archetype names + formulas; re-fetch when this changes
+- `slug` — stable machine identity. **Key on this, never on `name` or `id`.**
+- `polarity` — `"positive"` or `"negative"`. Resolve one of each per player.
+- `traitWeights.formula` — map of personality trait keys to **signed** weights. A positive weight
+  scores the trait directly ("High X"); a negative weight scores its inverse ("Low X"). Absolute
+  values sum to 1.0.
+- `traitWeights.threshold` — minimum weighted score (0–100) for a player to match this archetype.
+- `versionHash` — MD5 over every archetype's slug, polarity, description and weights.
 
-Available trait keys: `bravery`, `consistency`, `loyalty`, `professionalism`, `ambition`, `ego`, `confidence`, `pressure`
+Available trait keys — these are exactly the eight fields of the player's `personality` object:
+`determination`, `professionalism`, `ambition`, `loyalty`, `adaptability`, `pressure`,
+`temperament`, `consistency`
+
+**Scoring.** Personality traits are served on a **1–20** scale, but `threshold` is on 0–100.
+Normalise each trait before applying weights:
+
+```
+norm(t)  = (personality[t] / 20) * 100
+score    = SUM( w > 0 ?  w  * norm(t)
+                      : |w| * (100 - norm(t)) )
+matches  = score >= threshold
+```
+
+> **Changed 2026-08-21.** The previous catalogue had 30 archetypes, no `slug`, no `polarity`, and
+> used the key `traitMapping`. It also weighted `bravery`, `ego` and `confidence`, which are not
+> personality traits — they always scored 0, which is why archetypes resolved to `null`. Those
+> three keys no longer exist.
 
 ---
 

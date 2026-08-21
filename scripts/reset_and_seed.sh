@@ -259,6 +259,12 @@ console_cmd app:market:generate \
     --coaches="$SEED_COACHES" \
     --scouts="$SEED_POOL_SCOUTS"
 
+echo ""
+echo -e "${BLUE}🌱 Phase 2c: Seeding the curated archetype catalogue (10 positive · 10 negative)...${NC}"
+# Truncates and reseeds. The verification block below reports the resulting count, which
+# used to read 0 on every fresh database because this step did not exist.
+console_cmd app:seed-archetypes
+
 # ─── Verification ────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}📊 Verifying seeded data...${NC}"

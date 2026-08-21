@@ -76,6 +76,12 @@ jobs:
               php bin/console doctrine:migrations:migrate --no-interaction
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-player-events
+            # Rebuilds the curated 20-archetype catalogue. Unlike app:seed-excursions this
+            # TRUNCATES first, so admin edits to archetypes do not survive a deploy — the
+            # catalogue is code-owned. Without this the table is empty and /api/archetypes
+            # silently serves [], which is why scout reports showed null archetypes.
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:seed-archetypes
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-social-post-templates
             # Upserts the excursion catalogue by slug — safe to re-run, and
