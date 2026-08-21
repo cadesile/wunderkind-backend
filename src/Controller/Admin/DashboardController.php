@@ -1287,6 +1287,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
+        yield MenuItem::section('Messaging');
+        yield MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn');
+        yield MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group');
         yield MenuItem::section('Social');
         yield MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post Templates', 'fa fa-file-signature');
         yield MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections');

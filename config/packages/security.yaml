@@ -84,6 +84,7 @@ security:
         - { path: ^/api/market/assign,   roles: ROLE_CLUB }
         - { path: ^/api/club/,        roles: ROLE_CLUB }
         - { path: ^/api/inbox,           roles: ROLE_CLUB }
+        - { path: ^/api/messages,        roles: ROLE_CLUB }
         - { path: ^/api/finance/,        roles: ROLE_CLUB }
         - { path: ^/api/events/,         roles: ROLE_CLUB }
         - { path: ^/api/squad,           roles: ROLE_CLUB }

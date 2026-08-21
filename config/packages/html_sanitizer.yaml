@@ -1,0 +1,22 @@
+framework:
+    html_sanitizer:
+        sanitizers:
+            # Used only for admin-authored AdminMessage bodies. Deliberately narrow: no `style`
+            # or `class` attributes are allowed anywhere, so admin-supplied CSS is stripped at
+            # write time and cannot bleed into the client's retro theme. Script, iframe and
+            # event-handler attributes cannot survive an allowlist this tight.
+            admin_message:
+                allow_safe_elements: false
+                allow_elements:
+                    p: []
+                    strong: []
+                    em: []
+                    ul: []
+                    ol: []
+                    li: []
+                    br: []
+                    h3: []
+                    a: ['href']
+                allowed_link_schemes: ['https', 'buildmyclub']
+                force_attributes:
+                    a: { rel: 'noopener noreferrer' }

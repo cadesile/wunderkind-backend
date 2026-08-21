@@ -85,6 +85,15 @@ lando php bin/console debug:firewall
   lando php bin/console doctrine:migrations:up-to-date --env=test
   lando psql -d wunderkind_test -c "<sql>"   # inspect the test DB directly
   ```
+- **API functional-test login is single-use.** `$client->loginUser($user, 'api')` authenticates
+  **exactly one request** against the stateless JWT firewall — the next request on the same
+  client returns `401 JWT Token not found`, and calling `loginUser()` again does not recover it.
+  The test env has no JWT keys (`JWT_SECRET_KEY` is empty in `.env`, and `.env.local` is skipped
+  under `APP_ENV=test`), so minting a real bearer token is not an option either. To exercise more
+  than one authenticated call, reboot per request: `self::ensureKernelShutdown()`,
+  `static::createClient()`, re-fetch the `User` from the fresh EntityManager, then `loginUser()`.
+  See `AdminMessageControllerTest::authenticatedRequest()`. This is why
+  `InboxControllerTest` only ever asserts 401.
 - **Admin functional-test login** — the `admin` firewall uses a Doctrine `EntityUserProvider` that re-fetches the user by email on every request, so an in-memory-only `Admin` is silently treated as unauthenticated. Persist a real `Admin` first, then `$client->loginUser($admin, 'admin')` (see `tests/Controller/Admin/SocialAuthControllerTest.php`).
 
 ## Git Workflow
@@ -154,6 +163,44 @@ ClubController → ClubInitializationService::initializeClub()
 - At world-pack generation (`buildLeaguesPack`/`buildTierPack`), the loaded pool (`AgentRepository::findAll()`) is first bounded by `selectBoundedAgentPool()` to `ceil(estimatedNpcPlayers / StarterConfig::worldPackPlayersPerAgent)` (default 12 → ~12 players/agent, capped at pool size), then `assignAgents($players, $boundedAgents)` **reassigns every NPC-club player** a random agent from that bounded subset before the player is snapshotted and deleted. Without the bound, distinct agents surfaced would scale with the whole pool (one agent per player). Association follows the same structural nesting as player↔club/staff↔club (there is no player↔club FK; association is the snapshot nesting).
 - **Dependency:** the ratio caps at pool size, so for a full country pack to reach its target the agent pool must hold ≥ that many agents (`PoolConfig::agentPoolTarget`, default 100). Agent generation is additive and agents are never consumed, so pools can balloon — the world-pack bound makes surfacing correct regardless.
 - Agent pool size is `PoolConfig::agentPoolTarget` (default 100), driving generation/replenishment in `MarketPoolService`. `MarketPoolService::generatePlayers` also assigns pool players a random agent at generation time; the world-pack pass reassigns.
+
+### Server-Driven Messaging
+Operator-authored announcements (`AdminMessage`), separate from the in-game `InboxMessage`
+fiction. Full client contract: `docs/api/server-driven-messaging.md`.
+
+- **Targeting reads `Club`; delivery is keyed to `User`.** Cohort axes (reputation, league tier,
+  country, week, tutorial state) only exist on `Club`, so eligibility is evaluated against the
+  polling club — but `MessageDelivery` is keyed `(user, message)`. That split matters:
+  `ClubRepository::findByUser()` returns only the *most recently created* club, so a club-keyed
+  delivery row would let a player start a new club and have every active announcement replay.
+  Acking therefore needs no club at all.
+- **Guests and registered accounts are the same thing here.** Both are plain `User` rows;
+  nothing in this system branches on `isVerified()` or the `@guest.buildmyclub.local` domain.
+  (Registration still creates a *new* `User` when a guest signs up with a real email, so an
+  upgrading guest may re-see a dismissed message — that is an account-linking gap in
+  `SyncController::register()`, not something delivery keying can fix.)
+- **Delivery-once** is enforced by a `NOT EXISTS` clause in
+  `AdminMessageRepository::findCandidatesForClub()` against `MessageDelivery` rows in a terminal
+  status. The `uq_message_delivery` unique constraint is **load-bearing**:
+  `AdminMessageService::acknowledge()` is a PostgreSQL `INSERT … ON CONFLICT DO UPDATE` against
+  it, which is what makes a repeated ack idempotent. Catching
+  `UniqueConstraintViolationException` from a `flush()` would not work — Doctrine closes the
+  EntityManager on a failed flush.
+- **Two-phase targeting.** The SQL query resolves broadcast/direct fully, but only proves that
+  *some* audience group qualified. `AdminMessageService::isEligible()` then re-checks each group
+  on its own terms in PHP — manual membership included. Skipping that lets a non-member through
+  on a message that also carries a dynamic group.
+- **`leagueTier` criteria are inverted** — tier 1 is the top division, 8 is where new clubs
+  start. `AudienceCriteriaEvaluator` fails **closed**: an unrecognised criteria key makes the
+  group match nothing, so an admin typo under-delivers rather than broadcasting to everyone.
+- **`bodyHtml` is sanitized on write** by `AdminMessageCrudController::persistEntity()`/
+  `updateEntity()` via the `admin_message` named sanitizer
+  (`config/packages/html_sanitizer.yaml`, autowired as `HtmlSanitizerInterface $adminMessage`).
+  `style`/`class` are stripped so admin CSS cannot bleed into the client theme. The API emits
+  the stored HTML verbatim.
+- **Admin `json` column fields need generic `Field::new()`**, not `TextareaField` —
+  the Text configurator rejects an array value with "can't be converted into a string". See
+  `AudienceGroupCrudController::configureFields()`.
 
 ### Two Firewalls
 - **`api`** — stateless JWT, covers `/api/*`; role `ROLE_CLUB` for game clients
@@ -239,6 +286,8 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
 | `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
 | `POST` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
 | `GET` | `/api/archetypes` | Public | Curated archetype catalogue (10 positive + 10 negative); ETag/`versionHash` cached |
+| `GET` | `/api/messages/pending` | JWT | Undelivered admin announcements for the club (capped: 1 blocking + 5 other) |
+| `POST` | `/api/messages/{id}/ack` | JWT | Record a message as `displayed`/`dismissed`; idempotent upsert |
 | `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
 | `GET` | `/api/club/status` | JWT | Club initialization status |
 | `GET` | `/api/club/check` | JWT | Check if club exists for current user |
@@ -281,6 +330,8 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `ConfigImportExportService` | Export/import `GameConfig`, `StarterConfig`, and `PoolConfig` rows as JSON |
 | `LeagueImportExportService` | Export/import `League` + `NpcClub` world data (used for admin-driven world pack management) |
 | `NarrativeImportExportService` | Export/import event templates, facility templates, player archetypes, and `TacticalAdvantage` rows |
+| `AdminMessageService` | Resolve pending announcements for a club, cap the payload, upsert acknowledgements, sanitize admin HTML |
+| `AudienceCriteriaEvaluator` | Evaluate a DYNAMIC `AudienceGroup`'s JSON criteria against a `Club`, live at poll time |
 
 ## Key Entities (non-obvious fields)
 
@@ -302,4 +353,5 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **Admin** — separate admin user entity (`UserInterface`); `email`, `password`, `name`, `department`, `accessLevel`; always `ROLE_ADMIN`; created via `app:admin:create`
 - **BetaRequest** — beta-access waitlist entry; `email`, `code`, `valid`, `attempts`, `expiresAt`, `verifiedAt`; verified via `/api/beta-request/verify`
 - **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool
+- **AdminMessage / AudienceGroup / AudienceGroupMember / MessageDelivery** — server-driven messaging; `MessageDelivery` is keyed `(user, message)` while targeting reads `Club` (see Server-Driven Messaging)
 - **SeasonRecord / SeasonSnapshot / SeasonRatingsSnapshot** — historical season data persisted at `conclude-season`
