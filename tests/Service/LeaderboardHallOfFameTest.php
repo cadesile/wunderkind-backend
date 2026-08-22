@@ -137,6 +137,35 @@ class LeaderboardHallOfFameTest extends KernelTestCase
     }
 
     /**
+     * Backfill safety: before this change the score came from the client, so production can
+     * hold hall_of_fame entries with a nonzero score for a club that has never won anything.
+     * The aggregate pass only writes rows for clubs that scored, so such a row must be
+     * explicitly reset — otherwise it outranks every legitimate title winner forever.
+     */
+    public function testStaleClientSuppliedScoreIsResetForATitlelessClub(): void
+    {
+        $club = $this->persistClub('HoF Stale Score FC');
+
+        $entry = $this->persist(
+            new LeaderboardEntry($club, LeaderboardCategory::HALL_OF_FAME, 'all-time')
+        );
+        $entry->setScore(999999999);
+        $club->setHallOfFamePoints(999999999);
+        $this->em->flush();
+
+        self::getContainer()->get(LeaderboardCalculationService::class)
+            ->recalculate(LeaderboardCategory::HALL_OF_FAME, 'all-time');
+
+        $this->em->refresh($entry);
+        $this->assertSame(0, $entry->getScore(), 'a club with no titles must score 0');
+
+        // Club::$hallOfFamePoints is mirrored by the backfill step, not by recalculate().
+        self::getContainer()->get(HallOfFameScoreService::class)->syncAllClubs();
+        $this->em->refresh($club);
+        $this->assertSame(0, $club->getHallOfFamePoints());
+    }
+
+    /**
      * The old behaviour: a client could send any hallOfFamePoints and the server stored it.
      * Sync must no longer touch the field.
      */

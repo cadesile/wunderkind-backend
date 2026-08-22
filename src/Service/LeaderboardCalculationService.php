@@ -117,6 +117,25 @@ class LeaderboardCalculationService
         }
 
         $this->em->flush();
+
+        // hall_of_fame is fully derived: a club with no titles scores 0, and the loop above
+        // only writes rows for clubs that *did* score. Any other row is stale — most
+        // importantly a leftover value from the old client-supplied hallOfFamePoints path,
+        // which would otherwise outrank every legitimate title winner forever.
+        if ($category === LeaderboardCategory::HALL_OF_FAME) {
+            $scored = [];
+            foreach ($rows as $row) {
+                $scored[(string) $row['clubId']] = true;
+            }
+
+            foreach ($this->leaderboardEntryRepository->findAllOrderedByScore($category, $period) as $entry) {
+                if ($entry->getScore() !== 0 && !isset($scored[(string) $entry->getClub()->getId()])) {
+                    $entry->setScore(0);
+                }
+            }
+
+            $this->em->flush();
+        }
     }
 
     /**
