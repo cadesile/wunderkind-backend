@@ -8,6 +8,11 @@ This is separate from the existing club Inbox (`/api/inbox`). Inbox messages are
 fiction from agents, sponsors and investors, written by game services. These are out-of-game
 messages written by a human.
 
+Client developers integrating these endpoints should start with
+[admin-messages-client-integration.md](admin-messages-client-integration.md), which carries the
+TS types, polling policy and rendering rules. This document is the full spec, including the
+targeting model an operator uses when authoring a message.
+
 ## Endpoints
 
 Both require the normal club JWT (`ROLE_CLUB`).
@@ -92,7 +97,8 @@ the same broadcast.
 
 `bodyHtml` is sanitised **when the admin saves it**, so what the API returns is already clean.
 Only these tags survive: `p`, `strong`, `em`, `ul`, `ol`, `li`, `br`, `h3`, and `a` with an
-`href` (https links only, and every link is forced to `rel="noopener noreferrer"`).
+`href` — `https:` and the app's own `buildmyclub:` deep-link scheme only, with every link
+forced to `rel="noopener noreferrer"`.
 
 Everything else is dropped, **including `style` and `class` attributes** — the client owns its
 retro theme and admin-supplied CSS must never bleed into it. Scripts and iframes cannot be
