@@ -12,13 +12,35 @@ freshness below.
 
 | Slug | Label | Score meaning | `displayLabel` |
 |---|---|---|---|
-| `hall_of_fame` | Hall of Fame | Club's Hall of Fame points (high-water mark, never decreases) | — |
+| `hall_of_fame` | Hall of Fame | Tier-weighted league titles — derived server-side (see below) | — |
 | `club_reputation` | Reputation | Club's current reputation score | — |
 | `career_earnings` | Career Earnings | Lifetime earnings, **in pence/cents** | — |
 | `golden_boot` | Golden Boot | Goals scored this season by the club's top scorer | Top scorer's name |
 | `playmaker` | Playmaker | Assists this season by the club's top provider | Top provider's name |
 | `empire_index` | Empire Index | Sum of the club's facility upgrade levels | — |
 | `fanatics` | Fanatics | Total season attendance (accumulated across home fixtures) | — |
+
+### How `hall_of_fame` is scored
+
+Hall of Fame points are **derived on the server** — the client does not supply them. A club earns
+points by winning leagues:
+
+```
+score = Σ  GameConfig.leagueWinPoints[league.tier]
+        over SeasonRecord rows where finalPosition = 1
+```
+
+The per-tier weights are admin-editable and default to a 10× drop per tier
+(T1 = 10,000,000 … T8 = 1), so a single top-flight title outweighs any number of lower-division
+titles. Only titles count — a runner-up finish scores nothing, and a club with no titles scores 0.
+
+The score is recomputed when a season is concluded (`POST /api/league/conclude-season`, which also
+returns the new `hallOfFamePoints`) and by `app:leaderboards:generate`. The same value is mirrored
+onto `Club.hallOfFamePoints`, which `/api/club/status` and the `POST /api/sync` response report.
+
+`SyncRequest.hallOfFamePoints` is still accepted for backwards compatibility but is **ignored** —
+it is only recorded in the `SyncRecord` audit payload.
+
 
 `golden_boot` and `playmaker` are **club-level** boards — the club is credited
 with its single best individual performer's tally, not a combined squad total.

@@ -56,4 +56,36 @@ class SeasonRecordRepository extends ServiceEntityRepository
 
         return $qb->getQuery()->getArrayResult();
     }
+
+    /**
+     * Title counts per club, grouped by the tier the title was won in.
+     * Backs the derived `hall_of_fame` leaderboard — a title is a SeasonRecord
+     * with finalPosition = 1, and each tier is worth a different number of points
+     * (GameConfig::$leagueWinPoints). The weighting is applied in PHP because the
+     * weights live in a json column.
+     *
+     * @return array<array{clubId: string, tier: int, titles: int}>
+     */
+    public function countTitlesByClubAndTier(?Club $club = null): array
+    {
+        $qb = $this->createQueryBuilder('sr')
+            ->select('IDENTITY(sr.club) AS clubId', 'l.tier AS tier', 'COUNT(sr.id) AS titles')
+            ->innerJoin('sr.league', 'l')
+            ->where('sr.finalPosition = 1')
+            ->groupBy('sr.club')
+            ->addGroupBy('l.tier');
+
+        if ($club !== null) {
+            $qb->andWhere('sr.club = :club')->setParameter('club', $club);
+        }
+
+        return array_map(
+            static fn (array $row): array => [
+                'clubId' => (string) $row['clubId'],
+                'tier'   => (int) $row['tier'],
+                'titles' => (int) $row['titles'],
+            ],
+            $qb->getQuery()->getArrayResult(),
+        );
+    }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Enum\LeaderboardCategory;
+use App\Service\HallOfFameScoreService;
 use App\Service\LeaderboardCalculationService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -21,6 +22,7 @@ class GenerateLeaderboardsCommand extends Command
 {
     public function __construct(
         private readonly LeaderboardCalculationService $calculationService,
+        private readonly HallOfFameScoreService $hallOfFameScoreService,
     ) {
         parent::__construct();
     }
@@ -63,6 +65,13 @@ class GenerateLeaderboardsCommand extends Command
         }
 
         $warmCache = (bool) $input->getOption('warm-cache');
+
+        // hall_of_fame is also mirrored onto Club::$hallOfFamePoints, which /api/club/status and
+        // the sync response read. Backfill it so those surfaces agree with the board.
+        if (in_array(LeaderboardCategory::HALL_OF_FAME, $categories, true)) {
+            $changed = $this->hallOfFameScoreService->syncAllClubs();
+            $io->text("Hall of Fame: updated Club.hallOfFamePoints on {$changed} club(s).");
+        }
 
         $progressBar = $io->createProgressBar(count($categories) * count($periods));
         $progressBar->start();

@@ -27,6 +27,11 @@ class SyncRequest
     /** Client-authoritative reputation score (float — server rounds to int on store). */
     public float $reputation = 0.0;
 
+    /**
+     * Accepted but IGNORED — the server derives Hall of Fame points from SeasonRecord titles
+     * (see HallOfFameScoreService). Still recorded in the SyncRecord payload for diagnostics,
+     * and still accepted so older clients don't fail validation.
+     */
     #[Assert\PositiveOrZero]
     public float $hallOfFamePoints = 0;
 

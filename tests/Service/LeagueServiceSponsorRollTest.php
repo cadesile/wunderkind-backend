@@ -33,7 +33,17 @@ class LeagueServiceSponsorRollTest extends TestCase
         $configRepo = $this->createStub(GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn($this->makeConfig(10000, 50000));
         $fixtureGenerationService = $this->createStub(\App\Service\FixtureGenerationService::class);
-        return new LeagueService($repo, $em, $configRepo, $fixtureGenerationService);
+        $hallOfFameScoreService = $this->createStub(\App\Service\HallOfFameScoreService::class);
+        $leaderboardCalculationService = $this->createStub(\App\Service\LeaderboardCalculationService::class);
+
+        return new LeagueService(
+            $repo,
+            $em,
+            $configRepo,
+            $fixtureGenerationService,
+            $hallOfFameScoreService,
+            $leaderboardCalculationService,
+        );
     }
 
     public function testRollLeagueSponsorsUpdatesRolledValueWithinRange(): void

@@ -264,7 +264,7 @@ Request body:
 - `clientTimestamp` — ISO 8601 device time at tick; used to compute player age-out dates
 - `earningsDelta` — earnings this week in pence/cents (≥ 0)
 - `reputationDelta` — reputation change this week (can be negative)
-- `hallOfFamePoints` — all-time HoF total (server takes `max(current, incoming)`, never decreases)
+- `hallOfFamePoints` — **ignored by the server.** Hall of Fame points are derived server-side from tier-weighted league titles (see `docs/api/leaderboard.md`); the field is still accepted for backwards compatibility and recorded in the sync audit payload. The value returned in the sync response is the derived one.
 - `transfers` — array, pass `[]` until transfer syncing is implemented
 - `managerShifts` — optional; signed integer deltas for manager personality traits (each clamped to 0–100 server-side); omit or pass `{}` if no changes this week
 

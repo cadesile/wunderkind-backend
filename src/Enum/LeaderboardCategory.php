@@ -14,13 +14,13 @@ enum LeaderboardCategory: string
 
     /**
      * True for categories whose score requires a cross-table aggregate
-     * (ClubFacility / PlayerCareerStat) rather than a plain Club scalar.
+     * (ClubFacility / PlayerCareerStat / SeasonRecord) rather than a plain Club scalar.
      * These are computed only by LeaderboardCalculationService, not on every sync.
      */
     public function isAggregate(): bool
     {
         return match ($this) {
-            self::EMPIRE_INDEX, self::GOLDEN_BOOT, self::PLAYMAKER => true,
+            self::EMPIRE_INDEX, self::GOLDEN_BOOT, self::PLAYMAKER, self::HALL_OF_FAME => true,
             default => false,
         };
     }

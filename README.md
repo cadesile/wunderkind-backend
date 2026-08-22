@@ -208,7 +208,7 @@ Role separation: `ROLE_CLUB` for game clients, `ROLE_ADMIN` for the admin panel.
 - **PostgreSQL** — migrated from MySQL 8.0. All new migrations must use Doctrine Schema API or PostgreSQL syntax (no `AUTO_INCREMENT`, no `ENGINE=InnoDB`).
 - **UUID columns** — Doctrine uses its `uuid` type, stored as UUID strings in PostgreSQL.
 - **`rank`** is a reserved word in some SQL dialects; `LeaderboardEntry` uses column name `rank_position`.
-- **`hallOfFamePoints`** is `max(current, incoming)` — never decreases.
+- **`hallOfFamePoints`** is derived server-side from tier-weighted league titles (`HallOfFameScoreService`); the client-sent value is ignored.
 - **`reputation`** floors at 0. **`totalCareerEarnings`** accumulates deltas.
 - **Doctrine JSON dirty-check** — When a `json` column contains mixed PHP string/int types, Doctrine silently skips the UPDATE. Use `$em->getConnection()->executeStatement()` with `json_encode()` to bypass.
 - Symfony `RouterListener` (priority 32) runs before `FirewallListener` (priority 8) — `json_login` check_path must be a real registered route.

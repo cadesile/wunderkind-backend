@@ -224,7 +224,7 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
 ### Key Gotchas
 - **PostgreSQL** — migrated from MySQL 8.0. New migrations must use Doctrine Schema API or PostgreSQL syntax (no `AUTO_INCREMENT`, no `ENGINE=InnoDB`).
 - **`rank`** is a reserved SQL word — `LeaderboardEntry` uses column name `rank_position`.
-- **`hallOfFamePoints`** is `max(current, incoming)` — never decreases. **`reputation`** floors at 0. **`totalCareerEarnings`** adds deltas.
+- **`hallOfFamePoints`** is **server-derived, not client-supplied** — `Σ GameConfig::$leagueWinPoints[tier]` over `SeasonRecord` rows with `finalPosition = 1` (`HallOfFameScoreService`). `SyncRequest::$hallOfFamePoints` is accepted but ignored. Recomputed in `LeagueService::concludeSeason()` and by `app:leaderboards:generate`; mirrored onto `Club::$hallOfFamePoints` so `/api/club/status` matches the board. **`reputation`** floors at 0. **`totalCareerEarnings`** adds deltas.
 - **Leaderboard scores** are absolute values from Club state at sync time, not running sums.
 - **Doctrine JSON dirty-check** — when a `json` column stores mixed PHP string/int types, Doctrine silently skips the UPDATE. Bypass with:
   ```php

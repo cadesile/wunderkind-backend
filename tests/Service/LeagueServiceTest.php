@@ -19,7 +19,17 @@ class LeagueServiceTest extends TestCase
         $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
         $fixtureGenerationService = $this->createStub(\App\Service\FixtureGenerationService::class);
-        return new LeagueService($repo, $em, $configRepo, $fixtureGenerationService);
+        $hallOfFameScoreService = $this->createStub(\App\Service\HallOfFameScoreService::class);
+        $leaderboardCalculationService = $this->createStub(\App\Service\LeaderboardCalculationService::class);
+
+        return new LeagueService(
+            $repo,
+            $em,
+            $configRepo,
+            $fixtureGenerationService,
+            $hallOfFameScoreService,
+            $leaderboardCalculationService,
+        );
     }
 
     public function testGenerateLeaguesSkipsExisting(): void

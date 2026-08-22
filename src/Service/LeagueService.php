@@ -12,6 +12,7 @@ use App\Entity\NpcClub;
 use App\Entity\SeasonRecord;
 use App\Entity\SeasonSnapshot;
 use App\Enum\CompanySize;
+use App\Enum\LeaderboardCategory;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -23,6 +24,8 @@ class LeagueService
         private readonly EntityManagerInterface   $em,
         private readonly GameConfigRepository     $gameConfigRepository,
         private readonly FixtureGenerationService $fixtureGenerationService,
+        private readonly HallOfFameScoreService   $hallOfFameScoreService,
+        private readonly LeaderboardCalculationService $leaderboardCalculationService,
     ) {}
 
     /**
@@ -289,13 +292,22 @@ class LeagueService
         // Flush all movements before buildSeasonPyramid() queries clubs by league
         $this->em->flush();
 
+        // A league title may have just landed — recompute the derived Hall of Fame score from
+        // the club's SeasonRecords so the board reflects it immediately rather than at the next
+        // cache expiry. Must run *after* the flush above: the score is read back with DQL, which
+        // does not see the SeasonRecord persisted earlier in this method until it hits the DB.
+        $hallOfFamePoints = $this->hallOfFameScoreService->syncClub($club);
+        $this->leaderboardCalculationService->invalidate(LeaderboardCategory::HALL_OF_FAME);
+        $this->em->flush();
+
         // Compute new league membership from the snapshot's promotion/relegation flags,
         // then build the full pyramid: financials, clubs per league, and new fixtures.
         $newLeagueMembership = $this->computeNewLeagueMembership($dto->pyramidSnapshot, $country);
         $leagues = $this->buildSeasonPyramid($country, $gameConfig, $newLeagueMembership);
 
         return [
-            'seasonRecordId' => (string) $record->getId(),
+            'seasonRecordId'   => (string) $record->getId(),
+            'hallOfFamePoints' => $hallOfFamePoints,
             'newLeague'      => $newLeague !== null ? [
                 'id'   => (string) $newLeague->getId(),
                 'tier' => $newLeague->getTier(),

@@ -135,10 +135,10 @@ class SyncService
         $club->setTotalCareerEarnings($request->totalCareerEarnings);
         $club->setReputation(max(0, (int) round($request->reputation)));
 
-        // hallOfFamePoints never decreases — server keeps the high-water mark.
-        $club->setHallOfFamePoints(
-            max($club->getHallOfFamePoints(), (int) round($request->hallOfFamePoints))
-        );
+        // hallOfFamePoints is NOT taken from the client — it is derived server-side from
+        // SeasonRecord titles by HallOfFameScoreService, refreshed on conclude-season and by
+        // app:leaderboards:generate. The incoming value is still recorded in the SyncRecord
+        // payload above for diagnostics.
 
         $club->setLastSyncedWeek($request->weekNumber);
         $club->setLastSyncedAt(new \DateTimeImmutable());
@@ -170,14 +170,13 @@ class SyncService
 
         // ── Leaderboard upserts ───────────────────────────────────────────────
         // Only the "cheap" categories (plain Club scalar reads) are upserted on every
-        // sync. empire_index/golden_boot/playmaker require cross-table aggregation and
-        // are computed only by LeaderboardCalculationService (CLI command / cache-miss path).
+        // sync. empire_index/golden_boot/playmaker/hall_of_fame require cross-table aggregation
+        // and are computed only by LeaderboardCalculationService (CLI command / cache-miss path).
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
         $cheapCategories = [
             LeaderboardCategory::CAREER_EARNINGS,
             LeaderboardCategory::CLUB_REPUTATION,
-            LeaderboardCategory::HALL_OF_FAME,
             LeaderboardCategory::FANATICS,
         ];
 
@@ -185,7 +184,6 @@ class SyncService
             $score = match ($category) {
                 LeaderboardCategory::CAREER_EARNINGS    => $club->getTotalCareerEarnings(),
                 LeaderboardCategory::CLUB_REPUTATION => $club->getReputation(),
-                LeaderboardCategory::HALL_OF_FAME       => $club->getHallOfFamePoints(),
                 LeaderboardCategory::FANATICS            => $club->getTotalSeasonAttendance(),
             };
 

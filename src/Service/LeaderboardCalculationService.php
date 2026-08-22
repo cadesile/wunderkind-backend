@@ -22,6 +22,7 @@ class LeaderboardCalculationService
         private readonly ClubFacilityRepository $clubFacilityRepository,
         private readonly PlayerCareerStatRepository $playerCareerStatRepository,
         private readonly ClubRepository $clubRepository,
+        private readonly HallOfFameScoreService $hallOfFameScoreService,
         private readonly TagAwareCacheInterface $leaderboardCache,
         private readonly int $leaderboardCacheTtl,
     ) {}
@@ -89,7 +90,7 @@ class LeaderboardCalculationService
 
     /**
      * Computes and upserts LeaderboardEntry.score (and displayLabel where relevant)
-     * for one of the 3 aggregate categories, from ClubFacility / PlayerCareerStat.
+     * for one of the aggregate categories, from ClubFacility / PlayerCareerStat / SeasonRecord.
      */
     private function computeAggregateScores(LeaderboardCategory $category, string $period): void
     {
@@ -100,6 +101,7 @@ class LeaderboardCalculationService
             ),
             LeaderboardCategory::GOLDEN_BOOT => $this->playerCareerStatRepository->findTopPerformerByClub('goals'),
             LeaderboardCategory::PLAYMAKER   => $this->playerCareerStatRepository->findTopPerformerByClub('assists'),
+            LeaderboardCategory::HALL_OF_FAME => $this->hallOfFameRows(),
             default => throw new \InvalidArgumentException("{$category->value} is not an aggregate category"),
         };
 
@@ -115,6 +117,21 @@ class LeaderboardCalculationService
         }
 
         $this->em->flush();
+    }
+
+    /**
+     * Tier-weighted league titles per club, shaped like the other aggregate row sets.
+     *
+     * @return array<array{clubId: string, score: int, displayLabel: null}>
+     */
+    private function hallOfFameRows(): array
+    {
+        $rows = [];
+        foreach ($this->hallOfFameScoreService->scoresByClub() as $clubId => $score) {
+            $rows[] = ['clubId' => $clubId, 'score' => $score, 'displayLabel' => null];
+        }
+
+        return $rows;
     }
 
     /**
