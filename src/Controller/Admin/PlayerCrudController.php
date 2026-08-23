@@ -3,11 +3,14 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Player;
+use App\Entity\PersonalityProfile;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use App\Form\Type\AppearanceType;
+use App\Form\Type\ArchetypeSummaryType;
 use App\Repository\PlayerRepository;
+use App\Service\ArchetypeResolverService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -34,6 +37,7 @@ class PlayerCrudController extends AbstractCrudController
 {
     public function __construct(
         private readonly PlayerRepository $playerRepository,
+        private readonly ArchetypeResolverService $archetypeResolver,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -54,7 +58,8 @@ class PlayerCrudController extends AbstractCrudController
         return parent::configureCrud($crud)
             ->setDefaultSort(['lastName' => 'ASC'])
             ->overrideTemplate('crud/index', 'admin/player_index.html.twig')
-            ->addFormTheme('admin/form/appearance_theme.html.twig');
+            ->addFormTheme('admin/form/appearance_theme.html.twig')
+            ->addFormTheme('admin/form/archetype_summary_theme.html.twig');
     }
 
     public function index(AdminContext $context): KeyValueStore|Response
@@ -179,6 +184,19 @@ class PlayerCrudController extends AbstractCrudController
         yield IntegerField::new('personality.temperament', 'Temperament')->setHelp('1–20')->setColumns(3)->hideOnIndex();
         yield IntegerField::new('personality.consistency', 'Consistency')->setHelp('1–20')->setColumns(3)->hideOnIndex();
 
+        // Resolved archetype preview — read-only mirror of the client's dual-report
+        // classification (positive + negative) over the eight traits above. Recomputed
+        // live in the browser as the traits are edited; see ArchetypeResolverService.
+        yield Field::new('archetypeSummary', 'Resolved Archetypes')
+            ->setFormType(ArchetypeSummaryType::class)
+            ->setFormTypeOptions([
+                'mapped'    => false,
+                'catalogue' => $this->archetypeResolver->catalogue(),
+                'resolved'  => $this->archetypeResolver->resolve($this->currentPersonality()),
+            ])
+            ->setColumns(12)
+            ->onlyOnForms();
+
         // ── Panel: Physical & Contract ────────────────────────────────────────
         yield FormField::addFieldset('Physical & Contract', 'fa fa-weight-scale')->hideOnIndex();
 
@@ -203,5 +221,17 @@ class PlayerCrudController extends AbstractCrudController
         yield Field::new('appearance')
             ->setFormType(AppearanceType::class)
             ->onlyOnForms();
+    }
+
+    /**
+     * Personality matrix of the entity currently being edited, for the initial
+     * server-side archetype render. Falls back to a fresh (all-10) profile on the
+     * NEW page, where there is no persisted instance yet.
+     */
+    private function currentPersonality(): PersonalityProfile
+    {
+        $instance = $this->getContext()?->getEntity()?->getInstance();
+
+        return $instance instanceof Player ? $instance->getPersonality() : new PersonalityProfile();
     }
 }

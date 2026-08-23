@@ -1,0 +1,127 @@
+{# Read-only archetype preview rendered inside the Personality fieldset of the
+   Player / Staff edit forms. Included from
+   templates/admin/form/archetype_summary_theme.html.twig's `archetype_summary_widget`
+   block, so `catalogue` / `resolved` here are the FormView vars set by
+   App\Form\Type\ArchetypeSummaryType.
+
+   The server-resolved values (`resolved`) are the initial render; the inline
+   scorer below re-runs the same formula in JS whenever a trait input changes,
+   so the panel tracks unsaved edits the way the appearance preview does. #}
+<div class="archetype-summary" data-archetype-summary
+     data-catalogue="{{ catalogue|json_encode|e('html_attr') }}">
+    <div class="row">
+        {% for polarity in ['positive', 'negative'] %}
+            {% set best = resolved[polarity]|default(null) %}
+            <div class="col-md-6 mb-2">
+                <div class="card h-100" data-archetype-card="{{ polarity }}"
+                     style="border-left:4px solid {{ polarity == 'positive' ? '#2e9e5b' : '#c0392b' }};">
+                    <div class="card-body py-2 px-3">
+                        <small class="text-muted text-uppercase">
+                            {{ polarity == 'positive' ? 'Positive archetype' : 'Negative archetype' }}
+                        </small>
+                        <div class="d-flex align-items-baseline justify-content-between">
+                            <strong data-archetype-name>{{ best ? best.name : '—' }}</strong>
+                            <span data-archetype-score class="text-muted small">
+                                {{ best ? best.score ~ ' / ' ~ best.threshold : '' }}
+                            </span>
+                        </div>
+                        <div data-archetype-status class="small {{ best and best.matched ? 'text-success' : 'text-muted' }}">
+                            {% if best is null %}
+                                No archetypes seeded
+                            {% elseif best.matched %}
+                                Matched
+                            {% else %}
+                                Below threshold (closest match)
+                            {% endif %}
+                        </div>
+                        <div data-archetype-description class="small text-muted mt-1">
+                            {{ best ? best.description : '' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+(function () {
+    var root = document.currentScript.previousElementSibling;
+    if (!root || !root.hasAttribute('data-archetype-summary')) {
+        root = document.querySelector('[data-archetype-summary]');
+    }
+    if (!root) return;
+
+    var catalogue = JSON.parse(root.getAttribute('data-catalogue') || '[]');
+    if (!catalogue.length) return;
+
+    var TRAITS = ['determination', 'professionalism', 'ambition', 'loyalty',
+                  'adaptability', 'pressure', 'temperament', 'consistency'];
+    var form = root.closest('form') || document;
+
+    // EasyAdmin names embedded fields off the `personality.<trait>` property path;
+    // match loosely so a change in how it brackets the name doesn't break the panel.
+    function inputFor(trait) {
+        var inputs = form.querySelectorAll('input[name]');
+        var re = new RegExp('personality.*' + trait + '\\W*$', 'i');
+        for (var i = 0; i < inputs.length; i++) {
+            if (re.test(inputs[i].getAttribute('name'))) return inputs[i];
+        }
+        return null;
+    }
+
+    function readTraits() {
+        var out = {};
+        TRAITS.forEach(function (t) {
+            var el = inputFor(t);
+            var v = el ? parseInt(el.value, 10) : NaN;
+            out[t] = isNaN(v) ? 10 : Math.max(1, Math.min(20, v));
+        });
+        return out;
+    }
+
+    // score = SUM( w > 0 ? w * norm(t) : |w| * (100 - norm(t)) ), norm(t) = (t / 20) * 100
+    function score(traits, formula) {
+        var total = 0;
+        Object.keys(formula).forEach(function (t) {
+            var w = formula[t];
+            var norm = ((traits[t] === undefined ? 10 : traits[t]) / 20) * 100;
+            total += w > 0 ? w * norm : Math.abs(w) * (100 - norm);
+        });
+        return Math.round(total * 10) / 10;
+    }
+
+    function render() {
+        var traits = readTraits();
+        var best = { positive: null, negative: null };
+
+        catalogue.forEach(function (a) {
+            var s = score(traits, a.formula || {});
+            var current = best[a.polarity];
+            if (current && s <= current.score) return;
+            best[a.polarity] = {
+                name: a.name, description: a.description, score: s,
+                threshold: a.threshold, matched: s >= a.threshold
+            };
+        });
+
+        ['positive', 'negative'].forEach(function (polarity) {
+            var card = root.querySelector('[data-archetype-card="' + polarity + '"]');
+            if (!card) return;
+            var b = best[polarity];
+            card.querySelector('[data-archetype-name]').textContent = b ? b.name : '—';
+            card.querySelector('[data-archetype-score]').textContent = b ? b.score + ' / ' + b.threshold : '';
+            card.querySelector('[data-archetype-description]').textContent = b ? b.description : '';
+            var status = card.querySelector('[data-archetype-status]');
+            status.textContent = !b ? 'No archetypes seeded'
+                : (b.matched ? 'Matched' : 'Below threshold (closest match)');
+            status.className = 'small ' + (b && b.matched ? 'text-success' : 'text-muted');
+        });
+    }
+
+    form.addEventListener('input', function (e) {
+        if (e.target && /personality/i.test(e.target.getAttribute('name') || '')) render();
+    });
+    render();
+})();
+</script>

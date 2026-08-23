@@ -235,25 +235,24 @@ class PlayerGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPersonalityTraitsCeilingRespectsPotential(): void
+    public function testPersonalityIsIndependentOfPotential(): void
     {
-        // Each trait must be <= ceil(20 * potential/100)
-        $svc = $this->makeService();
-        for ($i = 0; $i < 30; $i++) {
+        // Personality used to be capped at ceil(20 * potential/100). It no longer is:
+        // how good a player might become says nothing about what he is like, so a
+        // low-potential player must still be able to roll a standout trait.
+        $svc  = $this->makeService();
+        $seen = [];
+
+        for ($i = 0; $i < 200; $i++) {
             $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
-            $p      = $player->getPersonality();
-            $maxTrait = (int) ceil(20 * $player->getPotential() / 100);
-            foreach ([
-                $p->getDetermination(), $p->getProfessionalism(), $p->getAmbition(),
-                $p->getLoyalty(), $p->getAdaptability(), $p->getPressure(),
-                $p->getTemperament(), $p->getConsistency(),
-            ] as $trait) {
-                $this->assertLessThanOrEqual(
-                    $maxTrait, $trait,
-                    "Trait {$trait} must not exceed ceil(20 * {$player->getPotential()} / 100) = {$maxTrait}"
-                );
+            $cap    = (int) ceil(20 * $player->getPotential() / 100);
+            $peak   = max($player->getPersonality()->toArray());
+            if ($peak > $cap) {
+                $seen[] = $peak;
             }
         }
+
+        $this->assertNotEmpty($seen, 'Traits are still being held under the old potential ceiling');
     }
 
     public function testCurrentAbilityIsAverageOfSixAttributes(): void

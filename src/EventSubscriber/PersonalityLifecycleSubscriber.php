@@ -6,6 +6,7 @@ namespace App\EventSubscriber;
 
 use App\Entity\Scout;
 use App\Entity\Staff;
+use App\Service\Personality\PersonalityContext;
 use App\Service\Personality\PersonalityGeneratorService;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PrePersistEventArgs;
@@ -36,13 +37,13 @@ final class PersonalityLifecycleSubscriber
     /** Pure logic, no Doctrine args — unit-testable. */
     public function fill(object $entity): void
     {
-        $anchor = match (true) {
-            $entity instanceof Staff => $entity->getCoachingAbility(),
-            $entity instanceof Scout => $entity->getExperience(),
+        $context = match (true) {
+            $entity instanceof Staff => PersonalityContext::forStaff($entity->getRole()),
+            $entity instanceof Scout => PersonalityContext::forScout(),
             default                  => null,
         };
 
-        if ($anchor === null) {
+        if ($context === null) {
             return;
         }
 
@@ -51,6 +52,6 @@ final class PersonalityLifecycleSubscriber
             return;
         }
 
-        $this->generator->apply($profile, $anchor);
+        $this->generator->apply($profile, $context);
     }
 }

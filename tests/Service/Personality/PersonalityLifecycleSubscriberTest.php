@@ -22,45 +22,50 @@ class PersonalityLifecycleSubscriberTest extends TestCase
     public function testFillsStaffPersonality(): void
     {
         $staff = new Staff('A', 'B', StaffRole::COACH);
-        $staff->setCoachingAbility(90);
 
         $this->sub->fill($staff);
 
         $this->assertFalse($staff->getPersonality()->isDefault());
         foreach ($staff->getPersonality()->toArray() as $name => $value) {
-            $this->assertGreaterThanOrEqual(12, $value, $name);
-            $this->assertLessThanOrEqual(18, $value, $name);
+            $this->assertGreaterThanOrEqual(1, $value, $name);
+            $this->assertLessThanOrEqual(20, $value, $name);
         }
     }
 
     public function testFillsScoutPersonality(): void
     {
         $scout = new Scout('S');
-        $scout->setExperience(90);
 
         $this->sub->fill($scout);
 
         $this->assertFalse($scout->getPersonality()->isDefault());
-        foreach ($scout->getPersonality()->toArray() as $name => $value) {
-            $this->assertGreaterThanOrEqual(12, $value, $name);
-            $this->assertLessThanOrEqual(18, $value, $name);
-        }
+        $this->assertGreaterThanOrEqual(13, $scout->getPersonality()->getAdaptability());
+        $this->assertGreaterThanOrEqual(12, $scout->getPersonality()->getConsistency());
     }
 
-    public function testStaffAnchorsOnCoachingAbilityAndScoutOnExperience(): void
+    public function testStaffContextComesFromTheRole(): void
     {
-        $lowStaff  = new Staff('L', 'S', StaffRole::COACH);
-        $lowStaff->setCoachingAbility(30);
-        $highStaff = new Staff('H', 'S', StaffRole::COACH);
-        $highStaff->setCoachingAbility(100);
+        // A coach carries the leadership floors; a facility manager does not.
+        $coach = new Staff('A', 'B', StaffRole::COACH);
+        $this->sub->fill($coach);
 
-        $this->sub->fill($lowStaff);
-        $this->sub->fill($highStaff);
+        $this->assertGreaterThanOrEqual(11, $coach->getPersonality()->getDetermination());
+        $this->assertGreaterThanOrEqual(9,  $coach->getPersonality()->getTemperament());
+        $this->assertGreaterThanOrEqual(12, $coach->getPersonality()->getPressure());
+    }
 
-        $this->assertLessThan(
-            array_sum($highStaff->getPersonality()->toArray()),
-            array_sum($lowStaff->getPersonality()->toArray()),
-        );
+    public function testPersonalityIsIndependentOfCoachingAbility(): void
+    {
+        // Ability says nothing about character — a limited coach can still be unflappable.
+        $seen = [];
+        for ($i = 0; $i < 200; $i++) {
+            $staff = new Staff('A', 'B', StaffRole::FACILITY_MANAGER);
+            $staff->setCoachingAbility(1);
+            $this->sub->fill($staff);
+            $seen[] = max($staff->getPersonality()->toArray());
+        }
+
+        $this->assertGreaterThanOrEqual(15, max($seen), 'A low-ability coach must still be able to roll a strong trait');
     }
 
     public function testDoesNotOverwriteAnAlreadyPopulatedProfile(): void

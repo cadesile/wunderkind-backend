@@ -7,6 +7,7 @@ use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
 use App\Repository\PoolConfigRepository;
+use App\Service\Personality\PersonalityContext;
 use App\Service\Personality\PersonalityGeneratorService;
 
 class PlayerGenerationService
@@ -102,15 +103,16 @@ class PlayerGenerationService
     }
 
     /**
-     * Rolls the Personality Matrix anchored on the player's potential. Shares
-     * PersonalityGeneratorService with Staff and Scout so the three entity types
-     * cannot drift apart — they differ only in which stat anchors the window.
+     * Rolls the Personality Matrix. Shares PersonalityGeneratorService with Staff
+     * and Scout so the three entity types cannot drift apart — they differ only in
+     * the context they pass. Personality is independent of potential: how good a
+     * player might become says nothing about what he is like.
      */
     private function buildPersonality(PlayerBlueprint $bp): PlayerBlueprint
     {
         return new PlayerBlueprint(...array_replace(
             (array) $bp,
-            $this->personalityGenerator->rollTraits($bp->potential),
+            $this->personalityGenerator->rollTraits(PersonalityContext::forPlayer($bp->age)),
         ));
     }
 
@@ -195,14 +197,7 @@ class PlayerGenerationService
      */
     private function bellCurveInt(int $min, int $max, int $mean): int
     {
-        $sigma = ($max - $min) / 4.0;
-
-        // Box-Muller: two independent uniform samples → one standard-normal value
-        $u1 = mt_rand(1, PHP_INT_MAX) / PHP_INT_MAX;
-        $u2 = mt_rand(1, PHP_INT_MAX) / PHP_INT_MAX;
-        $z  = sqrt(-2.0 * log($u1)) * cos(2.0 * M_PI * $u2);
-
-        return max($min, min($max, (int) round($mean + $z * $sigma)));
+        return $this->personalityGenerator->gaussianInt($mean, ($max - $min) / 4.0, $min, $max);
     }
 
     private function normalise(int $value, int $min, int $max): float

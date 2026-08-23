@@ -3128,7 +3128,7 @@ function openBetaModal() {
         return html;
     }
 
-    function renderEntries(entries, format) {
+    function renderEntries(entries, format, category) {
         listEl.innerHTML = '';
         if (!entries.length) {
             listEl.innerHTML = '<li class="lbg-empty">No clubs ranked yet — be the first</li>';
@@ -3148,7 +3148,9 @@ function openBetaModal() {
             if (entry.displayLabel) {
                 li.querySelector('.lbg-row-tag').textContent = entry.displayLabel;
             }
-            li.querySelector('.lbg-row-value').textContent = formatValue(entry.score, format);
+            if(category != 'hall_of_fame'){
+                li.querySelector('.lbg-row-value').textContent = formatValue(entry.score, format);   
+            }
             listEl.appendChild(li);
         });
     }
@@ -3171,7 +3173,7 @@ function openBetaModal() {
             .then(function (data) {
                 if (requestId !== activeReq) return; // a newer tab switch superseded this request
                 loaded[category] = true;
-                renderEntries(data.entries || [], meta.format);
+                renderEntries(data.entries || [], meta.format, category);
             })
             .catch(function () {
                 if (requestId !== activeReq) return;

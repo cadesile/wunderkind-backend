@@ -1,0 +1,10 @@
+{# Form theme for App\Form\Type\ArchetypeSummaryType. Its block prefix is
+   "archetype_summary" (StringUtil::fqcnToBlockPrefix strips "Type" and
+   snake_cases the rest), so Symfony/EasyAdmin render this compound field's
+   widget through `archetype_summary_widget`. Registered per-controller via:
+     $crud->addFormTheme('admin/form/archetype_summary_theme.html.twig')
+   Note addFormTheme is additive — Player/Staff also register the appearance
+   theme, and both must be listed. #}
+{% block archetype_summary_widget %}
+    {{ include('admin/field/archetype_summary.html.twig') }}
+{% endblock archetype_summary_widget %}
