@@ -88,6 +88,10 @@ jobs:
             # preserves artwork uploaded through the admin.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-excursions
+            # Idempotent — skips existing slugs, so re-running only inserts new
+            # templates (e.g. the dressing-room cohesion events).
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:seed-game-events
             # NOTE: app:backfill-appearances is deliberately NOT run here. It
             # hydrates every matching row in one findBy(), which exhausted the
             # 128MB container limit on prod's 36,569 appearance-less Staff rows

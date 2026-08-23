@@ -879,6 +879,159 @@ class SeedGameEventsCommand extends Command
                 'firingConditions' => ['type' => 'goalDifference', 'threshold' => -4],
                 'severity'         => 'minor',
             ],
+
+            // ── Dressing Room Cohesion narrative events (interactive, AMP-only) ──
+            // These are the first templates to use `impacts.choices` (EventChoice[])
+            // instead of the legacy flat impacts array — each choice's stat_changes
+            // is applied client-side by SimulationService.applyStatChanges only once
+            // the manager taps a response (major severity skips auto-apply). See
+            // EventChoiceType.php for the stat_changes item shape.
+            [
+                'slug'             => 'dressing-room-rogue-press-leak',
+                'category'         => EventCategory::NPC_INTERACTION,
+                'weight'           => 2,
+                'title'            => 'Dressing Room Leak',
+                'bodyTemplate'     => '{player_1} has leaked frustration about being overlooked to a local tabloid, naming {player_2} as a sympathetic ear in the dressing room. The story is already circulating.',
+                'severity'         => 'major',
+                'impacts'          => [
+                    'choices' => [
+                        [
+                            'emoji'         => '📋',
+                            'label'         => 'Back the manager — fine and drop the player',
+                            'stat_changes'  => [
+                                ['target' => 'player_1', 'field' => 'morale',       'operator' => 'subtract', 'value' => 10],
+                                ['target' => 'pair',     'field' => 'relationship', 'operator' => 'subtract', 'value' => 15],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => 5, 'ambition' => 0],
+                        ],
+                        [
+                            'emoji'         => '🛡️',
+                            'label'         => 'Publicly back the player over the manager',
+                            'stat_changes'  => [
+                                ['target' => 'player_1',   'field' => 'morale', 'operator' => 'add',      'value' => 6],
+                                ['target' => 'squad_wide', 'field' => 'morale', 'operator' => 'subtract', 'value' => 8],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => -6, 'ambition' => 0],
+                        ],
+                    ],
+                ],
+                'firingConditions' => [
+                    'minPairRelationship'    => 40,
+                    'actorTraitRequirements' => [
+                        ['trait' => 'professionalism', 'max' => 8],
+                        ['trait' => 'ambition',        'min' => 14],
+                    ],
+                ],
+            ],
+            [
+                'slug'             => 'dressing-room-unsanctioned-night-out',
+                'category'         => EventCategory::NPC_INTERACTION,
+                'weight'           => 2,
+                'title'            => 'Unsanctioned Night Out',
+                'bodyTemplate'     => '{player_1} and {player_2} organised an unauthorised night out with several senior players ahead of a crucial fixture. Word has reached the manager.',
+                'severity'         => 'major',
+                'impacts'          => [
+                    'choices' => [
+                        [
+                            'emoji'         => '🍻',
+                            'label'         => 'Turn a blind eye — let them bond',
+                            'stat_changes'  => [
+                                ['target' => 'pair',     'field' => 'relationship', 'operator' => 'add',      'value' => 15],
+                                ['target' => 'player_1', 'field' => 'condition',    'operator' => 'subtract', 'value' => 15],
+                                ['target' => 'player_2', 'field' => 'condition',    'operator' => 'subtract', 'value' => 15],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => 0, 'ambition' => 0],
+                        ],
+                        [
+                            'emoji'         => '🚫',
+                            'label'         => 'Issue club fines',
+                            'stat_changes'  => [
+                                ['target' => 'player_1', 'field' => 'morale', 'operator' => 'subtract', 'value' => 4],
+                                ['target' => 'player_2', 'field' => 'morale', 'operator' => 'subtract', 'value' => 4],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => 3, 'ambition' => 0],
+                        ],
+                    ],
+                ],
+                'firingConditions' => [
+                    'minPairRelationship' => 30,
+                    'minSquadMorale'      => 40,
+                ],
+            ],
+            [
+                'slug'             => 'dressing-room-wonderkid-head-turn',
+                'category'         => EventCategory::NPC_INTERACTION,
+                'weight'           => 2,
+                'title'            => 'Transfer Speculation',
+                'bodyTemplate'     => '{player_1} is being courted by a bigger club, and the transfer talk is dividing the dressing room — {player_2} has taken it personally.',
+                'severity'         => 'major',
+                'impacts'          => [
+                    'choices' => [
+                        [
+                            'emoji'         => '🚫',
+                            'label'         => 'Reject the bid outright, no promises',
+                            'stat_changes'  => [
+                                ['target' => 'player_1', 'field' => 'morale',                  'operator' => 'subtract', 'value' => 8],
+                                ['target' => 'player_1', 'field' => 'personality.loyalty',      'operator' => 'subtract', 'value' => 1],
+                                ['target' => 'pair',     'field' => 'relationship',             'operator' => 'subtract', 'value' => 10],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => 0, 'ambition' => 0],
+                        ],
+                        [
+                            'emoji'         => '🤝',
+                            'label'         => 'Reject the bid, but promise a clear pathway',
+                            'stat_changes'  => [
+                                ['target' => 'player_1', 'field' => 'morale',      'operator' => 'add', 'value' => 4],
+                                ['target' => 'pair',     'field' => 'relationship', 'operator' => 'add', 'value' => 8],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => 0, 'ambition' => 2],
+                        ],
+                    ],
+                ],
+                'firingConditions' => [
+                    'minPairRelationship'    => 30,
+                    'actorTraitRequirements' => [
+                        ['trait' => 'loyalty',  'max' => 8],
+                        ['trait' => 'ambition', 'min' => 14],
+                    ],
+                ],
+            ],
+            [
+                'slug'             => 'dressing-room-veteran-intervention',
+                'category'         => EventCategory::NPC_INTERACTION,
+                'weight'           => 2,
+                'title'            => 'Players-Only Meeting',
+                'bodyTemplate'     => '{player_1} has called a players-only meeting to clear the air after a poor run of form, with {player_2} among those pulled aside for a one-to-one.',
+                'severity'         => 'major',
+                'impacts'          => [
+                    'choices' => [
+                        [
+                            'emoji'         => '🤝',
+                            'label'         => 'Let the squad handle it internally',
+                            'stat_changes'  => [
+                                ['target' => 'pair',       'field' => 'relationship', 'operator' => 'add', 'value' => 20],
+                                ['target' => 'squad_wide', 'field' => 'morale',       'operator' => 'add', 'value' => 8],
+                            ],
+                            'manager_shift' => ['temperament' => 0, 'discipline' => 0, 'ambition' => 0],
+                        ],
+                        [
+                            'emoji'         => '👔',
+                            'label'         => 'Intervene directly as chairman',
+                            'stat_changes'  => [
+                                ['target' => 'player_1',   'field' => 'morale', 'operator' => 'subtract', 'value' => 5],
+                                ['target' => 'squad_wide', 'field' => 'morale', 'operator' => 'add',      'value' => 3],
+                            ],
+                            'manager_shift' => ['temperament' => -2, 'discipline' => 0, 'ambition' => 0],
+                        ],
+                    ],
+                ],
+                'firingConditions' => [
+                    'maxSquadMorale'          => 45,
+                    'actorTraitRequirements' => [
+                        ['trait' => 'determination', 'min' => 14],
+                    ],
+                ],
+            ],
         ];
     }
 }
