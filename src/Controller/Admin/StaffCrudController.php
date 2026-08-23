@@ -117,6 +117,18 @@ class StaffCrudController extends AbstractCrudController
 
         yield DateTimeField::new('hiredAt')->hideOnForm()->hideOnIndex();
 
+        // ── Panel: Personality ────────────────────────────────────────────────
+        yield FormField::addFieldset('Personality', 'fa fa-brain')->hideOnIndex();
+
+        yield IntegerField::new('personality.determination', 'Determination')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.professionalism', 'Professionalism')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.ambition', 'Ambition')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.loyalty', 'Loyalty')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.adaptability', 'Adaptability')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.pressure', 'Pressure')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.temperament', 'Temperament')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+        yield IntegerField::new('personality.consistency', 'Consistency')->setHelp('1–20')->setColumns(3)->hideOnIndex();
+
         // ── Panel: Appearance ─────────────────────────────────────────────────
         yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
 

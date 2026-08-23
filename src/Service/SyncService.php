@@ -110,6 +110,10 @@ class SyncService
         }
         $this->em->persist($syncRecord);
 
+        // Captured before setLastSyncedWeek() below — the financial-year check needs the
+        // span the client is reporting, not just its end week (syncs batch ~4 weeks).
+        $previousSyncedWeek = $club->getLastSyncedWeek();
+
         // Rollback detection: client sent a week behind the server's last recorded week.
         // Accept the sync but flag it, then purge any superseded future records so
         // the rollback becomes the new canonical timeline for this club.
@@ -195,7 +199,7 @@ class SyncService
 
         // ── Economic lifecycle checks ─────────────────────────────────────────
         $dividendPaidPence = 0;
-        if ($club->isFinancialYearEnd($request->weekNumber)) {
+        if ($club->crossedFinancialYearEnd($previousSyncedWeek, $request->weekNumber)) {
             $yearEndResult     = $this->economicService->processFinancialYearEnd($club);
             $dividendPaidPence = $yearEndResult['dividendPaidPence'];
         }

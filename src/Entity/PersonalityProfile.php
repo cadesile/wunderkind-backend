@@ -14,6 +14,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Embeddable]
 class PersonalityProfile
 {
+    /** Value every trait is constructed at, and the marker for "not yet generated". */
+    public const DEFAULT_TRAIT = 10;
+
     #[ORM\Column(type: 'smallint', options: ['default' => 10])]
     private int $determination = 10;
 
@@ -61,6 +64,43 @@ class PersonalityProfile
 
     public function getConsistency(): int { return $this->consistency; }
     public function setConsistency(int $v): void { $this->consistency = $this->clamp($v); }
+
+    /**
+     * The eight traits keyed in the canonical order every client payload uses.
+     * Single source of truth for the serialized `personality` block — player,
+     * staff and scout snapshots all emit this.
+     *
+     * @return array<string, int>
+     */
+    public function toArray(): array
+    {
+        return [
+            'determination'   => $this->determination,
+            'professionalism' => $this->professionalism,
+            'ambition'        => $this->ambition,
+            'loyalty'         => $this->loyalty,
+            'adaptability'    => $this->adaptability,
+            'pressure'        => $this->pressure,
+            'temperament'     => $this->temperament,
+            'consistency'     => $this->consistency,
+        ];
+    }
+
+    /**
+     * True while every trait still sits at the constructed default. This is how
+     * PersonalityLifecycleSubscriber tells an ungenerated profile from one that
+     * has already been populated — an embedded value object is never null, so
+     * there is no other "unset" signal to read.
+     */
+    public function isDefault(): bool
+    {
+        foreach ($this->toArray() as $value) {
+            if ($value !== self::DEFAULT_TRAIT) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     private function clamp(int $v): int
     {

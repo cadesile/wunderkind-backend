@@ -279,9 +279,17 @@ class Club
         return $this->totalCareerEarnings;
     }
 
-    public function isFinancialYearEnd(int $currentWeek): bool
+    /**
+     * True when the span from $fromWeek to $toWeek crosses a 52-week financial-year boundary.
+     *
+     * Clients batch several weeks into a single sync, so they never reliably land on
+     * week % 52 === 0 — the old modulo check would simply never fire. Comparing year
+     * indices also makes a replayed or duplicate sync a no-op; the modulo check paid the
+     * dividend again every time week 52 was re-sent.
+     */
+    public function crossedFinancialYearEnd(int $fromWeek, int $toWeek): bool
     {
-        return $currentWeek % 52 === 0;
+        return intdiv($toWeek, 52) > intdiv(max(0, $fromWeek), 52);
     }
 
     public function getCurrentLeague(): ?League { return $this->currentLeague; }

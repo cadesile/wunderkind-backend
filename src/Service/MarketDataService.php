@@ -50,6 +50,7 @@ class MarketDataService
             'morale'          => $s->getMorale(),
             'specialisms'     => $s->getSpecialisms() ?? [],
             'appearance'      => $s->getAppearance(),
+            'personality'     => $s->getPersonality()->toArray(),
         ];
     }
 
@@ -78,6 +79,7 @@ class MarketDataService
             'tier'        => Tier::fromScore($s->getExperience())->value,
             'judgements'  => $s->getJudgements(),
             'appearance'  => $s->getAppearance(),
+            'personality' => $s->getPersonality()->toArray(),
         ];
     }
 

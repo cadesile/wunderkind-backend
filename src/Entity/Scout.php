@@ -35,14 +35,24 @@ class Scout
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $appearance = null;
 
+    /**
+     * 8-spoke Personality Matrix, identical to Player's. Auto-generated on
+     * persist by PersonalityLifecycleSubscriber, anchored on experience.
+     */
+    #[ORM\Embedded(class: PersonalityProfile::class)]
+    private PersonalityProfile $personality;
+
     public function __construct(string $name = '')
     {
         $this->id        = new UuidV7();
         $this->name      = $name;
         $this->createdAt = new \DateTimeImmutable();
+        $this->personality = new PersonalityProfile();
     }
 
     public function getId(): UuidV7 { return $this->id; }
+
+    public function getPersonality(): PersonalityProfile { return $this->personality; }
 
     public function getName(): string { return $this->name; }
     public function setName(string $name): void { $this->name = $name; }

@@ -7,6 +7,7 @@ use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
 use App\Repository\PoolConfigRepository;
+use App\Service\Personality\PersonalityGeneratorService;
 
 class PlayerGenerationService
 {
@@ -21,6 +22,7 @@ class PlayerGenerationService
     public function __construct(
         private readonly NameGeneratorService  $nameGenerator,
         private readonly PoolConfigRepository  $poolConfigRepo,
+        private readonly PersonalityGeneratorService $personalityGenerator = new PersonalityGeneratorService(),
     ) {}
 
     public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null): Player
@@ -99,21 +101,17 @@ class PlayerGenerationService
         return new PlayerBlueprint(...array_replace((array) $bp, ['abilityTarget' => $abilityTarget, 'isProdigy' => $isProdigy]));
     }
 
+    /**
+     * Rolls the Personality Matrix anchored on the player's potential. Shares
+     * PersonalityGeneratorService with Staff and Scout so the three entity types
+     * cannot drift apart — they differ only in which stat anchors the window.
+     */
     private function buildPersonality(PlayerBlueprint $bp): PlayerBlueprint
     {
-        $maxPct = $bp->potential / 100.0;
-        $minPct = max(0.0, ($bp->potential - 30) / 100.0);
-
-        return new PlayerBlueprint(...array_replace((array) $bp, [
-            'determination'  => $this->randTrait($minPct, $maxPct),
-            'professionalism' => $this->randTrait($minPct, $maxPct),
-            'ambition'        => $this->randTrait($minPct, $maxPct),
-            'loyalty'         => $this->randTrait($minPct, $maxPct),
-            'adaptability'    => $this->randTrait($minPct, $maxPct),
-            'pressure'        => $this->randTrait($minPct, $maxPct),
-            'temperament'     => $this->randTrait($minPct, $maxPct),
-            'consistency'     => $this->randTrait($minPct, $maxPct),
-        ]));
+        return new PlayerBlueprint(...array_replace(
+            (array) $bp,
+            $this->personalityGenerator->rollTraits($bp->potential),
+        ));
     }
 
     private function buildAttributes(PlayerBlueprint $bp): PlayerBlueprint
@@ -215,12 +213,6 @@ class PlayerGenerationService
     private function randFloat(float $min, float $max): float
     {
         return $min + (mt_rand() / mt_getrandmax()) * ($max - $min);
-    }
-
-    private function randTrait(float $minPct, float $maxPct): int
-    {
-        $pct = $this->randFloat($minPct, $maxPct);
-        return max(1, min(20, (int) ceil(20.0 * $pct)));
     }
 
     private function randInCap(int $cap, float $minFrac, float $maxFrac): int

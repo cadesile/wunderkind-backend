@@ -466,16 +466,7 @@ class WorldInitializationService
             'power'       => $player->getPower(),
             'stamina'     => $player->getStamina(),
             'heart'       => $player->getHeart(),
-            'personality' => [
-                'determination'   => $p->getDetermination(),
-                'professionalism' => $p->getProfessionalism(),
-                'ambition'        => $p->getAmbition(),
-                'loyalty'         => $p->getLoyalty(),
-                'adaptability'    => $p->getAdaptability(),
-                'pressure'        => $p->getPressure(),
-                'temperament'     => $p->getTemperament(),
-                'consistency'     => $p->getConsistency(),
-            ],
+            'personality' => $p->toArray(),
             'appearance' => $player->getAppearance(),
             'agent'      => $player->getAgent()?->toSnapshotArray(),
         ];
@@ -498,6 +489,7 @@ class WorldInitializationService
             'morale'          => $staff->getMorale(),
             'specialisms'     => $staff->getSpecialisms() ?? [],
             'appearance'      => $staff->getAppearance(),
+            'personality'     => $staff->getPersonality()->toArray(),
         ];
     }
 
@@ -526,6 +518,7 @@ class WorldInitializationService
             'tier'        => Tier::fromScore($scout->getExperience())->value,
             'judgements'  => $scout->getJudgements(),
             'appearance'  => $scout->getAppearance(),
+            'personality' => $scout->getPersonality()->toArray(),
         ];
     }
 

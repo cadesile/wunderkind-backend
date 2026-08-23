@@ -68,6 +68,13 @@ class Staff
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $appearance = null;
 
+    /**
+     * 8-spoke Personality Matrix, identical to Player's. Auto-generated on
+     * persist by PersonalityLifecycleSubscriber, anchored on coachingAbility.
+     */
+    #[ORM\Embedded(class: PersonalityProfile::class)]
+    private PersonalityProfile $personality;
+
     public function __construct(
         string $firstName = '',
         string $lastName = '',
@@ -78,6 +85,7 @@ class Staff
         $this->lastName  = $lastName;
         $this->role      = $role;
         $this->hiredAt   = new \DateTimeImmutable();
+        $this->personality = new PersonalityProfile();
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -131,6 +139,8 @@ class Staff
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
 
     public function getHiredAt(): \DateTimeImmutable { return $this->hiredAt; }
+
+    public function getPersonality(): PersonalityProfile { return $this->personality; }
 
     public function getAppearance(): ?array { return $this->appearance; }
     public function setAppearance(?array $appearance): void { $this->appearance = $appearance; }
