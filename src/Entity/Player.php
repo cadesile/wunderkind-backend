@@ -57,6 +57,7 @@ class Player
     private Collection $guardians;
 
     #[ORM\ManyToOne(inversedBy: 'players')]
+    #[ORM\JoinColumn(onDelete: 'SET NULL')]
     private ?Agent $agent = null;
 
     #[ORM\ManyToMany(targetEntity: self::class)]
