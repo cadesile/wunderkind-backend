@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\CountryWorldPackCache;
+use App\Service\WorldInitializationService;
 use App\Repository\CountryWorldPackCacheRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -17,7 +18,12 @@ class WorldPackCacheService
 
     /**
      * Returns the cached payload for (country, tier).
-     * If no cache entry exists, calls $generator(), stores the result, and returns it.
+     *
+     * A row stamped with a payload version other than the current
+     * WorldInitializationService::WORLD_PACK_VERSION counts as a miss and is
+     * rebuilt. The cache has no TTL, so without that check a pack built before a
+     * snapshot-shape change would be served verbatim forever — which is how packs
+     * predating the personality work kept handing out all-10s matrices.
      *
      * @param callable(): array $generator
      */
@@ -25,7 +31,12 @@ class WorldPackCacheService
     {
         $cached = $this->cacheRepository->findForCountryAndTier($country, $tier);
         if ($cached !== null) {
-            return $cached->getPayload();
+            if ($cached->getPayloadVersion() === WorldInitializationService::WORLD_PACK_VERSION) {
+                return $cached->getPayload();
+            }
+            // Stale shape — rebuild through the atomic replace path so a failed
+            // generator never leaves the cache empty.
+            return $this->forceRebuild($country, $tier, $generator);
         }
 
         $payload = $generator();
@@ -35,7 +46,7 @@ class WorldPackCacheService
         // prevents Doctrine from trying to re-process them when persisting the cache entry.
         $this->em->clear();
 
-        $entry = new CountryWorldPackCache($country, $tier, $payload);
+        $entry = new CountryWorldPackCache($country, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
         $this->em->persist($entry);
         $this->em->flush();
 
@@ -49,7 +60,7 @@ class WorldPackCacheService
      */
     public function allTiersCached(string $country, array $tierNumbers): bool
     {
-        $cached = $this->cacheRepository->findCachedTiers($country);
+        $cached = $this->cacheRepository->findCachedTiers($country, WorldInitializationService::WORLD_PACK_VERSION);
         return count(array_diff($tierNumbers, $cached)) === 0;
     }
 
@@ -72,7 +83,7 @@ class WorldPackCacheService
             $this->em->flush();
         }
 
-        $entry = new CountryWorldPackCache($country, $tier, $payload);
+        $entry = new CountryWorldPackCache($country, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
         $this->em->persist($entry);
         $this->em->flush();
 

@@ -29,13 +29,30 @@ class CountryWorldPackCache
     #[ORM\Column]
     private \DateTimeImmutable $generatedAt;
 
-    public function __construct(string $country, int $tier, array $payload)
+    /**
+     * Shape version of the serialized payload, stamped from
+     * WorldInitializationService::WORLD_PACK_VERSION at build time.
+     *
+     * Without it a cached row lives forever: the cache has no TTL, so a pack
+     * built before a snapshot-shape change keeps being served verbatim until
+     * someone remembers to run `app:warm-world-pack --force`. That is how packs
+     * predating the personality work carried all-10s matrices — and packs
+     * predating 2026-08-23 carry no `personality` key on staff/scout at all.
+     *
+     * Legacy rows default to 0, which never matches a current version, so they
+     * are treated as a miss and rebuilt on first read.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $payloadVersion;
+
+    public function __construct(string $country, int $tier, array $payload, int $payloadVersion = 0)
     {
-        $this->id          = new UuidV7();
-        $this->country     = $country;
-        $this->tier        = $tier;
-        $this->payload     = $payload;
-        $this->generatedAt = new \DateTimeImmutable();
+        $this->id             = new UuidV7();
+        $this->country        = $country;
+        $this->tier           = $tier;
+        $this->payload        = $payload;
+        $this->payloadVersion = $payloadVersion;
+        $this->generatedAt    = new \DateTimeImmutable();
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -43,4 +60,5 @@ class CountryWorldPackCache
     public function getTier(): int { return $this->tier; }
     public function getPayload(): array { return $this->payload; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
+    public function getPayloadVersion(): int { return $this->payloadVersion; }
 }

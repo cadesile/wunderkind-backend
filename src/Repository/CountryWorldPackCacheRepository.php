@@ -24,21 +24,26 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns the list of tier numbers already cached for a country.
+     * Returns the list of tier numbers already cached for a country at the given
+     * payload version. A row stamped with an older version is deliberately not
+     * counted — getOrBuild would rebuild it anyway, so reporting it as cached
+     * would let a caller skip warming and then pay the rebuild on a user request.
      *
      * @return int[]
      */
-    public function findCachedTiers(string $country): array
+    public function findCachedTiers(string $country, ?int $payloadVersion = null): array
     {
-        return array_column(
-            $this->createQueryBuilder('c')
-                ->select('c.tier')
-                ->where('c.country = :country')
-                ->setParameter('country', $country)
-                ->getQuery()
-                ->getArrayResult(),
-            'tier'
-        );
+        $qb = $this->createQueryBuilder('c')
+            ->select('c.tier')
+            ->where('c.country = :country')
+            ->setParameter('country', $country);
+
+        if ($payloadVersion !== null) {
+            $qb->andWhere('c.payloadVersion = :version')
+               ->setParameter('version', $payloadVersion);
+        }
+
+        return array_column($qb->getQuery()->getArrayResult(), 'tier');
     }
 
     public function deleteByCountry(string $country): int

@@ -31,6 +31,22 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class WorldInitializationService
 {
+    /**
+     * Shape version of the world-pack payload. Bump this whenever
+     * buildPlayerSnapshot/buildStaffSnapshot/buildScoutSnapshot change shape —
+     * WorldPackCacheService treats any cached row stamped with a different
+     * version as a miss and rebuilds it.
+     *
+     * 1 — first version to guarantee a generated `personality` matrix on players,
+     *     staff and scouts. Everything cached before this may carry all-10s
+     *     defaults, and anything cached before 2026-08-23 has no `personality`
+     *     key on staff/scout at all.
+     *
+     * ⚠️ Run `app:backfill-personalities` BEFORE bumping this, or the rebuilt
+     * packs just re-serialise the same default matrices.
+     */
+    public const WORLD_PACK_VERSION = 1;
+
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
         1 => ['min' => 75, 'max' => 95],
