@@ -128,7 +128,7 @@ class LeaderboardCalculationService
                 $scored[(string) $row['clubId']] = true;
             }
 
-            foreach ($this->leaderboardEntryRepository->findAllOrderedByScore($category, $period) as $entry) {
+            foreach ($this->leaderboardEntryRepository->findAllForCategoryAndPeriod($category, $period) as $entry) {
                 if ($entry->getScore() !== 0 && !isset($scored[(string) $entry->getClub()->getId()])) {
                     $entry->setScore(0);
                 }

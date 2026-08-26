@@ -14,6 +14,7 @@ class TransferLeaderboardService
 
     /**
      * Get top selling academies by total net proceeds for a period.
+     * Only clubs that have concluded at least one full season are eligible.
      *
      * @param string $period 'week' | 'month' | 'all-time'
      * @param int    $limit  1–50
@@ -31,12 +32,14 @@ class TransferLeaderboardService
             ->setMaxResults(min($limit, 50));
 
         $this->applyPeriodFilter($qb, $period);
+        $qb->andWhere('a.currentSeason > 1');
 
         return $qb->getQuery()->getResult();
     }
 
     /**
      * Get the single highest-value transfer for a period.
+     * Only clubs that have concluded at least one full season are eligible.
      *
      * @return array{playerName: string, clubName: string, netProceeds: int, buyingClub: string}|null
      */
@@ -51,6 +54,7 @@ class TransferLeaderboardService
             ->setMaxResults(1);
 
         $this->applyPeriodFilter($qb, $period);
+        $qb->andWhere('a.currentSeason > 1');
 
         $result = $qb->getQuery()->getOneOrNullResult();
         if (!$result) {

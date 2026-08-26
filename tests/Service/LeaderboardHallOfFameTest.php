@@ -69,6 +69,12 @@ class LeaderboardHallOfFameTest extends KernelTestCase
         // A runner-up finish earns nothing.
         $this->persistSeason($winless, $topTier, 1, finalPosition: 2);
 
+        // A SeasonRecord only exists after LeagueService::concludeSeason() has run, which also
+        // bumps Club::$currentSeason — mirror that here so these clubs are leaderboard-eligible.
+        $champion->setCurrentSeason(2);
+        $lowerWins->setCurrentSeason(3);
+        $winless->setCurrentSeason(2);
+
         $this->em->flush();
 
         $weights = self::getContainer()->get(GameConfigRepository::class)

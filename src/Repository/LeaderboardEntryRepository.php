@@ -15,8 +15,11 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
         parent::__construct($registry, LeaderboardEntry::class);
     }
 
-    /** All entries for a category/period, ordered by score descending (full result — used for ranking passes and cache hydration). */
-    public function findAllOrderedByScore(LeaderboardCategory $category, string $period): array
+    /**
+     * All entries for a category/period regardless of club eligibility — used only where
+     * every stored row must be inspected (e.g. resetting stale scores), never for a public read.
+     */
+    public function findAllForCategoryAndPeriod(LeaderboardCategory $category, string $period): array
     {
         return $this->createQueryBuilder('e')
             ->join('e.club', 'c')
@@ -30,7 +33,29 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /** @return LeaderboardEntry[] */
+    /**
+     * All entries for a category/period, ordered by score descending (full result — used for ranking passes and cache hydration).
+     * Only clubs that have concluded at least one full season are surfaced.
+     */
+    public function findAllOrderedByScore(LeaderboardCategory $category, string $period): array
+    {
+        return $this->createQueryBuilder('e')
+            ->join('e.club', 'c')
+            ->addSelect('c')
+            ->where('e.category = :category')
+            ->andWhere('e.period = :period')
+            ->andWhere('c.currentSeason > 1')
+            ->setParameter('category', $category)
+            ->setParameter('period', $period)
+            ->orderBy('e.score', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * @return LeaderboardEntry[]
+     * Only clubs that have concluded at least one full season are surfaced.
+     */
     public function findTopByPeriod(LeaderboardCategory $category, string $period, int $limit = 50): array
     {
         return $this->createQueryBuilder('e')
@@ -38,6 +63,7 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
             ->addSelect('a')
             ->where('e.category = :category')
             ->andWhere('e.period = :period')
+            ->andWhere('a.currentSeason > 1')
             ->setParameter('category', $category)
             ->setParameter('period', $period)
             ->orderBy('e.score', 'DESC')
