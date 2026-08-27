@@ -5,21 +5,25 @@
        Shell only. The headline totals below are server-rendered so the page
        paints immediately; every panel fetches its own JSON from
        AdminStatsController, which caches each aggregate for 5 minutes.
+
+       Assets are page-scoped (not in configureAssets) so Chart.js and the
+       dashboard stylesheet never reach the CRUD screens. The version query is
+       what stops a browser serving a stale copy after a deploy.
     #}
-    <div data-dashboard
+    {% set dash_v = '20260827b' %}
+    <link rel="stylesheet" href="{{ asset('admin-dashboard.css') }}?v={{ dash_v }}">
+
+    <div class="dash"
+         data-dashboard
          data-refresh-url="{{ path('admin_stats_refresh') }}"
          data-refresh-token="{{ csrf_token('admin_stats_refresh') }}">
 
         {% include 'admin/dashboard/_kpi_strip.html.twig' %}
-
         {% include 'admin/dashboard/_growth.html.twig' %}
-
         {% include 'admin/dashboard/_leaderboards.html.twig' %}
-
         {% include 'admin/dashboard/_pool.html.twig' %}
     </div>
 
-    {# Page-scoped so Chart.js is not shipped on every admin CRUD screen. #}
-    <script src="{{ asset('vendor/chart.umd.min.js') }}"></script>
-    <script src="{{ asset('admin-dashboard.js') }}"></script>
+    <script src="{{ asset('vendor/chart.umd.min.js') }}?v={{ dash_v }}"></script>
+    <script src="{{ asset('admin-dashboard.js') }}?v={{ dash_v }}"></script>
 {% endblock %}

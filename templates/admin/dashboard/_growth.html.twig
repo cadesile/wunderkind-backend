@@ -1,11 +1,5 @@
 {% import 'admin/dashboard/_macros.html.twig' as dash %}
 
-{{ dash.section('Growth', 'last 30 days') }}
+{{ dash.section('Growth', 'daily · last 30 days') }}
 
-{{ dash.panel(
-    'panel-growth',
-    'Signups, Clubs & Syncs',
-    path('admin_stats_growth'),
-    'growth',
-    260
-) }}
+{{ dash.panel('panel-growth', 'Signups, Clubs & Syncs', path('admin_stats_growth'), 'growth', 280) }}

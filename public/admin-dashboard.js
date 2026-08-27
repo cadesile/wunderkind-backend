@@ -3,7 +3,14 @@
 
    The page ships as a shell; each panel pulls its own JSON from
    AdminStatsController. Chart colours are read from the CSS custom properties
-   in admin-theme.css so the charts track the theme rather than duplicating hex.
+   in admin-dashboard.css so the charts track the theme rather than carrying
+   their own hex list.
+
+   Charting is deliberately sparing. Small facets (≤ 8 categories) render as
+   labelled meter lists: exact values stay visible without a hover, which is
+   both more accessible and far denser than eight near-empty canvases. Only
+   nationality — the one facet with enough categories to need a chart — and the
+   growth trend get a real canvas.
    ══════════════════════════════════════════════════════════════════════════ */
 (function () {
     'use strict';
@@ -12,35 +19,39 @@
     if (!root) { return; }
 
     var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var CHART_THRESHOLD = 8;   // more categories than this earns a canvas
+    var CHART_MAX_BARS = 15;   // beyond this a bar chart stops being readable
 
     // ── Theme ────────────────────────────────────────────────────────────
     function cssVar(name, fallback) {
-        var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        var v = getComputedStyle(root).getPropertyValue(name).trim();
         return v || fallback;
     }
 
     var PALETTE = (function () {
         var out = [];
-        for (var i = 1; i <= 12; i++) { out.push(cssVar('--dash-chart-' + i, '#4e79a7')); }
+        for (var i = 1; i <= 12; i++) { out.push(cssVar('--dash-chart-' + i, '#E8CF59')); }
         return out;
     })();
-    var GRID = cssVar('--dash-grid', 'rgba(155,176,196,.16)');
+    var GRID = cssVar('--dash-grid', 'rgba(155,176,196,.10)');
     var TICK = cssVar('--dash-tick', '#9bb0c4');
+    var ACCENT = cssVar('--accent', '#E8CF59');
+    var DANGER = cssVar('--bs-danger', '#C44747');
 
     function colorAt(i) { return PALETTE[i % PALETTE.length]; }
     function alpha(hex, a) { return hex + a; }
 
     if (window.Chart) {
         Chart.defaults.font.family = "'Space Mono', monospace";
-        Chart.defaults.font.size = 11;
+        Chart.defaults.font.size = 10;
         Chart.defaults.color = TICK;
-        Chart.defaults.animation = REDUCED ? false : { duration: 250 };
+        Chart.defaults.animation = REDUCED ? false : { duration: 240 };
         Chart.defaults.maintainAspectRatio = false;
         Chart.defaults.responsive = true;
     }
 
     var charts = [];
-    function register(chart) { charts.push(chart); return chart; }
+    function register(c) { charts.push(c); return c; }
     function destroyIn(container) {
         charts = charts.filter(function (c) {
             if (c.canvas && container.contains(c.canvas)) { c.destroy(); return false; }
@@ -48,13 +59,13 @@
         });
     }
 
-    // ── Fetch (deduped: the KPI strip and the growth panel share a payload) ──
+    // ── Fetch (deduped: the KPI band and the growth panel share a payload) ──
     var inflight = {};
 
     function load(url, force) {
         if (force) { delete inflight[url]; }
         if (!inflight[url]) {
-            inflight[url] = fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            inflight[url] = fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
                 .then(function (res) {
                     if (!res.ok) { throw new Error('HTTP ' + res.status); }
                     return res.json();
@@ -77,7 +88,7 @@
         });
     }
 
-    // ── Small DOM helpers ────────────────────────────────────────────────
+    // ── DOM helpers ──────────────────────────────────────────────────────
     function el(tag, cls, text) {
         var n = document.createElement(tag);
         if (cls) { n.className = cls; }
@@ -87,8 +98,29 @@
 
     function num(n) { return Number(n || 0).toLocaleString(); }
 
+    /** Big counts get an abbreviated form so a KPI tile never wraps. */
+    function compact(n) {
+        n = Number(n || 0);
+        if (n >= 1e9) { return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B'; }
+        if (n >= 1e6) { return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; }
+        if (n >= 1e5) { return Math.round(n / 1e3) + 'K'; }
+        return n.toLocaleString();
+    }
+
+    /**
+     * Facet keys are a mix of enum values (`facility_manager`), demonyms
+     * (`English`) and band labels (`26-30`). Only the first kind needs
+     * prettifying — titleizing the rest would mangle them.
+     */
+    function prettyKey(k) {
+        k = String(k);
+        return k.indexOf('_') === -1 ? k : titleize(k);
+    }
+
     function titleize(s) {
-        return String(s).replace(/[_-]/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        return String(s).replace(/([a-z])([A-Z])/g, '$1 $2')
+            .replace(/[_-]/g, ' ')
+            .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
     }
 
     function stamp(node, iso) {
@@ -97,54 +129,100 @@
         node.textContent = 'updated ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    function show(panel, which) {
-        ['loading', 'error', 'content'].forEach(function (k) {
-            var n = panel.querySelector('[data-' + panel.dataset.slot + '-' + k + ']');
-            if (n) { n.classList.toggle('d-none', k !== which); }
+    function busy(panel, on) {
+        panel.querySelectorAll('[data-panel-refresh],[data-pool-refresh]').forEach(function (b) {
+            b.classList.toggle('is-busy', !!on);
+            b.disabled = !!on;
         });
     }
 
-    // ── Charts ───────────────────────────────────────────────────────────
-    function barChart(canvas, facet, opts) {
+    /*
+       Meters and the ranked bar chart are single-hue on purpose. Each of these
+       shows one measure across categories, so a different colour per row would
+       encode nothing and just add noise. Colour is reserved for the one place
+       it does carry meaning: the KPI composition strip, where the swatch is the
+       only link between a segment and its legend label.
+    */
+    // ── Meter list (the default facet renderer) ──────────────────────────
+    function meterList(facet, opts) {
         opts = opts || {};
-        var labels = facet.map(function (r) { return r.key; });
-        var data = facet.map(function (r) { return r.count; });
+        var total = facet.reduce(function (a, r) { return a + r.count; }, 0) || 1;
+        var max = facet.reduce(function (a, r) { return Math.max(a, r.count); }, 0) || 1;
+
+        var wrap = el('div', 'meters');
+
+        facet.forEach(function (row, i) {
+            var m = el('div', 'meter');
+
+            var head = el('div', 'm-head');
+            head.appendChild(el('span', 'm-key', prettyKey(row.key)));
+
+            var right = el('span');
+            right.appendChild(el('span', 'm-val', num(row.count)));
+            right.appendChild(document.createTextNode(' '));
+            right.appendChild(el('span', 'm-pct', ((row.count / total) * 100).toFixed(1) + '%'));
+            head.appendChild(right);
+            m.appendChild(head);
+
+            var track = el('div', 'm-track');
+            var fill = el('i');
+            fill.style.width = (max ? (row.count / max) * 100 : 0).toFixed(2) + '%';
+            fill.style.background = opts.color || ACCENT;
+            track.appendChild(fill);
+            m.appendChild(track);
+
+            wrap.appendChild(m);
+        });
+
+        return wrap;
+    }
+
+    // ── Charts ───────────────────────────────────────────────────────────
+    /** Horizontal bars, sorted descending, with the value printed on each bar. */
+    function rankedBarChart(canvas, facet) {
+        var rows = facet.slice().sort(function (a, b) { return b.count - a.count; }).slice(0, CHART_MAX_BARS);
 
         return register(new Chart(canvas.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: labels,
+                labels: rows.map(function (r) { return prettyKey(r.key); }),
                 datasets: [{
-                    data: data,
-                    backgroundColor: labels.map(function (_, i) { return alpha(colorAt(opts.mono ? 0 : i), 'cc'); }),
-                    borderColor: labels.map(function (_, i) { return colorAt(opts.mono ? 0 : i); }),
-                    borderWidth: 1
+                    data: rows.map(function (r) { return r.count; }),
+                    backgroundColor: alpha(ACCENT, '99'),
+                    borderColor: ACCENT,
+                    borderWidth: 1,
+                    barPercentage: 0.86,
+                    categoryPercentage: 0.88
                 }]
             },
             options: {
-                indexAxis: opts.horizontal ? 'y' : 'x',
-                plugins: { legend: { display: false } },
+                indexAxis: 'y',
+                layout: { padding: { right: 34 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function (c) { return num(c.parsed.x); } } }
+                },
                 scales: {
-                    x: { beginAtZero: true, ticks: { precision: 0, color: TICK }, grid: { color: GRID } },
-                    y: { beginAtZero: true, ticks: { precision: 0, color: TICK }, grid: { color: GRID } }
+                    x: { beginAtZero: true, ticks: { precision: 0, color: TICK, maxTicksLimit: 5 }, grid: { color: GRID } },
+                    y: { ticks: { color: TICK, autoSkip: false }, grid: { display: false } }
                 }
-            }
-        }));
-    }
-
-    function doughnutChart(canvas, facet) {
-        return register(new Chart(canvas.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: facet.map(function (r) { return r.key; }),
-                datasets: [{
-                    data: facet.map(function (r) { return r.count; }),
-                    backgroundColor: facet.map(function (_, i) { return colorAt(i); }),
-                    borderColor: cssVar('--bs-card-bg', '#1e2448'),
-                    borderWidth: 2
-                }]
             },
-            options: { plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
+            plugins: [{
+                // Value labels by default — the bar chart's accessibility grade
+                // depends on the numbers not being hover-only.
+                id: 'valueLabels',
+                afterDatasetsDraw: function (chart) {
+                    var ctx = chart.ctx;
+                    ctx.save();
+                    ctx.fillStyle = TICK;
+                    ctx.font = '10px "Space Mono", monospace';
+                    ctx.textBaseline = 'middle';
+                    chart.getDatasetMeta(0).data.forEach(function (bar, i) {
+                        ctx.fillText(num(rows[i].count), bar.x + 6, bar.y);
+                    });
+                    ctx.restore();
+                }
+            }]
         }));
     }
 
@@ -155,117 +233,166 @@
                 labels: series.map(function (_, i) { return i; }),
                 datasets: [{
                     data: series,
-                    borderColor: color,
-                    backgroundColor: alpha(color, '22'),
+                    borderColor: alpha(color, 'aa'),
+                    backgroundColor: alpha(color, '33'),
                     borderWidth: 1.5,
                     fill: true,
                     pointRadius: 0,
-                    tension: 0.3
+                    tension: 0.35
                 }]
             },
             options: {
+                layout: { padding: 0 },
                 plugins: { legend: { display: false }, tooltip: { enabled: false } },
                 scales: { x: { display: false }, y: { display: false, beginAtZero: true } }
             }
         }));
     }
 
-    // ── KPI strip ────────────────────────────────────────────────────────
-    var POOL_KEYS = { poolPlayers: 'players', poolStaff: 'staff', poolAgents: 'agents' };
+    // ── KPI band ─────────────────────────────────────────────────────────
+    var SPARK_COLOR = { invalidSyncs: DANGER };
 
     function paintKpis(growth) {
-        var m = growth.metrics;
-
-        Object.keys(m).forEach(function (metric) {
+        Object.keys(growth.metrics).forEach(function (metric) {
             var tile = root.querySelector('[data-kpi="' + metric + '"]');
             if (!tile) { return; }
 
-            var data = m[metric];
-            tile.querySelector('[data-kpi-value]').textContent = num(data.all);
+            var data = growth.metrics[metric];
+            var value = tile.querySelector('[data-kpi-value]');
+            value.textContent = compact(data.all);
+            value.title = num(data.all);
+            value.classList.remove('is-muted');
 
             tile.querySelectorAll('[data-window]').forEach(function (node) {
                 var v = data[node.dataset.window] || 0;
-                node.textContent = v > 0 ? '+' + num(v) : '0';
+                node.textContent = v > 0 ? '+' + compact(v) : '0';
                 node.classList.toggle('is-zero', v === 0);
             });
 
             if (metric === 'users') {
                 tile.querySelector('[data-kpi-sub]').textContent =
                     num(data.registered) + ' registered · ' + num(data.guest) + ' guest';
-            }
-            if (metric === 'activeClubs') {
-                tile.querySelector('[data-kpi-sub]').textContent = 'clubs that have ever synced';
+            } else if (metric === 'activeClubs') {
+                tile.querySelector('[data-kpi-sub]').textContent = 'distinct clubs syncing';
+            } else if (metric === 'invalidSyncs') {
+                var all = growth.metrics.syncs.all;
+                tile.classList.toggle('is-clean', data.all === 0);
+                tile.querySelector('[data-kpi-sub]').textContent = all
+                    ? ((data.all / all) * 100).toFixed(2) + '% of all syncs rejected'
+                    : 'no syncs recorded yet';
             }
 
             var spark = tile.querySelector('[data-kpi-spark]');
             var series = growth.trend.series[metric];
             if (spark && series) {
                 destroyIn(spark.parentNode);
-                sparkline(spark, series, metric === 'invalidSyncs' ? cssVar('--bs-danger', '#C44747') : colorAt(0));
-            } else if (spark) {
-                spark.parentNode.classList.add('d-none');
+                sparkline(spark, series, SPARK_COLOR[metric] || ACCENT);
             }
         });
     }
 
-    /** Pool totals live on the pool endpoints, so fill those tiles from there. */
-    function paintPoolKpi(metric, total, sub) {
-        var tile = root.querySelector('[data-kpi="' + metric + '"]');
+    /** Inventory tiles: a standing count plus a composition strip. */
+    function paintStockKpi(metric, data, facetName) {
+        var tile = root.querySelector('[data-kpi-stock="' + metric + '"]');
         if (!tile) { return; }
-        tile.querySelector('[data-kpi-value]').textContent = num(total);
-        if (sub) { tile.querySelector('[data-kpi-sub]').textContent = sub; }
-        var deltas = tile.querySelector('[data-kpi-deltas]');
-        if (deltas) { deltas.classList.add('d-none'); }
-        var spark = tile.querySelector('.kpi-spark');
-        if (spark) { spark.classList.add('d-none'); }
+
+        var value = tile.querySelector('[data-kpi-value]');
+        value.textContent = compact(data.total);
+        value.title = num(data.total);
+        value.classList.remove('is-muted');
+
+        var facet = (data.facets && data.facets[facetName]) || [];
+        var shown = facet.slice().sort(function (a, b) { return b.count - a.count; }).slice(0, 4);
+        var total = facet.reduce(function (a, r) { return a + r.count; }, 0) || 1;
+
+        var strip = tile.querySelector('[data-kpi-strip]');
+        var legend = tile.querySelector('[data-kpi-legend]');
+        strip.textContent = '';
+        legend.textContent = '';
+
+        shown.forEach(function (row, i) {
+            var seg = el('i');
+            seg.style.flex = row.count;
+            seg.style.background = colorAt(i);
+            strip.appendChild(seg);
+
+            var item = el('span');
+            var swatch = el('i');
+            swatch.style.background = colorAt(i);
+            item.appendChild(swatch);
+            item.appendChild(document.createTextNode(prettyKey(row.key) + ' ' + ((row.count / total) * 100).toFixed(0) + '%'));
+            legend.appendChild(item);
+        });
+
+        if (metric === 'agents' && data.unagentedPlayers !== undefined) {
+            tile.querySelector('[data-kpi-sub]').textContent = num(data.unagentedPlayers) + ' players unrepresented';
+        }
     }
 
-    // ── Panel renderers ──────────────────────────────────────────────────
+    // ── Growth panel ─────────────────────────────────────────────────────
     function renderGrowth(container, data) {
         destroyIn(container);
         container.textContent = '';
 
-        var wrap = el('div', 'dash-chart');
-        wrap.style.height = '260px';
+        var wrap = el('div');
+        wrap.style.height = '280px';
+        wrap.style.position = 'relative';
         var canvas = document.createElement('canvas');
         wrap.appendChild(canvas);
         container.appendChild(wrap);
 
         // Series are differentiated by dash pattern as well as colour, so the
         // chart still reads without colour perception.
-        var styles = [[], [6, 4], [2, 3]];
+        var dashes = [[], [7, 4], [2, 3]];
         var keys = ['users', 'clubs', 'syncs'];
 
         register(new Chart(canvas.getContext('2d'), {
             type: 'line',
             data: {
-                labels: data.trend.days.map(function (d) { return d.slice(5); }),
+                labels: data.trend.days,
                 datasets: keys.map(function (k, i) {
                     return {
                         label: titleize(k),
                         data: data.trend.series[k],
                         borderColor: colorAt(i),
-                        backgroundColor: alpha(colorAt(i), '22'),
-                        borderDash: styles[i],
+                        backgroundColor: alpha(colorAt(i), '1f'),
+                        borderDash: dashes[i],
                         borderWidth: 2,
                         pointRadius: 0,
-                        pointHitRadius: 12,
-                        tension: 0.25,
-                        fill: false
+                        pointHoverRadius: 3,
+                        pointHitRadius: 14,
+                        tension: 0.3,
+                        fill: i === 0
                     };
                 })
             },
             options: {
                 interaction: { mode: 'index', intersect: false },
-                plugins: { legend: { position: 'top', labels: { boxWidth: 24, usePointStyle: false } } },
+                plugins: {
+                    legend: { position: 'top', align: 'end', labels: { boxWidth: 26, boxHeight: 1, padding: 14 } },
+                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + num(c.parsed.y); } } }
+                },
                 scales: {
-                    x: { ticks: { color: TICK, maxTicksLimit: 10 }, grid: { color: GRID } },
-                    y: { beginAtZero: true, ticks: { precision: 0, color: TICK }, grid: { color: GRID } }
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: TICK,
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 8,
+                            callback: function (v) {
+                                var d = this.getLabelForValue(v);
+                                return d ? d.slice(8) + '/' + d.slice(5, 7) : d;
+                            }
+                        }
+                    },
+                    y: { beginAtZero: true, ticks: { precision: 0, color: TICK, maxTicksLimit: 6 }, border: { display: false }, grid: { color: GRID } }
                 }
             }
         }));
     }
 
+    // ── Leaderboards panel ───────────────────────────────────────────────
     function renderLeaderboards(container, data) {
         container.textContent = '';
 
@@ -273,8 +400,9 @@
         tabs.setAttribute('role', 'tablist');
         tabs.setAttribute('aria-label', 'Leaderboard category');
 
-        var region = el('div', 'dash-scroll');
+        var region = el('div');
         region.setAttribute('role', 'tabpanel');
+        region.setAttribute('aria-live', 'polite');
 
         function paint(board) {
             region.textContent = '';
@@ -284,12 +412,13 @@
                 return;
             }
 
+            var scroll = el('div', 'dash-scroll');
             var table = el('table', 'dash-table');
+
             var thead = el('thead');
             var hr = el('tr');
-            ['#', 'Club', 'Score', 'Label'].forEach(function (h, i) {
-                var th = el('th', i === 2 ? 'num' : null, h);
-                hr.appendChild(th);
+            [['#', 'col-rank'], ['Club', ''], ['Score', 'col-score num'], ['Label', 'col-label']].forEach(function (h) {
+                hr.appendChild(el('th', h[1], h[0]));
             });
             thead.appendChild(hr);
             table.appendChild(thead);
@@ -297,16 +426,24 @@
             var tbody = el('tbody');
             board.entries.forEach(function (row) {
                 var tr = el('tr');
-                tr.appendChild(el('td', 'num', row.rank));
+
+                var tdRank = el('td', 'col-rank');
+                tdRank.appendChild(el('span', 'rank-badge', row.rank));
+                tr.appendChild(tdRank);
+
                 tr.appendChild(el('td', null, row.clubName));
-                tr.appendChild(el('td', 'num', num(row.score)));
-                tr.appendChild(el('td', null, row.displayLabel || '—'));
+
+                var tdScore = el('td', 'col-score num', num(row.score));
+                tr.appendChild(tdScore);
+
+                tr.appendChild(el('td', 'col-label', row.displayLabel || '—'));
                 tbody.appendChild(tr);
             });
             table.appendChild(tbody);
-            region.appendChild(table);
 
-            region.appendChild(el('p', 'dash-empty', board.total + ' ranked club' + (board.total === 1 ? '' : 's') + ' in this board.'));
+            scroll.appendChild(table);
+            region.appendChild(scroll);
+            region.appendChild(el('p', 'dash-foot', num(board.total) + ' ranked club' + (board.total === 1 ? '' : 's') + ' in this board.'));
         }
 
         data.boards.forEach(function (board, i) {
@@ -327,9 +464,7 @@
         container.appendChild(region);
     }
 
-    // ── Pool breakdown ───────────────────────────────────────────────────
-    var CHART_HINTS = { position: 'doughnut', role: 'doughnut', agent: 'doughnut', tier: 'doughnut' };
-
+    // ── Pool panel ───────────────────────────────────────────────────────
     function renderPool(container, data) {
         destroyIn(container);
         container.textContent = '';
@@ -339,47 +474,65 @@
             return;
         }
 
-        var head = el('p', 'dash-empty');
-        head.textContent = num(data.total) + ' ' + (data.label || '').toLowerCase() + ' in the pool.';
-        if (data.unagentedPlayers !== undefined) {
-            head.textContent += ' ' + num(data.unagentedPlayers) + ' pool players have no agent.';
-        }
-        if (data.summary) {
-            head.textContent += ' ' + num(data.summary.leagues) + ' leagues · '
-                + num(data.summary.cachedWorldPacks) + ' cached world packs ('
-                + num(data.summary.staleWorldPacks) + ' stale).';
-        }
-        container.appendChild(head);
+        container.appendChild(poolSummary(data));
 
-        // Overview facets
         var grid = el('div', 'facet-grid');
         Object.keys(data.facets).forEach(function (name) {
             var facet = data.facets[name];
             if (!facet.length) { return; }
 
-            var cell = el('div', 'facet-cell');
-            cell.appendChild(el('h6', null, titleize(name)));
+            // The nested table below already renders this dimension in full,
+            // with counts, share and drill-down. A chart of the same numbers
+            // directly above it is duplication, not a second view.
+            if (name === data.nested.dimension) { return; }
 
-            var holder = el('div', 'facet-canvas dash-chart');
-            var canvas = document.createElement('canvas');
-            holder.appendChild(canvas);
-            cell.appendChild(holder);
-            grid.appendChild(cell);
+            var big = facet.length > CHART_THRESHOLD;
+            var cell = el('div', 'facet' + (big ? ' facet--wide' : ''));
+            cell.appendChild(el('h3', null, titleize(name)));
 
-            // Deferred so the canvas has laid out before Chart.js measures it.
-            requestAnimationFrame(function () {
-                if (CHART_HINTS[name] === 'doughnut' && facet.length <= 8) {
-                    doughnutChart(canvas, facet);
-                } else if (facet.length > 8) {
-                    barChart(canvas, facet.slice(0, 15), { horizontal: true });
-                } else {
-                    barChart(canvas, facet, { mono: true });
+            if (big) {
+                var holder = el('div', 'facet-canvas');
+                var canvas = document.createElement('canvas');
+                holder.appendChild(canvas);
+                cell.appendChild(holder);
+                // Deferred so the canvas has laid out before Chart.js measures it.
+                requestAnimationFrame(function () { rankedBarChart(canvas, facet); });
+                if (facet.length > CHART_MAX_BARS) {
+                    cell.appendChild(el('p', 'dash-foot', 'Top ' + CHART_MAX_BARS + ' of ' + facet.length + ' — the full list is in the table below.'));
                 }
-            });
+            } else {
+                cell.appendChild(meterList(facet));
+            }
+
+            grid.appendChild(cell);
         });
         container.appendChild(grid);
 
         container.appendChild(renderNested(data.nested, data.total));
+    }
+
+    function poolSummary(data) {
+        var wrap = el('div', 'pool-summary');
+
+        function stat(label, value, warn) {
+            var s = el('div', 'pool-stat' + (warn ? ' is-warn' : ''));
+            s.appendChild(el('span', 's-label', label));
+            s.appendChild(el('span', 's-value', value));
+            wrap.appendChild(s);
+        }
+
+        stat('In pool', num(data.total));
+
+        if (data.unagentedPlayers !== undefined) {
+            stat('Unrepresented players', num(data.unagentedPlayers), data.unagentedPlayers > 0);
+        }
+        if (data.summary) {
+            stat('Leagues', num(data.summary.leagues));
+            stat('Cached world packs', num(data.summary.cachedWorldPacks));
+            stat('Stale packs', num(data.summary.staleWorldPacks), data.summary.staleWorldPacks > 0);
+        }
+
+        return wrap;
     }
 
     /**
@@ -393,13 +546,15 @@
 
         var thead = el('thead');
         var hr = el('tr');
-        [titleize(nested.dimension), 'Count', 'Share', ''].forEach(function (h, i) {
-            hr.appendChild(el('th', i === 1 ? 'num' : null, h));
+        [[titleize(nested.dimension), ''], ['Count', 'col-count num'], ['Share', 'col-share num'], ['', 'col-meter']].forEach(function (h) {
+            hr.appendChild(el('th', h[1], h[0]));
         });
         thead.appendChild(hr);
         table.appendChild(thead);
 
         var tbody = el('tbody');
+
+        var max = nested.rows.reduce(function (a, r) { return Math.max(a, r.count); }, 0) || 1;
 
         nested.rows.forEach(function (row, i) {
             var pct = total ? (row.count / total) * 100 : 0;
@@ -413,22 +568,20 @@
             btn.setAttribute('aria-expanded', 'false');
             btn.setAttribute('aria-controls', childId);
             btn.appendChild(el('i', 'fa fa-chevron-right caret'));
-            btn.appendChild(el('span', null, row.key));
+            btn.appendChild(el('span', null, prettyKey(row.key)));
             tdKey.appendChild(btn);
             tr.appendChild(tdKey);
 
-            tr.appendChild(el('td', 'num', num(row.count)));
+            tr.appendChild(el('td', 'col-count num', num(row.count)));
+            tr.appendChild(el('td', 'col-share num', pct.toFixed(1) + '%'));
 
-            var tdShare = el('td');
-            tdShare.appendChild(el('span', null, pct.toFixed(1) + '%'));
-            tr.appendChild(tdShare);
-
-            var tdMeter = el('td');
-            var meter = el('span', 'dash-meter');
+            var tdMeter = el('td', 'col-meter');
+            var track = el('div', 'm-track');
             var fill = el('i');
-            fill.style.width = Math.max(pct, 1).toFixed(2) + '%';
-            meter.appendChild(fill);
-            tdMeter.appendChild(meter);
+            fill.style.width = Math.max((row.count / max) * 100, 1).toFixed(2) + '%';
+            fill.style.background = ACCENT;
+            track.appendChild(fill);
+            tdMeter.appendChild(track);
             tr.appendChild(tdMeter);
 
             tbody.appendChild(tr);
@@ -441,16 +594,9 @@
             var cg = el('div', 'child-grid');
             nested.children.forEach(function (dim) {
                 var col = el('div');
-                col.appendChild(el('h6', null, titleize(dim)));
-                var ul = el('ul');
-                (row.children[dim] || []).forEach(function (c) {
-                    var li = el('li');
-                    li.appendChild(el('span', 'k', c.key));
-                    li.appendChild(el('span', 'v', num(c.count)));
-                    ul.appendChild(li);
-                });
-                if (!ul.children.length) { ul.appendChild(el('li', null, '—')); }
-                col.appendChild(ul);
+                col.appendChild(el('h4', null, titleize(dim)));
+                var rows = row.children[dim] || [];
+                col.appendChild(rows.length ? meterList(rows) : el('p', 'dash-empty', '—'));
                 cg.appendChild(col);
             });
 
@@ -477,20 +623,28 @@
     };
 
     function bindPanel(panel) {
-        panel.dataset.slot = 'panel';
         var render = RENDERERS[panel.id];
+        var loading = panel.querySelector('[data-panel-loading]');
+        var error = panel.querySelector('[data-panel-error]');
+        var content = panel.querySelector('[data-panel-content]');
+
+        function state(which) {
+            loading.classList.toggle('d-none', which !== 'loading');
+            error.classList.toggle('d-none', which !== 'error');
+            content.classList.toggle('d-none', which !== 'content');
+        }
 
         function run(force) {
-            show(panel, 'loading');
+            state('loading');
+            busy(panel, true);
             load(panel.dataset.src, force).then(function (data) {
-                var content = panel.querySelector('[data-panel-content]');
                 render(content, data);
                 stamp(panel.querySelector('[data-panel-stamp]'), data.generatedAt);
-                show(panel, 'content');
+                state('content');
             }).catch(function (err) {
                 panel.querySelector('[data-panel-error-text]').textContent = 'Could not load this panel (' + err.message + ').';
-                show(panel, 'error');
-            });
+                state('error');
+            }).finally(function () { busy(panel, false); });
         }
 
         panel.querySelectorAll('[data-panel-refresh]').forEach(function (btn) {
@@ -506,7 +660,7 @@
         var panel = root.querySelector('[data-pool-panel]');
         if (!panel) { return; }
 
-        var tabs = panel.querySelectorAll('[data-pool-tab]');
+        var tabs = Array.prototype.slice.call(panel.querySelectorAll('[data-pool-tab]'));
         var content = panel.querySelector('[data-pool-content]');
         var loading = panel.querySelector('[data-pool-loading]');
         var error = panel.querySelector('[data-pool-error]');
@@ -521,6 +675,7 @@
         function run(tab, force) {
             current = tab;
             state('loading');
+            busy(panel, true);
             load(tab.dataset.src, force).then(function (data) {
                 if (current !== tab) { return; }
                 renderPool(content, data);
@@ -530,16 +685,27 @@
                 if (current !== tab) { return; }
                 panel.querySelector('[data-pool-error-text]').textContent = 'Could not load this breakdown (' + err.message + ').';
                 state('error');
-            });
+            }).finally(function () { busy(panel, false); });
         }
 
-        tabs.forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                tabs.forEach(function (t) { t.setAttribute('aria-selected', 'false'); });
-                tab.setAttribute('aria-selected', 'true');
-                run(tab, false);
+        tabs.forEach(function (tab, i) {
+            tab.addEventListener('click', function () { select(i); });
+            // Arrow-key traversal, as a tablist is expected to support.
+            tab.addEventListener('keydown', function (e) {
+                var delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                if (!delta) { return; }
+                e.preventDefault();
+                var next = (i + delta + tabs.length) % tabs.length;
+                tabs[next].focus();
+                select(next);
             });
         });
+
+        function select(i) {
+            tabs.forEach(function (t) { t.setAttribute('aria-selected', 'false'); });
+            tabs[i].setAttribute('aria-selected', 'true');
+            run(tabs[i], false);
+        }
 
         panel.querySelectorAll('[data-pool-refresh]').forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -549,29 +715,21 @@
 
         run(tabs[0], false);
 
-        // Fill the pool KPI tiles without a second render pass.
-        Object.keys(POOL_KEYS).forEach(function (metric) {
-            var entity = POOL_KEYS[metric];
-            var tab = panel.querySelector('[data-pool-tab="' + entity + '"]');
+        // Inventory KPI tiles read the same cached pool payloads.
+        [['players', 'position'], ['staff', 'role'], ['agents', 'rating']].forEach(function (pair) {
+            var tab = panel.querySelector('[data-pool-tab="' + pair[0] + '"]');
             if (!tab) { return; }
-            load(tab.dataset.src, false).then(function (data) {
-                if (metric === 'poolAgents') {
-                    var scoutTab = panel.querySelector('[data-pool-tab="scouts"]');
-                    load(scoutTab.dataset.src, false).then(function (scouts) {
-                        paintPoolKpi(metric, scouts.total + data.total, num(scouts.total) + ' scouts · ' + num(data.total) + ' agents');
-                    });
-                } else {
-                    paintPoolKpi(metric, data.total);
-                }
-            }).catch(function () { /* the panel itself already reports the failure */ });
+            load(tab.dataset.src, false)
+                .then(function (data) { paintStockKpi(pair[0], data, pair[1]); })
+                .catch(function () { /* the panel itself already reports the failure */ });
         });
     }
 
     // ── Boot ─────────────────────────────────────────────────────────────
-    var strip = root.querySelector('[data-kpi-strip]');
-    if (strip) {
-        load(strip.dataset.src, false).then(paintKpis).catch(function () {
-            strip.querySelectorAll('[data-kpi-value]').forEach(function (n) {
+    var band = root.querySelector('[data-kpi-strip]');
+    if (band) {
+        load(band.dataset.src, false).then(paintKpis).catch(function () {
+            band.querySelectorAll('[data-kpi-value]').forEach(function (n) {
                 if (n.textContent === '—') { n.textContent = 'n/a'; }
             });
         });

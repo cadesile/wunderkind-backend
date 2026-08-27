@@ -2,10 +2,4 @@
 
 {{ dash.section('Leaderboards', 'all-time · top 10 · same data the API serves') }}
 
-{{ dash.panel(
-    'panel-leaderboards',
-    'Top Clubs by Category',
-    path('admin_stats_leaderboards'),
-    'leaderboards',
-    360
-) }}
+{{ dash.panel('panel-leaderboards', 'Top Clubs by Category', path('admin_stats_leaderboards'), 'leaderboards', 380) }}

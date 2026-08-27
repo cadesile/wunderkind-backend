@@ -2,13 +2,18 @@
 
 {{ dash.section('Platform', 'rolling windows · 30-day trend') }}
 
-<div class="row g-3" data-kpi-strip data-src="{{ path('admin_stats_growth') }}">
-    {{ dash.kpi('users',        'Users',         'fa-users',                stats.users) }}
-    {{ dash.kpi('clubs',        'Clubs',         'fa-shield-halved',        stats.clubs) }}
-    {{ dash.kpi('syncs',        'Syncs',         'fa-rotate',               stats.syncs) }}
-    {{ dash.kpi('activeClubs',  'Active Clubs',  'fa-signal',               null) }}
-    {{ dash.kpi('invalidSyncs', 'Invalid Syncs', 'fa-triangle-exclamation', stats.invalidSyncs, 'danger') }}
-    {{ dash.kpi('poolPlayers',  'Pool Players',  'fa-person-running',       null, 'success') }}
-    {{ dash.kpi('poolStaff',    'Pool Staff',    'fa-chalkboard-user',      null, 'success') }}
-    {{ dash.kpi('poolAgents',   'Scouts / Agents', 'fa-binoculars',         null, 'success') }}
+<div data-kpi-strip data-src="{{ path('admin_stats_growth') }}">
+    <div class="kpi-band kpi-band--activity">
+        {{ dash.kpi_activity('users',       'Users',        'fa-users',                stats.users) }}
+        {{ dash.kpi_activity('clubs',       'Clubs',        'fa-shield-halved',        stats.clubs) }}
+        {{ dash.kpi_activity('syncs',       'Syncs',        'fa-rotate',               stats.syncs) }}
+        {{ dash.kpi_activity('activeClubs', 'Active Clubs', 'fa-signal',               null) }}
+    </div>
+
+    <div class="kpi-band kpi-band--stock">
+        {{ dash.kpi_activity('invalidSyncs', 'Invalid Syncs', 'fa-triangle-exclamation', stats.invalidSyncs, 'kpi--danger') }}
+        {{ dash.kpi_stock('players', 'Pool Players', 'fa-person-running',  null, 'kpi--success') }}
+        {{ dash.kpi_stock('staff',   'Pool Staff',   'fa-chalkboard-user', null, 'kpi--success') }}
+        {{ dash.kpi_stock('agents',  'Agents',       'fa-handshake',       null, 'kpi--success') }}
+    </div>
 </div>

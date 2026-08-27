@@ -1,0 +1,396 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Build My Club — admin dashboard
+
+   Data-dense layout on top of the existing dark-retro admin theme. Loaded
+   page-scoped by dashboard.html.twig (with a cache-busting version query), so
+   nothing here reaches the CRUD screens.
+
+   Spacing follows a 4/8 rhythm with three section tiers (16 / 24 / 32).
+   Type follows one scale: 10 / 11 / 12 / 13 / 15 / 28px.
+   The chart palette below is the single source of truth — admin-dashboard.js
+   reads these custom properties rather than carrying its own hex list.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.dash {
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+
+    --fs-micro: 10px;
+    --fs-label: 11px;
+    --fs-body:  12px;
+    --fs-lede:  13px;
+    --fs-sub:   15px;
+    --fs-hero:  28px;
+
+    --surface:   #1e2448;
+    --surface-2: #1a2240;
+    --sunken:    #161b33;
+    --line:      #2c3566;
+    --line-soft: rgba(155, 176, 196, .14);
+    --ink:       #e8f0f4;
+    --ink-dim:   #9bb0c4;
+    --accent:    #E8CF59;
+
+    --dash-chart-1:  #E8CF59;
+    --dash-chart-2:  #3FAA7E;
+    --dash-chart-3:  #6D8AE8;
+    --dash-chart-4:  #e8852a;
+    --dash-chart-5:  #C77DB0;
+    --dash-chart-6:  #54c4d4;
+    --dash-chart-7:  #C44747;
+    --dash-chart-8:  #8fbf8f;
+    --dash-chart-9:  #b0a0d8;
+    --dash-chart-10: #d4a373;
+    --dash-chart-11: #7fd4c1;
+    --dash-chart-12: #9bb0c4;
+
+    --dash-grid: rgba(155, 176, 196, .10);
+    --dash-tick: #9bb0c4;
+
+    font-size: var(--fs-body);
+}
+
+/* ── Section headings ─────────────────────────────────────────────────────
+   Heading and note sit on separate visual planes with a hairline between —
+   previously they ran together into one long sentence.                     */
+.dash-heading {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-3);
+    margin: var(--sp-8) 0 var(--sp-3);
+}
+.dash-heading:first-child { margin-top: var(--sp-2); }
+.dash-heading > .h-title {
+    font-size: var(--fs-label);
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+    margin: 0;
+}
+.dash-heading > .h-rule { flex: 1 1 auto; height: 1px; background: var(--line); }
+.dash-heading > .h-note {
+    font-size: var(--fs-micro);
+    letter-spacing: .04em;
+    color: var(--ink-dim);
+    white-space: nowrap;
+}
+
+/* ── KPI tiles ────────────────────────────────────────────────────────────
+   Two bands. Activity tiles carry deltas + a sparkline; inventory tiles carry
+   a composition strip. Both bands are internally uniform in height so no row
+   ends up ragged.                                                           */
+.kpi-band {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--sp-3);
+}
+.kpi-band + .kpi-band { margin-top: var(--sp-3); }
+
+.kpi {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: var(--sp-3) var(--sp-4);
+    min-width: 0;
+}
+.kpi-band--activity .kpi { min-height: 132px; }
+.kpi-band--stock    .kpi { min-height: 96px; }
+
+.kpi-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+}
+.kpi-label .fa { font-size: 11px; width: 14px; text-align: center; opacity: .75; }
+
+.kpi-value {
+    font-size: var(--fs-hero);
+    line-height: 1;
+    font-weight: 700;
+    margin-top: var(--sp-2);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+}
+.kpi-value.is-muted { color: var(--ink-dim); }
+.kpi--danger  .kpi-value { color: var(--bs-danger, #C44747); }
+.kpi--success .kpi-value { color: var(--bs-success, #3FAA7E); }
+.kpi--danger.is-clean .kpi-value { color: var(--bs-success, #3FAA7E); }
+
+.kpi-sub {
+    font-size: var(--fs-micro);
+    color: var(--ink-dim);
+    margin-top: var(--sp-1);
+    min-height: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Deltas: always-visible text, tabular so the three columns line up. */
+.kpi-deltas {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--sp-2);
+    margin-top: auto;
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--line-soft);
+}
+.kpi-delta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.kpi-delta .d-window {
+    font-size: var(--fs-micro);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    opacity: .7;
+}
+.kpi-delta .d-value {
+    font-size: var(--fs-lede);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--bs-success, #3FAA7E);
+}
+.kpi-delta .d-value.is-zero { color: var(--ink-dim); font-weight: 400; }
+.kpi--danger .kpi-delta .d-value:not(.is-zero) { color: var(--bs-danger, #C44747); }
+
+/* The sparkline is decoration behind the numbers, never the only source. */
+.kpi-spark {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 46px;
+    opacity: .5;
+    pointer-events: none;
+}
+.kpi-band--activity .kpi { position: relative; overflow: hidden; }
+.kpi-band--activity .kpi > * { position: relative; z-index: 1; }
+
+/* Inventory tiles get a composition strip instead of dead space. */
+.kpi-strip { display: flex; height: 4px; margin-top: auto; gap: 1px; }
+.kpi-strip > i { display: block; height: 100%; }
+.kpi-strip-legend {
+    display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2);
+    margin-top: 6px; font-size: var(--fs-micro); color: var(--ink-dim);
+}
+.kpi-strip-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.kpi-strip-legend i { width: 7px; height: 7px; display: inline-block; }
+
+/* ── Panels ───────────────────────────────────────────────────────────── */
+.dash-panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+}
+.dash-panel-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+}
+.dash-panel-head .p-title {
+    font-size: var(--fs-label);
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin: 0;
+}
+.dash-panel-head .p-meta { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+.dash-panel-head .p-stamp { font-size: var(--fs-micro); color: var(--ink-dim); }
+.dash-panel-body { padding: var(--sp-4); }
+
+.dash-refresh {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px;
+    min-width: 30px; min-height: 30px;   /* comfortable hit area */
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    font: inherit; font-size: var(--fs-micro); letter-spacing: .06em; text-transform: uppercase;
+    padding: 0 var(--sp-2);
+    cursor: pointer;
+    transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+.dash-refresh:hover { color: #0f1420; background: var(--accent); border-color: var(--accent); }
+.dash-refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dash-refresh.is-busy .fa { animation: dash-spin 900ms linear infinite; }
+@keyframes dash-spin { to { transform: rotate(360deg); } }
+
+/* Skeletons reserve the panel's final height so nothing shifts. */
+.dash-skeleton { display: flex; flex-direction: column; gap: var(--sp-2); }
+.dash-skeleton i {
+    display: block; height: 10px;
+    background: linear-gradient(90deg, rgba(155,176,196,.06), rgba(155,176,196,.16), rgba(155,176,196,.06));
+    background-size: 200% 100%;
+    animation: dash-shimmer 1.4s linear infinite;
+}
+.dash-skeleton i:nth-child(2) { width: 84%; }
+.dash-skeleton i:nth-child(3) { width: 62%; }
+.dash-skeleton i:nth-child(4) { width: 73%; }
+@keyframes dash-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.dash-error { display: flex; align-items: center; gap: var(--sp-3); color: var(--bs-danger, #C44747); font-size: var(--fs-body); }
+
+/* ── Segmented tabs ───────────────────────────────────────────────────── */
+.dash-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--line);
+    margin-bottom: var(--sp-4);
+}
+.dash-tab {
+    background: transparent;
+    border: 0;
+    border-right: 1px solid var(--line);
+    color: var(--ink-dim);
+    font: inherit;
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: var(--sp-2) var(--sp-4);
+    min-height: 32px;
+    cursor: pointer;
+    transition: background-color 180ms ease, color 180ms ease;
+}
+.dash-tab:last-child { border-right: 0; }
+.dash-tab:hover { background: var(--sunken); color: var(--ink); }
+.dash-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dash-tab[aria-selected="true"] { background: var(--accent); color: #0f1420; }
+
+/* ── Pool panel: summary line + facets ────────────────────────────────── */
+.pool-summary {
+    display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6);
+    padding-bottom: var(--sp-3);
+    margin-bottom: var(--sp-4);
+    border-bottom: 1px solid var(--line);
+}
+.pool-stat { display: flex; flex-direction: column; gap: 2px; }
+.pool-stat .s-label { font-size: var(--fs-micro); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); }
+.pool-stat .s-value { font-size: var(--fs-sub); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pool-stat.is-warn .s-value { color: var(--bs-warning, #e8852a); }
+
+/*
+   Small facets render as labelled meter lists rather than charts: exact values
+   stay visible (AAA) and eight sparse canvases stop competing for attention.
+   Only nationality — the one facet with enough categories to need it — keeps a
+   real chart.
+*/
+.facet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-6);
+}
+.facet {
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    padding: var(--sp-3);
+    min-width: 0;
+}
+.facet--wide { grid-column: 1 / -1; }
+.facet > h3 {
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 var(--sp-3);
+}
+.facet-canvas { height: 260px; position: relative; }
+
+.meters { display: flex; flex-direction: column; gap: 6px; }
+.meter { display: grid; grid-template-columns: minmax(0, 1fr) 52px; gap: var(--sp-2); align-items: center; }
+.meter .m-head { display: flex; justify-content: space-between; gap: var(--sp-2); grid-column: 1 / -1; }
+.meter .m-key { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter .m-val { font-size: var(--fs-body); font-weight: 700; font-variant-numeric: tabular-nums; }
+.meter .m-pct { font-size: var(--fs-micro); color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+/* Standalone, not scoped to .meter — the breakdown table reuses the same bar. */
+.m-track { display: block; height: 5px; background: var(--line-soft); }
+.m-track > i { display: block; height: 100%; background: var(--accent); transition: width 220ms ease; }
+.meter .m-track { grid-column: 1 / -1; }
+
+/* ── Breakdown table ──────────────────────────────────────────────────── */
+.dash-scroll { overflow-x: auto; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: var(--fs-body); }
+.dash-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--surface-2);
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    text-align: left;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+.dash-table td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.dash-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash-table .col-rank  { width: 44px; }
+.dash-table .col-score { width: 22%; min-width: 140px; }
+.dash-table .col-label { width: 26%; min-width: 120px; }
+.dash-table .col-count { width: 90px; }
+.dash-table .col-share { width: 68px; }
+.dash-table .col-meter { width: 34%; min-width: 120px; }
+.dash-table tbody tr:not(.dash-children):hover > td { background: rgba(255, 255, 255, .03); }
+.dash-table .rank-badge { display: inline-block; min-width: 20px; font-weight: 700; }
+.dash-table tbody tr:nth-child(-n+3) .rank-badge { color: var(--accent); }
+
+.dash-toggle {
+    display: flex; align-items: center; gap: var(--sp-2);
+    background: none; border: 0; color: inherit; font: inherit;
+    padding: var(--sp-1) 0; min-height: 28px; width: 100%;
+    text-align: left; cursor: pointer;
+}
+.dash-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dash-toggle .caret { font-size: 9px; width: 10px; color: var(--ink-dim); transition: transform 180ms ease; }
+.dash-toggle:hover .caret { color: var(--accent); }
+.dash-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); color: var(--accent); }
+
+.dash-children > td { background: var(--sunken); padding: 0 var(--sp-3) 0 var(--sp-6); }
+.dash-children .child-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: var(--sp-4);
+    padding: var(--sp-3) 0 var(--sp-4);
+}
+.dash-children h4 {
+    font-size: var(--fs-micro); font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-dim); margin: 0 0 6px;
+}
+
+.dash-empty { color: var(--ink-dim); font-size: var(--fs-body); padding: var(--sp-4) 0; margin: 0; }
+.dash-foot { color: var(--ink-dim); font-size: var(--fs-micro); padding-top: var(--sp-3); margin: 0; }
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 1199.98px) {
+    .kpi-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 575.98px) {
+    .kpi-band { grid-template-columns: 1fr; }
+    .kpi-value { font-size: 22px; }
+    .dash-heading { flex-wrap: wrap; }
+    .dash-heading > .h-rule { display: none; }
+    .dash-panel-body { padding: var(--sp-3); }
+    .facet-canvas { height: 300px; }
+    .dash-tabs { display: flex; width: 100%; }
+    .dash-tab { flex: 1 1 auto; padding: var(--sp-2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dash-skeleton i { animation: none; }
+    .dash-refresh.is-busy .fa { animation: none; }
+    .dash-toggle .caret, .dash-tab, .dash-refresh, .m-track > i { transition: none; }
+}

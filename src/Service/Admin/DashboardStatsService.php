@@ -85,10 +85,15 @@ class DashboardStatsService
                 ],
                 'trend' => [
                     'days'   => $this->trendDayLabels(),
+                    // Every headline metric gets a series so all four activity
+                    // tiles are the same height — a tile missing its sparkline
+                    // leaves a ragged row.
                     'series' => [
-                        'users' => $this->dailySeries('"user"', 'created_at'),
-                        'clubs' => $this->dailySeries('club', 'created_at'),
-                        'syncs' => $this->dailySeries('sync_record', 'server_timestamp'),
+                        'users'        => $this->dailySeries('"user"', 'created_at'),
+                        'clubs'        => $this->dailySeries('club', 'created_at'),
+                        'syncs'        => $this->dailySeries('sync_record', 'server_timestamp'),
+                        'invalidSyncs' => $this->dailySeries('sync_record', 'server_timestamp', 'is_valid = false'),
+                        'activeClubs'  => $this->dailyDistinctClubs(),
                     ],
                 ],
                 'generatedAt' => (new \DateTimeImmutable())->format(\DATE_ATOM),
@@ -156,12 +161,37 @@ class DashboardStatsService
      *
      * @return list<int>
      */
-    private function dailySeries(string $table, string $column): array
+    private function dailySeries(string $table, string $column, ?string $extraWhere = null): array
     {
+        $and = $extraWhere !== null ? " AND {$extraWhere}" : '';
+
         $rows = $this->connection->fetchAllAssociative(
             "SELECT to_char(date_trunc('day', {$column}), 'YYYY-MM-DD') AS d, COUNT(*) AS cnt
              FROM {$table}
-             WHERE {$column} >= date_trunc('day', NOW()) - INTERVAL '" . (self::TREND_DAYS - 1) . " days'
+             WHERE {$column} >= date_trunc('day', NOW()) - INTERVAL '" . (self::TREND_DAYS - 1) . " days'{$and}
+             GROUP BY 1 ORDER BY 1"
+        );
+
+        $byDay = [];
+        foreach ($rows as $row) {
+            $byDay[(string) $row['d']] = (int) $row['cnt'];
+        }
+
+        return array_map(static fn (string $day): int => $byDay[$day] ?? 0, $this->trendDayLabels());
+    }
+
+    /**
+     * Distinct clubs syncing per day — the daily counterpart to activeClubs().
+     * Deliberately not a sum: a club syncing twice in a day counts once.
+     *
+     * @return list<int>
+     */
+    private function dailyDistinctClubs(): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT to_char(date_trunc('day', server_timestamp), 'YYYY-MM-DD') AS d, COUNT(DISTINCT club_id) AS cnt
+             FROM sync_record
+             WHERE server_timestamp >= date_trunc('day', NOW()) - INTERVAL '" . (self::TREND_DAYS - 1) . " days'
              GROUP BY 1 ORDER BY 1"
         );
 
