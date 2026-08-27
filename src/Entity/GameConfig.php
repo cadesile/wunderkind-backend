@@ -747,10 +747,10 @@ class GameConfig
      */
     #[ORM\Column(type: 'json')]
     private array $maxSponsorsByTier = [
-        'local'    => 3,
+        'local'    => 5,
         'regional' => 5,
-        'national' => 7,
-        'elite'    => 10,
+        'national' => 5,
+        'elite'    => 5,
     ];
 
     /**
@@ -760,10 +760,10 @@ class GameConfig
      */
     #[ORM\Column(type: 'json')]
     private array $maxInvestorsByTier = [
-        'local'    => 3,
-        'regional' => 5,
-        'national' => 7,
-        'elite'    => 10,
+        'local'    => 2,
+        'regional' => 2,
+        'national' => 2,
+        'elite'    => 3,
     ];
 
     public function getMaxSponsorsByTier(): array { return $this->maxSponsorsByTier; }
