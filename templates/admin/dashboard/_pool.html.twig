@@ -1,0 +1,48 @@
+{% import 'admin/dashboard/_macros.html.twig' as dash %}
+
+{{ dash.section('Entity Pool', 'expand a row to drill down') }}
+
+<div class="card dash-panel" data-pool-panel>
+    <div class="card-header">
+        <span>Pool Breakdown</span>
+        <span class="panel-actions">
+            <span class="text-muted" data-panel-stamp style="font-size:.65rem;letter-spacing:0;text-transform:none;"></span>
+            <button type="button" class="dash-refresh" data-pool-refresh>
+                <i class="fa fa-rotate" aria-hidden="true"></i>
+                <span class="visually-hidden">Refresh pool breakdown</span>
+            </button>
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="dash-tabs" role="tablist" aria-label="Pool entity">
+            {% for entity, label in {
+                'players': 'Players',
+                'staff':   'Staff',
+                'scouts':  'Scouts',
+                'agents':  'Agents',
+                'world':   'NPC Clubs & World'
+            } %}
+                <button type="button" class="dash-tab" role="tab"
+                        id="pool-tab-{{ entity }}"
+                        aria-controls="pool-region"
+                        aria-selected="{{ loop.first ? 'true' : 'false' }}"
+                        data-pool-tab="{{ entity }}"
+                        data-src="{{ path('admin_stats_pool', {entity: entity}) }}"
+                        data-panel-key="pool.{{ entity }}">{{ label }}</button>
+            {% endfor %}
+        </div>
+
+        <div id="pool-region" role="tabpanel" aria-live="polite">
+            <div class="dash-skeleton" data-pool-loading style="min-height:420px;" role="status">
+                <span class="visually-hidden">Loading pool breakdown…</span>
+                <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="dash-error d-none" data-pool-error role="alert">
+                <i class="fa fa-triangle-exclamation" aria-hidden="true"></i>
+                <span data-pool-error-text></span>
+                <button type="button" class="dash-refresh" data-pool-refresh>Retry</button>
+            </div>
+            <div class="d-none" data-pool-content style="min-height:420px;"></div>
+        </div>
+    </div>
+</div>

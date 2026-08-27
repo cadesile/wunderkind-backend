@@ -11,9 +11,22 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity]
 #[ORM\Table(name: '`user`')]
+#[ORM\Index(name: 'idx_user_created_at', columns: ['created_at'])]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     public const ROLE_CLUB = 'ROLE_CLUB';
+
+    /**
+     * Domain used for device-bound guest accounts (see GuestAuthService).
+     * Accounts registered under this domain are auto-verified since the
+     * address is synthetic and can never receive a real verification email.
+     */
+    public const GUEST_EMAIL_DOMAIN = '@guest.buildmyclub.local';
+
+    public static function isGuestEmail(string $email): bool
+    {
+        return str_ends_with($email, self::GUEST_EMAIL_DOMAIN);
+    }
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]

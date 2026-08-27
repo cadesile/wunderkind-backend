@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: ClubRepository::class)]
+#[ORM\Index(name: 'idx_club_created_at', columns: ['created_at'])]
 class Club
 {
     #[ORM\Id]

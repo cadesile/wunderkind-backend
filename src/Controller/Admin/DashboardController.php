@@ -63,33 +63,18 @@ class DashboardController extends AbstractDashboardController
 
     // ── Dashboard ─────────────────────────────────────────────────────────
 
+    #[IsGranted('ROLE_ADMIN')]
     public function index(): Response
     {
-        $conn = $this->em->getConnection();
-
-        $byNationality = $conn->fetchAllAssociative(
-            'SELECT nationality, COUNT(*) AS cnt FROM player GROUP BY nationality ORDER BY cnt DESC LIMIT 15'
-        );
-        $byPosition = $conn->fetchAllAssociative(
-            'SELECT position, COUNT(*) AS cnt FROM player GROUP BY position ORDER BY cnt DESC'
-        );
-        $byAge = $conn->fetchAllAssociative(
-            'SELECT (EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM date_of_birth)) AS age, COUNT(*) AS cnt FROM player GROUP BY age ORDER BY age'
-        );
-
+        // Only the headline totals are rendered server-side so the shell paints
+        // immediately; every heavy panel (growth, leaderboards, pool breakdowns)
+        // is fetched by the page from AdminStatsController and cached there.
         return $this->render('admin/dashboard.html.twig', [
             'stats' => [
-                'users'           => $this->em->getRepository(User::class)->count([]),
-                'academies'       => $this->em->getRepository(Club::class)->count([]),
-                'syncs'           => $this->em->getRepository(SyncRecord::class)->count([]),
-                'invalidSyncs'    => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
-                'poolPlayers' => (int) $conn->fetchOne('SELECT COUNT(*) FROM player'),
-                'poolStaff'   => (int) $conn->fetchOne('SELECT COUNT(*) FROM staff'),
-            ],
-            'charts' => [
-                'byNationality' => $byNationality,
-                'byPosition'    => $byPosition,
-                'byAge'         => $byAge,
+                'users'        => $this->em->getRepository(User::class)->count([]),
+                'clubs'        => $this->em->getRepository(Club::class)->count([]),
+                'syncs'        => $this->em->getRepository(SyncRecord::class)->count([]),
+                'invalidSyncs' => $this->em->getRepository(SyncRecord::class)->count(['isValid' => false]),
             ],
         ]);
     }

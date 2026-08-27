@@ -23,16 +23,10 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 #[Route('/api')]
 class SyncController extends AbstractController
 {
-    /**
-     * Domain used for device-bound guest accounts (see GuestAuthService).
-     * Accounts registered under this domain are auto-verified since the
-     * address is synthetic and can never receive a real verification email.
-     */
-    private const GUEST_EMAIL_DOMAIN = '@guest.buildmyclub.local';
-
+    /** @see User::GUEST_EMAIL_DOMAIN — the canonical definition lives on the entity. */
     private static function isGuestEmail(string $email): bool
     {
-        return str_ends_with($email, self::GUEST_EMAIL_DOMAIN);
+        return User::isGuestEmail($email);
     }
 
     /**

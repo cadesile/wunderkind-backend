@@ -1,0 +1,71 @@
+{#
+   Shared dashboard chrome. Extracted so the eight KPI tiles and four section
+   headings stop being copy-pasted markup with inline styles.
+#}
+
+{% macro section(title, note) %}
+    <h2 class="admin-section-heading">
+        {{ title }}
+        {% if note %}<span class="heading-note">{{ note }}</span>{% endif %}
+    </h2>
+{% endmacro %}
+
+{#
+   A KPI tile. `value` is the all-time figure; deltas are filled in client-side
+   from the growth payload keyed by `metric`. Values render as text always —
+   never hover-only — so the tile is readable without a pointer.
+#}
+{% macro kpi(metric, label, icon, value, tone) %}
+    <div class="col-6 col-lg-3">
+        <div class="card kpi-tile" data-kpi="{{ metric }}">
+            <div class="card-body">
+                <div class="kpi-label"><i class="fa {{ icon }}" aria-hidden="true"></i>{{ label }}</div>
+                <div class="kpi-value {{ tone ? 'text-' ~ tone : '' }}" data-kpi-value>{{ value is null ? '—' : value|number_format }}</div>
+                <div class="kpi-sub" data-kpi-sub></div>
+                <div class="kpi-deltas" data-kpi-deltas>
+                    {% for w in ['24h', '7d', '30d'] %}
+                        <span class="kpi-delta">
+                            <span class="d-window">{{ w }}</span>
+                            <span class="d-value" data-window="{{ w }}">–</span>
+                        </span>
+                    {% endfor %}
+                </div>
+                <div class="kpi-spark"><canvas data-kpi-spark aria-hidden="true"></canvas></div>
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+
+{#
+   A lazily-loaded panel: header with its own refresh control, a skeleton sized
+   to the panel's final height, and an error slot. `panel` is the cache key the
+   refresh button clears; `src` is the JSON endpoint.
+#}
+{% macro panel(id, title, src, panel_key, height, note) %}
+    <div class="card dash-panel" data-panel id="{{ id }}"
+         data-src="{{ src }}" data-panel-key="{{ panel_key }}">
+        <div class="card-header">
+            <span>{{ title }}</span>
+            {% if note %}<span class="text-muted fw-normal text-lowercase" style="letter-spacing:0;">{{ note }}</span>{% endif %}
+            <span class="panel-actions">
+                <span class="text-muted" data-panel-stamp style="font-size:.65rem;letter-spacing:0;text-transform:none;"></span>
+                <button type="button" class="dash-refresh" data-panel-refresh>
+                    <i class="fa fa-rotate" aria-hidden="true"></i>
+                    <span class="visually-hidden">Refresh {{ title }}</span>
+                </button>
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="dash-skeleton" data-panel-loading style="min-height:{{ height|default(220) }}px;" role="status">
+                <span class="visually-hidden">Loading {{ title }}…</span>
+                <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="dash-error d-none" data-panel-error role="alert">
+                <i class="fa fa-triangle-exclamation" aria-hidden="true"></i>
+                <span data-panel-error-text></span>
+                <button type="button" class="dash-refresh" data-panel-refresh>Retry</button>
+            </div>
+            <div class="d-none" data-panel-content style="min-height:{{ height|default(220) }}px;"></div>
+        </div>
+    </div>
+{% endmacro %}

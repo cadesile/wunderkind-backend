@@ -6,6 +6,7 @@ use App\Entity\Guardian;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
+use App\Service\Admin\StatBuckets;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -269,78 +270,109 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns three summary maps for the player admin panel.
-     * Age buckets are computed in PHP from dateOfBirth to avoid PostgreSQL-specific DQL.
+     * Backwards-compatible view of {@see getPoolBreakdown()} for the Player CRUD index.
      *
-     * @return array{byNationality: array<string,int>, byPosition: array<string,int>, byAge: array<string,int>}
+     * @return array{byNationality: array<string,int>, byPosition: array<string,int>, byAge: array<string,int>, byAbility: array<string,int>}
      */
     public function getAdminSummary(): array
     {
-        // ── By nationality ────────────────────────────────────────────────────
-        $natRows = $this->createQueryBuilder('p')
-            ->select('p.nationality AS nationality, COUNT(p.id) AS cnt')
-            ->groupBy('p.nationality')
-            ->orderBy('cnt', 'DESC')
-            ->getQuery()
-            ->getResult();
+        $breakdown = $this->getPoolBreakdown();
 
-        $byNationality = [];
-        foreach ($natRows as $row) {
-            $byNationality[(string) $row['nationality']] = (int) $row['cnt'];
-        }
+        return [
+            'byNationality' => $breakdown['maps']['nationality'],
+            'byPosition'    => $breakdown['maps']['position'],
+            'byAge'         => $breakdown['maps']['age'],
+            'byAbility'     => $breakdown['maps']['ability'],
+        ];
+    }
 
-        // ── By position ───────────────────────────────────────────────────────
-        $posRows = $this->createQueryBuilder('p')
-            ->select('p.position AS position, COUNT(p.id) AS cnt')
-            ->groupBy('p.position')
-            ->getQuery()
-            ->getResult();
-
-        $byPosition = [];
-        foreach ($posRows as $row) {
-            $pos = $row['position'] instanceof PlayerPosition
-                ? $row['position']->value
-                : (string) $row['position'];
-            $byPosition[$pos] = (int) $row['cnt'];
-        }
-
-        $byAge = ['U16' => 0, '16-18' => 0, '19-21' => 0, '22-25' => 0, '26-30' => 0, '30+' => 0];
-        $byAbility = ['1-20' => 0, '21-40' => 0, '41-60' => 0, '61-80' => 0, '81-100' => 0];
-        $now   = new \DateTimeImmutable();
-
-        $playerData = $this->createQueryBuilder('p')
-            ->select('p.dateOfBirth AS dob, p.currentAbility AS ability')
+    /**
+     * Full pool breakdown for the admin dashboard.
+     *
+     * One scalar-column pass over the pool, bucketed in PHP: age is a computed
+     * property ({@see Player::getAge()}) so it cannot be grouped in DQL, and
+     * doing the remaining facets in the same pass keeps this to a single query
+     * instead of six.
+     *
+     * @return array{
+     *     total: int,
+     *     maps: array<string, array<string,int>>,
+     *     facets: array<string, list<array{key: string, count: int}>>,
+     *     nested: array{dimension: string, children: list<string>, rows: list<array{key: string, count: int, children: array<string, list<array{key: string, count: int}>>}>}
+     * }
+     */
+    public function getPoolBreakdown(): array
+    {
+        $rows = $this->createQueryBuilder('p')
+            ->select(
+                'p.nationality AS nationality',
+                'p.position AS position',
+                'p.dateOfBirth AS dob',
+                'p.currentAbility AS ability',
+                'p.potential AS potential',
+                'p.recruitmentSource AS source',
+                'IDENTITY(p.agent) AS agentId'
+            )
             ->getQuery()
             ->getArrayResult();
 
-        foreach ($playerData as $row) {
-            // Age breakdown
-            $dob = $row['dob'];
-            if ($dob instanceof \DateTimeInterface) {
-                $age    = (int) $dob->diff($now)->y;
-                $ageBucket = match (true) {
-                    $age < 16   => 'U16',
-                    $age <= 18  => '16-18',
-                    $age <= 21  => '19-21',
-                    $age <= 25  => '22-25',
-                    $age < 30   => '26-30',
-                    default     => '30+',
-                };
-                $byAge[$ageBucket]++;
-            }
+        $now = new \DateTimeImmutable();
 
-            // Ability breakdown
-            $a = (int) $row['ability'];
-            $abilityBucket = match (true) {
-                $a <= 20 => '1-20',
-                $a <= 40 => '21-40',
-                $a <= 60 => '41-60',
-                $a <= 80 => '61-80',
-                default  => '81-100',
-            };
-            $byAbility[$abilityBucket]++;
+        $nationality = [];
+        $position    = [];
+        $source      = [];
+        $age         = StatBuckets::seed(StatBuckets::AGE_LABELS);
+        $ability     = StatBuckets::seed(StatBuckets::ABILITY_LABELS);
+        $potential   = StatBuckets::seed(StatBuckets::ABILITY_LABELS);
+        $agentStatus = ['Represented' => 0, 'Unagented' => 0];
+
+        // nationality => {position|ability|age} => count
+        $nested = [];
+
+        foreach ($rows as $row) {
+            $nat = (string) ($row['nationality'] ?? StatBuckets::UNKNOWN);
+            $pos = $row['position'] instanceof PlayerPosition
+                ? $row['position']->value
+                : (string) $row['position'];
+            $src = $row['source'] instanceof \BackedEnum
+                ? (string) $row['source']->value
+                : (string) $row['source'];
+
+            $ageBucket     = StatBuckets::age($row['dob'] instanceof \DateTimeInterface ? $row['dob'] : null, $now);
+            $abilityBucket = StatBuckets::ability((int) $row['ability']);
+            $potBucket     = StatBuckets::ability((int) $row['potential']);
+
+            $nationality[$nat] = ($nationality[$nat] ?? 0) + 1;
+            $position[$pos]    = ($position[$pos] ?? 0) + 1;
+            $source[$src]      = ($source[$src] ?? 0) + 1;
+            $age[$ageBucket]++;
+            $ability[$abilityBucket]++;
+            $potential[$potBucket]++;
+            $agentStatus[$row['agentId'] === null ? 'Unagented' : 'Represented']++;
+
+            $nested[$nat]['position'][$pos]        = ($nested[$nat]['position'][$pos] ?? 0) + 1;
+            $nested[$nat]['ability'][$abilityBucket] = ($nested[$nat]['ability'][$abilityBucket] ?? 0) + 1;
+            $nested[$nat]['age'][$ageBucket]         = ($nested[$nat]['age'][$ageBucket] ?? 0) + 1;
         }
 
-        return compact('byNationality', 'byPosition', 'byAge', 'byAbility');
+        arsort($nationality);
+        arsort($position);
+        arsort($source);
+
+        return [
+            'total'  => count($rows),
+            'maps'   => compact('nationality', 'position', 'age', 'ability'),
+            'facets' => [
+                'nationality' => StatBuckets::facet($nationality),
+                'position'    => StatBuckets::facet($position),
+                'ability'     => StatBuckets::facet($ability),
+                'age'         => StatBuckets::facet($age),
+                'potential'   => StatBuckets::facet($potential),
+                'source'      => StatBuckets::facet($source),
+                'agent'       => StatBuckets::facet($agentStatus),
+            ],
+            'nested' => StatBuckets::nested('nationality', $nationality, $nested, ['position', 'ability', 'age']),
+        ];
     }
+
 }

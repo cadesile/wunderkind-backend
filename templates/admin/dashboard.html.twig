@@ -1,227 +1,25 @@
 {% extends '@EasyAdmin/layout.html.twig' %}
 
 {% block content %}
+    {#
+       Shell only. The headline totals below are server-rendered so the page
+       paints immediately; every panel fetches its own JSON from
+       AdminStatsController, which caches each aggregate for 5 minutes.
+    #}
+    <div data-dashboard
+         data-refresh-url="{{ path('admin_stats_refresh') }}"
+         data-refresh-token="{{ csrf_token('admin_stats_refresh') }}">
 
-<div class="row g-3 mt-1">
+        {% include 'admin/dashboard/_kpi_strip.html.twig' %}
 
-    {# ── Platform stats ────────────────────────────────────────────────── #}
-    <div class="col-12">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-primary, #0d6efd);padding-left:.5rem;">Platform</h6>
+        {% include 'admin/dashboard/_growth.html.twig' %}
+
+        {% include 'admin/dashboard/_leaderboards.html.twig' %}
+
+        {% include 'admin/dashboard/_pool.html.twig' %}
     </div>
 
-    <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-users fa-lg"></i></div>
-                <div class="text-muted small mb-1">Total Users</div>
-                <div class="fs-3 fw-bold">{{ stats.users }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-school fa-lg"></i></div>
-                <div class="text-muted small mb-1">Academies</div>
-                <div class="fs-3 fw-bold">{{ stats.academies }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-sync fa-lg"></i></div>
-                <div class="text-muted small mb-1">Total Syncs</div>
-                <div class="fs-3 fw-bold">{{ stats.syncs }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-danger mb-2"><i class="fa fa-triangle-exclamation fa-lg"></i></div>
-                <div class="text-muted small mb-1">Invalid Syncs</div>
-                <div class="fs-3 fw-bold text-danger">{{ stats.invalidSyncs }}</div>
-            </div>
-        </div>
-    </div>
-
-    {# ── Pool stats ────────────────────────────────────────────────────── #}
-    <div class="col-12 mt-2">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-success,#198754);padding-left:.5rem;">Market Pool</h6>
-    </div>
-
-    <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-person-running fa-lg"></i></div>
-                <div class="text-muted small mb-1">Players in Pool</div>
-                <div class="fs-3 fw-bold text-success">{{ stats.poolPlayers }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card text-center">
-            <div class="card-body py-3">
-                <div class="text-muted mb-2"><i class="fa fa-chalkboard-user fa-lg"></i></div>
-                <div class="text-muted small mb-1">Staff in Pool</div>
-                <div class="fs-3 fw-bold text-success">{{ stats.poolStaff }}</div>
-            </div>
-        </div>
-    </div>
-
-    {# ── Charts ────────────────────────────────────────────────────────── #}
-    <div class="col-12 mt-2">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-secondary,#6c757d);padding-left:.5rem;">Pool Players — Breakdown</h6>
-    </div>
-
-    {# Nationality chart #}
-    <div class="col-12 col-xl-6">
-        <div class="card">
-            <div class="card-header py-2">
-                <span class="fw-semibold small">By Nationality</span>
-                <span class="text-muted small ms-1">(pool)</span>
-            </div>
-            <div class="card-body" style="height:260px;">
-                <canvas id="chartNationality"></canvas>
-            </div>
-        </div>
-    </div>
-
-    {# Position + Age side by side #}
-    <div class="col-12 col-xl-6">
-        <div class="row g-3 h-100">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header py-2">
-                        <span class="fw-semibold small">By Position</span>
-                        <span class="text-muted small ms-1">(pool)</span>
-                    </div>
-                    <div class="card-body" style="height:170px;">
-                        <canvas id="chartPosition"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header py-2">
-                        <span class="fw-semibold small">By Age</span>
-                        <span class="text-muted small ms-1">(pool)</span>
-                    </div>
-                    <div class="card-body" style="height:170px;">
-                        <canvas id="chartAge"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-{# Chart.js #}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script>
-(function () {
-    const COLORS = [
-        '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
-        '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
-        '#54a0d4','#f9896b','#34b49e','#a48cf4','#fb8072',
-    ];
-
-    function makeGradient(ctx, color) {
-        const g = ctx.createLinearGradient(0, 0, 0, 200);
-        g.addColorStop(0, color + 'cc');
-        g.addColorStop(1, color + '33');
-        return g;
-    }
-
-    // ── Nationality (horizontal bar) ──────────────────────────────────
-    (function () {
-        const raw = {{ charts.byNationality | json_encode | raw }};
-        const labels = raw.map(r => r.nationality);
-        const data   = raw.map(r => parseInt(r.cnt));
-        const ctx    = document.getElementById('chartNationality').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    data,
-                    backgroundColor: labels.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
-                    borderColor:     labels.map((_, i) => COLORS[i % COLORS.length]),
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }],
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { beginAtZero: true, ticks: { precision: 0 } },
-                    y: { ticks: { font: { size: 11 } } },
-                },
-            },
-        });
-    })();
-
-    // ── Position (doughnut) ───────────────────────────────────────────
-    (function () {
-        const posLabels = { GK: 'GK', DEF: 'DEF', MID: 'MID', ATT: 'ATT' };
-        const raw    = {{ charts.byPosition | json_encode | raw }};
-        const labels = raw.map(r => posLabels[r.position] ?? r.position);
-        const data   = raw.map(r => parseInt(r.cnt));
-        const ctx    = document.getElementById('chartPosition').getContext('2d');
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels,
-                datasets: [{
-                    data,
-                    backgroundColor: COLORS.slice(0, labels.length),
-                    borderWidth: 2,
-                }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } },
-                },
-            },
-        });
-    })();
-
-    // ── Age (bar) ─────────────────────────────────────────────────────
-    (function () {
-        const raw    = {{ charts.byAge | json_encode | raw }};
-        const labels = raw.map(r => r.age + ' yrs');
-        const data   = raw.map(r => parseInt(r.cnt));
-        const ctx    = document.getElementById('chartAge').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    data,
-                    backgroundColor: makeGradient(ctx, '#4e79a7'),
-                    borderColor: '#4e79a7',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { precision: 0 } },
-                    x: { ticks: { font: { size: 11 } } },
-                },
-            },
-        });
-    })();
-})();
-</script>
+    {# Page-scoped so Chart.js is not shipped on every admin CRUD screen. #}
+    <script src="{{ asset('vendor/chart.umd.min.js') }}"></script>
+    <script src="{{ asset('admin-dashboard.js') }}"></script>
 {% endblock %}

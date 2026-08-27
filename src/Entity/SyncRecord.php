@@ -11,6 +11,8 @@ use Symfony\Component\Uid\UuidV7;
  * against the global leaderboards.
  */
 #[ORM\Entity(repositoryClass: \App\Repository\SyncRecordRepository::class)]
+#[ORM\Index(name: 'idx_sync_record_server_timestamp', columns: ['server_timestamp'])]
+#[ORM\Index(name: 'idx_sync_record_club_server_ts', columns: ['club_id', 'server_timestamp'])]
 class SyncRecord
 {
     #[ORM\Id]
