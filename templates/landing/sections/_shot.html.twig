@@ -2,17 +2,24 @@
    One screenshot, two widths.
 
    Captures are 1080×2400, so the emitted intrinsic sizes are 420×934 and
-   900×2000. Both are stated on the tag: without width/height the browser
-   cannot reserve space and every image shifts the layout as it arrives.
+   900×2000. Both are stated on the tag so the browser can reserve space before
+   the image arrives (CLS). Note landing.css carries `img[width][height] {
+   height: auto }` — without it those attributes fight the `width: 100%` rules
+   and squash the image to a literal pixel height.
+
+   `sizes` must describe the CSS width the image will actually occupy, or the
+   browser picks from srcset against the wrong number: the gallery frames are
+   190px, and a default of 420px made every one of them download the 900w file.
 
    `eager` is for the first hero slide only — everything else is below the fold.
 #}
-{% macro img(name, alt, eager = false, wide = false) %}
+{% macro img(name, alt, eager = false, display_width = 420) %}
     {%- set base = '/screenshots/2026-08/' ~ name -%}
-    <img src="{{ base }}-{{ wide ? '900' : '420' }}.webp"
+    {%- set src = display_width > 460 ? base ~ '-900.webp' : base ~ '-420.webp' -%}
+    <img src="{{ src }}"
          srcset="{{ base }}-420.webp 420w, {{ base }}-900.webp 900w"
-         sizes="{{ wide ? '(max-width: 900px) 100vw, 900px' : '(max-width: 480px) 90vw, 420px' }}"
-         width="{{ wide ? 900 : 420 }}" height="{{ wide ? 2000 : 934 }}"
+         sizes="(max-width: 480px) 90vw, {{ display_width }}px"
+         width="420" height="934"
          alt="{{ alt }}"
          {% if eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}>
 {% endmacro %}

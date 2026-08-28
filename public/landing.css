@@ -1579,6 +1579,14 @@
    Built from the existing tokens — no new palette.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* ── Aspect-ratio safety ─────────────────────────────────────────────────
+   Screenshots carry intrinsic width/height attributes so the browser can
+   reserve space before they load (CLS). Several older rules set `width: 100%`
+   on those images without `height: auto`, which promotes the height attribute
+   to a literal pixel height and squashes the image — 190x934 instead of
+   190x422. Anything given both attributes must still scale by aspect ratio. */
+img[width][height] { height: auto; }
+
 .wrap-narrow { max-width: 720px; }
 
 /* ── Tier prize / TV income table ────────────────────────────────────── */
@@ -1730,4 +1738,65 @@
 
 @media (prefers-reduced-motion: reduce) {
     .video-play, .video-play img, .delete-reveal { transition: none; }
+}
+
+/* ── Feature sections (dressing room, excursions) ────────────────────────
+   These pair a full-height screenshot with a list of points. They cannot
+   reuse .ss-frame (hard-coded to 190px for the horizontal scroller) or the
+   default .depth-item (title and body side by side, so anything longer than
+   one word wraps into a narrow column).                                     */
+.feature-split {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 56px;
+    align-items: center;
+    margin-top: 40px;
+}
+.feature-split.is-reversed { grid-template-columns: 340px 1fr; }
+.feature-split > * { min-width: 0; }
+
+.feature-shot {
+    margin: 0;
+    border: 3px solid var(--border);
+    background: var(--dark);
+    max-width: 340px;
+    width: 100%;
+}
+.feature-shot img { width: 100%; height: auto; display: block; }
+.feature-shot figcaption {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 10px 8px;
+    border-top: 1px solid var(--border);
+}
+
+/* Stacked variant: title on its own line, body beneath. */
+.point-list { display: flex; flex-direction: column; border: 1px solid var(--border); }
+.point {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+}
+.point:last-child { border-bottom: 0; }
+.point:hover { background: var(--panel); }
+.point-title {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    color: var(--gold);
+}
+.point-title.is-mint { color: var(--mint); }
+.point-title.is-red  { color: var(--red); }
+.point-title.is-plain { color: var(--text); }
+.point p { font-size: 13px; line-height: 1.75; color: var(--text-muted); }
+
+@media (max-width: 900px) {
+    .feature-split,
+    .feature-split.is-reversed { grid-template-columns: 1fr; gap: 32px; }
+    .feature-shot { max-width: 300px; margin: 0 auto; }
+    .feature-split.is-reversed > .feature-shot { order: 2; }
 }

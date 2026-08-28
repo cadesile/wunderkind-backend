@@ -25,7 +25,7 @@
             <div class="bento-phone-frame">
                 <div class="bento-phone-outer">
                     <div class="bento-phone-screen">
-                        {{ shot.img(item.name, item.alt) }}
+                        {{ shot.img(item.name, item.alt, false, 304) }}
                     </div>
                 </div>
                 <span class="bento-phone-label">{{ item.label }}</span>
@@ -33,9 +33,11 @@
         {% endfor %}
     </div>
 
-    {# Full gallery #}
-    <div class="wrap">
-        <div class="screenshot-scroll">
+    {# Full gallery — deliberately outside .wrap so the track runs full-bleed.
+       .screenshot-scroll only provides overflow; .screenshot-track is the flex
+       container, and without it the frames stack vertically. #}
+    <div class="screenshot-scroll" role="region" aria-label="Game screenshots">
+        <div class="screenshot-track">
             {% set gallery = [
                 { name: 'transfer-offer',           label: 'Transfer Offer',   alt: 'Incoming transfer bid of £1.2m with the manager advising against the sale' },
                 { name: 'staff-opinions',           label: 'Staff Verdicts',   alt: 'Manager, director of football and scout giving conflicting opinions on a signing' },
@@ -58,7 +60,7 @@
             ] %}
             {% for item in gallery %}
                 <div class="ss-frame">
-                    {{ shot.img(item.name, item.alt) }}
+                    {{ shot.img(item.name, item.alt, false, 190) }}
                     <p class="ss-caption">{{ item.label }}</p>
                 </div>
             {% endfor %}

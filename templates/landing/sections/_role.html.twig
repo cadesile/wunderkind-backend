@@ -31,11 +31,16 @@
             </div>
         </div>
 
-        <p class="role-footer">Delegate everything to your DoF and Manager and focus on the boardroom — or override every decision yourself. The level of involvement is always your choice. Promotion means your decisions worked, not just your tactics.</p>
+        {# Paired with the closing text rather than dropped underneath it on its
+           own — a lone tall phone shot centred under a full-width block reads as
+           an orphan and leaves a column of dead space either side. #}
+        <div class="feature-split is-reversed" style="margin-top:32px;">
+            <figure class="feature-shot">
+                {{ shot.img('club-value-budget', 'Club finances — £7.0m club value, £6.2m balance, and budget allocation sliders splitting the pot between transfers, facilities and an operating reserve', false, 340) }}
+                <figcaption>Club value, balance and where the money goes</figcaption>
+            </figure>
 
-        <figure class="role-visual">
-            {{ shot.img('club-value-budget', 'Club finances — £7.0m club value, £6.2m balance, and budget allocation sliders splitting the pot between transfers, facilities and operating reserve') }}
-            <p class="ss-caption">Staff Don't Always Agree</p>
-        </figure>
+            <p class="role-footer" style="margin-top:0;">Delegate everything to your DoF and Manager and focus on the boardroom — or override every decision yourself. The level of involvement is always your choice. Promotion means your decisions worked, not just your tactics.</p>
+        </div>
     </div>
 </section>

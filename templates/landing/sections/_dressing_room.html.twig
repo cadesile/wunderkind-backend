@@ -1,43 +1,40 @@
 {% import 'landing/sections/_shot.html.twig' as shot %}
 
 <!-- ═══════════════════════════════ DRESSING ROOM ═══════════════════════════════ -->
-<section id="dressing-room" class="depth-section">
+<section id="dressing-room">
     <div class="wrap">
         <div class="section-label">Dressing Room Dynamics</div>
         <h2 class="section-title">Your squad has opinions about each other.</h2>
         <p class="section-sub">
             Every player carries a live relationship with every team-mate. Bonds form
-            between players who train together, room together and win together; friction
-            builds between the ones who don't. The network is visible, and it moves.
+            between players who train, room and win together; friction builds between
+            the ones who don't. The network is visible, and it moves.
         </p>
 
-        <div class="leagues-inner" style="margin-top:40px;">
-            <div>
-                <div class="depth-list">
-                    <div class="depth-item">
-                        <span class="depth-item-title glow-mint">Bonded</span>
-                        <p>Solid green links. Bonded players lift each other's morale week on week and hold form through a bad run.</p>
-                    </div>
-                    <div class="depth-item">
-                        <span class="depth-item-title" style="color:var(--red);">Friction</span>
-                        <p>Dashed red links. Friction drags morale down, and a dressing room carrying enough of it will turn on a manager.</p>
-                    </div>
-                    <div class="depth-item">
-                        <span class="depth-item-title">Unformed</span>
-                        <p>Most of the squad, most of the time. Relationships are earned, not assigned at signing — a new arrival starts connected to nobody.</p>
-                    </div>
-                    <div class="depth-item">
-                        <span class="depth-item-title">It compounds</span>
-                        <p>Sell the wrong player and you cut three bonds at once. The squad you build is a network, not a list.</p>
-                    </div>
+        <div class="feature-split">
+            <div class="point-list">
+                <div class="point">
+                    <span class="point-title is-mint">Bonded</span>
+                    <p>Solid green links. Bonded players lift each other's morale week on week and hold their form through a bad run.</p>
+                </div>
+                <div class="point">
+                    <span class="point-title is-red">Friction</span>
+                    <p>Dashed red links. Friction drags morale down, and a dressing room carrying enough of it will turn on a manager.</p>
+                </div>
+                <div class="point">
+                    <span class="point-title is-plain">Unformed</span>
+                    <p>Most of the squad, most of the time. Relationships are earned rather than assigned at signing — a new arrival starts connected to nobody.</p>
+                </div>
+                <div class="point">
+                    <span class="point-title">It compounds</span>
+                    <p>Sell the wrong player and you cut three bonds at once. The squad you build is a network, not a list.</p>
                 </div>
             </div>
-            <div>
-                <figure class="ss-frame">
-                    {{ shot.img('dressing-room-network', 'Dressing room overview — squad rated SETTLED, 24% bonded, 76% unformed, 0% friction, average morale 99, with a relationship network mapping links between eleven named players') }}
-                    <figcaption class="ss-caption">Key relationship network — tap a face for scores</figcaption>
-                </figure>
-            </div>
+
+            <figure class="feature-shot">
+                {{ shot.img('dressing-room-network', 'Dressing room overview — squad rated SETTLED, 24% bonded, 76% unformed, 0% friction, average morale 99, with a relationship network mapping links between eleven named players', false, 340) }}
+                <figcaption>Key relationship network — tap a face for scores</figcaption>
+            </figure>
         </div>
     </div>
 </section>
