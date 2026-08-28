@@ -1,0 +1,38 @@
+{#
+   Featured video, picked at random from the channel's recent uploads.
+
+   Rendered as a click-to-play facade rather than a live <iframe>: an embedded
+   player on page load pulls roughly a megabyte of Google JS and sets
+   third-party cookies on every visit, on a page with no consent banner. The
+   poster is a plain image until the visitor actually asks to watch, at which
+   point landing.js swaps in a youtube-nocookie iframe.
+
+   The section renders nothing at all when the feed is empty or unreachable — a
+   broken player frame is worse than no section.
+#}
+{% if videos is not empty %}
+    {% set featured = random(videos) %}
+    <!-- ═══════════════════════════════ VIDEO ═══════════════════════════════ -->
+    <section id="video">
+        <div class="wrap">
+            <div class="section-label">On the Channel</div>
+            <h2 class="section-title">See it running.</h2>
+            <p class="section-sub">Gameplay walkthroughs, feature breakdowns and full seasons — a different one each time you land here.</p>
+
+            <div class="video-facade"
+                 data-video-id="{{ featured.id }}"
+                 data-video-title="{{ featured.title }}">
+                <button type="button" class="video-play" aria-label="Play “{{ featured.title }}” on YouTube">
+                    <img src="{{ featured.thumbnail }}" alt="" width="480" height="360" loading="lazy" decoding="async">
+                    <span class="video-play-icon" aria-hidden="true">▶</span>
+                </button>
+                <p class="video-caption">
+                    {{ featured.title }} ·
+                    <a href="https://www.youtube.com/@BuildMyClub" target="_blank" rel="noopener">More on YouTube</a>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+{% endif %}

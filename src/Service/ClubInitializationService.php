@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Enum\Country;
 use App\Entity\Club;
 use App\Entity\User;
 use App\Exception\ClubNameTakenException;
@@ -13,29 +14,6 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class ClubInitializationService
 {
-
-    /** Maps the frontend country code to the nationality string used in the player pool. */
-    private const COUNTRY_TO_NATIONALITY = [
-        'EN' => 'English',
-        'IT' => 'Italian',
-        'DE' => 'German',
-        'ES' => 'Spanish',
-        'BR' => 'Brazilian',
-        'AR' => 'Argentine',
-        'NL' => 'Dutch',
-        'FR' => 'French',
-        'PT' => 'Portuguese',
-        'NG' => 'Nigerian',
-        'GH' => 'Ghanaian',
-        'JP' => 'Japanese',
-        'KR' => 'South Korean',
-        'SE' => 'Swedish',
-        'DK' => 'Danish',
-        'IE' => 'Irish',
-        'CI' => 'Ivorian',
-        'SN' => 'Senegalese',
-        'CN' => 'Chinese',
-    ];
 
     private const PA_FIRST_NAMES = [
         'Marcus', 'Daniel', 'James', 'Ryan', 'Michael',
@@ -99,7 +77,7 @@ class ClubInitializationService
 
     public static function countryToNationality(string $countryCode): ?string
     {
-        return self::COUNTRY_TO_NATIONALITY[$countryCode] ?? null;
+        return Country::tryFrom($countryCode)?->nationality();
     }
 
     public function getStarterBundle(): array

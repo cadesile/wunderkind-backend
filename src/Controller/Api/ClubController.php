@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Dto\ClubInitRequest;
 use App\Entity\Investor;
 use App\Entity\User;
+use App\Enum\Country;
 use App\Exception\ClubNameTakenException;
 use App\Repository\ClubRepository;
 use App\Repository\NpcClubRepository;
@@ -25,18 +26,7 @@ class ClubController extends AbstractController
     // characters (e.g. Spanish "Ávila") sort next to their unaccented
     // neighbors instead of at the end of the list (PHP's plain sort() sorts
     // by raw UTF-8 byte value, which pushes multi-byte accented letters past
-    // all plain ASCII ones).
-    private const LOCALE_BY_COUNTRY = [
-        'ES' => 'es_ES',
-        'EN' => 'en_GB',
-        'DE' => 'de_DE',
-        'IT' => 'it_IT',
-        'FR' => 'fr_FR',
-        'BR' => 'pt_BR',
-        'AR' => 'es_AR',
-        'NL' => 'nl_NL',
-        'PT' => 'pt_PT',
-    ];
+    // all plain ASCII ones). The locale table lives on App\Enum\Country.
 
     public function __construct(private readonly ClubRepository $clubRepository) {}
 
@@ -67,7 +57,7 @@ class ClubController extends AbstractController
         );
         $suffixes = $npcClubGenerationService->getSuffixes($country) ?: $npcClubGenerationService->getSuffixes('EN');
 
-        $locale = self::LOCALE_BY_COUNTRY[$country] ?? 'en_GB';
+        $locale = Country::tryFrom($country)?->locale() ?? 'en_GB';
 
         return $this->json([
             'country'  => $country,

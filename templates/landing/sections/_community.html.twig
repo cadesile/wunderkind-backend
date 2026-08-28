@@ -1,0 +1,65 @@
+<!-- ═══════════════════════════════ COMMUNITY STATS ═══════════════════════════════ -->
+<section id="community-stats">
+    <div class="wrap" style="padding-bottom:0;">
+        <div class="section-label">Community</div>
+        <h2 class="section-title">The community, right now.</h2>
+        <p class="section-sub">Live activity across every club in the pyramid — pulled straight from the server.</p>
+    </div>
+</section>
+
+<div class="stats-band">
+    <div class="wrap stats-inner">
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-transfers">--</span>
+            <span class="stat-lbl">Transfers (top 10 clubs)</span>
+        </div>
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-development">--</span>
+            <span class="stat-lbl">Development points (top 10 clubs)</span>
+        </div>
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-seasons">--</span>
+            <span class="stat-lbl">Seasons completed (top 10 clubs)</span>
+        </div>
+        <div class="stat-block">
+            <span class="stat-num" id="cs-stat-trophies">--</span>
+            <span class="stat-lbl">Titles won (top 10 clubs)</span>
+        </div>
+    </div>
+</div>
+
+<section>
+    <div class="wrap">
+        <div class="period-tabs" id="cs-period-tabs" role="tablist" aria-label="Leaderboard period">
+            <div class="period-tab active" data-period="week" role="tab" aria-selected="true">Week</div>
+            <div class="period-tab" data-period="month" role="tab" aria-selected="false">Month</div>
+            <div class="period-tab" data-period="season" role="tab" aria-selected="false">Season</div>
+            <div class="period-tab" data-period="all" role="tab" aria-selected="false">All Time</div>
+        </div>
+
+        <div class="lb-grid-2">
+            <div class="lb-card">
+                <div class="lb-card-title">MOST TRANSFERS</div>
+                <div class="lb-card-sub">clubs</div>
+                <ul class="lb-list" id="cs-list-transfers"><li class="lb-loading">Loading…</li></ul>
+            </div>
+            <div class="lb-card">
+                <div class="lb-card-title">MOST DEVELOPMENT</div>
+                <div class="lb-card-sub">CA points gained</div>
+                <ul class="lb-list" id="cs-list-development"><li class="lb-loading">Loading…</li></ul>
+            </div>
+            <div class="lb-card">
+                <div class="lb-card-title">MOST SEASONS</div>
+                <div class="lb-card-sub">seasons completed</div>
+                <ul class="lb-list" id="cs-list-seasons"><li class="lb-loading">Loading…</li></ul>
+            </div>
+            <div class="lb-card">
+                <div class="lb-card-title">MOST TROPHIES</div>
+                <div class="lb-card-sub">titles won</div>
+                <ul class="lb-list" id="cs-list-trophies"><li class="lb-loading">Loading…</li></ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">

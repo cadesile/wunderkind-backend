@@ -1,0 +1,18 @@
+{#
+   One screenshot, two widths.
+
+   Captures are 1080×2400, so the emitted intrinsic sizes are 420×934 and
+   900×2000. Both are stated on the tag: without width/height the browser
+   cannot reserve space and every image shifts the layout as it arrives.
+
+   `eager` is for the first hero slide only — everything else is below the fold.
+#}
+{% macro img(name, alt, eager = false, wide = false) %}
+    {%- set base = '/screenshots/2026-08/' ~ name -%}
+    <img src="{{ base }}-{{ wide ? '900' : '420' }}.webp"
+         srcset="{{ base }}-420.webp 420w, {{ base }}-900.webp 900w"
+         sizes="{{ wide ? '(max-width: 900px) 100vw, 900px' : '(max-width: 480px) 90vw, 420px' }}"
+         width="{{ wide ? 900 : 420 }}" height="{{ wide ? 2000 : 934 }}"
+         alt="{{ alt }}"
+         {% if eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}>
+{% endmacro %}

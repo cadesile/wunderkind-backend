@@ -77,6 +77,11 @@ security:
         - { path: ^/api/archetypes,            roles: PUBLIC_ACCESS }
         - { path: ^/api/excursions,            roles: PUBLIC_ACCESS }
         - { path: ^/api/beta-request,          roles: PUBLIC_ACCESS }
+        # Browser-reachable account deletion (Google Play / iOS requirement).
+        # Narrower than ^/api/account/delete, which stays JWT-only.
+        - { path: ^/api/account/delete-request, roles: PUBLIC_ACCESS }
+        - { path: ^/api/world/overview,        roles: PUBLIC_ACCESS }
+        - { path: ^/api/videos,                roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/pool,             roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/sync,             roles: ROLE_CLUB }

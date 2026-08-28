@@ -1,0 +1,182 @@
+{% extends 'landing/base.html.twig' %}
+
+{% block title %}Delete your account — Build My Club{% endblock %}
+{% block description %}Permanently delete your Build My Club account and all associated club data.{% endblock %}
+{% block robots %}<meta name="robots" content="noindex, follow">{% endblock %}
+
+{% block body %}
+{% include 'landing/sections/_nav.html.twig' %}
+
+<section class="delete-section">
+    <div class="wrap wrap-narrow">
+        <div class="section-label">Account &amp; Data</div>
+        <h1 class="section-title">Delete your account</h1>
+        <p class="section-sub">
+            This permanently removes your account and every club you own — squads,
+            seasons, transfers, finances and leaderboard entries. It cannot be undone
+            and there is no backup to restore from.
+        </p>
+
+        {# The device-only case is called out before the form, not after a failed
+           attempt: a guest has no password, so the form can never work for them
+           and letting them try it first is a dead end by design. #}
+        <div class="delete-note" role="note">
+            <h2 class="delete-note-title">Playing as a guest?</h2>
+            <p>
+                If you started playing without creating an email and password, your account
+                is tied to your device and cannot be verified here. Delete it from inside
+                the app instead: <strong>Settings → Delete Account</strong>.
+            </p>
+        </div>
+
+        <form id="delete-form" class="delete-form" novalidate>
+            <h2 class="delete-form-title">Registered accounts</h2>
+
+            <label class="delete-label" for="delete-email">Email address</label>
+            <input type="email" id="delete-email" name="email" class="beta-input"
+                   placeholder="your@email.com" autocomplete="email" required
+                   aria-describedby="delete-email-hint">
+            <p class="delete-hint" id="delete-email-hint">The address you registered with.</p>
+
+            <label class="delete-label" for="delete-password">Password</label>
+            <div class="delete-password-row">
+                <input type="password" id="delete-password" name="password" class="beta-input"
+                       placeholder="••••••••" autocomplete="current-password" required>
+                <button type="button" class="delete-reveal" id="delete-reveal"
+                        aria-controls="delete-password" aria-pressed="false">Show</button>
+            </div>
+            <p class="delete-hint">We verify your password to prove the account is yours.</p>
+
+            <label class="delete-label" for="delete-confirm">
+                Type <strong>DELETE</strong> to confirm
+            </label>
+            <input type="text" id="delete-confirm" name="confirm" class="beta-input"
+                   placeholder="DELETE" autocomplete="off" spellcheck="false" required
+                   aria-describedby="delete-confirm-hint">
+            <p class="delete-hint" id="delete-confirm-hint">
+                A deliberate step, because this is irreversible.
+            </p>
+
+            <button type="submit" class="beta-submit delete-submit" id="delete-submit" disabled>
+                Permanently delete my account
+            </button>
+
+            {# role=alert so the outcome is announced, not just coloured. #}
+            <div class="beta-msg delete-msg" id="delete-msg" role="alert" aria-live="assertive"></div>
+        </form>
+
+        <div class="delete-success" id="delete-success" hidden>
+            <h2 class="delete-note-title glow-mint">Account deleted</h2>
+            <p id="delete-success-detail">
+                Your account and all associated club data have been permanently deleted.
+            </p>
+            <p><a href="{{ path('landing_home') }}" class="btn btn-outline">Back to Build My Club</a></p>
+        </div>
+
+        <div class="delete-note" style="margin-top:32px;">
+            <h2 class="delete-note-title">What gets removed</h2>
+            <ul class="delete-list">
+                <li>Your account and login credentials</li>
+                <li>Every club you own, and its squad, staff and facilities</li>
+                <li>Season history, match results and transfer records</li>
+                <li>Investor and sponsor contracts</li>
+                <li>All leaderboard entries</li>
+            </ul>
+            <p class="delete-hint">
+                We keep a dated record that a deletion was requested and completed, so we can
+                confirm it later if you ask. Anything else, email
+                <a href="mailto:admin@buildmyclub.co.uk">admin@buildmyclub.co.uk</a>.
+            </p>
+        </div>
+    </div>
+</section>
+
+{% include 'landing/sections/_footer.html.twig' %}
+{% endblock %}
+
+{% block javascripts %}
+<script>
+(function () {
+    'use strict';
+
+    var form     = document.getElementById('delete-form');
+    var email    = document.getElementById('delete-email');
+    var password = document.getElementById('delete-password');
+    var confirm  = document.getElementById('delete-confirm');
+    var submit   = document.getElementById('delete-submit');
+    var msg      = document.getElementById('delete-msg');
+    var reveal   = document.getElementById('delete-reveal');
+    var success  = document.getElementById('delete-success');
+
+    function say(text, kind) {
+        msg.textContent = text;
+        msg.className = 'beta-msg delete-msg' + (kind ? ' is-' + kind : '');
+    }
+
+    // The submit button stays disabled until all three fields are satisfied,
+    // so the destructive action is never one stray click away.
+    function ready() {
+        return email.value.indexOf('@') > 0
+            && password.value.length > 0
+            && confirm.value.trim().toUpperCase() === 'DELETE';
+    }
+
+    function sync() { submit.disabled = !ready(); }
+
+    [email, password, confirm].forEach(function (field) {
+        field.addEventListener('input', sync);
+        field.addEventListener('blur', function () {
+            if (field === email && field.value && field.value.indexOf('@') < 1) {
+                say('That does not look like an email address.', 'error');
+            }
+        });
+    });
+
+    reveal.addEventListener('click', function () {
+        var shown = password.type === 'text';
+        password.type = shown ? 'password' : 'text';
+        reveal.textContent = shown ? 'Show' : 'Hide';
+        reveal.setAttribute('aria-pressed', shown ? 'false' : 'true');
+    });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!ready()) { return; }
+
+        submit.disabled = true;
+        say('Verifying…');
+
+        var body = new FormData();
+        body.append('email', email.value.trim());
+        body.append('password', password.value);
+        body.append('confirm', confirm.value.trim());
+
+        fetch('/api/account/delete-request', { method: 'POST', body: body })
+            .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+            .then(function (result) {
+                if (result.ok && result.data.success) {
+                    form.hidden = true;
+                    success.hidden = false;
+                    if (result.data.clubsDeleted > 0) {
+                        document.getElementById('delete-success-detail').textContent =
+                            'Your account and ' + result.data.clubsDeleted +
+                            ' club' + (result.data.clubsDeleted === 1 ? '' : 's') +
+                            ' have been permanently deleted.';
+                    }
+                    success.scrollIntoView({ block: 'center' });
+                    return;
+                }
+
+                say(result.data.message || 'Something went wrong. Please try again.', 'error');
+                submit.disabled = false;
+            })
+            .catch(function () {
+                say('Could not reach the server. Check your connection and try again.', 'error');
+                submit.disabled = false;
+            });
+    });
+
+    sync();
+})();
+</script>
+{% endblock %}

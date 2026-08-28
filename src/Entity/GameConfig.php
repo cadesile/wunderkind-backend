@@ -1037,6 +1037,20 @@ class GameConfig
     #[ORM\Column(nullable: true)]
     private ?string $xProfileUrl = null;
 
+    /**
+     * YouTube channel ID (the UC... form, not the @handle).
+     *
+     * YouTubeFeedService reads the public RSS feed at
+     * /feeds/videos.xml?channel_id=..., which only accepts the UC form — resolve
+     * a handle to its channel ID before pasting it here. Empty disables the
+     * featured-video section on the landing page.
+     */
+    #[ORM\Column(type: 'string', length: 64, nullable: true, options: ['default' => 'UC_NapTnWVJf_XSDbiGbLMBA'])]
+    private ?string $youtubeChannelId = 'UC_NapTnWVJf_XSDbiGbLMBA';
+
+    public function getYoutubeChannelId(): ?string { return $this->youtubeChannelId; }
+    public function setYoutubeChannelId(?string $v): static { $this->youtubeChannelId = $v ?: null; return $this; }
+
     public function getFacebookPageUrl(): ?string { return $this->facebookPageUrl; }
     public function setFacebookPageUrl(?string $v): static { $this->facebookPageUrl = $v ?: null; return $this; }
 

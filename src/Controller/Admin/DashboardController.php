@@ -16,8 +16,10 @@ use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
 use App\Service\NarrativeImportExportService;
 use App\Controller\Admin\BetaRequestCrudController;
+use App\Controller\Admin\DeletionRequestCrudController;
 use App\Controller\Admin\LeagueCrudController;
 use App\Controller\Admin\SocialPostTemplateCrudController;
+use App\Enum\Country;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
 use App\Service\LeagueService;
@@ -1039,22 +1041,10 @@ class DashboardController extends AbstractDashboardController
             $byCountry[$row['country']][$row['tier']] = true;
         }
 
-        // Matches the country dropdowns on the "Generate" screen
-        // (admin_npc_clubs_content: Generate Clubs / Generate League Structure) —
-        // cache warming only makes sense for countries the league/club generation
-        // process can actually build, independent of StarterConfig's
-        // player-facing "enabled countries" toggle.
-        $enabledCountries = [
-            'ES' => 'Spain',
-            'EN' => 'England',
-            'DE' => 'Germany',
-            'IT' => 'Italy',
-            'FR' => 'France',
-            'BR' => 'Brazil',
-            'AR' => 'Argentina',
-            'NL' => 'Netherlands',
-            'PT' => 'Portugal',
-        ];
+        // Cache warming only makes sense for countries the league/club
+        // generation process can actually build - independent of
+        // StarterConfig's player-facing "enabled countries" toggle.
+        $enabledCountries = Country::generationCapableLabels();
 
         return $this->render('admin/worldpack_cache.html.twig', [
             'entries'          => $entries,
@@ -1245,6 +1235,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(ClubCrudController::class, 'Clubs', 'fa fa-school');
         yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
         yield MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text');
+        yield MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash');
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');

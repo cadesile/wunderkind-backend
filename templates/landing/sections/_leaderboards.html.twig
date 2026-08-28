@@ -1,0 +1,32 @@
+<!-- ═══════════════════════════════ GLOBAL LEADERBOARDS ═══════════════════════════════ -->
+<section id="leaderboards">
+    <div class="wrap">
+        <div class="section-label">Rankings</div>
+        <h2 class="section-title">Global leaderboards.</h2>
+        <p class="section-sub">Every club in the pyramid, ranked. Reputation, silverware, top scorers, empire-building — {{ world.totals.leaderboardCategories }} categories, updated live from Integrity Sync.</p>
+
+        <div class="lbg-tabs" id="lbg-tabs" role="tablist" aria-label="Leaderboard category">
+            <div class="lbg-tab active" data-category="hall_of_fame"    role="tab" aria-selected="true"  tabindex="0">Hall of Fame</div>
+            <div class="lbg-tab"        data-category="club_reputation" role="tab" aria-selected="false" tabindex="-1">Reputation</div>
+            <div class="lbg-tab"        data-category="career_earnings" role="tab" aria-selected="false" tabindex="-1">Career Earnings</div>
+            <div class="lbg-tab"        data-category="golden_boot"     role="tab" aria-selected="false" tabindex="-1">Golden Boot</div>
+            <div class="lbg-tab"        data-category="playmaker"       role="tab" aria-selected="false" tabindex="-1">Playmaker</div>
+            <div class="lbg-tab"        data-category="empire_index"    role="tab" aria-selected="false" tabindex="-1">Empire Index</div>
+            <div class="lbg-tab"        data-category="fanatics"        role="tab" aria-selected="false" tabindex="-1">Fanatics</div>
+        </div>
+
+        <div class="lbg-panel">
+            <div class="lbg-panel-head">
+                <div class="lbg-panel-title" id="lbg-panel-title">HALL OF FAME</div>
+                <div class="lbg-panel-sub" id="lbg-panel-sub">all-time · HoF points</div>
+            </div>
+            <ul class="lbg-list" id="lbg-list" aria-live="polite">
+                <li class="lbg-skel-row"><span class="lbg-skel lbg-skel-rank"></span><span class="lbg-skel lbg-skel-main"></span><span class="lbg-skel lbg-skel-value"></span></li>
+                <li class="lbg-skel-row"><span class="lbg-skel lbg-skel-rank"></span><span class="lbg-skel lbg-skel-main"></span><span class="lbg-skel lbg-skel-value"></span></li>
+                <li class="lbg-skel-row"><span class="lbg-skel lbg-skel-rank"></span><span class="lbg-skel lbg-skel-main"></span><span class="lbg-skel lbg-skel-value"></span></li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">

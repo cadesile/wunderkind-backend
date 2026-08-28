@@ -1,0 +1,67 @@
+{% import 'landing/sections/_shot.html.twig' as shot %}
+
+<!-- ═══════════════════════════════ SCREENSHOTS ═══════════════════════════════ -->
+{#
+   Gallery rebuilt from the August 2026 captures. The previous set was from June
+   and no longer matched the shipped UI, so it was replaced wholesale rather than
+   topped up — a gallery that mixes two generations of the interface reads as
+   inconsistency, not history.
+#}
+<section class="screenshots-section" id="screenshots">
+    <div class="wrap">
+        <div class="section-label">Real Screenshots</div>
+        <h2 class="section-title">No mockups. No renders.</h2>
+        <p class="section-sub">Every frame taken from the live build on Google Play.</p>
+    </div>
+
+    {# Featured three #}
+    <div class="bento-phones" aria-label="Featured screenshots">
+        {% set featured = [
+            { name: 'dressing-room-network', label: 'Dressing Room',  alt: 'Dressing room relationship network mapping bonds and friction across the squad' },
+            { name: 'excursion-report',      label: 'Excursions',     alt: 'Excursion report showing which players bonded and which fell out after a team night' },
+            { name: 'weekly-cashflow',       label: 'The Money',      alt: 'Weekly cashflow projection — sponsor and matchday income against player wages, staff wages and facility upkeep' }
+        ] %}
+        {% for item in featured %}
+            <div class="bento-phone-frame">
+                <div class="bento-phone-outer">
+                    <div class="bento-phone-screen">
+                        {{ shot.img(item.name, item.alt) }}
+                    </div>
+                </div>
+                <span class="bento-phone-label">{{ item.label }}</span>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# Full gallery #}
+    <div class="wrap">
+        <div class="screenshot-scroll">
+            {% set gallery = [
+                { name: 'transfer-offer',           label: 'Transfer Offer',   alt: 'Incoming transfer bid of £1.2m with the manager advising against the sale' },
+                { name: 'staff-opinions',           label: 'Staff Verdicts',   alt: 'Manager, director of football and scout giving conflicting opinions on a signing' },
+                { name: 'contract-talks',           label: 'Contract Talks',   alt: 'A player requesting a new deal at fourteen times his current wage' },
+                { name: 'contract-talks-rejected',  label: 'Wage Pressure',    alt: 'Director of football rejecting a wage demand the income cannot support' },
+                { name: 'player-profile-agent',     label: 'Player Profile',   alt: 'Free agent profile with limited scouting information and his agent commission' },
+                { name: 'scouting-config',          label: 'Scouting Brief',   alt: 'Director of football scouting configuration by position, age band and squad role' },
+                { name: 'scout-inbox-report',       label: 'Scout Reports',    alt: 'Inbox message announcing a completed scout report on a target' },
+                { name: 'tactics-first-xi',         label: 'Tactics',          alt: 'First XI in a 4-5-1 counter formation with form indicators per player' },
+                { name: 'manager-archetype',        label: 'Your Manager',     alt: 'Manager archetype THE AUTOCRAT with a squad fit rating and flagged weaknesses' },
+                { name: 'league-table',             label: 'League',           alt: 'Tier 6 league table at the start of season three' },
+                { name: 'ranking-reputation',       label: 'Reputation',       alt: 'Global reputation leaderboard with the player club ranked fourth' },
+                { name: 'ranking-career-earnings',  label: 'Career Earnings',  alt: 'Career earnings leaderboard across all clubs' },
+                { name: 'development-report',       label: 'Development',      alt: 'Weekly development report showing attribute growth across the squad' },
+                { name: 'fans-happiness',           label: 'The Fans',         alt: 'Fan happiness at THRILLED with active attendance and morale effects' },
+                { name: 'club-value-budget',        label: 'Budget',           alt: 'Club value, balance and budget allocation between transfers and facilities' },
+                { name: 'facility-training-pitch',  label: 'Facilities',       alt: 'Isometric level four training pitch with condition and upgrade costs' },
+                { name: 'weekly-tick',              label: 'Weekly Tick',      alt: 'Week processing overlay advancing the season and checking in every pyramid club' },
+                { name: 'nav-drawer',               label: 'Navigation',       alt: 'Main navigation drawer with office, squad, transfers, finances, facilities and pyramid' }
+            ] %}
+            {% for item in gallery %}
+                <div class="ss-frame">
+                    {{ shot.img(item.name, item.alt) }}
+                    <p class="ss-caption">{{ item.label }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

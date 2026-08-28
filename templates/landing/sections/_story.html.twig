@@ -1,0 +1,102 @@
+{% import 'landing/sections/_shot.html.twig' as shot %}
+
+<!-- ═══════════════════════════════ STORY / JOURNEY ═══════════════════════════════ -->
+<section class="story-section" id="story">
+    <div class="wrap">
+        <div class="section-label">The Journey</div>
+        <h2 class="section-title">From blank canvas to top flight.</h2>
+        <p class="section-sub">Four chapters. Infinite decisions. One club to call yours.</p>
+    </div>
+
+    <!-- Chapter 1 -->
+    <div class="story-step">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        {{ shot.img('league-table', 'League table — Season 3, Tier 6, the player club sitting mid-table among ten rivals') }}
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 01 // CREATE</div>
+                <h3 class="story-headline">Name your club.<br>Pick your battleground.</h3>
+                <p class="story-desc">Design your manager identity, choose your nation, and christen your club. The game then builds a world of {{ world.totals.npcClubs }} NPC clubs across {{ world.totals.tierCount }} tiers — all simulated, all waiting to be beaten.</p>
+                <ul class="story-tags">
+                    <li>Custom manager — name, age, nationality</li>
+                    <li>Choose from {{ world.totals.playableCountries }} playable {{ world.totals.playableCountries == 1 ? 'country' : 'countries' }}</li>
+                    <li>{{ world.totals.npcClubs }} NPC clubs generated at kickoff</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter 2 -->
+    <div class="story-step story-step--flip">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        {{ shot.img('development-report', 'Development report — squad update showing Isaac Knight and Tobias Dalton gaining attribute points') }}
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 02 // BUILD</div>
+                <h3 class="story-headline">Assemble your squad.<br>Hire your staff.</h3>
+                <p class="story-desc">Every player has a personality profile, a contract, a guardian, and an agent. Your Director of Football scouts, your Manager coaches. Delegate everything — or stay hands-on across every call.</p>
+                <ul class="story-tags">
+                    <li>8 personality traits per player</li>
+                    <li>6 staff roles to fill</li>
+                    <li>Contract negotiations &amp; guardian dynamics</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter 3 -->
+    <div class="story-step">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        {{ shot.img('scout-inbox-report', 'Inbox — a scout has finished watching Tobias Clifford and filed a full report') }}
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 03 // COMPETE</div>
+                <h3 class="story-headline">Every week,<br>the simulation runs.</h3>
+                <p class="story-desc">Advance time with a tap. The engine simulates matches, ages players, triggers narrative events, pays wages, and checks your finances — all at once. Stay ahead of the table or get relegated trying.</p>
+                <ul class="story-tags">
+                    <li>18-round seasons with full match events</li>
+                    <li>Inbox-driven narrative system</li>
+                    <li>Real player ratings &amp; form tracking</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter 4 -->
+    <div class="story-step story-step--flip">
+        <div class="story-inner">
+            <div class="story-phone-wrap">
+                <div class="story-phone-outer">
+                    <div class="story-phone-screen">
+                        {{ shot.img('ranking-career-earnings', 'Career earnings ranking — the player club fourth on the all-time board at £7.0m') }}
+                    </div>
+                </div>
+            </div>
+            <div class="story-text">
+                <div class="story-chapter">CHAPTER 04 // ASCEND</div>
+                <h3 class="story-headline">Get promoted.<br>Do it again.</h3>
+                <p class="story-desc">Win promotion and step up a division — new clubs, harder opponents, bigger wages, richer investors. Season review shows every champion across all {{ world.totals.tierCount }} tiers. Track your hall of fame points. Become unstoppable.</p>
+                <ul class="story-tags">
+                    <li>{{ world.totals.tierCount }} tiers from local minnow to top flight</li>
+                    <li>Full season review across every league</li>
+                    <li>Hall of Fame &amp; all-time club records</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>

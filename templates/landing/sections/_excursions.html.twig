@@ -1,0 +1,55 @@
+{% import 'landing/sections/_shot.html.twig' as shot %}
+
+<!-- ═══════════════════════════════ EXCURSIONS ═══════════════════════════════ -->
+<section id="excursions">
+    <div class="wrap">
+        <div class="section-label">Excursions</div>
+        <h2 class="section-title">Book the trip. Change the room.</h2>
+        <p class="section-sub">
+            Morale is not a slider you drag. As chairman you book team-building
+            excursions and live with what comes back — new bonds, occasionally new
+            grudges, and a squad that is measurably different afterwards.
+        </p>
+
+        <div class="leagues-inner" style="margin-top:40px;">
+            <div>
+                <figure class="ss-frame">
+                    {{ shot.img('excursion-report', 'Excursion report for Local Pub Quiz Night — a who-came-back-changed relationship map with six bonds formed and two friction lines, listing pairings and their scores') }}
+                    <figcaption class="ss-caption">Excursion report — who came back changed</figcaption>
+                </figure>
+            </div>
+            <div>
+                {% if excursions is not empty %}
+                    <div class="depth-list">
+                        {% for excursion in excursions %}
+                            <div class="depth-item">
+                                <span class="depth-item-title glow-gold">{{ excursion.title }}</span>
+                                <p>{{ excursion.body }}</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <p class="pyramid-label" style="margin-top:16px;">
+                        Live from the game's excursion catalogue.
+                    </p>
+                {% else %}
+                    <div class="depth-list">
+                        <div class="depth-item">
+                            <span class="depth-item-title glow-gold">Pick the outing</span>
+                            <p>Each excursion has a cost per head, a target audience and a cooldown. A pub quiz is not a warm-weather camp.</p>
+                        </div>
+                        <div class="depth-item">
+                            <span class="depth-item-title glow-gold">Read the room after</span>
+                            <p>The report maps exactly which pairs bonded and which fell out, and by how much.</p>
+                        </div>
+                        <div class="depth-item">
+                            <span class="depth-item-title glow-gold">Nothing is guaranteed</span>
+                            <p>Excursions carry a negative frequency. Sometimes the trip is the reason two players stop speaking.</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">

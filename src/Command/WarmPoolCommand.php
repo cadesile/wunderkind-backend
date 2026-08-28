@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Enum\Country;
 use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use App\Repository\PlayerRepository;
@@ -30,28 +31,6 @@ class WarmPoolCommand extends Command
         StaffRole::MANAGER,
         StaffRole::COACH,
         StaffRole::CHAIRMAN,
-    ];
-
-    private const SUPPORTED_COUNTRIES = [
-        'EN' => 'English',
-        'IT' => 'Italian',
-        'DE' => 'German',
-        'ES' => 'Spanish',
-        'BR' => 'Brazilian',
-        'AR' => 'Argentine',
-        'NL' => 'Dutch',
-        'FR' => 'French',
-        'PT' => 'Portuguese',
-        'NG' => 'Nigerian',
-        'GH' => 'Ghanaian',
-        'JP' => 'Japanese',
-        'KR' => 'South Korean',
-        'SE' => 'Swedish',
-        'DK' => 'Danish',
-        'IE' => 'Irish',
-        'CI' => 'Ivorian',
-        'SN' => 'Senegalese',
-        'CN' => 'Chinese',
     ];
 
     public function __construct(
@@ -92,7 +71,7 @@ class WarmPoolCommand extends Command
             $nationality = ClubInitializationService::countryToNationality($country);
 
             if ($nationality === null) {
-                $io->error("Unknown country code '{$country}'. Supported: " . implode(' ', array_keys(self::SUPPORTED_COUNTRIES)));
+                $io->error("Unknown country code '{$country}'. Supported: " . implode(' ', array_keys(Country::nationalityMap())));
                 return Command::FAILURE;
             }
 
@@ -101,7 +80,7 @@ class WarmPoolCommand extends Command
 
         // ── All-countries mode ────────────────────────────────────────────────
         $failed = 0;
-        foreach (self::SUPPORTED_COUNTRIES as $country => $nationality) {
+        foreach (Country::nationalityMap() as $country => $nationality) {
             $result = $this->warmCountry($io, $country, $nationality, $minPlayers, $minStaff, $minScouts, $force);
             if ($result !== Command::SUCCESS) {
                 $failed++;
@@ -197,7 +176,7 @@ class WarmPoolCommand extends Command
         $io->section('[INTERNATIONAL] Foreign-slot pool');
 
         // Count pool entities whose nationality is NOT one of the 19 mapped ones.
-        $mappedNationalities = array_values(self::SUPPORTED_COUNTRIES);
+        $mappedNationalities = array_values(Country::nationalityMap());
 
         try {
             // Players

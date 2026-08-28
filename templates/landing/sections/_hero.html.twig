@@ -1,0 +1,74 @@
+{% import 'landing/sections/_shot.html.twig' as shot %}
+
+<!-- ═══════════════════════════════ HERO ═══════════════════════════════ -->
+<section class="hero">
+    <div class="wrap">
+        <div class="hero-inner">
+            <div>
+                <div class="hero-badge">LIVE ON GOOGLE PLAY &nbsp;// ELITE STRATEGY SIM</div>
+                <h1 class="glow-gold">OWN THE CLUB. BUILD THE EMPIRE.</h1>
+                <p class="hero-sub">
+                    The retro pixel-art football chairman game built for tactical depth.
+                    No matchday hands-on — just pure strategy, infrastructure, and heavy
+                    decisions on mobile. Allocate capital, build out your facilities, and
+                    manage a living dressing room where every player has an 8-trait
+                    personality matrix and real relationships with his team-mates.
+                    Sync weekly and compete across {{ world.totals.leaderboardCategories }} global leaderboards.
+                </p>
+                <div class="hero-actions">
+                    <a href="#download" id="hero-android-btn" class="btn btn-gold" style="display:none">Get it on Google Play</a>
+                    <a href="#download" id="hero-ios-btn" class="btn btn-outline" style="display:none">Download (iOS)</a>
+                    <a href="#download" id="hero-download-btn" class="btn btn-gold">Download</a>
+                    <button type="button" id="hero-beta-btn" class="btn btn-outline" onclick="openBetaModal()">Join the iOS beta</button>
+                    <a href="#features" class="btn btn-outline">See Features</a>
+                </div>
+                <div class="hero-stat-row">
+                    <div class="hero-stat">
+                        <span class="hero-stat-val glow-gold">{{ world.totals.tierCount }}</span>
+                        <span class="hero-stat-label">League Tiers</span>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="hero-stat-val glow-mint">{{ world.totals.leaderboardCategories }}</span>
+                        <span class="hero-stat-label">Global Rankings</span>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="hero-stat-val" style="color:var(--red);">8</span>
+                        <span class="hero-stat-label">Player Traits</span>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="hero-stat-val" style="color:var(--text-muted);">100%</span>
+                        <span class="hero-stat-label">Offline-First</span>
+                    </div>
+                </div>
+            </div>
+
+            {# Rotating phone carousel #}
+            <div class="phone-frame">
+                <div class="phone-outer">
+                    <div class="phone-screen" id="phone-screen">
+                        <div class="phone-slide active">
+                            {{ shot.img('dressing-room-network', 'Dressing room — key relationship network showing bonded and friction links across the squad, 24% bonded, average morale 99', true) }}
+                        </div>
+                        <div class="phone-slide">
+                            {{ shot.img('excursion-report', 'Excursion report — Local Pub Quiz Night, six new bonds formed and two friction lines across the squad') }}
+                        </div>
+                        <div class="phone-slide">
+                            {{ shot.img('transfer-offer', 'Transfer offer — £1.2m bid from Stoke-on-Trent City for Hugo Pemberton, with the manager advising KEEP') }}
+                        </div>
+                        <div class="phone-slide">
+                            {{ shot.img('tactics-first-xi', 'Tactics — first XI laid out in a 4-5-1 counter formation with per-player form arrows') }}
+                        </div>
+                        <div class="phone-slide">
+                            {{ shot.img('fans-happiness', 'Fans — overall happiness THRILLED at 100/100, 52,046 fan base, attendance and morale bonuses active') }}
+                        </div>
+                    </div>
+                </div>
+                <div class="phone-dots" role="tablist" aria-label="Slide indicators">
+                    {% for i in 1..5 %}
+                        <div class="phone-dot{{ loop.first ? ' active' }}" role="tab" aria-label="Slide {{ i }}" tabindex="0"></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

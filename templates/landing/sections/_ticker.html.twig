@@ -1,0 +1,41 @@
+{#
+   Scrolling feature marquee. The list is declared once and rendered twice —
+   the animation needs a duplicate track to loop seamlessly, and the previous
+   markup achieved that by hand-copying 21 spans, which is how "6 Global
+   Leaderboards" survived in one copy while the rest of the page said 7.
+#}
+{% set ticker_items = [
+    'Scarcity Market Pool',
+    'Style Multipliers',
+    'Integrity Syncing',
+    world.totals.leaderboardCategories ~ ' Global Leaderboards',
+    'Dressing Room Dynamics',
+    'Team Excursions',
+    'Manager Personality Traits',
+    world.totals.tierCount ~ '-Tier League Pyramid',
+    'Player Personality Matrix',
+    'Director of Football',
+    'Sponsor Contracts',
+    'Investor Relations',
+    'Facility Upgrades',
+    'Chained Narrative Events',
+    'Offline-First',
+    'Weekly Tick Engine',
+    'Player Archetypes',
+    'Fan Happiness System',
+    'Match Events Engine',
+    'Trophy Museum',
+    'Dynamic NPC Market',
+    'Guardian Dynamics',
+    'Formation & Tactics'
+] %}
+
+<div class="ticker-wrap" role="marquee" aria-label="Feature highlights">
+    <div class="ticker-track">
+        {% for pass in 1..2 %}
+            {% for item in ticker_items %}
+                <span class="ticker-item"{% if pass == 2 %} aria-hidden="true"{% endif %}>{{ item }}</span>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</div>

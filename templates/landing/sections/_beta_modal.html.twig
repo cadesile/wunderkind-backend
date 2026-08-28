@@ -1,0 +1,41 @@
+<!-- ═══════════════════════════════ BETA REQUEST MODAL ═══════════════════════════════ -->
+<div class="beta-overlay" id="beta-overlay" role="dialog" aria-modal="true" aria-labelledby="beta-title">
+    <div class="beta-modal">
+        <div class="beta-header">
+            <h2 id="beta-title">Request Beta Access</h2>
+            <button class="beta-close" id="beta-close" aria-label="Close">✕ CLOSE</button>
+        </div>
+        <div class="beta-body">
+
+            <!-- Step 1: Email -->
+            <div id="beta-step-email">
+                <p>Enter your email address to receive a verification code.</p>
+                <form id="beta-form-email" novalidate>
+                    <input type="email" id="beta-email" name="email" class="beta-input"
+                           placeholder="your@email.com" autocomplete="email" required>
+                    <button type="submit" class="beta-submit" id="beta-submit-email">Send Code</button>
+                    <div class="beta-msg" id="beta-msg-email"></div>
+                </form>
+            </div>
+
+            <!-- Step 2: Code verification (hidden initially) -->
+            <div id="beta-step-code" style="display:none">
+                <p id="beta-code-hint">Enter the 6-digit code sent to your email.</p>
+                <form id="beta-form-code" novalidate>
+                    <input type="text" id="beta-code" name="code" class="beta-input"
+                           placeholder="000000" maxlength="6" autocomplete="one-time-code"
+                           inputmode="numeric" pattern="[0-9]{6}" required>
+                    <button type="submit" class="beta-submit" id="beta-submit-code">Verify Code</button>
+                    <div class="beta-msg" id="beta-msg-code"></div>
+                    <button type="button" class="beta-resend" id="beta-resend">Resend code</button>
+                </form>
+            </div>
+
+            <!-- Step 3: Success (hidden initially) -->
+            <div id="beta-step-success" style="display:none">
+                <p class="beta-success-msg">You're on the list! We'll be in touch when a slot opens.</p>
+            </div>
+
+        </div>
+    </div>
+</div>

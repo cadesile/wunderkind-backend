@@ -1,0 +1,35 @@
+{#
+   Landing shell. Replaces the former single-file public/index.html.
+
+   Assets are versioned with `landing_v` so a deploy cannot leave a browser
+   serving a stale stylesheet — there is no build step to fingerprint them.
+#}
+{% set landing_v = '20260828' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Build My Club — Football Chairman Game{% endblock %}</title>
+    <meta name="description" content="{% block description %}Build My Club is a football chairman game for mobile — own the club, invest the capital, build the infrastructure, and climb the league pyramid offline. If you love games like Football Manager mobile, this is the offline football sim built for you.{% endblock %}">
+    <meta name="theme-color" content="#0d2e28">
+    <meta property="og:title" content="{{ block('title') }}">
+    <meta property="og:description" content="Own the club. Build the empire. Climb the pyramid. A mobile football club management game built for tactical depth.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/logo-512.png">
+    {% block robots %}{% endblock %}
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/logo-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/logo-180.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('landing.css') }}?v={{ landing_v }}">
+</head>
+<body>
+{% block body %}{% endblock %}
+<script src="{{ asset('landing.js') }}?v={{ landing_v }}"></script>
+{% block javascripts %}{% endblock %}
+</body>
+</html>
