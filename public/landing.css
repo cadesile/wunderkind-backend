@@ -1800,3 +1800,34 @@ img[width][height] { height: auto; }
     .feature-shot { max-width: 300px; margin: 0 auto; }
     .feature-split.is-reversed > .feature-shot { order: 2; }
 }
+
+/* ── Archetype polarity tag ──────────────────────────────────────────────
+   The positive/negative split is the point of this section, so it is stated
+   in words as well as in the accent colour — red-vs-green is exactly the
+   distinction a colour-blind visitor would otherwise lose.                  */
+.archetype-tag {
+    display: inline-block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    padding: 4px 6px;
+    margin-bottom: 10px;
+    border: 1px solid currentColor;
+    line-height: 1;
+}
+.archetype-tag.is-positive { color: var(--mint); }
+.archetype-tag.is-negative { color: var(--red); }
+
+.archetype-footnote {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 16px;
+}
+
+/* The catalogue's real descriptions run longer than the hard-coded copy they
+   replaced, and two 162px columns at 375px leaves them very cramped. */
+@media (max-width: 480px) {
+    .archetype-grid { grid-template-columns: 1fr; }
+}

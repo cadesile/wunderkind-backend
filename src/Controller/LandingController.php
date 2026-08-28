@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Repository\ExcursionRepository;
 use App\Repository\GameConfigRepository;
+use App\Service\ArchetypeShowcaseService;
 use App\Service\WorldOverviewService;
 use App\Service\YouTubeFeedService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -32,6 +33,7 @@ class LandingController extends AbstractController
         private readonly YouTubeFeedService $youTubeFeedService,
         private readonly GameConfigRepository $gameConfigRepository,
         private readonly ExcursionRepository $excursionRepository,
+        private readonly ArchetypeShowcaseService $archetypeShowcase,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -48,6 +50,8 @@ class LandingController extends AbstractController
             'world'      => $this->worldOverviewService->getOverview(),
             'videos'     => $videos,
             'excursions' => $this->excursionRepository->findBy(['active' => true], ['title' => 'ASC'], 6),
+            // Re-sampled every request, so the shop window rotates between visits.
+            'archetypes' => $this->archetypeShowcase->sample(),
         ]);
     }
 
