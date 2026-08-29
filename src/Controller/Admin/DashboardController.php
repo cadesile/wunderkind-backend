@@ -233,6 +233,26 @@ class DashboardController extends AbstractDashboardController
         $config->setCliqueRelationshipThreshold((int) $request->request->get('cliqueRelationshipThreshold', 20));
         $config->setCliqueSquadCapPercent((int) $request->request->get('cliqueSquadCapPercent', 30));
         $config->setCliqueMinTenureWeeks((int) $request->request->get('cliqueMinTenureWeeks', 3));
+
+        $config->setBondMin((int) $request->request->get('bondMin', -100));
+        $config->setBondMax((int) $request->request->get('bondMax', 100));
+        $config->setBondNegativeDriftPerWeek((int) $request->request->get('bondNegativeDriftPerWeek', 1));
+        $config->setBondPositiveDecayPerWeek((int) $request->request->get('bondPositiveDecayPerWeek', 1));
+        $config->setBondDecayFloor((int) $request->request->get('bondDecayFloor', 50));
+        $config->setBondNeglectWeeks((int) $request->request->get('bondNeglectWeeks', 8));
+        $config->setBondNegativeRelationsThreshold((int) $request->request->get('bondNegativeRelationsThreshold', -20));
+        $config->setBondMoraleDecayChance((float) $request->request->get('bondMoraleDecayChance', 0.1));
+        $config->setBondMoraleDecayPenalty((int) $request->request->get('bondMoraleDecayPenalty', 5));
+        $config->setBondOrganicGrowthBaseChance((float) $request->request->get('bondOrganicGrowthBaseChance', 0.05));
+        $config->setBondOrganicGrowthLoyaltyDivisor((int) $request->request->get('bondOrganicGrowthLoyaltyDivisor', 20));
+        $config->setBondOrganicGrowthAbilityDivisor((int) $request->request->get('bondOrganicGrowthAbilityDivisor', 100));
+        $config->setBondOrganicGrowthDelta((int) $request->request->get('bondOrganicGrowthDelta', 5));
+        $config->setBondManagerAmpDelta((int) $request->request->get('bondManagerAmpDelta', 5));
+        $config->setBondIncidentNegativeDelta((int) $request->request->get('bondIncidentNegativeDelta', -10));
+        $config->setBondIncidentPositiveDelta((int) $request->request->get('bondIncidentPositiveDelta', 8));
+        $config->setCoachManagerTrustThreshold((int) $request->request->get('coachManagerTrustThreshold', -20));
+        $config->setCoachManagerTrustDecayChance((float) $request->request->get('coachManagerTrustDecayChance', 0.15));
+        $config->setCoachManagerTrustMoralePenalty((int) $request->request->get('coachManagerTrustMoralePenalty', 5));
         $config->setBaseXP((int) $request->request->get('baseXP', 10));
         $config->setBaseInjuryProbability((float) $request->request->get('baseInjuryProbability', 0.05));
         $config->setRegressionUpperThreshold((int) $request->request->get('regressionUpperThreshold', 14));

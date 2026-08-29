@@ -30,6 +30,7 @@
             ] %}
             {% set cfgSections = [
                 {id: 'clique',               label: 'Clique System',          group: 'player-dev'},
+                {id: 'bonds',                label: 'Bond System',            group: 'player-dev'},
                 {id: 'development',          label: 'Development / Potential', group: 'player-dev'},
                 {id: 'coach',                label: 'Coach Influence',         group: 'player-dev'},
                 {id: 'transfer',             label: 'Transfer Market',         group: 'transfer'},
@@ -142,6 +143,173 @@
                                    value="{{ config.cliqueMinTenureWeeks }}"
                                    min="1" max="52" class="form-control">
                             <div class="form-text">Club tenure required before clique eligibility. Default: 3</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Bond System ────────────────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="bonds" data-group="player-dev">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-heart-pulse text-muted"></i>
+                    <span class="fw-semibold small">Bond System</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Bonds run from Bond Min to Bond Max and move in two directions each week.
+                        Negative bonds recover toward 0 at the drift rate — grudges fade.
+                        Positive bonds above the <strong>decay floor</strong> erode back down to it
+                        once they have gone <strong>neglect weeks</strong> without an interaction;
+                        anything at or below the floor is permanent. Coaching a player refreshes the
+                        interaction clock, so an actively coached player never decays.
+                        Set Positive Decay / Week to 0 to switch neglect decay off entirely.
+                    </p>
+
+                    <h6 class="small fw-bold text-uppercase text-muted mt-2 mb-2">Decay &amp; Drift</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="bondDecayFloor" class="form-label fw-semibold small">Decay Floor</label>
+                            <input type="number" id="bondDecayFloor" name="bondDecayFloor"
+                                   value="{{ config.bondDecayFloor }}"
+                                   min="-100" max="100" class="form-control">
+                            <div class="form-text">Bonds at or below this never decay — the earned baseline is permanent. Default: 50</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondNeglectWeeks" class="form-label fw-semibold small">Neglect Weeks</label>
+                            <input type="number" id="bondNeglectWeeks" name="bondNeglectWeeks"
+                                   value="{{ config.bondNeglectWeeks }}"
+                                   min="1" max="104" class="form-control">
+                            <div class="form-text">Weeks without an interaction before a bond above the floor starts decaying. Default: 8</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondPositiveDecayPerWeek" class="form-label fw-semibold small">Positive Decay / Week</label>
+                            <input type="number" id="bondPositiveDecayPerWeek" name="bondPositiveDecayPerWeek"
+                                   value="{{ config.bondPositiveDecayPerWeek }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Points a neglected bond loses each week. 0 disables neglect decay. Default: 1</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondNegativeDriftPerWeek" class="form-label fw-semibold small">Negative Drift / Week</label>
+                            <input type="number" id="bondNegativeDriftPerWeek" name="bondNegativeDriftPerWeek"
+                                   value="{{ config.bondNegativeDriftPerWeek }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Points a soured bond recovers toward 0 each week — grudges fade. Default: 1</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondNegativeRelationsThreshold" class="form-label fw-semibold small">Negative Threshold</label>
+                            <input type="number" id="bondNegativeRelationsThreshold" name="bondNegativeRelationsThreshold"
+                                   value="{{ config.bondNegativeRelationsThreshold }}"
+                                   min="-100" max="0" class="form-control">
+                            <div class="form-text">Below this a bond arms weekly morale decay. Default: -20</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondMin" class="form-label fw-semibold small">Bond Min</label>
+                            <input type="number" id="bondMin" name="bondMin"
+                                   value="{{ config.bondMin }}"
+                                   min="-100" max="0" class="form-control">
+                            <div class="form-text">Lower clamp on every bond write. Default: -100</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondMax" class="form-label fw-semibold small">Bond Max</label>
+                            <input type="number" id="bondMax" name="bondMax"
+                                   value="{{ config.bondMax }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Upper clamp on every bond write. Default: 100</div>
+                        </div>
+                    </div>
+
+                    <h6 class="small fw-bold text-uppercase text-muted mt-4 mb-2">Morale Consequences</h6>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="bondMoraleDecayChance" class="form-label fw-semibold small">Morale Decay Chance</label>
+                            <input type="number" id="bondMoraleDecayChance" name="bondMoraleDecayChance"
+                                   value="{{ config.bondMoraleDecayChance }}"
+                                   min="0" max="1"
+                                   step="0.01" class="form-control">
+                            <div class="form-text">Weekly chance an entity with negative relations loses morale. Default: 0.1</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="bondMoraleDecayPenalty" class="form-label fw-semibold small">Morale Decay Penalty</label>
+                            <input type="number" id="bondMoraleDecayPenalty" name="bondMoraleDecayPenalty"
+                                   value="{{ config.bondMoraleDecayPenalty }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Morale lost when that roll passes. Default: 5</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="coachManagerTrustThreshold" class="form-label fw-semibold small">Coach Trust Threshold</label>
+                            <input type="number" id="coachManagerTrustThreshold" name="coachManagerTrustThreshold"
+                                   value="{{ config.coachManagerTrustThreshold }}"
+                                   min="-100" max="0" class="form-control">
+                            <div class="form-text">Coach↔manager value below this arms trust decay. Default: -20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="coachManagerTrustDecayChance" class="form-label fw-semibold small">Coach Trust Chance</label>
+                            <input type="number" id="coachManagerTrustDecayChance" name="coachManagerTrustDecayChance"
+                                   value="{{ config.coachManagerTrustDecayChance }}"
+                                   min="0" max="1"
+                                   step="0.01" class="form-control">
+                            <div class="form-text">Weekly chance a distrusting coach loses morale. Default: 0.15</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="coachManagerTrustMoralePenalty" class="form-label fw-semibold small">Coach Trust Penalty</label>
+                            <input type="number" id="coachManagerTrustMoralePenalty" name="coachManagerTrustMoralePenalty"
+                                   value="{{ config.coachManagerTrustMoralePenalty }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Morale a distrusting coach loses. Default: 5</div>
+                        </div>
+                    </div>
+
+                    <h6 class="small fw-bold text-uppercase text-muted mt-4 mb-2">Bond Gains</h6>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="bondOrganicGrowthBaseChance" class="form-label fw-semibold small">Organic Growth Chance</label>
+                            <input type="number" id="bondOrganicGrowthBaseChance" name="bondOrganicGrowthBaseChance"
+                                   value="{{ config.bondOrganicGrowthBaseChance }}"
+                                   min="0" max="1"
+                                   step="0.01" class="form-control">
+                            <div class="form-text">Base weekly chance a player↔coach bond grows, before boosts. Default: 0.05</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="bondOrganicGrowthDelta" class="form-label fw-semibold small">Organic Growth Delta</label>
+                            <input type="number" id="bondOrganicGrowthDelta" name="bondOrganicGrowthDelta"
+                                   value="{{ config.bondOrganicGrowthDelta }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Bond points added when the growth roll passes. Default: 5</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="bondOrganicGrowthLoyaltyDivisor" class="form-label fw-semibold small">Loyalty Divisor</label>
+                            <input type="number" id="bondOrganicGrowthLoyaltyDivisor" name="bondOrganicGrowthLoyaltyDivisor"
+                                   value="{{ config.bondOrganicGrowthLoyaltyDivisor }}"
+                                   min="1" max="100" class="form-control">
+                            <div class="form-text">Divides player loyalty (1–20) for the growth boost. Default: 20</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="bondOrganicGrowthAbilityDivisor" class="form-label fw-semibold small">Ability Divisor</label>
+                            <input type="number" id="bondOrganicGrowthAbilityDivisor" name="bondOrganicGrowthAbilityDivisor"
+                                   value="{{ config.bondOrganicGrowthAbilityDivisor }}"
+                                   min="1" max="100" class="form-control">
+                            <div class="form-text">Divides coachingAbility (0–100) for the growth boost. Default: 100</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondManagerAmpDelta" class="form-label fw-semibold small">Support / Criticise Delta</label>
+                            <input type="number" id="bondManagerAmpDelta" name="bondManagerAmpDelta"
+                                   value="{{ config.bondManagerAmpDelta }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Bond shift from an AMP SUPPORT (+) or CRITICISE (−) action. Default: 5</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondIncidentNegativeDelta" class="form-label fw-semibold small">Incident Delta (negative)</label>
+                            <input type="number" id="bondIncidentNegativeDelta" name="bondIncidentNegativeDelta"
+                                   value="{{ config.bondIncidentNegativeDelta }}"
+                                   min="-100" max="0" class="form-control">
+                            <div class="form-text">Player↔player change from a negative training incident. Default: -10</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bondIncidentPositiveDelta" class="form-label fw-semibold small">Incident Delta (positive)</label>
+                            <input type="number" id="bondIncidentPositiveDelta" name="bondIncidentPositiveDelta"
+                                   value="{{ config.bondIncidentPositiveDelta }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Player↔player change from a positive training incident. Default: 8</div>
                         </div>
                     </div>
                 </div>

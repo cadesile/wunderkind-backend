@@ -38,6 +38,102 @@ class GameConfig
     #[ORM\Column(type: 'integer')]
     private int $cliqueMinTenureWeeks = 3;
 
+    // ── Bond System ───────────────────────────────────────────────────────
+
+    /** Lower bound every bond write is clamped to. Default: -100 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondMin = -100;
+
+    /** Upper bound every bond write is clamped to. Default: 100 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondMax = 100;
+
+    /**
+     * Points a NEGATIVE bond recovers toward 0 each week — grudges fade.
+     * Positive bonds are untouched by this. Default: 1
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $bondNegativeDriftPerWeek = 1;
+
+    /**
+     * Points a neglected POSITIVE bond loses each week, down to bondDecayFloor.
+     * Set to 0 to disable neglect decay entirely. Default: 1
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $bondPositiveDecayPerWeek = 1;
+
+    /**
+     * Bonds at or below this value never decay — the earned baseline is
+     * permanent, and only the surplus above it is at risk. Default: 50
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $bondDecayFloor = 50;
+
+    /**
+     * Weeks without an interaction before a bond above the floor starts
+     * decaying. Default: 8
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $bondNeglectWeeks = 8;
+
+    /**
+     * A bond below this counts as a negative relationship and arms weekly
+     * morale decay for that player/coach/scout. Default: -20
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $bondNegativeRelationsThreshold = -20;
+
+    /** Weekly chance (0–1) an entity with negative relations loses morale. Default: 0.10 */
+    #[ORM\Column(type: 'float')]
+    private float $bondMoraleDecayChance = 0.10;
+
+    /** Morale lost when that roll passes. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondMoraleDecayPenalty = 5;
+
+    /**
+     * Base weekly chance (0–1) a player↔assigned-coach bond grows organically,
+     * before the loyalty and coaching-ability boosts. Default: 0.05
+     */
+    #[ORM\Column(type: 'float')]
+    private float $bondOrganicGrowthBaseChance = 0.05;
+
+    /** Divisor applied to player loyalty (1–20) for the growth boost. Default: 20 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondOrganicGrowthLoyaltyDivisor = 20;
+
+    /** Divisor applied to coachingAbility (0–100) for the growth boost. Default: 100 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondOrganicGrowthAbilityDivisor = 100;
+
+    /** Bond points added when the organic growth roll passes. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondOrganicGrowthDelta = 5;
+
+    /** Bond shift from an AMP SUPPORT (+) or CRITICISE (−) action. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondManagerAmpDelta = 5;
+
+    /** Player↔player bond change from a negative training incident. Default: -10 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondIncidentNegativeDelta = -10;
+
+    /** Player↔player bond change from a positive training incident. Default: 8 */
+    #[ORM\Column(type: 'integer')]
+    private int $bondIncidentPositiveDelta = 8;
+
+    /** Coach↔manager relationship below this arms coach trust decay. Default: -20 */
+    #[ORM\Column(type: 'integer')]
+    private int $coachManagerTrustThreshold = -20;
+
+    /** Weekly chance (0–1) a distrusting coach loses morale. Default: 0.15 */
+    #[ORM\Column(type: 'float')]
+    private float $coachManagerTrustDecayChance = 0.15;
+
+    /** Morale a distrusting coach loses when that roll passes. Default: 5 */
+    #[ORM\Column(type: 'integer')]
+    private int $coachManagerTrustMoralePenalty = 5;
+
     // ── Engine Constants ──────────────────────────────────────────────────
 
     /** Base XP awarded per player per week before facility/coach multipliers. Default: 10 */
@@ -429,6 +525,63 @@ class GameConfig
 
     public function getCliqueMinTenureWeeks(): int { return $this->cliqueMinTenureWeeks; }
     public function setCliqueMinTenureWeeks(int $v): static { $this->cliqueMinTenureWeeks = $v; return $this; }
+
+    public function getBondMin(): int { return $this->bondMin; }
+    public function setBondMin(int $v): static { $this->bondMin = $v; return $this; }
+
+    public function getBondMax(): int { return $this->bondMax; }
+    public function setBondMax(int $v): static { $this->bondMax = $v; return $this; }
+
+    public function getBondNegativeDriftPerWeek(): int { return $this->bondNegativeDriftPerWeek; }
+    public function setBondNegativeDriftPerWeek(int $v): static { $this->bondNegativeDriftPerWeek = $v; return $this; }
+
+    public function getBondPositiveDecayPerWeek(): int { return $this->bondPositiveDecayPerWeek; }
+    public function setBondPositiveDecayPerWeek(int $v): static { $this->bondPositiveDecayPerWeek = $v; return $this; }
+
+    public function getBondDecayFloor(): int { return $this->bondDecayFloor; }
+    public function setBondDecayFloor(int $v): static { $this->bondDecayFloor = $v; return $this; }
+
+    public function getBondNeglectWeeks(): int { return $this->bondNeglectWeeks; }
+    public function setBondNeglectWeeks(int $v): static { $this->bondNeglectWeeks = $v; return $this; }
+
+    public function getBondNegativeRelationsThreshold(): int { return $this->bondNegativeRelationsThreshold; }
+    public function setBondNegativeRelationsThreshold(int $v): static { $this->bondNegativeRelationsThreshold = $v; return $this; }
+
+    public function getBondMoraleDecayPenalty(): int { return $this->bondMoraleDecayPenalty; }
+    public function setBondMoraleDecayPenalty(int $v): static { $this->bondMoraleDecayPenalty = $v; return $this; }
+
+    public function getBondOrganicGrowthLoyaltyDivisor(): int { return $this->bondOrganicGrowthLoyaltyDivisor; }
+    public function setBondOrganicGrowthLoyaltyDivisor(int $v): static { $this->bondOrganicGrowthLoyaltyDivisor = $v; return $this; }
+
+    public function getBondOrganicGrowthAbilityDivisor(): int { return $this->bondOrganicGrowthAbilityDivisor; }
+    public function setBondOrganicGrowthAbilityDivisor(int $v): static { $this->bondOrganicGrowthAbilityDivisor = $v; return $this; }
+
+    public function getBondOrganicGrowthDelta(): int { return $this->bondOrganicGrowthDelta; }
+    public function setBondOrganicGrowthDelta(int $v): static { $this->bondOrganicGrowthDelta = $v; return $this; }
+
+    public function getBondManagerAmpDelta(): int { return $this->bondManagerAmpDelta; }
+    public function setBondManagerAmpDelta(int $v): static { $this->bondManagerAmpDelta = $v; return $this; }
+
+    public function getBondIncidentNegativeDelta(): int { return $this->bondIncidentNegativeDelta; }
+    public function setBondIncidentNegativeDelta(int $v): static { $this->bondIncidentNegativeDelta = $v; return $this; }
+
+    public function getBondIncidentPositiveDelta(): int { return $this->bondIncidentPositiveDelta; }
+    public function setBondIncidentPositiveDelta(int $v): static { $this->bondIncidentPositiveDelta = $v; return $this; }
+
+    public function getCoachManagerTrustThreshold(): int { return $this->coachManagerTrustThreshold; }
+    public function setCoachManagerTrustThreshold(int $v): static { $this->coachManagerTrustThreshold = $v; return $this; }
+
+    public function getCoachManagerTrustMoralePenalty(): int { return $this->coachManagerTrustMoralePenalty; }
+    public function setCoachManagerTrustMoralePenalty(int $v): static { $this->coachManagerTrustMoralePenalty = $v; return $this; }
+
+    public function getBondMoraleDecayChance(): float { return $this->bondMoraleDecayChance; }
+    public function setBondMoraleDecayChance(float $v): static { $this->bondMoraleDecayChance = $v; return $this; }
+
+    public function getBondOrganicGrowthBaseChance(): float { return $this->bondOrganicGrowthBaseChance; }
+    public function setBondOrganicGrowthBaseChance(float $v): static { $this->bondOrganicGrowthBaseChance = $v; return $this; }
+
+    public function getCoachManagerTrustDecayChance(): float { return $this->coachManagerTrustDecayChance; }
+    public function setCoachManagerTrustDecayChance(float $v): static { $this->coachManagerTrustDecayChance = $v; return $this; }
 
     public function getBaseXP(): int { return $this->baseXP; }
     public function setBaseXP(int $v): static { $this->baseXP = $v; return $this; }

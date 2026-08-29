@@ -34,6 +34,25 @@ class ConfigImportExportService
             'exportedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
             'gameConfig' => [
                 'cliqueRelationshipThreshold'              => $game->getCliqueRelationshipThreshold(),
+                'bondMin'                         => $game->getBondMin(),
+                'bondMax'                         => $game->getBondMax(),
+                'bondNegativeDriftPerWeek'        => $game->getBondNegativeDriftPerWeek(),
+                'bondPositiveDecayPerWeek'        => $game->getBondPositiveDecayPerWeek(),
+                'bondDecayFloor'                  => $game->getBondDecayFloor(),
+                'bondNeglectWeeks'                => $game->getBondNeglectWeeks(),
+                'bondNegativeRelationsThreshold'  => $game->getBondNegativeRelationsThreshold(),
+                'bondMoraleDecayChance'           => $game->getBondMoraleDecayChance(),
+                'bondMoraleDecayPenalty'          => $game->getBondMoraleDecayPenalty(),
+                'bondOrganicGrowthBaseChance'     => $game->getBondOrganicGrowthBaseChance(),
+                'bondOrganicGrowthLoyaltyDivisor' => $game->getBondOrganicGrowthLoyaltyDivisor(),
+                'bondOrganicGrowthAbilityDivisor' => $game->getBondOrganicGrowthAbilityDivisor(),
+                'bondOrganicGrowthDelta'          => $game->getBondOrganicGrowthDelta(),
+                'bondManagerAmpDelta'             => $game->getBondManagerAmpDelta(),
+                'bondIncidentNegativeDelta'       => $game->getBondIncidentNegativeDelta(),
+                'bondIncidentPositiveDelta'       => $game->getBondIncidentPositiveDelta(),
+                'coachManagerTrustThreshold'      => $game->getCoachManagerTrustThreshold(),
+                'coachManagerTrustDecayChance'    => $game->getCoachManagerTrustDecayChance(),
+                'coachManagerTrustMoralePenalty'  => $game->getCoachManagerTrustMoralePenalty(),
                 'cliqueSquadCapPercent'                    => $game->getCliqueSquadCapPercent(),
                 'cliqueMinTenureWeeks'                     => $game->getCliqueMinTenureWeeks(),
                 'baseXP'                                   => $game->getBaseXP(),
@@ -174,6 +193,44 @@ class ConfigImportExportService
         $config = $this->gameConfigRepository->getConfig();
 
         if (isset($row['cliqueRelationshipThreshold']))              $config->setCliqueRelationshipThreshold((int) $row['cliqueRelationshipThreshold']);
+
+        if (isset($row['bondMin']))                       $config->setBondMin((int) $row['bondMin']);
+
+        if (isset($row['bondMax']))                       $config->setBondMax((int) $row['bondMax']);
+
+        if (isset($row['bondNegativeDriftPerWeek']))      $config->setBondNegativeDriftPerWeek((int) $row['bondNegativeDriftPerWeek']);
+
+        if (isset($row['bondPositiveDecayPerWeek']))      $config->setBondPositiveDecayPerWeek((int) $row['bondPositiveDecayPerWeek']);
+
+        if (isset($row['bondDecayFloor']))                $config->setBondDecayFloor((int) $row['bondDecayFloor']);
+
+        if (isset($row['bondNeglectWeeks']))              $config->setBondNeglectWeeks((int) $row['bondNeglectWeeks']);
+
+        if (isset($row['bondNegativeRelationsThreshold'])) $config->setBondNegativeRelationsThreshold((int) $row['bondNegativeRelationsThreshold']);
+
+        if (isset($row['bondMoraleDecayChance']))         $config->setBondMoraleDecayChance((float) $row['bondMoraleDecayChance']);
+
+        if (isset($row['bondMoraleDecayPenalty']))        $config->setBondMoraleDecayPenalty((int) $row['bondMoraleDecayPenalty']);
+
+        if (isset($row['bondOrganicGrowthBaseChance']))   $config->setBondOrganicGrowthBaseChance((float) $row['bondOrganicGrowthBaseChance']);
+
+        if (isset($row['bondOrganicGrowthLoyaltyDivisor'])) $config->setBondOrganicGrowthLoyaltyDivisor((int) $row['bondOrganicGrowthLoyaltyDivisor']);
+
+        if (isset($row['bondOrganicGrowthAbilityDivisor'])) $config->setBondOrganicGrowthAbilityDivisor((int) $row['bondOrganicGrowthAbilityDivisor']);
+
+        if (isset($row['bondOrganicGrowthDelta']))        $config->setBondOrganicGrowthDelta((int) $row['bondOrganicGrowthDelta']);
+
+        if (isset($row['bondManagerAmpDelta']))           $config->setBondManagerAmpDelta((int) $row['bondManagerAmpDelta']);
+
+        if (isset($row['bondIncidentNegativeDelta']))     $config->setBondIncidentNegativeDelta((int) $row['bondIncidentNegativeDelta']);
+
+        if (isset($row['bondIncidentPositiveDelta']))     $config->setBondIncidentPositiveDelta((int) $row['bondIncidentPositiveDelta']);
+
+        if (isset($row['coachManagerTrustThreshold']))    $config->setCoachManagerTrustThreshold((int) $row['coachManagerTrustThreshold']);
+
+        if (isset($row['coachManagerTrustDecayChance']))  $config->setCoachManagerTrustDecayChance((float) $row['coachManagerTrustDecayChance']);
+
+        if (isset($row['coachManagerTrustMoralePenalty'])) $config->setCoachManagerTrustMoralePenalty((int) $row['coachManagerTrustMoralePenalty']);
         if (isset($row['cliqueSquadCapPercent']))                    $config->setCliqueSquadCapPercent((int) $row['cliqueSquadCapPercent']);
         if (isset($row['cliqueMinTenureWeeks']))                     $config->setCliqueMinTenureWeeks((int) $row['cliqueMinTenureWeeks']);
         if (isset($row['baseXP']))                                   $config->setBaseXP((int) $row['baseXP']);
