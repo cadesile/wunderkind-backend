@@ -86,4 +86,39 @@ class TransferRepository extends ServiceEntityRepository
 
         return $qb->getQuery()->getArrayResult();
     }
+
+    /**
+     * Each club's single biggest transfer fee — the transfer_record (outgoing) and
+     * transfer_spend (incoming) score. Collapses to one row per club the same way
+     * PlayerCareerStatRepository::findTopPerformerByClub() does.
+     *
+     * Ranks on gross `fee` on both sides: a SIGNING row never populates netProceeds,
+     * so gross is the only value the two directions share.
+     *
+     * @param  bool $incoming true for fees paid (SIGNING rows), false for fees received
+     * @return array<array{clubId: string, score: int, displayLabel: string}>
+     */
+    public function findHighestFeeByClub(bool $incoming): array
+    {
+        $qb = $this->createQueryBuilder('t')
+            ->select('IDENTITY(t.club) AS clubId', 't.fee AS score', 't.playerName AS displayLabel')
+            ->where('t.club IS NOT NULL')   // club FK is ON DELETE SET NULL
+            ->andWhere($incoming ? 't.type = :signing' : 't.type != :signing')
+            ->setParameter('signing', TransferType::SIGNING->value)
+            ->orderBy('t.fee', 'DESC');
+
+        $topPerClub = [];
+        foreach ($qb->getQuery()->getArrayResult() as $row) {
+            $clubId = $row['clubId'];
+            if (!isset($topPerClub[$clubId])) {
+                $topPerClub[$clubId] = [
+                    'clubId'       => $clubId,
+                    'score'        => (int) $row['score'],
+                    'displayLabel' => $row['displayLabel'] ?? 'Unknown Player',
+                ];
+            }
+        }
+
+        return array_values($topPerClub);
+    }
 }

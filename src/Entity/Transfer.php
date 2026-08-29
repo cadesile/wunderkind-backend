@@ -9,6 +9,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: \App\Repository\TransferRepository::class)]
 #[ORM\Index(columns: ['club_id', 'occurred_at'], name: 'idx_transfer_club_occurred')]
 #[ORM\Index(columns: ['net_proceeds'], name: 'idx_transfer_net_proceeds')]
+#[ORM\Index(columns: ['type', 'fee'], name: 'idx_transfer_type_fee')]
 #[ORM\HasLifecycleCallbacks]
 class Transfer
 {

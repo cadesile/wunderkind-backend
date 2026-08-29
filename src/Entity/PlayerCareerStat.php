@@ -19,6 +19,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\UniqueConstraint(name: 'uq_player_career_stat_club_player', columns: ['club_id', 'player_id'])]
 #[ORM\Index(name: 'idx_player_career_stat_goals', columns: ['goals'])]
 #[ORM\Index(name: 'idx_player_career_stat_assists', columns: ['assists'])]
+#[ORM\Index(name: 'idx_player_career_stat_appearances', columns: ['appearances'])]
 class PlayerCareerStat
 {
     #[ORM\Id]

@@ -17,6 +17,25 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 {
     private const PASSWORD = 'correct-horse-battery';
 
+    /**
+     * A client on an IP address no other test shares.
+     *
+     * The endpoint rate-limits by counting persisted DeletionRequest rows for the
+     * caller's IP over a rolling 15-minute window (AccountDeletionRequestController
+     * ::RATE_LIMIT). Those rows are the audit trail — they are never cleaned up — so
+     * on the default 127.0.0.1 the counter is shared by every test in this class AND
+     * by every previous run: four invalid-credential rows per run means the third
+     * consecutive run inside the window trips the limit and the endpoint starts
+     * answering the tests themselves with 429. A per-test IP gives each one its own
+     * counter, so the limiter can never be tripped by anything but that test.
+     */
+    private function newClient(): KernelBrowser
+    {
+        self::ensureKernelShutdown();
+
+        return static::createClient([], ['REMOTE_ADDR' => '10.' . random_int(0, 255) . '.' . random_int(0, 255) . '.' . random_int(1, 254)]);
+    }
+
     private function post(KernelBrowser $client, array $fields): array
     {
         $client->request('POST', '/api/account/delete-request', $fields);
@@ -53,7 +72,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testValidCredentialsDeleteTheAccountAndItsClubs(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $email  = 'del-ok-' . uniqid() . '@example.com';
         $user   = $this->makeUser($email);
         $userId = $user->getId();
@@ -77,7 +96,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testEmailIsMatchedCaseInsensitively(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $email  = 'del-case-' . uniqid() . '@example.com';
         $this->makeUser($email);
 
@@ -99,7 +118,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
      */
     public function testGuestAccountIsRejectedWithActionableGuidance(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $email  = 'device-abc' . User::GUEST_EMAIL_DOMAIN;
 
         $data = $this->post($client, ['email' => $email, 'password' => 'anything', 'confirm' => 'DELETE']);
@@ -115,7 +134,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testGuestCheckHappensBeforeAnyCredentialLookup(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
 
         // No such account exists at all; the guest domain alone must decide.
         $data = $this->post($client, [
@@ -135,7 +154,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
      */
     public function testUnknownEmailAndWrongPasswordAreIndistinguishable(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $known  = 'del-wrong-' . uniqid() . '@example.com';
         $this->makeUser($known);
 
@@ -153,7 +172,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testWrongPasswordLeavesTheAccountIntact(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $email  = 'del-intact-' . uniqid() . '@example.com';
         $userId = $this->makeUser($email)->getId();
 
@@ -172,7 +191,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
     /** The typed-DELETE gate is enforced server-side; a client-only check is theatre. */
     public function testMissingConfirmationIsRejectedBeforeCredentialsAreChecked(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $email  = 'del-noconfirm-' . uniqid() . '@example.com';
         $userId = $this->makeUser($email)->getId();
 
@@ -188,7 +207,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testConfirmationIsCaseInsensitive(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $email  = 'del-lower-' . uniqid() . '@example.com';
         $this->makeUser($email);
 
@@ -199,7 +218,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testMalformedEmailIsRejected(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
 
         $data = $this->post($client, ['email' => 'not-an-email', 'password' => 'x', 'confirm' => 'DELETE']);
 
@@ -209,7 +228,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
 
     public function testEndpointIsPubliclyReachableWithoutAToken(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $client->request('POST', '/api/account/delete-request', ['email' => 'x@y.z', 'password' => 'p', 'confirm' => 'DELETE']);
 
         // Anything but 401-from-the-firewall proves the route is public; the
@@ -223,7 +242,7 @@ class AccountDeletionRequestControllerTest extends WebTestCase
     /** The narrower public rule must not have opened up the JWT-only endpoint. */
     public function testTheJwtOnlyDeleteEndpointIsStillProtected(): void
     {
-        $client = static::createClient();
+        $client = $this->newClient();
         $client->request('POST', '/api/account/delete');
 
         self::assertResponseStatusCodeSame(401);

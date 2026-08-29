@@ -33,12 +33,12 @@ class PlayerCareerStatRepository extends ServiceEntityRepository
      * Each club's top individual performer for the given stat column.
      * Returns one row per club: the row with the highest value of that column.
      *
-     * @param 'goals'|'assists' $column
+     * @param 'goals'|'assists'|'appearances' $column
      * @return array<array{clubId: string, score: int, displayLabel: string}>
      */
     public function findTopPerformerByClub(string $column): array
     {
-        if (!in_array($column, ['goals', 'assists'], true)) {
+        if (!in_array($column, ['goals', 'assists', 'appearances'], true)) {
             throw new \InvalidArgumentException("Unsupported column: {$column}");
         }
 
@@ -61,5 +61,37 @@ class PlayerCareerStatRepository extends ServiceEntityRepository
         }
 
         return array_values($topPerClub);
+    }
+
+    /**
+     * Squad-wide total per club for the given stat column — the club_goals /
+     * club_assists score. Shaped like ClubFacilityRepository::sumLevelsByClub().
+     *
+     * Safe to recompute repeatedly: PlayerCareerStat::applySnapshot() overwrites
+     * rather than accumulates, so a replayed sync can't inflate the total.
+     *
+     * @param 'goals'|'assists'|'appearances' $column
+     * @return array<array{clubId: string, score: int, displayLabel: null}>
+     */
+    public function sumByClub(string $column): array
+    {
+        if (!in_array($column, ['goals', 'assists', 'appearances'], true)) {
+            throw new \InvalidArgumentException("Unsupported column: {$column}");
+        }
+
+        $rows = $this->createQueryBuilder('s')
+            ->select('IDENTITY(s.club) AS clubId', "SUM(s.{$column}) AS score")
+            ->groupBy('s.club')
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_map(
+            static fn (array $row): array => [
+                'clubId'       => $row['clubId'],
+                'score'        => (int) $row['score'],
+                'displayLabel' => null,
+            ],
+            $rows,
+        );
     }
 }

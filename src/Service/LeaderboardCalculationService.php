@@ -10,6 +10,7 @@ use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubRepository;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\PlayerCareerStatRepository;
+use App\Repository\TransferRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
@@ -21,6 +22,7 @@ class LeaderboardCalculationService
         private readonly LeaderboardEntryRepository $leaderboardEntryRepository,
         private readonly ClubFacilityRepository $clubFacilityRepository,
         private readonly PlayerCareerStatRepository $playerCareerStatRepository,
+        private readonly TransferRepository $transferRepository,
         private readonly ClubRepository $clubRepository,
         private readonly HallOfFameScoreService $hallOfFameScoreService,
         private readonly TagAwareCacheInterface $leaderboardCache,
@@ -90,7 +92,7 @@ class LeaderboardCalculationService
 
     /**
      * Computes and upserts LeaderboardEntry.score (and displayLabel where relevant)
-     * for one of the aggregate categories, from ClubFacility / PlayerCareerStat / SeasonRecord.
+     * for one of the aggregate categories, from ClubFacility / PlayerCareerStat / SeasonRecord / Transfer.
      */
     private function computeAggregateScores(LeaderboardCategory $category, string $period): void
     {
@@ -102,6 +104,11 @@ class LeaderboardCalculationService
             LeaderboardCategory::GOLDEN_BOOT => $this->playerCareerStatRepository->findTopPerformerByClub('goals'),
             LeaderboardCategory::PLAYMAKER   => $this->playerCareerStatRepository->findTopPerformerByClub('assists'),
             LeaderboardCategory::HALL_OF_FAME => $this->hallOfFameRows(),
+            LeaderboardCategory::CLUB_GOALS   => $this->playerCareerStatRepository->sumByClub('goals'),
+            LeaderboardCategory::CLUB_ASSISTS => $this->playerCareerStatRepository->sumByClub('assists'),
+            LeaderboardCategory::IRON_MAN     => $this->playerCareerStatRepository->findTopPerformerByClub('appearances'),
+            LeaderboardCategory::TRANSFER_RECORD => $this->transferRepository->findHighestFeeByClub(false),
+            LeaderboardCategory::TRANSFER_SPEND  => $this->transferRepository->findHighestFeeByClub(true),
             default => throw new \InvalidArgumentException("{$category->value} is not an aggregate category"),
         };
 

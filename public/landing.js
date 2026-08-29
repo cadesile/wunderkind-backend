@@ -396,6 +396,11 @@ function openBetaModal() {
         playmaker:        { label: 'Playmaker',        unit: 'assists · top provider', format: 'int' },
         empire_index:     { label: 'Empire Index',     unit: 'facility levels',   format: 'int' },
         fanatics:         { label: 'Fanatics',         unit: 'season attendance', format: 'int' },
+        club_goals:       { label: 'Club Goals',       unit: 'goals · whole squad',   format: 'int' },
+        club_assists:     { label: 'Club Assists',     unit: 'assists · whole squad', format: 'int' },
+        iron_man:         { label: 'Iron Man',         unit: 'appearances · most capped', format: 'int' },
+        transfer_record:  { label: 'Transfer Record',  unit: 'biggest fee received', format: 'currency' },
+        transfer_spend:   { label: 'Transfer Spend',   unit: 'biggest fee paid',     format: 'currency' },
     };
 
     var PAGE_SIZE  = 10;

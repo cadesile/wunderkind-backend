@@ -1,6 +1,6 @@
 # Global Leaderboard API
 
-Seven public, cached leaderboard categories ranking clubs. Backed by
+Twelve public, cached leaderboard categories ranking clubs. Backed by
 `GET /api/leaderboard/{category}` — **no authentication required** (public
 endpoint, same as `/api/stats/*` and `/api/leaderboard/transfers`).
 
@@ -19,6 +19,11 @@ freshness below.
 | `playmaker` | Playmaker | Assists this season by the club's top provider | Top provider's name |
 | `empire_index` | Empire Index | Sum of the club's facility upgrade levels | — |
 | `fanatics` | Fanatics | Total season attendance (accumulated across home fixtures) | — |
+| `club_goals` | Club Goals | Goals scored by the club's **whole squad** combined | — |
+| `club_assists` | Club Assists | Assists made by the club's **whole squad** combined | — |
+| `iron_man` | Iron Man | Appearances made by the club's most-capped player | That player's name |
+| `transfer_record` | Transfer Record | Biggest single fee **received** for a departing player, **in pence/cents** | Player sold |
+| `transfer_spend` | Transfer Spend | Biggest single fee **paid** for a signing, **in pence/cents** | Player signed |
 
 ### How `hall_of_fame` is scored
 
@@ -42,9 +47,25 @@ onto `Club.hallOfFamePoints`, which `/api/club/status` and the `POST /api/sync` 
 it is only recorded in the `SyncRecord` audit payload.
 
 
-`golden_boot` and `playmaker` are **club-level** boards — the club is credited
-with its single best individual performer's tally, not a combined squad total.
-`displayLabel` carries that player's name; it's `null` for every other category.
+### Squad totals vs. individual bests
+
+`golden_boot`, `playmaker` and `iron_man` credit the club with its single best
+individual performer's tally; `displayLabel` carries that player's name.
+`club_goals` and `club_assists` are the combined squad totals over the same
+underlying per-player stats, so a club always ranks on both scales.
+
+All twelve boards are **club-level** — entries are clubs, never players.
+`displayLabel` is populated for `golden_boot`, `playmaker`, `iron_man`,
+`transfer_record` and `transfer_spend`, and `null` for every other category.
+
+### How the transfer boards are scored
+
+Both rank on the **gross** fee (before agent commission), since an incoming
+signing never records a net figure. `transfer_record` looks at every non-signing
+transfer the club has made; `transfer_spend` looks only at signings. They are
+records, not totals — a club's score is its single biggest deal, not its
+lifetime turnover. For lifetime sale volume use
+`GET /api/leaderboard/transfers/top-sellers` instead.
 
 ## Request
 
@@ -54,7 +75,7 @@ GET /api/leaderboard/{category}?period=all-time&page=1&pageSize=20
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `category` | path, string | — | One of the 7 slugs above |
+| `category` | path, string | — | One of the 12 slugs above |
 | `period` | query, string | `all-time` | `all-time`, or a specific ISO week string e.g. `2026-W09` |
 | `page` | query, int | `1` | 1-indexed |
 | `pageSize` | query, int | `20` | Clamped to `[1, 100]` |
@@ -91,8 +112,8 @@ GET /api/leaderboard/{category}?period=all-time&page=1&pageSize=20
 | `entries[].rank` | int | 1-indexed, matches sort order (descending by `score`) |
 | `entries[].clubId` | string (UUID) | |
 | `entries[].clubName` | string | |
-| `entries[].score` | int | Raw value — see the per-category table above for units. `career_earnings` is **pence/cents**, divide by 100 before formatting as currency. |
-| `entries[].displayLabel` | string \| null | Only populated for `golden_boot`/`playmaker` |
+| `entries[].score` | int | Raw value — see the per-category table above for units. `career_earnings`, `transfer_record` and `transfer_spend` are **pence/cents**, divide by 100 before formatting as currency. |
+| `entries[].displayLabel` | string \| null | Only populated for `golden_boot`, `playmaker`, `iron_man`, `transfer_record`, `transfer_spend` |
 | `total` | int | Total clubs ranked in this category/period (across all pages) |
 | `hasNextPage` | bool | Whether `page + 1` has more results |
 
@@ -105,14 +126,15 @@ error condition — render an empty/zero state.
 
 - `400 Bad Request` for an unknown category:
   ```json
-  { "error": "Invalid category. Valid values: career_earnings, club_reputation, hall_of_fame, golden_boot, playmaker, empire_index, fanatics" }
+  { "error": "Invalid category. Valid values: career_earnings, club_reputation, hall_of_fame, golden_boot, playmaker, empire_index, fanatics, club_goals, club_assists, iron_man, transfer_record, transfer_spend" }
   ```
 
 ## Caching & freshness
 
 Responses are cached server-side per `(category, period)` for 5 minutes
-(`LEADERBOARD_CACHE_TTL` env var). A cron job re-ranks and (for `golden_boot`,
-`playmaker`, `empire_index`) recomputes scores every 5 minutes and invalidates
+(`LEADERBOARD_CACHE_TTL` env var). A cron job re-ranks and (for every category
+except `club_reputation`, `career_earnings` and `fanatics`, whose scores are
+upserted on each sync) recomputes scores every 5 minutes and invalidates
 the cache; a cold cache falls back to computing fresh on that request. In
 practice: **don't poll faster than every ~30–60s**, and expect the board to
 lag live gameplay by up to ~5–10 minutes. Good candidates for polling on an
