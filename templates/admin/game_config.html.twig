@@ -24,7 +24,7 @@
                 {id: 'transfer',        label: 'Transfers',          icon: 'fa-money-bill-transfer', subs: 'Transfer Market · Wages · Scouting'},
                 {id: 'match-settings',  label: 'Match Settings',     icon: 'fa-futbol',              subs: 'Injury · Playing Style · Cards'},
                 {id: 'league-config',   label: 'League Config',      icon: 'fa-trophy',              subs: 'Morale · Finances · NPC · Squad · Penalties · Trophy Points · Pyramid News'},
-                {id: 'facility-config', label: 'Facility Config',    icon: 'fa-building',            subs: 'Income · Construction'},
+                {id: 'facility-config', label: 'Facility Config',    icon: 'fa-building',            subs: 'Income · Construction · Staff Morale'},
                 {id: 'event-config',    label: 'Event Config',       icon: 'fa-bolt',                subs: 'Incidents · Sacking · Guardian'},
                 {id: 'club-dev',        label: 'Club Development',   icon: 'fa-seedling',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium · Cooldowns'},
             ] %}
@@ -44,6 +44,7 @@
                 {id: 'squad',                label: 'Squad',                   group: 'league-config'},
                 {id: 'facility-income',      label: 'Facility Income',         group: 'facility-config'},
                 {id: 'facility-build',       label: 'Facility Construction',   group: 'facility-config'},
+                {id: 'facility-morale',      label: 'Facility Staff Morale',   group: 'facility-config'},
                 {id: 'incidents',            label: 'Incidents',               group: 'event-config'},
                 {id: 'sacking',              label: 'Manager Sacking',         group: 'event-config'},
                 {id: 'guardian',             label: 'Guardian Complaints',     group: 'event-config'},
@@ -1261,6 +1262,73 @@
                                    value="{{ config.facilityConstructionFailureTimeMax }}"
                                    step="1" min="0" class="form-control">
                             <div class="form-text">Weeks added on failure. Default: 6</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Facility Staff Morale ──────────────────────────────────── #}
+            <div class="card cfg-section" data-section-id="facility-morale" data-group="facility-config">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-face-smile text-muted"></i>
+                    <span class="fw-semibold small">Facility Staff Morale</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Morale granted to staff when the club starts or completes a facility build or upgrade.
+                        The Facility Manager takes the full amount; every other staff member takes a share.
+                        This counterweights the Facility Manager's workload and condition penalties, which are
+                        otherwise a one-way ratchet down.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="facilityMoraleFmBase" class="form-label fw-semibold small">FM Base Gain</label>
+                            <input type="number" id="facilityMoraleFmBase" name="facilityMoraleFmBase"
+                                   value="{{ config.facilityMoraleFmBase }}"
+                                   step="1" min="0" max="100" class="form-control">
+                            <div class="form-text">Facility Manager morale on completing a level-1 upgrade. Default: 6</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityMoraleFmPerLevel" class="form-label fw-semibold small">Per Level</label>
+                            <input type="number" id="facilityMoraleFmPerLevel" name="facilityMoraleFmPerLevel"
+                                   value="{{ config.facilityMoraleFmPerLevel }}"
+                                   step="1" min="0" max="100" class="form-control">
+                            <div class="form-text">Added for each level above 1. Default: 2</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityMoraleNewBuildBonus" class="form-label fw-semibold small">New Build Bonus</label>
+                            <input type="number" id="facilityMoraleNewBuildBonus" name="facilityMoraleNewBuildBonus"
+                                   value="{{ config.facilityMoraleNewBuildBonus }}"
+                                   step="1" min="0" max="100" class="form-control">
+                            <div class="form-text">Extra gain when a facility goes 0 → 1. Default: 4</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityMoraleStaffShare" class="form-label fw-semibold small">Other Staff Share</label>
+                            <input type="number" id="facilityMoraleStaffShare" name="facilityMoraleStaffShare"
+                                   value="{{ config.facilityMoraleStaffShare }}"
+                                   step="0.01" min="0.0" max="1.0" class="form-control">
+                            <div class="form-text">Fraction of the FM gain given to every other staff member. Default: 0.34</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="facilityMoraleStartMultiplier" class="form-label fw-semibold small">Start Multiplier</label>
+                            <input type="number" id="facilityMoraleStartMultiplier" name="facilityMoraleStartMultiplier"
+                                   value="{{ config.facilityMoraleStartMultiplier }}"
+                                   step="0.05" min="0.0" max="1.0" class="form-control">
+                            <div class="form-text">Fraction of the completion gain paid when work starts. Default: 0.4</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="staffMoraleBandFactorMid" class="form-label fw-semibold small">Mid Band Factor</label>
+                            <input type="number" id="staffMoraleBandFactorMid" name="staffMoraleBandFactorMid"
+                                   step="0.05" min="0.0" max="1.0" class="form-control"
+                                   value="{{ config.staffMoraleBandFactorMid }}">
+                            <div class="form-text">Diminishing returns while morale is in the mid band. Default: 0.6</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="staffMoraleBandFactorHigh" class="form-label fw-semibold small">High Band Factor</label>
+                            <input type="number" id="staffMoraleBandFactorHigh" name="staffMoraleBandFactorHigh"
+                                   step="0.05" min="0.0" max="1.0" class="form-control"
+                                   value="{{ config.staffMoraleBandFactorHigh }}">
+                            <div class="form-text">Diminishing returns while morale is in the high band. Default: 0.25</div>
                         </div>
                     </div>
                 </div>

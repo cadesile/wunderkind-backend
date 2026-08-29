@@ -246,6 +246,61 @@ class GameConfig
     #[ORM\Column(type: 'float')]
     private float $coachMoraleInfluence = 0.5;
 
+    // ── Facility Staff Morale ───────────────────────────────────────────────
+    // Morale granted to staff when the club starts or completes a facility
+    // build/upgrade. The Facility Manager takes the full amount; every other
+    // staff member takes a share of it. Counterweights the FM's workload and
+    // condition penalties, which are otherwise a one-way ratchet down.
+
+    /**
+     * Facility Manager morale gained on completing a level-1 upgrade.
+     * Default: 6
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityMoraleFmBase = 6;
+
+    /**
+     * Added to the Facility Manager's gain for each level above 1, so bigger
+     * facilities feel bigger. Default: 2
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityMoraleFmPerLevel = 2;
+
+    /**
+     * Extra gain when the facility goes from level 0 to 1 — a new build rather
+     * than an incremental upgrade. Default: 4
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $facilityMoraleNewBuildBonus = 4;
+
+    /**
+     * Fraction of the Facility Manager's gain given to every other staff member
+     * (all other coaches plus all scouts). Default: 0.34
+     */
+    #[ORM\Column(type: 'float')]
+    private float $facilityMoraleStaffShare = 0.34;
+
+    /**
+     * Fraction of the completion value paid when construction starts, so
+     * approving the work is rewarded as well as delivering it. Default: 0.4
+     */
+    #[ORM\Column(type: 'float')]
+    private float $facilityMoraleStartMultiplier = 0.4;
+
+    /**
+     * Diminishing-returns multiplier for non-match staff morale gains while the
+     * member's morale sits in the mid band. Default: 0.6
+     */
+    #[ORM\Column(type: 'float')]
+    private float $staffMoraleBandFactorMid = 0.6;
+
+    /**
+     * Diminishing-returns multiplier for non-match staff morale gains while the
+     * member's morale is in the high band. Default: 0.25
+     */
+    #[ORM\Column(type: 'float')]
+    private float $staffMoraleBandFactorHigh = 0.25;
+
     // ── Physical Degradation & Form ──────────────────────────────────────────
 
     /**
@@ -627,6 +682,27 @@ class GameConfig
 
     public function getCoachMoraleInfluence(): float { return $this->coachMoraleInfluence; }
     public function setCoachMoraleInfluence(float $v): static { $this->coachMoraleInfluence = max(0.0, $v); return $this; }
+
+    public function getFacilityMoraleFmBase(): int { return $this->facilityMoraleFmBase; }
+    public function setFacilityMoraleFmBase(int $v): static { $this->facilityMoraleFmBase = max(0, $v); return $this; }
+
+    public function getFacilityMoraleFmPerLevel(): int { return $this->facilityMoraleFmPerLevel; }
+    public function setFacilityMoraleFmPerLevel(int $v): static { $this->facilityMoraleFmPerLevel = max(0, $v); return $this; }
+
+    public function getFacilityMoraleNewBuildBonus(): int { return $this->facilityMoraleNewBuildBonus; }
+    public function setFacilityMoraleNewBuildBonus(int $v): static { $this->facilityMoraleNewBuildBonus = max(0, $v); return $this; }
+
+    public function getFacilityMoraleStaffShare(): float { return $this->facilityMoraleStaffShare; }
+    public function setFacilityMoraleStaffShare(float $v): static { $this->facilityMoraleStaffShare = max(0.0, $v); return $this; }
+
+    public function getFacilityMoraleStartMultiplier(): float { return $this->facilityMoraleStartMultiplier; }
+    public function setFacilityMoraleStartMultiplier(float $v): static { $this->facilityMoraleStartMultiplier = max(0.0, $v); return $this; }
+
+    public function getStaffMoraleBandFactorMid(): float { return $this->staffMoraleBandFactorMid; }
+    public function setStaffMoraleBandFactorMid(float $v): static { $this->staffMoraleBandFactorMid = max(0.0, $v); return $this; }
+
+    public function getStaffMoraleBandFactorHigh(): float { return $this->staffMoraleBandFactorHigh; }
+    public function setStaffMoraleBandFactorHigh(float $v): static { $this->staffMoraleBandFactorHigh = max(0.0, $v); return $this; }
 
     public function getAttributeHardCap(): int { return $this->attributeHardCap; }
     public function setAttributeHardCap(int $v): static { $this->attributeHardCap = max(0, $v); return $this; }

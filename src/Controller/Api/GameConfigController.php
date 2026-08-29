@@ -67,6 +67,15 @@ class GameConfigController extends AbstractController
             'coachDevelopmentStackingFactor' => $config->getCoachDevelopmentStackingFactor(),
             'coachMoraleInfluence'           => $config->getCoachMoraleInfluence(),
 
+            // Facility Staff Morale
+            'facilityMoraleFmBase'          => $config->getFacilityMoraleFmBase(),
+            'facilityMoraleFmPerLevel'      => $config->getFacilityMoraleFmPerLevel(),
+            'facilityMoraleNewBuildBonus'   => $config->getFacilityMoraleNewBuildBonus(),
+            'facilityMoraleStaffShare'      => $config->getFacilityMoraleStaffShare(),
+            'facilityMoraleStartMultiplier' => $config->getFacilityMoraleStartMultiplier(),
+            'staffMoraleBandFactorMid'      => $config->getStaffMoraleBandFactorMid(),
+            'staffMoraleBandFactorHigh'     => $config->getStaffMoraleBandFactorHigh(),
+
             // Physical Degradation & Form
             'attributeHardCap'                       => $config->getAttributeHardCap(),
             'physicalDegradationAgeThreshold'        => $config->getPhysicalDegradationAgeThreshold(),

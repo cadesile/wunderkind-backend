@@ -269,6 +269,15 @@ class DashboardController extends AbstractDashboardController
         $config->setCoachDevelopmentStackingFactor((float) $request->request->get('coachDevelopmentStackingFactor', 0.3));
         $config->setCoachMoraleInfluence((float) $request->request->get('coachMoraleInfluence', 0.5));
 
+        // Facility Staff Morale
+        $config->setFacilityMoraleFmBase((int) $request->request->get('facilityMoraleFmBase', 6));
+        $config->setFacilityMoraleFmPerLevel((int) $request->request->get('facilityMoraleFmPerLevel', 2));
+        $config->setFacilityMoraleNewBuildBonus((int) $request->request->get('facilityMoraleNewBuildBonus', 4));
+        $config->setFacilityMoraleStaffShare((float) $request->request->get('facilityMoraleStaffShare', 0.34));
+        $config->setFacilityMoraleStartMultiplier((float) $request->request->get('facilityMoraleStartMultiplier', 0.4));
+        $config->setStaffMoraleBandFactorMid((float) $request->request->get('staffMoraleBandFactorMid', 0.6));
+        $config->setStaffMoraleBandFactorHigh((float) $request->request->get('staffMoraleBandFactorHigh', 0.25));
+
         // Physical Degradation & Form
         $config->setAttributeHardCap((int) $request->request->get('attributeHardCap', 98));
         $config->setPhysicalDegradationAgeThreshold((int) $request->request->get('physicalDegradationAgeThreshold', 30));
