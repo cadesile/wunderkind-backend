@@ -12,10 +12,10 @@ use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\MarketEntityType;
 use App\Enum\Tier;
-use App\Repository\ClubRepository;
 use App\Repository\AgentRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\PlayerRepository;
+use App\Service\ClubResolver;
 use App\Repository\ScoutRepository;
 use App\Repository\SponsorRepository;
 use App\Repository\StaffRepository;
@@ -55,7 +55,7 @@ class MarketController extends AbstractController
     public function assign(
         #[MapRequestPayload] MarketAssignRequest $dto,
         MarketPoolService  $pool,
-        ClubRepository  $clubRepo,
+        ClubResolver    $clubResolver,
         PlayerRepository   $playerRepo,
         StaffRepository    $staffRepo,
         ScoutRepository    $scoutRepo,
@@ -64,7 +64,7 @@ class MarketController extends AbstractController
     ): JsonResponse {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $clubRepo->findByUser($user);
+        $club = $clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'No club found for this user.'], Response::HTTP_NOT_FOUND);

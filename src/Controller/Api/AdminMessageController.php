@@ -9,8 +9,8 @@ use App\Entity\AdminMessage;
 use App\Entity\User;
 use App\Enum\MessageDeliveryStatus;
 use App\Repository\AdminMessageRepository;
-use App\Repository\ClubRepository;
 use App\Service\AdminMessageService;
+use App\Service\ClubResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,7 +39,7 @@ use Symfony\Component\Uid\Uuid;
 class AdminMessageController extends AbstractController
 {
     public function __construct(
-        private readonly ClubRepository $clubRepository,
+        private readonly ClubResolver $clubResolver,
         private readonly AdminMessageRepository $messageRepository,
         private readonly AdminMessageService $adminMessageService,
     ) {}
@@ -49,7 +49,7 @@ class AdminMessageController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);

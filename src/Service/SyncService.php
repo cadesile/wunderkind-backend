@@ -18,7 +18,6 @@ use App\Enum\PlayerStatus;
 use App\Enum\StaffRole;
 use App\Enum\TransferType;
 use App\Repository\ClubFacilityRepository;
-use App\Repository\ClubRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeaderboardEntryRepository;
@@ -34,7 +33,7 @@ use Symfony\Component\Uid\Uuid;
 class SyncService
 {
     public function __construct(
-        private readonly ClubRepository              $clubRepository,
+        private readonly ClubResolver                   $clubResolver,
         private readonly LeaderboardEntryRepository     $leaderboardEntryRepository,
         private readonly EntityManagerInterface         $em,
         private readonly EconomicService                $economicService,
@@ -56,7 +55,9 @@ class SyncService
      */
     public function process(User $user, SyncRequest $request): array
     {
-        $club = $this->clubRepository->findByUser($user);
+        // Attribute by the club the payload names, NOT by "the user's newest club" —
+        // a user owns one club per save slot, and guessing merged their saves together.
+        $club = $this->clubResolver->resolve($user, $request->clubId);
         if ($club === null) {
             throw new \RuntimeException('Club not found for user.');
         }

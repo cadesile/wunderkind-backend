@@ -6,6 +6,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 class ConcludeSeasonRequest
 {
+    /** The club this season belongs to. See SyncRequest::$clubId — same semantics. */
+    #[Assert\Uuid]
+    public ?string $clubId = null;
+
     #[Assert\Positive]
     public int $finalPosition = 1;
 

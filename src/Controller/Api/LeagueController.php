@@ -4,7 +4,7 @@ namespace App\Controller\Api;
 
 use App\Dto\ConcludeSeasonRequest;
 use App\Entity\User;
-use App\Repository\ClubRepository;
+use App\Service\ClubResolver;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SeasonSnapshotRepository;
 use App\Service\LeagueService;
@@ -19,7 +19,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class LeagueController extends AbstractController
 {
     public function __construct(
-        private readonly ClubRepository        $clubRepository,
+        private readonly ClubResolver          $clubResolver,
         private readonly LeagueService            $leagueService,
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
         private readonly SeasonRecordRepository   $seasonRecordRepository,
@@ -33,7 +33,8 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Unauthorized.'], 401);
         }
 
-        $club = $this->clubRepository->findByUser($user);
+        // Attribute by the club the payload names — see ClubResolver.
+        $club = $this->clubResolver->resolve($user, $dto->clubId);
         if ($club === null) {
             return $this->json(['error' => 'Club not found.'], 404);
         }
@@ -55,7 +56,7 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Unauthorized.'], 401);
         }
 
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
         if ($club === null) {
             return $this->json(['error' => 'Club not found.'], 404);
         }
@@ -84,7 +85,7 @@ class LeagueController extends AbstractController
             return $this->json(['error' => 'Unauthorized.'], 401);
         }
 
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
         if ($club === null) {
             return $this->json(['error' => 'Club not found.'], 404);
         }

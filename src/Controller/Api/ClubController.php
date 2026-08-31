@@ -7,10 +7,10 @@ use App\Entity\Investor;
 use App\Entity\User;
 use App\Enum\Country;
 use App\Exception\ClubNameTakenException;
-use App\Repository\ClubRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\ClubInitializationService;
 use App\Service\NpcClubGenerationService;
+use App\Service\ClubResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,7 +28,7 @@ class ClubController extends AbstractController
     // by raw UTF-8 byte value, which pushes multi-byte accented letters past
     // all plain ASCII ones). The locale table lives on App\Enum\Country.
 
-    public function __construct(private readonly ClubRepository $clubRepository) {}
+    public function __construct(private readonly ClubResolver $clubResolver) {}
 
     #[Route('/foreign', name: 'api_clubs_foreign', methods: ['GET'])]
     public function foreignClubs(Request $request, NpcClubRepository $npcClubRepo): JsonResponse
@@ -125,7 +125,7 @@ class ClubController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['exists' => false, 'reason' => 'club_not_found'], Response::HTTP_NOT_FOUND);
@@ -140,7 +140,7 @@ class ClubController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'No club found.'], Response::HTTP_NOT_FOUND);

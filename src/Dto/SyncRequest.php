@@ -6,6 +6,17 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 class SyncRequest
 {
+    /**
+     * The club this payload describes, captured on the client when the payload was
+     * BUILT. Payloads queue on the device and can arrive after the user has switched
+     * saves, so the club must travel with the payload rather than be resolved here.
+     *
+     * Nullable, and deliberately not NotBlank: clients released before this field
+     * existed omit it, and ClubResolver falls back to the user's newest club for them.
+     */
+    #[Assert\Uuid]
+    public ?string $clubId = null;
+
     #[Assert\Positive]
     public int $weekNumber;
 

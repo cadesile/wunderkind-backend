@@ -6,9 +6,9 @@ use App\Entity\Investor;
 use App\Entity\Sponsor;
 use App\Entity\User;
 use App\Enum\SponsorStatus;
-use App\Repository\ClubRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\SponsorRepository;
+use App\Service\ClubResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,7 +20,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class FinanceController extends AbstractController
 {
     public function __construct(
-        private readonly ClubRepository  $clubRepository,
+        private readonly ClubResolver    $clubResolver,
         private readonly InvestorRepository $investorRepository,
         private readonly SponsorRepository  $sponsorRepository,
     ) {}
@@ -30,7 +30,7 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
@@ -54,7 +54,7 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
@@ -73,7 +73,7 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);
@@ -92,7 +92,7 @@ class FinanceController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found'], Response::HTTP_NOT_FOUND);

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
-use App\Repository\ClubRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\PlayerRepository;
 use App\Service\ClubInitializationService;
 use App\Service\StarterPackService;
 use App\Service\WorldInitializationService;
 use App\Service\WorldPackCacheService;
+use App\Service\ClubResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,7 +25,7 @@ class InitializeController extends AbstractController
     private const MIN_POOL_SIZE = 500;
 
     public function __construct(
-        private readonly ClubRepository             $clubRepository,
+        private readonly ClubResolver               $clubResolver,
         private readonly PlayerRepository           $playerRepository,
         private readonly LeagueRepository           $leagueRepository,
         private readonly StarterPackService         $starterPackService,
@@ -45,7 +45,7 @@ class InitializeController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
@@ -108,7 +108,7 @@ class InitializeController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
@@ -152,7 +152,7 @@ class InitializeController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        $club = $this->clubRepository->findByUser($user);
+        $club = $this->clubResolver->resolveFromRequest($user);
 
         if ($club === null) {
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
