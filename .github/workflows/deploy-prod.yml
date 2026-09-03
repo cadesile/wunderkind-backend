@@ -53,6 +53,9 @@ jobs:
             cat > .env <<EOF
             DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
             APP_SECRET=${{ secrets.PROD_APP_SECRET }}
+            APP_URL=https://www.buildmyclub.co.uk
+            DEFAULT_URI=https://www.buildmyclub.co.uk
+            TRUSTED_PROXIES=private_ranges
             CORS_ALLOW_ORIGIN=${{ secrets.PROD_CORS_ALLOW_ORIGIN }}
             CLUB_STARTING_BALANCE=${{ secrets.PROD_CLUB_STARTING_BALANCE }}
             JWT_SECRET_KEY="${{ secrets.PROD_JWT_SECRET_KEY }}"

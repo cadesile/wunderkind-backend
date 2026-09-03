@@ -2,6 +2,13 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # The app runs behind the host-level Caddy reverse proxy (deploy/proxy/Caddyfile),
+    # which terminates TLS. Without this, Symfony sees the docker bridge address as the
+    # client and generates http:// absolute URLs — breaking the admin form_login redirect
+    # and every absolute link in a verification / password-reset email.
+    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port']
+
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 

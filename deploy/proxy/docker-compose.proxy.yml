@@ -1,0 +1,35 @@
+# Shared TLS-terminating reverse proxy. Deployed by hand to
+# /mnt/volume-wkf/wunderkind/proxy/ — see docs/deploy/hetzner.md.
+#
+# Requires the external network:  docker network create web
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data holds the issued certificates and the ACME account key. It MUST
+      # persist across restarts, or every recreate re-issues certs and walks into
+      # Let's Encrypt rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  web:
+    external: true

@@ -26,7 +26,6 @@ COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/nginx-http-only.conf /etc/nginx/nginx-http-only.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/jwt-entrypoint.sh /usr/local/bin/jwt-entrypoint.sh
 COPY docker/pool-warm.sh /usr/local/bin/pool-warm.sh
@@ -50,7 +49,7 @@ RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/l
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 
-EXPOSE 80 443
+EXPOSE 80
 
 ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

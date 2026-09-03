@@ -1,3 +1,7 @@
+# Production stack. TLS and host ports 80/443 are owned by the shared Caddy proxy
+# (deploy/proxy/), which reaches this container by name over the external `web`
+# network — this stack binds no host ports at all.
+
 services:
   app:
     image: ghcr.io/cadesile/wunderkind-backend:prod
@@ -8,12 +12,12 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-    ports:
-      - "80:80"
-      - "443:443"
     environment:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET}
+      APP_URL: ${APP_URL}
+      DEFAULT_URI: ${DEFAULT_URI}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
       DATABASE_URL: postgresql://wunderkind:${DB_PASSWORD}@postgres-prod:5432/wunderkind?serverVersion=16&charset=utf8
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
@@ -29,9 +33,9 @@ services:
       TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID}
       TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET}
       TWITTER_REDIRECT_URI: ${TWITTER_REDIRECT_URI}
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /var/www/certbot:/var/www/certbot:ro
+    networks:
+      - web
+      - default
     depends_on:
       postgres-prod:
         condition: service_healthy
@@ -56,16 +60,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Deliberately NOT on the `web` network — the database must not be reachable
+    # from the proxy or from the dev stack.
+    networks:
+      - default
 
-  certbot:
-    image: certbot/certbot
-    container_name: certbot-prod
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt
-      - /var/www/certbot:/var/www/certbot
-    entrypoint: >
-      /bin/sh -c "trap exit TERM;
-      while :; do
-        certbot renew --webroot -w /var/www/certbot --quiet;
-        sleep 12h & wait $${!};
-      done"
+networks:
+  web:
+    external: true
