@@ -18,10 +18,9 @@ chown -R www-data:www-data var/
 su-exec www-data php bin/console cache:warmup --env=prod
 chown -R www-data:www-data var/
 
-# Use HTTP-only nginx config if TLS certs are not yet provisioned
-if [ ! -f /etc/letsencrypt/live/api.buildmyclub.co.uk/fullchain.pem ]; then
-    echo "TLS certs not found — serving HTTP only until certs are provisioned"
-    cp /etc/nginx/nginx-http-only.conf /etc/nginx/nginx.conf
-fi
+# NOTE: this container serves plain HTTP only. TLS is terminated by the host-level
+# Caddy reverse proxy (deploy/proxy/Caddyfile). There is deliberately no cert check
+# here — the previous one was hardcoded to api.buildmyclub.co.uk and would silently
+# mis-configure any other environment.
 
 exec "$@"
