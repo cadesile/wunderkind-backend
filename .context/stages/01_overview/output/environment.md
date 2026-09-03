@@ -24,7 +24,12 @@ TWITTER_CLIENT_ID=***
 TWITTER_CLIENT_SECRET=***
 TWITTER_REDIRECT_URI=***
 SOCIAL_TOKEN_ENCRYPTION_KEY=***
+TRUSTED_PROXIES=***
 ```
+
+Deployed environments additionally set `APP_URL`, `DEFAULT_URI` and
+`TRUSTED_PROXIES=private_ranges` from the deploy workflow rather than from a committed
+`.env`. See `output/deployment.md`.
 
 ## Development Setup
 

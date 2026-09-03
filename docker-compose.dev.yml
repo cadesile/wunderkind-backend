@@ -1,0 +1,74 @@
+# Development stack — dev.buildmyclub.co.uk / api.dev.buildmyclub.co.uk.
+#
+# Structurally identical to docker-compose.prod.yml: TLS and host ports 80/443 are
+# owned by the shared Caddy proxy (deploy/proxy/), which reaches this container by
+# name over the external `web` network. This stack binds no host ports.
+
+services:
+  app:
+    image: ghcr.io/cadesile/wunderkind-backend:dev
+    container_name: wunderkind-dev
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    environment:
+      # APP_ENV is the deployed runtime env, not the tier name — dev runs the
+      # optimised prod container exactly as production does.
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET}
+      APP_URL: ${APP_URL}
+      DEFAULT_URI: ${DEFAULT_URI}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      DATABASE_URL: postgresql://wunderkind:${DB_PASSWORD}@postgres-dev:5432/wunderkind?serverVersion=16&charset=utf8
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      CLUB_STARTING_BALANCE: ${CLUB_STARTING_BALANCE}
+      MAILER_DSN: ${MAILER_DSN}
+      MAILER_FROM: ${MAILER_FROM}
+      MAILER_FROM_NAME: ${MAILER_FROM_NAME}
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET}
+      FACEBOOK_REDIRECT_URI: ${FACEBOOK_REDIRECT_URI}
+      TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID}
+      TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET}
+      TWITTER_REDIRECT_URI: ${TWITTER_REDIRECT_URI}
+    networks:
+      - web
+      - default
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: postgres-dev
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    environment:
+      POSTGRES_USER: wunderkind
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: wunderkind
+    volumes:
+      - /mnt/volume-wkf/wunderkind/dev/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wunderkind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Deliberately NOT on the `web` network — the database must not be reachable
+    # from the proxy or from the prod stack.
+    networks:
+      - default
+
+networks:
+  web:
+    external: true

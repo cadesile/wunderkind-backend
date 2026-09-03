@@ -108,6 +108,51 @@ gh pr create --title "..." --body "..."
 
 Branch naming: `feat/`, `fix/`, `chore/` prefixes. Base branch is `master`.
 
+**Two long-lived branches, each auto-deploying:** `master` → production, `dev` → the dev
+environment. A push to either triggers a real deploy — see Deployment below. Feature
+branches normally target `dev` first.
+
+## Deployment
+
+Full runbook: `docs/deploy/hetzner.md`. Context digest:
+`.context/stages/01_overview/output/deployment.md`.
+
+| Push to | Deploys to | Workflow | Image tag |
+|---|---|---|---|
+| `master` | `buildmyclub.co.uk`, `www.`, `api.` | `deploy-prod.yml` | `:prod` |
+| `dev` | `dev.buildmyclub.co.uk`, `api.dev.` | `deploy-dev.yml` | `:dev` |
+
+One Hetzner box. A **host-level Caddy container owns ports 80/443** and reverse-proxies by
+hostname to the app containers over an external docker network called `web`. The app
+containers serve **plain HTTP and bind no host ports**; `docker/nginx.conf` is a single
+hostname-agnostic vhost, so one image backs every environment. Caddy manages its own
+certificates — there is no certbot.
+
+The proxy (`deploy/proxy/`) is shared infrastructure deployed **by hand**, never by a
+per-branch workflow. The per-environment `.env` on the box is regenerated from scratch on
+every deploy, so hand edits there are lost.
+
+### Deployment gotchas
+
+- **`TRUSTED_PROXIES=private_ranges` is required in every proxied environment.** Without it
+  Symfony reads the docker bridge address as the client, ignores `X-Forwarded-Proto`, and
+  emits `http://` URLs — breaking the admin `form_login` redirect and absolute links in
+  emails.
+- **Never add `ngx_http_realip_module` config to `docker/nginx.conf`.** Rewriting
+  `$remote_addr` to the original client puts a *public* IP in `REMOTE_ADDR`, which fails
+  the `private_ranges` check and reintroduces exactly that bug. nginx real_ip and Symfony
+  `trusted_proxies` do the same job and conflict — Symfony owns it.
+- **Keep the apex `buildmyclub.co.uk` in the Caddyfile.** `www` is a CNAME to it and it has
+  its own A record, so apex traffic reaches the box; Caddy matches hostnames strictly.
+- **`JWT_SECRET_KEY`/`JWT_PUBLIC_KEY` secrets are base64-encoded PEMs** —
+  `docker/jwt-entrypoint.sh` runs `base64 -d`. Each environment gets its own keypair.
+- **`CORS_ALLOW_ORIGIN` is a regex**, not a literal (`origin_regex: true`).
+- **Do not add `app:backfill-appearances` or `cache:clear` to a deploy.** Both OOM-killed a
+  prod deploy; the workflows carry inline comments explaining why.
+- The baked crontab (`pool-warm`, `worldpack-warm`, `leaderboards-generate`) runs in
+  **every** environment, dev included.
+- There is **no staging tier** — the old `staging` stack was repurposed as dev.
+
 ## Architecture
 
 ### The Hybrid Model

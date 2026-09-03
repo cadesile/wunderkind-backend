@@ -120,6 +120,19 @@ For a new environment, also create its data directory before the first deploy:
 mkdir -p /mnt/volume-wkf/wunderkind/dev/pgdata
 ```
 
+## History: the staging tier
+
+The dev environment replaced a dormant `staging` stack that lived at
+`/mnt/volume-wkf/wunderkind/staging`, bound host port 8080, and was reachable only as
+`http://204.168.207.171:8080`. Its workflow trigger was `workflow_dispatch`, it ran only a
+subset of the seeders, and it had no `MAILER_*` configuration at all.
+
+It was repurposed rather than kept alongside dev, so **there is no staging tier any more.**
+Anything that referenced `204.168.207.171:8080` — notably the frontend's `staging` EAS build
+profile and its OTA workflow — was retired at the same time. If a pre-prod tier is wanted
+later it must be added back as a genuinely new environment; do not assume the old staging
+directory or its pgdata still mean anything.
+
 ## Migrating an existing box off certbot
 
 Historically the prod container bound 80/443 itself and terminated TLS with certbot certs

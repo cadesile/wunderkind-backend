@@ -12,3 +12,6 @@ Detected the tech stack (symfony 8.0 · PHP 8.4 · postgres:16), dev environment
 - output/stack.md — stack, versions, dependencies
 - output/environment.md — dev env, masked env vars, setup commands
 - output/metrics.md — file and component counts
+- output/deployment.md — **hand-written, not generator output.** Hetzner topology, the
+  shared Caddy reverse proxy, branch→environment mapping, per-env secrets, and the
+  proxy/TLS constraints (trusted_proxies, the nginx real_ip conflict, the apex vhost)
