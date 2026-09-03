@@ -43,7 +43,7 @@ Regenerate with: `node generate_project_context.js`. Ignore rules live in
 
 | Stage | Purpose | Output files |
 |---|---|---|
-| `stages/01_overview/` | Stack, environment, metrics | `output/stack.md` (1081b), `output/environment.md` (578b), `output/metrics.md` (126b) |
+| `stages/01_overview/` | Stack, environment, metrics, deployment | `output/stack.md` (1081b), `output/environment.md` (578b), `output/metrics.md` (126b), `output/deployment.md` (4618b) |
 | `stages/02_architecture/` | Structure and git activity | `output/structure.md` (1097b), `output/git-activity.md` (1286b) |
 | `stages/03_data/` | Schema, entities, state, migrations | `output/schema.md` (6022b), `output/entities.md` (23898b), `output/migrations.md` (470b) |
 | `stages/04_interfaces/` | Routes, controllers, services, API spec | `output/routes.md` (8224b), `output/controllers.md` (21612b), `output/services.md` (10304b) |
