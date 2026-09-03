@@ -80,6 +80,24 @@ Per environment, prefixed `PROD_` / `DEV_`: `DB_PASSWORD`, `APP_SECRET`,
 heredoc rather than as secrets — not sensitive, and they must differ per environment or a
 dev deploy emits production links.
 
+## Standing up a new environment: what the deploy does NOT do
+
+The workflow migrates and seeds, but a fresh environment is not usable until these are done
+by hand. Both were needed for dev and neither is in any workflow:
+
+- **Create an admin user.** `app:admin:create <email> <password> [--name] [--department]`
+  run inside that environment's container. The seeders do not create one, so `/admin` has
+  no account to log into. (Dev had 0 `admin` rows after a fully green first deploy.)
+- **Set the app download URLs.** `GameConfig::androidDownloadUrl` / `iosDownloadUrl`, edited
+  in that environment's own admin and served by `GET /api/app-links`. They are
+  per-environment, so the dev landing page distributes the dev APK independently of prod.
+
+`scripts/setup-dev-secrets.sh` creates the `DEV_*` GitHub secrets and documents the two
+formats that are easy to get wrong (base64 PEMs, base64 32-byte sodium key). Note that
+`gh secret set --body ''` blocks reading the value from stdin — the four Facebook/Twitter
+credential secrets are therefore deliberately never created, since GitHub substitutes an
+empty string for a secret that does not exist.
+
 ## History
 
 The dev environment replaced a dormant `staging` stack (`:8080`, reachable only as
