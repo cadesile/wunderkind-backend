@@ -1,0 +1,117 @@
+name: Deploy Development
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/cadesile/wunderkind-backend:dev
+
+      - name: Copy compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_IP }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: docker-compose.dev.yml
+          target: /mnt/volume-wkf/wunderkind/dev/
+
+      - name: Deploy to Hetzner
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_IP }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd /mnt/volume-wkf/wunderkind/dev
+
+            cat > .env <<EOF
+            DB_PASSWORD=${{ secrets.DEV_DB_PASSWORD }}
+            APP_SECRET=${{ secrets.DEV_APP_SECRET }}
+            APP_URL=https://dev.buildmyclub.co.uk
+            DEFAULT_URI=https://dev.buildmyclub.co.uk
+            TRUSTED_PROXIES=private_ranges
+            CORS_ALLOW_ORIGIN=${{ secrets.DEV_CORS_ALLOW_ORIGIN }}
+            CLUB_STARTING_BALANCE=${{ secrets.DEV_CLUB_STARTING_BALANCE }}
+            JWT_SECRET_KEY="${{ secrets.DEV_JWT_SECRET_KEY }}"
+            JWT_PUBLIC_KEY="${{ secrets.DEV_JWT_PUBLIC_KEY }}"
+            MAILER_DSN="${{ secrets.DEV_MAILER_DSN }}"
+            MAILER_FROM="${{ secrets.DEV_MAILER_FROM }}"
+            MAILER_FROM_NAME="${{ secrets.DEV_MAILER_FROM_NAME }}"
+            SOCIAL_TOKEN_ENCRYPTION_KEY="${{ secrets.DEV_SOCIAL_TOKEN_ENCRYPTION_KEY }}"
+            FACEBOOK_APP_ID="${{ secrets.DEV_FACEBOOK_APP_ID }}"
+            FACEBOOK_APP_SECRET="${{ secrets.DEV_FACEBOOK_APP_SECRET }}"
+            FACEBOOK_REDIRECT_URI="${{ secrets.DEV_FACEBOOK_REDIRECT_URI }}"
+            TWITTER_CLIENT_ID="${{ secrets.DEV_TWITTER_CLIENT_ID }}"
+            TWITTER_CLIENT_SECRET="${{ secrets.DEV_TWITTER_CLIENT_SECRET }}"
+            TWITTER_REDIRECT_URI="${{ secrets.DEV_TWITTER_REDIRECT_URI }}"
+            EOF
+            sed -i 's/^[[:space:]]*//' .env
+
+            docker compose -f docker-compose.dev.yml pull
+            docker compose -f docker-compose.dev.yml up -d
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console doctrine:migrations:migrate --no-interaction
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:seed-player-events
+            # Rebuilds the curated 20-archetype catalogue. Unlike app:seed-excursions this
+            # TRUNCATES first, so admin edits to archetypes do not survive a deploy — the
+            # catalogue is code-owned. Without this the table is empty and /api/archetypes
+            # silently serves [], which is why scout reports showed null archetypes.
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:seed-archetypes
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:seed-social-post-templates
+            # Upserts the excursion catalogue by slug — safe to re-run, and
+            # preserves artwork uploaded through the admin.
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:seed-excursions
+            # Idempotent — skips existing slugs, so re-running only inserts new
+            # templates (e.g. the dressing-room cohesion events).
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:seed-game-events
+            # NOTE: app:backfill-appearances is deliberately NOT run here. It
+            # hydrates every matching row in one findBy(), which exhausted the
+            # 128MB container limit on prod's 36,569 appearance-less Staff rows
+            # (the same command, same shape, would do the same here)
+            # and aborted the deploy. Appearance is filled on persist by
+            # AppearanceLifecycleSubscriber, so freshly generated pools need no
+            # backfill; run the command by hand only if a backlog builds up.
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console assets:install --symlink
+            # NOTE: no cache:clear here, deliberately. `up -d` recreates the
+            # container from the new image, so jwt-entrypoint.sh has already run
+            # `cache:warmup --env=prod` as www-data for this exact code. Running
+            # cache:clear afterwards would (a) be redundant, (b) rebuild the
+            # cache as ROOT — `exec` does not drop privileges — which is the
+            # permission bug jwt-entrypoint.sh documents, and (c) clear+rewarm is
+            # the peak-memory step of the deploy: it got SIGKILLed (exit 137) by
+            # the host OOM killer on 2026-08-15. Nothing above invalidates the
+            # compiled container: migrations change schema, seeds change data,
+            # assets:install writes symlinks under public/.
+            docker image prune -a -f --filter "until=24h"
