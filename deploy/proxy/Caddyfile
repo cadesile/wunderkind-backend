@@ -1,0 +1,31 @@
+# Host-level reverse proxy for every wunderkind environment on this box.
+#
+# Caddy owns host ports 80/443 and terminates TLS for all environments. The app
+# containers behind it serve plain HTTP on port 80 and are reachable only over the
+# external `web` docker network — they no longer bind host ports at all.
+#
+# Caddy obtains and renews its own Let's Encrypt certificates via HTTP-01. The old
+# certbot container and the /etc/letsencrypt bind mounts are gone.
+#
+# This file is SHARED infrastructure. It is deployed by hand (see docs/deploy/hetzner.md),
+# never by a per-branch workflow — if both deploy-prod and deploy-dev scp'd it they would
+# fight over the same path.
+{
+	email admin@buildmyclub.co.uk
+}
+
+# Production.
+#
+# The apex must be listed: `www` is a CNAME to the apex and the apex has its own A
+# record, so apex traffic reaches this box. Caddy matches hostnames strictly, and an
+# unlisted apex would fail TLS and 404 where it works today.
+buildmyclub.co.uk, www.buildmyclub.co.uk, api.buildmyclub.co.uk {
+	encode zstd gzip
+	reverse_proxy wunderkind-prod:80
+}
+
+# Development.
+api.dev.buildmyclub.co.uk, dev.buildmyclub.co.uk {
+	encode zstd gzip
+	reverse_proxy wunderkind-dev:80
+}
