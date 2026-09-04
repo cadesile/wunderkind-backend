@@ -19,7 +19,14 @@ class PoolConfigRepository extends ServiceEntityRepository
      */
     public function getConfig(bool $flush = false): PoolConfig
     {
-        $config = $this->findOneBy([]);
+        // Ordered by id, deliberately. PoolConfig is a singleton (no country/tier
+        // discriminator), but nothing enforces that at the schema level, and an
+        // unordered findOneBy([]) returns whichever row PostgreSQL yields first from
+        // the heap. That is not stable across writes: an UPDATE rewrites the tuple at a
+        // new heap location, so the row read after a save can differ from the row that
+        // was saved. In the admin that presented as the Player Pool Config form
+        // resetting to defaults on save.
+        $config = $this->findOneBy([], ['id' => 'ASC']);
         if ($config === null) {
             $config = new PoolConfig();
             $this->getEntityManager()->persist($config);
