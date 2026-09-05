@@ -56,8 +56,12 @@ Hand edits there are lost on the next push.
 - **The apex `buildmyclub.co.uk` must stay listed in the Caddyfile.** `www` is a CNAME to
   it and it has its own A record, so apex traffic reaches the box. Caddy matches hostnames
   strictly where nginx was absorbing it into a default vhost.
-- **JWT secrets are base64-encoded PEMs** — `docker/jwt-entrypoint.sh` runs `base64 -d`.
-  Each environment gets its own keypair.
+- **JWT secrets hold the RAW PEM, not base64.** `secret_key: '%env(JWT_SECRET_KEY)%'` means
+  Lexik uses the env var as the key material and never reads `config/jwt/*.pem`. Set it via
+  `gh secret set <NAME> < private.pem`. Base64 fails at sign time with
+  `DECODER routines::unsupported`, after authentication has already succeeded.
+  `jwt-entrypoint.sh` writes `config/jwt/*.pem` via `base64 -d`, but those files are vestigial
+  and root-owned 600 — unreadable by the `www-data` workers, and unread by anything.
 - **`CORS_ALLOW_ORIGIN` is a regex**, not a literal (`origin_regex: true`).
 - **Two post-deploy commands are deliberately omitted** and must not be added back:
   `app:backfill-appearances` (hydrates every row in one `findBy()`; OOMed on prod's ~36.5k

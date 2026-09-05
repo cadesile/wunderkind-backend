@@ -84,10 +84,18 @@ Shared: `HETZNER_IP`, `HETZNER_SSH_KEY`.
 
 Two traps:
 
-- **JWT keys are base64-encoded PEMs.** `docker/jwt-entrypoint.sh` runs `base64 -d` on
-  them. Generate them with
-  `php bin/console lexik:jwt:generate-keypair --no-pass` then `base64 -i config/jwt/private.pem`.
-  Each environment gets its **own** keypair — never reuse prod's.
+- **`JWT_SECRET_KEY`/`JWT_PUBLIC_KEY` hold the RAW PEM, not base64.**
+  `config/packages/lexik_jwt_authentication.yaml` sets `secret_key: '%env(JWT_SECRET_KEY)%'`, so
+  Lexik uses the environment variable *itself* as the key material — it never reads
+  `config/jwt/*.pem`. Set the secret with `gh secret set DEV_JWT_SECRET_KEY < private.pem` so the
+  multi-line PEM is preserved; a base64 blob fails at sign time with
+  `InvalidKeyProvided: error:1E08010C:DECODER routines::unsupported`, *after* login has already
+  succeeded. Each environment gets its own keypair.
+  
+  `docker/jwt-entrypoint.sh` does run `base64 -d` into `config/jwt/*.pem`, but **those files are
+  vestigial** — nothing reads them, they end up root-owned mode 600 (unreadable by the `www-data`
+  php-fpm workers), and on a raw-PEM secret `base64 -d` silently produces a junk DER file. Do not
+  take that script as evidence the secret should be base64.
 - **`CORS_ALLOW_ORIGIN` is a regex**, not a literal
   (`origin_regex: true` in `config/packages/nelmio_cors.yaml`), e.g.
   `^https://dev\.buildmyclub\.co\.uk$`.

@@ -144,8 +144,13 @@ every deploy, so hand edits there are lost.
   `trusted_proxies` do the same job and conflict — Symfony owns it.
 - **Keep the apex `buildmyclub.co.uk` in the Caddyfile.** `www` is a CNAME to it and it has
   its own A record, so apex traffic reaches the box; Caddy matches hostnames strictly.
-- **`JWT_SECRET_KEY`/`JWT_PUBLIC_KEY` secrets are base64-encoded PEMs** —
-  `docker/jwt-entrypoint.sh` runs `base64 -d`. Each environment gets its own keypair.
+- **`JWT_SECRET_KEY`/`JWT_PUBLIC_KEY` hold the RAW PEM, not base64.** Lexik is configured as
+  `secret_key: '%env(JWT_SECRET_KEY)%'`, so the env var *is* the key material — it never reads
+  `config/jwt/*.pem`. Set it with `gh secret set <NAME> < private.pem`. A base64 blob fails at
+  sign time with `DECODER routines::unsupported`, *after* login has already succeeded, so the
+  logs show a successful authentication followed by a 500. `jwt-entrypoint.sh` does `base64 -d`
+  into `config/jwt/`, but those files are vestigial — nothing reads them and they are root-owned
+  600, unreadable by the `www-data` workers. Don't infer the format from that script.
 - **`CORS_ALLOW_ORIGIN` is a regex**, not a literal (`origin_regex: true`).
 - **Do not add `app:backfill-appearances` or `cache:clear` to a deploy.** Both OOM-killed a
   prod deploy; the workflows carry inline comments explaining why.

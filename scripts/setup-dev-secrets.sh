@@ -22,14 +22,23 @@ echo "Generating a dev-only JWT keypair (separate from production)..."
 openssl genrsa -out "$TMP/private.pem" 4096 2>/dev/null
 openssl rsa -in "$TMP/private.pem" -pubout -out "$TMP/public.pem" 2>/dev/null
 
-# jwt-entrypoint.sh does `base64 -d` on these, so they must be base64-encoded PEMs.
-b64() { base64 < "$1" | tr -d '\n'; }
-
 set_secret() { gh secret set "$1" -R "$REPO" --body "$2" >/dev/null && echo "  set $1"; }
 
+# The JWT keys are set as RAW PEM, piped via stdin so the multi-line value survives.
+#
+# NOT base64. config/packages/lexik_jwt_authentication.yaml sets
+# `secret_key: '%env(JWT_SECRET_KEY)%'`, so Lexik uses the environment variable itself as
+# the key material and never reads config/jwt/*.pem. A base64 blob is accepted silently at
+# boot and only fails when a token is signed, with
+# `InvalidKeyProvided: error:1E08010C:DECODER routines::unsupported` — i.e. login succeeds
+# and then returns 500, which is a confusing thing to debug.
+#
+# docker/jwt-entrypoint.sh does run `base64 -d` into config/jwt/*.pem, but those files are
+# vestigial: nothing reads them, and they end up root-owned mode 600 which the www-data
+# php-fpm workers cannot read anyway. Do not treat that script as the source of truth.
 echo "Setting secrets on $REPO ..."
-set_secret DEV_JWT_SECRET_KEY "$(b64 "$TMP/private.pem")"
-set_secret DEV_JWT_PUBLIC_KEY "$(b64 "$TMP/public.pem")"
+gh secret set DEV_JWT_SECRET_KEY -R "$REPO" < "$TMP/private.pem" >/dev/null && echo "  set DEV_JWT_SECRET_KEY (raw PEM)"
+gh secret set DEV_JWT_PUBLIC_KEY -R "$REPO" < "$TMP/public.pem"  >/dev/null && echo "  set DEV_JWT_PUBLIC_KEY (raw PEM)"
 
 set_secret DEV_DB_PASSWORD                "$(openssl rand -hex 24)"
 set_secret DEV_APP_SECRET                 "$(openssl rand -hex 16)"
