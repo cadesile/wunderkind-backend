@@ -346,7 +346,7 @@ class SeedGameEventsCommand extends AbstractSeedEventTemplatesCommand
                 'severity'         => 'minor',
                 'firingConditions' => [
                     'actorTraitRequirements' => [
-                        ['trait' => 'loyalty', 'min' => 55],
+                        ['trait' => 'loyalty', 'min' => 11],
                     ],
                 ],
             ],

@@ -208,6 +208,27 @@ class EventsRepairCommandTest extends KernelTestCase
         self::assertSame(40, $conditions['minSquadMorale'], 'Non-trait keys must not be rescaled.');
     }
 
+    /**
+     * The old 0-100 scale was used with real trait names too, so rescaling has to key on the
+     * value rather than on whether the trait needed renaming.
+     */
+    public function testRealTraitsOnTheOldScaleAreRescaled(): void
+    {
+        $this->persist('real-trait-scale', [], [
+            'actorTraitRequirements' => [
+                ['trait' => 'loyalty', 'min' => 55],
+                ['trait' => 'determination', 'min' => 14],
+            ],
+        ]);
+
+        $this->repair();
+        $requirements = $this->reload('real-trait-scale')->getFiringConditions()['actorTraitRequirements'];
+
+        self::assertSame(['trait' => 'loyalty', 'min' => 11], $requirements[0]);
+        // Already within 1-20 — left alone.
+        self::assertSame(['trait' => 'determination', 'min' => 14], $requirements[1]);
+    }
+
     public function testLegacySeverityIsMigrated(): void
     {
         $this->persist('sev-low', [], null, 'low');

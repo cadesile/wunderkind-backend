@@ -304,11 +304,15 @@ class EventsRepairCommand extends Command
 
                 if (is_string($trait) && isset(self::TRAIT_MAP[$trait])) {
                     $requirement['trait'] = self::TRAIT_MAP[$trait];
+                }
 
-                    foreach (['min', 'max'] as $bound) {
-                        if (isset($requirement[$bound]) && is_numeric($requirement[$bound])) {
-                            $requirement[$bound] = $this->rescaleToMatrix((float) $requirement[$bound]);
-                        }
+                // A threshold above the matrix ceiling is 0–100 data, whatever the trait is
+                // called — real trait names carry the old scale too.
+                foreach (['min', 'max'] as $bound) {
+                    if (isset($requirement[$bound])
+                        && is_numeric($requirement[$bound])
+                        && $requirement[$bound] > 20) {
+                        $requirement[$bound] = $this->rescaleToMatrix((float) $requirement[$bound]);
                     }
                 }
 
