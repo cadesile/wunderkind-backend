@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Concern\EditableJsonColumnTrait;
 use App\Enum\EventCategory;
 use App\Repository\GameEventTemplateRepository;
 use Doctrine\ORM\Mapping as ORM;
@@ -10,6 +11,8 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: GameEventTemplateRepository::class)]
 class GameEventTemplate
 {
+    use EditableJsonColumnTrait;
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
@@ -116,13 +119,17 @@ class GameEventTemplate
     /** Virtual property for admin form — serialises impacts as a JSON string. */
     public function getImpactsJson(): string
     {
-        return json_encode($this->impacts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]';
+        return $this->invalidJsonInputFor('impactsJson')
+            ?? (json_encode($this->impacts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]');
     }
 
     public function setImpactsJson(string $json): void
     {
-        $decoded = json_decode($json, true);
-        $this->impacts = is_array($decoded) ? $decoded : [];
+        $decoded = $this->decodeJsonInput('impactsJson', $json);
+
+        if ($decoded !== null) {
+            $this->impacts = $decoded;
+        }
     }
 
     public function getFiringConditions(): ?array { return $this->firingConditions; }
@@ -131,6 +138,10 @@ class GameEventTemplate
     /** Virtual property for admin form — serialises firingConditions as a JSON string. */
     public function getFiringConditionsJson(): string
     {
+        if (($invalid = $this->invalidJsonInputFor('firingConditionsJson')) !== null) {
+            return $invalid;
+        }
+
         return $this->firingConditions !== null
             ? (json_encode($this->firingConditions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}')
             : '';
@@ -139,12 +150,19 @@ class GameEventTemplate
     public function setFiringConditionsJson(?string $json): void
     {
         $trimmed = trim($json ?? '');
+
+        // Empty means "unconditional" — the event rejoins the weekly random roll.
         if ($trimmed === '') {
+            unset($this->invalidJsonInput['firingConditionsJson']);
             $this->firingConditions = null;
             return;
         }
-        $decoded = json_decode($trimmed, true);
-        $this->firingConditions = is_array($decoded) ? $decoded : null;
+
+        $decoded = $this->decodeJsonInput('firingConditionsJson', $trimmed);
+
+        if ($decoded !== null) {
+            $this->firingConditions = $decoded;
+        }
     }
 
     public function getSeverity(): ?string { return $this->severity; }
@@ -163,6 +181,10 @@ class GameEventTemplate
     /** Virtual accessor for raw-JSON admin textarea (kept for import/export). */
     public function getChainedEventsJson(): string
     {
+        if (($invalid = $this->invalidJsonInputFor('chainedEventsJson')) !== null) {
+            return $invalid;
+        }
+
         return $this->chainedEvents !== null
             ? (json_encode($this->chainedEvents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]')
             : '[]';
@@ -171,13 +193,19 @@ class GameEventTemplate
     public function setChainedEventsJson(?string $json): void
     {
         $trimmed = trim($json ?? '');
+
         // Both empty string and '[]' mean "no chains configured"
         if ($trimmed === '' || $trimmed === '[]') {
+            unset($this->invalidJsonInput['chainedEventsJson']);
             $this->chainedEvents = null;
             return;
         }
-        $decoded = json_decode($trimmed, true);
-        $this->chainedEvents = is_array($decoded) ? $decoded : null;
+
+        $decoded = $this->decodeJsonInput('chainedEventsJson', $trimmed);
+
+        if ($decoded !== null) {
+            $this->chainedEvents = $decoded;
+        }
     }
 
     /**

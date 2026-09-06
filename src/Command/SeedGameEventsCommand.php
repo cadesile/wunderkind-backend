@@ -2,77 +2,24 @@
 
 namespace App\Command;
 
-use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
-use App\Repository\GameEventTemplateRepository;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:seed-game-events',
-    description: 'Seeds initial game event templates (idempotent — skips existing slugs).',
+    description: 'Seeds initial game event templates (skips existing slugs; pass --update to overwrite them).',
 )]
-class SeedGameEventsCommand extends Command
+class SeedGameEventsCommand extends AbstractSeedEventTemplatesCommand
 {
-    public function __construct(
-        private readonly GameEventTemplateRepository $repository,
-        private readonly EntityManagerInterface $em,
-    ) {
-        parent::__construct();
-    }
-
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function templateLabel(): string
     {
-        $io = new SymfonyStyle($input, $output);
-
-        $templates = $this->buildTemplates();
-
-        $created = 0;
-        $skipped = 0;
-
-        foreach ($templates as $data) {
-            if ($this->repository->findBySlug($data['slug']) !== null) {
-                $io->note("Skipping existing slug: {$data['slug']}");
-                $skipped++;
-                continue;
-            }
-
-            $template = new GameEventTemplate(
-                $data['slug'],
-                $data['category'],
-                $data['title'],
-                $data['bodyTemplate'],
-                $data['impacts'],
-                $data['weight'],
-            );
-
-            if (isset($data['firingConditions'])) {
-                $template->setFiringConditions($data['firingConditions']);
-            }
-
-            if (isset($data['severity'])) {
-                $template->setSeverity($data['severity']);
-            }
-
-            $this->em->persist($template);
-            $created++;
-        }
-
-        $this->em->flush();
-
-        $io->success("Seeded {$created} event template(s). Skipped {$skipped} existing.");
-
-        return Command::SUCCESS;
+        return 'event';
     }
 
     /**
      * @return array<int, array{slug: string, category: EventCategory, weight: int, title: string, bodyTemplate: string, impacts: array}>
      */
-    private function buildTemplates(): array
+    protected function buildTemplates(): array
     {
         return [
             [
@@ -82,8 +29,8 @@ class SeedGameEventsCommand extends Command
                 'title'        => 'Homesickness',
                 'bodyTemplate' => '{player} has been struggling to settle and is showing signs of homesickness. Their morale has taken a hit.',
                 'impacts'      => [
-                    ['target' => 'player.morale', 'delta' => -8],
-                    ['target' => 'player.personality.loyalty', 'delta' => -3],
+                    ['target' => 'player_1.morale', 'delta' => -8],
+                    ['target' => 'player_1.personality.loyalty', 'delta' => -3],
                 ],
             ],
             [
@@ -91,11 +38,13 @@ class SeedGameEventsCommand extends Command
                 'category'     => EventCategory::PLAYER,
                 'weight'       => 2,
                 'title'        => 'Training Ground Dispute',
-                'bodyTemplate' => '{staff} and {player} clashed on the training pitch today. Team cohesion has suffered slightly.',
+                // {staff} is not substituted by any client engine and would render literally,
+                // and a staff.morale impact on a PLAYER-category template is dropped — only
+                // the staff path (subject: "staff") applies it.
+                'bodyTemplate' => '{player_1} and a member of the coaching staff clashed on the training pitch today. Team cohesion has suffered slightly.',
                 'impacts'      => [
-                    ['target' => 'player.morale', 'delta' => -5],
-                    ['target' => 'player.personality.teamwork', 'delta' => -4],
-                    ['target' => 'staff.morale', 'delta' => -3],
+                    ['target' => 'player_1.morale', 'delta' => -5],
+                    ['target' => 'player_1.personality.adaptability', 'delta' => -4],
                 ],
             ],
             [
@@ -105,8 +54,8 @@ class SeedGameEventsCommand extends Command
                 'title'        => 'Minor Injury',
                 'bodyTemplate' => '{player} picked up a minor knock during training and will miss the next session.',
                 'impacts'      => [
-                    ['target' => 'player.injuredWeeks', 'delta' => 1],
-                    ['target' => 'player.morale', 'delta' => -4],
+                    ['target' => 'player_1.injuredWeeks', 'delta' => 1],
+                    ['target' => 'player_1.morale', 'delta' => -4],
                 ],
             ],
             [
@@ -116,8 +65,8 @@ class SeedGameEventsCommand extends Command
                 'title'        => 'Injury Recovery',
                 'bodyTemplate' => '{player} has made a full recovery and is ready to return to training.',
                 'impacts'      => [
-                    ['target' => 'player.injuredWeeks', 'delta' => 0],
-                    ['target' => 'player.morale', 'delta' => 5],
+                    ['target' => 'player_1.injuredWeeks', 'delta' => 0],
+                    ['target' => 'player_1.morale', 'delta' => 5],
                 ],
             ],
             [
@@ -150,8 +99,8 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',                   'delta' => -6],
                     ['target' => 'player_2.morale',                   'delta' => -6],
-                    ['target' => 'player_1.personality.teamwork',     'delta' => -4],
-                    ['target' => 'player_2.personality.teamwork',     'delta' => -4],
+                    ['target' => 'player_1.personality.adaptability',     'delta' => -4],
+                    ['target' => 'player_2.personality.adaptability',     'delta' => -4],
                     ['target' => 'pair.relationship',                 'delta' => -10],
                 ],
                 'severity'         => 'major',
@@ -168,7 +117,7 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',               'delta' => -4],
                     ['target' => 'player_2.morale',               'delta' => -5],
-                    ['target' => 'player_1.personality.ego',      'delta' => 2],
+                    ['target' => 'player_1.personality.ambition',      'delta' => 2],
                     ['target' => 'pair.relationship',             'delta' => -7],
                 ],
                 'severity'         => 'minor',
@@ -176,7 +125,7 @@ class SeedGameEventsCommand extends Command
                     'maxSquadMorale'      => 55,
                     'maxPairRelationship' => 30,
                     'actorTraitRequirements' => [
-                        ['trait' => 'ego', 'min' => 60],
+                        ['trait' => 'ambition', 'min' => 12],
                     ],
                 ],
             ],
@@ -187,19 +136,19 @@ class SeedGameEventsCommand extends Command
                 'title'            => 'Experienced Hand',
                 'bodyTemplate'     => '{player_1} took {player_2} under their wing after training, sharing advice on positioning and focus. {player_2} responded well.',
                 'impacts'          => [
-                    ['target' => 'player_1.personality.leadership', 'delta' => 2],
+                    ['target' => 'player_1.personality.determination', 'delta' => 2],
                     ['target' => 'player_2.morale',                 'delta' => 5],
-                    ['target' => 'player_2.personality.confidence', 'delta' => 3],
+                    ['target' => 'player_2.personality.pressure', 'delta' => 3],
                     ['target' => 'pair.relationship',               'delta' => 6],
                 ],
                 'severity'         => 'minor',
                 'firingConditions' => [
                     'minPairRelationship' => 30,
                     'actorTraitRequirements' => [
-                        ['trait' => 'leadership', 'min' => 60],
+                        ['trait' => 'determination', 'min' => 12],
                     ],
                     'subjectTraitRequirements' => [
-                        ['trait' => 'maturity', 'max' => 50],
+                        ['trait' => 'professionalism', 'max' => 10],
                     ],
                 ],
             ],
@@ -212,8 +161,8 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',                   'delta' => 4],
                     ['target' => 'player_2.morale',                   'delta' => 4],
-                    ['target' => 'player_1.personality.bravery',      'delta' => 2],
-                    ['target' => 'player_2.personality.bravery',      'delta' => 2],
+                    ['target' => 'player_1.personality.pressure',      'delta' => 2],
+                    ['target' => 'player_2.personality.pressure',      'delta' => 2],
                     ['target' => 'pair.relationship',                 'delta' => 3],
                 ],
                 'severity'         => 'minor',
@@ -232,14 +181,14 @@ class SeedGameEventsCommand extends Command
                 'bodyTemplate'     => '{player_1} has been distancing themselves from {player_2} and the rest of the group. The disconnect is becoming visible on the pitch.',
                 'impacts'          => [
                     ['target' => 'player_1.morale',                   'delta' => -5],
-                    ['target' => 'player_1.personality.teamwork',     'delta' => -3],
+                    ['target' => 'player_1.personality.adaptability',     'delta' => -3],
                     ['target' => 'pair.relationship',                 'delta' => -5],
                 ],
                 'severity'         => 'minor',
                 'firingConditions' => [
                     'maxSquadMorale' => 45,
                     'actorTraitRequirements' => [
-                        ['trait' => 'confidence', 'max' => 40],
+                        ['trait' => 'pressure', 'max' => 9],
                     ],
                 ],
             ],
@@ -252,7 +201,7 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',                   'delta' => 3],
                     ['target' => 'player_2.morale',                   'delta' => 3],
-                    ['target' => 'player_1.personality.teamwork',     'delta' => 2],
+                    ['target' => 'player_1.personality.adaptability',     'delta' => 2],
                     ['target' => 'pair.relationship',                 'delta' => 5],
                 ],
                 'severity'         => 'minor',
@@ -269,15 +218,15 @@ class SeedGameEventsCommand extends Command
                 'bodyTemplate'     => '{player_1} showed up late and poorly prepared, frustrating {player_2} who had been waiting to partner in drills. The coaching staff had to intervene.',
                 'impacts'          => [
                     ['target' => 'player_1.morale',                  'delta' => -4],
-                    ['target' => 'player_1.personality.maturity',    'delta' => -3],
+                    ['target' => 'player_1.personality.professionalism',    'delta' => -3],
                     ['target' => 'player_2.morale',                  'delta' => -3],
                     ['target' => 'pair.relationship',                'delta' => -6],
                 ],
                 'severity'         => 'major',
                 'firingConditions' => [
                     'actorTraitRequirements' => [
-                        ['trait' => 'maturity', 'max' => 40],
-                        ['trait' => 'ego',      'min' => 55],
+                        ['trait' => 'professionalism', 'max' => 9],
+                        ['trait' => 'ambition', 'min' => 11],
                     ],
                     'requiresCoLocation' => true,
                 ],
@@ -291,8 +240,8 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',                   'delta' => 6],
                     ['target' => 'player_2.morale',                   'delta' => 6],
-                    ['target' => 'player_1.personality.confidence',   'delta' => 3],
-                    ['target' => 'player_2.personality.confidence',   'delta' => 3],
+                    ['target' => 'player_1.personality.pressure',   'delta' => 3],
+                    ['target' => 'player_2.personality.pressure',   'delta' => 3],
                     ['target' => 'pair.relationship',                 'delta' => 8],
                 ],
                 'severity'         => 'minor',
@@ -311,17 +260,17 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',               'delta' => -4],
                     ['target' => 'player_2.morale',               'delta' => -4],
-                    ['target' => 'player_1.personality.ego',      'delta' => 3],
-                    ['target' => 'player_2.personality.ego',      'delta' => 3],
+                    ['target' => 'player_1.personality.ambition',      'delta' => 3],
+                    ['target' => 'player_2.personality.ambition',      'delta' => 3],
                     ['target' => 'pair.relationship',             'delta' => -8],
                 ],
                 'severity'         => 'major',
                 'firingConditions' => [
                     'actorTraitRequirements' => [
-                        ['trait' => 'ego', 'min' => 65],
+                        ['trait' => 'ambition', 'min' => 13],
                     ],
                     'subjectTraitRequirements' => [
-                        ['trait' => 'ego', 'min' => 65],
+                        ['trait' => 'ambition', 'min' => 13],
                     ],
                 ],
             ],
@@ -332,18 +281,18 @@ class SeedGameEventsCommand extends Command
                 'title'            => 'Quiet Leader',
                 'bodyTemplate'     => '{player_1} quietly guided {player_2} through a difficult session, saying little but meaning everything. A natural leader in the making.',
                 'impacts'          => [
-                    ['target' => 'player_1.personality.leadership', 'delta' => 3],
-                    ['target' => 'player_1.personality.teamwork',   'delta' => 2],
+                    ['target' => 'player_1.personality.determination', 'delta' => 3],
+                    ['target' => 'player_1.personality.adaptability',   'delta' => 2],
                     ['target' => 'player_2.morale',                 'delta' => 5],
-                    ['target' => 'player_2.personality.maturity',   'delta' => 2],
+                    ['target' => 'player_2.personality.professionalism',   'delta' => 2],
                     ['target' => 'pair.relationship',               'delta' => 7],
                 ],
                 'severity'         => 'minor',
                 'firingConditions' => [
                     'minPairRelationship' => 15,
                     'actorTraitRequirements' => [
-                        ['trait' => 'leadership', 'min' => 55],
-                        ['trait' => 'ego',        'max' => 45],
+                        ['trait' => 'determination', 'min' => 11],
+                        ['trait' => 'ambition', 'max' => 10],
                     ],
                 ],
             ],
@@ -359,7 +308,7 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',                 'delta' => 5],
                     ['target' => 'player_2.morale',                 'delta' => 4],
-                    ['target' => 'player_1.personality.confidence', 'delta' => 2],
+                    ['target' => 'player_1.personality.pressure', 'delta' => 2],
                     ['target' => 'pair.relationship',               'delta' => 5],
                 ],
                 'severity'         => 'minor',
@@ -389,7 +338,7 @@ class SeedGameEventsCommand extends Command
                 'bodyTemplate'     => 'When criticism came {player_2}\'s way, {player_1} stepped in without hesitation. It was a show of character that didn\'t go unnoticed.',
                 'impacts'          => [
                     ['target' => 'player_1.personality.loyalty',    'delta' => 3],
-                    ['target' => 'player_1.personality.leadership',  'delta' => 2],
+                    ['target' => 'player_1.personality.determination',  'delta' => 2],
                     ['target' => 'player_2.morale',                  'delta' => 7],
                     ['target' => 'player_2.personality.loyalty',     'delta' => 2],
                     ['target' => 'pair.relationship',                'delta' => 9],
@@ -426,19 +375,19 @@ class SeedGameEventsCommand extends Command
                 'title'            => 'Words of Reassurance',
                 'bodyTemplate'     => '{player_1} pulled {player_2} aside after a rough session and reminded them why they\'re here. Sometimes that\'s all it takes.',
                 'impacts'          => [
-                    ['target' => 'player_1.personality.leadership', 'delta' => 2],
+                    ['target' => 'player_1.personality.determination', 'delta' => 2],
                     ['target' => 'player_2.morale',                 'delta' => 8],
-                    ['target' => 'player_2.personality.confidence', 'delta' => 3],
+                    ['target' => 'player_2.personality.pressure', 'delta' => 3],
                     ['target' => 'pair.relationship',               'delta' => 6],
                 ],
                 'severity'         => 'minor',
                 'firingConditions' => [
                     'actorTraitRequirements' => [
-                        ['trait' => 'maturity',  'min' => 55],
-                        ['trait' => 'teamwork',  'min' => 50],
+                        ['trait' => 'professionalism', 'min' => 11],
+                        ['trait' => 'adaptability', 'min' => 10],
                     ],
                     'subjectTraitRequirements' => [
-                        ['trait' => 'confidence', 'max' => 45],
+                        ['trait' => 'pressure', 'max' => 10],
                     ],
                 ],
             ],
@@ -451,14 +400,14 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',               'delta' => 5],
                     ['target' => 'player_2.morale',               'delta' => 5],
-                    ['target' => 'player_1.personality.teamwork', 'delta' => 2],
+                    ['target' => 'player_1.personality.adaptability', 'delta' => 2],
                     ['target' => 'pair.relationship',             'delta' => 5],
                 ],
                 'severity'         => 'minor',
                 'firingConditions' => [
                     'minSquadMorale' => 45,
                     'actorTraitRequirements' => [
-                        ['trait' => 'teamwork', 'min' => 55],
+                        ['trait' => 'adaptability', 'min' => 11],
                     ],
                 ],
             ],
@@ -471,7 +420,7 @@ class SeedGameEventsCommand extends Command
                 'impacts'          => [
                     ['target' => 'player_1.morale',                 'delta' => 6],
                     ['target' => 'player_2.morale',                 'delta' => 5],
-                    ['target' => 'player_1.personality.confidence', 'delta' => 2],
+                    ['target' => 'player_1.personality.pressure', 'delta' => 2],
                     ['target' => 'pair.relationship',               'delta' => 6],
                 ],
                 'severity'         => 'minor',
@@ -603,7 +552,7 @@ class SeedGameEventsCommand extends Command
                     ['target' => 'player_1.morale',               'delta' => 4],
                     ['target' => 'player_2.morale',               'delta' => 4],
                     ['target' => 'pair.relationship',             'delta' => 4],
-                    ['target' => 'player_1.personality.ego',      'delta' => -1],
+                    ['target' => 'player_1.personality.ambition',      'delta' => -1],
                 ],
                 'severity'         => 'minor',
                 'firingConditions' => [
@@ -885,7 +834,7 @@ class SeedGameEventsCommand extends Command
             // instead of the legacy flat impacts array — each choice's stat_changes
             // is applied client-side by SimulationService.applyStatChanges only once
             // the manager taps a response (major severity skips auto-apply). See
-            // EventChoiceType.php for the stat_changes item shape.
+            // the Impacts help table on the event-template admin page for the item shape.
             [
                 'slug'             => 'dressing-room-rogue-press-leak',
                 'category'         => EventCategory::NPC_INTERACTION,

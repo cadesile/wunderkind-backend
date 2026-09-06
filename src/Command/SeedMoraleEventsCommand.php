@@ -2,77 +2,24 @@
 
 namespace App\Command;
 
-use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
-use App\Repository\GameEventTemplateRepository;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:seed:morale-events',
-    description: 'Seeds morale-based event templates (idempotent — skips existing slugs).',
+    description: 'Seeds morale-based event templates (skips existing slugs; pass --update to overwrite them).',
 )]
-class SeedMoraleEventsCommand extends Command
+class SeedMoraleEventsCommand extends AbstractSeedEventTemplatesCommand
 {
-    public function __construct(
-        private readonly GameEventTemplateRepository $repository,
-        private readonly EntityManagerInterface $em,
-    ) {
-        parent::__construct();
-    }
-
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function templateLabel(): string
     {
-        $io = new SymfonyStyle($input, $output);
-
-        $templates = $this->buildTemplates();
-
-        $created = 0;
-        $skipped = 0;
-
-        foreach ($templates as $data) {
-            if ($this->repository->findBySlug($data['slug']) !== null) {
-                $io->note("Skipping existing slug: {$data['slug']}");
-                $skipped++;
-                continue;
-            }
-
-            $template = new GameEventTemplate(
-                $data['slug'],
-                $data['category'],
-                $data['title'],
-                $data['bodyTemplate'],
-                $data['impacts'],
-                $data['weight'],
-            );
-
-            if (isset($data['firingConditions'])) {
-                $template->setFiringConditions($data['firingConditions']);
-            }
-
-            if (isset($data['severity'])) {
-                $template->setSeverity($data['severity']);
-            }
-
-            $this->em->persist($template);
-            $created++;
-        }
-
-        $this->em->flush();
-
-        $io->success("Seeded {$created} morale event template(s). Skipped {$skipped} existing.");
-
-        return Command::SUCCESS;
+        return 'morale event';
     }
 
     /**
      * @return array<int, array{slug: string, category: EventCategory, weight: int, title: string, bodyTemplate: string, impacts: array, firingConditions?: array, severity?: string}>
      */
-    private function buildTemplates(): array
+    protected function buildTemplates(): array
     {
         return [
 
@@ -89,10 +36,12 @@ class SeedMoraleEventsCommand extends Command
                     'morale_below' => 25,
                 ],
                 'impacts'  => [
-                    ['target' => 'player.personality.loyalty', 'delta' => -2],
-                    ['target' => 'player.morale',              'delta' => -3],
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'personality.loyalty', 'operator' => 'subtract', 'value' => 2],
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'subtract', 'value' => 3],
+                    ],
                 ],
-                'severity' => 'high',
+                'severity' => 'major',
             ],
 
             [
@@ -106,10 +55,12 @@ class SeedMoraleEventsCommand extends Command
                     'morale_above' => 82,
                 ],
                 'impacts'  => [
-                    ['target' => 'player.personality.loyalty', 'delta' => 1],
-                    ['target' => 'player.morale',              'delta' => 2],
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'personality.loyalty', 'operator' => 'add', 'value' => 1],
+                        ['target' => 'player_1', 'field' => 'morale', 'operator' => 'add', 'value' => 2],
+                    ],
                 ],
-                'severity' => 'low',
+                'severity' => 'minor',
             ],
 
             [
@@ -124,9 +75,11 @@ class SeedMoraleEventsCommand extends Command
                     'morale_below' => 80,
                 ],
                 'impacts'  => [
-                    ['target' => 'player.personality.consistency', 'delta' => 1],
+                    'stat_changes' => [
+                        ['target' => 'player_1', 'field' => 'personality.consistency', 'operator' => 'add', 'value' => 1],
+                    ],
                 ],
-                'severity' => 'low',
+                'severity' => 'minor',
             ],
 
             // ── PLAYER_MORALE — staff morale conditions ───────────────────────
@@ -143,9 +96,11 @@ class SeedMoraleEventsCommand extends Command
                     'morale_below' => 30,
                 ],
                 'impacts'  => [
-                    ['target' => 'squad.morale', 'delta' => -2],
+                    'stat_changes' => [
+                        ['target' => 'squad.morale', 'field' => 'morale', 'operator' => 'subtract', 'value' => 2],
+                    ],
                 ],
-                'severity' => 'medium',
+                'severity' => 'minor',
             ],
 
             [
@@ -160,9 +115,11 @@ class SeedMoraleEventsCommand extends Command
                     'morale_below' => 35,
                 ],
                 'impacts'  => [
-                    ['target' => 'staff.morale', 'delta' => -2],
+                    'stat_changes' => [
+                        ['target' => 'staff.morale', 'field' => 'morale', 'operator' => 'subtract', 'value' => 2],
+                    ],
                 ],
-                'severity' => 'medium',
+                'severity' => 'minor',
             ],
         ];
     }

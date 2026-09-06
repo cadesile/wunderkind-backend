@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Concern\EditableJsonColumnTrait;
 use App\Repository\FacilityTemplateRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\Uuid;
@@ -10,6 +11,8 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: FacilityTemplateRepository::class)]
 class FacilityTemplate
 {
+    use EditableJsonColumnTrait;
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private Uuid $id;
@@ -171,12 +174,17 @@ class FacilityTemplate
 
     public function getGameplayEffectsJson(): string
     {
-        return json_encode($this->gameplayEffects, JSON_PRETTY_PRINT) ?: '{}';
+        return $this->invalidJsonInputFor('gameplayEffectsJson')
+            ?? (json_encode($this->gameplayEffects, JSON_PRETTY_PRINT) ?: '{}');
     }
 
     public function setGameplayEffectsJson(string $v): void
     {
-        $this->gameplayEffects = json_decode($v, true) ?? [];
+        $decoded = $this->decodeJsonInput('gameplayEffectsJson', $v);
+
+        if ($decoded !== null) {
+            $this->gameplayEffects = $decoded;
+        }
     }
 
     public function getSortOrder(): int { return $this->sortOrder; }
