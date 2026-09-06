@@ -300,6 +300,7 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
   ```bash
   lando psql -c "UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';"
   ```
+- **Adding a persisted field is not done until it round-trips through Import/Export.** Three admin screens back up and restore domain data, and a field the service doesn't carry is silently lost on restore — the import reports no error, the value just comes back at its entity default. `ConfigImportExportService` (`GameConfig`, `StarterConfig`, `PoolConfig`) is **reflection-driven**: it walks every `#[ORM\Column]` property, so a new config field is covered automatically and the only decision is whether it belongs on `ConfigImportExportService::DENIED_PROPERTIES` (secrets and runtime state — the export file is documented to admins as safe to commit). `NarrativeImportExportService` and `LeagueImportExportService` are still hand-maintained lists that must be edited on **both** sides. All three are guarded by coverage tests (`tests/Service/ConfigImportExportCoverageTest.php`, `NarrativeFacilityTemplateRoundTripTest.php`, `LeagueImportExportRoundTripTest.php`) that fail when an entity gains a column the service doesn't handle — so a red build here means the export needs updating, not the test.
 - **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
 
 ## Source Layout
@@ -410,8 +411,8 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **League** — `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
 - **NpcClub** — `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor`, `playingStyle`, `financialApproach`; grouped into leagues for the world pack
 - **FacilityTemplate** — canonical slug shared with frontend; `category` (TRAINING/MEDICAL/SCOUTING), `baseCost`, `weeklyUpkeepBase`, `matchdayIncome`, `matchdayIncomeMultiplier`; seeded via admin
-- **GameConfig** — singleton row; all global gameplay constants (XP rates, injury chances, wage multipliers, attendance formulas, etc.)
-- **StarterConfig** — singleton row; league player ability ranges + fan base growth curves; JSON dirty-check workaround applies here
+- **GameConfig** — singleton row; all global gameplay constants (XP rates, injury chances, wage multipliers, attendance formulas, etc.); every `#[ORM\Column]` is exported by `ConfigImportExportService` unless denied
+- **StarterConfig** — singleton row; league player ability ranges + fan base growth curves; JSON dirty-check workaround applies here; covered by `ConfigImportExportService` reflection
 - **LeaderboardEntry** — UNIQUE(club, category, period); `rank_position` column (not `rank`)
 - **InboxMessage** — `senderType` (MessageSenderType), `offerData` (json), `status` (MessageStatus)
 - **Transfer** — fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server); `player_id` is `ON DELETE SET NULL`
@@ -419,6 +420,6 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **TacticalAdvantage** — matchup table row: `style` vs `opponentStyle` (both `PlayingStyle`) → `multiplier` (float); seeded via `NarrativeImportExportService`
 - **Admin** — separate admin user entity (`UserInterface`); `email`, `password`, `name`, `department`, `accessLevel`; always `ROLE_ADMIN`; created via `app:admin:create`
 - **BetaRequest** — beta-access waitlist entry; `email`, `code`, `valid`, `attempts`, `expiresAt`, `verifiedAt`; verified via `/api/beta-request/verify`
-- **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool
+- **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool; covered by `ConfigImportExportService` reflection
 - **AdminMessage / AudienceGroup / AudienceGroupMember / MessageDelivery** — server-driven messaging; `MessageDelivery` is keyed `(user, message)` while targeting reads `Club` (see Server-Driven Messaging)
 - **SeasonRecord / SeasonSnapshot / SeasonRatingsSnapshot** — historical season data persisted at `conclude-season`

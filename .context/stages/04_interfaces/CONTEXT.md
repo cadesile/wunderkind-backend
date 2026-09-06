@@ -11,3 +11,4 @@ Extracted API routes, controller and service signatures via AI discovery+generat
 - output/routes.md — API routes
 - output/controllers.md — controller signatures
 - output/services.md — service signatures
+- output/conventions.md — hand-written engineering conventions (import/export coverage rules)
