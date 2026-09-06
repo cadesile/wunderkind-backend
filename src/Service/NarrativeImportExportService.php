@@ -16,7 +16,6 @@ use App\Repository\GameEventTemplateRepository;
 use App\Repository\PlayerArchetypeRepository;
 use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\Uid\UuidV7;
 
 class NarrativeImportExportService
 {
@@ -168,17 +167,16 @@ class NarrativeImportExportService
         $slug = trim($row['slug'] ?? '');
         if ($slug === '') throw new \InvalidArgumentException('Missing slug.');
 
+        $category = EventCategory::tryFrom($row['category'] ?? '');
+        if ($category === null) throw new \InvalidArgumentException("Unknown category '{$row['category']}'.");
+
         $template = $this->eventTemplateRepository->findOneBy(['slug' => $slug]);
         $created  = $template === null;
 
         if ($created) {
             $template = new GameEventTemplate();
             $template->setSlug($slug);
-            $this->em->persist($template);
         }
-
-        $category = EventCategory::tryFrom($row['category'] ?? '');
-        if ($category === null) throw new \InvalidArgumentException("Unknown category '{$row['category']}'.");
 
         $template->setCategory($category);
         $template->setWeight((int) ($row['weight'] ?? 1));
@@ -189,6 +187,11 @@ class NarrativeImportExportService
         $template->setSeverity($row['severity'] ?? null);
         $template->setChainedEvents($row['chainedEvents'] ?? null);
         $template->setNoInteract((bool) ($row['noInteract'] ?? false));
+
+        // Persisted only once the row is known-good, so a rejected row leaves nothing behind.
+        if ($created) {
+            $this->em->persist($template);
+        }
 
         return $created;
     }
@@ -204,7 +207,6 @@ class NarrativeImportExportService
 
         if ($created) {
             $template = new FacilityTemplate();
-            $this->em->persist($template);
         }
 
         $template->setSlug($slug);
@@ -218,6 +220,7 @@ class NarrativeImportExportService
         $template->setReputationBonus((float) ($row['reputationBonus'] ?? 0));
         $template->setMaxLevel((int) ($row['maxLevel'] ?? 5));
         $template->setDecayBase((float) ($row['decayBase'] ?? 2.0));
+        $template->setBaseConstructionWeeks((int) ($row['baseConstructionWeeks'] ?? 4));
         $template->setSortOrder((int) ($row['sortOrder'] ?? 0));
         $template->setIsActive((bool) ($row['isActive'] ?? true));
         $template->setGameplayEffects((array) ($row['gameplayEffects'] ?? []));
@@ -225,6 +228,10 @@ class NarrativeImportExportService
             $template->setImagePath($row['imagePath'] !== null ? basename((string) $row['imagePath']) : null);
         }
         $template->touch();
+
+        if ($created) {
+            $this->em->persist($template);
+        }
 
         return $created;
     }
@@ -252,7 +259,6 @@ class NarrativeImportExportService
 
         if ($created) {
             $archetype = new PlayerArchetype();
-            $this->em->persist($archetype);
         }
 
         $archetype->setSlug($slug);
@@ -261,6 +267,10 @@ class NarrativeImportExportService
         $archetype->setPolarity($polarity);
         // `traitMapping` is the pre-v2 key name — accepted so older exports still load.
         $archetype->setTraitWeights($row['traitWeights'] ?? $row['traitMapping'] ?? []);
+
+        if ($created) {
+            $this->em->persist($archetype);
+        }
 
         return $created;
     }
@@ -283,10 +293,13 @@ class NarrativeImportExportService
 
         if ($created) {
             $advantage = new TacticalAdvantage($style, $opponentStyle);
-            $this->em->persist($advantage);
         }
 
         $advantage->setMultiplier((float) ($row['multiplier'] ?? 1.0));
+
+        if ($created) {
+            $this->em->persist($advantage);
+        }
 
         return $created;
     }

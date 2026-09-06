@@ -7,7 +7,7 @@
         <h5 class="fw-semibold mb-0">Narrative Content — Import / Export</h5>
         <p class="text-muted small mb-0">
             Export all narrative content (event templates, facility templates, player archetypes, tactical advantages) to a single JSON file.
-            Import a file to upsert content by slug or name — existing records are updated, new ones are created.
+            Import a file to upsert content by slug — existing records are updated, new ones are created.
             Use this to develop and test locally, then import to the external API.
         </p>
     </div>
@@ -49,8 +49,9 @@
             <div class="card-body d-flex flex-column gap-3">
                 <p class="text-muted small mb-0">
                     Upload a previously exported <code>.json</code> file. Each record is matched by
-                    <strong>slug</strong> (templates) or <strong>name</strong> (archetypes) and upserted —
-                    existing records are updated in-place, new records are created.
+                    <strong>slug</strong> — or, for tactical advantages, by the
+                    <strong>style / opponent style</strong> pair — and upserted: existing records are
+                    updated in-place, new records are created.
                 </p>
                 <div class="alert alert-warning py-2 small mb-0">
                     <i class="fa fa-triangle-exclamation me-1"></i>
@@ -73,7 +74,7 @@
                             </label>
                         </div>
                         <p class="text-muted small mb-0 mt-1">
-                            Deletes all event templates, facility templates, and player archetypes before applying the import file. Cannot be undone.
+                            Deletes all event templates, facility templates, player archetypes and tactical advantages before applying the import file. Cannot be undone.
                         </p>
                     </div>
                     <button type="submit" class="btn btn-warning btn-sm">

@@ -56,8 +56,12 @@ Hand edits there are lost on the next push.
 - **The apex `buildmyclub.co.uk` must stay listed in the Caddyfile.** `www` is a CNAME to
   it and it has its own A record, so apex traffic reaches the box. Caddy matches hostnames
   strictly where nginx was absorbing it into a default vhost.
-- **JWT secrets are base64-encoded PEMs** — `docker/jwt-entrypoint.sh` runs `base64 -d`.
-  Each environment gets its own keypair.
+- **JWT secrets hold the RAW PEM, not base64.** `secret_key: '%env(JWT_SECRET_KEY)%'` means
+  Lexik uses the env var as the key material and never reads `config/jwt/*.pem`. Set it via
+  `gh secret set <NAME> < private.pem`. Base64 fails at sign time with
+  `DECODER routines::unsupported`, after authentication has already succeeded.
+  `jwt-entrypoint.sh` writes `config/jwt/*.pem` via `base64 -d`, but those files are vestigial
+  and root-owned 600 — unreadable by the `www-data` workers, and unread by anything.
 - **`CORS_ALLOW_ORIGIN` is a regex**, not a literal (`origin_regex: true`).
 - **Two post-deploy commands are deliberately omitted** and must not be added back:
   `app:backfill-appearances` (hydrates every row in one `findBy()`; OOMed on prod's ~36.5k
@@ -79,6 +83,24 @@ Per environment, prefixed `PROD_` / `DEV_`: `DB_PASSWORD`, `APP_SECRET`,
 `APP_URL`, `DEFAULT_URI` and `TRUSTED_PROXIES` are written as literals in each workflow's
 heredoc rather than as secrets — not sensitive, and they must differ per environment or a
 dev deploy emits production links.
+
+## Standing up a new environment: what the deploy does NOT do
+
+The workflow migrates and seeds, but a fresh environment is not usable until these are done
+by hand. Both were needed for dev and neither is in any workflow:
+
+- **Create an admin user.** `app:admin:create <email> <password> [--name] [--department]`
+  run inside that environment's container. The seeders do not create one, so `/admin` has
+  no account to log into. (Dev had 0 `admin` rows after a fully green first deploy.)
+- **Set the app download URLs.** `GameConfig::androidDownloadUrl` / `iosDownloadUrl`, edited
+  in that environment's own admin and served by `GET /api/app-links`. They are
+  per-environment, so the dev landing page distributes the dev APK independently of prod.
+
+`scripts/setup-dev-secrets.sh` creates the `DEV_*` GitHub secrets and documents the two
+formats that are easy to get wrong (base64 PEMs, base64 32-byte sodium key). Note that
+`gh secret set --body ''` blocks reading the value from stdin — the four Facebook/Twitter
+credential secrets are therefore deliberately never created, since GitHub substitutes an
+empty string for a secret that does not exist.
 
 ## History
 

@@ -4,15 +4,51 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Enum\ReputationTier;
+use App\Entity\GameConfig;
+use App\Entity\PoolConfig;
+use App\Entity\StarterConfig;
 use App\Repository\GameConfigRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Mapping as ORM;
 
+/**
+ * Exports and imports the three singleton config entities as JSON.
+ *
+ * The field list is **derived from the entities by reflection**, not hand-maintained: every
+ * `#[ORM\Column]` property is covered automatically, so adding a config field to an entity
+ * cannot silently fall out of a backup. The only decision left to make when adding a field
+ * is whether it belongs on DENIED_PROPERTIES below.
+ *
+ * `tests/Service/ConfigImportExportCoverageTest.php` enforces both halves of that contract.
+ */
 class ConfigImportExportService
 {
     private const EXPORT_VERSION = 1;
+
+    /**
+     * Properties deliberately excluded from export/import. `#[ORM\Id]` columns are skipped
+     * automatically and do not need listing here.
+     *
+     * Every entry must name a property that still exists — the coverage test fails on stale
+     * entries, so a rename cannot quietly re-expose a secret.
+     *
+     * @var array<class-string, string[]>
+     */
+    public const DENIED_PROPERTIES = [
+        GameConfig::class => [
+            // Credentials. The export file is documented to admins as safe to commit to
+            // version control, so it must never carry secrets.
+            'recaptchaSiteKey',
+            'recaptchaSecretKey',
+            // Runtime state written by app:post-community-stat, not configuration —
+            // restoring it would rewind the round-robin cursor.
+            'lastPostedStatCategory',
+        ],
+        StarterConfig::class => [],
+        PoolConfig::class    => [],
+    ];
 
     public function __construct(
         private readonly GameConfigRepository    $gameConfigRepository,
@@ -25,139 +61,22 @@ class ConfigImportExportService
 
     public function export(): array
     {
-        $game    = $this->gameConfigRepository->getConfig();
-        $starter = $this->starterConfigRepository->getConfig();
-        $pool    = $this->poolConfigRepository->getConfig();
-
         return [
-            'version'    => self::EXPORT_VERSION,
-            'exportedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'gameConfig' => [
-                'cliqueRelationshipThreshold'              => $game->getCliqueRelationshipThreshold(),
-                'bondMin'                         => $game->getBondMin(),
-                'bondMax'                         => $game->getBondMax(),
-                'bondNegativeDriftPerWeek'        => $game->getBondNegativeDriftPerWeek(),
-                'bondPositiveDecayPerWeek'        => $game->getBondPositiveDecayPerWeek(),
-                'bondDecayFloor'                  => $game->getBondDecayFloor(),
-                'bondNeglectWeeks'                => $game->getBondNeglectWeeks(),
-                'bondNegativeRelationsThreshold'  => $game->getBondNegativeRelationsThreshold(),
-                'bondMoraleDecayChance'           => $game->getBondMoraleDecayChance(),
-                'bondMoraleDecayPenalty'          => $game->getBondMoraleDecayPenalty(),
-                'bondOrganicGrowthBaseChance'     => $game->getBondOrganicGrowthBaseChance(),
-                'bondOrganicGrowthLoyaltyDivisor' => $game->getBondOrganicGrowthLoyaltyDivisor(),
-                'bondOrganicGrowthAbilityDivisor' => $game->getBondOrganicGrowthAbilityDivisor(),
-                'bondOrganicGrowthDelta'          => $game->getBondOrganicGrowthDelta(),
-                'bondManagerAmpDelta'             => $game->getBondManagerAmpDelta(),
-                'bondIncidentNegativeDelta'       => $game->getBondIncidentNegativeDelta(),
-                'bondIncidentPositiveDelta'       => $game->getBondIncidentPositiveDelta(),
-                'coachManagerTrustThreshold'      => $game->getCoachManagerTrustThreshold(),
-                'coachManagerTrustDecayChance'    => $game->getCoachManagerTrustDecayChance(),
-                'coachManagerTrustMoralePenalty'  => $game->getCoachManagerTrustMoralePenalty(),
-                'cliqueSquadCapPercent'                    => $game->getCliqueSquadCapPercent(),
-                'cliqueMinTenureWeeks'                     => $game->getCliqueMinTenureWeeks(),
-                'baseXP'                                   => $game->getBaseXP(),
-                'baseInjuryProbability'                    => $game->getBaseInjuryProbability(),
-                'regressionUpperThreshold'                 => $game->getRegressionUpperThreshold(),
-                'regressionLowerThreshold'                 => $game->getRegressionLowerThreshold(),
-                'reputationDeltaBase'                      => $game->getReputationDeltaBase(),
-                'reputationDeltaFacilityMultiplier'        => $game->getReputationDeltaFacilityMultiplier(),
-                'injuryMinorWeight'                        => $game->getInjuryMinorWeight(),
-                'injuryModerateWeight'                     => $game->getInjuryModerateWeight(),
-                'injurySeriousWeight'                      => $game->getInjurySeriousWeight(),
-                'scoutMoraleThreshold'                     => $game->getScoutMoraleThreshold(),
-                'scoutRevealWeeks'                         => $game->getScoutRevealWeeks(),
-                'scoutAbilityErrorRange'                   => $game->getScoutAbilityErrorRange(),
-                'scoutMaxAssignments'                      => $game->getScoutMaxAssignments(),
-                'missionGemRollThresholds'                 => $game->getMissionGemRollThresholds(),
-                'playerFeeMultiplier'                      => $game->getPlayerFeeMultiplier(),
-                'defaultMoraleMin'                         => $game->getDefaultMoraleMin(),
-                'defaultMoraleMax'                         => $game->getDefaultMoraleMax(),
-                'incidentLowProfessionalismThreshold'      => $game->getIncidentLowProfessionalismThreshold(),
-                'incidentLowProfessionalismChance'         => $game->getIncidentLowProfessionalismChance(),
-                'incidentHighDeterminationThreshold'       => $game->getIncidentHighDeterminationThreshold(),
-                'incidentHighDeterminationChance'          => $game->getIncidentHighDeterminationChance(),
-                'incidentAltercationBaseChance'            => $game->getIncidentAltercationBaseChance(),
-                'incidentAltercationSeriousBase'           => $game->getIncidentAltercationSeriousBase(),
-                'incidentAltercationSeriousTemperamentScale' => $game->getIncidentAltercationSeriousTemperamentScale(),
-                'guardianConvinceMoraleBoost'              => $game->getGuardianConvinceMoraleBoost(),
-                'guardianConvinceGuardianLoyaltyBoost'     => $game->getGuardianConvinceGuardianLoyaltyBoost(),
-                'guardianConvinceGuardianDemandIncrease'   => $game->getGuardianConvinceGuardianDemandIncrease(),
-                'guardianIgnoreMoralePenalty'              => $game->getGuardianIgnoreMoralePenalty(),
-                'guardianIgnoreLoyaltyTraitPenalty'        => $game->getGuardianIgnoreLoyaltyTraitPenalty(),
-                'guardianIgnoreGuardianLoyaltyPenalty'     => $game->getGuardianIgnoreGuardianLoyaltyPenalty(),
-                'guardianIgnoreGuardianDemandIncrease'     => $game->getGuardianIgnoreGuardianDemandIncrease(),
-                'guardianIgnoreSiblingMoralePenalty'       => $game->getGuardianIgnoreSiblingMoralePenalty(),
-                'guardianIgnoreSiblingLoyaltyTraitPenalty' => $game->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
-                'smallSponsorMin'                          => $game->getSmallSponsorMin(),
-                'smallSponsorMax'                          => $game->getSmallSponsorMax(),
-                'mediumSponsorMin'                         => $game->getMediumSponsorMin(),
-                'mediumSponsorMax'                         => $game->getMediumSponsorMax(),
-                'largeSponsorMin'                          => $game->getLargeSponsorMin(),
-                'largeSponsorMax'                          => $game->getLargeSponsorMax(),
-                'leaguePositionDecreasePercent'            => $game->getLeaguePositionDecreasePercent(),
-                'debugLoggingEnabled'                      => $game->isDebugLoggingEnabled(),
-            ],
-            'starterConfig' => [
-                'startingBalance'       => $starter->getStartingBalance(),
-                'starterPlayerCount'    => $starter->getStarterPlayerCount(),
-                'starterCoachCount'     => $starter->getStarterCoachCount(),
-                'starterScoutCount'     => $starter->getStarterScoutCount(),
-                'starterSponsorTier'    => $starter->getStarterSponsorTier(),
-                'starterClubTier'       => $starter->getStarterClubTier(),
-                'defaultFacilities'     => $starter->getDefaultFacilities(),
-                'starterReputationTier' => $starter->getStarterReputationTier()->value,
-                'enabledCountries'      => $starter->getEnabledCountries(),
-                'leagueAbilityRanges'   => $starter->getLeagueAbilityRanges(),
-                'npcSquadConfig'        => $starter->getNpcSquadConfig(),
-            ],
-            'poolConfig' => [
-                'playerAgeMin'              => $pool->getPlayerAgeMin(),
-                'playerAgeMax'              => $pool->getPlayerAgeMax(),
-                'playerPotentialMin'        => $pool->getPlayerPotentialMin(),
-                'playerPotentialMax'        => $pool->getPlayerPotentialMax(),
-                'playerPotentialMean'       => $pool->getPlayerPotentialMean(),
-                'playerAbilityMin'          => $pool->getPlayerAbilityMin(),
-                'playerAbilityMax'          => $pool->getPlayerAbilityMax(),
-                'playerAttributeBudgetMin'  => $pool->getPlayerAttributeBudgetMin(),  // no longer used for attribute generation (budget now derived from currentAbility)
-                'playerAttributeBudgetMax'  => $pool->getPlayerAttributeBudgetMax(),  // no longer used for attribute generation (budget now derived from currentAbility)
-                'playerAgentChancePercent'  => $pool->getPlayerAgentChancePercent(),
-                'playerHeightMin'           => $pool->getPlayerHeightMin(),
-                'playerHeightMax'           => $pool->getPlayerHeightMax(),
-                'playerWeightMin'           => $pool->getPlayerWeightMin(),
-                'playerWeightMax'           => $pool->getPlayerWeightMax(),
-                'personalityTraitMin'       => $pool->getPersonalityTraitMin(),
-                'personalityTraitMax'       => $pool->getPersonalityTraitMax(),
-                'positionWeightGk'          => $pool->getPositionWeightGk(),
-                'positionWeightDef'         => $pool->getPositionWeightDef(),
-                'positionWeightMid'         => $pool->getPositionWeightMid(),
-                'positionWeightAtt'         => $pool->getPositionWeightAtt(),
-                'coachAgeMin'               => $pool->getCoachAgeMin(),
-                'coachAgeMax'               => $pool->getCoachAgeMax(),
-                'coachAbilityMin'           => $pool->getCoachAbilityMin(),
-                'coachAbilityMax'           => $pool->getCoachAbilityMax(),
-                'scoutAgeMin'               => $pool->getScoutAgeMin(),
-                'scoutAgeMax'               => $pool->getScoutAgeMax(),
-                'scoutExperienceMin'        => $pool->getScoutExperienceMin(),
-                'scoutExperienceMax'        => $pool->getScoutExperienceMax(),
-                'scoutJudgementMin'         => $pool->getScoutJudgementMin(),
-                'scoutJudgementMax'         => $pool->getScoutJudgementMax(),
-                'agentReputationMin'        => $pool->getAgentReputationMin(),
-                'agentReputationMax'        => $pool->getAgentReputationMax(),
-                'agentAgeMin'               => $pool->getAgentAgeMin(),
-                'agentAgeMax'               => $pool->getAgentAgeMax(),
-                'playerPoolTarget'          => $pool->getPlayerPoolTarget(),
-                'coachPoolTarget'           => $pool->getCoachPoolTarget(),
-                'scoutPoolTarget'           => $pool->getScoutPoolTarget(),
-                'sponsorPoolTarget'         => $pool->getSponsorPoolTarget(),
-                'investorPoolTarget'        => $pool->getInvestorPoolTarget(),
-                'agentPoolTarget'           => $pool->getAgentPoolTarget(),
-            ],
+            'version'       => self::EXPORT_VERSION,
+            'exportedAt'    => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'gameConfig'    => self::exportEntity($this->gameConfigRepository->getConfig()),
+            'starterConfig' => self::exportEntity($this->starterConfigRepository->getConfig()),
+            'poolConfig'    => self::exportEntity($this->poolConfigRepository->getConfig()),
         ];
     }
 
     // ── Import ────────────────────────────────────────────────────────────────
 
     /**
+     * Applies every field it understands and reports the rest, rather than aborting on the
+     * first bad value — a single malformed enum in a hand-edited file should not discard the
+     * other two hundred settings.
+     *
      * @return array{applied: bool, errors: string[]}
      */
     public function import(array $data): array
@@ -169,16 +88,22 @@ class ConfigImportExportService
             return $result;
         }
 
+        $sections = [
+            'gameConfig'    => fn () => $this->gameConfigRepository->getConfig(),
+            'starterConfig' => fn () => $this->starterConfigRepository->getConfig(),
+            'poolConfig'    => fn () => $this->poolConfigRepository->getConfig(),
+        ];
+
         try {
-            if (isset($data['gameConfig'])) {
-                $this->applyGameConfig($data['gameConfig']);
+            foreach ($sections as $key => $fetch) {
+                if (!is_array($data[$key] ?? null)) {
+                    continue;
+                }
+                foreach (self::applyEntity($fetch(), $data[$key]) as $error) {
+                    $result['errors'][] = $key . '.' . $error;
+                }
             }
-            if (isset($data['starterConfig'])) {
-                $this->applyStarterConfig($data['starterConfig']);
-            }
-            if (isset($data['poolConfig'])) {
-                $this->applyPoolConfig($data['poolConfig']);
-            }
+
             $this->em->flush();
             $result['applied'] = true;
         } catch (\Throwable $e) {
@@ -188,154 +113,137 @@ class ConfigImportExportService
         return $result;
     }
 
-    private function applyGameConfig(array $row): void
+    // ── Reflection plumbing ───────────────────────────────────────────────────
+
+    /**
+     * Mapped column properties of an entity, minus the identifier and anything denied.
+     *
+     * @return string[]
+     */
+    public static function exportableProperties(string $class): array
     {
-        $config = $this->gameConfigRepository->getConfig();
+        $denied = self::DENIED_PROPERTIES[$class] ?? [];
+        $names  = [];
 
-        if (isset($row['cliqueRelationshipThreshold']))              $config->setCliqueRelationshipThreshold((int) $row['cliqueRelationshipThreshold']);
+        foreach ((new \ReflectionClass($class))->getProperties() as $property) {
+            if ($property->getAttributes(ORM\Column::class) === []) {
+                continue;
+            }
+            if ($property->getAttributes(ORM\Id::class) !== []) {
+                continue;
+            }
+            if (in_array($property->getName(), $denied, true)) {
+                continue;
+            }
+            $names[] = $property->getName();
+        }
 
-        if (isset($row['bondMin']))                       $config->setBondMin((int) $row['bondMin']);
+        sort($names);
 
-        if (isset($row['bondMax']))                       $config->setBondMax((int) $row['bondMax']);
-
-        if (isset($row['bondNegativeDriftPerWeek']))      $config->setBondNegativeDriftPerWeek((int) $row['bondNegativeDriftPerWeek']);
-
-        if (isset($row['bondPositiveDecayPerWeek']))      $config->setBondPositiveDecayPerWeek((int) $row['bondPositiveDecayPerWeek']);
-
-        if (isset($row['bondDecayFloor']))                $config->setBondDecayFloor((int) $row['bondDecayFloor']);
-
-        if (isset($row['bondNeglectWeeks']))              $config->setBondNeglectWeeks((int) $row['bondNeglectWeeks']);
-
-        if (isset($row['bondNegativeRelationsThreshold'])) $config->setBondNegativeRelationsThreshold((int) $row['bondNegativeRelationsThreshold']);
-
-        if (isset($row['bondMoraleDecayChance']))         $config->setBondMoraleDecayChance((float) $row['bondMoraleDecayChance']);
-
-        if (isset($row['bondMoraleDecayPenalty']))        $config->setBondMoraleDecayPenalty((int) $row['bondMoraleDecayPenalty']);
-
-        if (isset($row['bondOrganicGrowthBaseChance']))   $config->setBondOrganicGrowthBaseChance((float) $row['bondOrganicGrowthBaseChance']);
-
-        if (isset($row['bondOrganicGrowthLoyaltyDivisor'])) $config->setBondOrganicGrowthLoyaltyDivisor((int) $row['bondOrganicGrowthLoyaltyDivisor']);
-
-        if (isset($row['bondOrganicGrowthAbilityDivisor'])) $config->setBondOrganicGrowthAbilityDivisor((int) $row['bondOrganicGrowthAbilityDivisor']);
-
-        if (isset($row['bondOrganicGrowthDelta']))        $config->setBondOrganicGrowthDelta((int) $row['bondOrganicGrowthDelta']);
-
-        if (isset($row['bondManagerAmpDelta']))           $config->setBondManagerAmpDelta((int) $row['bondManagerAmpDelta']);
-
-        if (isset($row['bondIncidentNegativeDelta']))     $config->setBondIncidentNegativeDelta((int) $row['bondIncidentNegativeDelta']);
-
-        if (isset($row['bondIncidentPositiveDelta']))     $config->setBondIncidentPositiveDelta((int) $row['bondIncidentPositiveDelta']);
-
-        if (isset($row['coachManagerTrustThreshold']))    $config->setCoachManagerTrustThreshold((int) $row['coachManagerTrustThreshold']);
-
-        if (isset($row['coachManagerTrustDecayChance']))  $config->setCoachManagerTrustDecayChance((float) $row['coachManagerTrustDecayChance']);
-
-        if (isset($row['coachManagerTrustMoralePenalty'])) $config->setCoachManagerTrustMoralePenalty((int) $row['coachManagerTrustMoralePenalty']);
-        if (isset($row['cliqueSquadCapPercent']))                    $config->setCliqueSquadCapPercent((int) $row['cliqueSquadCapPercent']);
-        if (isset($row['cliqueMinTenureWeeks']))                     $config->setCliqueMinTenureWeeks((int) $row['cliqueMinTenureWeeks']);
-        if (isset($row['baseXP']))                                   $config->setBaseXP((int) $row['baseXP']);
-        if (isset($row['baseInjuryProbability']))                    $config->setBaseInjuryProbability((float) $row['baseInjuryProbability']);
-        if (isset($row['regressionUpperThreshold']))                 $config->setRegressionUpperThreshold((int) $row['regressionUpperThreshold']);
-        if (isset($row['regressionLowerThreshold']))                 $config->setRegressionLowerThreshold((int) $row['regressionLowerThreshold']);
-        if (isset($row['reputationDeltaBase']))                      $config->setReputationDeltaBase((float) $row['reputationDeltaBase']);
-        if (isset($row['reputationDeltaFacilityMultiplier']))        $config->setReputationDeltaFacilityMultiplier((float) $row['reputationDeltaFacilityMultiplier']);
-        if (isset($row['injuryMinorWeight']))                        $config->setInjuryMinorWeight((int) $row['injuryMinorWeight']);
-        if (isset($row['injuryModerateWeight']))                     $config->setInjuryModerateWeight((int) $row['injuryModerateWeight']);
-        if (isset($row['injurySeriousWeight']))                      $config->setInjurySeriousWeight((int) $row['injurySeriousWeight']);
-        if (isset($row['scoutMoraleThreshold']))                     $config->setScoutMoraleThreshold((int) $row['scoutMoraleThreshold']);
-        if (isset($row['scoutRevealWeeks']))                         $config->setScoutRevealWeeks((int) $row['scoutRevealWeeks']);
-        if (isset($row['scoutAbilityErrorRange']))                   $config->setScoutAbilityErrorRange((int) $row['scoutAbilityErrorRange']);
-        if (isset($row['scoutMaxAssignments']))                      $config->setScoutMaxAssignments((int) $row['scoutMaxAssignments']);
-        if (isset($row['missionGemRollThresholds']))                 $config->setMissionGemRollThresholds((array) $row['missionGemRollThresholds']);
-        if (isset($row['playerFeeMultiplier']))                      $config->setPlayerFeeMultiplier((float) $row['playerFeeMultiplier']);
-        if (isset($row['defaultMoraleMin']))                         $config->setDefaultMoraleMin((int) $row['defaultMoraleMin']);
-        if (isset($row['defaultMoraleMax']))                         $config->setDefaultMoraleMax((int) $row['defaultMoraleMax']);
-        if (isset($row['incidentLowProfessionalismThreshold']))      $config->setIncidentLowProfessionalismThreshold((int) $row['incidentLowProfessionalismThreshold']);
-        if (isset($row['incidentLowProfessionalismChance']))         $config->setIncidentLowProfessionalismChance((float) $row['incidentLowProfessionalismChance']);
-        if (isset($row['incidentHighDeterminationThreshold']))       $config->setIncidentHighDeterminationThreshold((int) $row['incidentHighDeterminationThreshold']);
-        if (isset($row['incidentHighDeterminationChance']))          $config->setIncidentHighDeterminationChance((float) $row['incidentHighDeterminationChance']);
-        if (isset($row['incidentAltercationBaseChance']))            $config->setIncidentAltercationBaseChance((float) $row['incidentAltercationBaseChance']);
-        if (isset($row['incidentAltercationSeriousBase']))           $config->setIncidentAltercationSeriousBase((float) $row['incidentAltercationSeriousBase']);
-        if (isset($row['incidentAltercationSeriousTemperamentScale'])) $config->setIncidentAltercationSeriousTemperamentScale((float) $row['incidentAltercationSeriousTemperamentScale']);
-        if (isset($row['guardianConvinceMoraleBoost']))              $config->setGuardianConvinceMoraleBoost((int) $row['guardianConvinceMoraleBoost']);
-        if (isset($row['guardianConvinceGuardianLoyaltyBoost']))     $config->setGuardianConvinceGuardianLoyaltyBoost((int) $row['guardianConvinceGuardianLoyaltyBoost']);
-        if (isset($row['guardianConvinceGuardianDemandIncrease']))   $config->setGuardianConvinceGuardianDemandIncrease((int) $row['guardianConvinceGuardianDemandIncrease']);
-        if (isset($row['guardianIgnoreMoralePenalty']))              $config->setGuardianIgnoreMoralePenalty((int) $row['guardianIgnoreMoralePenalty']);
-        if (isset($row['guardianIgnoreLoyaltyTraitPenalty']))        $config->setGuardianIgnoreLoyaltyTraitPenalty((int) $row['guardianIgnoreLoyaltyTraitPenalty']);
-        if (isset($row['guardianIgnoreGuardianLoyaltyPenalty']))     $config->setGuardianIgnoreGuardianLoyaltyPenalty((int) $row['guardianIgnoreGuardianLoyaltyPenalty']);
-        if (isset($row['guardianIgnoreGuardianDemandIncrease']))     $config->setGuardianIgnoreGuardianDemandIncrease((int) $row['guardianIgnoreGuardianDemandIncrease']);
-        if (isset($row['guardianIgnoreSiblingMoralePenalty']))       $config->setGuardianIgnoreSiblingMoralePenalty((int) $row['guardianIgnoreSiblingMoralePenalty']);
-        if (isset($row['guardianIgnoreSiblingLoyaltyTraitPenalty'])) $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $row['guardianIgnoreSiblingLoyaltyTraitPenalty']);
-        if (isset($row['smallSponsorMin']))                          $config->setSmallSponsorMin((int) $row['smallSponsorMin']);
-        if (isset($row['smallSponsorMax']))                          $config->setSmallSponsorMax((int) $row['smallSponsorMax']);
-        if (isset($row['mediumSponsorMin']))                         $config->setMediumSponsorMin((int) $row['mediumSponsorMin']);
-        if (isset($row['mediumSponsorMax']))                         $config->setMediumSponsorMax((int) $row['mediumSponsorMax']);
-        if (isset($row['largeSponsorMin']))                          $config->setLargeSponsorMin((int) $row['largeSponsorMin']);
-        if (isset($row['largeSponsorMax']))                          $config->setLargeSponsorMax((int) $row['largeSponsorMax']);
-        if (isset($row['leaguePositionDecreasePercent']))           $config->setLeaguePositionDecreasePercent((int) $row['leaguePositionDecreasePercent']);
-        if (array_key_exists('debugLoggingEnabled', $row))          $config->setDebugLoggingEnabled((bool) $row['debugLoggingEnabled']);
+        return $names;
     }
 
-    private function applyStarterConfig(array $row): void
+    /** Serializes every exportable property, keyed by property name. */
+    public static function exportEntity(object $entity): array
     {
-        $config = $this->starterConfigRepository->getConfig();
+        $row = [];
 
-        if (isset($row['startingBalance']))    $config->setStartingBalance((int) $row['startingBalance']);
-        if (isset($row['starterPlayerCount'])) $config->setStarterPlayerCount((int) $row['starterPlayerCount']);
-        if (isset($row['starterCoachCount']))  $config->setStarterCoachCount((int) $row['starterCoachCount']);
-        if (isset($row['starterScoutCount']))  $config->setStarterScoutCount((int) $row['starterScoutCount']);
-        if (isset($row['starterSponsorTier'])) $config->setStarterSponsorTier((string) $row['starterSponsorTier']);
-        if (isset($row['starterClubTier']))    $config->setStarterClubTier((string) $row['starterClubTier']);
-        if (isset($row['defaultFacilities']))  $config->setDefaultFacilities((array) $row['defaultFacilities']);
-        if (isset($row['starterReputationTier'])) $config->setStarterReputationTier(ReputationTier::from((string) $row['starterReputationTier']));
-        if (isset($row['enabledCountries']))      $config->setEnabledCountries((array) $row['enabledCountries']);
-        if (isset($row['leagueAbilityRanges']))   $config->setLeagueAbilityRanges((array) $row['leagueAbilityRanges']);
-        if (isset($row['npcSquadConfig']))        $config->setNpcSquadConfig((array) $row['npcSquadConfig']);
+        foreach (self::exportableProperties($entity::class) as $name) {
+            $getter = self::resolveGetter($entity, $name);
+            if ($getter === null) {
+                // No accessor — the coverage test turns this into a build failure rather
+                // than a silently absent key.
+                continue;
+            }
+
+            $value = $entity->$getter();
+            $row[$name] = $value instanceof \BackedEnum ? $value->value : $value;
+        }
+
+        return $row;
     }
 
-    private function applyPoolConfig(array $row): void
+    /**
+     * Applies every recognised key in $row to $entity.
+     *
+     * Uses array_key_exists rather than isset so `false` and explicit `null` are applied —
+     * with isset, a boolean could only ever be imported as true.
+     *
+     * @return string[] per-field error messages, prefixed with the property name
+     */
+    public static function applyEntity(object $entity, array $row): array
     {
-        $config = $this->poolConfigRepository->getConfig();
+        $errors = [];
 
-        if (isset($row['playerAgeMin']))             $config->setPlayerAgeMin((int) $row['playerAgeMin']);
-        if (isset($row['playerAgeMax']))             $config->setPlayerAgeMax((int) $row['playerAgeMax']);
-        if (isset($row['playerPotentialMin']))       $config->setPlayerPotentialMin((int) $row['playerPotentialMin']);
-        if (isset($row['playerPotentialMax']))       $config->setPlayerPotentialMax((int) $row['playerPotentialMax']);
-        if (isset($row['playerPotentialMean']))      $config->setPlayerPotentialMean((int) $row['playerPotentialMean']);
-        if (isset($row['playerAbilityMin']))         $config->setPlayerAbilityMin((int) $row['playerAbilityMin']);
-        if (isset($row['playerAbilityMax']))         $config->setPlayerAbilityMax((int) $row['playerAbilityMax']);
-        if (isset($row['playerAttributeBudgetMin'])) $config->setPlayerAttributeBudgetMin((int) $row['playerAttributeBudgetMin']); // no longer used for attribute generation (budget now derived from currentAbility)
-        if (isset($row['playerAttributeBudgetMax'])) $config->setPlayerAttributeBudgetMax((int) $row['playerAttributeBudgetMax']); // no longer used for attribute generation (budget now derived from currentAbility)
-        if (isset($row['playerAgentChancePercent'])) $config->setPlayerAgentChancePercent((int) $row['playerAgentChancePercent']);
-        if (isset($row['playerHeightMin']))          $config->setPlayerHeightMin((int) $row['playerHeightMin']);
-        if (isset($row['playerHeightMax']))          $config->setPlayerHeightMax((int) $row['playerHeightMax']);
-        if (isset($row['playerWeightMin']))          $config->setPlayerWeightMin((int) $row['playerWeightMin']);
-        if (isset($row['playerWeightMax']))          $config->setPlayerWeightMax((int) $row['playerWeightMax']);
-        if (isset($row['personalityTraitMin']))      $config->setPersonalityTraitMin((int) $row['personalityTraitMin']);
-        if (isset($row['personalityTraitMax']))      $config->setPersonalityTraitMax((int) $row['personalityTraitMax']);
-        if (isset($row['positionWeightGk']))         $config->setPositionWeightGk((int) $row['positionWeightGk']);
-        if (isset($row['positionWeightDef']))        $config->setPositionWeightDef((int) $row['positionWeightDef']);
-        if (isset($row['positionWeightMid']))        $config->setPositionWeightMid((int) $row['positionWeightMid']);
-        if (isset($row['positionWeightAtt']))        $config->setPositionWeightAtt((int) $row['positionWeightAtt']);
-        if (isset($row['coachAgeMin']))              $config->setCoachAgeMin((int) $row['coachAgeMin']);
-        if (isset($row['coachAgeMax']))              $config->setCoachAgeMax((int) $row['coachAgeMax']);
-        if (isset($row['coachAbilityMin']))          $config->setCoachAbilityMin((int) $row['coachAbilityMin']);
-        if (isset($row['coachAbilityMax']))          $config->setCoachAbilityMax((int) $row['coachAbilityMax']);
-        if (isset($row['scoutAgeMin']))              $config->setScoutAgeMin((int) $row['scoutAgeMin']);
-        if (isset($row['scoutAgeMax']))              $config->setScoutAgeMax((int) $row['scoutAgeMax']);
-        if (isset($row['scoutExperienceMin']))       $config->setScoutExperienceMin((int) $row['scoutExperienceMin']);
-        if (isset($row['scoutExperienceMax']))       $config->setScoutExperienceMax((int) $row['scoutExperienceMax']);
-        if (isset($row['scoutJudgementMin']))        $config->setScoutJudgementMin((int) $row['scoutJudgementMin']);
-        if (isset($row['scoutJudgementMax']))        $config->setScoutJudgementMax((int) $row['scoutJudgementMax']);
-        if (isset($row['agentReputationMin']))       $config->setAgentReputationMin((int) $row['agentReputationMin']);
-        if (isset($row['agentReputationMax']))       $config->setAgentReputationMax((int) $row['agentReputationMax']);
-        if (isset($row['agentAgeMin']))              $config->setAgentAgeMin((int) $row['agentAgeMin']);
-        if (isset($row['agentAgeMax']))              $config->setAgentAgeMax((int) $row['agentAgeMax']);
-        if (isset($row['playerPoolTarget']))         $config->setPlayerPoolTarget((int) $row['playerPoolTarget']);
-        if (isset($row['coachPoolTarget']))          $config->setCoachPoolTarget((int) $row['coachPoolTarget']);
-        if (isset($row['scoutPoolTarget']))          $config->setScoutPoolTarget((int) $row['scoutPoolTarget']);
-        if (isset($row['sponsorPoolTarget']))        $config->setSponsorPoolTarget((int) $row['sponsorPoolTarget']);
-        if (isset($row['investorPoolTarget']))       $config->setInvestorPoolTarget((int) $row['investorPoolTarget']);
-        if (isset($row['agentPoolTarget']))          $config->setAgentPoolTarget((int) $row['agentPoolTarget']);
+        foreach (self::exportableProperties($entity::class) as $name) {
+            if (!array_key_exists($name, $row)) {
+                continue;
+            }
+
+            $setter = 'set' . ucfirst($name);
+            if (!method_exists($entity, $setter)) {
+                continue;
+            }
+
+            try {
+                $entity->$setter(self::coerce($entity, $setter, $row[$name]));
+            } catch (\Throwable $e) {
+                $errors[] = $name . ': ' . $e->getMessage();
+            }
+        }
+
+        return $errors;
+    }
+
+    private static function resolveGetter(object $entity, string $name): ?string
+    {
+        foreach (['get' . ucfirst($name), 'is' . ucfirst($name), $name] as $candidate) {
+            if (method_exists($entity, $candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /** Casts a raw JSON value to whatever the setter's own signature declares. */
+    private static function coerce(object $entity, string $setter, mixed $value): mixed
+    {
+        $parameters = (new \ReflectionMethod($entity, $setter))->getParameters();
+        $type       = $parameters[0]->getType() ?? null;
+
+        if (!$type instanceof \ReflectionNamedType) {
+            return $value;
+        }
+
+        if ($value === null) {
+            if (!$type->allowsNull()) {
+                throw new \InvalidArgumentException('null is not allowed.');
+            }
+            return null;
+        }
+
+        $typeName = $type->getName();
+
+        if (is_subclass_of($typeName, \BackedEnum::class)) {
+            $case = (is_string($value) || is_int($value)) ? $typeName::tryFrom($value) : null;
+            if ($case === null) {
+                throw new \InvalidArgumentException(sprintf(
+                    'invalid value "%s" — expected one of: %s',
+                    is_scalar($value) ? (string) $value : gettype($value),
+                    implode(', ', array_column($typeName::cases(), 'value')),
+                ));
+            }
+            return $case;
+        }
+
+        return match ($typeName) {
+            'int'    => (int) $value,
+            'float'  => (float) $value,
+            'bool'   => (bool) $value,
+            'string' => (string) $value,
+            'array'  => (array) $value,
+            default  => $value,
+        };
     }
 }
