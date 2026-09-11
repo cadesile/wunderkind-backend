@@ -499,7 +499,7 @@ Errors:
 ### `GET /api/events/templates` — JWT required (`ROLE_CLUB`)
 Returns all active (weight > 0) game event templates for client-side narrative simulation. Response is cached server-side for 1 hour (`Cache-Control: max-age=3600`).
 
-The client uses these templates to randomly trigger narrative events during the Weekly Tick. Events with higher `weight` are selected more frequently. The `impacts` array is consumed by the client engine to apply effects to player/academy state.
+The client uses these templates to trigger narrative events during the Weekly Tick. Events with higher `weight` are selected more frequently. The backend stores and serves these fields verbatim and interprets none of them — see `docs/event-guide.md` for the full key reference.
 
 Response `200`:
 ```json
@@ -510,19 +510,27 @@ Response `200`:
       "category": "player",
       "weight": 3,
       "title": "Homesick",
-      "bodyTemplate": "{player} has been struggling to settle in. They're missing home.",
+      "bodyTemplate": "{player_1} has been struggling to settle in. They're missing home.",
       "impacts": [
-        {"target": "player.morale", "delta": -10}
-      ]
+        {"target": "player_1.morale", "delta": -10}
+      ],
+      "firingConditions": null,
+      "severity": null,
+      "chainedEvents": null,
+      "noInteract": false
     }
   ]
 }
 ```
 - `slug` — unique identifier; use to reference templates in client logic
-- `category` — `player` · `facility` · `staff` · `finance`
+- `category` — one of `player`, `facility`, `staff`, `finance`, `NPC_INTERACTION`, `GUARDIAN`, `MATCH`, `press`, `player_reputation`, `player_milestone`, `player_morale`, `player_form`. Determines which client engine consumes the template.
 - `weight` — relative selection probability; 0 = inactive (never returned by this endpoint)
-- `bodyTemplate` — replace `{player}`, `{staff}`, `{facility}`, `{amount}` before displaying
-- `impacts` — array of effect descriptors; known `target` keys: `player.morale`, `player.confidence`, `player.energy`, `academy.reputation`, `academy.finances`, `staff.morale`
+- `bodyTemplate` — token placeholders; which tokens are available depends on the engine (see the guide)
+- `impacts` — either `{"stat_changes": [...]}` (canonical, and the only shape the `player_*` categories read) or a flat `[{target, delta}]` array
+- `firingConditions` — `null` for an unconditional event. When set, the template leaves the random roll and only fires if a dedicated evaluator claims its shape.
+- `severity` — `minor` or `major`; only read on the `NPC_INTERACTION` path
+- `chainedEvents` — `[{nextEventSlug, boostMultiplier, windowWeeks}]` or `null`; the admin-only `note` field is stripped here
+- `noInteract` — when true, effects apply automatically with no prompt to the manager
 
 ---
 
