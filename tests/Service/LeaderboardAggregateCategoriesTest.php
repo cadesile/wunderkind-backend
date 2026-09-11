@@ -5,12 +5,14 @@ namespace App\Tests\Service;
 use App\Entity\Club;
 use App\Entity\LeaderboardEntry;
 use App\Entity\PlayerCareerStat;
+use App\Entity\PlayerCareerStatSnapshot;
 use App\Entity\Transfer;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\TransferType;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\PlayerCareerStatRepository;
+use App\Repository\PlayerCareerStatSnapshotRepository;
 use App\Repository\TransferRepository;
 use App\Service\LeaderboardCalculationService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,6 +35,14 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
 
     private string $period;
 
+    /**
+     * 'all-time' is a shared, permanent period (unlike $this->period), so entries written
+     * there for a test club must be swept individually rather than by period sweep.
+     *
+     * @var array<array{0: Club, 1: LeaderboardCategory}>
+     */
+    private array $allTimeEntriesToClean = [];
+
     protected function setUp(): void
     {
         self::bootKernel();
@@ -46,6 +56,18 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         foreach ($this->em->getRepository(LeaderboardEntry::class)->findBy(['period' => $this->period]) as $entry) {
             $this->em->remove($entry);
         }
+
+        foreach ($this->allTimeEntriesToClean as [$club, $category]) {
+            $entry = $this->em->getRepository(LeaderboardEntry::class)->findOneBy([
+                'club'     => $club,
+                'category' => $category,
+                'period'   => 'all-time',
+            ]);
+            if ($entry !== null) {
+                $this->em->remove($entry);
+            }
+        }
+        $this->allTimeEntriesToClean = [];
         $this->em->flush();
 
         foreach (array_reverse($this->cleanup) as $entity) {
@@ -127,6 +149,55 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $this->assertSame(100, $spend[$buyerId]->getScore());
     }
 
+    public function testAllTimeSurvivesASeasonResetWhileOtherPeriodsDoNot(): void
+    {
+        $club = $this->persistClub('Agg Season Reset FC');
+
+        // Season 1: player scores up to 10 goals across the season, tracked by three synced
+        // snapshots (cumulative season-to-date, as the client sends it).
+        $this->persistSnapshot($club, 'p1', 'Reset Fixture', goals: 4,  recordedAt: '-30 days');
+        $this->persistSnapshot($club, 'p1', 'Reset Fixture', goals: 10, recordedAt: '-20 days');
+        // Season 2 begins: client resets its season-to-date counter to 0, then the player
+        // scores 3 more goals this new season.
+        $this->persistSnapshot($club, 'p1', 'Reset Fixture', goals: 3,  recordedAt: '-5 days');
+
+        // PlayerCareerStat (the "current" table) only ever reflects the latest sync — this is
+        // exactly the value that period != 'all-time' still reads today.
+        $this->persistStat($club, 'p1', 'Reset Fixture', appearances: 0, goals: 3, assists: 0);
+        $this->em->flush();
+
+        $allTime = $this->recalculateAllTimeEntry($club, LeaderboardCategory::CLUB_GOALS);
+        $other   = $this->recalculateAndIndex(LeaderboardCategory::CLUB_GOALS);
+
+        // Career total = 10 (season 1 peak) + 3 (season 2 to date) = 13, not just the
+        // current season-to-date value of 3.
+        $this->assertSame(13, $allTime->getScore(), 'all-time must reconstruct across the season reset');
+        $this->assertSame(3, $other[(string) $club->getId()]->getScore(), 'other periods still read the live current-season value');
+    }
+
+    public function testTopCareerPerformerUsesResetAwareTotalsAndLatestName(): void
+    {
+        $club = $this->persistClub('Agg Golden Boot Reset FC');
+
+        // Player A: 20 goals last season (reset to 0), 5 so far this season -> career total 25.
+        $this->persistSnapshot($club, 'a', 'Old Name', goals: 20, recordedAt: '-20 days');
+        $this->persistSnapshot($club, 'a', 'New Name', goals: 5,  recordedAt: '-2 days');
+        // Player B: 18 goals this season only, never reset -> career total 18.
+        $this->persistSnapshot($club, 'b', 'Solo Scorer', goals: 18, recordedAt: '-2 days');
+        $this->em->flush();
+
+        $entry = $this->recalculateAllTimeEntry($club, LeaderboardCategory::GOLDEN_BOOT);
+
+        $this->assertSame(25, $entry->getScore(), 'player A\'s reconstructed career total beats player B\'s single-season 18');
+        $this->assertSame('New Name', $entry->getDisplayLabel(), 'display label uses the most recent snapshot\'s name, not a stale one');
+    }
+
+    public function testCareerTotalsRepositoryRejectsAnUnknownColumn(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        self::getContainer()->get(PlayerCareerStatSnapshotRepository::class)->sumCareerTotalsByClub('rank');
+    }
+
     public function testSumByClubRejectsAnUnknownColumn(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -190,6 +261,47 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $stat->applySnapshot($appearances, $goals, $assists, $playerName);
 
         return $stat;
+    }
+
+    private function persistSnapshot(
+        Club $club,
+        string $playerId,
+        string $playerName,
+        int $goals = 0,
+        int $assists = 0,
+        int $appearances = 0,
+        string $recordedAt = 'now',
+    ): PlayerCareerStatSnapshot {
+        return $this->persist(new PlayerCareerStatSnapshot(
+            $club,
+            $playerId,
+            $playerName,
+            $appearances,
+            $goals,
+            $assists,
+            new \DateTimeImmutable($recordedAt),
+        ));
+    }
+
+    /**
+     * Recalculates one category at 'all-time' and returns this club's entry, without
+     * touching every other club's 'all-time' rows in the shared test DB the way
+     * recalculateAndIndex()'s full-board read would.
+     */
+    private function recalculateAllTimeEntry(Club $club, LeaderboardCategory $category): LeaderboardEntry
+    {
+        $this->allTimeEntriesToClean[] = [$club, $category];
+
+        self::getContainer()->get(LeaderboardCalculationService::class)->recalculate($category, 'all-time');
+
+        $entry = $this->em->getRepository(LeaderboardEntry::class)->findOneBy([
+            'club'     => $club,
+            'category' => $category,
+            'period'   => 'all-time',
+        ]);
+        $this->assertNotNull($entry, 'expected an all-time entry to have been written for this club');
+
+        return $entry;
     }
 
     private function persistTransfer(Club $club, TransferType $type, string $playerName, int $fee, int $netProceeds = 0): Transfer

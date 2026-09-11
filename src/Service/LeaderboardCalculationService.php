@@ -10,6 +10,7 @@ use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubRepository;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\PlayerCareerStatRepository;
+use App\Repository\PlayerCareerStatSnapshotRepository;
 use App\Repository\TransferRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -22,6 +23,7 @@ class LeaderboardCalculationService
         private readonly LeaderboardEntryRepository $leaderboardEntryRepository,
         private readonly ClubFacilityRepository $clubFacilityRepository,
         private readonly PlayerCareerStatRepository $playerCareerStatRepository,
+        private readonly PlayerCareerStatSnapshotRepository $playerCareerStatSnapshotRepository,
         private readonly TransferRepository $transferRepository,
         private readonly ClubRepository $clubRepository,
         private readonly HallOfFameScoreService $hallOfFameScoreService,
@@ -96,17 +98,35 @@ class LeaderboardCalculationService
      */
     private function computeAggregateScores(LeaderboardCategory $category, string $period): void
     {
+        // 'all-time' is reconstructed from the full append-only snapshot history rather
+        // than PlayerCareerStat's current value, because PlayerCareerStat is overwritten
+        // in place each sync and only ever reflects the current season — a season reset
+        // would otherwise make a club's all-time total silently shrink. Every other
+        // period value keeps reading the live PlayerCareerStat snapshot unchanged; see
+        // PlayerCareerStatSnapshotRepository for the reset-aware reconstruction.
+        $isAllTime = $period === 'all-time';
+
         $rows = match ($category) {
             LeaderboardCategory::EMPIRE_INDEX => array_map(
                 static fn (array $r): array => $r + ['displayLabel' => null],
                 $this->clubFacilityRepository->sumLevelsByClub(),
             ),
-            LeaderboardCategory::GOLDEN_BOOT => $this->playerCareerStatRepository->findTopPerformerByClub('goals'),
-            LeaderboardCategory::PLAYMAKER   => $this->playerCareerStatRepository->findTopPerformerByClub('assists'),
+            LeaderboardCategory::GOLDEN_BOOT => $isAllTime
+                ? $this->playerCareerStatSnapshotRepository->topCareerPerformerByClub('goals')
+                : $this->playerCareerStatRepository->findTopPerformerByClub('goals'),
+            LeaderboardCategory::PLAYMAKER => $isAllTime
+                ? $this->playerCareerStatSnapshotRepository->topCareerPerformerByClub('assists')
+                : $this->playerCareerStatRepository->findTopPerformerByClub('assists'),
             LeaderboardCategory::HALL_OF_FAME => $this->hallOfFameRows(),
-            LeaderboardCategory::CLUB_GOALS   => $this->playerCareerStatRepository->sumByClub('goals'),
-            LeaderboardCategory::CLUB_ASSISTS => $this->playerCareerStatRepository->sumByClub('assists'),
-            LeaderboardCategory::IRON_MAN     => $this->playerCareerStatRepository->findTopPerformerByClub('appearances'),
+            LeaderboardCategory::CLUB_GOALS => $isAllTime
+                ? $this->playerCareerStatSnapshotRepository->sumCareerTotalsByClub('goals')
+                : $this->playerCareerStatRepository->sumByClub('goals'),
+            LeaderboardCategory::CLUB_ASSISTS => $isAllTime
+                ? $this->playerCareerStatSnapshotRepository->sumCareerTotalsByClub('assists')
+                : $this->playerCareerStatRepository->sumByClub('assists'),
+            LeaderboardCategory::IRON_MAN => $isAllTime
+                ? $this->playerCareerStatSnapshotRepository->topCareerPerformerByClub('appearances')
+                : $this->playerCareerStatRepository->findTopPerformerByClub('appearances'),
             LeaderboardCategory::TRANSFER_RECORD => $this->transferRepository->findHighestFeeByClub(false),
             LeaderboardCategory::TRANSFER_SPEND  => $this->transferRepository->findHighestFeeByClub(true),
             default => throw new \InvalidArgumentException("{$category->value} is not an aggregate category"),

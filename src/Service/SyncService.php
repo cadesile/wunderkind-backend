@@ -9,6 +9,7 @@ use App\Entity\GameConfig;
 use App\Entity\MatchResult;
 use App\Entity\NpcClub;
 use App\Entity\Player;
+use App\Entity\PlayerCareerStatSnapshot;
 use App\Entity\SyncRecord;
 use App\Entity\TacticalAdvantage;
 use App\Entity\Transfer;
@@ -170,7 +171,7 @@ class SyncService
 
         // Player season stats — back the 'golden_boot'/'playmaker' leaderboards (computed by LeaderboardCalculationService, not here).
         if (!empty($request->playerStats)) {
-            $this->processPlayerCareerStats($club, $request->playerStats);
+            $this->processPlayerCareerStats($club, $request->playerStats, $syncRecord);
         }
 
         // ── Leaderboard upserts ───────────────────────────────────────────────
@@ -483,28 +484,45 @@ class SyncService
     }
 
     /**
-     * Upserts PlayerCareerStat rows from the client's season-to-date player stats.
-     * playerStats is a cumulative snapshot (not a per-tick delta), so this overwrites
-     * rather than accumulates — replaying a sync can't double-count.
+     * Upserts PlayerCareerStat rows from the client's season-to-date player stats, and
+     * appends a PlayerCareerStatSnapshot per player so the history survives a season
+     * reset — PlayerCareerStat itself is overwritten in place and only ever reflects
+     * the current season, so it alone can't answer "career total across all seasons"
+     * (see PlayerCareerStatSnapshotRepository).
+     *
+     * playerStats is a cumulative snapshot (not a per-tick delta), so PlayerCareerStat
+     * overwrites rather than accumulates — replaying a sync can't double-count. The
+     * snapshot row is append-only by design; a replayed sync just adds a duplicate
+     * data point with the same value, which the reset-aware total handles as a
+     * zero-delta step, not double-counted activity.
      *
      * @param array<array{playerId: string, playerName?: string, appearances: int, goals: int, assists: int, averageRating: float}> $playerStats
      */
-    private function processPlayerCareerStats(Club $club, array $playerStats): void
+    private function processPlayerCareerStats(Club $club, array $playerStats, SyncRecord $syncRecord): void
     {
         foreach ($playerStats as $data) {
             if (empty($data['playerId'])) {
                 continue;
             }
 
-            $playerName = $data['playerName'] ?? $data['playerId'];
+            $playerName   = $data['playerName'] ?? $data['playerId'];
+            $appearances  = (int) ($data['appearances'] ?? 0);
+            $goals        = (int) ($data['goals'] ?? 0);
+            $assists      = (int) ($data['assists'] ?? 0);
 
             $stat = $this->playerCareerStatRepository->findOrCreate($club, (string) $data['playerId'], (string) $playerName);
-            $stat->applySnapshot(
-                (int) ($data['appearances'] ?? 0),
-                (int) ($data['goals'] ?? 0),
-                (int) ($data['assists'] ?? 0),
+            $stat->applySnapshot($appearances, $goals, $assists, (string) $playerName);
+
+            $this->em->persist(new PlayerCareerStatSnapshot(
+                $club,
+                (string) $data['playerId'],
                 (string) $playerName,
-            );
+                $appearances,
+                $goals,
+                $assists,
+                $syncRecord->getServerTimestamp(),
+                $syncRecord,
+            ));
         }
     }
 

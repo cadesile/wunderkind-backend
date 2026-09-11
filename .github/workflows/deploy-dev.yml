@@ -77,6 +77,14 @@ jobs:
             docker compose -f docker-compose.dev.yml up -d
             docker compose -f docker-compose.dev.yml exec -T app \
               php bin/console doctrine:migrations:migrate --no-interaction
+            # Unlike app:backfill-appearances below, this is a single set-based SQL
+            # INSERT...SELECT executed entirely in Postgres — no findBy()/entity
+            # hydration, so it carries none of that command's OOM risk regardless of
+            # table size. Idempotent (NOT EXISTS guard on sync_record_id): safe to run
+            # on every deploy, and after the first run only backfills syncs received
+            # since the last deploy, since live syncs already write their own snapshot.
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:backfill-player-career-stat-snapshots
             docker compose -f docker-compose.dev.yml exec -T app \
               php bin/console app:seed-player-events
             # Rebuilds the curated 20-archetype catalogue. Unlike app:seed-excursions this
