@@ -45,7 +45,7 @@ class DeletionRequestCrudController extends AbstractCrudController
             ->setEntityLabelInSingular('Deletion Request')
             ->setEntityLabelInPlural('Deletion Requests')
             ->setDefaultSort(['requestedAt' => 'DESC'])
-            ->setHelp('index', 'Audit trail for web account deletions (GET /delete-account). Read-only by design.');
+            ->setHelp('index', 'Audit trail for account deletions — both the web form (POST /api/account/delete-request) and the in-app endpoint (POST /api/account/delete). Read-only by design.');
     }
 
     public function configureFilters(Filters $filters): Filters

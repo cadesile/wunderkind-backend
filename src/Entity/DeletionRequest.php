@@ -10,11 +10,16 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 /**
- * Audit record of a web account-deletion request.
+ * Audit record of an account-deletion attempt, from either deletion route.
  *
  * Google Play and iOS both require a web-accessible deletion route, and both
- * expect you to be able to evidence that requests are actioned. This table is
- * that evidence: one row per attempt, successful or not.
+ * expect you to be able to evidence that requests are actioned — that's what
+ * this table was originally built for (`AccountDeletionRequestController`,
+ * email+password, no JWT). The in-app JWT endpoint (`AccountController::delete()`)
+ * writes here too, so this is the single audit trail for every deletion attempt
+ * regardless of which route it came from. Only the web route can produce
+ * REJECTED_INVALID_CREDENTIALS / REJECTED_GUEST — the in-app route is already
+ * authenticated, so it only ever writes COMPLETED or FAILED.
  *
  * Note the deliberate tension — a COMPLETED row outlives the User it deleted and
  * still holds their email address. That is intentional (it is what lets you
