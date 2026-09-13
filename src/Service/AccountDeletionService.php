@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\User;
+use App\Enum\LeaderboardCategory;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -37,11 +38,16 @@ final class AccountDeletionService
         'LeaderboardEntry',
     ];
 
-    public function __construct(private readonly EntityManagerInterface $em) {}
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly LeaderboardCalculationService $leaderboardCalculationService,
+    ) {}
 
     public function deleteAccount(User $user): void
     {
-        $this->em->wrapInTransaction(function () use ($user): void {
+        $hadClubs = false;
+
+        $this->em->wrapInTransaction(function () use ($user, &$hadClubs): void {
             // Queried directly (not via $user->getClubs()) so this is correct regardless of
             // whether the club collection is already hydrated/populated on the User instance.
             $clubs = $this->em->createQuery('SELECT c FROM App\Entity\Club c WHERE c.user = :user')
@@ -49,6 +55,8 @@ final class AccountDeletionService
                 ->getResult();
 
             foreach ($clubs as $club) {
+                $hadClubs = true;
+
                 foreach (self::BLOCKING_CLUB_DEPENDENTS as $entity) {
                     $this->em->createQuery("DELETE FROM App\\Entity\\{$entity} e WHERE e.club = :club")
                         ->setParameter('club', $club)
@@ -65,10 +73,29 @@ final class AccountDeletionService
                 $this->em->remove($club);
             }
 
+            // Revoke standing sessions: no FK ties refresh_tokens.username to user.id (it's a
+            // bare string, set to the JWT identifier at issue time), so nothing above touches
+            // it — left alone, a still-valid refresh token could keep minting new access tokens
+            // against an account that no longer exists in this table.
+            $this->em->createQuery('DELETE FROM App\Entity\RefreshToken t WHERE t.username = :username')
+                ->setParameter('username', $user->getUserIdentifier())
+                ->execute();
+
             // DB cascade: InboxMessage (ON DELETE CASCADE on club) and email_verification
             // (ON DELETE CASCADE on user); DB SET NULL: transfer.club_id/player_id.
             $this->em->remove($user);
             $this->em->flush();
         });
+
+        // Outside the transaction and only once it has committed: the LeaderboardEntry rows
+        // are really gone at this point, so it's safe to drop every cached leaderboard page
+        // rather than risk repopulating the cache from a read that raced the commit. Every
+        // category is invalidated (not just the ones the deleted club scored in) because the
+        // cache is keyed by category+period for the whole board, not per club.
+        if ($hadClubs) {
+            foreach (LeaderboardCategory::cases() as $category) {
+                $this->leaderboardCalculationService->invalidate($category);
+            }
+        }
     }
 }

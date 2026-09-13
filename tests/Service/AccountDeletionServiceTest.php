@@ -7,6 +7,7 @@ use App\Entity\Investor;
 use App\Entity\League;
 use App\Entity\LeaderboardEntry;
 use App\Entity\MatchResult;
+use App\Entity\RefreshToken;
 use App\Entity\SeasonRatingsSnapshot;
 use App\Entity\SeasonRecord;
 use App\Entity\SeasonSnapshot;
@@ -17,6 +18,7 @@ use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use App\Enum\TransferType;
 use App\Service\AccountDeletionService;
+use App\Service\LeaderboardCalculationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -75,6 +77,7 @@ class AccountDeletionServiceTest extends KernelTestCase
         $this->persist($user);
 
         $club = new Club('Doomed FC', $user);
+        $club->setCurrentSeason(2); // leaderboard queries only surface clubs past season 1
         $this->persist($club);
 
         $uniqueCountry = chr(97 + mt_rand(0, 25)) . chr(97 + mt_rand(0, 25));
@@ -99,14 +102,48 @@ class AccountDeletionServiceTest extends KernelTestCase
         $transfer = new Transfer(null, $club, 'Some Club', TransferType::SALE, new \DateTimeImmutable());
         $this->persist($transfer);
 
+        $leaderboardEntry = new LeaderboardEntry($club, LeaderboardCategory::CLUB_REPUTATION, 'all-time');
+        $this->persist($leaderboardEntry);
+
+        $refreshToken = RefreshToken::createForUserWithTtl('rt-' . uniqid(), $user, 2592000);
+        $this->persist($refreshToken);
+
         $this->em->flush();
 
         $userId     = $user->getId();
         $clubId     = $club->getId();
         $transferId = $transfer->getId();
+        $userEmail  = $user->getUserIdentifier();
+
+        // Prime the leaderboard cache with the doomed club in it, so deleting the account
+        // can be shown to actually invalidate the cached page rather than leaving it stale
+        // for the rest of the TTL. Force a fresh compute first — this pool is filesystem-backed
+        // and persists across runs, so a page cached by an earlier run/request could otherwise
+        // already be stale (missing our just-created club) before we ever prime it here.
+        $leaderboardService = self::getContainer()->get(LeaderboardCalculationService::class);
+        $leaderboardService->invalidate(LeaderboardCategory::CLUB_REPUTATION, 'all-time');
+        $cachedBefore = $leaderboardService->getLeaderboard(LeaderboardCategory::CLUB_REPUTATION, 'all-time', 1, 50);
+        $this->assertTrue(
+            $this->leaderboardContainsClub($cachedBefore, $clubId),
+            'sanity check: doomed club should be in the primed cache'
+        );
 
         self::getContainer()->get(AccountDeletionService::class)->deleteAccount($user);
         $this->em->clear();
+
+        // Refresh tokens for the deleted user are revoked, not left to expire naturally.
+        $remainingTokens = (int) $this->em->createQuery(
+            'SELECT COUNT(t) FROM App\Entity\RefreshToken t WHERE t.username = :username'
+        )->setParameter('username', $userEmail)->getSingleScalarResult();
+        $this->assertSame(0, $remainingTokens, 'refresh tokens should be revoked');
+
+        // The cached leaderboard page no longer serves the deleted club, even though its TTL
+        // hasn't elapsed — proves the cache was actually invalidated, not just the DB row.
+        $cachedAfter = $leaderboardService->getLeaderboard(LeaderboardCategory::CLUB_REPUTATION, 'all-time', 1, 50);
+        $this->assertFalse(
+            $this->leaderboardContainsClub($cachedAfter, $clubId),
+            'deleted club should no longer appear on the cached leaderboard'
+        );
 
         // Account + club gone.
         $this->assertNull($this->em->find(User::class, $userId), 'user should be deleted');
@@ -155,6 +192,17 @@ class AccountDeletionServiceTest extends KernelTestCase
 
         $this->assertNull($this->em->find(Club::class, $idA));
         $this->assertNull($this->em->find(Club::class, $idB));
+    }
+
+    private function leaderboardContainsClub(\App\Dto\Leaderboard\LeaderboardResponseDto $response, mixed $clubId): bool
+    {
+        foreach ($response->entries as $entry) {
+            if ($entry->clubId === (string) $clubId) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function testDeletesUserWithNoClubs(): void
