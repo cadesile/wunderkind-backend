@@ -149,23 +149,6 @@ class SeedPlayerEventsCommand extends AbstractSeedEventTemplatesCommand
                 ],
                 'severity'         => 'major',
             ],
-            [
-                'slug'             => 'morale_surge',
-                'category'         => EventCategory::PLAYER_MORALE,
-                'weight'           => 3,
-                'title'            => 'Rejuvenated',
-                'bodyTemplate'     => '{player_name} looks like a new player. High spirits in the dressing room seem to be bringing out the best in them.',
-                'impacts'          => [
-                    'stat_changes' => [
-                        ['target' => 'player_1', 'field' => 'personality.consistency', 'operator' => 'add', 'value' => 1],
-                    ],
-                ],
-                'firingConditions' => [
-                    'morale_threshold' => 85,
-                    'morale_direction' => 'above',
-                ],
-                'severity'         => 'minor',
-            ],
 
             // ── PLAYER_FORM ───────────────────────────────────────────────────
 
