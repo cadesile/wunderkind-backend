@@ -9,6 +9,7 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: MatchResultRepository::class)]
 #[ORM\Table(name: 'match_result')]
+#[ORM\Index(columns: ['club_id', 'created_at'], name: 'idx_match_result_club_created')]
 class MatchResult
 {
     #[ORM\Id]

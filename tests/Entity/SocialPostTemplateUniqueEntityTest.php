@@ -52,6 +52,29 @@ class SocialPostTemplateUniqueEntityTest extends KernelTestCase
         $this->cleanUp();
     }
 
+    public function testSameCategoryAndPlatformDifferentPeriodPassesValidation(): void
+    {
+        self::bootKernel();
+        $this->cleanUp();
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $validator = self::getContainer()->get(ValidatorInterface::class);
+
+        $existing = new SocialPostTemplate(StatCategory::MOST_SEASONS, SocialPlatform::TWITTER, StatsPeriod::ALL, 'All-time one.');
+        $em->persist($existing);
+        $em->flush();
+
+        // Same category, same platform, different period — period now joins the unique
+        // key, so this is no longer a duplicate and must pass.
+        $notADuplicate = new SocialPostTemplate(StatCategory::MOST_SEASONS, SocialPlatform::TWITTER, StatsPeriod::WEEK, 'Weekly one — same category/platform as the existing row, different period.');
+
+        $violations = $validator->validate($notADuplicate);
+
+        $this->assertCount(0, $violations);
+
+        $this->cleanUp();
+    }
+
     public function testDifferentPlatformForSameCategoryPassesValidation(): void
     {
         self::bootKernel();

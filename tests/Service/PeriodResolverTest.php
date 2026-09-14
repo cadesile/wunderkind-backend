@@ -28,6 +28,34 @@ class PeriodResolverTest extends TestCase
         $this->assertNull($qb->getDQLPart('where'));
     }
 
+    public function testLast6HoursSetsSixHourCutoff(): void
+    {
+        $em = $this->createStub(EntityManagerInterface::class);
+        $qb = $this->makeQueryBuilder($em);
+
+        (new PeriodResolver($em))->applyPeriodFilter($qb, StatsPeriod::LAST_6_HOURS, 't', 'occurredAt', 'c');
+
+        $cutoff = $qb->getParameter('periodStart')->getValue();
+        $expected = (new \DateTimeImmutable())->modify('-6 hours');
+
+        $this->assertInstanceOf(\DateTimeImmutable::class, $cutoff);
+        $this->assertEqualsWithDelta($expected->getTimestamp(), $cutoff->getTimestamp(), 5);
+    }
+
+    public function testLast24HoursSetsTwentyFourHourCutoff(): void
+    {
+        $em = $this->createStub(EntityManagerInterface::class);
+        $qb = $this->makeQueryBuilder($em);
+
+        (new PeriodResolver($em))->applyPeriodFilter($qb, StatsPeriod::LAST_24_HOURS, 't', 'occurredAt', 'c');
+
+        $cutoff = $qb->getParameter('periodStart')->getValue();
+        $expected = (new \DateTimeImmutable())->modify('-24 hours');
+
+        $this->assertInstanceOf(\DateTimeImmutable::class, $cutoff);
+        $this->assertEqualsWithDelta($expected->getTimestamp(), $cutoff->getTimestamp(), 5);
+    }
+
     public function testWeekSetsSevenDayCutoff(): void
     {
         $em = $this->createStub(EntityManagerInterface::class);
@@ -106,5 +134,28 @@ class PeriodResolverTest extends TestCase
             count(array_unique($aliases)),
             "PeriodResolver's internal subquery aliases collided with the outer query's alias.\nAliases found: ".implode(', ', $aliases)."\nDQL: {$dql}",
         );
+    }
+
+    public function testResolveFixedLowerBoundForEachPeriod(): void
+    {
+        $em = $this->createStub(EntityManagerInterface::class);
+        $resolver = new PeriodResolver($em);
+        $now = new \DateTimeImmutable();
+
+        $cases = [
+            [StatsPeriod::LAST_6_HOURS, '-6 hours'],
+            [StatsPeriod::LAST_24_HOURS, '-24 hours'],
+            [StatsPeriod::WEEK, '-7 days'],
+            [StatsPeriod::MONTH, '-30 days'],
+        ];
+
+        foreach ($cases as [$period, $modifier]) {
+            $bound = $resolver->resolveFixedLowerBound($period);
+            $this->assertInstanceOf(\DateTimeImmutable::class, $bound, $period->value);
+            $this->assertEqualsWithDelta($now->modify($modifier)->getTimestamp(), $bound->getTimestamp(), 5, $period->value);
+        }
+
+        $this->assertNull($resolver->resolveFixedLowerBound(StatsPeriod::SEASON));
+        $this->assertNull($resolver->resolveFixedLowerBound(StatsPeriod::ALL));
     }
 }

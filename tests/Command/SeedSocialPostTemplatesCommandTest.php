@@ -29,7 +29,7 @@ class SeedSocialPostTemplatesCommandTest extends KernelTestCase
         $em->flush();
     }
 
-    public function testSeedsEightTemplatesAndIsIdempotent(): void
+    public function testSeedsEighteenTemplatesAndIsIdempotent(): void
     {
         self::bootKernel();
         $this->cleanUp();
@@ -40,13 +40,16 @@ class SeedSocialPostTemplatesCommandTest extends KernelTestCase
 
         $em = self::getContainer()->get(EntityManagerInterface::class);
         $all = $em->getRepository(SocialPostTemplate::class)->findAll();
-        $this->assertCount(8, $all);
+        $this->assertCount(18, $all);
 
-        // Running again must not create duplicates.
+        // Running again must not create duplicates — proves the idempotency check is
+        // period-aware (it wasn't, before the SocialPostTemplate uniqueness change: a
+        // period-blind lookup would have skipped seeding a second period-variant of an
+        // already-seeded (category, platform) pair as a false duplicate).
         $tester->execute([]);
         $em->clear();
         $allAfterSecondRun = $em->getRepository(SocialPostTemplate::class)->findAll();
-        $this->assertCount(8, $allAfterSecondRun);
+        $this->assertCount(18, $allAfterSecondRun);
 
         foreach (StatCategory::cases() as $category) {
             foreach (SocialPlatform::cases() as $platform) {

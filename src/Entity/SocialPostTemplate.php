@@ -14,10 +14,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: SocialPostTemplateRepository::class)]
 #[ORM\Table(name: 'social_post_template')]
-#[ORM\UniqueConstraint(name: 'uq_social_post_template_category_platform', columns: ['category', 'platform'])]
+#[ORM\UniqueConstraint(name: 'uq_social_post_template_category_platform_period', columns: ['category', 'platform', 'period'])]
 #[UniqueEntity(
-    fields: ['category', 'platform'],
-    message: 'A template for this category and platform already exists.',
+    fields: ['category', 'platform', 'period'],
+    message: 'A template for this category, platform, and period already exists.',
 )]
 class SocialPostTemplate
 {
@@ -35,7 +35,21 @@ class SocialPostTemplate
     #[ORM\Column(type: 'string', enumType: StatsPeriod::class)]
     private StatsPeriod $period;
 
-    /** Template string with {{clubName}}, {{value}}, {{rank}}, {{period}}, {{categoryLabel}} placeholders. */
+    /**
+     * Template string. Placeholders:
+     *  - {{clubName}}       club name
+     *  - {{value}}          raw rounded int (unformatted) — used by the original 4 categories
+     *  - {{statValue}}      per-category formatted figure (comma-separated; pence->pounds
+     *                       for TRANSFER_SPLURGE; 1 decimal place for FORTRESS_DEFENCE)
+     *  - {{secondaryValue}} secondary figure — only BEST_FORM populates it (goal
+     *                       difference); empty string for every other category
+     *  - {{playerName}}     individual player name — only SUPER_STRIKER populates it;
+     *                       empty string for every other category
+     *  - {{rank}}           1-indexed rank
+     *  - {{period}}         human-readable period phrase, e.g. "this week", "over the
+     *                       last 24 hours" — not the raw enum value
+     *  - {{categoryLabel}}  human-readable category phrase
+     */
     #[ORM\Column(type: 'text')]
     private string $bodyTemplate;
 

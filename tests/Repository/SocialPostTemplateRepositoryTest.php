@@ -2,10 +2,15 @@
 
 namespace App\Tests\Repository;
 
+use App\Entity\SocialPostTemplate;
+use App\Enum\SocialPlatform;
+use App\Enum\StatCategory;
+use App\Enum\StatsPeriod;
 use App\Repository\SocialPostTemplateRepository;
-use PHPUnit\Framework\TestCase;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
-class SocialPostTemplateRepositoryTest extends TestCase
+class SocialPostTemplateRepositoryTest extends KernelTestCase
 {
     public function testFindAllOrderedOrdersByCategoryThenPlatform(): void
     {
@@ -25,5 +30,58 @@ class SocialPostTemplateRepositoryTest extends TestCase
 
         $result = $repo->findAllOrdered();
         $this->assertSame([], $result);
+    }
+
+    public function testFindByCategoryAndPlatformFiltersByPeriod(): void
+    {
+        self::bootKernel();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $repository = self::getContainer()->get(SocialPostTemplateRepository::class);
+
+        $weekTemplate = new SocialPostTemplate(StatCategory::BEST_FORM, SocialPlatform::FACEBOOK, StatsPeriod::WEEK, 'Week body.');
+        $monthTemplate = new SocialPostTemplate(StatCategory::BEST_FORM, SocialPlatform::FACEBOOK, StatsPeriod::MONTH, 'Month body.');
+        $em->persist($weekTemplate);
+        $em->persist($monthTemplate);
+        $em->flush();
+
+        try {
+            $foundWeek = $repository->findByCategoryAndPlatform(StatCategory::BEST_FORM, SocialPlatform::FACEBOOK, StatsPeriod::WEEK);
+            $foundMonth = $repository->findByCategoryAndPlatform(StatCategory::BEST_FORM, SocialPlatform::FACEBOOK, StatsPeriod::MONTH);
+            $foundMissing = $repository->findByCategoryAndPlatform(StatCategory::BEST_FORM, SocialPlatform::FACEBOOK, StatsPeriod::LAST_24_HOURS);
+
+            $this->assertSame($weekTemplate->getId()->toRfc4122(), $foundWeek?->getId()->toRfc4122());
+            $this->assertSame($monthTemplate->getId()->toRfc4122(), $foundMonth?->getId()->toRfc4122());
+            $this->assertNull($foundMissing);
+        } finally {
+            $em->remove($weekTemplate);
+            $em->remove($monthTemplate);
+            $em->flush();
+        }
+    }
+
+    public function testFindActiveByCategoryAndPlatformFiltersByPeriodAndActiveFlag(): void
+    {
+        self::bootKernel();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $repository = self::getContainer()->get(SocialPostTemplateRepository::class);
+
+        $active = new SocialPostTemplate(StatCategory::BIGGEST_ROUT, SocialPlatform::TWITTER, StatsPeriod::WEEK, 'Active body.');
+        $inactive = (new SocialPostTemplate(StatCategory::BIGGEST_ROUT, SocialPlatform::TWITTER, StatsPeriod::MONTH, 'Inactive body.'))
+            ->setIsActive(false);
+        $em->persist($active);
+        $em->persist($inactive);
+        $em->flush();
+
+        try {
+            $foundActive = $repository->findActiveByCategoryAndPlatform(StatCategory::BIGGEST_ROUT, SocialPlatform::TWITTER, StatsPeriod::WEEK);
+            $foundInactive = $repository->findActiveByCategoryAndPlatform(StatCategory::BIGGEST_ROUT, SocialPlatform::TWITTER, StatsPeriod::MONTH);
+
+            $this->assertSame($active->getId()->toRfc4122(), $foundActive?->getId()->toRfc4122());
+            $this->assertNull($foundInactive);
+        } finally {
+            $em->remove($active);
+            $em->remove($inactive);
+            $em->flush();
+        }
     }
 }

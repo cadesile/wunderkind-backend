@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Enum\StatCategory;
+use App\Enum\StatsPeriod;
 use App\Repository\GameConfigRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -1901,10 +1902,38 @@ class GameConfig
 
     // ── Social Posting ───────────────────────────────────────────────────
 
-    /** Last StatCategory posted by app:post-community-stat, for round-robin advancement. Null before the first run. */
-    #[ORM\Column(type: 'string', enumType: StatCategory::class, nullable: true)]
-    private ?StatCategory $lastPostedStatCategory = null;
+    /**
+     * Per-period round-robin cursor for app:post-community-stat, keyed by
+     * StatsPeriod::value => StatCategory::value. Each period tier (last_6_hours,
+     * last_24_hours, week, month, ...) advances through StatCategory::cases()
+     * independently of every other period.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $statPostRotation = [];
 
-    public function getLastPostedStatCategory(): ?StatCategory { return $this->lastPostedStatCategory; }
-    public function setLastPostedStatCategory(?StatCategory $v): static { $this->lastPostedStatCategory = $v; return $this; }
+    public function getLastPostedCategoryForPeriod(StatsPeriod $period): ?StatCategory
+    {
+        $value = $this->statPostRotation[$period->value] ?? null;
+
+        return $value !== null ? StatCategory::from($value) : null;
+    }
+
+    public function setLastPostedCategoryForPeriod(StatsPeriod $period, StatCategory $category): static
+    {
+        // Reassign a new array rather than mutate in place — Doctrine's json-column
+        // change-tracking needs a new array instance to notice the field changed at all.
+        $map = $this->statPostRotation;
+        $map[$period->value] = $category->value;
+        $this->statPostRotation = $map;
+
+        return $this;
+    }
+
+    /** Clears rotation state for every period — test/ops convenience, not used by the cron path itself. */
+    public function resetStatPostRotation(): static
+    {
+        $this->statPostRotation = [];
+
+        return $this;
+    }
 }

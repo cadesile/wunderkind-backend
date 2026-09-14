@@ -34,6 +34,16 @@ class PeriodResolver
         $now = new \DateTimeImmutable();
 
         switch ($period) {
+            case StatsPeriod::LAST_6_HOURS:
+                $qb->andWhere("{$alias}.{$dateField} >= :periodStart")
+                    ->setParameter('periodStart', $now->modify('-6 hours'));
+                break;
+
+            case StatsPeriod::LAST_24_HOURS:
+                $qb->andWhere("{$alias}.{$dateField} >= :periodStart")
+                    ->setParameter('periodStart', $now->modify('-24 hours'));
+                break;
+
             case StatsPeriod::WEEK:
                 $qb->andWhere("{$alias}.{$dateField} >= :periodStart")
                     ->setParameter('periodStart', $now->modify('-7 days'));
@@ -51,6 +61,26 @@ class PeriodResolver
             case StatsPeriod::ALL:
                 break;
         }
+    }
+
+    /**
+     * Same date-bound logic as applyPeriodFilter(), as a scalar — for raw-SQL call sites
+     * that can't use a DQL QueryBuilder (e.g. PlayerCareerStatSnapshotRepository's
+     * window-function CTEs). Null for ALL (no bound) and SEASON (per-club bound — callers
+     * needing SEASON must resolve it themselves, see applySeasonFilter()'s DQL for the
+     * equivalent per-club MAX(SeasonRecord.createdAt) logic).
+     */
+    public function resolveFixedLowerBound(StatsPeriod $period): ?\DateTimeImmutable
+    {
+        $now = new \DateTimeImmutable();
+
+        return match ($period) {
+            StatsPeriod::LAST_6_HOURS  => $now->modify('-6 hours'),
+            StatsPeriod::LAST_24_HOURS => $now->modify('-24 hours'),
+            StatsPeriod::WEEK          => $now->modify('-7 days'),
+            StatsPeriod::MONTH         => $now->modify('-30 days'),
+            StatsPeriod::SEASON, StatsPeriod::ALL => null,
+        };
     }
 
     private function applySeasonFilter(

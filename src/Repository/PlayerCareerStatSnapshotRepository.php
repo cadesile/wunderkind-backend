@@ -3,6 +3,8 @@
 namespace App\Repository;
 
 use App\Entity\PlayerCareerStatSnapshot;
+use App\Enum\StatsPeriod;
+use App\Service\PeriodResolver;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -62,6 +64,120 @@ class PlayerCareerStatSnapshotRepository extends ServiceEntityRepository
         }
 
         return array_values($best);
+    }
+
+    /**
+     * Top goal-scorer per club within a real-world time window — backs the
+     * SUPER_STRIKER category. Extends the reset-aware CTE pattern from
+     * playerCareerTotals() with three deliberate differences, each load-bearing:
+     *
+     * 1. Reset-detection (LAG()) still runs over the FULL unfiltered snapshot history
+     *    per (club, player) in the `ordered` CTE — a season reset just before or inside
+     *    the window must still be caught, or it would be misread as a huge negative
+     *    delta (or, per the existing reset-handling CASE, correctly re-counted as fresh
+     *    activity — but only if the prior value is visible at all).
+     * 2. The window bound is applied only when SUMMING deltas into a total (in `totals`),
+     *    never earlier — filtering `ordered`/`deltas` by the window first would hide the
+     *    pre-window snapshot LAG() needs to detect a reset correctly.
+     * 3. Unlike playerCareerTotals()'s private helper (whose only callers don't need a
+     *    club name), this method JOINs `club` to project `clubName`, because
+     *    CommunityStatsService::rank() requires it on every row.
+     *
+     * SEASON is not one of PeriodResolver's fixed offsets — its bound is per-club (each
+     * club's own latest SeasonRecord.createdAt), so it's handled as a separate SQL
+     * template (a LEFT JOIN against a per-club bound) rather than a bound parameter.
+     *
+     * @return array<array{clubId: string, clubName: string, value: int, playerName: string}>
+     */
+    public function topGoalScorerInWindowByClub(StatsPeriod $period, int $limit, PeriodResolver $resolver): array
+    {
+        $connection = $this->getEntityManager()->getConnection();
+
+        $ordered = <<<'SQL'
+            ordered AS (
+                SELECT
+                    club_id,
+                    player_id,
+                    player_name,
+                    goals AS value,
+                    recorded_at,
+                    LAG(goals) OVER (PARTITION BY club_id, player_id ORDER BY recorded_at, id) AS prev_value,
+                    ROW_NUMBER() OVER (PARTITION BY club_id, player_id ORDER BY recorded_at DESC, id DESC) AS rn_desc
+                FROM player_career_stat_snapshot
+            ),
+            deltas AS (
+                SELECT
+                    club_id,
+                    player_id,
+                    recorded_at,
+                    CASE
+                        WHEN prev_value IS NULL THEN value
+                        WHEN value >= prev_value THEN value - prev_value
+                        ELSE value
+                    END AS delta
+                FROM ordered
+            )
+            SQL;
+
+        $select = <<<'SQL'
+            SELECT t.club_id::text AS club_id, cl.name AS club_name, t.player_id, o.player_name, t.total
+            FROM totals t
+            JOIN ordered o ON o.club_id = t.club_id AND o.player_id = t.player_id AND o.rn_desc = 1
+            JOIN club cl ON cl.id = t.club_id
+            SQL;
+
+        if ($period === StatsPeriod::SEASON) {
+            $sql = <<<SQL
+                WITH club_season_bound AS (
+                    SELECT club_id, MAX(created_at) AS bound
+                    FROM season_record
+                    GROUP BY club_id
+                ),
+                {$ordered},
+                totals AS (
+                    SELECT d.club_id, d.player_id, SUM(d.delta) AS total
+                    FROM deltas d
+                    LEFT JOIN club_season_bound csb ON csb.club_id = d.club_id
+                    WHERE csb.bound IS NULL OR d.recorded_at >= csb.bound
+                    GROUP BY d.club_id, d.player_id
+                )
+                {$select}
+                SQL;
+            $rows = $connection->fetchAllAssociative($sql);
+        } else {
+            $windowStart = $resolver->resolveFixedLowerBound($period);
+            $sql = <<<SQL
+                WITH {$ordered},
+                totals AS (
+                    SELECT club_id, player_id, SUM(delta) AS total
+                    FROM deltas
+                    WHERE (:windowStart::timestamp IS NULL OR recorded_at >= :windowStart::timestamp)
+                    GROUP BY club_id, player_id
+                )
+                {$select}
+                SQL;
+            $rows = $connection->fetchAllAssociative($sql, [
+                'windowStart' => $windowStart?->format('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $best = [];
+        foreach ($rows as $row) {
+            $clubId = $row['club_id'];
+            $total  = (int) $row['total'];
+            if (!isset($best[$clubId]) || $total > $best[$clubId]['value']) {
+                $best[$clubId] = [
+                    'clubId'     => $clubId,
+                    'clubName'   => $row['club_name'],
+                    'value'      => $total,
+                    'playerName' => $row['player_name'],
+                ];
+            }
+        }
+
+        usort($best, static fn (array $a, array $b): int => $b['value'] <=> $a['value']);
+
+        return array_slice(array_values($best), 0, $limit);
     }
 
     /**

@@ -43,8 +43,8 @@ class ConfigImportExportService
             'recaptchaSiteKey',
             'recaptchaSecretKey',
             // Runtime state written by app:post-community-stat, not configuration —
-            // restoring it would rewind the round-robin cursor.
-            'lastPostedStatCategory',
+            // restoring it would rewind the round-robin cursor(s).
+            'statPostRotation',
         ],
         StarterConfig::class => [],
         PoolConfig::class    => [],

@@ -1268,6 +1268,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');
+        yield MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check');
+        yield MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera');
         yield MenuItem::section('Roster');
         yield MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running');
         yield MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-users');

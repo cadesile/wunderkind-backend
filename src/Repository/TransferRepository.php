@@ -88,6 +88,29 @@ class TransferRepository extends ServiceEntityRepository
     }
 
     /**
+     * Total spent on incoming signings per club within the period — the buying club's
+     * own perspective (a SIGNING-type Transfer row's `club` is the acquiring club, not
+     * the seller; see findHighestFeeByClub()'s docblock for the same distinction).
+     *
+     * @return array<array{clubId: string, clubName: string, value: int|string}>
+     */
+    public function getBiggestSpendersByClub(StatsPeriod $period, int $limit, PeriodResolver $resolver): array
+    {
+        $qb = $this->createQueryBuilder('t')
+            ->select('c.id as clubId, c.name as clubName, SUM(t.fee) as value')
+            ->innerJoin('t.club', 'c')
+            ->where('t.type = :signing')
+            ->setParameter('signing', TransferType::SIGNING->value)
+            ->groupBy('c.id')
+            ->orderBy('value', 'DESC')
+            ->setMaxResults($limit);
+
+        $resolver->applyPeriodFilter($qb, $period, 't', 'occurredAt', 'c');
+
+        return $qb->getQuery()->getArrayResult();
+    }
+
+    /**
      * Each club's single biggest transfer fee — the transfer_record (outgoing) and
      * transfer_spend (incoming) score. Collapses to one row per club the same way
      * PlayerCareerStatRepository::findTopPerformerByClub() does.
