@@ -36,6 +36,9 @@ class BetaRequest
     #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
     private ?\DateTimeImmutable $verifiedAt = null;
 
+    #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
+    private ?\DateTimeImmutable $invitedAt = null;
+
     public function __construct(string $email, string $code)
     {
         $this->id        = new UuidV7();
@@ -53,12 +56,15 @@ class BetaRequest
     public function getExpiresAt(): \DateTimeImmutable { return $this->expiresAt; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getVerifiedAt(): ?\DateTimeImmutable { return $this->verifiedAt; }
+    public function getInvitedAt(): ?\DateTimeImmutable { return $this->invitedAt; }
 
     public function markVerified(): void
     {
         $this->valid      = true;
         $this->verifiedAt = new \DateTimeImmutable();
     }
+
+    public function markInvited(): void { $this->invitedAt = new \DateTimeImmutable(); }
 
     public function incrementAttempts(): void { $this->attempts++; }
     public function isExpired(): bool { return $this->expiresAt <= new \DateTimeImmutable(); }

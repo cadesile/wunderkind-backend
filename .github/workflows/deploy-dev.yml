@@ -63,6 +63,7 @@ jobs:
             MAILER_DSN="${{ secrets.DEV_MAILER_DSN }}"
             MAILER_FROM="${{ secrets.DEV_MAILER_FROM }}"
             MAILER_FROM_NAME="${{ secrets.DEV_MAILER_FROM_NAME }}"
+            BETA_INVITE_MAILER_FROM=admin@buildmyclub.co.uk
             SOCIAL_TOKEN_ENCRYPTION_KEY="${{ secrets.DEV_SOCIAL_TOKEN_ENCRYPTION_KEY }}"
             FACEBOOK_APP_ID="${{ secrets.DEV_FACEBOOK_APP_ID }}"
             FACEBOOK_APP_SECRET="${{ secrets.DEV_FACEBOOK_APP_SECRET }}"

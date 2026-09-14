@@ -29,6 +29,7 @@ services:
             $mailerFrom: '%env(MAILER_FROM)%'
             $mailerFromName: '%env(MAILER_FROM_NAME)%'
             $appUrl: '%env(APP_URL)%'
+            $betaInviteMailerFrom: '%env(BETA_INVITE_MAILER_FROM)%'
 
     App\Service\TokenEncryptionService:
         arguments:

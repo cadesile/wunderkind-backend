@@ -20,6 +20,7 @@ class EmailVerificationService
         private readonly string $mailerFrom,
         private readonly string $mailerFromName,
         private readonly string $appUrl,
+        private readonly string $betaInviteMailerFrom,
     ) {}
 
     public function sendVerificationEmail(User $user): void
@@ -119,6 +120,39 @@ class EmailVerificationService
         $this->mailer->send($email);
     }
 
+    public function sendBetaInviteEmail(string $toEmail): void
+    {
+        $name = $this->greetingNameFromEmail($toEmail);
+
+        $email = (new Email())
+            ->from(new Address($this->betaInviteMailerFrom, $this->mailerFromName))
+            ->to($toEmail)
+            ->subject("You're in — Build My Club beta")
+            ->html($this->renderHtml(
+                'Welcome To The Beta',
+                $this->betaInviteBody($name),
+                "<span style='color:#9bb0c4;font-size:8px'>Just reply to this email — a real person on our end will read it.</span>"
+            ))
+            ->text(
+                "Hi {$name},\n\n" .
+                "Thanks for putting your hand up to test Build My Club. We're officially opening up the beta and would love to have you on board.\n\n" .
+                "Before we get your build sorted, let us know what device you'll be testing on:\n\n" .
+                "- iOS (TestFlight)\n" .
+                "- Android (Google Play closed test)\n\n" .
+                "Simply reply directly to this email with:\n\n" .
+                "- Your device platform (iOS or Android)\n" .
+                "- The email address tied to your Apple ID or Google Play account (if different from this one)\n\n" .
+                "Once we have that, we'll fire over your access link and setup instructions so you can start taking the reins.\n\n" .
+                "Looking forward to hearing your thoughts and breaking a few save files together.\n\n" .
+                "Best regards,\n" .
+                "admin@buildmyclub.co.uk\n" .
+                "Build My Club\n" .
+                "buildmyclub.co.uk"
+            );
+
+        $this->mailer->send($email);
+    }
+
     /**
      * Validate a submitted registration code.
      *
@@ -212,6 +246,34 @@ class EmailVerificationService
     private function logoUrl(): string
     {
         return $this->appUrl . '/images/logo.png';
+    }
+
+    private function greetingNameFromEmail(string $email): string
+    {
+        $localPart = strstr($email, '@', true) ?: $email;
+        $firstToken = preg_replace('/[0-9]+/', '', strtok($localPart, '._+-') ?: $localPart);
+
+        return $firstToken !== '' ? ucfirst(strtolower($firstToken)) : 'there';
+    }
+
+    private function betaInviteBody(string $name): string
+    {
+        return "
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 12px'>Hi {$name},</p>
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 12px'>Thanks for putting your hand up to test Build My Club. We're officially opening up the beta and would love to have you on board.</p>
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 8px'>Before we get your build sorted, let us know what device you'll be testing on:</p>
+            <ul style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 12px;padding-left:18px'>
+                <li>iOS (TestFlight)</li>
+                <li>Android (Google Play closed test)</li>
+            </ul>
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 8px'>Simply reply directly to this email with:</p>
+            <ul style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 12px;padding-left:18px'>
+                <li>Your device platform (iOS or Android)</li>
+                <li>The email address tied to your Apple ID or Google Play account (if different from this one)</li>
+            </ul>
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 12px'>Once we have that, we'll fire over your access link and setup instructions so you can start taking the reins.</p>
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0 0 12px'>Looking forward to hearing your thoughts and breaking a few save files together.</p>
+            <p style='color:#e8f0f4;font-size:9px;line-height:2;margin:0'>Best regards,<br>admin@buildmyclub.co.uk<br>Build My Club<br>buildmyclub.co.uk</p>";
     }
 
     private function verificationBlock(string $code): string
