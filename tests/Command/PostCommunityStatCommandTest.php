@@ -35,6 +35,7 @@ class PostCommunityStatCommandTest extends KernelTestCase
         $em = $this->em();
         $config = self::getContainer()->get(GameConfigRepository::class)->getConfig(flush: true);
         $config->resetStatPostRotation();
+        $config->resetAutoPostSchedule();
         $em->flush();
 
         foreach ($em->getRepository(SocialAccountConnection::class)->findAll() as $c) {

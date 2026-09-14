@@ -127,7 +127,34 @@ class DashboardController extends AbstractDashboardController
             'previewTemplate'  => null,
             'previewText'      => null,
             'previewRequested' => false,
+            'schedulePeriods'  => \App\Enum\StatsPeriod::cases(),
+            'scheduleConfig'   => $this->gameConfigRepository->getConfig(),
         ]);
+    }
+
+    #[Route('/admin/social/schedule/save', name: 'admin_social_schedule_save', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function socialScheduleSave(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('save_social_schedule', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
+        }
+
+        $config = $this->gameConfigRepository->getConfig();
+        $submitted = $request->request->all('schedule');
+
+        foreach (\App\Enum\StatsPeriod::cases() as $period) {
+            $row = $submitted[$period->value] ?? [];
+            $enabled = !empty($row['enabled']);
+            $intervalHours = max(1, (int) ($row['intervalHours'] ?? $config->getAutoPostIntervalHours($period)));
+            $config->setAutoPostSchedule($period, $enabled, $intervalHours);
+        }
+
+        $this->em->flush();
+
+        $this->addFlash('success', 'Auto-post schedule saved.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_social_connections']));
     }
 
     #[Route('/admin/social/test/preview', name: 'admin_social_test_preview', methods: ['POST'])]
@@ -153,6 +180,8 @@ class DashboardController extends AbstractDashboardController
             'previewTemplate'  => $template,
             'previewText'      => $previewText,
             'previewRequested' => true,
+            'schedulePeriods'  => \App\Enum\StatsPeriod::cases(),
+            'scheduleConfig'   => $this->gameConfigRepository->getConfig(),
         ]);
     }
 

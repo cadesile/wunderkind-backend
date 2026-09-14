@@ -91,6 +91,63 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-clock text-muted"></i>
+                <span class="fw-semibold small">Auto-Post Schedule</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    Each period tier round-robins through every category before repeating (see the
+                    rotation cursor in <code>GameConfig</code>). Enabling a tier here posts automatically
+                    whenever its interval elapses — checked every 15 minutes by a background job, so a
+                    change here takes effect without a deploy.
+                </p>
+                {#
+                    This form only ever redirects (never renders), so — unlike the preview form below —
+                    it can safely POST directly to the named route instead of going through
+                    /admin?routeName=..., same exemption already used by admin_social_test_publish
+                    and admin_app_links_save. See CLAUDE.md's EasyAdmin Custom Routes gotcha.
+                #}
+                <form method="POST" action="{{ path('admin_social_schedule_save') }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('save_social_schedule') }}">
+                    <table class="table table-sm align-middle mb-3">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Enabled</th>
+                                <th>Interval (hours)</th>
+                                <th>Last ran</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for period in schedulePeriods %}
+                                <tr>
+                                    <td>{{ period.value }}</td>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input" name="schedule[{{ period.value }}][enabled]" value="1"
+                                               {{ scheduleConfig.isAutoPostEnabled(period) ? 'checked' : '' }}>
+                                    </td>
+                                    <td>
+                                        <input type="number" min="1" class="form-control form-control-sm" style="width: 6rem;"
+                                               name="schedule[{{ period.value }}][intervalHours]"
+                                               value="{{ scheduleConfig.getAutoPostIntervalHours(period) }}">
+                                    </td>
+                                    <td class="small text-muted">
+                                        {% set lastRun = scheduleConfig.getLastAutoPostRunAt(period) %}
+                                        {{ lastRun ? lastRun|date('Y-m-d H:i') : 'never' }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Save Schedule</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
                 <i class="fa fa-flask text-muted"></i>
                 <span class="fw-semibold small">Test Post</span>
             </div>

@@ -1936,4 +1936,92 @@ class GameConfig
 
         return $this;
     }
+
+    /**
+     * Admin-editable auto-post schedule per period tier, keyed by StatsPeriod::value
+     * => {enabled: bool, intervalHours: int}. Checked by app:post-community-stat-tick
+     * (run frequently by cron) against statPostLastRunAt to decide whether a period
+     * is due — this is what lets cadence change from the admin UI without a redeploy;
+     * the OS crontab itself only ever invokes the tick command on a fixed, fine-grained
+     * schedule (see Dockerfile).
+     */
+    #[ORM\Column(type: 'json')]
+    private array $statPostSchedule = [];
+
+    /**
+     * Last time app:post-community-stat-tick actually ran (attempted) app:post-community-stat
+     * for each period, keyed by StatsPeriod::value => ISO 8601 string. Recorded regardless of
+     * whether that attempt found active connections or posted successfully — a transient
+     * failure should wait a full interval before retrying, same as any other tick.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $statPostLastRunAt = [];
+
+    /**
+     * Plain accessor pair for ConfigImportExportService — unlike statPostRotation/
+     * statPostLastRunAt (pure runtime state, denied from export), statPostSchedule is a
+     * deliberate admin choice and belongs in a config export/import round-trip like any
+     * other setting.
+     */
+    public function getStatPostSchedule(): array { return $this->statPostSchedule; }
+    public function setStatPostSchedule(array $v): static { $this->statPostSchedule = $v; return $this; }
+
+    public function isAutoPostEnabled(StatsPeriod $period): bool
+    {
+        return (bool) ($this->statPostSchedule[$period->value]['enabled'] ?? false);
+    }
+
+    public function getAutoPostIntervalHours(StatsPeriod $period): int
+    {
+        return (int) ($this->statPostSchedule[$period->value]['intervalHours'] ?? 24);
+    }
+
+    public function setAutoPostSchedule(StatsPeriod $period, bool $enabled, int $intervalHours): static
+    {
+        $schedule = $this->statPostSchedule;
+        $schedule[$period->value] = ['enabled' => $enabled, 'intervalHours' => max(1, $intervalHours)];
+        $this->statPostSchedule = $schedule;
+
+        return $this;
+    }
+
+    public function getLastAutoPostRunAt(StatsPeriod $period): ?\DateTimeImmutable
+    {
+        $value = $this->statPostLastRunAt[$period->value] ?? null;
+
+        return $value !== null ? new \DateTimeImmutable($value) : null;
+    }
+
+    public function markAutoPostRun(StatsPeriod $period, \DateTimeImmutable $at): static
+    {
+        $map = $this->statPostLastRunAt;
+        $map[$period->value] = $at->format(DATE_ATOM);
+        $this->statPostLastRunAt = $map;
+
+        return $this;
+    }
+
+    /** True if this period is enabled and its configured interval has elapsed since it last ran. */
+    public function isAutoPostDue(StatsPeriod $period, \DateTimeImmutable $now): bool
+    {
+        if (!$this->isAutoPostEnabled($period)) {
+            return false;
+        }
+
+        $lastRun = $this->getLastAutoPostRunAt($period);
+        if ($lastRun === null) {
+            return true;
+        }
+
+        return $lastRun->modify('+' . $this->getAutoPostIntervalHours($period) . ' hours') <= $now;
+    }
+
+    /** Clears schedule + last-run state for every period — test/ops convenience. */
+    public function resetAutoPostSchedule(): static
+    {
+        $this->statPostSchedule = [];
+        $this->statPostLastRunAt = [];
+
+        return $this;
+    }
 }

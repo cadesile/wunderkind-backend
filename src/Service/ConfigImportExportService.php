@@ -45,6 +45,10 @@ class ConfigImportExportService
             // Runtime state written by app:post-community-stat, not configuration —
             // restoring it would rewind the round-robin cursor(s).
             'statPostRotation',
+            // Runtime state written by app:post-community-stat-tick, not configuration —
+            // restoring it would reset every period's "when did this last run" clock,
+            // potentially firing every enabled period at once on the next tick.
+            'statPostLastRunAt',
         ],
         StarterConfig::class => [],
         PoolConfig::class    => [],
