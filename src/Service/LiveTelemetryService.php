@@ -11,10 +11,10 @@ use App\Entity\LiveTelemetrySnapshot;
  * Aggregates SyncRecord.payload JSON from the last 24h, plus recent anonymised
  * promotion/relegation/title events from SeasonRecord, into the cached
  * LiveTelemetrySnapshot singleton for the landing page's "Chairman's Terminal"
- * widget. All 3 macro counters are backed by real data — see the aggregate()
- * docblock for exactly how each is computed. Only the feed's remaining
- * illustrative lines (sackings, contract disputes, youth intake) have no
- * backing data anywhere in this codebase.
+ * widget. All 3 macro counters are backed by real data — see
+ * aggregateCapitalDeployed()/aggregateSeasonActivity() for exactly how each is
+ * computed. Only the feed's remaining illustrative lines (sackings, contract
+ * disputes, youth intake) have no backing data anywhere in this codebase.
  */
 class LiveTelemetryService
 {
@@ -38,12 +38,16 @@ class LiveTelemetryService
 
     public function refresh(): void
     {
-        $now = new \DateTimeImmutable();
+        $now   = new \DateTimeImmutable();
+        $since = $now->modify('-' . self::WINDOW_HOURS . ' hours');
 
-        $payloads = $this->syncRecordRepository->findValidPayloadsSince(
-            $now->modify('-' . self::WINDOW_HOURS . ' hours'),
+        $capitalDeployedPence = self::aggregateCapitalDeployed(
+            $this->syncRecordRepository->findValidPayloadsSince($since),
         );
-        $result = self::aggregate($payloads);
+
+        $latestPerClub   = $this->syncRecordRepository->findLatestValidPayloadPerClubSince($since);
+        $baselinePerClub = $this->syncRecordRepository->findLatestValidPayloadPerClubBefore($since, array_keys($latestPerClub));
+        $activity        = self::aggregateSeasonActivity($latestPerClub, $baselinePerClub);
 
         $rows   = $this->seasonRecordRepository->findRecentPyramidEvents(
             $now->modify('-' . self::EVENTS_WINDOW_DAYS . ' days'),
@@ -52,7 +56,7 @@ class LiveTelemetryService
         $events = self::buildEvents($rows, $now);
 
         $snapshot = $this->snapshotRepository->getSnapshot();
-        $snapshot->update($result['fixturesSimulated'], $result['capitalDeployedPence'], $result['goalsScored'], $events);
+        $snapshot->update($activity['fixturesSimulated'], $capitalDeployedPence, $activity['goalsScored'], $events);
         $this->snapshotRepository->getEntityManager()->flush();
     }
 
@@ -62,41 +66,20 @@ class LiveTelemetryService
     }
 
     /**
-     * Pure aggregation over a batch of SyncRecord payloads — kept separate from the
-     * repository fetch so it's unit-testable without a database.
-     *
-     * fixturesSimulated: count of matchResults[] entries across all payloads. A fixture
-     * between two human-controlled clubs double-counts (once per side's sync) — accepted
-     * simplification, since most fixtures are against NPC clubs.
-     *
-     * capitalDeployedPence: sum of |ledger[] entries| in the "upkeep"/"wages" categories
-     * (always-negative spend) plus transfers[].grossFee for incoming "signing"/
-     * "agent_assisted" transfers (money paid to acquire a player). Deliberately excludes
-     * revenue categories (matchday_income, sponsor_payment) and "sale" transfers (money in).
-     *
-     * goalsScored: sum of goals scored BY the syncing club across matchResults[]. Prefers
-     * the v2 shape (homeGoals/awayGoals + isHome) when present, since that's unambiguous
-     * even on a 0-0 draw; falls back to the legacy goalsFor field only when the payload has
-     * neither homeGoals nor awayGoals at all (a true pre-v2 client). Like fixturesSimulated,
-     * a match between two human-controlled clubs contributes goals from both sides' syncs.
+     * Sum of |ledger[] entries| in the "upkeep"/"wages" categories (always-negative
+     * spend) plus transfers[].grossFee for incoming "signing"/"agent_assisted"
+     * transfers (money paid to acquire a player). Deliberately excludes revenue
+     * categories (matchday_income, sponsor_payment) and "sale" transfers (money in).
+     * Each sync's ledger/transfers already represent just that tick's activity, so
+     * this sums across every valid payload in the window — no per-club deltas needed.
      *
      * @param array<int, array<string, mixed>> $payloads
-     * @return array{fixturesSimulated: int, capitalDeployedPence: int, goalsScored: int}
      */
-    public static function aggregate(array $payloads): array
+    public static function aggregateCapitalDeployed(array $payloads): int
     {
-        $fixturesSimulated    = 0;
         $capitalDeployedPence = 0;
-        $goalsScored          = 0;
 
         foreach ($payloads as $payload) {
-            $matches = $payload['matchResults'] ?? [];
-            $fixturesSimulated += count($matches);
-
-            foreach ($matches as $match) {
-                $goalsScored += self::goalsScoredFor($match);
-            }
-
             foreach ($payload['ledger'] ?? [] as $entry) {
                 if (in_array($entry['category'] ?? null, self::SPEND_LEDGER_CATEGORIES, true)) {
                     $capitalDeployedPence += abs((int) ($entry['amount'] ?? 0));
@@ -110,21 +93,66 @@ class LiveTelemetryService
             }
         }
 
+        return $capitalDeployedPence;
+    }
+
+    /**
+     * fixturesSimulated / goalsScored, derived from the CHANGE in each club's cumulative
+     * seasonRecord (wins+draws+losses, goalsFor) between their latest sync in the window
+     * and their latest sync before it.
+     *
+     * Real clients don't currently populate SyncRequest::$matchResults (confirmed against
+     * production payloads — present fields are seasonRecord/form/ledger/transfers, never
+     * matchResults), so that field can't be used despite SyncRequest defining and
+     * validating it. seasonRecord is the one reliably-sent field that implies fixture
+     * count, but it's a season-to-date running total, not a per-tick delta — hence diffing
+     * against each club's own prior sync rather than summing it directly (which would
+     * double-count a club's whole season history on every refresh).
+     *
+     * A club with no sync before the window contributes nothing (no baseline to diff
+     * against — safer to undercount than fabricate a number). A negative delta (a season
+     * rollover reset the cumulative totals between the two syncs) clamps to 0 rather than
+     * going negative — this can undercount the handful of fixtures either side of a
+     * rollover, an accepted simplification given seasonRecord carries no season number to
+     * detect the boundary precisely.
+     *
+     * @param array<string, array<string, mixed>> $latestPerClub payload keyed by club id
+     * @param array<string, array<string, mixed>> $baselinePerClub payload keyed by club id
+     * @return array{fixturesSimulated: int, goalsScored: int}
+     */
+    public static function aggregateSeasonActivity(array $latestPerClub, array $baselinePerClub): array
+    {
+        $fixturesSimulated = 0;
+        $goalsScored       = 0;
+
+        foreach ($latestPerClub as $clubId => $latest) {
+            $baseline = $baselinePerClub[$clubId] ?? null;
+            if ($baseline === null) {
+                continue;
+            }
+
+            $fixturesSimulated += max(0, self::gamesPlayed($latest) - self::gamesPlayed($baseline));
+            $goalsScored       += max(0, self::goalsFor($latest) - self::goalsFor($baseline));
+        }
+
         return [
-            'fixturesSimulated'    => $fixturesSimulated,
-            'capitalDeployedPence' => $capitalDeployedPence,
-            'goalsScored'          => $goalsScored,
+            'fixturesSimulated' => $fixturesSimulated,
+            'goalsScored'       => $goalsScored,
         ];
     }
 
-    /** @param array<string, mixed> $match */
-    private static function goalsScoredFor(array $match): int
+    /** @param array<string, mixed> $payload */
+    private static function gamesPlayed(array $payload): int
     {
-        if (array_key_exists('homeGoals', $match) || array_key_exists('awayGoals', $match)) {
-            return (int) (($match['isHome'] ?? false) ? ($match['homeGoals'] ?? 0) : ($match['awayGoals'] ?? 0));
-        }
+        $sr = $payload['seasonRecord'] ?? [];
 
-        return (int) ($match['goalsFor'] ?? 0);
+        return (int) ($sr['wins'] ?? 0) + (int) ($sr['draws'] ?? 0) + (int) ($sr['losses'] ?? 0);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function goalsFor(array $payload): int
+    {
+        return (int) ($payload['seasonRecord']['goalsFor'] ?? 0);
     }
 
     /**

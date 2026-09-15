@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Entity\Club;
 use App\Entity\SyncRecord;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -74,5 +75,63 @@ class SyncRecordRepository extends ServiceEntityRepository
             static fn (string $json): array => json_decode($json, true) ?? [],
             $rows,
         );
+    }
+
+    /**
+     * Latest valid payload per club, for syncs at or after $since. This is the "now" side
+     * of a per-club seasonRecord delta (see LiveTelemetryService::aggregateSeasonActivity) —
+     * real clients don't currently populate matchResults[], so fixtures/goals are derived
+     * from the change in each club's cumulative seasonRecord instead.
+     *
+     * @return array<string, array<string, mixed>> payload keyed by club id
+     */
+    public function findLatestValidPayloadPerClubSince(\DateTimeImmutable $since): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT DISTINCT ON (club_id) club_id, payload
+             FROM sync_record
+             WHERE is_valid = true AND server_timestamp >= :since
+             ORDER BY club_id, server_timestamp DESC',
+            ['since' => $since->format('Y-m-d H:i:sP')],
+        );
+
+        return self::payloadsByClubId($rows);
+    }
+
+    /**
+     * Latest valid payload per club, for syncs strictly before $before — the "baseline"
+     * side of the delta. Only looked up for the clubs that actually appear in the window,
+     * not the whole table.
+     *
+     * @param string[] $clubIds
+     * @return array<string, array<string, mixed>> payload keyed by club id
+     */
+    public function findLatestValidPayloadPerClubBefore(\DateTimeImmutable $before, array $clubIds): array
+    {
+        if ($clubIds === []) {
+            return [];
+        }
+
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT DISTINCT ON (club_id) club_id, payload
+             FROM sync_record
+             WHERE is_valid = true AND server_timestamp < :before AND club_id IN (:clubIds)
+             ORDER BY club_id, server_timestamp DESC',
+            ['before' => $before->format('Y-m-d H:i:sP'), 'clubIds' => $clubIds],
+            ['clubIds' => ArrayParameterType::STRING],
+        );
+
+        return self::payloadsByClubId($rows);
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private static function payloadsByClubId(array $rows): array
+    {
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['club_id']] = json_decode($row['payload'], true) ?? [];
+        }
+
+        return $result;
     }
 }

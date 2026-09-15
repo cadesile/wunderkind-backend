@@ -6,62 +6,52 @@ use App\Service\LiveTelemetryService;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Unit coverage for the pure aggregation step behind the landing page's
- * "Chairman's Terminal" widget. The DB-backed fetch (findValidPayloadsSince)
- * is not exercised here — this only covers the counting/summing formula.
+ * Unit coverage for the pure aggregation steps behind the landing page's
+ * "Chairman's Terminal" widget. The DB-backed fetches (findValidPayloadsSince,
+ * findLatestValidPayloadPerClub{Since,Before}) are not exercised here — this
+ * only covers the counting/summing/diffing formulas.
  */
 class LiveTelemetryServiceTest extends TestCase
 {
-    public function testCountsMatchResultsAcrossPayloadsAsFixturesSimulated(): void
-    {
-        $result = LiveTelemetryService::aggregate([
-            ['matchResults' => [['fixtureId' => 'a'], ['fixtureId' => 'b']]],
-            ['matchResults' => [['fixtureId' => 'c']]],
-            ['matchResults' => []],
-        ]);
-
-        $this->assertSame(3, $result['fixturesSimulated']);
-    }
-
     public function testSumsUpkeepAndWagesLedgerEntriesAsCapitalDeployed(): void
     {
-        $result = LiveTelemetryService::aggregate([
+        $result = LiveTelemetryService::aggregateCapitalDeployed([
             ['ledger' => [
                 ['category' => 'upkeep', 'amount' => -23625000],
                 ['category' => 'wages', 'amount' => -31940000],
             ]],
         ]);
 
-        $this->assertSame(23625000 + 31940000, $result['capitalDeployedPence']);
+        $this->assertSame(23625000 + 31940000, $result);
     }
 
     public function testExcludesRevenueLedgerCategories(): void
     {
-        $result = LiveTelemetryService::aggregate([
+        $result = LiveTelemetryService::aggregateCapitalDeployed([
             ['ledger' => [
                 ['category' => 'matchday_income', 'amount' => 32220000],
                 ['category' => 'sponsor_payment', 'amount' => 19506000],
             ]],
         ]);
 
-        $this->assertSame(0, $result['capitalDeployedPence']);
+        $this->assertSame(0, $result);
     }
 
     public function testCountsSigningAndAgentAssistedTransfersAsCapitalDeployed(): void
     {
-        $result = LiveTelemetryService::aggregate([
+        $result = LiveTelemetryService::aggregateCapitalDeployed([
             ['transfers' => [
                 ['type' => 'signing', 'grossFee' => 35000000],
                 ['type' => 'agent_assisted', 'grossFee' => 5000000],
             ]],
         ]);
 
-        $this->assertSame(40000000, $result['capitalDeployedPence']);
+        $this->assertSame(40000000, $result);
     }
 
     public function testExcludesSaleAndOtherOutgoingTransferTypes(): void
     {
-        $result = LiveTelemetryService::aggregate([
+        $result = LiveTelemetryService::aggregateCapitalDeployed([
             ['transfers' => [
                 ['type' => 'sale', 'grossFee' => 35000000],
                 ['type' => 'loan', 'grossFee' => 1000000],
@@ -70,83 +60,96 @@ class LiveTelemetryServiceTest extends TestCase
             ]],
         ]);
 
-        $this->assertSame(0, $result['capitalDeployedPence']);
+        $this->assertSame(0, $result);
     }
 
     public function testCombinesLedgerAndTransferSpendAcrossPayloads(): void
     {
-        $result = LiveTelemetryService::aggregate([
-            [
-                'matchResults' => [['fixtureId' => 'a']],
-                'ledger'       => [['category' => 'upkeep', 'amount' => -100]],
-                'transfers'    => [['type' => 'signing', 'grossFee' => 5000]],
-            ],
-            [
-                'matchResults' => [['fixtureId' => 'b'], ['fixtureId' => 'c']],
-                'ledger'       => [['category' => 'sponsor_payment', 'amount' => 200]],
-                'transfers'    => [['type' => 'sale', 'grossFee' => 9000]],
-            ],
+        $result = LiveTelemetryService::aggregateCapitalDeployed([
+            ['ledger' => [['category' => 'upkeep', 'amount' => -100]], 'transfers' => [['type' => 'signing', 'grossFee' => 5000]]],
+            ['ledger' => [['category' => 'sponsor_payment', 'amount' => 200]], 'transfers' => [['type' => 'sale', 'grossFee' => 9000]]],
         ]);
 
-        $this->assertSame(3, $result['fixturesSimulated']);
-        $this->assertSame(5100, $result['capitalDeployedPence']);
+        $this->assertSame(5100, $result);
     }
 
-    public function testHandlesEmptyOrMissingKeysGracefully(): void
+    public function testCapitalDeployedHandlesEmptyOrMissingKeysGracefully(): void
     {
-        $result = LiveTelemetryService::aggregate([[], ['matchResults' => []], ['ledger' => []], ['transfers' => []]]);
+        $result = LiveTelemetryService::aggregateCapitalDeployed([[], ['ledger' => []], ['transfers' => []]]);
+
+        $this->assertSame(0, $result);
+    }
+
+    public function testFixturesAndGoalsAreTheChangeInEachClubsSeasonRecord(): void
+    {
+        $latest = [
+            'club-a' => ['seasonRecord' => ['wins' => 10, 'draws' => 2, 'losses' => 3, 'goalsFor' => 40]],
+        ];
+        $baseline = [
+            'club-a' => ['seasonRecord' => ['wins' => 8, 'draws' => 2, 'losses' => 2, 'goalsFor' => 32]],
+        ];
+
+        $result = LiveTelemetryService::aggregateSeasonActivity($latest, $baseline);
+
+        // games: (10+2+3) - (8+2+2) = 15 - 12 = 3; goals: 40 - 32 = 8
+        $this->assertSame(3, $result['fixturesSimulated']);
+        $this->assertSame(8, $result['goalsScored']);
+    }
+
+    public function testSumsDeltasAcrossMultipleClubs(): void
+    {
+        $latest = [
+            'club-a' => ['seasonRecord' => ['wins' => 5, 'draws' => 0, 'losses' => 0, 'goalsFor' => 10]],
+            'club-b' => ['seasonRecord' => ['wins' => 1, 'draws' => 1, 'losses' => 1, 'goalsFor' => 6]],
+        ];
+        $baseline = [
+            'club-a' => ['seasonRecord' => ['wins' => 4, 'draws' => 0, 'losses' => 0, 'goalsFor' => 9]],
+            'club-b' => ['seasonRecord' => ['wins' => 0, 'draws' => 1, 'losses' => 1, 'goalsFor' => 4]],
+        ];
+
+        $result = LiveTelemetryService::aggregateSeasonActivity($latest, $baseline);
+
+        // club-a: 1 game, 1 goal. club-b: 1 game, 2 goals. Totals: 2 games, 3 goals.
+        $this->assertSame(2, $result['fixturesSimulated']);
+        $this->assertSame(3, $result['goalsScored']);
+    }
+
+    public function testClubWithNoBaselineContributesNothing(): void
+    {
+        $latest = [
+            'club-new' => ['seasonRecord' => ['wins' => 4, 'draws' => 1, 'losses' => 0, 'goalsFor' => 15]],
+        ];
+
+        $result = LiveTelemetryService::aggregateSeasonActivity($latest, []);
 
         $this->assertSame(0, $result['fixturesSimulated']);
-        $this->assertSame(0, $result['capitalDeployedPence']);
         $this->assertSame(0, $result['goalsScored']);
     }
 
-    public function testSumsLegacyGoalsForWhenNoV2FieldsPresent(): void
+    /** A season rollover resets the cumulative totals — clamp to 0 rather than go negative. */
+    public function testNegativeDeltaFromASeasonRolloverClampsToZero(): void
     {
-        $result = LiveTelemetryService::aggregate([
-            ['matchResults' => [
-                ['fixtureId' => 'a', 'goalsFor' => 2, 'goalsAgainst' => 1],
-                ['fixtureId' => 'b', 'goalsFor' => 0, 'goalsAgainst' => 3],
-            ]],
-        ]);
+        $latest = [
+            'club-a' => ['seasonRecord' => ['wins' => 1, 'draws' => 0, 'losses' => 0, 'goalsFor' => 2]],
+        ];
+        $baseline = [
+            'club-a' => ['seasonRecord' => ['wins' => 20, 'draws' => 5, 'losses' => 3, 'goalsFor' => 60]],
+        ];
 
-        $this->assertSame(2, $result['goalsScored']);
+        $result = LiveTelemetryService::aggregateSeasonActivity($latest, $baseline);
+
+        $this->assertSame(0, $result['fixturesSimulated']);
+        $this->assertSame(0, $result['goalsScored']);
     }
 
-    public function testSumsV2HomeAwayGoalsByIsHomeFlag(): void
+    public function testSeasonActivityHandlesMissingSeasonRecordGracefully(): void
     {
-        $result = LiveTelemetryService::aggregate([
-            ['matchResults' => [
-                ['fixtureId' => 'a', 'isHome' => true, 'homeGoals' => 3, 'awayGoals' => 1],
-                ['fixtureId' => 'b', 'isHome' => false, 'homeGoals' => 2, 'awayGoals' => 4],
-            ]],
-        ]);
+        $result = LiveTelemetryService::aggregateSeasonActivity(
+            ['club-a' => []],
+            ['club-a' => []],
+        );
 
-        // 3 (home side scored 3) + 4 (away side scored 4) = 7
-        $this->assertSame(7, $result['goalsScored']);
-    }
-
-    public function testV2FieldsWinOverLegacyGoalsForWhenBothPresent(): void
-    {
-        $result = LiveTelemetryService::aggregate([
-            ['matchResults' => [
-                // A client that sends both shapes: v2 says the away side scored 5, legacy
-                // (defaulted to 0 by SyncRequest::setMatchResults) must not override that.
-                ['fixtureId' => 'a', 'isHome' => false, 'homeGoals' => 1, 'awayGoals' => 5, 'goalsFor' => 0],
-            ]],
-        ]);
-
-        $this->assertSame(5, $result['goalsScored']);
-    }
-
-    public function testZeroZeroDrawCountsAsZeroGoalsNotMisdetectedAsLegacy(): void
-    {
-        $result = LiveTelemetryService::aggregate([
-            ['matchResults' => [
-                ['fixtureId' => 'a', 'isHome' => true, 'homeGoals' => 0, 'awayGoals' => 0],
-            ]],
-        ]);
-
+        $this->assertSame(0, $result['fixturesSimulated']);
         $this->assertSame(0, $result['goalsScored']);
     }
 
