@@ -9,10 +9,10 @@ use App\Entity\LiveTelemetrySnapshot;
 
 /**
  * Aggregates SyncRecord.payload JSON from the last 24h, plus recent anonymised
- * promotion/relegation/title events from SeasonRecord, into the cached
- * LiveTelemetrySnapshot singleton for the landing page's "Chairman's Terminal"
- * widget. All 3 macro counters are backed by real data — see
- * aggregateCapitalDeployed()/aggregateSeasonActivity() for exactly how each is
+ * promotion/relegation/title events from SeasonRecord and real high-cost
+ * ledger/attendance lines, into the cached LiveTelemetrySnapshot singleton for
+ * the landing page's "Chairman's Terminal" widget. All 3 macro counters are
+ * backed by real data — see the aggregate() docblock for exactly how each is
  * computed. Only the feed's remaining illustrative lines (sackings, contract
  * disputes, youth intake) have no backing data anywhere in this codebase.
  */
@@ -23,6 +23,9 @@ class LiveTelemetryService
     /** Season conclusions are much rarer than syncs, so look back further for events. */
     private const EVENTS_WINDOW_DAYS = 7;
     private const EVENTS_LIMIT       = 8;
+
+    private const LEDGER_EVENTS_LIMIT     = 5;
+    private const ATTENDANCE_EVENTS_LIMIT = 5;
 
     /** Ledger categories that represent money leaving the club (spend, not revenue). */
     private const SPEND_LEDGER_CATEGORIES = ['upkeep', 'wages'];
@@ -41,22 +44,30 @@ class LiveTelemetryService
         $now   = new \DateTimeImmutable();
         $since = $now->modify('-' . self::WINDOW_HOURS . ' hours');
 
-        $capitalDeployedPence = self::aggregateCapitalDeployed(
-            $this->syncRecordRepository->findValidPayloadsSince($since),
-        );
+        $syncRows = $this->syncRecordRepository->findValidPayloadsSince($since);
+        $result   = self::aggregate(array_column($syncRows, 'payload'));
 
-        $latestPerClub   = $this->syncRecordRepository->findLatestValidPayloadPerClubSince($since);
-        $baselinePerClub = $this->syncRecordRepository->findLatestValidPayloadPerClubBefore($since, array_keys($latestPerClub));
-        $activity        = self::aggregateSeasonActivity($latestPerClub, $baselinePerClub);
-
-        $rows   = $this->seasonRecordRepository->findRecentPyramidEvents(
+        $pyramidRows = $this->seasonRecordRepository->findRecentPyramidEvents(
             $now->modify('-' . self::EVENTS_WINDOW_DAYS . ' days'),
             self::EVENTS_LIMIT,
         );
-        $events = self::buildEvents($rows, $now);
+        $attendanceRows = $this->syncRecordRepository->findTopAttendanceSince($since, self::ATTENDANCE_EVENTS_LIMIT);
+
+        $events = [
+            ...self::buildEvents($pyramidRows, $now),
+            ...self::buildLedgerEvents($syncRows, $now, self::LEDGER_EVENTS_LIMIT),
+            ...self::buildAttendanceEvents($attendanceRows, $now),
+        ];
 
         $snapshot = $this->snapshotRepository->getSnapshot();
-        $snapshot->update($activity['fixturesSimulated'], $capitalDeployedPence, $activity['goalsScored'], $events);
+        $snapshot->update(
+            $result['fixturesSimulated'],
+            $result['capitalDeployedPence'],
+            $result['wins'],
+            $result['draws'],
+            $result['losses'],
+            $events,
+        );
         $this->snapshotRepository->getEntityManager()->flush();
     }
 
@@ -66,20 +77,42 @@ class LiveTelemetryService
     }
 
     /**
-     * Sum of |ledger[] entries| in the "upkeep"/"wages" categories (always-negative
-     * spend) plus transfers[].grossFee for incoming "signing"/"agent_assisted"
-     * transfers (money paid to acquire a player). Deliberately excludes revenue
-     * categories (matchday_income, sponsor_payment) and "sale" transfers (money in).
-     * Each sync's ledger/transfers already represent just that tick's activity, so
-     * this sums across every valid payload in the window — no per-club deltas needed.
+     * Pure aggregation over a batch of SyncRecord payloads — kept separate from the
+     * repository fetch so it's unit-testable without a database.
+     *
+     * wins/draws/losses/fixturesSimulated: tallied directly from each payload's
+     * form[] (last ≤5 results, newest first) — no delta or baseline comparison against
+     * a prior sync. This is a deliberate simplification: real clients don't currently
+     * send matchResults[] or any other clean "games since last sync" delta, and a club
+     * syncing more than once within the window (or with an unchanged form[] between
+     * syncs) will have some results counted more than once. Revisit once the sync
+     * payload carries better-suited data for this.
+     *
+     * capitalDeployedPence: sum of |ledger[] entries| in the "upkeep"/"wages" categories
+     * (always-negative spend) plus transfers[].grossFee for incoming "signing"/
+     * "agent_assisted" transfers (money paid to acquire a player). Deliberately excludes
+     * revenue categories (matchday_income, sponsor_payment) and "sale" transfers (money in).
      *
      * @param array<int, array<string, mixed>> $payloads
+     * @return array{fixturesSimulated: int, capitalDeployedPence: int, wins: int, draws: int, losses: int}
      */
-    public static function aggregateCapitalDeployed(array $payloads): int
+    public static function aggregate(array $payloads): array
     {
         $capitalDeployedPence = 0;
+        $wins = 0;
+        $draws = 0;
+        $losses = 0;
 
         foreach ($payloads as $payload) {
+            foreach ($payload['form'] ?? [] as $result) {
+                match ($result) {
+                    'W'     => $wins++,
+                    'D'     => $draws++,
+                    'L'     => $losses++,
+                    default => null,
+                };
+            }
+
             foreach ($payload['ledger'] ?? [] as $entry) {
                 if (in_array($entry['category'] ?? null, self::SPEND_LEDGER_CATEGORIES, true)) {
                     $capitalDeployedPence += abs((int) ($entry['amount'] ?? 0));
@@ -93,66 +126,13 @@ class LiveTelemetryService
             }
         }
 
-        return $capitalDeployedPence;
-    }
-
-    /**
-     * fixturesSimulated / goalsScored, derived from the CHANGE in each club's cumulative
-     * seasonRecord (wins+draws+losses, goalsFor) between their latest sync in the window
-     * and their latest sync before it.
-     *
-     * Real clients don't currently populate SyncRequest::$matchResults (confirmed against
-     * production payloads — present fields are seasonRecord/form/ledger/transfers, never
-     * matchResults), so that field can't be used despite SyncRequest defining and
-     * validating it. seasonRecord is the one reliably-sent field that implies fixture
-     * count, but it's a season-to-date running total, not a per-tick delta — hence diffing
-     * against each club's own prior sync rather than summing it directly (which would
-     * double-count a club's whole season history on every refresh).
-     *
-     * A club with no sync before the window contributes nothing (no baseline to diff
-     * against — safer to undercount than fabricate a number). A negative delta (a season
-     * rollover reset the cumulative totals between the two syncs) clamps to 0 rather than
-     * going negative — this can undercount the handful of fixtures either side of a
-     * rollover, an accepted simplification given seasonRecord carries no season number to
-     * detect the boundary precisely.
-     *
-     * @param array<string, array<string, mixed>> $latestPerClub payload keyed by club id
-     * @param array<string, array<string, mixed>> $baselinePerClub payload keyed by club id
-     * @return array{fixturesSimulated: int, goalsScored: int}
-     */
-    public static function aggregateSeasonActivity(array $latestPerClub, array $baselinePerClub): array
-    {
-        $fixturesSimulated = 0;
-        $goalsScored       = 0;
-
-        foreach ($latestPerClub as $clubId => $latest) {
-            $baseline = $baselinePerClub[$clubId] ?? null;
-            if ($baseline === null) {
-                continue;
-            }
-
-            $fixturesSimulated += max(0, self::gamesPlayed($latest) - self::gamesPlayed($baseline));
-            $goalsScored       += max(0, self::goalsFor($latest) - self::goalsFor($baseline));
-        }
-
         return [
-            'fixturesSimulated' => $fixturesSimulated,
-            'goalsScored'       => $goalsScored,
+            'fixturesSimulated'    => $wins + $draws + $losses,
+            'capitalDeployedPence' => $capitalDeployedPence,
+            'wins'                 => $wins,
+            'draws'                => $draws,
+            'losses'               => $losses,
         ];
-    }
-
-    /** @param array<string, mixed> $payload */
-    private static function gamesPlayed(array $payload): int
-    {
-        $sr = $payload['seasonRecord'] ?? [];
-
-        return (int) ($sr['wins'] ?? 0) + (int) ($sr['draws'] ?? 0) + (int) ($sr['losses'] ?? 0);
-    }
-
-    /** @param array<string, mixed> $payload */
-    private static function goalsFor(array $payload): int
-    {
-        return (int) ($payload['seasonRecord']['goalsFor'] ?? 0);
     }
 
     /**
@@ -182,6 +162,68 @@ class LiveTelemetryService
         }
 
         return $events;
+    }
+
+    /**
+     * The highest-magnitude ledger[] spend entries (negative amounts only — "especially
+     * high cost", per the brief) across the batch of sync rows, ranked regardless of
+     * category so one-off items (a scouting mission, a facility auto-repair) naturally
+     * outrank routine weekly payroll/upkeep. Uses each entry's own description verbatim —
+     * these are client-generated narrative strings (may name a player, generated fiction;
+     * never a club) — see SyncRecordRepository::findValidPayloadsSince for the row shape.
+     *
+     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable}> $syncRows
+     * @return array<int, array{time: string, text: string}>
+     */
+    public static function buildLedgerEvents(array $syncRows, \DateTimeImmutable $now, int $limit): array
+    {
+        $entries = [];
+
+        foreach ($syncRows as $row) {
+            foreach ($row['payload']['ledger'] ?? [] as $entry) {
+                $amountPence = (int) ($entry['amount'] ?? 0);
+                $description = trim((string) ($entry['description'] ?? ''));
+                if ($amountPence >= 0 || $description === '') {
+                    continue;
+                }
+
+                $entries[] = [
+                    'amountPence'     => $amountPence,
+                    'description'     => $description,
+                    'serverTimestamp' => $row['serverTimestamp'],
+                ];
+            }
+        }
+
+        usort($entries, static fn (array $a, array $b): int => $a['amountPence'] <=> $b['amountPence']);
+
+        return array_map(
+            static fn (array $entry): array => [
+                'time' => self::relativeTime($entry['serverTimestamp'], $now),
+                'text' => sprintf('%s spent: %s', LiveTelemetrySnapshot::formatPence(abs($entry['amountPence'])), $entry['description']),
+            ],
+            array_slice($entries, 0, $limit),
+        );
+    }
+
+    /**
+     * Turns SyncRecordRepository::findTopAttendanceSince() rows into feed-ready
+     * {time, text} lines. Unlike buildEvents()/buildLedgerEvents(), this names the real
+     * club — see findTopAttendanceSince()'s docblock for why that's not a moderation risk
+     * here (curated name-options, not free text).
+     *
+     * @param array<int, array{clubName: string, fanCount: int, serverTimestamp: \DateTimeImmutable}> $rows
+     * @return array<int, array{time: string, text: string}>
+     */
+    public static function buildAttendanceEvents(array $rows, \DateTimeImmutable $now): array
+    {
+        return array_map(
+            static fn (array $row): array => [
+                'time' => self::relativeTime($row['serverTimestamp'], $now),
+                'text' => sprintf('%s recorded attendance of %s!', $row['clubName'], number_format($row['fanCount'])),
+            ],
+            $rows,
+        );
     }
 
     private static function describeOutcome(int $tier, bool $promoted, bool $relegated, int $finalPosition): ?string

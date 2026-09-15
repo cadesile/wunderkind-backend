@@ -2,11 +2,20 @@
    The Chairman's Terminal — hero widget, replaces the phone screenshot carousel.
 
    Real, live data (refreshed by app:telemetry:generate / cached WorldOverviewService):
-     - telemetry.fixturesSimulated / getCapitalDeployedFormatted() / goalsScored —
+     - telemetry.fixturesSimulated / getCapitalDeployedFormatted() / getResultsFormatted() —
        aggregated from recent SyncRecord payloads (see LiveTelemetryService).
-     - telemetry.recentEvents — anonymised promotion/relegation/title lines from real
-       SeasonRecord rows (tier + outcome only, never a club name — see
-       SeasonRecordRepository::findRecentPyramidEvents()).
+     - telemetry.recentEvents — a blend of three real sources, built in
+       LiveTelemetryService::refresh():
+         1. anonymised promotion/relegation/title lines from SeasonRecord (tier +
+            outcome only, never a club name — see
+            SeasonRecordRepository::findRecentPyramidEvents());
+         2. the highest-cost ledger[] spends from recent syncs (client-generated
+            narrative text, e.g. a scouting mission or facility repair — may name a
+            player, never a club);
+         3. top attendance figures from recent syncs, WITH the real club name — safe
+            here because club names come from a curated, server-generated set of
+            options (/api/club/name-options), not free text (see
+            SyncRecordRepository::findTopAttendanceSince()).
      - world.totals.realClubs / tierCount — real registered clubs (COUNT(*) FROM club,
        same figure as the admin dashboard's "Clubs" KPI) and league tier count.
 
@@ -36,9 +45,9 @@
             <span class="terminal-stat-sub vt">Transfers &amp; Infra</span>
         </div>
         <div class="terminal-stat">
-            <span class="terminal-stat-label pixel">Goals Scored</span>
-            <span class="terminal-stat-val">{{ telemetry.goalsScored|number_format }}</span>
-            <span class="terminal-stat-sub vt">Across The Pyramid</span>
+            <span class="terminal-stat-label pixel">Results W/D/L</span>
+            <span class="terminal-stat-val">{{ telemetry.getResultsFormatted() }}</span>
+            <span class="terminal-stat-sub vt">Last 24 hours</span>
         </div>
     </div>
 

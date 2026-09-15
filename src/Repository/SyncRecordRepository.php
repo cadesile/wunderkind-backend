@@ -7,7 +7,7 @@ namespace App\Repository;
 use App\Entity\Club;
 use App\Entity\SyncRecord;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\DBAL\ArrayParameterType;
+use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -50,88 +50,65 @@ class SyncRecordRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns just the `payload` column for valid syncs received since $since, for the
-     * landing page's "Chairman's Terminal" telemetry aggregate. Selecting only the JSON
-     * column (not full entities) keeps this cheap over the idx_sync_record_server_timestamp
-     * index even as the table grows.
+     * Returns the `payload` + `serverTimestamp` for valid syncs received since $since,
+     * for the landing page's "Chairman's Terminal" telemetry aggregate. Selecting only
+     * these two columns (not full entities) keeps this cheap over the
+     * idx_sync_record_server_timestamp index even as the table grows.
      *
-     * getSingleColumnResult() bypasses Doctrine's `json` type conversion (that only runs
-     * during entity hydration), so each row comes back as a raw JSON string — decode it
-     * here rather than leaking that detail to the caller.
-     *
-     * @return array<int, array<string, mixed>>
+     * @return array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable}>
      */
     public function findValidPayloadsSince(\DateTimeImmutable $since): array
     {
         $rows = $this->createQueryBuilder('s')
-            ->select('s.payload')
+            ->select('s.payload', 's.serverTimestamp')
             ->where('s.isValid = true')
             ->andWhere('s.serverTimestamp >= :since')
             ->setParameter('since', $since)
             ->getQuery()
-            ->getSingleColumnResult();
+            ->getArrayResult();
 
         return array_map(
-            static fn (string $json): array => json_decode($json, true) ?? [],
+            static fn (array $row): array => [
+                'payload'         => $row['payload'],
+                'serverTimestamp' => $row['serverTimestamp'],
+            ],
             $rows,
         );
     }
 
     /**
-     * Latest valid payload per club, for syncs at or after $since. This is the "now" side
-     * of a per-club seasonRecord delta (see LiveTelemetryService::aggregateSeasonActivity) —
-     * real clients don't currently populate matchResults[], so fixtures/goals are derived
-     * from the change in each club's cumulative seasonRecord instead.
+     * Top valid syncs in the window by attendance fanCount, with the club's real name
+     * attached. Club names here come from a curated, server-generated set of options
+     * (see /api/club/name-options) rather than free text, so this carries no
+     * moderation risk despite naming a specific club — unlike SeasonRecordRepository's
+     * anonymised events, which avoid the club entirely for other reasons (see there).
      *
-     * @return array<string, array<string, mixed>> payload keyed by club id
+     * @return array<int, array{clubName: string, fanCount: int, serverTimestamp: \DateTimeImmutable}>
      */
-    public function findLatestValidPayloadPerClubSince(\DateTimeImmutable $since): array
+    public function findTopAttendanceSince(\DateTimeImmutable $since, int $limit): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT DISTINCT ON (club_id) club_id, payload
-             FROM sync_record
-             WHERE is_valid = true AND server_timestamp >= :since
-             ORDER BY club_id, server_timestamp DESC',
-            ['since' => $since->format('Y-m-d H:i:sP')],
+            "SELECT c.name AS club_name,
+                    (sr.payload->'attendance'->>'fanCount')::int AS fan_count,
+                    sr.server_timestamp AS server_timestamp
+             FROM sync_record sr
+             JOIN club c ON c.id = sr.club_id
+             WHERE sr.is_valid = true
+               AND sr.server_timestamp >= :since
+               AND (sr.payload->'attendance'->>'fanCount') IS NOT NULL
+             ORDER BY fan_count DESC
+             LIMIT :limit",
+            ['since' => $since->format('Y-m-d H:i:sP'), 'limit' => $limit],
+            ['limit' => ParameterType::INTEGER],
         );
 
-        return self::payloadsByClubId($rows);
-    }
-
-    /**
-     * Latest valid payload per club, for syncs strictly before $before — the "baseline"
-     * side of the delta. Only looked up for the clubs that actually appear in the window,
-     * not the whole table.
-     *
-     * @param string[] $clubIds
-     * @return array<string, array<string, mixed>> payload keyed by club id
-     */
-    public function findLatestValidPayloadPerClubBefore(\DateTimeImmutable $before, array $clubIds): array
-    {
-        if ($clubIds === []) {
-            return [];
-        }
-
-        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT DISTINCT ON (club_id) club_id, payload
-             FROM sync_record
-             WHERE is_valid = true AND server_timestamp < :before AND club_id IN (:clubIds)
-             ORDER BY club_id, server_timestamp DESC',
-            ['before' => $before->format('Y-m-d H:i:sP'), 'clubIds' => $clubIds],
-            ['clubIds' => ArrayParameterType::STRING],
+        return array_map(
+            static fn (array $row): array => [
+                'clubName'        => (string) $row['club_name'],
+                'fanCount'        => (int) $row['fan_count'],
+                'serverTimestamp' => new \DateTimeImmutable($row['server_timestamp']),
+            ],
+            $rows,
         );
-
-        return self::payloadsByClubId($rows);
-    }
-
-    /** @return array<string, array<string, mixed>> */
-    private static function payloadsByClubId(array $rows): array
-    {
-        $result = [];
-        foreach ($rows as $row) {
-            $result[$row['club_id']] = json_decode($row['payload'], true) ?? [];
-        }
-
-        return $result;
     }
 }

@@ -26,7 +26,13 @@ class LiveTelemetrySnapshot
     private int $capitalDeployedPence = 0;
 
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
-    private int $goalsScored = 0;
+    private int $resultsWins = 0;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $resultsDraws = 0;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $resultsLosses = 0;
 
     /**
      * Real, anonymised promotion/relegation/title events from recent SeasonRecord
@@ -49,17 +55,21 @@ class LiveTelemetrySnapshot
 
     public function getFixturesSimulated(): int { return $this->fixturesSimulated; }
     public function getCapitalDeployedPence(): int { return $this->capitalDeployedPence; }
-    public function getGoalsScored(): int { return $this->goalsScored; }
+    public function getResultsWins(): int { return $this->resultsWins; }
+    public function getResultsDraws(): int { return $this->resultsDraws; }
+    public function getResultsLosses(): int { return $this->resultsLosses; }
     /** @return array<int, array{time: string, text: string}> */
     public function getRecentEvents(): array { return $this->recentEvents; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
 
     /** @param array<int, array{time: string, text: string}> $recentEvents */
-    public function update(int $fixturesSimulated, int $capitalDeployedPence, int $goalsScored, array $recentEvents): void
+    public function update(int $fixturesSimulated, int $capitalDeployedPence, int $wins, int $draws, int $losses, array $recentEvents): void
     {
         $this->fixturesSimulated    = $fixturesSimulated;
         $this->capitalDeployedPence = $capitalDeployedPence;
-        $this->goalsScored          = $goalsScored;
+        $this->resultsWins          = $wins;
+        $this->resultsDraws         = $draws;
+        $this->resultsLosses        = $losses;
         $this->recentEvents         = $recentEvents;
         $this->generatedAt          = new \DateTimeImmutable();
     }
@@ -67,7 +77,13 @@ class LiveTelemetrySnapshot
     /** e.g. "£14.6M" / "£850K" / "£0" — compact, matches the widget's Press Start 2P counter style. */
     public function getCapitalDeployedFormatted(): string
     {
-        $pounds = $this->capitalDeployedPence / 100;
+        return self::formatPence($this->capitalDeployedPence);
+    }
+
+    /** Shared with LiveTelemetryService's ledger-event lines, so both use the same £K/£M style. */
+    public static function formatPence(int $pence): string
+    {
+        $pounds = $pence / 100;
 
         if ($pounds >= 1_000_000) {
             return '£' . rtrim(rtrim(number_format($pounds / 1_000_000, 1), '0'), '.') . 'M';
@@ -77,5 +93,11 @@ class LiveTelemetrySnapshot
         }
 
         return '£' . number_format($pounds, 0);
+    }
+
+    /** e.g. "14-6-7" (wins-draws-losses). */
+    public function getResultsFormatted(): string
+    {
+        return "{$this->resultsWins}-{$this->resultsDraws}-{$this->resultsLosses}";
     }
 }
