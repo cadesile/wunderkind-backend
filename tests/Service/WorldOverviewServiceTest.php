@@ -7,7 +7,6 @@ namespace App\Tests\Service;
 use App\Entity\League;
 use App\Enum\Country;
 use App\Enum\LeaderboardCategory;
-use App\Repository\ClubRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\WorldOverviewService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -84,31 +83,9 @@ class WorldOverviewServiceTest extends KernelTestCase
             array_keys($data)
         );
         self::assertSame(
-            ['tierCount', 'npcClubs', 'realClubs', 'leaderboardCategories', 'playableCountries', 'clubsPerTier'],
+            ['tierCount', 'npcClubs', 'leaderboardCategories', 'playableCountries', 'clubsPerTier'],
             array_keys($data['totals'])
         );
-    }
-
-    /**
-     * realClubs must be the real, user-owned Club count (same figure as the admin
-     * dashboard's "Clubs" KPI) — never conflated with npcClubs, a completely
-     * separate table.
-     *
-     * getOverview() is cached for an hour, so the suite's other tests can create
-     * clubs between when that cache warms and when this test runs. Clear it
-     * immediately before reading both figures so they describe the same instant.
-     */
-    public function testRealClubTotalMatchesTheClubRepositoryCount(): void
-    {
-        self::bootKernel();
-        $container = self::getContainer();
-        $service   = $container->get(WorldOverviewService::class);
-
-        $service->clear();
-        $data     = $service->getOverview();
-        $expected = $container->get(ClubRepository::class)->count([]);
-
-        self::assertSame($expected, $data['totals']['realClubs']);
     }
 
     /**

@@ -111,4 +111,20 @@ class SyncRecordRepository extends ServiceEntityRepository
             $rows,
         );
     }
+
+    /**
+     * Count of distinct clubs with a valid sync since $since — "active clubs" for the
+     * landing page footer, matching the same DISTINCT club_id definition the admin
+     * dashboard's "Active Clubs" KPI uses (see DashboardStatsService::activeClubs()).
+     */
+    public function countActiveClubsSince(\DateTimeImmutable $since): int
+    {
+        return (int) $this->createQueryBuilder('s')
+            ->select('COUNT(DISTINCT IDENTITY(s.club))')
+            ->where('s.isValid = true')
+            ->andWhere('s.serverTimestamp >= :since')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

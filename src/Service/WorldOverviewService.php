@@ -6,7 +6,6 @@ namespace App\Service;
 
 use App\Enum\Country;
 use App\Enum\LeaderboardCategory;
-use App\Repository\ClubRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
@@ -36,7 +35,6 @@ class WorldOverviewService
         private readonly LeagueRepository $leagueRepository,
         private readonly NpcClubRepository $npcClubRepository,
         private readonly StarterConfigRepository $starterConfigRepository,
-        private readonly ClubRepository $clubRepository,
         private readonly CacheInterface $cache,
     ) {}
 
@@ -110,9 +108,6 @@ class WorldOverviewService
             'totals'    => [
                 'tierCount'             => count($tiers),
                 'npcClubs'              => $npcClubTotal,
-                // Real, user-owned clubs — same COUNT(*) FROM club the admin dashboard's
-                // "Clubs" KPI card uses. Distinct from npcClubs above.
-                'realClubs'             => $this->clubRepository->count([]),
                 // Derived from the enum, so the hero can never again disagree
                 // with the rest of the page about how many boards there are.
                 'leaderboardCategories' => count(LeaderboardCategory::cases()),

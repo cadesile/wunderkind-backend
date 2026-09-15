@@ -27,6 +27,9 @@ class LiveTelemetryService
     private const LEDGER_EVENTS_LIMIT     = 5;
     private const ATTENDANCE_EVENTS_LIMIT = 5;
 
+    /** Each sync represents ~4 weeks of on-device ticks — used only for the footer's "weeks played" figure. */
+    private const WEEKS_PER_SYNC = 4;
+
     /** Ledger categories that represent money leaving the club (spend, not revenue). */
     private const SPEND_LEDGER_CATEGORIES = ['upkeep', 'wages'];
 
@@ -59,6 +62,9 @@ class LiveTelemetryService
             ...self::buildAttendanceEvents($attendanceRows, $now),
         ];
 
+        $activeClubs = $this->syncRecordRepository->countActiveClubsSince($since);
+        $weeksPlayed = count($syncRows) * self::WEEKS_PER_SYNC;
+
         $snapshot = $this->snapshotRepository->getSnapshot();
         $snapshot->update(
             $result['fixturesSimulated'],
@@ -66,6 +72,8 @@ class LiveTelemetryService
             $result['wins'],
             $result['draws'],
             $result['losses'],
+            $activeClubs,
+            $weeksPlayed,
             $events,
         );
         $this->snapshotRepository->getEntityManager()->flush();

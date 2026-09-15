@@ -31,10 +31,12 @@ class GenerateLiveTelemetryCommand extends Command
 
         $snapshot = $this->liveTelemetryService->getSnapshot();
         $io->success(sprintf(
-            'Live telemetry refreshed: %d fixtures simulated, %s capital deployed, %s results (last 24h), %d feed event(s).',
+            'Live telemetry refreshed: %d fixtures simulated, %s capital deployed, %s results, %d active clubs, %d weeks played (last 24h), %d feed event(s).',
             $snapshot->getFixturesSimulated(),
             $snapshot->getCapitalDeployedFormatted(),
             $snapshot->getResultsFormatted(),
+            $snapshot->getActiveClubs(),
+            $snapshot->getWeeksPlayed(),
             count($snapshot->getRecentEvents()),
         ));
 

@@ -34,6 +34,12 @@ class LiveTelemetrySnapshot
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $resultsLosses = 0;
 
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $activeClubs = 0;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $weeksPlayed = 0;
+
     /**
      * Real, anonymised promotion/relegation/title events from recent SeasonRecord
      * rows — never a club name. Each entry: {time: string, text: string}.
@@ -58,18 +64,30 @@ class LiveTelemetrySnapshot
     public function getResultsWins(): int { return $this->resultsWins; }
     public function getResultsDraws(): int { return $this->resultsDraws; }
     public function getResultsLosses(): int { return $this->resultsLosses; }
+    public function getActiveClubs(): int { return $this->activeClubs; }
+    public function getWeeksPlayed(): int { return $this->weeksPlayed; }
     /** @return array<int, array{time: string, text: string}> */
     public function getRecentEvents(): array { return $this->recentEvents; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
 
     /** @param array<int, array{time: string, text: string}> $recentEvents */
-    public function update(int $fixturesSimulated, int $capitalDeployedPence, int $wins, int $draws, int $losses, array $recentEvents): void
-    {
+    public function update(
+        int $fixturesSimulated,
+        int $capitalDeployedPence,
+        int $wins,
+        int $draws,
+        int $losses,
+        int $activeClubs,
+        int $weeksPlayed,
+        array $recentEvents,
+    ): void {
         $this->fixturesSimulated    = $fixturesSimulated;
         $this->capitalDeployedPence = $capitalDeployedPence;
         $this->resultsWins          = $wins;
         $this->resultsDraws         = $draws;
         $this->resultsLosses        = $losses;
+        $this->activeClubs          = $activeClubs;
+        $this->weeksPlayed          = $weeksPlayed;
         $this->recentEvents         = $recentEvents;
         $this->generatedAt          = new \DateTimeImmutable();
     }
