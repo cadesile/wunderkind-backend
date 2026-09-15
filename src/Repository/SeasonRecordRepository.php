@@ -88,4 +88,26 @@ class SeasonRecordRepository extends ServiceEntityRepository
             $qb->getQuery()->getArrayResult(),
         );
     }
+
+    /**
+     * Recent promotion/relegation/title events, anonymised to tier + outcome only.
+     * Deliberately never selects `sr.club` or joins to the club's name — the
+     * anonymity is structural, not just a serialization omission. Backs the
+     * landing page's "Chairman's Terminal" real-events feed (see LiveTelemetryService).
+     *
+     * @return array<array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable}>
+     */
+    public function findRecentPyramidEvents(\DateTimeImmutable $since, int $limit): array
+    {
+        return $this->createQueryBuilder('sr')
+            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt')
+            ->innerJoin('sr.league', 'l')
+            ->where('sr.createdAt >= :since')
+            ->andWhere('sr.promoted = true OR sr.relegated = true OR sr.finalPosition = 1')
+            ->setParameter('since', $since)
+            ->orderBy('sr.createdAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getArrayResult();
+    }
 }

@@ -5,34 +5,20 @@
    Plain ES5-compatible DOM code, no dependencies, no build step.
    ══════════════════════════════════════════════════════════════════════ */
 
-// ── Phone carousel ──────────────────────────────────────────────────────────
+// ── Chairman's Terminal feed ─────────────────────────────────────────────────
 (function () {
-    var slides = document.querySelectorAll('.phone-slide');
-    var dots   = document.querySelectorAll('.phone-dot');
-    var current = 0;
-    var timer;
+    var items = document.querySelectorAll('.terminal-feed-item');
+    if (!items.length) return;
 
-    function goTo(n) {
-        slides[current].classList.remove('active');
-        dots[current].classList.remove('active');
-        current = (n + slides.length) % slides.length;
-        slides[current].classList.add('active');
-        dots[current].classList.add('active');
+    var current = 0;
+
+    function next() {
+        items[current].classList.remove('active');
+        current = (current + 1) % items.length;
+        items[current].classList.add('active');
     }
 
-    function next() { goTo(current + 1); }
-
-    function start() { timer = setInterval(next, 3200); }
-    function stop()  { clearInterval(timer); }
-
-    dots.forEach(function (dot, i) {
-        dot.addEventListener('click', function () { stop(); goTo(i); start(); });
-        dot.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') { stop(); goTo(i); start(); }
-        });
-    });
-
-    start();
+    setInterval(next, 4500);
 }());
 
 // ── Download links ──────────────────────────────────────────────────────────

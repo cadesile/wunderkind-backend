@@ -47,4 +47,32 @@ class SyncRecordRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * Returns just the `payload` column for valid syncs received since $since, for the
+     * landing page's "Chairman's Terminal" telemetry aggregate. Selecting only the JSON
+     * column (not full entities) keeps this cheap over the idx_sync_record_server_timestamp
+     * index even as the table grows.
+     *
+     * getSingleColumnResult() bypasses Doctrine's `json` type conversion (that only runs
+     * during entity hydration), so each row comes back as a raw JSON string — decode it
+     * here rather than leaking that detail to the caller.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function findValidPayloadsSince(\DateTimeImmutable $since): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.payload')
+            ->where('s.isValid = true')
+            ->andWhere('s.serverTimestamp >= :since')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        return array_map(
+            static fn (string $json): array => json_decode($json, true) ?? [],
+            $rows,
+        );
+    }
 }

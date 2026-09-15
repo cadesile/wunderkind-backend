@@ -33,6 +33,7 @@ COPY docker/worldpack-warm.sh /usr/local/bin/worldpack-warm.sh
 COPY docker/leaderboards-generate.sh /usr/local/bin/leaderboards-generate.sh
 COPY docker/post-community-stat.sh /usr/local/bin/post-community-stat.sh
 COPY docker/post-community-stat-tick.sh /usr/local/bin/post-community-stat-tick.sh
+COPY docker/telemetry-generate.sh /usr/local/bin/telemetry-generate.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   :00 — pool-warm:              top up player/staff/scout pool for all 19 countries
@@ -43,6 +44,9 @@ COPY docker/post-community-stat-tick.sh /usr/local/bin/post-community-stat-tick.
 #     app:post-community-stat for whichever periods are due. Cadence itself is
 #     configured at /admin?routeName=admin_social_connections, not here — this
 #     entry's own schedule is just the tick granularity, not the posting cadence.
+#   every 15 min — telemetry-generate: recompute the landing page's 24h pyramid
+#     activity aggregate (fixtures simulated, capital deployed) from recent
+#     SyncRecord payloads, into LiveTelemetrySnapshot.
 # pool-warm/worldpack-warm run every 6 hours with 256 MB PHP memory limit (set inside each script).
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
@@ -50,10 +54,11 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '30 */6 * * * /usr/local/bin/worldpack-warm.sh         >> /var/log/worldpack-cron.log     2>&1' \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
     '*/15 * * * * /usr/local/bin/post-community-stat-tick.sh >> /var/log/post-stat-cron.log 2>&1' \
+    '*/15 * * * * /usr/local/bin/telemetry-generate.sh     >> /var/log/telemetry-cron.log     2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

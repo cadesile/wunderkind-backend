@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Repository\ExcursionRepository;
 use App\Repository\GameConfigRepository;
 use App\Service\ArchetypeShowcaseService;
+use App\Service\LiveTelemetryService;
 use App\Service\WorldOverviewService;
 use App\Service\YouTubeFeedService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -34,6 +35,7 @@ class LandingController extends AbstractController
         private readonly GameConfigRepository $gameConfigRepository,
         private readonly ExcursionRepository $excursionRepository,
         private readonly ArchetypeShowcaseService $archetypeShowcase,
+        private readonly LiveTelemetryService $liveTelemetryService,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -52,6 +54,8 @@ class LandingController extends AbstractController
             'excursions' => $this->excursionRepository->findBy(['active' => true], ['title' => 'ASC'], 6),
             // Re-sampled every request, so the shop window rotates between visits.
             'archetypes' => $this->archetypeShowcase->sample(),
+            // Cached aggregate, refreshed by app:telemetry:generate — never computed live here.
+            'telemetry'  => $this->liveTelemetryService->getSnapshot(),
         ]);
     }
 

@@ -1,0 +1,75 @@
+{#
+   The Chairman's Terminal — hero widget, replaces the phone screenshot carousel.
+
+   Real, live data (refreshed by app:telemetry:generate / cached WorldOverviewService):
+     - telemetry.fixturesSimulated / getCapitalDeployedFormatted() / goalsScored —
+       aggregated from recent SyncRecord payloads (see LiveTelemetryService).
+     - telemetry.recentEvents — anonymised promotion/relegation/title lines from real
+       SeasonRecord rows (tier + outcome only, never a club name — see
+       SeasonRecordRepository::findRecentPyramidEvents()).
+     - world.totals.realClubs / tierCount — real registered clubs (COUNT(*) FROM club,
+       same figure as the admin dashboard's "Clubs" KPI) and league tier count.
+
+   Still illustrative (no backing data exists anywhere in this codebase): the
+   sackings/boardroom-clash/contract-dispute/youth-intake feed lines below — same
+   as the static feature list in _ticker.html.twig.
+#}
+{% set hasRealEvents = telemetry.recentEvents|length > 0 %}
+<div class="terminal">
+    <div class="terminal-header">
+        <div class="terminal-header-live">
+            <span class="terminal-dot" aria-hidden="true"></span>
+            <span class="pixel">LIVE TELEMETRY // 24H PYRAMID FEED</span>
+        </div>
+        <span class="terminal-sync vt">SYNC: ACTIVE [REFRESHED {{ telemetry.generatedAt|date('H:i') }}]</span>
+    </div>
+
+    <div class="terminal-stats">
+        <div class="terminal-stat">
+            <span class="terminal-stat-label pixel">Fixtures Simulated</span>
+            <span class="terminal-stat-val">{{ telemetry.fixturesSimulated|number_format }}</span>
+            <span class="terminal-stat-sub vt">Last 24 hours</span>
+        </div>
+        <div class="terminal-stat">
+            <span class="terminal-stat-label pixel">Capital Deployed</span>
+            <span class="terminal-stat-val" style="color:var(--mint);">{{ telemetry.getCapitalDeployedFormatted() }}</span>
+            <span class="terminal-stat-sub vt">Transfers &amp; Infra</span>
+        </div>
+        <div class="terminal-stat">
+            <span class="terminal-stat-label pixel">Goals Scored</span>
+            <span class="terminal-stat-val">{{ telemetry.goalsScored|number_format }}</span>
+            <span class="terminal-stat-sub vt">Across The Pyramid</span>
+        </div>
+    </div>
+
+    <div class="terminal-feed" aria-live="off">
+        {% for event in telemetry.recentEvents %}
+            <div class="terminal-feed-item{{ loop.first ? ' active' }} vt">
+                <span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}
+            </div>
+        {% endfor %}
+        <div class="terminal-feed-item{{ not hasRealEvents ? ' active' }} vt">
+            <span class="terminal-feed-time">[04m ago]</span> Bury Town rejected a £350k bid for 16yo ATT James Naylor.
+        </div>
+        <div class="terminal-feed-item vt">
+            <span class="terminal-feed-time">[18m ago]</span> <strong>SACKED:</strong> Reading County dismissed Louis Clifford following fan backlash.
+        </div>
+        <div class="terminal-feed-item vt">
+            <span class="terminal-feed-time">[32m ago]</span> Boardroom clash: Chairman denied £75k Hydro Pool upgrade. Morale dropped.
+        </div>
+        <div class="terminal-feed-item vt">
+            <span class="terminal-feed-time">[47m ago]</span> Contract breached: First-team gametime promise broken. 18yo winger handed in a transfer request.
+        </div>
+        <div class="terminal-feed-item vt">
+            <span class="terminal-feed-time">[1h ago]</span> Youth Intake: Tier 7 club signed 3 academy scholars to enrolment terms.
+        </div>
+        <div class="terminal-feed-item vt">
+            <span class="terminal-feed-time">[2h ago]</span> Upset: 8th-tier minnows held league leaders to a 1-1 draw in the 90+4'.
+        </div>
+    </div>
+
+    <div class="terminal-footer vt">
+        <span>{{ world.totals.realClubs }} CLUBS // {{ world.totals.tierCount }} TIERS // OFFLINE-FIRST ENGINE</span>
+        <a href="#download" class="terminal-cta pixel">[ TAP TO ENTER THE BOARDROOM ]</a>
+    </div>
+</div>
