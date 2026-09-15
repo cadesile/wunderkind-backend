@@ -46,6 +46,7 @@ class SeasonSnapshotCrudController extends AbstractCrudController
         yield DateTimeField::new('createdAt')->setFormat('yyyy-MM-dd HH:mm');
         yield CodeEditorField::new('snapshotData', 'Snapshot Data')
             ->setLanguage('js')
-            ->onlyOnDetail();
+            ->onlyOnDetail()
+            ->formatValue(fn (array $value) => json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 }
