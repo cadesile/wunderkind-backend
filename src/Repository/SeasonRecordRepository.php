@@ -25,6 +25,17 @@ class SeasonRecordRepository extends ServiceEntityRepository
         return $this->findBy(['club' => $club], ['season' => 'ASC']);
     }
 
+    /** Count of successfully concluded seasons for a club — every concludeSeason() call persists one row unconditionally. */
+    public function countByClub(Club $club): int
+    {
+        return (int) $this->createQueryBuilder('sr')
+            ->select('COUNT(sr.id)')
+            ->where('sr.club = :club')
+            ->setParameter('club', $club->getId())
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /** @return array<array{clubId: string, clubName: string, value: int|string}> */
     public function getMostSeasonsByClub(StatsPeriod $period, int $limit, PeriodResolver $resolver): array
     {

@@ -1,0 +1,159 @@
+<?php
+
+namespace App\Entity\Competition;
+
+use App\Enum\Competition\CompetitionDuration;
+use App\Repository\Competition\CompetitionTemplateRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Uid\UuidV7;
+
+/**
+ * Admin-defined blueprint. Deliberately decoupled from ActiveCompetition — a template
+ * edit must never reach into a live tournament, so ActiveCompetition copies
+ * entrantCapacity/durationOption at creation rather than reading this entity live.
+ */
+#[ORM\Entity(repositoryClass: CompetitionTemplateRepository::class)]
+#[ORM\Table(name: 'competition_template')]
+#[ORM\Index(columns: ['is_active'], name: 'idx_competition_template_active')]
+#[ORM\HasLifecycleCallbacks]
+class CompetitionTemplate
+{
+    public const ALLOWED_ENTRANT_CAPACITIES = [4, 8, 16, 32, 64];
+
+    #[ORM\Id]
+    #[ORM\Column(type: 'uuid', unique: true)]
+    private UuidV7 $id;
+
+    #[ORM\Column(length: 100)]
+    private string $name;
+
+    #[ORM\Column(length: 80, unique: true)]
+    private string $slug;
+
+    #[ORM\Column(type: 'smallint')]
+    private int $entrantCapacity;
+
+    #[ORM\Column(type: 'string', enumType: CompetitionDuration::class)]
+    private CompetitionDuration $durationOption;
+
+    /** @var list<int>|null Tier semantics inverted — tier 1 = top division, per AudienceCriteriaEvaluator convention. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $allowedTiers = null;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $minClubReputation = 0;
+
+    /** "Future/advanced" gate — inert unless an admin sets it above 0. */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $minClubAgeSeasons = 0;
+
+    /** Pence. Defined for the admin UI/schema; not enforced/charged in Phase 1. */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $entryFeePerRound = 0;
+
+    /** Pence. Synthesized into a ledger_delta reward at completion — no RewardTemplate row needed. */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $victorPrize = 0;
+
+    /** @var array<string, string>|null Keyed by round label (QF/SF/FINAL/...) -> MatchEngineIdentifier value. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $roundEngineConfig = null;
+
+    /** Additional rewards applied to the winner on completion, alongside victorPrize. */
+    #[ORM\ManyToMany(targetEntity: RewardTemplate::class)]
+    #[ORM\JoinTable(name: 'competition_template_reward_template')]
+    private Collection $rewardTemplates;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $isActive = true;
+
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
+
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $updatedAt;
+
+    public function __construct(string $name, string $slug, int $entrantCapacity, CompetitionDuration $durationOption)
+    {
+        $this->id              = new UuidV7();
+        $this->name            = $name;
+        $this->slug            = $slug;
+        $this->entrantCapacity = $entrantCapacity;
+        $this->durationOption  = $durationOption;
+        $this->rewardTemplates = new ArrayCollection();
+        $this->createdAt       = new \DateTimeImmutable();
+        $this->updatedAt       = new \DateTimeImmutable();
+    }
+
+    public function getId(): UuidV7 { return $this->id; }
+
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): static { $this->name = $name; return $this; }
+
+    public function getSlug(): string { return $this->slug; }
+    public function setSlug(string $slug): static { $this->slug = $slug; return $this; }
+
+    public function getEntrantCapacity(): int { return $this->entrantCapacity; }
+    public function setEntrantCapacity(int $entrantCapacity): static { $this->entrantCapacity = $entrantCapacity; return $this; }
+
+    public function getDurationOption(): CompetitionDuration { return $this->durationOption; }
+    public function setDurationOption(CompetitionDuration $durationOption): static { $this->durationOption = $durationOption; return $this; }
+
+    public function getAllowedTiers(): ?array { return $this->allowedTiers; }
+    public function setAllowedTiers(?array $allowedTiers): static { $this->allowedTiers = $allowedTiers; return $this; }
+
+    public function getMinClubReputation(): int { return $this->minClubReputation; }
+    public function setMinClubReputation(int $minClubReputation): static { $this->minClubReputation = $minClubReputation; return $this; }
+
+    public function getMinClubAgeSeasons(): int { return $this->minClubAgeSeasons; }
+    public function setMinClubAgeSeasons(int $minClubAgeSeasons): static { $this->minClubAgeSeasons = $minClubAgeSeasons; return $this; }
+
+    public function getEntryFeePerRound(): int { return $this->entryFeePerRound; }
+    public function setEntryFeePerRound(int $entryFeePerRound): static { $this->entryFeePerRound = $entryFeePerRound; return $this; }
+
+    public function getVictorPrize(): int { return $this->victorPrize; }
+    public function setVictorPrize(int $victorPrize): static { $this->victorPrize = $victorPrize; return $this; }
+
+    public function getRoundEngineConfig(): ?array { return $this->roundEngineConfig; }
+    public function setRoundEngineConfig(?array $roundEngineConfig): static { $this->roundEngineConfig = $roundEngineConfig; return $this; }
+
+    /** @return Collection<int, RewardTemplate> */
+    public function getRewardTemplates(): Collection { return $this->rewardTemplates; }
+
+    public function addRewardTemplate(RewardTemplate $rewardTemplate): static
+    {
+        if (!$this->rewardTemplates->contains($rewardTemplate)) {
+            $this->rewardTemplates->add($rewardTemplate);
+        }
+        return $this;
+    }
+
+    public function removeRewardTemplate(RewardTemplate $rewardTemplate): static
+    {
+        $this->rewardTemplates->removeElement($rewardTemplate);
+        return $this;
+    }
+
+    public function isActive(): bool { return $this->isActive; }
+    public function setIsActive(bool $isActive): static { $this->isActive = $isActive; return $this; }
+
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
+
+    #[ORM\PrePersist]
+    #[ORM\PreUpdate]
+    public function validate(): void
+    {
+        if (!in_array($this->entrantCapacity, self::ALLOWED_ENTRANT_CAPACITIES, true)) {
+            throw new \InvalidArgumentException(
+                'entrantCapacity must be one of: ' . implode(', ', self::ALLOWED_ENTRANT_CAPACITIES)
+            );
+        }
+        if ($this->minClubReputation < 0 || $this->minClubReputation > 100) {
+            throw new \InvalidArgumentException('minClubReputation must be between 0 and 100');
+        }
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+}
