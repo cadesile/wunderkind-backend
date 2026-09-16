@@ -13,8 +13,13 @@ use App\Enum\PlayingStyle;
  */
 class SnapshotValidator
 {
-    private const MIN_PLAYERS = 11;
-    private const MAX_PLAYERS = 30;
+    /**
+     * Exactly the starting XI, not the full squad — DeterministicEngine averages
+     * currentAbility across every player in the snapshot, so a full 25-30 man squad
+     * (bench/reserves included) would dilute that average with players who aren't
+     * actually on the pitch.
+     */
+    private const REQUIRED_PLAYERS = 11;
 
     /**
      * @var list<string> Numeric player attributes checked for range, when present.
@@ -55,11 +60,10 @@ class SnapshotValidator
         }
 
         $playerCount = count($players);
-        if ($playerCount < self::MIN_PLAYERS || $playerCount > self::MAX_PLAYERS) {
+        if ($playerCount !== self::REQUIRED_PLAYERS) {
             $violations[] = sprintf(
-                'players must contain between %d and %d entries, got %d',
-                self::MIN_PLAYERS,
-                self::MAX_PLAYERS,
+                'players must contain exactly %d entries (the starting XI), got %d',
+                self::REQUIRED_PLAYERS,
                 $playerCount,
             );
         }

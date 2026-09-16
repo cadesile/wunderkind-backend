@@ -51,7 +51,7 @@ class SnapshotValidatorTest extends TestCase
         $this->assertContains('club.id does not match the authenticated club', $violations);
     }
 
-    public function testRejectsTooFewPlayers(): void
+    public function testRejectsFewerThan11Players(): void
     {
         $violations = $this->validator->validate(
             ['id' => 'club-1', 'name' => 'Test FC'],
@@ -60,19 +60,22 @@ class SnapshotValidatorTest extends TestCase
             'club-1',
         );
 
-        $this->assertNotEmpty(array_filter($violations, fn ($v) => str_contains($v, 'players must contain')));
+        $this->assertContains('players must contain exactly 11 entries (the starting XI), got 5', $violations);
     }
 
-    public function testRejectsTooManyPlayers(): void
+    public function testRejectsAFullSquadInsteadOfJustTheStartingXi(): void
     {
+        // The realistic mistake this check guards against: sending the whole 18-25 man
+        // squad (bench/reserves included) rather than just the starting XI, which would
+        // dilute DeterministicEngine's currentAbility average with players not on the pitch.
         $violations = $this->validator->validate(
             ['id' => 'club-1', 'name' => 'Test FC'],
-            $this->validPlayers(31),
+            $this->validPlayers(18),
             [],
             'club-1',
         );
 
-        $this->assertNotEmpty(array_filter($violations, fn ($v) => str_contains($v, 'players must contain')));
+        $this->assertContains('players must contain exactly 11 entries (the starting XI), got 18', $violations);
     }
 
     public function testRejectsOutOfRangeAttribute(): void
