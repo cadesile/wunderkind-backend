@@ -13,7 +13,13 @@ class SnapshotValidator
     private const MIN_PLAYERS = 11;
     private const MAX_PLAYERS = 30;
 
-    /** @var list<string> Numeric player attributes checked for the 1-20 clamp, when present. */
+    /**
+     * @var list<string> Numeric player attributes checked for range, when present.
+     * 0-100 — matches wunderkind-app's real local scale (Player.overallRating /
+     * PlayerAttributes), NOT the backend's own 1-20 Personality Matrix convention. An
+     * earlier version of this check used 1-20 by incorrect analogy to Personality; fixed
+     * before any client build against it.
+     */
     private const CLAMPED_PLAYER_ATTRIBUTES = ['currentAbility', 'pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
 
     /**
@@ -64,8 +70,8 @@ class SnapshotValidator
                 }
                 if (!is_int($player[$attr]) && !is_float($player[$attr])) {
                     $violations[] = "players[$i].$attr must be numeric";
-                } elseif ($player[$attr] < 1 || $player[$attr] > 20) {
-                    $violations[] = "players[$i].$attr must be between 1 and 20";
+                } elseif ($player[$attr] < 0 || $player[$attr] > 100) {
+                    $violations[] = "players[$i].$attr must be between 0 and 100";
                 }
             }
         }

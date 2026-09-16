@@ -78,7 +78,7 @@ class SnapshotValidatorTest extends TestCase
     public function testRejectsOutOfRangeAttribute(): void
     {
         $players    = $this->validPlayers();
-        $players[0]['currentAbility'] = 25; // > 20 clamp
+        $players[0]['currentAbility'] = 150; // > 100
 
         $violations = $this->validator->validate(
             ['id' => 'club-1', 'name' => 'Test FC'],
@@ -87,7 +87,25 @@ class SnapshotValidatorTest extends TestCase
             'club-1',
         );
 
-        $this->assertContains('players[0].currentAbility must be between 1 and 20', $violations);
+        $this->assertContains('players[0].currentAbility must be between 0 and 100', $violations);
+    }
+
+    public function testAcceptsRealAppScaleValues(): void
+    {
+        // wunderkind-app's real local scale for these attributes is 0-100, not the
+        // backend's own 1-20 Personality Matrix convention — a value like 78 must pass.
+        $players    = $this->validPlayers();
+        $players[0]['currentAbility'] = 78;
+        $players[0]['pace']           = 92;
+
+        $violations = $this->validator->validate(
+            ['id' => 'club-1', 'name' => 'Test FC'],
+            $players,
+            [],
+            'club-1',
+        );
+
+        $this->assertSame([], $violations);
     }
 
     public function testRejectsPlayerMissingRequiredKeys(): void
