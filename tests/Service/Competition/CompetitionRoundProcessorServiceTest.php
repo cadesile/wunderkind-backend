@@ -36,7 +36,8 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
 
         $this->em->getConnection()->executeStatement(
             'TRUNCATE competition_entrant, competition_fixture, competition_result,
-                      competition_round, active_competition, competition_template CASCADE',
+                      competition_round, active_competition, competition_template,
+                      entrant_reward_claim, inbox_message CASCADE',
         );
     }
 
@@ -54,9 +55,10 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
     }
 
     /** Builds a locked, 4-entrant ActiveCompetition (round 1 = SF, round 2 = FINAL). */
-    private function buildLockedCompetition(): ActiveCompetition
+    private function buildLockedCompetition(int $victorPrize = 0): ActiveCompetition
     {
         $template = new CompetitionTemplate('Proc Cup', 'proc-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+        $template->setVictorPrize($victorPrize);
         $this->em->persist($template);
 
         $instance = new ActiveCompetition($template);
@@ -120,7 +122,7 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
 
     public function testFinalRoundCompletesTheInstanceAndCrownsAWinner(): void
     {
-        $instance = $this->buildLockedCompetition();
+        $instance = $this->buildLockedCompetition(victorPrize: 500000);
         $this->backdateRound($instance, 1);
         $this->processor->processDueRounds(new \DateTimeImmutable());
 
@@ -135,6 +137,18 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
         $entrants = $this->em->getRepository(CompetitionEntrant::class)->findBy(['activeCompetition' => $instance]);
         $winners    = array_filter($entrants, fn ($e) => $e->getStatus() === CompetitionEntrantStatus::WINNER);
         $this->assertCount(1, $winners, 'Exactly one entrant should be crowned WINNER.');
+        $winner = array_values($winners)[0];
+
+        // Reward is delivered via InboxMessage, never applied to Club directly.
+        $messages = $this->em->getRepository(\App\Entity\InboxMessage::class)->findBy(['club' => $winner->getClub()]);
+        $this->assertCount(1, $messages);
+        $this->assertSame(\App\Enum\MessageSenderType::COMPETITION, $messages[0]->getSenderType());
+        $this->assertSame(500000, $messages[0]->getOfferData()['effects'][0]['amountPence']);
+        $this->assertSame(0, $winner->getClub()->getBalance(), 'Balance must not change until the message is accepted.');
+
+        $claims = $this->em->getRepository(\App\Entity\Competition\EntrantRewardClaim::class)->findBy(['entrant' => $winner]);
+        $this->assertCount(1, $claims);
+        $this->assertSame('victor_prize', $claims[0]->getTriggerContext());
     }
 
     public function testAlreadyClaimedRoundIsNotReprocessed(): void

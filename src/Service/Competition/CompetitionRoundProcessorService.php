@@ -30,6 +30,7 @@ class CompetitionRoundProcessorService
         private readonly CompetitionFixtureRepository $fixtureRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly MatchEngineRegistry $matchEngineRegistry,
+        private readonly RewardApplierService $rewardApplierService,
     ) {}
 
     /** @return int Number of rounds this call actually processed (0 if none were due, or all were claimed by an overlapping tick). */
@@ -116,10 +117,10 @@ class CompetitionRoundProcessorService
         if ($this->isFinalRound($round)) {
             foreach ($winners as $winner) {
                 $winner->setStatus(CompetitionEntrantStatus::WINNER);
+                $this->rewardApplierService->applyVictorPrize($winner, $activeCompetition);
             }
             $activeCompetition->setStatus(ActiveCompetitionStatus::COMPLETED);
             $activeCompetition->setCompletedAt($now);
-            // Victor/attached-template rewards are applied by RewardApplierService (Phase 1 step 5).
         } else {
             $this->populateNextRoundFixtures($round, $winners);
         }

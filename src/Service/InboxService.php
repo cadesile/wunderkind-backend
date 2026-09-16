@@ -95,9 +95,10 @@ class InboxService
 
         if ($offerData !== null) {
             match ($message->getSenderType()) {
-                MessageSenderType::SPONSOR  => $this->acceptSponsorOffer($message->getClub(), $offerData),
-                MessageSenderType::INVESTOR => $this->acceptInvestorOffer($message->getClub(), $offerData),
-                default                     => null,
+                MessageSenderType::SPONSOR     => $this->acceptSponsorOffer($message->getClub(), $offerData),
+                MessageSenderType::INVESTOR    => $this->acceptInvestorOffer($message->getClub(), $offerData),
+                MessageSenderType::COMPETITION => $this->acceptCompetitionReward($message->getClub(), $offerData),
+                default                        => null,
             };
         }
 
@@ -154,5 +155,28 @@ class InboxService
 
         // Capital injection — add investment to club balance
         $club->addFunds($offerData['investmentAmount'] ?? 0);
+    }
+
+    /**
+     * Applies a competition GameEffect list (see RewardApplierService) ONLY when the
+     * player explicitly accepts the message — this is what makes the subsequent sync's
+     * Club::setBalance()/setReputation() overwrite correct instead of a clobber: the
+     * client applies the effect to its own authoritative state first (same user action
+     * that triggered this accept), then reports it back up. A round processor tick
+     * mutating Club directly, on its own schedule, would just be undone by the next sync.
+     */
+    private function acceptCompetitionReward(Club $club, array $offerData): void
+    {
+        foreach ($offerData['effects'] ?? [] as $effect) {
+            match ($effect['type'] ?? null) {
+                'ledger_delta'     => $club->addFunds((int) ($effect['amountPence'] ?? 0)),
+                'reputation_delta' => $club->setReputation(max(0, $club->getReputation() + (int) ($effect['amount'] ?? 0))),
+                // Phase 1 stub — no delivery mechanism exists yet for minting an asset
+                // (e.g. a youth player) outside the Pool Lifecycle model. The claim/message
+                // already recorded the intent; nothing to apply here until that lands.
+                'unique_asset_grant' => null,
+                default              => null,
+            };
+        }
     }
 }
