@@ -1,5 +1,65 @@
 # API Routes
 
+## Client-facing API (hand-curated — method, auth, description)
+
+_Hand-maintained, not generator output — covers `src/Controller/Api/` only (not the
+`/admin/*` internal routes in the static scan below). Auth: Public / JWT (`ROLE_CLUB`) /
+JWT + `ROLE_ADMIN`._
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/register` | Public | Create user + club |
+| `POST` | `/api/login` | Public | JWT login → token |
+| `POST` | `/api/verify-email` | Public | Verify email address |
+| `POST` | `/api/resend-verification` | Public | Resend verification email |
+| `POST` | `/api/forgot-password` | Public | Trigger password reset flow |
+| `POST` | `/api/reset-password` | Public | Complete password reset |
+| `POST` | `/api/beta-request` | Public | Submit beta access request |
+| `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
+| `POST` | `/api/account/delete` | JWT | Permanently delete the caller's account + all owned clubs and their data |
+| `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
+| `GET` | `/api/app-links` | Public | App store / deep link URLs |
+| `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
+| `GET` | `/api/market/legacy` | JWT | Legacy market data format |
+| `POST` | `/api/market/assign` | JWT | Assign market entity to club; Player/Staff returns `snapshot` key |
+| `POST` | `/api/market/consume` | JWT | Consume/use a market entity |
+| `GET` | `/api/game-config` | JWT | Global game configuration values |
+| `GET` | `/api/events/templates` | JWT | Narrative event templates (cached 1hr) |
+| `GET` | `/api/inbox` / `GET /api/inbox/{id}` | JWT | Inbox offers |
+| `POST` | `/api/inbox/{id}/accept` | JWT | Accept inbox offer |
+| `POST` | `/api/inbox/{id}/reject` | JWT | Reject inbox offer |
+| `POST` | `/api/inbox/{id}/read` | JWT | Mark inbox message as read |
+| `GET` | `/api/finance/overview` | JWT | Financial summary |
+| `GET` | `/api/finance/investors` | JWT | Investor contracts |
+| `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
+| `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
+| `POST` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
+| `GET` | `/api/archetypes` | Public | Curated archetype catalogue (10 positive + 10 negative); ETag/`versionHash` cached |
+| `GET` | `/api/messages/pending` | JWT | Undelivered admin announcements for the club (capped: 1 blocking + 5 other) |
+| `POST` | `/api/messages/{id}/ack` | JWT | Record a message as `displayed`/`dismissed`; idempotent upsert |
+| `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
+| `GET` | `/api/club/status` | JWT | Club initialization status |
+| `GET` | `/api/club/check` | JWT | Check if club exists for current user |
+| `GET` | `/api/club/foreign` | JWT | Foreign clubs for scouting |
+| `GET` | `/api/club/name-options` | JWT | Generated club name options |
+| `GET` | `/api/starter-config` | JWT | League ability ranges |
+| `GET` | `/api/league` | JWT | Club's current league data |
+| `POST` | `/api/league/conclude-season` | JWT | Submit season results |
+| `GET` | `/api/league/season-history` | JWT | Historical season records |
+| `GET` | `/api/league/season-history/{season}` | JWT | Season record detail |
+| `GET` | `/api/scout/search` | JWT | Search for players via scouts |
+| `GET` | `/api/scout/foreign-clubs` | JWT | NPC clubs available for scout searches |
+| `GET` | `/api/leaderboard/transfers/top-sellers` | JWT | Top transfer seller leaderboard |
+| `GET` | `/api/leaderboard/transfers/most-valuable` | JWT | Most valuable players leaderboard |
+| `GET` | `/api/admin/stats` | JWT + ROLE_ADMIN | Backend stats |
+
+**Drift note:** `/api/archetypes`, `/api/messages/pending`, `/api/messages/{id}/ack`, and
+`/api/league` don't appear in the static scan below (last run 2026-08-20) — either added
+since, or missed by the scan pattern. Re-run the generator to reconcile; until then, trust
+this table for those four.
+
+## Full route scan (static)
+
 _Extracted via static scan of `#[Route(...)]` attributes — run `bin/console debug:router` for the live, resolved route table._
 
 Note: `config/routes/easyadmin.yaml` and the EasyAdmin CRUD controllers (`AdminCrudController`, `AgentCrudController`, `BetaRequestCrudController`, `ClubCrudController`) shown here don't add static rows — EasyAdmin generates their routes dynamically via the `easyadmin.routes` loader rather than `#[Route(...)]` attributes, so they aren't visible to a static scan.

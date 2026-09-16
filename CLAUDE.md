@@ -114,49 +114,8 @@ branches normally target `dev` first.
 
 ## Deployment
 
-Full runbook: `docs/deploy/hetzner.md`. Context digest:
-`.context/stages/01_overview/output/deployment.md`.
-
-| Push to | Deploys to | Workflow | Image tag |
-|---|---|---|---|
-| `master` | `buildmyclub.co.uk`, `www.`, `api.` | `deploy-prod.yml` | `:prod` |
-| `dev` | `dev.buildmyclub.co.uk`, `api.dev.` | `deploy-dev.yml` | `:dev` |
-
-One Hetzner box. A **host-level Caddy container owns ports 80/443** and reverse-proxies by
-hostname to the app containers over an external docker network called `web`. The app
-containers serve **plain HTTP and bind no host ports**; `docker/nginx.conf` is a single
-hostname-agnostic vhost, so one image backs every environment. Caddy manages its own
-certificates — there is no certbot.
-
-The proxy (`deploy/proxy/`) is shared infrastructure deployed **by hand**, never by a
-per-branch workflow. The per-environment `.env` on the box is regenerated from scratch on
-every deploy, so hand edits there are lost.
-
-### Deployment gotchas
-
-- **`TRUSTED_PROXIES=private_ranges` is required in every proxied environment.** Without it
-  Symfony reads the docker bridge address as the client, ignores `X-Forwarded-Proto`, and
-  emits `http://` URLs — breaking the admin `form_login` redirect and absolute links in
-  emails.
-- **Never add `ngx_http_realip_module` config to `docker/nginx.conf`.** Rewriting
-  `$remote_addr` to the original client puts a *public* IP in `REMOTE_ADDR`, which fails
-  the `private_ranges` check and reintroduces exactly that bug. nginx real_ip and Symfony
-  `trusted_proxies` do the same job and conflict — Symfony owns it.
-- **Keep the apex `buildmyclub.co.uk` in the Caddyfile.** `www` is a CNAME to it and it has
-  its own A record, so apex traffic reaches the box; Caddy matches hostnames strictly.
-- **`JWT_SECRET_KEY`/`JWT_PUBLIC_KEY` hold the RAW PEM, not base64.** Lexik is configured as
-  `secret_key: '%env(JWT_SECRET_KEY)%'`, so the env var *is* the key material — it never reads
-  `config/jwt/*.pem`. Set it with `gh secret set <NAME> < private.pem`. A base64 blob fails at
-  sign time with `DECODER routines::unsupported`, *after* login has already succeeded, so the
-  logs show a successful authentication followed by a 500. `jwt-entrypoint.sh` does `base64 -d`
-  into `config/jwt/`, but those files are vestigial — nothing reads them and they are root-owned
-  600, unreadable by the `www-data` workers. Don't infer the format from that script.
-- **`CORS_ALLOW_ORIGIN` is a regex**, not a literal (`origin_regex: true`).
-- **Do not add `app:backfill-appearances` or `cache:clear` to a deploy.** Both OOM-killed a
-  prod deploy; the workflows carry inline comments explaining why.
-- The baked crontab (`pool-warm`, `worldpack-warm`, `leaderboards-generate`) runs in
-  **every** environment, dev included.
-- There is **no staging tier** — the old `staging` stack was repurposed as dev.
+Full runbook: `docs/deploy/hetzner.md`. Context digest (topology, secrets, gotchas,
+per-branch deploy table): `.context/stages/01_overview/output/deployment.md`.
 
 ## Architecture
 
@@ -274,17 +233,9 @@ fiction. Full client contract: `docs/api/server-driven-messaging.md`.
 Symfony `RouterListener` runs at priority 32, `FirewallListener` at priority 8 — the router runs first. `json_login`'s `check_path` **must** be a real registered route or the router returns 404. The stub route in `SyncController::login()` exists for this reason.
 
 ### EasyAdmin Custom Routes
-Custom admin POST-action routes must **always** redirect through EasyAdmin's entry point:
 
-```php
-// CORRECT — initialises the `ea` context
-return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_my_route']));
-
-// WRONG — bypasses `ea` context; causes "i18n on null" Twig error
-return $this->redirectToRoute('admin_my_route');
-```
-
-This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates the `ea` Twig context when the **matched route** carries EasyAdmin's `routeCreatedByEasyAdmin` flag — true only for the dashboard's own `/admin` route, regardless of HTTP method. So **any** custom action that renders an `@EasyAdmin`-extending template directly (not just ones that redirect) must also be *reached* via `/admin?routeName=...`, not hit as a plain route — including POST actions. In Twig, target such a form at `path('admin', {routeName: 'admin_my_route'})` rather than `path('admin_my_route')`; `routeName` is read from the query string, so this works for POST bodies too.
+Rule + example live in `src/Controller/Admin/CLAUDE.md` (auto-loaded when working in that
+directory): custom admin routes must always redirect through EasyAdmin's entry point.
 
 ### Key Gotchas
 - **PostgreSQL** — migrated from MySQL 8.0. New migrations must use Doctrine Schema API or PostgreSQL syntax (no `AUTO_INCREMENT`, no `ENGINE=InnoDB`).
@@ -304,73 +255,9 @@ This rule generalizes beyond redirects: `AdminRouterSubscriber` only populates t
 - **`GameEventTemplate` JSON is client-interpreted, and the client is fussy.** The backend stores and serves `impacts`, `firingConditions`, `chainedEvents` and `severity` verbatim — nothing validates them, so a wrong key is not an error, it is an event that quietly does nothing. Three traps: `impacts` has **two shapes**, and the `player_reputation`/`player_milestone`/`player_morale`/`player_form` categories read **only** `{"stat_changes": [...]}` (a flat `[{target, delta}]` array on those fires the message and applies nothing); a legacy target **must carry its slot number** (`player_1.morale`, never `player.morale` — the client's entity map has no bare `player` key); and setting `firingConditions` at all **removes the template from the weekly random roll**, so a shape no evaluator claims makes the event permanently dead. Only eight personality traits exist (`determination, professionalism, ambition, loyalty, adaptability, pressure, temperament, consistency`, 1–20) — any other name is silently dropped. Full reference: `docs/event-guide.md`, mirrored in the admin help on `GameEventTemplateCrudController`. `app:events:repair` fixes existing rows; the seeders skip existing slugs unless you pass `--update`.
 - **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
 
-## Source Layout
-
-| Path | Purpose |
-|---|---|
-| `src/Entity/` | Doctrine ORM entities |
-| `src/Enum/` | PHP 8.1 backed enums |
-| `src/Dto/` | Validated input/output DTOs (`#[MapRequestPayload]`) |
-| `src/Repository/` | Domain-specific query methods |
-| `src/Service/` | Business logic |
-| `src/Command/` | Symfony console commands (seeding, market generation, cleanup) |
-| `src/Controller/Api/` | Thin HTTP layer — game client endpoints |
-| `src/Controller/Admin/` | EasyAdmin CRUD + custom admin routes |
-| `src/Form/Type/` | Custom Symfony form types (used in admin JSON field editors) |
-| `src/Security/` | Custom auth handlers (e.g. verification-aware success handler) |
-| `src/Doctrine/Function/` | Custom DQL functions (e.g. `RAND()`) |
-| `migrations/` | Doctrine migrations |
-| `config/jwt/` | RSA keypair (gitignored) |
-
 ## API Endpoints
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/register` | Public | Create user + club |
-| `POST` | `/api/login` | Public | JWT login → token |
-| `POST` | `/api/verify-email` | Public | Verify email address |
-| `POST` | `/api/resend-verification` | Public | Resend verification email |
-| `POST` | `/api/forgot-password` | Public | Trigger password reset flow |
-| `POST` | `/api/reset-password` | Public | Complete password reset |
-| `POST` | `/api/beta-request` | Public | Submit beta access request |
-| `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
-| `POST` | `/api/account/delete` | JWT | Permanently delete the caller's account + all owned clubs and their data |
-| `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
-| `GET` | `/api/app-links` | Public | App store / deep link URLs |
-| `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
-| `GET` | `/api/market/legacy` | JWT | Legacy market data format |
-| `POST` | `/api/market/assign` | JWT | Assign market entity to club; Player/Staff returns `snapshot` key |
-| `POST` | `/api/market/consume` | JWT | Consume/use a market entity |
-| `GET` | `/api/game-config` | JWT | Global game configuration values |
-| `GET` | `/api/events/templates` | JWT | Narrative event templates (cached 1hr) |
-| `GET` | `/api/inbox` / `GET /api/inbox/{id}` | JWT | Inbox offers |
-| `POST` | `/api/inbox/{id}/accept` | JWT | Accept inbox offer |
-| `POST` | `/api/inbox/{id}/reject` | JWT | Reject inbox offer |
-| `POST` | `/api/inbox/{id}/read` | JWT | Mark inbox message as read |
-| `GET` | `/api/finance/overview` | JWT | Financial summary |
-| `GET` | `/api/finance/investors` | JWT | Investor contracts |
-| `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
-| `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
-| `POST` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
-| `GET` | `/api/archetypes` | Public | Curated archetype catalogue (10 positive + 10 negative); ETag/`versionHash` cached |
-| `GET` | `/api/messages/pending` | JWT | Undelivered admin announcements for the club (capped: 1 blocking + 5 other) |
-| `POST` | `/api/messages/{id}/ack` | JWT | Record a message as `displayed`/`dismissed`; idempotent upsert |
-| `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
-| `GET` | `/api/club/status` | JWT | Club initialization status |
-| `GET` | `/api/club/check` | JWT | Check if club exists for current user |
-| `GET` | `/api/club/foreign` | JWT | Foreign clubs for scouting |
-| `GET` | `/api/club/name-options` | JWT | Generated club name options |
-| `GET` | `/api/starter-config` | JWT | League ability ranges |
-| `GET` | `/api/league` | JWT | Club's current league data |
-| `POST` | `/api/league/conclude-season` | JWT | Submit season results |
-| `GET` | `/api/league/season-history` | JWT | Historical season records |
-| `GET` | `/api/league/season-history/{season}` | JWT | Season record detail |
-| `GET` | `/api/scout/search` | JWT | Search for players via scouts |
-| `GET` | `/api/scout/foreign-clubs` | JWT | NPC clubs available for scout searches |
-| `GET` | `/api/leaderboard/transfers/top-sellers` | JWT | Top transfer seller leaderboard |
-| `GET` | `/api/leaderboard/transfers/most-valuable` | JWT | Most valuable players leaderboard |
-| `GET` | `/api/admin/stats` | JWT + ROLE_ADMIN | Backend stats |
-
+Full endpoint table (method, path, auth, description): `.context/stages/04_interfaces/output/routes.md`.
 Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 
 ## Key Services

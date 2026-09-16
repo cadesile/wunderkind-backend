@@ -92,5 +92,8 @@
       "Bash(cd *)",
       "Bash(xargs -I{} basename {})"
     ]
+  },
+  "enabledPlugins": {
+    "playground@claude-plugins-official": false
   }
 }
