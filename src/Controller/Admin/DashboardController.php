@@ -1294,6 +1294,12 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
         yield MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text');
         yield MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash');
+        yield MenuItem::section('Competitions');
+        yield MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy');
+        yield MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift');
+        yield MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered');
+        yield MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol');
+        yield MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro');
         yield MenuItem::section('Sync & Leaderboards');
         yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
         yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');
@@ -1323,12 +1329,6 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
-        yield MenuItem::section('Competitions');
-        yield MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy');
-        yield MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift');
-        yield MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered');
-        yield MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol');
-        yield MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro');
         yield MenuItem::section('Messaging');
         yield MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn');
         yield MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group');
