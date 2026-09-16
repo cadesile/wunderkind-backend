@@ -21,6 +21,16 @@ services:
     App\:
         resource: '../src/'
 
+    # Pluggable competition match engines (DeterministicEngine, AiEngineStub) — tagged so
+    # MatchEngineRegistry can iterate and dispatch by MatchEngineIdentifier::supports().
+    _instanceof:
+        App\Service\MatchEngine\MatchEngineInterface:
+            tags: ['app.match_engine']
+
+    App\Service\MatchEngine\MatchEngineRegistry:
+        arguments:
+            $engines: !tagged_iterator app.match_engine
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 

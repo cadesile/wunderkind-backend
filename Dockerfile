@@ -34,6 +34,8 @@ COPY docker/leaderboards-generate.sh /usr/local/bin/leaderboards-generate.sh
 COPY docker/post-community-stat.sh /usr/local/bin/post-community-stat.sh
 COPY docker/post-community-stat-tick.sh /usr/local/bin/post-community-stat-tick.sh
 COPY docker/telemetry-generate.sh /usr/local/bin/telemetry-generate.sh
+COPY docker/competition-provision-instances.sh /usr/local/bin/competition-provision-instances.sh
+COPY docker/competition-process-rounds.sh /usr/local/bin/competition-process-rounds.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   :00 — pool-warm:              top up player/staff/scout pool for all 19 countries
@@ -47,6 +49,13 @@ COPY docker/telemetry-generate.sh /usr/local/bin/telemetry-generate.sh
 #   every 15 min — telemetry-generate: recompute the landing page's 24h pyramid
 #     activity aggregate (fixtures simulated, capital deployed) from recent
 #     SyncRecord payloads, into LiveTelemetrySnapshot.
+#   every 10 min — competition-provision-instances: ensures every active
+#     CompetitionTemplate has an open (REGISTERING) instance. Not time-precision
+#     sensitive — capacity-fill itself locks an instance synchronously, this just
+#     replenishes the slot that leaves behind.
+#   every 1 min — competition-process-rounds: executes any CompetitionRound whose
+#     scheduledAt is due. Matches must fire close to their scheduled timestamp,
+#     unlike the other entries here, hence the tighter cadence.
 # pool-warm/worldpack-warm run every 6 hours with 256 MB PHP memory limit (set inside each script).
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
@@ -55,10 +64,12 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
     '*/15 * * * * /usr/local/bin/post-community-stat-tick.sh >> /var/log/post-stat-cron.log 2>&1' \
     '*/15 * * * * /usr/local/bin/telemetry-generate.sh     >> /var/log/telemetry-cron.log     2>&1' \
+    '*/10 * * * * /usr/local/bin/competition-provision-instances.sh >> /var/log/competition-provision-cron.log 2>&1' \
+    '* * * * *    /usr/local/bin/competition-process-rounds.sh      >> /var/log/competition-process-cron.log   2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-process-rounds.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 
