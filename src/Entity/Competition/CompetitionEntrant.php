@@ -97,4 +97,37 @@ class CompetitionEntrant
 
     public function getEliminatedInRound(): ?CompetitionRound { return $this->eliminatedInRound; }
     public function setEliminatedInRound(?CompetitionRound $eliminatedInRound): static { $this->eliminatedInRound = $eliminatedInRound; return $this; }
+
+    /**
+     * Read-only virtual accessor for the admin detail view — CodeEditorField needs a
+     * string, not the array-typed Doctrine column (the same json-column-to-form gotcha
+     * documented for GameEventTemplate's *Json properties, but no setter/trait needed
+     * here since CompetitionEntrantCrudController never renders an edit form).
+     */
+    public function getSnapshotJsonPretty(): string
+    {
+        return json_encode($this->snapshotJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
+
+    /** Index-page convenience column — avoids opening the full snapshot just to sanity-check tactics. */
+    public function getSnapshotFormation(): ?string
+    {
+        $value = $this->snapshotJson['club']['formation'] ?? null;
+
+        return is_string($value) ? $value : null;
+    }
+
+    public function getSnapshotPlayingStyle(): ?string
+    {
+        $value = $this->snapshotJson['club']['playingStyle'] ?? null;
+
+        return is_string($value) ? $value : null;
+    }
+
+    public function getSnapshotPlayerCount(): int
+    {
+        $players = $this->snapshotJson['players'] ?? [];
+
+        return is_array($players) ? count($players) : 0;
+    }
 }

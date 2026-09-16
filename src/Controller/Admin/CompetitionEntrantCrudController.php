@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Controller\Admin;
+
+use App\Entity\Competition\CompetitionEntrant;
+use App\Enum\Competition\CompetitionEntrantStatus;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Symfony\Component\Form\Extension\Core\Type\EnumType;
+
+/**
+ * Read-only view of every club snapshot submitted at registration/resubmission — the
+ * primary use is debugging/support: confirming what a club actually sent (roster size,
+ * tactics, attribute values) without needing direct DB access. Entrants are created by
+ * CompetitionRegistrationService and updated by round processing/resubmission, never
+ * hand-edited, so every action is disabled — same reasoning as
+ * ActiveCompetitionCrudController/CompetitionRoundCrudController.
+ */
+class CompetitionEntrantCrudController extends AbstractCrudController
+{
+    public static function getEntityFqcn(): string
+    {
+        return CompetitionEntrant::class;
+    }
+
+    public function configureCrud(Crud $crud): Crud
+    {
+        return $crud->setDefaultSort(['registeredAt' => 'DESC']);
+    }
+
+    public function configureActions(Actions $actions): Actions
+    {
+        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+    }
+
+    public function configureFields(string $pageName): iterable
+    {
+        yield IdField::new('id')->hideOnForm();
+        yield AssociationField::new('activeCompetition', 'Competition');
+        yield AssociationField::new('club');
+        yield IntegerField::new('seed');
+
+        yield ChoiceField::new('status')
+            ->setFormType(EnumType::class)
+            ->setFormTypeOptions(['class' => CompetitionEntrantStatus::class]);
+
+        // Snapshot-derived summary columns — scan the list without opening every row.
+        yield IntegerField::new('snapshotPlayerCount', 'Players');
+        yield TextField::new('snapshotFormation', 'Formation')->hideOnIndex();
+        yield TextField::new('snapshotPlayingStyle', 'Playing Style');
+
+        yield IntegerField::new('snapshotVersion', 'Version')->hideOnIndex();
+        yield DateTimeField::new('snapshotLockedAt')->hideOnIndex();
+        yield DateTimeField::new('registeredAt');
+        yield AssociationField::new('eliminatedInRound')->hideOnIndex();
+
+        yield CodeEditorField::new('snapshotJsonPretty', 'Full Snapshot')
+            ->setLanguage('js')
+            ->setNumOfRows(24)
+            ->onlyOnDetail();
+    }
+}

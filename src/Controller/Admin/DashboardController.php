@@ -1328,6 +1328,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift');
         yield MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered');
         yield MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol');
+        yield MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro');
         yield MenuItem::section('Messaging');
         yield MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn');
         yield MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group');
