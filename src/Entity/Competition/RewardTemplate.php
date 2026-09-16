@@ -2,6 +2,7 @@
 
 namespace App\Entity\Competition;
 
+use App\Entity\Concern\EditableJsonColumnTrait;
 use App\Repository\Competition\RewardTemplateRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
@@ -15,6 +16,8 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: 'reward_template')]
 class RewardTemplate
 {
+    use EditableJsonColumnTrait;
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
@@ -29,8 +32,8 @@ class RewardTemplate
     private ?string $description = null;
 
     /** @var list<array{type: string, amountPence?: int, amount?: int, assetType?: string, payload?: array}> */
-    #[ORM\Column(type: 'json')]
-    private array $effectsJson = [];
+    #[ORM\Column(name: 'effects_json', type: 'json')]
+    private array $effects = [];
 
     #[ORM\Column(options: ['default' => true])]
     private bool $isActive = true;
@@ -38,12 +41,12 @@ class RewardTemplate
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
-    public function __construct(string $slug, string $name, array $effectsJson = [])
+    public function __construct(string $slug = '', string $name = '', array $effects = [])
     {
         $this->id = new UuidV7();
         $this->slug = $slug;
         $this->name = $name;
-        $this->effectsJson = $effectsJson;
+        $this->effects = $effects;
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -58,11 +61,28 @@ class RewardTemplate
     public function getDescription(): ?string { return $this->description; }
     public function setDescription(?string $description): static { $this->description = $description; return $this; }
 
-    public function getEffectsJson(): array { return $this->effectsJson; }
-    public function setEffectsJson(array $effectsJson): static { $this->effectsJson = $effectsJson; return $this; }
+    public function getEffects(): array { return $this->effects; }
+    public function setEffects(array $effects): static { $this->effects = $effects; return $this; }
+
+    /** Virtual property for the admin form — serialises effects as a JSON string. */
+    public function getEffectsJson(): string
+    {
+        return $this->invalidJsonInputFor('effectsJson')
+            ?? (json_encode($this->effects, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]');
+    }
+
+    public function setEffectsJson(string $json): void
+    {
+        $decoded = $this->decodeJsonInput('effectsJson', $json);
+        if ($decoded !== null) {
+            $this->effects = $decoded;
+        }
+    }
 
     public function isActive(): bool { return $this->isActive; }
     public function setIsActive(bool $isActive): static { $this->isActive = $isActive; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public function __toString(): string { return $this->name; }
 }

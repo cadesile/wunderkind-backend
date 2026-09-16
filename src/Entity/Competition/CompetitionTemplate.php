@@ -2,6 +2,7 @@
 
 namespace App\Entity\Competition;
 
+use App\Entity\Concern\EditableJsonColumnTrait;
 use App\Enum\Competition\CompetitionDuration;
 use App\Repository\Competition\CompetitionTemplateRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -20,6 +21,8 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\HasLifecycleCallbacks]
 class CompetitionTemplate
 {
+    use EditableJsonColumnTrait;
+
     public const ALLOWED_ENTRANT_CAPACITIES = [4, 8, 16, 32, 64];
 
     #[ORM\Id]
@@ -75,7 +78,7 @@ class CompetitionTemplate
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $updatedAt;
 
-    public function __construct(string $name, string $slug, int $entrantCapacity, CompetitionDuration $durationOption)
+    public function __construct(string $name = '', string $slug = '', int $entrantCapacity = 4, CompetitionDuration $durationOption = CompetitionDuration::ONE_DAY)
     {
         $this->id              = new UuidV7();
         $this->name            = $name;
@@ -104,6 +107,33 @@ class CompetitionTemplate
     public function getAllowedTiers(): ?array { return $this->allowedTiers; }
     public function setAllowedTiers(?array $allowedTiers): static { $this->allowedTiers = $allowedTiers; return $this; }
 
+    /** Virtual property for the admin form — serialises allowedTiers as a JSON string. Empty/null means "no tier restriction". */
+    public function getAllowedTiersJson(): string
+    {
+        if (($invalid = $this->invalidJsonInputFor('allowedTiersJson')) !== null) {
+            return $invalid;
+        }
+
+        return $this->allowedTiers !== null
+            ? (json_encode($this->allowedTiers, JSON_PRETTY_PRINT) ?: '[]')
+            : '';
+    }
+
+    public function setAllowedTiersJson(?string $json): void
+    {
+        $trimmed = trim($json ?? '');
+        if ($trimmed === '') {
+            unset($this->invalidJsonInput['allowedTiersJson']);
+            $this->allowedTiers = null;
+            return;
+        }
+
+        $decoded = $this->decodeJsonInput('allowedTiersJson', $trimmed);
+        if ($decoded !== null) {
+            $this->allowedTiers = array_map('intval', $decoded);
+        }
+    }
+
     public function getMinClubReputation(): int { return $this->minClubReputation; }
     public function setMinClubReputation(int $minClubReputation): static { $this->minClubReputation = $minClubReputation; return $this; }
 
@@ -118,6 +148,37 @@ class CompetitionTemplate
 
     public function getRoundEngineConfig(): ?array { return $this->roundEngineConfig; }
     public function setRoundEngineConfig(?array $roundEngineConfig): static { $this->roundEngineConfig = $roundEngineConfig; return $this; }
+
+    /**
+     * Virtual property for the admin form — serialises roundEngineConfig as a JSON
+     * string. Keys are round labels (QF/SF/FINAL/R16/R32/R64) or "default"; values are
+     * MatchEngineIdentifier values (deterministic/ai_assisted/ai_narrative).
+     */
+    public function getRoundEngineConfigJson(): string
+    {
+        if (($invalid = $this->invalidJsonInputFor('roundEngineConfigJson')) !== null) {
+            return $invalid;
+        }
+
+        return $this->roundEngineConfig !== null
+            ? (json_encode($this->roundEngineConfig, JSON_PRETTY_PRINT) ?: '{}')
+            : '';
+    }
+
+    public function setRoundEngineConfigJson(?string $json): void
+    {
+        $trimmed = trim($json ?? '');
+        if ($trimmed === '') {
+            unset($this->invalidJsonInput['roundEngineConfigJson']);
+            $this->roundEngineConfig = null;
+            return;
+        }
+
+        $decoded = $this->decodeJsonInput('roundEngineConfigJson', $trimmed);
+        if ($decoded !== null) {
+            $this->roundEngineConfig = $decoded;
+        }
+    }
 
     /** @return Collection<int, RewardTemplate> */
     public function getRewardTemplates(): Collection { return $this->rewardTemplates; }
@@ -156,4 +217,6 @@ class CompetitionTemplate
         }
         $this->updatedAt = new \DateTimeImmutable();
     }
+
+    public function __toString(): string { return $this->name; }
 }

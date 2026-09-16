@@ -1323,6 +1323,11 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
         yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
+        yield MenuItem::section('Competitions');
+        yield MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy');
+        yield MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift');
+        yield MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered');
+        yield MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol');
         yield MenuItem::section('Messaging');
         yield MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn');
         yield MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group');

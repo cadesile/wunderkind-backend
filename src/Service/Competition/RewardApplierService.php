@@ -43,7 +43,7 @@ class RewardApplierService
         }
 
         foreach ($template->getRewardTemplates() as $rewardTemplate) {
-            $effects = $rewardTemplate->getEffectsJson();
+            $effects = $rewardTemplate->getEffects();
             if ($effects === []) {
                 continue;
             }
