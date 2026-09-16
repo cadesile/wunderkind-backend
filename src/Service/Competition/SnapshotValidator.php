@@ -2,6 +2,9 @@
 
 namespace App\Service\Competition;
 
+use App\Enum\Formation;
+use App\Enum\PlayingStyle;
+
 /**
  * Structural validation of the client-supplied entrant snapshot. This is NOT a
  * re-validation of game rules — just enough of a structural check to reject a
@@ -40,6 +43,15 @@ class SnapshotValidator
 
         if (!isset($club['name']) || !is_string($club['name']) || $club['name'] === '') {
             $violations[] = 'club.name is required';
+        }
+
+        // Both optional — a snapshot without them just gets neutral tactical treatment
+        // (DeterministicEngine) and no formation shown in narrative/display contexts.
+        if (isset($club['playingStyle']) && PlayingStyle::tryFrom((string) $club['playingStyle']) === null) {
+            $violations[] = 'club.playingStyle must be one of: ' . implode(', ', array_column(PlayingStyle::cases(), 'value'));
+        }
+        if (isset($club['formation']) && Formation::tryFrom((string) $club['formation']) === null) {
+            $violations[] = 'club.formation must be one of: ' . implode(', ', array_column(Formation::cases(), 'value'));
         }
 
         $playerCount = count($players);

@@ -5,6 +5,8 @@ namespace App\Service\MatchEngine;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Enum\Competition\MatchEngineIdentifier;
+use App\Enum\PlayingStyle;
+use App\Repository\TacticalAdvantageRepository;
 use App\Service\Appearance\SeededRng;
 
 /**
@@ -18,6 +20,14 @@ use App\Service\Appearance\SeededRng;
  * convention AppearanceGeneratorService already uses — so a re-run against the same
  * fixture is reproducible (useful for tests), even though match outcome need not be
  * literally deterministic across different fixtures the way appearance generation is.
+ *
+ * Reuses the existing admin-configurable TacticalAdvantage matchup table (style vs
+ * opponentStyle -> multiplier) rather than inventing new tactical logic — that table
+ * already drives the single-player on-device engine's style-vs-style advantage (served
+ * to the client via SyncService's tacticalMatrix), this just applies the same data
+ * server-side, since Cup fixtures are resolved server-side against frozen snapshots. Only
+ * playingStyle affects resolution; formation is captured in the snapshot for narrative/
+ * display purposes but there's no formation-vs-formation table in this codebase to apply.
  */
 class DeterministicEngine implements MatchEngineInterface
 {
@@ -26,6 +36,10 @@ class DeterministicEngine implements MatchEngineInterface
     private const CARD_CHANCE = 0.06;
     /** Strength floor so a snapshot with no readable player attributes doesn't divide by zero / auto-lose. */
     private const DEFAULT_STRENGTH = 10.0;
+
+    public function __construct(
+        private readonly TacticalAdvantageRepository $tacticalAdvantageRepository,
+    ) {}
 
     public function supports(MatchEngineIdentifier $identifier): bool
     {
@@ -38,6 +52,13 @@ class DeterministicEngine implements MatchEngineInterface
 
         $homeStrength = $this->strengthOf($home);
         $awayStrength = $this->strengthOf($away);
+
+        $homeStyle = $this->styleOf($home);
+        $awayStyle = $this->styleOf($away);
+        if ($homeStyle !== null && $awayStyle !== null) {
+            $homeStrength *= $this->tacticalAdvantageRepository->findMultiplier($homeStyle, $awayStyle);
+            $awayStrength *= $this->tacticalAdvantageRepository->findMultiplier($awayStyle, $homeStyle);
+        }
 
         $homeGoals = 0;
         $awayGoals = 0;
@@ -86,6 +107,13 @@ class DeterministicEngine implements MatchEngineInterface
         }
 
         return $count > 0 ? $sum / $count : self::DEFAULT_STRENGTH;
+    }
+
+    private function styleOf(CompetitionEntrant $entrant): ?PlayingStyle
+    {
+        $value = $entrant->getSnapshotJson()['club']['playingStyle'] ?? null;
+
+        return is_string($value) ? PlayingStyle::tryFrom($value) : null;
     }
 
     private function pickScorer(SeededRng $rng, CompetitionEntrant $entrant): ?string

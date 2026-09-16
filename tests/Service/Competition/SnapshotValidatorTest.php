@@ -134,4 +134,54 @@ class SnapshotValidatorTest extends TestCase
 
         $this->assertContains('staff[0].id and staff[0].role are required', $violations);
     }
+
+    public function testAcceptsValidFormationAndPlayingStyle(): void
+    {
+        $violations = $this->validator->validate(
+            ['id' => 'club-1', 'name' => 'Test FC', 'formation' => '4-3-3', 'playingStyle' => 'HIGH_PRESS'],
+            $this->validPlayers(),
+            [],
+            'club-1',
+        );
+
+        $this->assertSame([], $violations);
+    }
+
+    public function testFormationAndPlayingStyleAreOptional(): void
+    {
+        // No formation/playingStyle at all — a snapshot without them is still valid;
+        // the match engine just applies no tactical multiplier.
+        $violations = $this->validator->validate(
+            ['id' => 'club-1', 'name' => 'Test FC'],
+            $this->validPlayers(),
+            [],
+            'club-1',
+        );
+
+        $this->assertSame([], $violations);
+    }
+
+    public function testRejectsUnknownPlayingStyle(): void
+    {
+        $violations = $this->validator->validate(
+            ['id' => 'club-1', 'name' => 'Test FC', 'playingStyle' => 'TIKI_TAKA'],
+            $this->validPlayers(),
+            [],
+            'club-1',
+        );
+
+        $this->assertNotEmpty(array_filter($violations, fn ($v) => str_contains($v, 'club.playingStyle')));
+    }
+
+    public function testRejectsUnknownFormation(): void
+    {
+        $violations = $this->validator->validate(
+            ['id' => 'club-1', 'name' => 'Test FC', 'formation' => '2-3-5'],
+            $this->validPlayers(),
+            [],
+            'club-1',
+        );
+
+        $this->assertNotEmpty(array_filter($violations, fn ($v) => str_contains($v, 'club.formation')));
+    }
 }
