@@ -29,14 +29,26 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getOneOrNullResult();
     }
 
-    /** Locks the row for update — used to serialize concurrent "last slot" registrations. */
-    public function findForUpdate(string $id): ?ActiveCompetition
+    /** @return list<ActiveCompetition> */
+    public function findByStatus(ActiveCompetitionStatus $status): array
     {
         return $this->createQueryBuilder('a')
-            ->where('a.id = :id')
-            ->setParameter('id', $id)
+            ->where('a.status = :status')
+            ->setParameter('status', $status)
+            ->orderBy('a.createdAt', 'DESC')
             ->getQuery()
-            ->setLockMode(\Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE)
-            ->getOneOrNullResult();
+            ->getResult();
+    }
+
+    /** @return list<ActiveCompetition> Most recently completed instances, for "historical winners." */
+    public function findRecentlyCompleted(int $limit): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.status = :status')
+            ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
+            ->orderBy('a.completedAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 }
