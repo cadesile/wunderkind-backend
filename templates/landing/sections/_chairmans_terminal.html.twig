@@ -1,29 +1,26 @@
 {#
    The Chairman's Terminal — hero widget, replaces the phone screenshot carousel.
 
-   Real, live data (refreshed by app:telemetry:generate):
+   Real, live data only (refreshed by app:telemetry:generate) — no illustrative/
+   placeholder filler. Previously padded with six static sackings/boardroom-clash/
+   contract-dispute/youth-intake lines with no backing data; removed by product
+   decision so every line shown is real:
      - telemetry.fixturesSimulated / getCapitalDeployedFormatted() / getResultsFormatted() /
        activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads (see
        LiveTelemetryService). weeksPlayed is sync count * 4 (each sync ~= 4 on-device
        weekly ticks) — an approximation, not a true weeks-elapsed count.
-     - telemetry.recentEvents — a blend of three real sources, built in
+     - telemetry.recentEvents — a blend of three real sources, every one naming the
+       real club (safe: club names come from a curated, server-generated set of
+       options — /api/club/name-options — not free text), built in
        LiveTelemetryService::refresh():
-         1. anonymised promotion/relegation/title lines from SeasonRecord (tier +
-            outcome only, never a club name — see
+         1. promotion/relegation/title lines from SeasonRecord (see
             SeasonRecordRepository::findRecentPyramidEvents());
-         2. the highest-cost ledger[] spends from recent syncs (client-generated
-            narrative text, e.g. a scouting mission or facility repair — may name a
-            player, never a club);
-         3. top attendance figures from recent syncs, WITH the real club name — safe
-            here because club names come from a curated, server-generated set of
-            options (/api/club/name-options), not free text (see
+         2. the highest-cost ledger[] spends from recent syncs, club name + the
+            entry's own client-generated description (may name a player, generated
+            fiction);
+         3. top attendance figures from recent syncs (see
             SyncRecordRepository::findTopAttendanceSince()).
-
-   Still illustrative (no backing data exists anywhere in this codebase): the
-   sackings/boardroom-clash/contract-dispute/youth-intake feed lines below — same
-   as the static feature list in _ticker.html.twig.
 #}
-{% set hasRealEvents = telemetry.recentEvents|length > 0 %}
 <div class="terminal">
     <div class="terminal-header">
         <div class="terminal-header-live">
@@ -56,25 +53,9 @@
             <div class="terminal-feed-item{{ loop.first ? ' active' }} vt">
                 <span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}
             </div>
+        {% else %}
+            <div class="terminal-feed-item active vt">No activity to report in the last 24 hours.</div>
         {% endfor %}
-        <div class="terminal-feed-item{{ not hasRealEvents ? ' active' }} vt">
-            <span class="terminal-feed-time">[04m ago]</span> Bury Town rejected a £350k bid for 16yo ATT James Naylor.
-        </div>
-        <div class="terminal-feed-item vt">
-            <span class="terminal-feed-time">[18m ago]</span> <strong>SACKED:</strong> Reading County dismissed Louis Clifford following fan backlash.
-        </div>
-        <div class="terminal-feed-item vt">
-            <span class="terminal-feed-time">[32m ago]</span> Boardroom clash: Chairman denied £75k Hydro Pool upgrade. Morale dropped.
-        </div>
-        <div class="terminal-feed-item vt">
-            <span class="terminal-feed-time">[47m ago]</span> Contract breached: First-team gametime promise broken. 18yo winger handed in a transfer request.
-        </div>
-        <div class="terminal-feed-item vt">
-            <span class="terminal-feed-time">[1h ago]</span> Youth Intake: Tier 7 club signed 3 academy scholars to enrolment terms.
-        </div>
-        <div class="terminal-feed-item vt">
-            <span class="terminal-feed-time">[2h ago]</span> Upset: 8th-tier minnows held league leaders to a 1-1 draw in the 90+4'.
-        </div>
     </div>
 
     <div class="terminal-footer vt">

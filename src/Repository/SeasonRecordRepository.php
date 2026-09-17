@@ -90,18 +90,22 @@ class SeasonRecordRepository extends ServiceEntityRepository
     }
 
     /**
-     * Recent promotion/relegation/title events, anonymised to tier + outcome only.
-     * Deliberately never selects `sr.club` or joins to the club's name — the
-     * anonymity is structural, not just a serialization omission. Backs the
-     * landing page's "Chairman's Terminal" real-events feed (see LiveTelemetryService).
+     * Recent promotion/relegation/title events, with the real club name attached.
+     * Club names come from a curated, server-generated set of options (see
+     * /api/club/name-options) rather than free text, so naming a specific club here
+     * carries no moderation risk — same reasoning as
+     * SyncRecordRepository::findTopAttendanceSince(). Backs the landing page's
+     * "Chairman's Terminal" real-events feed (see LiveTelemetryService). (Previously
+     * anonymised to tier + outcome only — reversed by product decision.)
      *
-     * @return array<array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable}>
+     * @return array<array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable, clubName: string}>
      */
     public function findRecentPyramidEvents(\DateTimeImmutable $since, int $limit): array
     {
         return $this->createQueryBuilder('sr')
-            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt')
+            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt', 'c.name AS clubName')
             ->innerJoin('sr.league', 'l')
+            ->innerJoin('sr.club', 'c')
             ->where('sr.createdAt >= :since')
             ->andWhere('sr.promoted = true OR sr.relegated = true OR sr.finalPosition = 1')
             ->setParameter('since', $since)
