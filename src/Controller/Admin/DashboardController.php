@@ -1270,6 +1270,32 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
+    // ── Telemetry Config ──────────────────────────────────────────────────
+
+    #[Route('/admin/telemetry-config', name: 'admin_telemetry_config')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function telemetryConfig(\App\Service\LiveTelemetryService $liveTelemetryService): Response
+    {
+        return $this->render('admin/telemetry_config.html.twig', [
+            'snapshot' => $liveTelemetryService->getSnapshot(),
+        ]);
+    }
+
+    #[Route('/admin/telemetry-config/rebuild', name: 'admin_telemetry_rebuild', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function rebuildTelemetrySnapshot(Request $request, \App\Service\LiveTelemetryService $liveTelemetryService): Response
+    {
+        if (!$this->isCsrfTokenValid('rebuild_telemetry', $request->request->get('_csrf_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_telemetry_config']));
+        }
+
+        $liveTelemetryService->refresh();
+
+        $this->addFlash('success', 'Telemetry snapshot rebuilt.');
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_telemetry_config']));
+    }
+
     // ── EasyAdmin configuration ───────────────────────────────────────────
 
     public function configureAssets(): Assets
@@ -1322,6 +1348,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('System');
         yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
         yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
+        yield MenuItem::linkToRoute('Telemetry Config', 'fa fa-tower-broadcast', 'admin_telemetry_config');
         yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
         yield MenuItem::section('Messaging');
         yield MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn');
