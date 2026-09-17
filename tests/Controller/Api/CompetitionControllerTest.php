@@ -6,6 +6,7 @@ namespace App\Tests\Controller\Api;
 
 use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
+use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
@@ -80,6 +81,60 @@ class CompetitionControllerTest extends WebTestCase
             'club'       => ['id' => $clubId, 'name' => $clubName],
             'players'    => $players,
             'staff'      => [],
+            'facilities' => [],
+        ];
+    }
+
+    /**
+     * The 2026 client expansion (see SnapshotValidator's class doc comment) — full club/
+     * players/staff shape including every new field from the handoff, to prove they
+     * persist verbatim end-to-end and don't trip validation.
+     *
+     * @return array<string, mixed>
+     */
+    private function snapshotPayloadWithNewFields(string $clubId, string $clubName): array
+    {
+        $players = [];
+        for ($i = 0; $i < 11; $i++) {
+            $players[] = [
+                'id'             => "player-$i",
+                'position'       => 'MID',
+                'currentAbility' => 10,
+                'name'           => "Player $i",
+                'dateOfBirth'    => '2010-01-01',
+                'age'            => 16,
+                'nationality'    => 'Testland',
+                'potential'      => 80,
+                'personality'    => [
+                    'determination' => 15, 'professionalism' => 10, 'ambition' => 12,
+                    'loyalty' => 8, 'adaptability' => 14, 'pressure' => 9,
+                    'temperament' => 11, 'consistency' => 13,
+                ],
+                'morale'         => 60,
+                'motivation'     => 70,
+                'condition'      => 90,
+                'squadRole'      => 'first_team',
+            ];
+        }
+
+        return [
+            'club' => [
+                'id'            => $clubId,
+                'name'          => $clubName,
+                'reputation'    => 42,
+                'tier'          => 'regional',
+                'stadiumName'   => 'Test Arena',
+                'homePrimary'   => '#E53935',
+                'homeSecondary' => '#FFFFFF',
+                'awayPrimary'   => '#000000',
+                'awaySecondary' => '#CCCCCC',
+                'badgeShape'    => 'shield',
+            ],
+            'players' => $players,
+            'staff'   => [
+                ['id' => 'coach-1', 'role' => 'COACH', 'name' => 'Coach Name', 'nationality' => 'Testland', 'ability' => 70, 'specialisms' => ['pace' => 80]],
+                ['id' => 'scout-1', 'role' => 'SCOUT', 'name' => 'Scout Name', 'nationality' => 'Testland', 'ability' => 65, 'judgements' => ['potential' => 75]],
+            ],
             'facilities' => [],
         ];
     }
@@ -287,5 +342,58 @@ class CompetitionControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(404);
         $this->assertSame('not_registered', $this->responseJson()['error']);
+    }
+
+    public function testRegisterPersistsNewSnapshotFieldsVerbatim(): void
+    {
+        $template = $this->createTemplate();
+        $instance = $this->createOpenInstance($template);
+        $club     = $this->createClub('Rich Snapshot FC');
+
+        $this->login($club);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->snapshotPayloadWithNewFields((string) $club->getId(), 'Rich Snapshot FC')),
+        );
+        $this->assertResponseStatusCodeSame(201);
+
+        $entrant = $this->em->getRepository(CompetitionEntrant::class)->findOneBy([
+            'activeCompetition' => $instance,
+            'club'              => $club,
+        ]);
+        $snapshot = $entrant->getSnapshotJson();
+
+        $this->assertSame(42, $snapshot['club']['reputation']);
+        $this->assertSame('regional', $snapshot['club']['tier']);
+        $this->assertSame('shield', $snapshot['club']['badgeShape']);
+        $this->assertSame(80, $snapshot['players'][0]['potential']);
+        $this->assertSame('first_team', $snapshot['players'][0]['squadRole']);
+        $this->assertSame(15, $snapshot['players'][0]['personality']['determination']);
+        $this->assertSame(['pace' => 80], $snapshot['staff'][0]['specialisms']);
+        $this->assertSame(['potential' => 75], $snapshot['staff'][1]['judgements']);
+    }
+
+    public function testPublicBracketViewNeverExposesPotentialToRivalClubs(): void
+    {
+        // potential is explicitly flagged sensitive by the client team (normally hidden
+        // from opponents, only discoverable via in-game scouting) — this pins the current
+        // safe behavior: the public GET /{id} view only ever returns a hand-picked summary
+        // per entrant, never the raw snapshot.
+        $template = $this->createTemplate();
+        $instance = $this->createOpenInstance($template);
+        $club     = $this->createClub('Guarded FC');
+
+        $this->login($club);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->snapshotPayloadWithNewFields((string) $club->getId(), 'Guarded FC')),
+        );
+        $this->assertResponseStatusCodeSame(201);
+
+        $this->client->request('GET', "/api/competitions/{$instance->getId()}");
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertStringNotContainsString('potential', $this->client->getResponse()->getContent());
     }
 }
