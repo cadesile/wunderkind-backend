@@ -8,13 +8,14 @@ use App\Repository\SyncRecordRepository;
 use App\Entity\LiveTelemetrySnapshot;
 
 /**
- * Aggregates SyncRecord.payload JSON from the last 24h, plus recent anonymised
- * promotion/relegation/title events from SeasonRecord and real high-cost
- * ledger/attendance lines, into the cached LiveTelemetrySnapshot singleton for
- * the landing page's "Chairman's Terminal" widget. All 3 macro counters are
- * backed by real data — see the aggregate() docblock for exactly how each is
- * computed. Only the feed's remaining illustrative lines (sackings, contract
- * disputes, youth intake) have no backing data anywhere in this codebase.
+ * Aggregates SyncRecord.payload JSON from the last 24h, plus recent promotion/
+ * relegation/title events from SeasonRecord and real high-cost ledger/attendance
+ * lines — every line names the real club — into the cached LiveTelemetrySnapshot
+ * singleton for the landing page's "Chairman's Terminal" widget. All 3 macro
+ * counters are backed by real data — see the aggregate() docblock for exactly how
+ * each is computed. The feed shows real events only: the template no longer pads
+ * it with illustrative filler (sackings, contract disputes, youth intake) — those
+ * had no backing data anywhere in this codebase.
  */
 class LiveTelemetryService
 {
@@ -146,11 +147,10 @@ class LiveTelemetryService
     /**
      * Turns SeasonRecordRepository::findRecentPyramidEvents() rows into feed-ready
      * {time, text} lines. Pure function (given $now) — unit-testable without a clock
-     * or a database. Never receives or emits a club identifier: the row shape itself
-     * only carries tier + outcome, so there is nothing here that could leak a real
-     * club's chosen name.
+     * or a database. Names the real club (see findRecentPyramidEvents()'s docblock
+     * for why that carries no moderation risk).
      *
-     * @param array<int, array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable}> $rows
+     * @param array<int, array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable, clubName: string}> $rows
      * @return array<int, array{time: string, text: string}>
      */
     public static function buildEvents(array $rows, \DateTimeImmutable $now): array
@@ -158,7 +158,7 @@ class LiveTelemetryService
         $events = [];
 
         foreach ($rows as $row) {
-            $text = self::describeOutcome((int) $row['tier'], (bool) $row['promoted'], (bool) $row['relegated'], (int) $row['finalPosition']);
+            $text = self::describeOutcome((string) $row['clubName'], (int) $row['tier'], (bool) $row['promoted'], (bool) $row['relegated'], (int) $row['finalPosition']);
             if ($text === null) {
                 continue;
             }
@@ -176,11 +176,13 @@ class LiveTelemetryService
      * The highest-magnitude ledger[] spend entries (negative amounts only — "especially
      * high cost", per the brief) across the batch of sync rows, ranked regardless of
      * category so one-off items (a scouting mission, a facility auto-repair) naturally
-     * outrank routine weekly payroll/upkeep. Uses each entry's own description verbatim —
-     * these are client-generated narrative strings (may name a player, generated fiction;
-     * never a club) — see SyncRecordRepository::findValidPayloadsSince for the row shape.
+     * outrank routine weekly payroll/upkeep. Names the real spending club (see
+     * SyncRecordRepository::findValidPayloadsSince()'s docblock for why that carries no
+     * moderation risk) followed by the entry's own description verbatim — the
+     * description itself is client-generated narrative text (may name a player,
+     * generated fiction) — see findValidPayloadsSince() for the row shape.
      *
-     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable}> $syncRows
+     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}> $syncRows
      * @return array<int, array{time: string, text: string}>
      */
     public static function buildLedgerEvents(array $syncRows, \DateTimeImmutable $now, int $limit): array
@@ -198,6 +200,7 @@ class LiveTelemetryService
                 $entries[] = [
                     'amountPence'     => $amountPence,
                     'description'     => $description,
+                    'clubName'        => $row['clubName'],
                     'serverTimestamp' => $row['serverTimestamp'],
                 ];
             }
@@ -208,7 +211,7 @@ class LiveTelemetryService
         return array_map(
             static fn (array $entry): array => [
                 'time' => self::relativeTime($entry['serverTimestamp'], $now),
-                'text' => sprintf('%s spent: %s', LiveTelemetrySnapshot::formatPence(abs($entry['amountPence'])), $entry['description']),
+                'text' => sprintf('%s spent %s: %s', $entry['clubName'], LiveTelemetrySnapshot::formatPence(abs($entry['amountPence'])), $entry['description']),
             ],
             array_slice($entries, 0, $limit),
         );
@@ -234,16 +237,16 @@ class LiveTelemetryService
         );
     }
 
-    private static function describeOutcome(int $tier, bool $promoted, bool $relegated, int $finalPosition): ?string
+    private static function describeOutcome(string $clubName, int $tier, bool $promoted, bool $relegated, int $finalPosition): ?string
     {
         if ($finalPosition === 1) {
-            return "A Tier {$tier} club lifted the title.";
+            return "{$clubName} lifted the Tier {$tier} title.";
         }
         if ($promoted) {
-            return "A Tier {$tier} club won promotion.";
+            return "{$clubName} won promotion from Tier {$tier}.";
         }
         if ($relegated) {
-            return "A Tier {$tier} club was relegated.";
+            return "{$clubName} was relegated from Tier {$tier}.";
         }
 
         return null;
