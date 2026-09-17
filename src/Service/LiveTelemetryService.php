@@ -57,11 +57,11 @@ class LiveTelemetryService
         );
         $attendanceRows = $this->syncRecordRepository->findTopAttendanceSince($since, self::ATTENDANCE_EVENTS_LIMIT);
 
-        $events = [
-            ...self::buildEvents($pyramidRows, $now),
-            ...self::buildLedgerEvents($syncRows, $now, self::LEDGER_EVENTS_LIMIT),
-            ...self::buildAttendanceEvents($attendanceRows, $now),
-        ];
+        $events = self::mergeEventsByRecency(
+            self::buildEvents($pyramidRows, $now),
+            self::buildLedgerEvents($syncRows, $now, self::LEDGER_EVENTS_LIMIT),
+            self::buildAttendanceEvents($attendanceRows, $now),
+        );
 
         $activeClubs = $this->syncRecordRepository->countActiveClubsSince($since);
         $weeksPlayed = count($syncRows) * self::WEEKS_PER_SYNC;
@@ -151,7 +151,7 @@ class LiveTelemetryService
      * for why that carries no moderation risk).
      *
      * @param array<int, array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable, clubName: string}> $rows
-     * @return array<int, array{time: string, text: string}>
+     * @return array<int, array{time: string, text: string, at: \DateTimeImmutable}>
      */
     public static function buildEvents(array $rows, \DateTimeImmutable $now): array
     {
@@ -166,6 +166,7 @@ class LiveTelemetryService
             $events[] = [
                 'time' => self::relativeTime($row['createdAt'], $now),
                 'text' => $text,
+                'at'   => $row['createdAt'],
             ];
         }
 
@@ -183,7 +184,7 @@ class LiveTelemetryService
      * generated fiction) — see findValidPayloadsSince() for the row shape.
      *
      * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}> $syncRows
-     * @return array<int, array{time: string, text: string}>
+     * @return array<int, array{time: string, text: string, at: \DateTimeImmutable}>
      */
     public static function buildLedgerEvents(array $syncRows, \DateTimeImmutable $now, int $limit): array
     {
@@ -212,6 +213,7 @@ class LiveTelemetryService
             static fn (array $entry): array => [
                 'time' => self::relativeTime($entry['serverTimestamp'], $now),
                 'text' => sprintf('%s spent %s: %s', $entry['clubName'], LiveTelemetrySnapshot::formatPence(abs($entry['amountPence'])), $entry['description']),
+                'at'   => $entry['serverTimestamp'],
             ],
             array_slice($entries, 0, $limit),
         );
@@ -224,7 +226,7 @@ class LiveTelemetryService
      * here (curated name-options, not free text).
      *
      * @param array<int, array{clubName: string, fanCount: int, serverTimestamp: \DateTimeImmutable}> $rows
-     * @return array<int, array{time: string, text: string}>
+     * @return array<int, array{time: string, text: string, at: \DateTimeImmutable}>
      */
     public static function buildAttendanceEvents(array $rows, \DateTimeImmutable $now): array
     {
@@ -232,8 +234,32 @@ class LiveTelemetryService
             static fn (array $row): array => [
                 'time' => self::relativeTime($row['serverTimestamp'], $now),
                 'text' => sprintf('%s recorded attendance of %s!', $row['clubName'], number_format($row['fanCount'])),
+                'at'   => $row['serverTimestamp'],
             ],
             $rows,
+        );
+    }
+
+    /**
+     * Merges feed lines from all three sources into true descending-date order (newest
+     * first), rather than the source-grouped order plain concatenation would leave them
+     * in. Each source array is internally ordered by its own ranking (recency, or
+     * spend magnitude for ledger events) — this is what makes them appear grouped by
+     * type if just concatenated. Strips the 'at' sort key before returning, since
+     * recentEvents' persisted/rendered shape is {time, text} only.
+     *
+     * @param array<int, array{time: string, text: string, at: \DateTimeImmutable}> ...$eventLists
+     * @return array<int, array{time: string, text: string}>
+     */
+    public static function mergeEventsByRecency(array ...$eventLists): array
+    {
+        $events = array_merge(...$eventLists);
+
+        usort($events, static fn (array $a, array $b): int => $b['at'] <=> $a['at']);
+
+        return array_map(
+            static fn (array $event): array => ['time' => $event['time'], 'text' => $event['text']],
+            $events,
         );
     }
 
