@@ -10,6 +10,17 @@ use App\Enum\PlayingStyle;
  * re-validation of game rules — just enough of a structural check to reject a
  * malformed or spoofed payload before it's persisted (CLAUDE.md's "never trust
  * client JSON shape" pattern, same instinct as GameEventTemplate's JSON).
+ *
+ * `club`/`players`/`staff` are untyped arrays end-to-end (no nested DTOs), so any key
+ * not checked here still persists into the snapshot verbatim — this class is the only
+ * gate. As of the 2026 client expansion (club reputation/tier/stadiumName/kit colours/
+ * badgeShape; players[] name/dateOfBirth/age/nationality/potential/personality/morale/
+ * motivation/condition/squadRole; staff[] name/nationality/ability/specialisms/
+ * judgements), those new fields are DELIBERATELY left unchecked: the client's contract
+ * for them isn't confirmed yet, and unlike formation/playingStyle they must NOT 422 the
+ * whole registration on a malformed or unrecognized value. Don't "fix" this by adding
+ * tryFrom()-style rejection for them until the shapes are locked — see
+ * SnapshotValidatorTest's malformed-new-fields cases, which assert this on purpose.
  */
 class SnapshotValidator
 {

@@ -187,4 +187,95 @@ class SnapshotValidatorTest extends TestCase
 
         $this->assertNotEmpty(array_filter($violations, fn ($v) => str_contains($v, 'club.formation')));
     }
+
+    /**
+     * The 2026 client expansion — see SnapshotValidator's class doc comment. Both cases
+     * below (valid-shaped and deliberately malformed) must produce zero violations: these
+     * fields have no confirmed contract yet and must not 422 the registration.
+     */
+    private function clubWithNewFields(): array
+    {
+        return [
+            'id'             => 'club-1',
+            'name'           => 'Test FC',
+            'reputation'     => 42,
+            'tier'           => 'regional',
+            'stadiumName'    => 'Test Arena',
+            'homePrimary'    => '#E53935',
+            'homeSecondary'  => '#FFFFFF',
+            'awayPrimary'    => '#000000',
+            'awaySecondary'  => '#CCCCCC',
+            'badgeShape'     => 'shield',
+        ];
+    }
+
+    private function playerWithNewFields(string $id): array
+    {
+        return [
+            'id'          => $id,
+            'position'    => 'MID',
+            'currentAbility' => 10,
+            'name'        => 'Test Player',
+            'dateOfBirth' => '2010-01-01',
+            'age'         => 16,
+            'nationality' => 'Testland',
+            'potential'   => 80,
+            'personality' => [
+                'determination' => 15, 'professionalism' => 10, 'ambition' => 12,
+                'loyalty' => 8, 'adaptability' => 14, 'pressure' => 9,
+                'temperament' => 11, 'consistency' => 13,
+            ],
+            'morale'      => 60,
+            'motivation'  => 70,
+            'condition'   => 90,
+            'squadRole'   => 'first_team',
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function validPlayersWithNewFields(): array
+    {
+        $players = [];
+        for ($i = 0; $i < 11; $i++) {
+            $players[] = $this->playerWithNewFields("p$i");
+        }
+
+        return $players;
+    }
+
+    public function testAcceptsNewClubPlayerAndStaffFieldsWhenValidShaped(): void
+    {
+        $violations = $this->validator->validate(
+            $this->clubWithNewFields(),
+            $this->validPlayersWithNewFields(),
+            [
+                ['id' => 'staff-1', 'role' => 'COACH', 'name' => 'Coach Name', 'nationality' => 'Testland', 'ability' => 70, 'specialisms' => ['pace' => 80]],
+                ['id' => 'staff-2', 'role' => 'SCOUT', 'name' => 'Scout Name', 'nationality' => 'Testland', 'ability' => 65, 'judgements' => ['potential' => 75]],
+            ],
+            'club-1',
+        );
+
+        $this->assertSame([], $violations);
+    }
+
+    public function testDoesNotRejectMalformedOrUnrecognizedNewFields(): void
+    {
+        $club = $this->clubWithNewFields();
+        $club['tier']       = 'ultra'; // not one of the client's documented tiers
+        $club['reputation'] = 'lots'; // wrong type
+        $club['badgeShape'] = 'not-a-shape';
+
+        $players    = $this->validPlayersWithNewFields();
+        $players[0]['potential']   = 999; // out of 0-100 range
+        $players[0]['squadRole']   = 'goat'; // unrecognized
+        $players[0]['personality'] = 'not-an-object'; // wrong type
+
+        $staff = [
+            ['id' => 'staff-1', 'role' => 'COACH', 'ability' => 'n/a'], // wrong type
+        ];
+
+        $violations = $this->validator->validate($club, $players, $staff, 'club-1');
+
+        $this->assertSame([], $violations);
+    }
 }
