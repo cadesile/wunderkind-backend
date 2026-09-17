@@ -99,6 +99,10 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
 
         $this->assertStringContainsString('4-3-3', $crawler->text());
         $this->assertStringContainsString('"currentAbility": 65', $crawler->text());
+
+        // ActiveCompetition::__toString() — without it, the "Competition" AssociationField
+        // falls back to an opaque "ActiveCompetition #<uuid>" label instead of the real name.
+        $this->assertStringContainsString('Snapshot Admin Cup', $crawler->text());
     }
 
     public function testEditNewAndDeleteActionsAreDisabled(): void

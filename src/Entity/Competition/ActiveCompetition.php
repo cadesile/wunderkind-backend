@@ -108,4 +108,9 @@ class ActiveCompetition
     public function setCancellationReason(?string $cancellationReason): static { $this->cancellationReason = $cancellationReason; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public function __toString(): string
+    {
+        return sprintf('%s (%s)', $this->template->getName(), $this->status->value);
+    }
 }

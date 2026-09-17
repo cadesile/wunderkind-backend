@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Competition\ActiveCompetition;
 use App\Enum\Competition\ActiveCompetitionStatus;
+use App\Enum\Competition\CompetitionDuration;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -48,7 +49,9 @@ class ActiveCompetitionCrudController extends AbstractCrudController
             ->setFormTypeOptions(['class' => ActiveCompetitionStatus::class]);
 
         yield IntegerField::new('entrantCapacity');
-        yield TextField::new('durationOption');
+        yield ChoiceField::new('durationOption', 'Duration')
+            ->setFormType(EnumType::class)
+            ->setFormTypeOptions(['class' => CompetitionDuration::class]);
 
         yield DateTimeField::new('registrationOpenedAt');
         yield DateTimeField::new('lockedAt')->hideOnIndex();
