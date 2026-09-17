@@ -16,20 +16,15 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /**
- * Without __toString(), AssociationField::new('activeCompetition') on this controller's
- * detail page falls back to an opaque "ActiveCompetition #<uuid>" label instead of the
- * competition's actual name — this asserts the real name renders instead. This
- * controller does not itself crash on a missing __toString() (EasyAdmin's association
- * renderer degrades gracefully); the real crash class — an entity used in an
- * AssociationField needing __toString(), per CLAUDE.md — surfaces via
- * ActiveCompetition's own durationOption field instead, covered by
- * tests/Controller/Admin/ActiveCompetitionCrudPageTest.php.
+ * The read-only "view club snapshots" admin — renders the index (summary columns derived
+ * from snapshotJson) and detail (full pretty-printed JSON via CodeEditorField bound to the
+ * virtual snapshotJsonPretty property) pages against a real persisted entrant, since this
+ * repo has caught real EasyAdmin rendering bugs (missing __toString, missing constructor
+ * defaults) only by actually loading the pages, not by code review alone.
  */
 class CompetitionEntrantCrudPageTest extends WebTestCase
 {
     private const TEST_ADMIN_EMAIL = 'competition-entrant-crud-test-admin@example.com';
-    private const TEST_USER_EMAIL  = 'competition-entrant-crud-test-user@example.com';
-    private const SLUG             = 'crud-page-probe-entrant-cup';
 
     private function loginAsAdmin(KernelBrowser $client): void
     {
@@ -46,60 +41,81 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
         $client->loginUser($admin, 'admin');
     }
 
-    private function removeFixtures(EntityManagerInterface $em): void
+    private function seedEntrant(EntityManagerInterface $em): CompetitionEntrant
     {
-        $template = $em->getRepository(CompetitionTemplate::class)->findOneBy(['slug' => self::SLUG]);
-        if ($template !== null) {
-            foreach ($em->getRepository(ActiveCompetition::class)->findBy(['template' => $template]) as $instance) {
-                foreach ($em->getRepository(CompetitionEntrant::class)->findBy(['activeCompetition' => $instance]) as $entrant) {
-                    $em->remove($entrant);
-                }
-                $em->remove($instance);
-            }
-            $em->remove($template);
-        }
-
-        $user = $em->getRepository(User::class)->findOneBy(['email' => self::TEST_USER_EMAIL]);
-        if ($user !== null) {
-            foreach ($em->getRepository(Club::class)->findBy(['user' => $user]) as $club) {
-                $em->remove($club);
-            }
-            $em->remove($user);
-        }
-
-        $em->flush();
-    }
-
-    public function testDetailPageRendersTheAssociatedActiveCompetitionWithoutCrashing(): void
-    {
-        $client = static::createClient();
-        $this->loginAsAdmin($client);
-        $em = self::getContainer()->get(EntityManagerInterface::class);
-        $this->removeFixtures($em);
-
-        $user = new User(self::TEST_USER_EMAIL);
-        $user->setPassword('not-used-for-login-here');
-        $em->persist($user);
-
-        $club = new Club('Crud Page Probe Entrant Club', $user);
-        $em->persist($club);
-
-        $template = new CompetitionTemplate('Crud Page Probe Entrant Cup', self::SLUG, 8, CompetitionDuration::ONE_DAY);
+        $template = new CompetitionTemplate('Snapshot Admin Cup', 'snapshot-admin-cup-' . uniqid('', true), 8, CompetitionDuration::ONE_DAY);
         $em->persist($template);
 
         $instance = new ActiveCompetition($template);
         $em->persist($instance);
 
-        $entrant = new CompetitionEntrant($instance, $club, 1, ['club' => ['formation' => '4-4-2'], 'players' => []]);
+        $user = new User('snapshot-admin-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $club = new Club('Snapshot FC', $user);
+        $em->persist($user);
+        $em->persist($club);
+
+        $players = [];
+        for ($i = 0; $i < 11; $i++) {
+            $players[] = ['id' => "p$i", 'position' => 'MID', 'currentAbility' => 65];
+        }
+
+        $entrant = new CompetitionEntrant($instance, $club, 1, [
+            'club'    => ['id' => (string) $club->getId(), 'name' => 'Snapshot FC', 'formation' => '4-3-3', 'playingStyle' => 'HIGH_PRESS'],
+            'players' => $players,
+            'staff'   => [['id' => 's1', 'role' => 'MANAGER']],
+        ]);
         $em->persist($entrant);
         $em->flush();
 
-        $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
+        return $entrant;
+    }
 
+    public function testIndexPageRendersWithSnapshotSummaryColumns(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $this->seedEntrant($em);
+
+        $crawler = $client->request('GET', '/admin/competition-entrant');
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'Crud Page Probe Entrant Cup');
-        self::assertSelectorTextContains('body', 'Crud Page Probe Entrant Club');
 
-        $this->removeFixtures($em);
+        $this->assertStringContainsString('Snapshot FC', $crawler->text());
+        $this->assertStringContainsString('HIGH_PRESS', $crawler->text());
+    }
+
+    public function testDetailPageRendersFullSnapshotJson(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em      = self::getContainer()->get(EntityManagerInterface::class);
+        $entrant = $this->seedEntrant($em);
+
+        $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId() . '/edit');
+        // EDIT is disabled entirely, but EasyAdmin still exposes the detail route.
+        $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
+        self::assertResponseIsSuccessful();
+
+        $this->assertStringContainsString('4-3-3', $crawler->text());
+        $this->assertStringContainsString('"currentAbility": 65', $crawler->text());
+
+        // ActiveCompetition::__toString() — without it, the "Competition" AssociationField
+        // falls back to an opaque "ActiveCompetition #<uuid>" label instead of the real name.
+        $this->assertStringContainsString('Snapshot Admin Cup', $crawler->text());
+    }
+
+    public function testEditNewAndDeleteActionsAreDisabled(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em      = self::getContainer()->get(EntityManagerInterface::class);
+        $entrant = $this->seedEntrant($em);
+
+        $client->request('GET', '/admin/competition-entrant/new');
+        self::assertResponseStatusCodeSame(403, 'NEW must be disabled — entrants are never hand-created.');
+
+        $client->request('GET', '/admin/competition-entrant/' . $entrant->getId() . '/edit');
+        self::assertResponseStatusCodeSame(403, 'EDIT must be disabled — snapshots are never hand-edited.');
     }
 }
