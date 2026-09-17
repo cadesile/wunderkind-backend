@@ -1,0 +1,239 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    {# ── Header ─────────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Telemetry Config</h5>
+        <p class="text-muted small mb-0">
+            The landing page's "Chairman's Terminal" widget reads a single cached
+            <code>LiveTelemetrySnapshot</code> row, refreshed on a cron schedule
+            (<code>app:telemetry:generate</code>). Rebuild it on demand below, or expand
+            a source to see exactly what raw data feeds each number on the widget.
+        </p>
+    </div>
+
+    {# ── Current snapshot ──────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-tower-broadcast text-muted"></i>
+                <span class="fw-semibold small">Current Snapshot</span>
+                <span class="ms-auto badge bg-secondary">
+                    Refreshed {{ snapshot.generatedAt|date('Y-m-d H:i') }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-6 col-md-2">
+                        <div class="fw-bold fs-5">{{ snapshot.fixturesSimulated|number_format }}</div>
+                        <div class="text-muted small">Fixtures Simulated</div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="fw-bold fs-5 text-success">{{ snapshot.getCapitalDeployedFormatted() }}</div>
+                        <div class="text-muted small">Capital Deployed</div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="fw-bold fs-5">{{ snapshot.getResultsFormatted() }}</div>
+                        <div class="text-muted small">Results W/D/L</div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="fw-bold fs-5">{{ snapshot.activeClubs|number_format }}</div>
+                        <div class="text-muted small">Active Clubs</div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="fw-bold fs-5">{{ snapshot.weeksPlayed|number_format }}</div>
+                        <div class="text-muted small">Weeks Played</div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="fw-bold fs-5">{{ snapshot.recentEvents|length }}</div>
+                        <div class="text-muted small">Feed Events</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent d-flex align-items-center gap-2">
+                <form method="POST" action="{{ path('admin_telemetry_rebuild') }}" class="d-inline"
+                      onsubmit="return confirmAction(this, 'Rebuild the telemetry snapshot now? This recomputes every figure from the last 24h of sync data.')">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('rebuild_telemetry') }}">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fa fa-rotate me-1"></i> Rebuild Snapshot
+                    </button>
+                </form>
+                <span class="text-muted small">Same operation the cron job runs — safe to trigger manually at any time.</span>
+            </div>
+        </div>
+    </div>
+
+    {# ── Raw data uses ─────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-database text-muted"></i>
+                <span class="fw-semibold small">Raw Data Uses</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="accordion accordion-flush" id="telemetryRawDataAccordion">
+
+                    {# 1. Ledger / transfer spend ────────────────────────── #}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed small fw-semibold" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#rawUse1">
+                                Capital Deployed &amp; W/D/L — <code class="mx-1">SyncRecord.payload</code> (last 24h, valid syncs only)
+                            </button>
+                        </h2>
+                        <div id="rawUse1" class="accordion-collapse collapse">
+                            <div class="accordion-body small">
+                                <p class="text-muted">
+                                    <code>SyncRecordRepository::findValidPayloadsSince()</code> pulls every valid
+                                    sync in the last 24 hours; <code>LiveTelemetryService::aggregate()</code> tallies
+                                    three sub-fields of each payload:
+                                </p>
+                                <table class="table table-sm mb-0">
+                                    <thead class="table-light">
+                                        <tr><th>Payload field</th><th>Used for</th><th>Rule</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><code>form[]</code></td>
+                                            <td>Fixtures Simulated, Results W/D/L</td>
+                                            <td>Each <code>W</code>/<code>D</code>/<code>L</code> entry tallied directly — no delta vs. the prior sync.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>ledger[].amount</code></td>
+                                            <td>Capital Deployed</td>
+                                            <td><code>|amount|</code> summed for <code>category</code> in <code>upkeep</code>/<code>wages</code> only (excludes revenue categories).</td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>transfers[].grossFee</code></td>
+                                            <td>Capital Deployed</td>
+                                            <td>Summed for <code>type</code> in <code>signing</code>/<code>agent_assisted</code> only (excludes <code>sale</code> and other outgoing types).</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# 2. Pyramid events ─────────────────────────────────── #}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed small fw-semibold" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#rawUse2">
+                                Feed: promotion / relegation / title lines — <code class="mx-1">SeasonRecord</code> (last 7 days)
+                            </button>
+                        </h2>
+                        <div id="rawUse2" class="accordion-collapse collapse">
+                            <div class="accordion-body small">
+                                <p class="text-muted mb-1">
+                                    <code>SeasonRecordRepository::findRecentPyramidEvents()</code> selects rows where
+                                    <code>promoted = true</code>, <code>relegated = true</code>, or <code>finalPosition = 1</code>,
+                                    joined to the real club name. <code>LiveTelemetryService::describeOutcome()</code> then
+                                    renders one line per row (title takes priority over promotion for the same row).
+                                </p>
+                                <p class="text-muted mb-0">
+                                    Names the real club — safe because club names come from a curated,
+                                    server-generated set of options, not free text.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# 3. Ledger spend feed lines ─────────────────────────── #}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed small fw-semibold" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#rawUse3">
+                                Feed: high-cost spend lines — <code class="mx-1">SyncRecord.payload.ledger[]</code> (last 24h)
+                            </button>
+                        </h2>
+                        <div id="rawUse3" class="accordion-collapse collapse">
+                            <div class="accordion-body small">
+                                <p class="text-muted mb-0">
+                                    From the same 24h sync batch above, <code>LiveTelemetryService::buildLedgerEvents()</code>
+                                    ranks every negative-amount <code>ledger[]</code> entry with a non-empty description by
+                                    magnitude (regardless of category, so a one-off cost naturally outranks routine payroll),
+                                    keeps the top 5, and renders <code>"{club} spent {amount}: {description}"</code> — the
+                                    description is client-generated narrative text and may name a player.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# 4. Attendance feed lines ───────────────────────────── #}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed small fw-semibold" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#rawUse4">
+                                Feed: attendance records — <code class="mx-1">SyncRecord.payload.attendance</code> (last 24h)
+                            </button>
+                        </h2>
+                        <div id="rawUse4" class="accordion-collapse collapse">
+                            <div class="accordion-body small">
+                                <p class="text-muted mb-0">
+                                    <code>SyncRecordRepository::findTopAttendanceSince()</code> ranks valid syncs by
+                                    <code>payload.attendance.fanCount</code> and keeps the top 5, joined to the real club
+                                    name — rendered as <code>"{club} recorded attendance of {fanCount}!"</code>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# 5. Active clubs / weeks played ─────────────────────── #}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed small fw-semibold" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#rawUse5">
+                                Footer: Active Clubs &amp; Weeks Played — <code class="mx-1">SyncRecord</code> (last 24h)
+                            </button>
+                        </h2>
+                        <div id="rawUse5" class="accordion-collapse collapse">
+                            <div class="accordion-body small">
+                                <p class="text-muted mb-1">
+                                    <strong>Active Clubs</strong> — <code>SyncRecordRepository::countActiveClubsSince()</code>:
+                                    count of <em>distinct</em> clubs with a valid sync in the last 24h (same definition the
+                                    admin dashboard's "Active Clubs" KPI uses).
+                                </p>
+                                <p class="text-muted mb-0">
+                                    <strong>Weeks Played</strong> — <code>count(syncRows) &times; 4</code>: each sync
+                                    represents roughly 4 on-device weekly ticks. An approximation, not a true
+                                    weeks-elapsed count.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# 6. Merge / ordering ────────────────────────────────── #}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed small fw-semibold" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#rawUse6">
+                                Feed ordering — how the three sources above are combined
+                            </button>
+                        </h2>
+                        <div id="rawUse6" class="accordion-collapse collapse">
+                            <div class="accordion-body small">
+                                <p class="text-muted mb-0">
+                                    <code>LiveTelemetryService::mergeEventsByRecency()</code> merges the pyramid,
+                                    ledger-spend, and attendance lines and sorts the combined list by each line's real
+                                    timestamp, newest first — so the widget shows one true chronological feed rather
+                                    than the three sources grouped by type.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function confirmAction(form, message) {
+    return confirm(message);
+}
+</script>
+{% endblock %}
