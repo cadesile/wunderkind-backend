@@ -247,4 +247,31 @@ class LiveTelemetryServiceTest extends TestCase
         $this->assertSame('Stoke-on-Trent City recorded attendance of 32,776!', $events[0]['text']);
         $this->assertSame('10m ago', $events[0]['time']);
     }
+
+    public function testMergeEventsByRecencyInterleavesSourcesByDateInsteadOfGroupingByType(): void
+    {
+        $now = new \DateTimeImmutable();
+
+        $pyramidEvents = LiveTelemetryService::buildEvents([
+            ['tier' => 2, 'promoted' => true, 'relegated' => false, 'finalPosition' => 3, 'createdAt' => $now->modify('-3 hours'), 'clubName' => 'Pyramid Club'],
+        ], $now);
+
+        $ledgerEvents = LiveTelemetryService::buildLedgerEvents([
+            ['serverTimestamp' => $now->modify('-1 hour'), 'clubName' => 'Ledger Club', 'payload' => ['ledger' => [
+                ['category' => 'wages', 'amount' => -500, 'description' => 'Week 1 payroll'],
+            ]]],
+        ], $now, 5);
+
+        $attendanceEvents = LiveTelemetryService::buildAttendanceEvents([
+            ['clubName' => 'Attendance Club', 'fanCount' => 1000, 'serverTimestamp' => $now->modify('-5 hours')],
+        ], $now);
+
+        $merged = LiveTelemetryService::mergeEventsByRecency($pyramidEvents, $ledgerEvents, $attendanceEvents);
+
+        $this->assertSame([
+            ['time' => '1h ago', 'text' => 'Ledger Club spent £5: Week 1 payroll'],
+            ['time' => '3h ago', 'text' => 'Pyramid Club won promotion from Tier 2.'],
+            ['time' => '5h ago', 'text' => 'Attendance Club recorded attendance of 1,000!'],
+        ], $merged);
+    }
 }
