@@ -90,4 +90,9 @@ class CompetitionRound
 
     public function getLockedForProcessingAt(): ?\DateTimeImmutable { return $this->lockedForProcessingAt; }
     public function setLockedForProcessingAt(?\DateTimeImmutable $lockedForProcessingAt): static { $this->lockedForProcessingAt = $lockedForProcessingAt; return $this; }
+
+    public function __toString(): string
+    {
+        return sprintf('%s — %s', $this->activeCompetition->getTemplate()->getName(), $this->label);
+    }
 }

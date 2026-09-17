@@ -72,4 +72,30 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $this->removeFixtures($em);
     }
+
+    /**
+     * Same root cause, different EasyAdmin template — the detail page (crud/detail.html.twig)
+     * renders the same configureFields() output as the index page and crashed on
+     * durationOption exactly the same way before the fix.
+     */
+    public function testDetailPageRendersAnInstanceWithoutCrashingOnTheDurationEnum(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $this->removeFixtures($em);
+
+        $template = new CompetitionTemplate('Crud Page Probe Active Cup', self::SLUG, 8, CompetitionDuration::ONE_DAY);
+        $em->persist($template);
+        $instance = new ActiveCompetition($template);
+        $em->persist($instance);
+        $em->flush();
+
+        $client->request('GET', '/admin/active-competition/' . $instance->getId());
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('body', CompetitionDuration::ONE_DAY->name);
+
+        $this->removeFixtures($em);
+    }
 }
