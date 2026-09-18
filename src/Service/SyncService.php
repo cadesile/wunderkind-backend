@@ -104,6 +104,11 @@ class SyncService
                     'description' => $e->description,
                 ], $request->ledger),
                 'attendance'          => $request->attendance,
+                // Archival only — no structured storage/processing yet (see SyncRequest).
+                'fixtures'            => $request->fixtures,
+                'relationships'       => $request->relationships,
+                'promises'            => $request->promises,
+                'excursions'          => $request->excursions,
             ],
         );
         if ($request->log !== null) {
