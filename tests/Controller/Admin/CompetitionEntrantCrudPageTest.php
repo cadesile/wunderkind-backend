@@ -10,7 +10,9 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
+use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
+use App\Repository\Competition\CompetitionEntrantRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -117,5 +119,59 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
 
         $client->request('GET', '/admin/competition-entrant/' . $entrant->getId() . '/edit');
         self::assertResponseStatusCodeSame(403, 'EDIT must be disabled — snapshots are never hand-edited.');
+    }
+
+    public function testGenerateSpoofEntrantsFillsCompetitionAndTagsSpoofClubs(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em      = self::getContainer()->get(EntityManagerInterface::class);
+        $entrant = $this->seedEntrant($em);
+
+        $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
+        self::assertResponseIsSuccessful();
+
+        $link = $crawler->selectLink('Generate Spoof Entrants')->link();
+        $crawler = $client->click($link);
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString('slot', $crawler->text());
+
+        $form = $crawler->selectButton('Generate')->form();
+        $form['count'] = 7; // capacity 8, one real entrant already registered — 7 remain
+
+        $client->submit($form);
+        self::assertResponseRedirects();
+        $client->followRedirect();
+        self::assertResponseIsSuccessful();
+
+        // Re-fetch via the (possibly rebooted) container's own EntityManager rather than
+        // refreshing the original $em/$activeCompetition instance — each client request can
+        // reboot the kernel, detaching entities fetched before it.
+        $freshEm           = self::getContainer()->get(EntityManagerInterface::class);
+        $activeCompetition = $freshEm->find(ActiveCompetition::class, $entrant->getActiveCompetition()->getId());
+        self::assertSame(ActiveCompetitionStatus::SCHEDULED, $activeCompetition->getStatus());
+
+        $entrantRepository = self::getContainer()->get(CompetitionEntrantRepository::class);
+        self::assertSame(8, $entrantRepository->countForCompetition($activeCompetition));
+
+        $indexCrawler = $client->request('GET', '/admin/competition-entrant?filters[activeCompetition][value]=' . $activeCompetition->getId());
+        self::assertResponseIsSuccessful();
+        // 7 spoof clubs plus the 1 real (non-spoof) entrant should render on the index.
+        $this->assertStringNotContainsString('This competition is no longer', $indexCrawler->text());
+    }
+
+    public function testGenerateSpoofEntrantsIsUnavailableOnceCompetitionIsLocked(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em      = self::getContainer()->get(EntityManagerInterface::class);
+        $entrant = $this->seedEntrant($em);
+
+        $entrant->getActiveCompetition()->setStatus(ActiveCompetitionStatus::SCHEDULED);
+        $em->flush();
+
+        $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
+        self::assertResponseIsSuccessful();
+        $this->assertStringNotContainsString('Generate Spoof Entrants', $crawler->text());
     }
 }

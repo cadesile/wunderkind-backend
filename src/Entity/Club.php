@@ -149,6 +149,10 @@ class Club
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $totalSeasonAttendance = 0;
 
+    /** True for admin-generated spoof clubs (see CompetitionSpoofEntrantService) — never set by real client flows. */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isSpoof = false;
+
     public function __construct(string $name, User $user)
     {
         $this->id                 = new UuidV7();
@@ -244,6 +248,9 @@ class Club
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
     public function getUser(): User { return $this->user; }
+
+    public function isSpoof(): bool { return $this->isSpoof; }
+    public function setSpoof(bool $isSpoof): void { $this->isSpoof = $isSpoof; }
 
     public function getTransfers(): Collection { return $this->transfers; }
     public function getSyncRecords(): Collection { return $this->syncRecords; }
