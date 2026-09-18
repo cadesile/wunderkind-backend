@@ -5,9 +5,11 @@ namespace App\Controller\Admin;
 use App\Entity\Competition\ActiveCompetition;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
+use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
+use App\Service\Competition\CompetitionSpoofEntrantService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -20,7 +22,9 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Read-only "monitor active running competitions" view. Every action is disabled
@@ -33,6 +37,15 @@ use Symfony\Component\HttpFoundation\Response;
  * controllers (CompetitionRoundCrudController's docblock already flags that as
  * deliberately avoided, to not over-build admin surface for entities that are never
  * hand-edited).
+ *
+ * The one deliberate exception to "never hand-edited" is "Generate Spoof Entrants": an
+ * admin test-data tool that clones an existing real entrant's snapshot into N new spoof
+ * entrants in the same competition (see
+ * CompetitionSpoofEntrantService::generateSpoofEntrantsForCompetition()). It lives here,
+ * on the competition row/detail page, rather than on CompetitionEntrantCrudController —
+ * spoofing is something you do TO a competition to fill it, even though the clone basis
+ * happens to be one of its entrants. Only offered while REGISTERING and once at least one
+ * real entrant already exists to use as a basis.
  */
 class ActiveCompetitionCrudController extends AbstractCrudController
 {
@@ -40,6 +53,7 @@ class ActiveCompetitionCrudController extends AbstractCrudController
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
         private readonly CompetitionResultRepository $resultRepository,
+        private readonly CompetitionEntrantRepository $entrantRepository,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -66,11 +80,19 @@ class ActiveCompetitionCrudController extends AbstractCrudController
 
         $resultsByFixtureId = $this->resultRepository->findByFixtureIds($allFixtureIds);
 
+        $canGenerateSpoof = $competition->getStatus() === ActiveCompetitionStatus::REGISTERING
+            && $this->entrantRepository->countForCompetition($competition) > 0;
+
         return $this->render('admin/competition/active_competition_detail.html.twig', [
-            'competition'         => $competition,
-            'rounds'              => $rounds,
-            'fixturesByRoundId'   => $fixturesByRoundId,
-            'resultsByFixtureId'  => $resultsByFixtureId,
+            'competition'        => $competition,
+            'rounds'             => $rounds,
+            'fixturesByRoundId'  => $fixturesByRoundId,
+            'resultsByFixtureId' => $resultsByFixtureId,
+            'canGenerateSpoof'   => $canGenerateSpoof,
+            'generateSpoofUrl'   => $this->generateUrl('admin', [
+                'routeName'   => 'admin_active_competition_generate_spoof',
+                'routeParams' => ['activeCompetition' => (string) $competition->getId()],
+            ]),
         ]);
     }
 
@@ -81,7 +103,18 @@ class ActiveCompetitionCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        $generateSpoof = Action::new('generateSpoof', 'Generate Spoof Entrants', 'fa fa-clone')
+            ->linkToUrl(fn (ActiveCompetition $competition) => $this->generateUrl('admin', [
+                'routeName'   => 'admin_active_competition_generate_spoof',
+                'routeParams' => ['activeCompetition' => (string) $competition->getId()],
+            ]))
+            ->displayIf(fn (ActiveCompetition $competition) => $competition->getStatus() === ActiveCompetitionStatus::REGISTERING
+                && $this->entrantRepository->countForCompetition($competition) > 0);
+
+        return $actions
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->add(Crud::PAGE_INDEX, $generateSpoof)
+            ->add(Crud::PAGE_DETAIL, $generateSpoof);
     }
 
     public function configureFields(string $pageName): iterable
@@ -106,5 +139,61 @@ class ActiveCompetitionCrudController extends AbstractCrudController
         yield DateTimeField::new('cancelledAt')->hideOnIndex();
         yield TextField::new('cancellationReason')->hideOnIndex();
         yield DateTimeField::new('createdAt')->hideOnForm();
+    }
+
+    #[Route('/admin/active-competition/{activeCompetition}/generate-spoof', name: 'admin_active_competition_generate_spoof', methods: ['GET', 'POST'])]
+    public function generateSpoofEntrants(ActiveCompetition $activeCompetition, Request $request, CompetitionSpoofEntrantService $service): Response
+    {
+        // admin_active_competition_detail is one of EasyAdmin's own pretty CRUD routes
+        // (already wired to build the full crud/entity context on a direct match) — unlike
+        // this action's own route, it must NOT go through the /admin?routeName=... forwarding
+        // trick, which is only for routes EasyAdmin doesn't already know how to contextualise.
+        $detailUrl = $this->generateUrl('admin_active_competition_detail', ['entityId' => (string) $activeCompetition->getId()]);
+
+        if ($activeCompetition->getStatus() !== ActiveCompetitionStatus::REGISTERING) {
+            $this->addFlash('danger', 'This competition is no longer accepting registrations.');
+            return $this->redirect($detailUrl);
+        }
+
+        if ($this->entrantRepository->countForCompetition($activeCompetition) === 0) {
+            $this->addFlash('danger', 'This competition has no registered entrants yet to use as a spoof basis.');
+            return $this->redirect($detailUrl);
+        }
+
+        if ($request->isMethod('POST')) {
+            if (!$this->isCsrfTokenValid('generate_spoof_entrants', $request->request->get('_token'))) {
+                $this->addFlash('danger', 'Invalid CSRF token.');
+                return $this->redirect($detailUrl);
+            }
+
+            $count  = max(1, (int) $request->request->get('count', 1));
+            $result = $service->generateSpoofEntrantsForCompetition($activeCompetition, $count);
+            $made   = count($result['created']);
+
+            if ($made < $result['requested']) {
+                $this->addFlash('warning', sprintf(
+                    'Created %d of %d spoof entrants — competition filled and locked.',
+                    $made,
+                    $result['requested'],
+                ));
+            } else {
+                $this->addFlash('success', sprintf('Created %d spoof entrant%s.', $made, $made === 1 ? '' : 's'));
+            }
+
+            return $this->redirect($detailUrl);
+        }
+
+        $remaining = $activeCompetition->getEntrantCapacity() - $this->entrantRepository->countForCompetition($activeCompetition);
+        $actionUrl = $this->generateUrl('admin', [
+            'routeName'   => 'admin_active_competition_generate_spoof',
+            'routeParams' => ['activeCompetition' => (string) $activeCompetition->getId()],
+        ]);
+
+        return $this->render('admin/competition/generate_spoof_entrants.html.twig', [
+            'competition' => $activeCompetition,
+            'remaining'   => max(0, $remaining),
+            'actionUrl'   => $actionUrl,
+            'detailUrl'   => $detailUrl,
+        ]);
     }
 }

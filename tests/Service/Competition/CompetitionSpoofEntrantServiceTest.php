@@ -131,4 +131,32 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
         $this->expectException(\RuntimeException::class);
         $this->spoofService->generateSpoofEntrants($source, 1);
     }
+
+    public function testGenerateSpoofEntrantsForCompetitionUsesEarliestEntrantAsBasis(): void
+    {
+        $source            = $this->seedRealEntrant(capacity: 8);
+        $activeCompetition = $source->getActiveCompetition();
+
+        $result = $this->spoofService->generateSpoofEntrantsForCompetition($activeCompetition, 3);
+
+        self::assertCount(3, $result['created']);
+        foreach ($result['created'] as $entrant) {
+            self::assertTrue($entrant->getClub()->isSpoof());
+            self::assertNotSame('Real FC', $entrant->getClub()->getName());
+            // country carried through from the earliest entrant's snapshot (the resolved basis).
+            self::assertSame('EN', $entrant->getSnapshotJson()['club']['country']);
+        }
+    }
+
+    public function testGenerateSpoofEntrantsForCompetitionThrowsWithNoEntrantsYet(): void
+    {
+        $template = new CompetitionTemplate('Empty Spoof Cup', 'empty-spoof-cup-' . uniqid('', true), 8, CompetitionDuration::ONE_DAY);
+        $this->em->persist($template);
+        $activeCompetition = new ActiveCompetition($template);
+        $this->em->persist($activeCompetition);
+        $this->em->flush();
+
+        $this->expectException(\RuntimeException::class);
+        $this->spoofService->generateSpoofEntrantsForCompetition($activeCompetition, 1);
+    }
 }

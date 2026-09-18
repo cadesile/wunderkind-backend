@@ -3,6 +3,7 @@
 namespace App\Service\Competition;
 
 use App\Entity\Club;
+use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
@@ -38,6 +39,25 @@ class CompetitionSpoofEntrantService
         private readonly NameGeneratorService $nameGenerator,
         private readonly UserPasswordHasherInterface $passwordHasher,
     ) {}
+
+    /**
+     * Admin entry point from the ActiveCompetition row/detail page — the trigger lives on
+     * the competition, not on any one entrant, so the earliest-registered real entrant is
+     * used as the clone basis automatically. Spoofing is only possible once the
+     * competition has at least one registered entrant to use as a basis.
+     *
+     * @return array{created: list<CompetitionEntrant>, requested: int}
+     */
+    public function generateSpoofEntrantsForCompetition(ActiveCompetition $activeCompetition, int $count): array
+    {
+        $sourceEntrant = $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition)[0] ?? null;
+
+        if ($sourceEntrant === null) {
+            throw new \RuntimeException('This competition has no registered entrants yet to use as a spoof basis.');
+        }
+
+        return $this->generateSpoofEntrants($sourceEntrant, $count);
+    }
 
     /**
      * @return array{created: list<CompetitionEntrant>, requested: int}
