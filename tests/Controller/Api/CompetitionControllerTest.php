@@ -396,4 +396,59 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(200);
         $this->assertStringNotContainsString('potential', $this->client->getResponse()->getContent());
     }
+
+    /**
+     * Regression test: show() used to hardcode 'result' => null for every fixture
+     * regardless of whether CompetitionRoundProcessorService had already produced a
+     * CompetitionResult — round 1 would complete and advance a winner into round 2, but
+     * the client-facing bracket view still showed "result not yet available" for it
+     * forever. Fixed by batch-fetching CompetitionResult rows in show().
+     */
+    public function testShowIncludesResultsOnceRoundsAreProcessed(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+
+        $clubs = [
+            $this->createClub('Alpha FC'),
+            $this->createClub('Bravo FC'),
+            $this->createClub('Charlie FC'),
+            $this->createClub('Delta FC'),
+        ];
+
+        foreach ($clubs as $club) {
+            $this->login($club);
+            $this->authenticatedRequest(
+                'POST',
+                "/api/competitions/{$instance->getId()}/register",
+                json_encode($this->validSnapshotPayload((string) $club->getId(), $club->getName())),
+            );
+            $this->assertResponseStatusCodeSame(201);
+        }
+
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+
+        // Backdate round 1 so it's due, then run the same processor the cron command runs.
+        $round1 = $this->em->getRepository(\App\Entity\Competition\CompetitionRound::class)
+            ->findByCompetitionOrderedByIndex($instance)[0];
+        $round1->setScheduledAt(new \DateTimeImmutable('-1 minute'));
+        $this->em->flush();
+
+        $processor = self::getContainer()->get(\App\Service\Competition\CompetitionRoundProcessorService::class);
+        $processed = $processor->processDueRounds(new \DateTimeImmutable());
+        $this->assertGreaterThan(0, $processed, 'Round 1 should be due and processed.');
+
+        $this->client->request('GET', "/api/competitions/{$instance->getId()}");
+        $this->assertResponseStatusCodeSame(200);
+        $body = $this->responseJson();
+
+        $round1Fixtures = $body['rounds'][0]['fixtures'];
+        $this->assertNotEmpty($round1Fixtures);
+        foreach ($round1Fixtures as $fixture) {
+            $this->assertSame('complete', strtolower($fixture['status']));
+            $this->assertNotNull($fixture['result'], 'A completed fixture must expose its result, not null.');
+            $this->assertIsInt($fixture['result']['homeScore']);
+            $this->assertIsInt($fixture['result']['awayScore']);
+        }
+    }
 }
