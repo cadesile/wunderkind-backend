@@ -1309,6 +1309,35 @@ class NpcClubGenerationService
         return [$name, $place];
     }
 
+    /**
+     * Public one-off club name generator — same place+suffix composition as
+     * generateClubs(), but for a single name outside the NpcClub generation pipeline
+     * (e.g. CompetitionSpoofEntrantService renaming a cloned club). Tier only feeds the
+     * place-size weighting flavor here, not a persisted value, so it defaults to a
+     * mid-table tier.
+     *
+     * @param string[] $usedNames Names to avoid colliding with.
+     */
+    public function generateClubName(string $countryCode, array $usedNames = [], int $tier = 4): string
+    {
+        $placeData = self::PLACE_NAMES_BY_COUNTRY[$countryCode] ?? [
+            ['name' => 'Capital', 'population_size' => 500000, 'region' => 'Central', 'is_capital' => true],
+            ['name' => 'Northern', 'population_size' => 100000, 'region' => 'North'],
+            ['name' => 'Southern', 'population_size' => 100000, 'region' => 'South'],
+            ['name' => 'Eastern', 'population_size' => 100000, 'region' => 'East'],
+            ['name' => 'Western', 'population_size' => 100000, 'region' => 'West'],
+            ['name' => 'Central', 'population_size' => 100000, 'region' => 'Central'],
+        ];
+        $classifiedPlaces = $this->classifyPlaces($placeData);
+        $prestigeSuffixes = self::PRESTIGE_SUFFIXES_BY_COUNTRY[$countryCode] ?? ['FC'];
+        $genericSuffixes  = self::GENERIC_SUFFIXES_BY_COUNTRY[$countryCode] ?? ['FC'];
+        $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier(max(1, min(8, $tier)));
+
+        [$name] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights);
+
+        return $name;
+    }
+
     private function generateStadiumName(string $place, string $country): string
     {
         $formats = self::STADIUM_FORMATS_BY_COUNTRY[$country] ?? ['%s Stadium', '%s Ground', 'The %s Arena'];

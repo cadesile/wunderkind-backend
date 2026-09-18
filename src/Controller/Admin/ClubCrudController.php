@@ -18,6 +18,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -137,6 +138,7 @@ class ClubCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->hideOnForm()->onlyOnDetail();
         yield TextField::new('name', 'Club Name');
+        yield BooleanField::new('isSpoof', 'Spoof')->renderAsSwitch(false);
         yield TextField::new('country', 'Country');
         yield TextField::new('user.email', 'User')
             ->formatValue(fn($v, Club $c) => $c->getUser()->getEmail())

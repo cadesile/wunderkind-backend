@@ -1,30 +1,69 @@
-# Recent Git Activity
+# Git Activity — Hotspots & Coupling
 
-**Recent commits:**
+Evidence: `git log --since="2 months ago" --name-only --pretty=format:` piped
+through path-prefix counting, plus `git log --stat -15`/`--oneline -30`.
+
+## Hotspot counts (path-prefix, last ~2 months)
+
 ```
-91f1794 new service
-291d4ca Merge branch 'fix/deploy-drop-cache-clear'
-2785d21 Drop cache:clear from the prod deploy — OOM-killed, and wrong anyway
-9352640 Merge branch 'fix/deploy-drop-appearance-backfill'
-364413d Drop appearance backfill from the prod deploy — it OOMs the container
-7b615bd Merge branch 'fix/account-deletion-test-league-leak'
-b5d7db5 Stop AccountDeletionServiceTest leaking a League row per run
-e59368f Merge branch 'chore/deploy-excursions-and-appearance-backfill'
-6063a05 Add excursion seeding and appearance backfill to the prod deploy
-15b8283 Merge branch 'feat/player-dob-and-regional-skin-tone'
-a9eb208 Weight avatar skin tone by world region; fix generated DOB age drift
-eeb08d3 excursions
-727544b latest landing page
-21b28fa guest sign in changes
-1213e98 updated images
+163 public/screenshots
+139 public/images
+ 58 tests/Service
+ 47 templates/landing
+ 44 Controller/Admin
+ 26 templates/admin
+ 24 Controller/Api
+ 23 tests/Controller
+ 14 Service/Competition
+ 13 Form/Type
+ 13 Entity/Competition
+ 13 .github/workflows
+ 12 CLAUDE.md
+ 10 tests/Command
+ 10 Repository/Competition
+  9 docs/api
+  9 config/packages
+  8 tests/Repository / tests/Entity
+  8 Service/SyncService.php / Entity/GameConfig.php
 ```
 
-**Recently changed files:**
-- `.github/workflows/deploy-prod.yml`
-- `public/uploads/excursions/graptor-kids-litter-picker-3-4cc3dd7495d9bab04be3f725c7bdda4874255eff.png`
-- `src/Controller/Api/ClubController.php`
-- `src/Exception/ClubNameTakenException.php`
-- `src/Repository/NpcClubRepository.php`
-- `src/Service/ClubInitializationService.php`
-- `src/Service/ClubNameNormalizer.php`
-- `tests/Service/AccountDeletionServiceTest.php`
+(`.context/stages` also appeared high in the raw count — that's this
+tool's own prior housekeeping commits, not app activity, and is excluded
+above.)
+
+## What's actually changing together
+
+Two active clusters, both confirmed by reading actual commits (not just
+the aggregate counts):
+
+1. **Admin panel polish** — `Controller/Admin/*CrudController.php` +
+   `templates/admin/*` + their tests change together frequently (crash
+   fixes, click-through fixes, menu ordering).
+2. **New "Competition" feature (Phase 1 rollout)** — commits touch
+   `Entity/Competition/`, `Repository/Competition/`, `Service/Competition/`,
+   `Enum/Competition/`, `Dto/Competition/`, and their tests together, e.g.:
+   - `9668eea` "Add Phase 1 competition framework: entities, enums,
+     migration" — touches `migrations/Version20260916112510.php` + 5 files
+     under `src/Entity/Competition/`.
+   - `d1071bb` "Add competition eligibility, registration, and public API
+     endpoints" — touches `config/packages/security.yaml`,
+     `src/Controller/Api/CompetitionController.php`,
+     `src/Dto/Competition/*`, `src/Repository/Competition/*` together.
+   - `53c6fff` "Add round processor, match engines, and provisioning cron"
+     — touches `Dockerfile`, `config/services.yaml`, new scripts under
+     `docker/`, and `src/Command/CompetitionProcessRoundsCommand.php`
+     together — i.e. a new background command is consistently
+     accompanied by a Dockerfile cron-registration change and a
+     `docker/*.sh` wrapper script.
+   - Recent single-file bugfix commits (`e350125`, `1e7da60`, `0d99d1f`)
+     pair a `Controller/Admin/*CrudController.php` or
+     `Service/Competition/SnapshotValidator.php` change with its own test
+     file in the same commit — this source+test pairing is visible across
+     essentially all 15 commits inspected.
+
+## Current focus
+
+Per `git log --oneline -30`: a "Phase 1 competition framework" rollout
+(entities → eligibility/registration API → round processing/match
+engines/cron provisioning) plus ongoing admin-panel polish (crash fixes,
+click-through, menu ordering).
