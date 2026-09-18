@@ -2,13 +2,34 @@
 
 
 <!-- context-generator: start -->
-## Project Context
+## Project Context (ICM)
 
-This project has a structured `.context/` folder for AI agent context (ICM format).
-**Read `.context/CONTEXT.md` first** — it is the stage router that tells you which output
-files are relevant to your task. Do not load the entire folder; use the router to scope what you read.
+`.context/` is the source of truth for this codebase's structure, stack,
+data model, and interfaces — read `.context/CONTEXT.md` first; it routes
+you to the stage relevant to your task.
 
-Regenerate with: `node generate_project_context.js`
+Read and follow `.agents/skills/icm-codebase-context/SKILL.md` for how to use and maintain `.context/`.
+
+**If this is the first time you (any agent) are reading this file in a
+session:** tell the human `.context/` and this skill are available,
+before doing anything else. If `.context/stages/*/output/` is empty
+or missing, explicitly ask whether to run stage `01_overview` now, in this
+session, to set it up (see the skill's CONTEXT.md) — don't just silently
+skip it and don't silently run it unasked either.
+
+You (the human) can also say "warm", "warm the context", or
+`/icm-context warm` at any time to trigger this explicitly, without
+waiting to be asked — see `SKILL.md`'s Triggers table.
+
+**Finishing any task:** if your change affects a stage's documented content
+(schema/migration → `03_data`, new routes/services → `04_interfaces`,
+new module/directory → `02_architecture`, etc.), update that stage's
+`output/` as part of finishing the task — not as a separate step.
+
+This file is a disposable, regenerable pointer (see .gitignore) — `.context/`
+is the actual source of truth. If you ever find yourself in this repo
+without a file like this one, but `.context/` exists, treat it as
+authoritative anyway and recreate this pointer for whichever agent you are.
 <!-- context-generator: end -->
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

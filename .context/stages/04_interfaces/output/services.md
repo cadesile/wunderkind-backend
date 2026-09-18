@@ -1,297 +1,159 @@
-# Services
-
-#### `AccountDeletionService`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(private readonly EntityManagerInterface $em) {}
-    public function deleteAccount(User $user): void
-```
-
-#### `AppearanceGeneratorService`
-
-> **Purpose:** Deterministic avatar generation (port of frontend `generateAppearance`); paired with `AppearanceLifecycleSubscriber` (prePersist auto-fill) — see Avatar Appearance above
-
-```php
-public function generate(string $id, AppearanceRole $role, int $age): array
-```
-
-#### `SeededRng`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(int $seed)
-    public function next(): float
-    public function pick(array $arr): mixed
-    public function chance(float $probability): bool
-```
-
-#### `ClubInitializationService`
-
-> **Purpose:** Create Club entity, set paName + manager traits, abbreviation
-
-```php
-public function __construct(
-    public function initializeClub(User $user, string $clubName, ?string $country = null, ?array $managerProfile = null): Club
-    public function getStarterBundle(): array
-```
-
-#### `CommunityStatsService`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(
-    public function getMostTransfers(StatsPeriod $period, int $limit): array
-    public function getMostDevelopment(StatsPeriod $period, int $limit): array
-    public function getMostSeasons(StatsPeriod $period, int $limit): array
-    public function getMostTrophies(StatsPeriod $period, int $limit): array
-```
-
-#### `ConfigImportExportService`
-
-> **Purpose:** Export/import `GameConfig`, `StarterConfig`, and `PoolConfig` rows as JSON
-
-```php
-public function __construct(
-    public function export(): array
-    public function import(array $data): array
-```
-
-#### `EconomicService`
-
-> **Purpose:** Financial year-end, sponsor contracts, player market value
-
-```php
-public function __construct(
-    public function generateSponsorOffer(Club $club): array
-    public function generateInvestorOffer(Club $club): array
-    public function calculatePlayerMarketValue(Player $player): int
-    public function processFinancialYearEnd(Club $club): array
-    public function checkSponsorContracts(Club $club, int $currentReputation): void
-```
-
-#### `EmailVerificationService`
-
-> **Purpose:** Send and validate email verification / password reset tokens
-
-```php
-public function __construct(
-    public function sendVerificationEmail(User $user): void
-    public function sendPasswordResetEmail(User $user): void
-    public function sendPasswordResetConfirmationEmail(User $user): void
-    public function sendBetaVerificationEmail(string $toEmail, string $code): void
-    public function verifyCode(User $user, string $code): string
-    public function verifyPasswordResetCode(User $user, string $code): string
-```
-
-#### `FixtureGenerationService`
-
-> **Purpose:** Generate match fixtures for a league season
-
-```php
-public function generate(array $clubIds): array
-```
-
-#### `InboxService`
-
-> **Purpose:** Generate and respond to inbox offers (sponsors, investors)
-
-```php
-public function __construct(
-    public function sendSponsorOffer(Club $club, array $offerData): InboxMessage
-    public function sendInvestorOffer(Club $club, array $offerData): InboxMessage
-    public function sendSystemNotification(Club $club, string $subject, string $body, array $details = []): InboxMessage
-    public function acceptMessage(InboxMessage $message, User $user): void
-    public function rejectMessage(InboxMessage $message): void
-```
-
-#### `LeagueImportExportService`
-
-> **Purpose:** Export/import `League` + `NpcClub` world data (used for admin-driven world pack management)
-
-```php
-public function __construct(
-    public function export(): array
-    public function import(array $data): array
-    public function clearAll(): void
-```
-
-#### `LeagueService`
-
-> **Purpose:** Assign clubs to leagues, conclude seasons, roll league sponsors
-
-```php
-public function __construct(
-    public function generateLeaguesForCountry(string $country): array
-    public function assignClubToLeague(NpcClub $club): void
-    public function assignClubToStarterLeague(Club $club, string $country): void
-    public function rollLeagueSponsors(League $league, GameConfig $config): int
-    public function concludeSeason(Club $club, ConcludeSeasonRequest $dto): array
-```
-
-#### `MarketDataService`
-
-> **Purpose:** Serve market data to the client
-
-```php
-public function __construct(private readonly MarketPoolService $pool) {}
-    public function getMarketSnapshot(?Tier $tier = null): MarketDataResponse
-```
-
-#### `MarketPoolService`
-
-> **Purpose:** Generate and assign market entities; Player/Staff assign deletes entity and returns snapshot
-
-```php
-public function __construct(
-    public function generatePlayers(int $count, RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE, ?string $nationality = null): array
-    public function generateStaffForRole(StaffRole $role, int $count, ?string $nationality = null): array
-    public function generateScouts(int $count, ?string $nationality = null): array
-    public function generateAgents(int $count): array
-    public function generateSponsors(int $count): array
-    public function generateInvestors(int $count): array
-    public function getAvailablePlayers(int $limit = 100, ?string $nationality = null, ?int $abilityMin = null, ?int $abilityMax = null): array
-    public function getAvailableCoaches(int $limit = 20, ?int $abilityMin = null, ?int $abilityMax = null): array
-    public function getAvailableScouts(int $limit = 10, ?int $experienceMin = null, ?int $experienceMax = null): array
-    public function getAgents(int $limit = 20, ?int $ratingMin = null, ?int $ratingMax = null): array
-    public function getAvailableSponsorPool(int $limit = 20): array
-```
-
-#### `NameGeneratorService`
-
-> **Purpose:** Procedural name generation for players and PA personas
-
-```php
-public function generateName(string $nationality): string
-    public function generatePlayerName(string $nationality): array
-    public function generateFirstName(string $nationality): string
-    public function generateLastName(string $nationality): string
-    public function getRandomNationality(): string
-```
-
-#### `NarrativeImportExportService`
-
-> **Purpose:** Export/import event templates, facility templates, player archetypes, and `TacticalAdvantage` rows
-
-```php
-public function __construct(
-    public function export(): array
-    public function clearAll(): void
-    public function import(array $data): array
-```
-
-#### `NpcClubGenerationService`
-
-> **Purpose:** Generate NPC clubs with names, colors, facilities, and ability by tier
-
-```php
-public function __construct(
-    public function getPlaceNames(string $countryCode): array
-    public function getSuffixes(string $countryCode): array
-    public function generateClubs(int $count, int $tier, string $country, bool $deleteExisting = false): array
-```
-
-#### `PeriodResolver`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(
-    public function applyPeriodFilter(
-```
-
-#### `PlayerGenerationService`
-
-> **Purpose:** Procedurally generate a `Player` from archetype, position, and source
-
-```php
-public function __construct(
-    public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null): Player
-```
-
-#### `SocialPostRenderer`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(private readonly CommunityStatsService $statsService)
-    public function render(SocialPostTemplate $template): ?string
-```
-
-#### `SocialPostingService`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(
-    public function post(SocialAccountConnection $connection, string $text): void
-```
-
-#### `StarterPackService`
-
-> **Purpose:** Pull starting Player/Staff/Scout from pool; build snapshots; delete consumed Player/Staff
-
-```php
-public function __construct(
-    public function initialize(Club $club): array
-```
-
-#### `SyncService`
-
-> **Purpose:** Sync processing, anti-cheat, leaderboard upsert, manager trait shifts
-
-```php
-public function __construct(
-    public function process(User $user, SyncRequest $request): array
-```
-
-#### `TokenEncryptionService`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-public function __construct(string $socialTokenEncryptionKey)
-    public function encrypt(string $plaintext): string
-    public function decrypt(string $encoded): string
-```
-
-#### `TransferLeaderboardService`
-
-> **Purpose:** Rank players by transfer fee across clubs
-
-```php
-public function __construct(
-    public function getTopSellers(string $period = 'week', int $limit = 10): array
-    public function getMostValuableSale(string $period = 'week'): ?array
-```
-
-#### `WorldInitializationService`
-
-> **Purpose:** Build the full league pyramid + tier pack snapshot for a client; snapshot builders for Player/Staff/Scout
-
-```php
-public function __construct(
-    public function buildLeaguesPack(Club $club, string $country): array
-    public function buildTierPack(Club $club, string $country, int $tier): array
-    public function distributeByPosition(int $total, PoolConfig $config): array
-    public function assignAgents(array $players, array $agents): void
-    public function selectBoundedAgentPool(array $agents, int $estimatedPlayers, int $playersPerAgent): array
-    public function buildPlayerSnapshot(Player $player): array
-    public function buildStaffSnapshot(Staff $staff): array
-    public function buildScoutSnapshot(Scout $scout): array
-```
-
-#### `WorldPackCacheService`
-
-> **Purpose:** Cache country/nationality worldpack data (`CountryWorldPackCache`)
-
-```php
-public function __construct(
-    public function getOrBuild(string $country, int $tier, callable $generator): array
-    public function allTiersCached(string $country, array $tierNumbers): bool
-    public function forceRebuild(string $country, int $tier, callable $generator): array
-    public function deleteByCountry(string $country): int
-```
+# Service-Layer Responsibilities
+
+`src/Service/` — responsibilities drawn from each file's imports/
+constructor and, where present, its class docblock — not guessed from
+filename alone.
+
+- **`AccountDeletionService`** — permanently deletes a user account and
+  every club they own, including cascade-uncovered data, in one
+  transaction.
+- **`Admin/DashboardStatsService`** — computes admin dashboard growth/
+  leaderboard/pool stats; Postgres-dialect-specific SQL confined here.
+- **`Admin/StatBuckets`** — bucketing helper backing dashboard facet
+  charts.
+- **`AdminMessageService`** — resolves which announcements a club should
+  see and records that it has seen them.
+- **`Appearance/AppearanceGeneratorService`** — deterministically
+  generates a Player/Staff/Scout/Agent's visual appearance fields.
+- **`Appearance/SeededRng`** — seeded PRNG kept bit-identical to the
+  frontend's `SeededRng` (wunderkind-app) for appearance generation —
+  cross-repo invariant, don't change independently.
+- **`ArchetypeResolverService`** — read-only preview of archetype
+  matching against `PlayerArchetype::$traitWeights`.
+- **`ArchetypeShowcaseService`** — picks a best-match positive/negative
+  archetype pair per player for marketing display.
+- **`AudienceCriteriaEvaluator`** — evaluates admin-authored JSON
+  audience-targeting criteria, failing closed (under-deliver rather than
+  broadcast) on malformed input.
+- **`ClubInitializationService`** — creates/initializes a `Club` for a
+  `User` (name uniqueness via `ClubNameTakenException`, country/
+  starter-config wiring).
+- **`ClubNameNormalizer`** — normalizes club names; mirrored exactly by
+  the client's `clubName.ts` — cross-repo invariant.
+- **`ClubResolver`** — resolves the acting `Club` from the current
+  request (explicit id header, falling back to `findByUser()` for legacy
+  clients).
+- **`CommunityStatsService`** — computes community-wide stats (most
+  transfers/development/seasons/trophies) from match/transfer/season
+  repositories.
+- **`Competition/BracketLabeler`** — generates stable round labels used
+  as keys into `CompetitionTemplate::roundEngineConfig` and stored on
+  `CompetitionRound::label`.
+- **`Competition/CompetitionLockService`** — locks a competition instance
+  and schedules its first round the instant the last slot fills.
+- **`Competition/CompetitionRegistrationService`** — registers entrants,
+  using `SELECT ... FOR UPDATE` on the `ActiveCompetition` row to
+  serialize concurrent last-slot registrations.
+- **`Competition/CompetitionRoundProcessorService`** — core scheduling/
+  idempotency/bracket-advancement logic behind the
+  `app:competition:process-rounds` command (runs every 1 minute via cron
+  — see `02_architecture/output/structure.md`).
+- **`Competition/CompetitionSpoofEntrantService`** — admin-only override
+  that calls `CompetitionRegistrationService::register()` directly,
+  bypassing HTTP/JWT/eligibility checks.
+- **`Competition/EligibilityEvaluator`** — evaluates every competition
+  eligibility rule with no short-circuit, so all blocking reasons are
+  reported at once.
+- **`Competition/EligibilityResult`** — value object carrying every
+  blocking reason for register/available endpoints.
+- **`Competition/RewardApplierService`** — applies competition rewards to
+  entrants/clubs.
+- **`Competition/SnapshotValidator`** — validates match-result snapshot
+  payload shapes.
+- **`ConfigImportExportService`** — imports/exports admin game-config
+  JSON (contract enforced by `ConfigImportExportCoverageTest`).
+- **`EconomicService`** — club/investor/sponsor economic logic (tiers,
+  statuses), using `GameConfigRepository`, `InvestorRepository`,
+  `SponsorRepository`.
+- **`EmailVerificationService`** — issues/validates email verification
+  codes; sends verification/reset emails via `MailerInterface`.
+- **`FacilityImageResolver`** — resolves facility image assets for
+  `GameConfigController`.
+- **`FixtureGenerationService`** — generates competition/league
+  fixtures.
+- **`HallOfFameScoreService`** — computes hall-of-fame scores; a
+  previously-fixed bug here involved an unsent high-water-mark value
+  pinning leaderboard reads at 0 — worth checking if hall-of-fame numbers
+  ever look stuck again.
+- **`InboxService`** — builds/manages a club's inbox messages
+  (investor/sponsor status-driven).
+- **`LeaderboardCalculationService`** — computes and caches (via
+  `TagAwareCacheInterface`, `app.leaderboard_cache` pool) leaderboard
+  entries from career stats/transfers.
+- **`LeagueImportExportService`** — imports/exports league/NPC-club
+  config (formations, reputation tiers, trophy colours, city sizes).
+- **`LeagueService`** — league lifecycle logic (season conclusion,
+  leaderboard categories), using `LeagueRepository`,
+  `GameConfigRepository`.
+- **`LiveTelemetryService`** — feeds the landing page's live activity
+  feed; some entries (sackings, contract disputes, youth intake) are
+  illustrative and have no backing data — don't treat as real metrics.
+- **`MarketDataService`** — assembles market listing data (agents/
+  investors/scouts/sponsors/staff) into `MarketDataResponse`.
+- **`MarketPoolService`** — manages the shared unassigned-entity pool
+  (players/staff/scouts/sponsors) and top-up/consume operations.
+- **`MatchEngine/AiEngineStub`** — stub match engine standing in for real
+  LLM-based match resolution (explicitly out of Phase 1 scope per its own
+  code).
+- **`MatchEngine/DeterministicEngine`** — deterministic match resolution;
+  playing style affects outcome, formation is display-only.
+- **`MatchEngine/MatchEngineInterface`** — contract for match engines
+  (input: `CompetitionEntrant`/`CompetitionFixture`).
+- **`MatchEngine/MatchEngineRegistry`** — tagged-iterator dispatcher
+  selecting a `MatchEngineInterface` by `MatchEngineIdentifier` (see
+  `config/services.yaml`'s `_instanceof` binding).
+- **`MatchEngine/MatchEngineResult`** — plain value object for a match
+  result, persisted by the caller into `CompetitionResult`.
+- **`NameGeneratorService`** — generates names (players/staff/clubs).
+- **`NarrativeImportExportService`** — imports/exports narrative content
+  (events, playing styles, facility/tactical/archetype templates).
+- **`NpcClubGenerationService`** — generates NPC clubs using
+  `FacilityTemplateRepository`, `GameConfigRepository`, `LeagueService`.
+- **`PeriodResolver`** — resolves stats time-period filters
+  (`StatsPeriod`) into query constraints against `SeasonRecord`.
+- **`Personality/PersonalityContext`** — builds role-specific
+  personality-generation context (independent of skill level).
+- **`Personality/PersonalityGeneratorService`** — generates a
+  Staff/Scout personality matrix (Gaussian-based, `gaussianInt()`).
+- **`PlayerGenerationService`** — generates a `Player` blueprint
+  (position, recruitment source, personality matrix feeding into
+  attribute derivation).
+- **`SocialPostRenderer`** — renders `SocialPostTemplate` content with
+  stat-category/period substitutions.
+- **`SocialPostingService`** — publishes to connected social platforms
+  via `HttpClientInterface`, raising `SocialPostingException` on failure.
+- **`StarterPackService`** — assembles/grants a new club's starter pack
+  (players/staff/scouts) via `ClubInitializationService`.
+- **`SyncService`** — processes client sync payloads
+  (`SyncService::process()`); applies an **absolute** `Club::setBalance()`
+  call, not an accumulate — a client resync overwrites, doesn't add.
+- **`TokenEncryptionService`** — encrypts/decrypts OAuth tokens using
+  libsodium secretbox (key generated via
+  `sodium_crypto_secretbox_keygen()`).
+- **`TransferLeaderboardService`** — computes top-sellers/most-valuable
+  transfer leaderboards from `TransferRepository`.
+- **`WorldInitializationService`** — initializes a country's world data
+  (players/staff/scouts pools, starter configs) on first access.
+- **`WorldOverviewService`** — builds world overview figures, consumed
+  both by `GET /api/world/overview` and directly by `LandingController`
+  for server-rendering.
+- **`WorldPackCacheService`** — caches per-country/tier "world pack" data
+  (`CountryWorldPackCache`).
+- **`YouTubeFeedService`** — fetches/filters the YouTube channel feed
+  (drops entries with an empty `<media:title>`).
+
+## Event subscribers (`src/EventSubscriber/`)
+
+Not a service-layer concern per se, but worth noting alongside services
+since they run implicitly on every entity write:
+
+- **`AppearanceLifecycleSubscriber`** (`prePersist`) — auto-fills a
+  generated appearance on any `Player`/`Staff`/`Scout`/`Agent` persisted
+  without one, via `AppearanceGeneratorService` — covers every creation
+  path (services, commands, admin).
+- **`PersonalityLifecycleSubscriber`** (`prePersist`) — auto-fills the
+  Personality Matrix on any `Staff`/`Scout` persisted without one, via
+  `PersonalityGeneratorService`. `Player` is deliberately excluded —
+  `PlayerGenerationService` rolls its own matrix.
+
+No `src/EventListener/` directory exists.

@@ -123,37 +123,37 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable();
         $events = LiveTelemetryService::buildEvents([
-            ['tier' => 3, 'promoted' => true, 'relegated' => false, 'finalPosition' => 1, 'createdAt' => $now],
+            ['tier' => 3, 'promoted' => true, 'relegated' => false, 'finalPosition' => 1, 'createdAt' => $now, 'clubName' => 'Ferrington Athletic'],
         ], $now);
 
-        $this->assertSame('A Tier 3 club lifted the title.', $events[0]['text']);
+        $this->assertSame('Ferrington Athletic lifted the Tier 3 title.', $events[0]['text']);
     }
 
     public function testPromotedRowWithoutTitleDescribesPromotion(): void
     {
         $now = new \DateTimeImmutable();
         $events = LiveTelemetryService::buildEvents([
-            ['tier' => 5, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now],
+            ['tier' => 5, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now, 'clubName' => 'Stoke-on-Trent City'],
         ], $now);
 
-        $this->assertSame('A Tier 5 club won promotion.', $events[0]['text']);
+        $this->assertSame('Stoke-on-Trent City won promotion from Tier 5.', $events[0]['text']);
     }
 
     public function testRelegatedRowDescribesRelegation(): void
     {
         $now = new \DateTimeImmutable();
         $events = LiveTelemetryService::buildEvents([
-            ['tier' => 4, 'promoted' => false, 'relegated' => true, 'finalPosition' => 7, 'createdAt' => $now],
+            ['tier' => 4, 'promoted' => false, 'relegated' => true, 'finalPosition' => 7, 'createdAt' => $now, 'clubName' => 'Reading County'],
         ], $now);
 
-        $this->assertSame('A Tier 4 club was relegated.', $events[0]['text']);
+        $this->assertSame('Reading County was relegated from Tier 4.', $events[0]['text']);
     }
 
     public function testRowWithNoOutcomeIsFilteredOut(): void
     {
         $now = new \DateTimeImmutable();
         $events = LiveTelemetryService::buildEvents([
-            ['tier' => 4, 'promoted' => false, 'relegated' => false, 'finalPosition' => 5, 'createdAt' => $now],
+            ['tier' => 4, 'promoted' => false, 'relegated' => false, 'finalPosition' => 5, 'createdAt' => $now, 'clubName' => 'Bury Town'],
         ], $now);
 
         $this->assertSame([], $events);
@@ -163,9 +163,9 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable('2026-01-08 12:00:00');
         $rows = [
-            ['tier' => 1, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now->modify('-5 minutes')],
-            ['tier' => 1, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now->modify('-3 hours')],
-            ['tier' => 1, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now->modify('-2 days')],
+            ['tier' => 1, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now->modify('-5 minutes'), 'clubName' => 'Club A'],
+            ['tier' => 1, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now->modify('-3 hours'), 'clubName' => 'Club B'],
+            ['tier' => 1, 'promoted' => true, 'relegated' => false, 'finalPosition' => 2, 'createdAt' => $now->modify('-2 days'), 'clubName' => 'Club C'],
         ];
 
         $events = LiveTelemetryService::buildEvents($rows, $now);
@@ -179,7 +179,7 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable();
         $syncRows = [
-            ['serverTimestamp' => $now, 'payload' => ['ledger' => [
+            ['serverTimestamp' => $now, 'clubName' => 'Ferrington Athletic', 'payload' => ['ledger' => [
                 ['category' => 'wages', 'amount' => -344000, 'description' => 'Week 42 payroll'],
                 ['category' => 'upkeep', 'amount' => -118690800, 'description' => 'DOF assigned scouting mission — Louie Norris (MID)'],
             ]]],
@@ -187,7 +187,7 @@ class LiveTelemetryServiceTest extends TestCase
 
         $events = LiveTelemetryService::buildLedgerEvents($syncRows, $now, 5);
 
-        $this->assertSame('£1.2M spent: DOF assigned scouting mission — Louie Norris (MID)', $events[0]['text']);
+        $this->assertSame('Ferrington Athletic spent £1.2M: DOF assigned scouting mission — Louie Norris (MID)', $events[0]['text']);
         $this->assertCount(2, $events);
     }
 
@@ -195,7 +195,7 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable();
         $syncRows = [
-            ['serverTimestamp' => $now, 'payload' => ['ledger' => [
+            ['serverTimestamp' => $now, 'clubName' => 'Ferrington Athletic', 'payload' => ['ledger' => [
                 ['category' => 'matchday_income', 'amount' => 25590000, 'description' => 'Week 42 matchday income'],
             ]]],
         ];
@@ -209,7 +209,7 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable();
         $syncRows = [
-            ['serverTimestamp' => $now, 'payload' => ['ledger' => [
+            ['serverTimestamp' => $now, 'clubName' => 'Ferrington Athletic', 'payload' => ['ledger' => [
                 ['category' => 'upkeep', 'amount' => -100, 'description' => ''],
             ]]],
         ];
@@ -223,7 +223,7 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable();
         $syncRows = [
-            ['serverTimestamp' => $now, 'payload' => ['ledger' => [
+            ['serverTimestamp' => $now, 'clubName' => 'Ferrington Athletic', 'payload' => ['ledger' => [
                 ['category' => 'upkeep', 'amount' => -500, 'description' => 'a'],
                 ['category' => 'upkeep', 'amount' => -400, 'description' => 'b'],
                 ['category' => 'upkeep', 'amount' => -300, 'description' => 'c'],
@@ -246,5 +246,32 @@ class LiveTelemetryServiceTest extends TestCase
 
         $this->assertSame('Stoke-on-Trent City recorded attendance of 32,776!', $events[0]['text']);
         $this->assertSame('10m ago', $events[0]['time']);
+    }
+
+    public function testMergeEventsByRecencyInterleavesSourcesByDateInsteadOfGroupingByType(): void
+    {
+        $now = new \DateTimeImmutable();
+
+        $pyramidEvents = LiveTelemetryService::buildEvents([
+            ['tier' => 2, 'promoted' => true, 'relegated' => false, 'finalPosition' => 3, 'createdAt' => $now->modify('-3 hours'), 'clubName' => 'Pyramid Club'],
+        ], $now);
+
+        $ledgerEvents = LiveTelemetryService::buildLedgerEvents([
+            ['serverTimestamp' => $now->modify('-1 hour'), 'clubName' => 'Ledger Club', 'payload' => ['ledger' => [
+                ['category' => 'wages', 'amount' => -500, 'description' => 'Week 1 payroll'],
+            ]]],
+        ], $now, 5);
+
+        $attendanceEvents = LiveTelemetryService::buildAttendanceEvents([
+            ['clubName' => 'Attendance Club', 'fanCount' => 1000, 'serverTimestamp' => $now->modify('-5 hours')],
+        ], $now);
+
+        $merged = LiveTelemetryService::mergeEventsByRecency($pyramidEvents, $ledgerEvents, $attendanceEvents);
+
+        $this->assertSame([
+            ['time' => '1h ago', 'text' => 'Ledger Club spent £5: Week 1 payroll'],
+            ['time' => '3h ago', 'text' => 'Pyramid Club won promotion from Tier 2.'],
+            ['time' => '5h ago', 'text' => 'Attendance Club recorded attendance of 1,000!'],
+        ], $merged);
     }
 }

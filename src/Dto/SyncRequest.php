@@ -257,6 +257,38 @@ class SyncRequest
     public ?string $tutorialCompletedAt = null;
 
     /**
+     * Full per-fixture detail for every AMP fixture since the last sync (same window as
+     * matchResults, just richer) — scorers/assists/cards/player ratings. Archived verbatim
+     * into SyncRecord.payload only; no structured storage/processing yet.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $fixtures = [];
+
+    /**
+     * Current-value relationship/bond snapshot — no delta/history in a single payload; a
+     * bond's timeline is reconstructed from successive syncs, not this field alone.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $relationships = [];
+
+    /**
+     * Every promise, active and resolved, unfiltered — grows monotonically over a long save
+     * since resolved ones are never purged client-side. Archived as-is on every sync.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $promises = [];
+
+    /**
+     * Every excursion booking, resolved and pending, unfiltered.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $excursions = [];
+
+    /**
      * Optional debug diagnostics — only present when gameConfig.debugLoggingEnabled === true on the client.
      * Stored verbatim on SyncRecord; never fails validation if absent.
      * A value of -1 on any numeric field means the scan failed — treat as unavailable, not zero.

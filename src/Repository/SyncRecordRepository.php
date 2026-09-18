@@ -50,17 +50,20 @@ class SyncRecordRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns the `payload` + `serverTimestamp` for valid syncs received since $since,
-     * for the landing page's "Chairman's Terminal" telemetry aggregate. Selecting only
-     * these two columns (not full entities) keeps this cheap over the
-     * idx_sync_record_server_timestamp index even as the table grows.
+     * Returns the `payload` + `serverTimestamp` + the club's real name for valid syncs
+     * received since $since, for the landing page's "Chairman's Terminal" telemetry
+     * aggregate. clubName is attached so buildLedgerEvents() can name the spending club
+     * (safe per the same curated-name-options reasoning as findTopAttendanceSince() —
+     * no moderation risk). Joins to club (previously payload+serverTimestamp only) —
+     * still cheap over idx_sync_record_server_timestamp since it's a single indexed FK.
      *
-     * @return array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable}>
+     * @return array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}>
      */
     public function findValidPayloadsSince(\DateTimeImmutable $since): array
     {
         $rows = $this->createQueryBuilder('s')
-            ->select('s.payload', 's.serverTimestamp')
+            ->select('s.payload', 's.serverTimestamp', 'c.name AS clubName')
+            ->innerJoin('s.club', 'c')
             ->where('s.isValid = true')
             ->andWhere('s.serverTimestamp >= :since')
             ->setParameter('since', $since)
@@ -71,6 +74,7 @@ class SyncRecordRepository extends ServiceEntityRepository
             static fn (array $row): array => [
                 'payload'         => $row['payload'],
                 'serverTimestamp' => $row['serverTimestamp'],
+                'clubName'        => (string) $row['clubName'],
             ],
             $rows,
         );

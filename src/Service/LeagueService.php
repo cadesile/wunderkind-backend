@@ -270,6 +270,9 @@ class LeagueService
                     'relegated'     => $dto->relegated,
                 ],
                 'pyramid' => $dto->pyramidSnapshot,
+                // Archival only — no structured storage/processing yet (see ConcludeSeasonRequest).
+                'seasonLeaders'  => $dto->seasonLeaders,
+                'seasonFixtures' => $dto->seasonFixtures,
             ],
         );
         $this->em->persist($snapshot);

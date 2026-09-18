@@ -1,119 +1,72 @@
-# Database Schema (symfony / PostgreSQL)
+# Schema — Tables & Repositories
 
-# Database Schema (Doctrine / PostgreSQL)
+Full field-level detail lives in `entities.md` — this file indexes tables
+by name, notes repository query patterns, and records schema-level
+constraints. Don't restate field lists here.
 
-**Migrations (latest 10):**
+## Table index (by domain, matches `entities.md` grouping)
 
-- `Version20260626000001`
-  → ALTER TABLE "user" ADD last_login_at TIMESTAMP(0) WITH TIME ZONE DEFAULT NULL
-  → ALTER TABLE "user" DROP last_login_at
-- `Version20260704000001`
-  → ALTER TABLE club ADD tutorial_completed_at TIMESTAMP(0) WITH TIME ZONE DEFAULT NULL
-  → ALTER TABLE club DROP tutorial_completed_at
-- `Version20260705141806`
-  → CREATE TABLE social_account_connection (id UUID NOT NULL, platform VARCHAR(255) NOT NULL, display_name VARCHAR(255) NOT NULL, external_account_id VARCHAR(255) NOT NULL, access_token TEXT NOT NULL, refresh_token TEXT DEFAULT NULL, token_expires_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, is_active BOOLEAN NOT NULL, connected_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, last_refreshed_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, PRIMARY KEY (id))
-  → CREATE UNIQUE INDEX uq_social_platform_external_id ON social_account_connection (platform, external_account_id)
-  → DROP TABLE social_account_connection
-- `Version20260705202249`
-  → CREATE TABLE social_post_template (id UUID NOT NULL, category VARCHAR(255) NOT NULL, platform VARCHAR(255) NOT NULL, period VARCHAR(255) NOT NULL, body_template TEXT NOT NULL, is_active BOOLEAN NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY (id))
-  → CREATE UNIQUE INDEX uq_social_post_template_category_platform ON social_post_template (category, platform)
-  → DROP TABLE social_post_template
-- `Version20260705202745`
-  → ALTER TABLE game_config ADD last_posted_stat_category VARCHAR(255) DEFAULT NULL
-  → ALTER TABLE game_config DROP last_posted_stat_category
-- `Version20260705211313`
-  → ALTER TABLE game_config ADD facebook_page_url VARCHAR(255) DEFAULT NULL
-  → ALTER TABLE game_config ADD x_profile_url VARCHAR(255) DEFAULT NULL
-  → ALTER TABLE game_config DROP facebook_page_url
-- `Version20260707203954`
-  → ALTER TABLE club ALTER tutorial_completed_at TYPE TIMESTAMP(0) WITHOUT TIME ZONE
-  → ALTER TABLE game_config ADD npc_squad_config JSON DEFAULT NULL
-  → ALTER TABLE game_config ALTER npc_squad_config SET NOT NULL
-- `Version20260713194158`
-  → ALTER TABLE agent ADD appearance JSON DEFAULT NULL
-  → ALTER TABLE player ADD appearance JSON DEFAULT NULL
-  → ALTER TABLE scout ADD appearance JSON DEFAULT NULL
-- `Version20260716000000`
-  → ALTER TABLE starter_config ADD world_pack_players_per_agent INT NOT NULL DEFAULT 12
-  → ALTER TABLE starter_config DROP world_pack_players_per_agent
-- `Version20260719000000`
-  → ALTER TABLE game_config ADD season_ticket_holder_percent SMALLINT DEFAULT 60 NOT NULL
-  → ALTER TABLE game_config DROP season_ticket_holder_percent
+- **Auth/user:** `user`, `admin`, `guardian`, `email_verification`, `refresh_tokens`, `beta_request`, `deletion_request`
+- **Core game/club:** `club`, `club_facility`, `facility_template`, `league`, `league_sponsor_income`, `npc_club`, `transfer`, `sync_record`, `season_record`, `season_snapshot`, `season_ratings_snapshot`, `match_result`, `leaderboard_entry`, `tactical_advantage`
+- **Player/squad:** `player` (embeds `PersonalityProfile` — no separate table), `player_archetype`, `player_career_stat`, `player_career_stat_snapshot`, `agent`, `scout`, `staff`, `player_siblings` (self-referential join table)
+- **Sponsorship/finance:** `sponsor`, `investor`
+- **Messaging/admin comms:** `admin_message`, `admin_message_audience_group` (join table), `message_delivery`, `audience_group`, `audience_group_member`, `inbox_message`, `game_event_template`, `social_account_connection`, `social_post_template`
+- **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_round`, `competition_fixture`, `competition_result`, `reward_template`, `entrant_reward_claim`
+- **Config/singleton:** `game_config`, `pool_config`, `starter_config`
+- **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
 
-#### `LeagueSponsor`
-```php
-#[ORM\Id]
-    #[ORM\ManyToOne(inversedBy: 'leagueSponsors')]
-    #[ORM\JoinColumn(onDelete: 'CASCADE')]
-    private League $league;
-    #[ORM\Id]
-    #[ORM\ManyToOne]
-    #[ORM\JoinColumn(onDelete: 'CASCADE')]
-    private Sponsor $sponsor;
-    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
-    private int $rolledValue = 0;
-    public function __construct(League $league, Sponsor $sponsor, int $rolledValue = 0)
-        $this->league      = $league;
-        $this->sponsor     = $sponsor;
-        $this->rolledValue = $rolledValue;
-    public function getLeague(): League { return $this->league; }
-    public function getSponsor(): Sponsor { return $this->sponsor; }
-    public function getRolledValue(): int { return $this->rolledValue; }
-    public function setRolledValue(int $v): static { $this->rolledValue = $v; return $this; }
-```
+## Notable constraints (beyond ordinary FKs — see `entities.md` for those)
 
-#### `TacticalAdvantage`
-```php
-#[ORM\Id]
-    #[ORM\Column(type: 'uuid', unique: true)]
-    private UuidV7 $id;
-    #[ORM\Column(enumType: PlayingStyle::class)]
-    private PlayingStyle $style;
-    #[ORM\Column(enumType: PlayingStyle::class)]
-    private PlayingStyle $opponentStyle;
-    #[ORM\Column(type: 'float')]
-    private float $multiplier;
-        PlayingStyle $style = PlayingStyle::POSSESSION,
-        PlayingStyle $opponentStyle = PlayingStyle::DIRECT,
-        float $multiplier = 1.0
-        $this->id            = new UuidV7();
-        $this->style         = $style;
-        $this->opponentStyle = $opponentStyle;
-        $this->multiplier    = $multiplier;
-    public function getId(): UuidV7 { return $this->id; }
-    public function getStyle(): PlayingStyle { return $this->style; }
-    public function setStyle(PlayingStyle $style): void { $this->style = $style; }
-    public function getOpponentStyle(): PlayingStyle { return $this->opponentStyle; }
-    public function setOpponentStyle(PlayingStyle $opponentStyle): void { $this->opponentStyle = $opponentStyle; }
-    public function getMultiplier(): float { return $this->multiplier; }
-    public function setMultiplier(float $multiplier): void { $this->multiplier = $multiplier; }
-```
+- **`active_competition`** — partial unique index
+  `uq_active_competition_one_open_per_template` (`WHERE status =
+  'registering'`), added in `Version20260916112510` — enforces at most
+  one open competition per template at the database level, not just in
+  application code.
+- **`competition_entrant`** — unique index on
+  (`active_competition_id`, `club_id`) — one entry per club per
+  competition.
+- **`competition_result`** — `OneToOne` + unique on `fixture_id` — one
+  result per fixture.
 
-#### `User`
-```php
-#[ORM\Id]
-    #[ORM\Column(type: 'uuid', unique: true)]
-    private UuidV7 $id;
-    #[ORM\Column(length: 180, unique: true)]
-    private string $email;
-    #[ORM\Column]
-    private string $password;
-    #[ORM\Column(type: 'json')]
-    private array $roles = [];
-    #[ORM\OneToMany(mappedBy: 'user', targetEntity: Club::class, cascade: ['persist', 'remove'])]
-    private Collection $clubs;
-    #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $managerProfile = null;
-    #[ORM\Column(type: 'boolean', options: ['default' => false])]
-    private bool $isVerified = false;
-    #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
-    private ?\DateTimeImmutable $verifiedAt = null;
-    #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
-    private ?\DateTimeImmutable $lastLoginAt = null;
-    #[ORM\Column]
-    private \DateTimeImmutable $createdAt;
-    public function __construct(string $email)
-        $this->id        = new UuidV7();
-        $this->email     = $email;
-        $this->createdAt = new \DateTimeImmutable();
-```
+## Repository query patterns worth knowing
+
+- **Recruitment-pool repositories** (`AgentRepository`, `ScoutRepository`,
+  `StaffRepository`, `SponsorRepository`, `InvestorRepository`,
+  `PlayerRepository`) share a consistent shape: `findInPool(...)`,
+  `countInPool()`, `getPoolBreakdown()`, mirroring `PoolConfig` tuning
+  values. `PlayerRepository` additionally has
+  `findForWorldInit*` variants (by ability range/position/nationality
+  with `excludeIds`) for world/NPC population generation, plus
+  `findForScoutSearch(...)`, `getAdminSummary()`, `deleteByIds()`.
+- **Stats/leaderboard repositories** (`MatchResultRepository`,
+  `TransferRepository`, `SeasonRecordRepository`,
+  `PlayerCareerStat(Snapshot)Repository`, `LeaderboardEntryRepository`)
+  share a period-aggregation pattern parameterized by
+  `StatsPeriod`/`PeriodResolver` (e.g. `getMostWinsByClub`,
+  `getBiggestSpendersByClub`, `getMostTrophiesByClub`,
+  `topGoalScorerInWindowByClub`). `LeaderboardEntryRepository` also has
+  `findOrCreate`, `findWithRankForClub` (computes rank),
+  `findTopByPeriod`.
+- **Singleton-row repositories** (`GameConfigRepository`,
+  `PoolConfigRepository`, `StarterConfigRepository`,
+  `LiveTelemetrySnapshotRepository`) each expose a
+  `getConfig()`/`getSnapshot()` fetch-or-create method, consistent with
+  these being single-row config/telemetry tables.
+- **`NpcClubRepository`** — `findForeignClubs()`,
+  `getCountsByCountryAndTier()`, `getAllGroupedByLeague()`,
+  `findDistinctRegions()`, `clubNameExists()` — supports procedural world
+  generation and league population.
+- **`CountryWorldPackCacheRepository`** — `findForCountryAndTier`,
+  `findCachedTiers(..., payloadVersion)`, `deleteByCountry`,
+  `findAllSummaries` — cache invalidation/versioning.
+- **`Competition\ActiveCompetitionRepository`** — `findOpenForTemplate`
+  (enforces the one-open-per-template invariant at the app layer too).
+- **`Competition\CompetitionRoundRepository`** — `findDueRounds
+  (\DateTimeImmutable $now)`, `hasUpcomingRound` — drives round-
+  processing scheduling (see `04_interfaces/output/services.md`'s
+  `CompetitionRoundProcessorService`).
+- **`SyncRecordRepository`** — `deleteByClubFromWeek` (rollback
+  support), `countRollbacksByClub`, `findValidPayloadsSince`.
+- **`DeletionRequestRepository`** — `countRecentFailuresByIp`
+  (rate-limiting), `deleteOlderThan` (retention cleanup) — GDPR-style
+  deletion-request throttling/cleanup.
