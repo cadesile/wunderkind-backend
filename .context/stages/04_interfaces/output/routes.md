@@ -1,173 +1,126 @@
-# API Routes
+# Routes / Endpoints
 
-## Client-facing API (hand-curated — method, auth, description)
+All routes traced to `#[Route]` attributes actually opened in
+`src/Controller/**`. **API Platform is configured**
+(`config/packages/api_platform.yaml`, mounted at `/api` via
+`config/routes/api_platform.yaml`) **but zero entities carry
+`#[ApiResource]`** (`grep -rln "ApiResource" src/` returns nothing) — API
+Platform generates no real routes here. Every `/api/*` route below is a
+hand-written controller that happens to share the `/api` prefix with the
+unused API Platform mount.
 
-_Hand-maintained, not generator output — covers `src/Controller/Api/` only (not the
-`/admin/*` internal routes in the static scan below). Auth: Public / JWT (`ROLE_CLUB`) /
-JWT + `ROLE_ADMIN`._
+No OpenAPI/Swagger spec file exists in this repo (see "API spec" note at
+the end) — this file is the sole source of truth for the route surface.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/register` | Public | Create user + club |
-| `POST` | `/api/login` | Public | JWT login → token |
-| `POST` | `/api/verify-email` | Public | Verify email address |
-| `POST` | `/api/resend-verification` | Public | Resend verification email |
-| `POST` | `/api/forgot-password` | Public | Trigger password reset flow |
-| `POST` | `/api/reset-password` | Public | Complete password reset |
-| `POST` | `/api/beta-request` | Public | Submit beta access request |
-| `POST` | `/api/sync` | JWT | Anti-cheat sync + leaderboard upsert |
-| `POST` | `/api/account/delete` | JWT | Permanently delete the caller's account + all owned clubs and their data |
-| `GET` | `/api/leaderboard/{category}` | JWT | Leaderboard by category + period |
-| `GET` | `/api/app-links` | Public | App store / deep link URLs |
-| `GET` | `/api/market/data` | JWT | Market pool (agents, scouts, investors, sponsors) |
-| `GET` | `/api/market/legacy` | JWT | Legacy market data format |
-| `POST` | `/api/market/assign` | JWT | Assign market entity to club; Player/Staff returns `snapshot` key |
-| `POST` | `/api/market/consume` | JWT | Consume/use a market entity |
-| `GET` | `/api/game-config` | JWT | Global game configuration values |
-| `GET` | `/api/events/templates` | JWT | Narrative event templates (cached 1hr) |
-| `GET` | `/api/inbox` / `GET /api/inbox/{id}` | JWT | Inbox offers |
-| `POST` | `/api/inbox/{id}/accept` | JWT | Accept inbox offer |
-| `POST` | `/api/inbox/{id}/reject` | JWT | Reject inbox offer |
-| `POST` | `/api/inbox/{id}/read` | JWT | Mark inbox message as read |
-| `GET` | `/api/finance/overview` | JWT | Financial summary |
-| `GET` | `/api/finance/investors` | JWT | Investor contracts |
-| `GET` | `/api/finance/sponsors` | JWT | Sponsor contracts |
-| `POST` | `/api/finance/sponsors/{id}/terminate` | JWT | Early-terminate a sponsor contract |
-| `POST` | `/api/pool/ensure` | JWT | Ensure market pool is warm for club |
-| `GET` | `/api/archetypes` | Public | Curated archetype catalogue (10 positive + 10 negative); ETag/`versionHash` cached |
-| `GET` | `/api/messages/pending` | JWT | Undelivered admin announcements for the club (capped: 1 blocking + 5 other) |
-| `POST` | `/api/messages/{id}/ack` | JWT | Record a message as `displayed`/`dismissed`; idempotent upsert |
-| `POST` | `/api/club/initialize` | JWT | Initialize a new club + world data |
-| `GET` | `/api/club/status` | JWT | Club initialization status |
-| `GET` | `/api/club/check` | JWT | Check if club exists for current user |
-| `GET` | `/api/club/foreign` | JWT | Foreign clubs for scouting |
-| `GET` | `/api/club/name-options` | JWT | Generated club name options |
-| `GET` | `/api/starter-config` | JWT | League ability ranges |
-| `GET` | `/api/league` | JWT | Club's current league data |
-| `POST` | `/api/league/conclude-season` | JWT | Submit season results |
-| `GET` | `/api/league/season-history` | JWT | Historical season records |
-| `GET` | `/api/league/season-history/{season}` | JWT | Season record detail |
-| `GET` | `/api/scout/search` | JWT | Search for players via scouts |
-| `GET` | `/api/scout/foreign-clubs` | JWT | NPC clubs available for scout searches |
-| `GET` | `/api/leaderboard/transfers/top-sellers` | JWT | Top transfer seller leaderboard |
-| `GET` | `/api/leaderboard/transfers/most-valuable` | JWT | Most valuable players leaderboard |
-| `GET` | `/api/admin/stats` | JWT + ROLE_ADMIN | Backend stats |
+## `src/Controller/` (top-level)
 
-**Drift note:** `/api/archetypes`, `/api/messages/pending`, `/api/messages/{id}/ack`, and
-`/api/league` don't appear in the static scan below (last run 2026-08-20) — either added
-since, or missed by the scan pattern. Re-run the generator to reconcile; until then, trust
-this table for those four.
+- **`SyncController`** `#[Route('/api')]` — `POST /api/login` (dead code
+  — intercepted by the `json_login` firewall authenticator before
+  reaching this method), `POST /api/register`, `POST /api/verify-email`,
+  `POST /api/resend-verification`, `POST /api/forgot-password`,
+  `POST /api/reset-password`, `POST /api/resend-password-reset`,
+  `POST /api/sync`.
+- **`LandingController`** — public marketing site (Twig, not API JSON).
+  `GET /` (`landing_home`), `GET /delete-account`
+  (`landing_delete_account`).
+- **`InitializeController`** `#[Route('/api/initialize')]` —
+  `POST /starter`, `GET /leagues`, `POST /league/{tier}` (`tier`
+  constrained to `\d+`).
+- **`AdminSecurityController`** — `GET|POST /admin/login`
+  (`admin_login`), `/admin/logout` (`admin_logout` — actually intercepted
+  by the firewall logout listener, method body throws `LogicException`).
 
-## Full route scan (static)
+## `src/Controller/Api/` — player-facing API (all under `/api/...`)
 
-_Extracted via static scan of `#[Route(...)]` attributes — run `bin/console debug:router` for the live, resolved route table._
-
-Note: `config/routes/easyadmin.yaml` and the EasyAdmin CRUD controllers (`AdminCrudController`, `AgentCrudController`, `BetaRequestCrudController`, `ClubCrudController`) shown here don't add static rows — EasyAdmin generates their routes dynamically via the `easyadmin.routes` loader rather than `#[Route(...)]` attributes, so they aren't visible to a static scan.
-
-| Method | Path | Controller#action |
+| Controller | Route prefix | Endpoints |
 |---|---|---|
-| ANY | `/admin/app-links` | `DashboardController::appLinks` |
-| POST | `/admin/app-links/save` | `DashboardController::saveAppLinks` |
-| ANY | `/admin/social` | `DashboardController::socialConnections` |
-| POST | `/admin/social/test/preview` | `DashboardController::socialTestPreview` |
-| POST | `/admin/social/test/publish` | `DashboardController::socialTestPublish` |
-| ANY | `/admin/settings` | `DashboardController::settings` |
-| ANY | `/admin/game-config` | `DashboardController::gameConfig` |
-| POST | `/admin/game-config/save` | `DashboardController::saveGameConfig` |
-| ANY | `/admin/starter-config` | `DashboardController::starterConfig` |
-| POST | `/admin/starter-config/save` | `DashboardController::saveStarterConfig` |
-| ANY | `/admin/pool-config` | `DashboardController::poolConfig` |
-| POST | `/admin/pool-config/save` | `DashboardController::savePoolConfig` |
-| POST | `/admin/pool-config/generate` | `DashboardController::generatePool` |
-| POST | `/admin/pool-config/generate-chunk` | `DashboardController::generatePoolChunk` |
-| GET | `/admin/pool-config/counts` | `DashboardController::poolCountsJson` |
-| POST | `/admin/pool-config/clear` | `DashboardController::clearPool` |
-| ANY | `/admin/narrative/content` | `DashboardController::narrativeContent` |
-| GET | `/admin/narrative/export` | `DashboardController::narrativeExport` |
-| POST | `/admin/narrative/import` | `DashboardController::narrativeImport` |
-| ANY | `/admin/config/content` | `DashboardController::configContent` |
-| GET | `/admin/config/export` | `DashboardController::configExport` |
-| POST | `/admin/config/import` | `DashboardController::configImport` |
-| ANY | `/admin/npc-clubs/content` | `DashboardController::npcClubsContent` |
-| POST | `/admin/npc-clubs/save-facility-config` | `DashboardController::saveNpcFacilityConfig` |
-| ANY | `/admin/leagues/overview` | `DashboardController::leaguesOverview` |
-| ANY | `/admin/facilities/overview` | `DashboardController::facilitiesOverview` |
-| POST | `/admin/npc-clubs/generate` | `DashboardController::generateNpcClubs` |
-| POST | `/admin/leagues/generate` | `DashboardController::generateLeagues` |
-| ANY | `/admin/world/content` | `DashboardController::worldContent` |
-| GET | `/admin/world/export` | `DashboardController::worldExport` |
-| POST | `/admin/world/import` | `DashboardController::worldImport` |
-| ANY | `/admin/worldpack-cache` | `DashboardController::worldpackCache` |
-| POST | `/admin/developer-tools/trigger-age21` | `DashboardController::triggerAge21Deletion` |
-| POST | `/admin/developer-tools/cleanup-entities` | `DashboardController::cleanupEntities` |
-| GET | `/admin/developer-tools/reset-database` | `DashboardController::resetDatabase` |
-| POST | `/admin/developer-tools/nuclear-reset` | `DashboardController::nuclearReset` |
-| ANY | `/admin/logs` | `DashboardController::logs` |
-| GET | `/admin/clubs/{id}/delete-info` | `DeleteAdminController::clubDeleteInfo` |
-| POST | `/admin/clubs/{id}/delete` | `DeleteAdminController::clubDelete` |
-| GET | `/admin/users/{id}/delete-info` | `DeleteAdminController::userDeleteInfo` |
-| POST | `/admin/users/{id}/delete` | `DeleteAdminController::userDelete` |
-| POST | `/admin/facilities/{id}/quick-edit` | `FacilityAdminController::quickEdit` |
-| POST | `/admin/leagues/{id}/quick-edit` | `LeagueAdminController::quickEdit` |
-| POST | `/admin/social/{id}/disconnect` | `SocialAuthController::disconnect` |
-| GET | `/admin/social/facebook/connect` | `SocialAuthController::facebookConnect` |
-| GET | `/admin/social/facebook/callback` | `SocialAuthController::facebookCallback` |
-| GET | `/admin/social/twitter/connect` | `SocialAuthController::twitterConnect` |
-| GET | `/admin/social/twitter/callback` | `SocialAuthController::twitterCallback` |
-| POST | `/admin/worldpack-cache/delete/{id}` | `WorldPackController::deleteEntry` |
-| POST | `/admin/worldpack-cache/delete-country` | `WorldPackController::deleteCountry` |
-| GET | `/admin/worldpack-cache/tiers/{country}` | `WorldPackController::getTiers` |
-| POST | `/admin/worldpack-cache/warm-tier` | `WorldPackController::warmTier` |
-| ANY | `/admin/login` | `AdminSecurityController::login` |
-| ANY | `/admin/logout` | `AdminSecurityController::logout` |
-| POST | `/api/account/delete` | `AccountController::delete` |
-| GET | `/api/admin/stats` | `AdminController::stats` |
-| GET | `/api/app-links` | `AppLinksController::index` |
-| POST | `/api/beta-request` | `BetaRequestController::submit` |
-| POST | `/api/beta-request/verify` | `BetaRequestController::verify` |
-| GET | `/api/club/foreign` | `ClubController::foreignClubs` |
-| GET | `/api/club/name-options` | `ClubController::nameOptions` |
-| POST | `/api/club/initialize` | `ClubController::initialize` |
-| GET | `/api/club/check` | `ClubController::check` |
-| GET | `/api/club/status` | `ClubController::status` |
-| GET | `/api/stats/most-transfers` | `CommunityStatsController::mostTransfers` |
-| GET | `/api/stats/most-development` | `CommunityStatsController::mostDevelopment` |
-| GET | `/api/stats/most-seasons` | `CommunityStatsController::mostSeasons` |
-| GET | `/api/stats/most-trophies` | `CommunityStatsController::mostTrophies` |
-| GET | `/api/events/templates` | `EventController::templates` |
-| GET | `/api/finance/overview` | `FinanceController::overview` |
-| GET | `/api/finance/investors` | `FinanceController::investors` |
-| GET | `/api/finance/sponsors` | `FinanceController::sponsors` |
-| POST | `/api/finance/sponsors/{id}/terminate` | `FinanceController::terminateSponsor` |
-| GET | `/api/game-config` | `GameConfigController::index` |
-| GET | `/api/inbox` | `InboxController::list` |
-| GET | `/api/inbox/{id}` | `InboxController::show` |
-| POST | `/api/inbox/{id}/accept` | `InboxController::accept` |
-| POST | `/api/inbox/{id}/reject` | `InboxController::reject` |
-| POST | `/api/inbox/{id}/read` | `InboxController::markRead` |
-| POST | `/api/league/conclude-season` | `LeagueController::concludeSeason` |
-| GET | `/api/league/season-history` | `LeagueController::seasonHistory` |
-| GET | `/api/league/season-history/{season}` | `LeagueController::seasonHistoryDetail` |
-| GET | `/api/market/data` | `MarketController::data` |
-| POST | `/api/market/assign` | `MarketController::assign` |
-| POST | `/api/market/consume` | `MarketController::consume` |
-| GET | `/api/market/legacy` | `MarketController::legacyData` |
-| POST | `/api/pool/ensure` | `PoolController::ensure` |
-| GET | `/api/scout/foreign-clubs` | `ScoutSearchController::foreignClubs` |
-| GET | `/api/scout/search` | `ScoutSearchController::search` |
-| GET | `/api/starter-config` | `StarterConfigController::index` |
-| GET | `/api/leaderboard/transfers/top-sellers` | `TransferLeaderboardController::topSellers` |
-| GET | `/api/leaderboard/transfers/most-valuable` | `TransferLeaderboardController::mostValuable` |
-| GET | `/` | `HomeController::index` |
-| POST | `/api/initialize/starter` | `InitializeController::starter` |
-| GET | `/api/initialize/leagues` | `InitializeController::leagues` |
-| POST | `/api/initialize/league/{tier}` | `InitializeController::tier` |
-| GET | `/api/leaderboard/{category}` | `LeaderboardController::index` |
-| POST | `/api/login` | `SyncController::login` |
-| POST | `/api/register` | `SyncController::register` |
-| POST | `/api/verify-email` | `SyncController::verifyEmail` |
-| POST | `/api/resend-verification` | `SyncController::resendVerification` |
-| POST | `/api/forgot-password` | `SyncController::forgotPassword` |
-| POST | `/api/reset-password` | `SyncController::resetPassword` |
-| POST | `/api/resend-password-reset` | `SyncController::resendPasswordReset` |
-| POST | `/api/sync` | `SyncController::sync` |
+| `AccountController` | `/api/account` | `POST /delete` (`IsGranted('ROLE_CLUB')`) |
+| `AccountDeletionRequestController` | `/api/account` | `POST /delete-request` |
+| `AdminController` | `/api/admin` | `GET /stats` — **stub**, returns a static "not implemented" JSON, no service call |
+| `AdminMessageController` | `/api/messages` | `GET /pending`, `POST /{id}/ack` |
+| `AppLinksController` | `/api` | `GET /app-links` |
+| `ArchetypeController` | `/api/archetypes` | `GET` (single action) |
+| `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
+| `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /status` |
+| `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-development`, `/most-seasons`, `/most-trophies` |
+| `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` |
+| `EventController` | `/api/events` | `GET /templates` |
+| `ExcursionController` | `/api/excursions` | `GET` |
+| `FinanceController` | `/api/finance` | `GET /overview`, `GET /investors`, `GET /sponsors`, `POST /sponsors/{id}/terminate` |
+| `GameConfigController` | `/api` | `GET /game-config` |
+| `InboxController` | `/api/inbox` | `GET ''`, `GET /{id}`, `POST /{id}/accept`, `POST /{id}/reject`, `POST /{id}/read` |
+| `LeaderboardController` | `/api` | `GET /leaderboard/{category}` |
+| `LeagueController` | `/api/league` | `POST /conclude-season`, `GET /season-history`, `GET /season-history/{season}` |
+| `MarketController` | `/api/market` | `GET /data`, `POST /assign`, `POST /consume`, `GET /legacy` |
+| `PoolController` | `/api/pool` | `POST /ensure` (`IsGranted('IS_AUTHENTICATED_FULLY')`) |
+| `ScoutSearchController` | `/api/scout` | `GET /foreign-clubs`, `GET /search` |
+| `StarterConfigController` | `/api` | `GET /starter-config` |
+| `TransferLeaderboardController` | `/api/leaderboard/transfers` | `GET /top-sellers`, `GET /most-valuable` |
+| `VideoController` | `/api` | `GET /videos/latest` |
+| `WorldOverviewController` | `/api` | `GET /world/overview` |
+
+## `src/Controller/Admin/` — custom (non-CRUD) admin actions
+
+- **`DashboardController`** — the EasyAdmin dashboard root, plus ~25
+  bespoke routes: `/admin/app-links[/save]`, `/admin/social`,
+  `/admin/social/schedule/save`, `/admin/social/test/preview`,
+  `/admin/social/test/publish`, `/admin/settings`,
+  `/admin/game-config[/save]`, `/admin/starter-config[/save]`,
+  `/admin/narrative/content|export|import`,
+  `/admin/config/content|export|import`,
+  `/admin/npc-clubs/content|save-facility-config|save-size-weights|generate`,
+  `/admin/leagues/overview|generate`, `/admin/facilities/overview`,
+  `/admin/world/content|export|import`, `/admin/worldpack-cache`,
+  `/admin/developer-tools/trigger-age21|cleanup-entities|generate-leaderboards|reset-database|nuclear-reset`,
+  `/admin/logs`. Also declares `configureMenuItems()` linking to every
+  EasyAdmin CRUD controller below.
+- **`AdminStatsController`** — `GET /admin/stats/growth`,
+  `GET /admin/stats/leaderboards`,
+  `GET /admin/stats/pool/{entity}` (`entity` restricted to
+  `players|staff|scouts|agents|world`), `POST /admin/stats/refresh`.
+- **`DeleteAdminController`** — `GET /admin/clubs/{id}/delete-info`,
+  `POST /admin/clubs/{id}/delete`, `GET /admin/users/{id}/delete-info`,
+  `POST /admin/users/{id}/delete`.
+- **`FacilityAdminController`** — `POST /admin/facilities/{id}/quick-edit`.
+- **`LeagueAdminController`** — `POST /admin/leagues/{id}/quick-edit`.
+- **`BetaRequestInviteController`** —
+  `GET /admin/beta-requests/{id}/send-invite`.
+- **`SocialAuthController`** `#[Route('/admin/social')]` — OAuth flows:
+  `POST /{id}/disconnect`, `GET /facebook/connect`,
+  `GET /facebook/callback`, `GET /twitter/connect`,
+  `GET /twitter/callback`.
+- **`WorldPackController`** —
+  `POST /admin/worldpack-cache/delete/{id}`,
+  `POST /admin/worldpack-cache/delete-country`,
+  `GET /admin/worldpack-cache/tiers/{country}`,
+  `POST /admin/worldpack-cache/warm-tier`.
+- **`PoolConfigController`** —
+  `/admin/{player,staff,investor}-pool-config[/save|/generate-chunk|/counts|/clear]`.
+- **`CompetitionEntrantCrudController`** — in addition to being an
+  EasyAdmin CRUD controller (see below), declares one custom action:
+  `GET|POST /admin/competition-entrant/{entrant}/generate-spoof`.
+
+## `src/Controller/Admin/*CrudController.php` — EasyAdmin CRUD
+
+Routes generated dynamically by EasyAdmin (not static `#[Route]`), one
+controller per entity, each mapping via `getEntityFqcn()`:
+`ActiveCompetition`, `Admin`, `AdminMessage`, `Agent`, `AudienceGroup`,
+`BetaRequest`, `Club`, `CompetitionEntrant`, `CompetitionRound`,
+`CompetitionTemplate`, `DeletionRequest`, `Excursion`,
+`FacilityTemplate`, `GameEventTemplate`, `Guardian`, `Investor`,
+`LeaderboardEntry`, `League`, `NpcClub`, `PlayerArchetype`, `Player`,
+`RewardTemplate`, `Scout`, `SeasonRecord`, `SeasonSnapshot`,
+`SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
+`TacticalAdvantage`, `Transfer`, `User`. Each gives standard EasyAdmin
+CRUD screens (index/detail/edit/new/delete) plus whatever its own
+`configureFields()`/`configureActions()` customizes.
+
+## API spec
+
+**No OpenAPI/Swagger spec file exists.** The only Swagger-named files
+found are vendored **swagger-ui static assets** bundled by
+`api-platform/core` under `public/bundles/apiplatform/swagger-ui/`
+(display assets, not a project-authored spec). Since no entity is
+`#[ApiResource]`-annotated, API Platform's auto-generated `/api/docs`
+spec would in any case be effectively empty. Treat the routes documented
+above as the sole source of truth — nothing to cross-check against.
