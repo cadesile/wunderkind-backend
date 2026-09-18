@@ -1,0 +1,149 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% macro status_badge(color, label) %}
+    <span class="badge bg-{{ color }}-subtle text-{{ color }} border border-{{ color }}-subtle">{{ label }}</span>
+{% endmacro %}
+
+{% set roundStatusColor = {
+    pending:   'secondary',
+    scheduled: 'primary',
+    running:   'warning',
+    completed: 'success',
+    cancelled: 'danger',
+} %}
+
+{% set fixtureStatusColor = {
+    pending:  'secondary',
+    complete: 'success',
+    bye:      'secondary',
+} %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">{{ competition.template.name }}</h5>
+        <p class="text-muted small mb-0">
+            {{ _self.status_badge(roundStatusColor[competition.status.value] ?? 'secondary', competition.status.value) }}
+            &middot; {{ competition.entrantCapacity }} entrants &middot; {{ competition.durationOption.value }}
+            {% if competition.startsAt %}&middot; starts {{ competition.startsAt|date('Y-m-d H:i') }}{% endif %}
+            {% if competition.endsAt %}&middot; ends {{ competition.endsAt|date('Y-m-d H:i') }}{% endif %}
+        </p>
+    </div>
+
+    {% if rounds is empty %}
+        <div class="col-12">
+            <p class="text-muted small">No rounds yet — this competition is still REGISTERING.</p>
+        </div>
+    {% endif %}
+
+    {% for round in rounds %}
+        {% set fixtures = fixturesByRoundId[round.id|ea_as_string] ?? [] %}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <span class="fw-semibold small">{{ round.label }}</span>
+                    {{ _self.status_badge(roundStatusColor[round.status.value] ?? 'secondary', round.status.value) }}
+                    {% if round.matchEngineIdentifier %}
+                        <span class="badge bg-dark-subtle text-dark border border-dark-subtle">{{ round.matchEngineIdentifier.value }}</span>
+                    {% endif %}
+                    <span class="ms-auto text-muted small">scheduled {{ round.scheduledAt|date('Y-m-d H:i') }}</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 small align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Home</th>
+                                <th>Away</th>
+                                <th class="text-center">Score</th>
+                                <th>Status</th>
+                                <th class="pe-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fixture in fixtures %}
+                                {% set result = resultsByFixtureId[fixture.id|ea_as_string] ?? null %}
+                                {% set rowId = 'fixture-' ~ fixture.id %}
+                                <tr>
+                                    <td class="ps-3">
+                                        {% if fixture.homeEntrant %}
+                                            {{ fixture.homeEntrant.club.name }}
+                                            <span class="text-muted">#{{ fixture.homeEntrant.seed }}</span>
+                                        {% else %}
+                                            <span class="text-muted">BYE</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if fixture.awayEntrant %}
+                                            {{ fixture.awayEntrant.club.name }}
+                                            <span class="text-muted">#{{ fixture.awayEntrant.seed }}</span>
+                                        {% else %}
+                                            <span class="text-muted">BYE</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center fw-semibold">
+                                        {% if result %}
+                                            {{ result.homeScore }} &ndash; {{ result.awayScore }}
+                                        {% else %}
+                                            <span class="text-muted">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ _self.status_badge(fixtureStatusColor[fixture.status.value] ?? 'secondary', fixture.status.value) }}</td>
+                                    <td class="pe-3 text-end">
+                                        {% if result %}
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                    data-bs-toggle="collapse" data-bs-target="#{{ rowId }}" aria-expanded="false">
+                                                <i class="fa fa-magnifying-glass"></i> Details
+                                            </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% if result %}
+                                    <tr class="collapse" id="{{ rowId }}">
+                                        <td colspan="5" class="bg-body-tertiary">
+                                            <div class="p-3">
+                                                <div class="d-flex gap-3 mb-2 small text-muted">
+                                                    <span><i class="fa fa-microchip me-1"></i>{{ result.engineIdentifier.value }}</span>
+                                                    <span><i class="fa fa-clock me-1"></i>{{ result.generatedAt|date('Y-m-d H:i:s') }}</span>
+                                                </div>
+                                                {% if result.eventLogJson is not empty %}
+                                                    <table class="table table-sm mb-2">
+                                                        <thead>
+                                                            <tr class="text-muted small">
+                                                                <th style="width:4rem;">Min</th>
+                                                                <th>Type</th>
+                                                                <th>Team</th>
+                                                                <th>Scorer</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for event in result.eventLogJson %}
+                                                                <tr>
+                                                                    <td>{{ event.minute ?? '' }}'</td>
+                                                                    <td>{{ event.type ?? '' }}</td>
+                                                                    <td>{{ event.team ?? '' }}</td>
+                                                                    <td>{{ event.scorer ?? '' }}</td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                {% else %}
+                                                    <p class="text-muted small mb-2">No event log recorded.</p>
+                                                {% endif %}
+                                                {% if result.narrativePayloadPretty %}
+                                                    <pre class="small bg-body p-2 mb-0">{{ result.narrativePayloadPretty }}</pre>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            {% else %}
+                                <tr><td colspan="5" class="text-muted small p-3">No fixtures.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

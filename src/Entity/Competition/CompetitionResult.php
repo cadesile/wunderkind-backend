@@ -67,4 +67,17 @@ class CompetitionResult
     public function getEngineIdentifier(): MatchEngineIdentifier { return $this->engineIdentifier; }
 
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
+
+    /** Read-only virtual accessor for the admin detail view — see CompetitionEntrant::getSnapshotJsonPretty(). */
+    public function getEventLogJsonPretty(): string
+    {
+        return json_encode($this->eventLogJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]';
+    }
+
+    public function getNarrativePayloadPretty(): ?string
+    {
+        return $this->narrativePayload === null
+            ? null
+            : (json_encode($this->narrativePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
+    }
 }

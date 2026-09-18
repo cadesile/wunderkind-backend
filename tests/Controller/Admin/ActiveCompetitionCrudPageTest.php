@@ -5,19 +5,35 @@ declare(strict_types=1);
 namespace App\Tests\Controller\Admin;
 
 use App\Entity\Admin;
+use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
+use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionTemplate;
+use App\Entity\User;
 use App\Enum\Competition\CompetitionDuration;
+use App\Repository\Competition\CompetitionRoundRepository;
+use App\Service\Competition\CompetitionLockService;
+use App\Service\Competition\CompetitionRoundProcessorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /**
- * Regression coverage for a real production crash: durationOption is a backed
- * CompetitionDuration enum with no __toString(), and the index page's TextField
- * tried to render it directly, throwing "could not be converted to string" the
- * moment a real ActiveCompetition row existed (CompetitionTemplateCrudPageTest only
- * exercises CompetitionTemplate's own copy of the field, never this controller).
+ * Covers two things for the Active Competitions admin section:
+ *
+ * 1. Regression coverage for a real production crash: durationOption is a backed
+ *    CompetitionDuration enum with no __toString(), and rendering it directly used to
+ *    throw "could not be converted to string" the moment a real ActiveCompetition row
+ *    existed. Index page fix: configureFields() renders it via ChoiceField+EnumType.
+ *    Detail page fix: detail() no longer uses EasyAdmin's default configureFields()
+ *    rendering at all (see below), so it can't hit the same failure mode.
+ * 2. The "view an active competition" admin page itself — detail() is overridden (same
+ *    pattern as ClubCrudController::detail()) to show the full bracket (rounds ->
+ *    fixtures -> results) inline, since this repo deliberately avoids standalone
+ *    CompetitionFixture/CompetitionResult CRUD controllers (see
+ *    CompetitionRoundCrudController's docblock). Tested against a real processed round
+ *    so it catches the same class of bug the API's show() endpoint had (result silently
+ *    never wired up despite the round actually completing).
  */
 class ActiveCompetitionCrudPageTest extends WebTestCase
 {
@@ -74,11 +90,12 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
     }
 
     /**
-     * Same root cause, different EasyAdmin template — the detail page (crud/detail.html.twig)
-     * renders the same configureFields() output as the index page and crashed on
-     * durationOption exactly the same way before the fix.
+     * Same root cause as the index-page test, but the detail page no longer shares its
+     * rendering path — detail() is now a custom override (see class docblock) that shows
+     * durationOption.value ("24h"), not the raw enum case name, so the assertion here
+     * reflects the new template rather than the original EasyAdmin default one.
      */
-    public function testDetailPageRendersAnInstanceWithoutCrashingOnTheDurationEnum(): void
+    public function testDetailPageRendersAnInstanceWithNoRoundsWithoutCrashing(): void
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
@@ -94,8 +111,113 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $client->request('GET', '/admin/active-competition/' . $instance->getId());
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', CompetitionDuration::ONE_DAY->name);
+        self::assertSelectorTextContains('body', CompetitionDuration::ONE_DAY->value);
+        // Still REGISTERING with zero rounds — the empty-state branch, not a crash.
+        self::assertSelectorTextContains('body', 'REGISTERING');
 
         $this->removeFixtures($em);
+    }
+
+    private function createClub(EntityManagerInterface $em, string $name): Club
+    {
+        $user = new User('active-comp-admin-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $user->setRoles([User::ROLE_CLUB]);
+        $club = new Club($name, $user);
+
+        $em->persist($user);
+        $em->persist($club);
+
+        return $club;
+    }
+
+    /** Builds a locked, 4-entrant ActiveCompetition (round 1 = SF, round 2 = FINAL) and processes round 1. */
+    private function buildCompetitionWithOneProcessedRound(EntityManagerInterface $em): ActiveCompetition
+    {
+        $template = new CompetitionTemplate('Admin View Cup', 'admin-view-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+        $em->persist($template);
+
+        $instance = new ActiveCompetition($template);
+        $em->persist($instance);
+
+        foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
+            $club    = $this->createClub($em, $name);
+            $entrant = new CompetitionEntrant($instance, $club, 0, [
+                'club'    => ['id' => (string) $club->getId(), 'name' => $name],
+                'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
+            ]);
+            $em->persist($entrant);
+        }
+        $em->flush();
+
+        $lockService = self::getContainer()->get(CompetitionLockService::class);
+        $lockService->lock($instance);
+        $em->flush();
+
+        $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
+        $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $round1->setScheduledAt(new \DateTimeImmutable('-1 minute'));
+        $em->flush();
+
+        $processor = self::getContainer()->get(CompetitionRoundProcessorService::class);
+        $processed = $processor->processDueRounds(new \DateTimeImmutable());
+        self::assertGreaterThan(0, $processed, 'test setup: round 1 should process');
+
+        return $instance;
+    }
+
+    public function testDetailPageShowsRoundsFixturesAndScores(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildCompetitionWithOneProcessedRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+
+        $text = $crawler->text(null, true);
+        $this->assertStringContainsString('SF', $text);
+        $this->assertStringContainsString('FINAL', $text);
+        $this->assertStringContainsString('complete', $text);
+
+        // Round 1 fixtures paired the 4 seeded clubs — their names must render regardless
+        // of bracket pairing order.
+        foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
+            $this->assertStringContainsString($name, $text);
+        }
+
+        // A completed fixture must show a real "home – away" scoreline, not a blank dash,
+        // and must offer a way to see the full result detail (event log).
+        $this->assertMatchesRegularExpression('/\d+\s*[\x{2013}-]\s*\d+/u', $text, 'expected a rendered scoreline like "2 – 1"');
+        $this->assertStringContainsString('Details', $text);
+    }
+
+    public function testDetailPageResultDetailsIncludeEngineAndEventLog(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildCompetitionWithOneProcessedRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+
+        $text = $crawler->text(null, true);
+        $this->assertStringContainsString('deterministic', $text);
+    }
+
+    public function testEditNewAndDeleteActionsAreDisabled(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildCompetitionWithOneProcessedRound($em);
+
+        $client->request('GET', '/admin/active-competition/new');
+        self::assertResponseStatusCodeSame(403);
+
+        $client->request('GET', '/admin/active-competition/' . $instance->getId() . '/edit');
+        self::assertResponseStatusCodeSame(403);
     }
 }

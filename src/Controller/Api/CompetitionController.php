@@ -8,12 +8,14 @@ use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
+use App\Entity\Competition\CompetitionResult;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Repository\Competition\ActiveCompetitionRepository;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
+use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Repository\Competition\CompetitionTemplateRepository;
 use App\Service\ClubResolver;
@@ -44,6 +46,7 @@ class CompetitionController extends AbstractController
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
+        private readonly CompetitionResultRepository $resultRepository,
         private readonly EligibilityEvaluator $eligibilityEvaluator,
         private readonly SnapshotValidator $snapshotValidator,
         private readonly CompetitionRegistrationService $registrationService,
@@ -178,8 +181,21 @@ class CompetitionController extends AbstractController
             return $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND);
         }
 
+        $roundEntities     = $this->roundRepository->findByCompetitionOrderedByIndex($activeCompetition);
+        $fixturesByRoundId = [];
+        $allFixtureIds     = [];
+        foreach ($roundEntities as $round) {
+            $fixtures                                        = $this->fixtureRepository->findByRoundOrderedBySlot($round);
+            $fixturesByRoundId[$round->getId()->toRfc4122()] = $fixtures;
+            foreach ($fixtures as $fixture) {
+                $allFixtureIds[] = $fixture->getId();
+            }
+        }
+
+        $resultsByFixtureId = $this->resultRepository->findByFixtureIds($allFixtureIds);
+
         $rounds = [];
-        foreach ($this->roundRepository->findByCompetitionOrderedByIndex($activeCompetition) as $round) {
+        foreach ($roundEntities as $round) {
             $fixtures = array_map(
                 fn (CompetitionFixture $f) => [
                     'fixtureId' => (string) $f->getId(),
@@ -187,10 +203,9 @@ class CompetitionController extends AbstractController
                     'status'    => $f->getStatus()->value,
                     'home'      => $this->serializeEntrantSummary($f->getHomeEntrant()),
                     'away'      => $this->serializeEntrantSummary($f->getAwayEntrant()),
-                    // Wired up once results are produced (DeterministicEngine, Phase 1 step 4).
-                    'result'    => null,
+                    'result'    => $this->serializeResultSummary($resultsByFixtureId[(string) $f->getId()] ?? null),
                 ],
-                $this->fixtureRepository->findByRoundOrderedBySlot($round),
+                $fixturesByRoundId[$round->getId()->toRfc4122()],
             );
 
             $rounds[] = [
@@ -245,6 +260,22 @@ class CompetitionController extends AbstractController
             'entrantId' => (string) $entrant->getId(),
             'clubName'  => $entrant->getSnapshotJson()['club']['name'] ?? null,
             'seed'      => $entrant->getSeed(),
+        ];
+    }
+
+    /**
+     * Score-only summary for the public bracket view — the full event log is an admin-only
+     * concern, not part of this lightweight client payload.
+     */
+    private function serializeResultSummary(?CompetitionResult $result): ?array
+    {
+        if ($result === null) {
+            return null;
+        }
+
+        return [
+            'homeScore' => $result->getHomeScore(),
+            'awayScore' => $result->getAwayScore(),
         ];
     }
 
