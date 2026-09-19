@@ -26,3 +26,40 @@
 # Uploaded facility images (runtime data, not source)
 /public/uploads/facilities/*
 !/public/uploads/facilities/.gitkeep
+
+# icm-codebase-context: start
+
+# Claude Code #
+###############
+.claude/settings.local.json
+CLAUDE.local.md
+CLAUDE.md
+
+# AGENTS.md convention (Codex, and others that share it) #
+##########################################################
+AGENTS.md
+
+# Gemini CLI #
+##############
+.gemini/settings.local.json
+GEMINI.local.md
+GEMINI.md
+
+# GitHub Copilot #
+##################
+.github/copilot-instructions.local.md
+.github/copilot-instructions.md
+
+# Cursor #
+##########
+.cursor/rules/*.local.mdc
+.cursorrules
+
+# Windsurf #
+############
+.windsurf/rules/*.local.md
+.windsurfrules
+
+# .context/ is the master, committed source of truth — the files above
+# are disposable per-agent pointers to it, not tracked here.
+# icm-codebase-context: end

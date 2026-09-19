@@ -1,670 +1,281 @@
-# symfony Entity Definitions
-
-#### `Admin`
-
-> **Purpose:** separate admin user entity (`UserInterface`); `email`, `password`, `name`, `department`, `accessLevel`; always `ROLE_ADMIN`; created via `app:admin:create`
-
-```php
-private UuidV7 $id;
-    private string $email;
-    private string $password;
-    private ?string $name = null;
-    private ?string $department = null;
-    private int $accessLevel = 1;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `Agent`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $name;
-    private int $reputation = 50;
-    private string $commissionRate = '10.00';
-    private ?\DateTimeImmutable $dob = null;
-    private ?string $nationality = null;
-    private array $judgements = [];
-    private int $experience = 0;
-    private int $rating = 50;
-    private Collection $players;
-    private ?array $appearance = null;
-```
-
-> **Field note:** **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
-
-#### `BetaRequest`
-
-> **Purpose:** beta-access waitlist entry; `email`, `code`, `valid`, `attempts`, `expiresAt`, `verifiedAt`; verified via `/api/beta-request/verify`
-
-```php
-private UuidV7 $id;
-    private string $email;
-    private string $code;
-    private bool $valid = false;
-    private int $attempts = 0;
-    private \DateTimeImmutable $expiresAt;
-    private \DateTimeImmutable $createdAt;
-    private ?\DateTimeImmutable $verifiedAt = null;
-```
-
-#### `Club`
-
-> **Purpose:** `reputation`, `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`, manager traits (`temperament`/`discipline`/`ambition` 0–100 clamped setters), `paName`, `financialYearStart`, `balance`, `country`, `abbreviation`
-
-```php
-private UuidV7 $id;
-    private string $name;
-    private int $reputation = 0;
-    private int $totalCareerEarnings = 0;
-    private int $hallOfFamePoints = 0;
-    private int $lastSyncedWeek = 0;
-    private ?\DateTimeImmutable $lastSyncedAt = null;
-    private int $marketPoolSize = 20;
-    private int $financialYearStart = 4;
-    private ?string $country = null;
-    private ?string $abbreviation = null;
-    private ?\DateTimeImmutable $worldInitializedAt = null;
-    private ?\DateTimeImmutable $starterInitializedAt = null;
-    private ?\DateTimeImmutable $tutorialCompletedAt = null;
-    private ?string $paName = null;
-    private int $managerTemperament = 50;
-    private int $managerDiscipline = 50;
-    private int $managerAmbition = 50;
-    private int $balance = 0;
-    private ?array $managerProfile = null;
-    private \DateTimeImmutable $createdAt;
-    private User $user;
-    private Collection $transfers;
-    private Collection $syncRecords;
-    private Collection $leaderboardEntries;
-```
-
-> **Field note:** **`hallOfFamePoints`** is `max(current, incoming)` — never decreases. **`reputation`** floors at 0. **`totalCareerEarnings`** adds deltas.
-
-#### `CountryWorldPackCache`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $country;
-    private int $tier;
-    private array $payload;
-    private \DateTimeImmutable $generatedAt;
-```
-
-#### `EmailVerification`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private User $user;
-    private string $code;
-    private \DateTimeImmutable $expiresAt;
-    private VerificationPurpose $purpose;
-    private int $attempts = 0;
-    private ?\DateTimeImmutable $verifiedAt = null;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `FacilityTemplate`
-
-> **Purpose:** canonical slug shared with frontend; `category` (TRAINING/MEDICAL/SCOUTING), `baseCost`, `weeklyUpkeepBase`, `matchdayIncome`, `matchdayIncomeMultiplier`; seeded via admin
-
-```php
-private Uuid $id;
-    private string $slug;
-    private string $label;
-    private string $description;
-    private string $category;
-    private int $baseCost;
-    private int $weeklyUpkeepBase = 0;
-    private ?int $matchdayIncome = null;
-    private ?float $matchdayIncomeMultiplier = null;
-    private float $reputationBonus = 0.0;
-    private int $maxLevel = 5;
-    private float $decayBase = 2.0;
-    private array $gameplayEffects = [];
-    private int $baseConstructionWeeks = 4;
-    private int $sortOrder = 0;
-    private bool $isActive = true;
-    private \DateTimeImmutable $updatedAt;
-```
-
-#### `GameConfig`
-
-> **Purpose:** singleton row; all global gameplay constants (XP rates, injury chances, wage multipliers, attendance formulas, etc.)
-
-```php
-private ?int $id = null;
-    private int $cliqueRelationshipThreshold = 20;
-    private int $cliqueSquadCapPercent = 30;
-    private int $cliqueMinTenureWeeks = 3;
-    private int $baseXP = 10;
-    private float $baseInjuryProbability = 0.05;
-    private int $regressionUpperThreshold = 14;
-    private int $regressionLowerThreshold = 7;
-    private float $reputationDeltaBase = 0.15;
-    private float $reputationDeltaFacilityMultiplier = 0.15;
-    private int $injuryMinorWeight = 60;
-    private int $injuryModerateWeight = 30;
-    private int $injurySeriousWeight = 10;
-    private float $potentialOvershootMax = 0.05;
-    private float $potentialDecayRate = 0.5;
-    private float $coachDevelopmentMaxMultiplier = 2.0;
-    private int $coachDevelopmentMinSpecialism = 20;
-    private float $coachDevelopmentStackingFactor = 0.3;
-    private float $coachMoraleInfluence = 0.5;
-    private int $attributeHardCap = 98;
-    private int $physicalDegradationAgeThreshold = 30;
-    private float $physicalDegradationRateMild = 0.1;
-    private float $physicalDegradationRateModerate = 0.2;
-    private float $physicalDegradationRateSevere = 0.4;
-    private float $physicalDegradationPersonalityScale = 0.2;
-```
-
-#### `GameEventTemplate`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $slug;
-    private EventCategory $category;
-    private int $weight = 1;
-    private string $title;
-    private string $bodyTemplate;
-    private array $impacts = [];
-    private ?array $firingConditions = null;
-    private ?string $severity = null;
-    private bool $noInteract = false;
-    private ?array $chainedEvents = null;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `Guardian`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $firstName;
-    private string $lastName;
-    private string $gender = 'male';
-    private ?\DateTimeImmutable $dateOfBirth = null;
-    private ?string $contactEmail = null;
-    private int $demandLevel = 5;
-    private int $loyaltyToClub = 50;
-    private Player $player;
-```
-
-#### `InboxMessage`
-
-> **Purpose:** `senderType` (MessageSenderType), `offerData` (json), `status` (MessageStatus)
-
-```php
-private UuidV7 $id;
-    private Club $club;
-    private MessageSenderType $senderType;
-    private string $senderName;
-    private string $subject;
-    private string $body;
-    private ?array $offerData = null;
-    private MessageStatus $status = MessageStatus::UNREAD;
-    private ?string $relatedEntityType = null;
-    private ?string $relatedEntityId = null;
-    private \DateTimeImmutable $createdAt;
-    private ?\DateTimeImmutable $respondedAt = null;
-```
-
-#### `Investor`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $company;
-    private ?string $nationality = null;
-    private CompanySize $size = CompanySize::MEDIUM;
-    private bool $isActive = true;
-    private ?Club $club = null;
-    private \DateTimeImmutable $createdAt;
-    private InvestorTier $tier = InvestorTier::ANGEL;
-    private int $investmentAmount = 0;
-    private string $percentageOwned = '5.00';
-    private ?\DateTimeImmutable $assignedAt = null;
-    private ?\DateTimeImmutable $investedAt = null;
-    private ?\DateTimeImmutable $lastPayoutAt = null;
-```
-
-#### `LeaderboardEntry`
-
-> **Purpose:** UNIQUE(club, category, period); `rank_position` column (not `rank`)
-
-```php
-private UuidV7 $id;
-    private Club $club;
-    private LeaderboardCategory $category;
-    private int $score = 0;
-    private string $period;
-    private ?int $rank = null;
-    private \DateTimeImmutable $updatedAt;
-```
-
-> **Field note:** **`rank`** is a reserved SQL word — `LeaderboardEntry` uses column name `rank_position`.
-
-#### `League`
-
-> **Purpose:** `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
-
-```php
-private UuidV7 $id;
-    private string $country;
-    private int $tier;
-    private string $name;
-    private ?int $promotionSpots = null;
-    private ?int $tvDeal = null;
-    private ?ReputationTier $leagueReputationTier = null;
-    private ?int $prizeMoney = null;
-    private ?int $leaguePositionPot = null;
-    private int $sponsorCount = 0;
-    private ?string $trophyImage = null;
-    private ?TrophyColour $trophyColour = null;
-    private Collection $leagueSponsors;
-    private Collection $sponsors;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `LeagueSponsor`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private League $league;
-    private Sponsor $sponsor;
-    private int $rolledValue = 0;
-```
-
-#### `MatchResult`
-
-> **Purpose:** per-club match record; `goalsFor`, `goalsAgainst`, `week`, `season`, `fixtureId` (unique), `opponentClubName`, `isHome`, `homeGoals`, `awayGoals`, `round`, `playedAt`, `yellowCards`; FK to `Club`
-
-```php
-private UuidV7 $id;
-    private Club $club;
-    private int $goalsFor;
-    private int $goalsAgainst;
-    private int $week;
-    private int $season;
-    private ?string $fixtureId = null;
-    private ?string $opponentClubName = null;
-    private ?bool $isHome = null;
-    private ?int $homeGoals = null;
-    private ?int $awayGoals = null;
-    private ?int $round = null;
-    private ?\DateTimeImmutable $playedAt = null;
-    private int $yellowCards = 0;
-    private int $redCards = 0;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `NpcClub`
-
-> **Purpose:** `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor`, `playingStyle`, `financialApproach`; grouped into leagues for the world pack
-
-```php
-private UuidV7 $id;
-    private string $name;
-    private string $country;
-    private int $tier;
-    private int $reputation;
-    private string $primaryColor;
-    private string $secondaryColor;
-    private ?string $abbreviation = null;
-    private ?string $stadiumName = null;
-    private int $balance;
-    private string $playingStyle = 'DIRECT';
-    private string $financialApproach = 'BALANCED';
-    private int $managerTemperament = 50;
-    private array $facilities;
-    private \DateTimeImmutable $createdAt;
-    private ?League $league = null;
-    private Formation $formation = Formation::F_442;
-```
-
-#### `PersonalityProfile`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private int $determination = 10;
-    private int $professionalism = 10;
-    private int $ambition = 10;
-    private int $loyalty = 10;
-    private int $adaptability = 10;
-    private int $pressure = 10;
-    private int $temperament = 10;
-    private int $consistency = 10;
-```
-
-#### `Player`
-
-> **Purpose:** `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; nullable `?Agent $agent` FK (many players → one agent; assigned in `MarketPoolService` and reassigned at world-pack generation; surfaced in every player snapshot — see Player↔Agent Association); `appearance` json (see Avatar Appearance). **No club FK** — pool entity, deleted on consume.
-
-```php
-private UuidV7 $id;
-    private string $firstName;
-    private string $lastName;
-    private \DateTimeImmutable $dateOfBirth;
-    private string $nationality;
-    private PlayerPosition $position;
-    private PlayerStatus $status = PlayerStatus::ACTIVE;
-    private RecruitmentSource $recruitmentSource;
-    private int $potential;
-    private int $currentAbility;
-    private int $contractValue = 0;
-    private PersonalityProfile $personality;
-    private Collection $guardians;
-    private ?Agent $agent = null;
-    private Collection $siblings;
-    private int $pace = 0;
-    private int $technical = 0;
-    private int $vision = 0;
-    private int $power = 0;
-    private int $stamina = 0;
-    private int $heart = 0;
-    private int $height = 0;
-    private int $weight = 0;
-    private int $morale = 50;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `PlayerArchetype`
-
-> **Purpose:** defines trait mapping distributions used by `PlayerGenerationService`; `traitMapping` (json); seeded via `app:seed-archetypes`
-
-```php
-private ?int $id = null;
-    private string $name;
-    private string $description;
-    private array $traitMapping = [];
-    private \DateTimeImmutable $createdAt;
-    private \DateTimeImmutable $updatedAt;
-```
-
-#### `PoolConfig`
-
-> **Purpose:** per-country/tier configuration for how many entities to pre-warm in the pool
-
-```php
-private ?int $id = null;
-    private int $playerAgeMin = 12;
-    private int $playerAgeMax = 13;
-    private int $playerPotentialMin = 40;
-    private int $playerPotentialMax = 80;
-    private int $playerPotentialMean = 60;
-    private int $playerAbilityMin = 3;
-    private int $playerAbilityMax = 10;
-    private int $playerAttributeBudgetMin = 6;
-    private int $playerAttributeBudgetMax = 20;
-    private int $playerAgentChancePercent = 40;
-    private int $playerHeightMin = 145;
-    private int $playerHeightMax = 160;
-    private int $playerWeightMin = 38;
-    private int $playerWeightMax = 55;
-    private int $personalityTraitMin = 30;
-    private int $personalityTraitMax = 70;
-    private int $positionWeightGk = 8;
-    private int $positionWeightDef = 30;
-    private int $positionWeightMid = 38;
-    private int $positionWeightAtt = 24;
-    private int $coachAgeMin = 28;
-    private int $coachAgeMax = 60;
-    private int $coachAbilityMin = 40;
-    private int $coachAbilityMax = 75;
-```
-
-#### `Scout`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $name;
-    private ?\DateTimeImmutable $dob = null;
-    private ?string $nationality = null;
-    private array $judgements = [];
-    private int $experience = 0;
-    private \DateTimeImmutable $createdAt;
-    private ?array $appearance = null;
-```
-
-> **Field note:** **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
-
-#### `SeasonRatingsSnapshot`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private int $season;
-    private int $weekNum;
-    private int $tier;
-    private string $clubId;
-    private string $clubName;
-    private int $overallRating;
-    private int $expectedPosition;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `SeasonRecord`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private Club $club;
-    private League $league;
-    private int $season;
-    private int $finalPosition;
-    private int $gamesPlayed;
-    private int $wins;
-    private int $draws;
-    private int $losses;
-    private int $goalsFor;
-    private int $goalsAgainst;
-    private int $points;
-    private bool $promoted;
-    private bool $relegated;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `SeasonSnapshot`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private Club $club;
-    private int $season;
-    private string $country;
-    private array $snapshotData;
-    private \DateTimeImmutable $createdAt;
-```
-
-#### `SocialAccountConnection`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private SocialPlatform $platform;
-    private string $displayName;
-    private string $externalAccountId;
-    private string $accessToken;
-    private ?string $refreshToken = null;
-    private ?\DateTimeImmutable $tokenExpiresAt = null;
-    private bool $isActive = true;
-    private \DateTimeImmutable $connectedAt;
-    private ?\DateTimeImmutable $lastRefreshedAt = null;
-```
-
-#### `SocialPostTemplate`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private StatCategory $category;
-    private SocialPlatform $platform;
-    private StatsPeriod $period;
-    private string $bodyTemplate;
-    private bool $isActive = true;
-    private \DateTimeImmutable $createdAt;
-    private \DateTimeImmutable $updatedAt;
-```
-
-#### `Sponsor`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $company;
-    private ?string $nationality = null;
-    private CompanySize $size = CompanySize::MEDIUM;
-    private bool $isActive = true;
-    private ?Club $club = null;
-    private \DateTimeImmutable $createdAt;
-    private int $monthlyPayment = 0;
-    private ?\DateTimeImmutable $contractStartDate = null;
-    private ?\DateTimeImmutable $contractEndDate = null;
-    private int $reputationMinThreshold = 0;
-    private ?int $reputationBonusThreshold = null;
-    private string $bonusMultiplier = '1.00';
-    private SponsorStatus $status = SponsorStatus::ACTIVE;
-    private ?int $earlyTerminationFee = null;
-    private ?\DateTimeImmutable $assignedAt = null;
-    private ?\DateTimeImmutable $lastPaymentAt = null;
-```
-
-#### `Staff`
-
-> **Purpose:** `role` (StaffRole), `coachingAbility`; `appearance` json. **No club FK** — pool entity, deleted on consume.
-
-```php
-private UuidV7 $id;
-    private string $firstName;
-    private string $lastName;
-    private StaffRole $role;
-    private int $coachingAbility = 50;
-    private int $scoutingRange = 50;
-    private int $weeklySalary = 0;
-    private int $morale = 50;
-    private ?string $nationality = null;
-    private ?string $specialty = null;
-    private ?array $specialisms = null;
-    private ?\DateTimeImmutable $dob = null;
-    private \DateTimeImmutable $hiredAt;
-    private ?array $appearance = null;
-```
-
-> **Field note:** **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
-
-#### `StarterConfig`
-
-> **Purpose:** singleton row; league player ability ranges + fan base growth curves; JSON dirty-check workaround applies here
-
-```php
-private int $id = 1;
-    private int $startingBalance = 5_000_000;
-    private int $starterPlayerCount = 5;
-    private int $worldPackPlayersPerAgent = 12;
-    private int $starterCoachCount = 1;
-    private int $starterScoutCount = 1;
-    private int $starterManagerCount = 1;
-    private int $starterDirectorOfFootballCount = 0;
-    private int $starterFacilityManagerCount = 0;
-    private int $starterChairmanCount = 1;
-    private string $starterSponsorTier = 'SMALL';
-    private string $starterClubTier = 'local';
-    private array $defaultFacilities = [];
-    private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
-    private array $enabledCountries = ['EN'];
-    private array $leagueAbilityRanges = [];
-    private array $npcSquadConfig = [];
-    private array $fanBaseRanges = [];
-    private float $fanBasePromotionIncrease = 0.20;
-    private float $fanBaseRelegationDecrease = 0.10;
-```
-
-#### `SyncRecord`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private Club $club;
-    private int $clientWeekNumber;
-    private \DateTimeImmutable $clientTimestamp;
-    private \DateTimeImmutable $serverTimestamp;
-    private array $payload = [];
-    private ?array $debugLog = null;
-    private bool $isValid = true;
-    private ?string $invalidReason = null;
-    private bool $isRollback = false;
-```
-
-#### `TacticalAdvantage`
-
-> **Purpose:** matchup table row: `style` vs `opponentStyle` (both `PlayingStyle`) → `multiplier` (float); seeded via `NarrativeImportExportService`
-
-```php
-private UuidV7 $id;
-    private PlayingStyle $style;
-    private PlayingStyle $opponentStyle;
-    private float $multiplier;
-```
-
-#### `Transfer`
-
-> **Purpose:** fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server); `player_id` is `ON DELETE SET NULL`
-
-```php
-private UuidV7 $id;
-    private ?Player $player = null;
-    private ?Club $club = null;
-    private ?string $playerName = null;
-    private ?string $playerPosition = null;
-    private ?string $clubLeaving = null;
-    private string $destinationClubName;
-    private TransferType $type;
-    private int $fee = 0;
-    private int $agentCommission = 0;
-    private int $netProceeds = 0;
-    private int $developmentPoints = 0;
-    private int $reputationGained = 0;
-    private ?string $buyingClub = null;
-    private \DateTimeImmutable $occurredAt;
-    private ?\DateTimeImmutable $syncedAt = null;
-```
-
-#### `User`
-
-> _No hand-written notes found in CLAUDE.md/AGENTS.md/README.md for this name._
-
-```php
-private UuidV7 $id;
-    private string $email;
-    private string $password;
-    private array $roles = [];
-    private Collection $clubs;
-    private ?array $managerProfile = null;
-    private bool $isVerified = false;
-    private ?\DateTimeImmutable $verifiedAt = null;
-    private ?\DateTimeImmutable $lastLoginAt = null;
-    private \DateTimeImmutable $createdAt;
-```
+# Domain Entities & Relationships
+
+All facts below trace to `src/Entity/*.php` files opened during this pass.
+Doctrine entity attributes are the authoritative current schema —
+migrations are the change log (see `migrations.md`).
+
+## Auth / user
+
+- **`User`** — auth identity (`UserInterface`). `email`, `password`,
+  `roles:array`, `managerProfile:?array`, `isVerified`, `verifiedAt`,
+  `lastLoginAt`, `createdAt`. `OneToMany` → `clubs:Collection<Club>`
+  (cascade persist/remove).
+- **`Admin`** — separate back-office auth identity (`UserInterface`).
+  `email`, `password`, `name`, `department`, `accessLevel:int(1)`.
+  `getRoles()` hardcodes `['ROLE_ADMIN']`. No entity relations.
+- **`Guardian`** — a player's guardian. `firstName/lastName`, `gender`,
+  `dateOfBirth`, `contactEmail`, `demandLevel:int(5)`,
+  `loyaltyToClub:int(50)`. `ManyToOne` → `player:Player` (not nullable).
+- **`EmailVerification`** — verification codes. `code`, `expiresAt`,
+  `purpose:VerificationPurpose(enum)`, `attempts`, `verifiedAt`.
+  `ManyToOne` → `User` (not nullable, `onDelete:CASCADE`).
+- **`RefreshToken`** — extends `BaseRefreshToken` from
+  `gesdinet/jwt-refresh-token-bundle`, table `refresh_tokens`.
+- **`BetaRequest`** — beta signup gate. `email`, `code`, `valid:bool`,
+  `attempts`, `expiresAt/createdAt`, `verifiedAt/invitedAt`.
+- **`DeletionRequest`** — GDPR deletion tracking. `email`,
+  `status:DeletionRequestStatus(enum)`, `ipAddress`, `failureReason`,
+  `clubsDeleted:int`, `requestedAt/completedAt`.
+
+## Core game / club
+
+- **`Club`** — the player's club, central aggregate. `name`, `reputation`,
+  `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`,
+  `lastSyncedAt`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
+  `country`, `abbreviation`, `worldInitializedAt/starterInitializedAt/
+  tutorialCompletedAt`, `paName`, `managerTemperament/managerDiscipline/
+  managerAmbition:int(50)`, `balance:int`, `managerProfile:?array`,
+  `currentSeason:int(1)`, `formation:Formation(enum, F_442)`,
+  `fanCount/fanSentiment/fanMorale`, `lastWeeklyAttendance/
+  totalSeasonAttendance`, `isSpoof:bool(false)` (added by migration
+  `Version20260918205514`). Relationships: `ManyToOne` → `User` (not
+  nullable); `OneToMany` → `transfers`, `syncRecords` (cascade
+  persist/remove), `leaderboardEntries` (cascade persist/remove),
+  `investors`, `sponsors`, `inboxMessages` (cascade persist/remove);
+  `ManyToOne` → `currentLeague:?League` (nullable).
+- **`ClubFacility`** — a club's built facility instance. `facilitySlug`,
+  `level`, `updatedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`).
+- **`FacilityTemplate`** — facility catalog (not a relation target of
+  `ClubFacility` by FK — joined via `facilitySlug`). `slug/label/
+  description`, `category`, `baseCost`, `weeklyUpkeepBase`,
+  `matchdayIncome/Multiplier`, `reputationBonus`, `maxLevel:int(5)`,
+  `decayBase`, `gameplayEffects:array`, `baseConstructionWeeks:int(4)`,
+  `sortOrder`, `isActive`, `imagePath`.
+- **`League`** — a competitive tier. `country`, `tier`, `name`,
+  `promotionSpots`, `tvDeal`, `leagueReputationTier:?ReputationTier(enum)`,
+  `prizeMoney`, `leaguePositionPot`, `sponsorCount`, `trophyImage`,
+  `trophyColour:?TrophyColour(enum)`. `OneToMany` → `leagueSponsors`
+  (cascade persist/remove, orphanRemoval); `ManyToMany` → `sponsors`
+  (explicit `JoinTable`, `onDelete:CASCADE`).
+- **`LeagueSponsor`** — league↔sponsor income join (table
+  `league_sponsor_income`). `rolledValue:int`. `ManyToOne` → `League`,
+  `Sponsor` (both `CASCADE`).
+- **`NpcClub`** — AI-controlled club. `name/country`, `tier/reputation`,
+  `primaryColor/secondaryColor`, `abbreviation`, `stadiumName`, `balance`,
+  `playingStyle('DIRECT')`, `financialApproach('BALANCED')`,
+  `managerTemperament:int(50)`, `facilities:array`, `region`,
+  `citySize:CitySize(enum)`, `populationSize`, `isCapital`,
+  `formation:Formation(enum)`. `ManyToOne` → `League` (nullable).
+- **`Transfer`** — a transfer event record. `playerName/playerPosition/
+  clubLeaving`, `destinationClubName`, `type:TransferType(enum)`,
+  `fee/agentCommission/netProceeds/developmentPoints/reputationGained`,
+  `buyingClub`, `occurredAt/syncedAt`. `ManyToOne` → `Player` (nullable,
+  `SET NULL`), `Club` (nullable, `SET NULL`).
+- **`SyncRecord`** — one client sync event. `clientWeekNumber`,
+  `clientTimestamp/serverTimestamp`, `payload:array`, `debugLog:?array`,
+  `isValid`, `invalidReason`, `isRollback`. `ManyToOne` → `Club` (not
+  nullable).
+- **`SeasonRecord`** — end-of-season league result. `season/
+  finalPosition/gamesPlayed/wins/draws/losses/goalsFor/goalsAgainst/
+  points:int`, `promoted/relegated:bool`. `ManyToOne` → `Club`, `League`
+  (both not nullable).
+- **`SeasonSnapshot`** — season point-in-time snapshot. `season`,
+  `country`, `snapshotData:array`. `ManyToOne` → `Club` (not nullable).
+- **`SeasonRatingsSnapshot`** — denormalized ratings snapshot; stores
+  `clubId`/`clubName` as plain strings, no FK relation. `season/weekNum/
+  tier`, `overallRating`, `expectedPosition`.
+- **`MatchResult`** — a played match's result. `goalsFor/goalsAgainst/
+  week/season`, `fixtureId`, `opponentClubName`, `isHome`, `homeGoals/
+  awayGoals`, `round`, `playedAt`, `yellowCards/redCards`. `ManyToOne` →
+  `Club` (not nullable).
+- **`LeaderboardEntry`** — one club's score in one leaderboard category.
+  `category:LeaderboardCategory(enum)`, `score`, `period`, `rank`,
+  `displayLabel`. `ManyToOne` → `Club` (not nullable).
+- **`TacticalAdvantage`** — lookup table of style×style multipliers.
+  `style/opponentStyle:PlayingStyle(enum)`, `multiplier:float`. No
+  relations.
+
+## Player / squad
+
+- **`Player`** — a footballer. `firstName/lastName`, `dateOfBirth`,
+  `nationality`, `position:PlayerPosition(enum)`,
+  `status:PlayerStatus(enum, ACTIVE)`,
+  `recruitmentSource:RecruitmentSource(enum)`, `potential/currentAbility/
+  contractValue`, `pace/technical/vision/power/stamina/heart`,
+  `height/weight`, `morale:int(50)`, `appearance:?array`. Embeds
+  `personality:PersonalityProfile` (Embeddable — see below, not its own
+  table). `OneToMany` → `guardians` (cascade persist/remove,
+  orphanRemoval); `ManyToOne` → `agent:?Agent` (`SET NULL`);
+  self-referential `ManyToMany` → `siblings:Collection<Player>`
+  (`JoinTable: player_siblings`).
+- **`PersonalityProfile`** — `#[ORM\Embeddable]`, **not a standalone
+  entity/table**. `determination/professionalism/ambition/loyalty/
+  adaptability/pressure/temperament/consistency:int(10)`, all on a 1–20
+  scale (per docblock). Embedded into `Player`, `Scout`, `Staff`.
+- **`PlayerArchetype`** — catalog of personality archetypes. `slug/name/
+  description`, `polarity:ArchetypePolarity(enum)`,
+  `traitWeights:array`. No relations.
+- **`PlayerCareerStat`** — current cumulative career stat row.
+  `playerId/playerName`, `appearances/goals/assists`. `ManyToOne` →
+  `Club` (not nullable, `CASCADE`).
+- **`PlayerCareerStatSnapshot`** — point-in-time copy of the above, tied
+  to a sync. `playerId/playerName`, `appearances/goals/assists`,
+  `recordedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`),
+  `syncRecord:?SyncRecord` (nullable, `SET NULL`).
+- **`Agent`** — a player's agent. `name`, `reputation:int(50)`,
+  `commissionRate('10.00')`, `dob`, `nationality`, `judgements:array`,
+  `experience`, `rating:int(50)`, `appearance:?array`. `OneToMany` →
+  `players:Collection<Player>`.
+- **`Scout`** — a club's scout. `name`, `dob`, `nationality`,
+  `judgements:array`, `experience`, `appearance:?array`. Embeds
+  `personality:PersonalityProfile`.
+- **`Staff`** — coaching/other staff. `firstName/lastName`,
+  `role:StaffRole(enum)`, `coachingAbility/scoutingRange:int(50)`,
+  `weeklySalary`, `morale:int(50)`, `nationality`, `specialty`,
+  `specialisms:?array`, `dob`, `hiredAt`, `appearance:?array`. Embeds
+  `personality:PersonalityProfile`.
+
+## Sponsorship / finance
+
+- **`Sponsor`** — `company`, `nationality`, `size:CompanySize(enum)`,
+  `isActive`, `monthlyPayment`, `contractStartDate/EndDate`,
+  `reputationMinThreshold`, `reputationBonusThreshold`,
+  `bonusMultiplier`, `status:SponsorStatus(enum)`,
+  `earlyTerminationFee`, `assignedAt/lastPaymentAt`. `ManyToOne` →
+  `club:?Club` (nullable — unassigned pool = null club).
+- **`Investor`** — `company`, `nationality`, `size:CompanySize(enum)`,
+  `isActive`, `tier:InvestorTier(enum)`, `investmentAmount`,
+  `percentageOwned('5.00')`, `assignedAt/investedAt/lastPayoutAt`.
+  `ManyToOne` → `club:?Club` (nullable).
+
+## Messaging / admin comms
+
+- **`AdminMessage`** (table `admin_message`) — operator announcement.
+  `title`, `bodyHtml`, `targetType:MessageTargetType(enum)`,
+  `priority:MessagePriority(enum)`,
+  `displayType:MessageDisplayType(enum)`, `validFrom/Until`, `isActive`.
+  `ManyToOne` → `createdBy:?Admin` (`SET NULL`); `ManyToMany` →
+  `audienceGroups` (`JoinTable: admin_message_audience_group`);
+  `ManyToOne` → `targetClub:?Club` (nullable, `CASCADE`).
+- **`MessageDelivery`** (table `message_delivery`) — per-user delivery
+  state. `deliveredAt`, `displayedAt`,
+  `status:MessageDeliveryStatus(enum, PENDING)`. `ManyToOne` → `User`,
+  `AdminMessage` (both not nullable, `CASCADE`).
+- **`AudienceGroup`** (table `audience_group`) — a targeting segment.
+  `name/slug`, `criteriaType:AudienceCriteriaType(enum, MANUAL)`,
+  `criteriaPayload:?array`. Targeted via `AudienceGroupMember` and
+  `AdminMessage`'s `ManyToMany`.
+- **`AudienceGroupMember`** (table `audience_group_member`) — club↔group
+  join. `joinedAt`. `ManyToOne` → `Club`, `group:AudienceGroup` (both not
+  nullable, `CASCADE`).
+- **`InboxMessage`** — a club's inbox item. `senderType:
+  MessageSenderType(enum)`, `senderName/subject/body`, `offerData:?array`,
+  `status:MessageStatus(enum, UNREAD)`, `relatedEntityType/Id:?string`,
+  `respondedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`).
+- **`GameEventTemplate`** — a random-event definition. `slug`,
+  `category:EventCategory(enum)`, `weight`, `title`, `bodyTemplate`,
+  `impacts:array`, `firingConditions:?array`, `severity`, `noInteract`,
+  `chainedEvents:?array`. No relations. See also
+  `docs/event-guide.md`.
+- **`SocialAccountConnection`** — OAuth connection to a social platform.
+  `platform:SocialPlatform(enum)`, `displayName`, `externalAccountId`,
+  `accessToken` (encrypted, see `TokenEncryptionService`),
+  `refreshToken`, `tokenExpiresAt`, `isActive`, `connectedAt/
+  lastRefreshedAt`. No relations.
+- **`SocialPostTemplate`** — templated social post copy.
+  `category:StatCategory(enum)`, `platform:SocialPlatform(enum)`,
+  `period:StatsPeriod(enum)`, `bodyTemplate`, `isActive`. No relations.
+
+## Competition (`App\Entity\Competition`)
+
+- **`CompetitionTemplate`** — a competition's static rules. `name/slug`,
+  `entrantCapacity`, `durationOption:CompetitionDuration(enum)`,
+  `allowedTiers:?array`, `minClubReputation/minClubAgeSeasons/
+  entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`.
+  `ManyToMany` → `rewardTemplates` (`JoinTable:
+  competition_template_reward_template`).
+- **`ActiveCompetition`** (table `active_competition`) — one live
+  instance of a template. `status:ActiveCompetitionStatus(enum)`,
+  `entrantCapacity`, `durationOption:CompetitionDuration(enum)`,
+  `registrationOpenedAt`, `lockedAt/startsAt/endsAt/completedAt/
+  cancelledAt`, `cancellationReason`. `ManyToOne` → `template:
+  CompetitionTemplate` (not nullable, `CASCADE`). Migration
+  `Version20260916112510` adds a **partial unique index**
+  (`uq_active_competition_one_open_per_template`, `WHERE status =
+  'registering'`) — only one open competition per template at a time.
+- **`CompetitionEntrant`** (table `competition_entrant`) — a club's
+  registration. `seed`, `status:CompetitionEntrantStatus(enum)`,
+  `snapshotJson:array`, `snapshotLockedAt`, `snapshotVersion:int(1)`,
+  `registeredAt`. `ManyToOne` → `activeCompetition`, `club` (both not
+  nullable, `CASCADE`); `eliminatedInRound:?CompetitionRound` (nullable,
+  `SET NULL`). Unique index on (`active_competition_id`, `club_id`) —
+  one entry per club per competition.
+- **`CompetitionRound`** (table `competition_round`) — one round of a
+  competition. `roundIndex`, `label`,
+  `status:CompetitionRoundStatus(enum)`, `scheduledAt`, `startedAt/
+  completedAt`, `matchEngineIdentifier:?MatchEngineIdentifier(enum)`,
+  `lockedForProcessingAt`. `ManyToOne` → `activeCompetition` (not
+  nullable, `CASCADE`).
+- **`CompetitionFixture`** (table `competition_fixture`) — one matchup
+  within a round. `slotIndex`, `status:CompetitionFixtureStatus(enum)`,
+  `processedAt`. `ManyToOne` → `round` (not nullable, `CASCADE`);
+  `homeEntrant/awayEntrant/winnerEntrant:?CompetitionEntrant` (all
+  nullable, `SET NULL`).
+- **`CompetitionResult`** (table `competition_result`) — a fixture's
+  outcome. `homeScore/awayScore`, `eventLogJson:array`,
+  `narrativePayload:?array`, `engineIdentifier:MatchEngineIdentifier
+  (enum)`, `generatedAt`. `OneToOne` → `fixture:CompetitionFixture` (not
+  nullable, unique, `CASCADE`) — one result per fixture.
+- **`RewardTemplate`** (table `reward_template`) — a claimable reward
+  definition. `slug/name`, `description`, `effects:array`, `isActive`.
+  Reverse side of `CompetitionTemplate`'s `ManyToMany`; referenced by
+  `EntrantRewardClaim`.
+- **`EntrantRewardClaim`** (table `entrant_reward_claim`) — a claimed
+  reward instance. `triggerContext`, `appliedEffectsJson:array`,
+  `claimedAt`. `ManyToOne` → `entrant` (not nullable, `CASCADE`),
+  `rewardTemplate:?RewardTemplate` (nullable, `SET NULL`).
+
+## Config / singleton "tuning" entities
+
+Each is effectively a single global-config row.
+
+- **`GameConfig`** — very large singleton (~100+ scalar/array fields)
+  covering clique, bond/morale, injury, coaching, facility, transfer,
+  sponsor/investor, cooldown, squad-role, and social-post tuning
+  constants. Notable array fields: `bankruptcyDeductionTiers`,
+  `maxSponsorsByTier`, `maxInvestorsByTier`, `npcClubBalanceRanges`,
+  `npcFacilityLevelRanges`, `npcClubSizeWeights`, `npcSquadConfig`,
+  `squadRoleAppearanceExpectations/MoraleDecayPerWeek/
+  MoraleBoostPerWeek/AutoAssignThresholds`, `leaguePlayerAbilityRanges`,
+  `wageMultiplierTiers`, `leagueWinPoints`, `pyramidNewsConfig`,
+  `statPostRotation/Schedule/LastRunAt`. Fetched/created via
+  `GameConfigRepository::getConfig()`. No relations.
+- **`PoolConfig`** — singleton tuning for recruitment-pool generation
+  ranges (player/coach/scout/agent age/ability/height/weight ranges and
+  pool targets per role). No relations.
+- **`StarterConfig`** — singleton for new-club starter setup (starting
+  balance, starter counts of players/coaches/scouts/managers,
+  `starterSponsorTier`, `starterClubTier`, `defaultFacilities`,
+  `starterReputationTier`, `enabledCountries`, `leagueAbilityRanges`,
+  `npcSquadConfig`, `fanBaseRanges`, promotion/relegation fan-base
+  multipliers). `id:int = 1` fixed. No relations.
+
+## Misc / cache / analytics
+
+- **`CountryWorldPackCache`** — persisted (DB-backed, not in-memory)
+  cache of generated world-pack payloads. `country`, `tier`,
+  `payload:array`, `generatedAt`, `payloadVersion`. No relations. See
+  also `state.md`.
+- **`LiveTelemetrySnapshot`** — singleton-style live-activity feed row
+  (per `LiveTelemetrySnapshotRepository::getSnapshot()`).
+  `fixturesSimulated`, `capitalDeployedPence`, `resultsWins/Draws/
+  Losses`, `activeClubs`, `weeksPlayed`, `recentEvents:array`,
+  `generatedAt`. Built up incrementally across migrations
+  `Version20260915213526` → `Version20260915233540` — see
+  `migrations.md`. No relations.
+
+## Not an entity
+
+`src/Entity/Concern/EditableJsonColumnTrait.php` — a plain PHP trait
+(not `#[ORM\Entity]`), providing `decodeJsonInput`/`invalidJsonInputFor`
+helpers for entities with admin-editable JSON columns.

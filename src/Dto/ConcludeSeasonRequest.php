@@ -40,4 +40,20 @@ class ConcludeSeasonRequest
 
     /** @var array<string, mixed> */
     public array $pyramidSnapshot = [];
+
+    /**
+     * Top-10 goal scorers/assisters/rated players per club tier, across the whole game world
+     * for this season. Tiers with no qualifying data are omitted. Archived verbatim into
+     * SeasonSnapshot.snapshotData only; no structured storage/processing yet.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $seasonLeaders = [];
+
+    /**
+     * The user's own club's full season fixture history, same shape as SyncRequest::$fixtures.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $seasonFixtures = [];
 }
