@@ -5,6 +5,6 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
-- **Commit:** dfc8035a8cb9f014abcf5777da6840bc1f18f7ef
-- **Date:** 2026-09-18
-- **Stages touched this pass:** 01_overview, 02_architecture, 03_data, 04_interfaces, 05_ui, 06_documentation, 07_synthesis (full warm — rebuilt from scratch after retiring the old generator-script-based `.context/`, previous content preserved in this repo's `git stash`)
+- **Commit:** 535e99f1661b6ba1fcb0be19450024de50c18f6f
+- **Date:** 2026-09-19
+- **Stages touched this pass:** 02_architecture, 03_data, 04_interfaces, 06_documentation, 07_synthesis (incremental update for: Cup extra-time/penalty-shootout resolution, `DeterministicEngine` full `ResultsEngine.ts` port, `MATCH_NARRATIVE` chain-graph narrative content, and push notifications — device tokens, Messenger, FCM, admin-broadcast push channel). `01_overview`/`05_ui` untouched — nothing in this pass changed stack facts or the admin design system.
