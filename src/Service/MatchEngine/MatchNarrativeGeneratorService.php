@@ -15,7 +15,11 @@ use App\Service\Appearance\SeededRng;
  * `src/utils/matchTimelineGenerator.ts` (the per-match orchestration) — so a Competition
  * result can carry a complete, ordered `MatchTimelineItem[]`-shaped timeline
  * (`narrativePayload`) instead of the client needing its own copy of the graph + real
- * match data to build one.
+ * match data to build one. Item shape matches wunderkind-app's
+ * `TournamentMatchNarrativeEvent` (`docs/api/tournament-match-result-payload.md`): `side` is
+ * `'HOME'|'AWAY'|null` (null for whole-match markers — half-time/full-time/penalty-shootout
+ * summary), never a club id — the client has no local table to resolve one against for a
+ * tournament opponent it may never have seen.
  *
  * `EventCategory::MATCH_NARRATIVE` rows are the chain-graph nodes: each candidate line of
  * a node (e.g. GOAL_ATTEMPT) is its own row, slugged `{NODE_TYPE}_{N}` (see
@@ -47,7 +51,7 @@ class MatchNarrativeGeneratorService
      * @param list<array{minute:int,type:string,team?:string,scorer?:?string,assist?:?string,player?:?string}> $eventLog
      * @param list<array{id:?string,name:?string,position:?string,goals:int,assists:int,yellowCards:int,redCards:int,rating:float}> $homeLineup
      * @param list<array{id:?string,name:?string,position:?string,goals:int,assists:int,yellowCards:int,redCards:int,rating:float}> $awayLineup
-     * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,teamId:?string}>
+     * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}>
      */
     public function generate(
         CompetitionFixture $fixture,
@@ -90,13 +94,13 @@ class MatchNarrativeGeneratorService
             $lastMinute = max($lastMinute, (int) $event['minute']);
         }
 
-        $items[] = ['minute' => 45, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Half-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+        $items[] = ['minute' => 45, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Half-time.', 'playerA' => null, 'playerB' => null, 'side' => null];
 
         if ($wentToExtraTime) {
-            $items[] = ['minute' => 90, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time in normal time — this one\'s going to extra time!', 'playerA' => null, 'playerB' => null, 'teamId' => null];
-            $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+            $items[] = ['minute' => 90, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time in normal time — this one\'s going to extra time!', 'playerA' => null, 'playerB' => null, 'side' => null];
+            $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'side' => null];
         } else {
-            $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+            $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'side' => null];
         }
 
         if ($wentToPenalties && $penaltyHomeScore !== null && $penaltyAwayScore !== null) {
@@ -106,11 +110,15 @@ class MatchNarrativeGeneratorService
             $items[]    = [
                 'minute'     => $lastMinute + 2,
                 'isKeyEvent' => true,
-                'eventType'  => 'PENALTY_SHOOTOUT',
+                // Not 'GOAL'/'YELLOW_CARD'/'RED_CARD'/'FILLER' — a shootout belongs to neither
+                // side specifically, same as the half-time/full-time markers above, so this
+                // follows their eventType:null convention rather than inventing a new type
+                // the client's TournamentMatchNarrativeEvent union doesn't expect.
+                'eventType'  => null,
                 'text'       => "{$winnerName} win {$winnerPens}-{$loserPens} on penalties!",
                 'playerA'    => null,
                 'playerB'    => null,
-                'teamId'     => null,
+                'side'       => null,
             ];
         }
 
@@ -304,7 +312,7 @@ class MatchNarrativeGeneratorService
      *  @param list<array{id:?string,name:?string,position:?string,...}> $opposingLineup
      *  @param array<string, GameEventTemplate[]> $rowsByNodeType
      *  @param array<string, list<string>> $graph
-     *  @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,teamId:?string}> */
+     *  @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}> */
     private function buildGoalChainItems(SeededRng $rng, array $event, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph): array
     {
         $isHome         = $event['team'] === 'home';
@@ -312,7 +320,7 @@ class MatchNarrativeGeneratorService
         $opposingLineup = $isHome ? $awayLineup : $homeLineup;
         $scoringName    = $isHome ? $homeName : $awayName;
         $opposingName   = $isHome ? $awayName : $homeName;
-        $teamId         = $isHome ? (string) $home->getClub()->getId() : (string) $away->getClub()->getId();
+        $side           = $isHome ? 'HOME' : 'AWAY';
 
         $availableEntries = array_intersect_key(self::GOAL_CHAIN_ENTRY_WEIGHTS, $rowsByNodeType);
         if ($availableEntries === []) {
@@ -355,7 +363,7 @@ class MatchNarrativeGeneratorService
                 'text'       => $text,
                 'playerA'    => $attacker,
                 'playerB'    => $assistBy,
-                'teamId'     => $teamId,
+                'side'       => $side,
             ];
         }
 
@@ -368,13 +376,13 @@ class MatchNarrativeGeneratorService
         return !in_array($nodeType, ['GOAL_ATTEMPT_SAVED', 'GOAL_ATTEMPT_BLOCKED', 'CORNER_ATTEMPT_CLEARED'], true);
     }
 
-    /** @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,teamId:?string}> */
+    /** @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}> */
     private function buildCardChainItems(SeededRng $rng, array $event, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph): array
     {
         $isHome      = $event['team'] === 'home';
         $lineup      = $isHome ? $homeLineup : $awayLineup;
         $opponent    = $isHome ? $awayLineup : $homeLineup;
-        $teamId      = $isHome ? (string) $home->getClub()->getId() : (string) $away->getClub()->getId();
+        $side        = $isHome ? 'HOME' : 'AWAY';
         $playerName  = $this->playerName($lineup, $event['player'] ?? null) ?? $this->randomPlayerName($rng, $lineup);
         $opponentName = $this->randomPlayerName($rng, $opponent);
 
@@ -389,7 +397,7 @@ class MatchNarrativeGeneratorService
                 'text'       => $this->renderTemplate($foulTemplate, array_filter(['playerA' => $playerName, 'playerB' => $opponentName]), $isHome ? $homeName : $awayName),
                 'playerA'    => $playerName,
                 'playerB'    => $opponentName,
-                'teamId'     => $teamId,
+                'side'       => $side,
             ];
         }
 
@@ -403,7 +411,7 @@ class MatchNarrativeGeneratorService
                 'text'       => $this->renderTemplate($cardTemplate, array_filter(['player' => $playerName]), $isHome ? $homeName : $awayName),
                 'playerA'    => $playerName,
                 'playerB'    => null,
-                'teamId'     => $teamId,
+                'side'       => $side,
             ];
         }
 
@@ -414,7 +422,7 @@ class MatchNarrativeGeneratorService
      * @param array<string, GameEventTemplate[]> $rowsByNodeType
      * @param array<string, list<string>> $graph
      * @param list<array{minute:int,type:string}> $eventLog
-     * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,teamId:?string}>
+     * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}>
      */
     private function buildFillerItems(SeededRng $rng, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph, array $eventLog, int $maxMinute = 90): array
     {
@@ -441,7 +449,7 @@ class MatchNarrativeGeneratorService
             $isHome      = $rng->chance(0.5);
             $lineup      = $isHome ? $homeLineup : $awayLineup;
             $teamName    = $isHome ? $homeName : $awayName;
-            $teamId      = $isHome ? (string) $home->getClub()->getId() : (string) $away->getClub()->getId();
+            $side        = $isHome ? 'HOME' : 'AWAY';
 
             $entry = $rng->weightedPick(array_keys($availableEntries), array_values($availableEntries));
             $chain = $this->walkFillerChain($rng, $entry, $graph, self::FILLER_MAX_STEPS);
@@ -462,7 +470,7 @@ class MatchNarrativeGeneratorService
                     'text'       => $this->renderTemplate($template, array_filter(['playerA' => $playerA, 'playerB' => $playerB, 'attacker' => $playerA, 'taker' => $playerA]), $teamName),
                     'playerA'    => $playerA,
                     'playerB'    => $playerB,
-                    'teamId'     => $teamId,
+                    'side'       => $side,
                 ];
             }
         }

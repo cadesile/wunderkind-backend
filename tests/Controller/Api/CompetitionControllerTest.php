@@ -542,8 +542,22 @@ class CompetitionControllerTest extends WebTestCase
             $this->assertSame($fixture['home']['clubName'], $fixture['result']['homeClub']['name']);
             $this->assertSame($fixture['away']['clubName'], $fixture['result']['awayClub']['name']);
 
+            // No club id in the client-facing payload — a tournament opponent may not exist
+            // in any local store, so an id would be dead weight at best (see
+            // docs/api/tournament-match-result-payload.md).
+            $this->assertArrayNotHasKey('id', $fixture['result']['homeClub']);
+            $this->assertArrayNotHasKey('id', $fixture['result']['awayClub']);
+
             $this->assertArrayHasKey('narrativePayload', $fixture['result']);
             $this->assertNotEmpty($fixture['result']['narrativePayload'], 'A freshly generated result must carry a non-empty narrative timeline.');
+
+            foreach ($fixture['result']['narrativePayload'] as $item) {
+                $this->assertArrayHasKey('side', $item, 'Narrative events identify a side (HOME/AWAY/null), never a club id.');
+                $this->assertArrayNotHasKey('teamId', $item);
+                if ($item['side'] !== null) {
+                    $this->assertContains($item['side'], ['HOME', 'AWAY']);
+                }
+            }
         }
     }
 }
