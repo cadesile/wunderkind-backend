@@ -26,9 +26,40 @@ class CompetitionResult
     #[ORM\Column(type: 'smallint')]
     private int $awayScore;
 
-    /** @var list<array{minute: int, type: string, team?: string, scorer?: string}> */
+    /** @var list<array{minute: int, type: string, team?: string, scorer?: ?string, assist?: ?string, player?: ?string}> */
     #[ORM\Column(type: 'json')]
     private array $eventLogJson;
+
+    /**
+     * Snapshot of each side's club display data (name, kit colours, badge, stadium,
+     * playing style, etc.) at the moment this result was generated — copied verbatim from
+     * CompetitionEntrant::getSnapshotJson()['club']. Denormalized deliberately: a result is
+     * a historical record (same reasoning as CompetitionFixture's SET NULL entrant FKs),
+     * so it must not depend on the entrant/club rows still existing or being unchanged
+     * later, and it's exactly the shape the client needs to render kits/names for this
+     * match without a second lookup — see toClientSummary().
+     *
+     * @var array<string, mixed>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $homeClubJson;
+
+    /** @var array<string, mixed> */
+    #[ORM\Column(type: 'json')]
+    private array $awayClubJson;
+
+    /**
+     * The starting XI as fielded, each with this match's goals/assists/cards/rating —
+     * see DeterministicEngine::buildLineup(). Admin-only detail, not sent to clients.
+     *
+     * @var list<array{id: ?string, name: ?string, position: ?string, goals: int, assists: int, yellowCards: int, redCards: int, rating: float}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $homeLineupJson;
+
+    /** @var list<array{id: ?string, name: ?string, position: ?string, goals: int, assists: int, yellowCards: int, redCards: int, rating: float}> */
+    #[ORM\Column(type: 'json')]
+    private array $awayLineupJson;
 
     /** @var array|null Reserved for a future narrative match engine. Always null in Phase 1. */
     #[ORM\Column(type: 'json', nullable: true)]
@@ -40,15 +71,34 @@ class CompetitionResult
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $generatedAt;
 
-    public function __construct(CompetitionFixture $fixture, int $homeScore, int $awayScore, array $eventLogJson, MatchEngineIdentifier $engineIdentifier)
-    {
-        $this->id                = new UuidV7();
-        $this->fixture             = $fixture;
-        $this->homeScore            = $homeScore;
-        $this->awayScore             = $awayScore;
-        $this->eventLogJson           = $eventLogJson;
-        $this->engineIdentifier        = $engineIdentifier;
-        $this->generatedAt              = new \DateTimeImmutable();
+    /**
+     * @param array<string, mixed> $homeClubJson
+     * @param array<string, mixed> $awayClubJson
+     * @param list<array{id: ?string, name: ?string, position: ?string, goals: int, assists: int, yellowCards: int, redCards: int, rating: float}> $homeLineupJson
+     * @param list<array{id: ?string, name: ?string, position: ?string, goals: int, assists: int, yellowCards: int, redCards: int, rating: float}> $awayLineupJson
+     */
+    public function __construct(
+        CompetitionFixture $fixture,
+        int $homeScore,
+        int $awayScore,
+        array $eventLogJson,
+        MatchEngineIdentifier $engineIdentifier,
+        array $homeClubJson,
+        array $awayClubJson,
+        array $homeLineupJson,
+        array $awayLineupJson,
+    ) {
+        $this->id              = new UuidV7();
+        $this->fixture         = $fixture;
+        $this->homeScore       = $homeScore;
+        $this->awayScore       = $awayScore;
+        $this->eventLogJson    = $eventLogJson;
+        $this->engineIdentifier = $engineIdentifier;
+        $this->homeClubJson    = $homeClubJson;
+        $this->awayClubJson    = $awayClubJson;
+        $this->homeLineupJson  = $homeLineupJson;
+        $this->awayLineupJson  = $awayLineupJson;
+        $this->generatedAt     = new \DateTimeImmutable();
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -60,6 +110,14 @@ class CompetitionResult
     public function getAwayScore(): int { return $this->awayScore; }
 
     public function getEventLogJson(): array { return $this->eventLogJson; }
+
+    public function getHomeClubJson(): array { return $this->homeClubJson; }
+
+    public function getAwayClubJson(): array { return $this->awayClubJson; }
+
+    public function getHomeLineupJson(): array { return $this->homeLineupJson; }
+
+    public function getAwayLineupJson(): array { return $this->awayLineupJson; }
 
     public function getNarrativePayload(): ?array { return $this->narrativePayload; }
     public function setNarrativePayload(?array $narrativePayload): static { $this->narrativePayload = $narrativePayload; return $this; }
@@ -86,14 +144,22 @@ class CompetitionResult
      * fixture's "result" field — single source of truth so the admin "what the device
      * receives" view and the public API can never drift apart (see the show() bug where
      * this was hardcoded to null and silently never matched what was actually stored).
+     * homeClub/awayClub mirror exactly what's stored (see $homeClubJson's docblock) so the
+     * client can render kits/badges/names without a second lookup. narrativePayload is the
+     * full generated commentary timeline (see MatchNarrativeGeneratorService) — null for
+     * results generated before this field existed, which the client should treat as an
+     * absent/optional feature, not an error.
      *
-     * @return array{homeScore: int, awayScore: int}
+     * @return array{homeScore: int, awayScore: int, homeClub: array<string, mixed>, awayClub: array<string, mixed>, narrativePayload: ?array}
      */
     public function toClientSummary(): array
     {
         return [
-            'homeScore' => $this->homeScore,
-            'awayScore' => $this->awayScore,
+            'homeScore'        => $this->homeScore,
+            'awayScore'        => $this->awayScore,
+            'homeClub'         => $this->homeClubJson,
+            'awayClub'         => $this->awayClubJson,
+            'narrativePayload' => $this->narrativePayload,
         ];
     }
 
@@ -111,6 +177,10 @@ class CompetitionResult
             'fixtureId'        => (string) $this->fixture->getId(),
             'homeScore'        => $this->homeScore,
             'awayScore'        => $this->awayScore,
+            'homeClub'         => $this->homeClubJson,
+            'awayClub'         => $this->awayClubJson,
+            'homeLineup'       => $this->homeLineupJson,
+            'awayLineup'       => $this->awayLineupJson,
             'eventLogJson'     => $this->eventLogJson,
             'narrativePayload' => $this->narrativePayload,
             'engineIdentifier' => $this->engineIdentifier->value,

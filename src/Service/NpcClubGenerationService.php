@@ -1338,7 +1338,7 @@ class NpcClubGenerationService
         return $name;
     }
 
-    private function generateStadiumName(string $place, string $country): string
+    public function generateStadiumName(string $place, string $country): string
     {
         $formats = self::STADIUM_FORMATS_BY_COUNTRY[$country] ?? ['%s Stadium', '%s Ground', 'The %s Arena'];
         $format  = $formats[array_rand($formats)];
@@ -1376,7 +1376,7 @@ class NpcClubGenerationService
     }
 
     /** @return string[] [primaryColor, secondaryColor] */
-    private function pickColorPair(): array
+    public function pickColorPair(): array
     {
         $colors  = self::COLORS;
         $primary = $colors[array_rand($colors)];
@@ -1427,7 +1427,7 @@ class NpcClubGenerationService
         return 0.2126 * $linearise($r) + 0.7152 * $linearise($g) + 0.0722 * $linearise($b);
     }
 
-    private function playingStyleForTier(int $tier): string
+    public function playingStyleForTier(int $tier): string
     {
         $styles = ['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'];
         return $styles[array_rand($styles)];

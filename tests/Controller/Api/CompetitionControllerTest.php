@@ -449,6 +449,14 @@ class CompetitionControllerTest extends WebTestCase
             $this->assertNotNull($fixture['result'], 'A completed fixture must expose its result, not null.');
             $this->assertIsInt($fixture['result']['homeScore']);
             $this->assertIsInt($fixture['result']['awayScore']);
+
+            // Club data must mirror exactly what was stored, so the client can render
+            // kits/badges/names without a second lookup.
+            $this->assertSame($fixture['home']['clubName'], $fixture['result']['homeClub']['name']);
+            $this->assertSame($fixture['away']['clubName'], $fixture['result']['awayClub']['name']);
+
+            $this->assertArrayHasKey('narrativePayload', $fixture['result']);
+            $this->assertNotEmpty($fixture['result']['narrativePayload'], 'A freshly generated result must carry a non-empty narrative timeline.');
         }
     }
 }

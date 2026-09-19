@@ -31,7 +31,7 @@ abstract class AbstractSeedEventTemplatesCommand extends Command
     }
 
     /**
-     * @return array<int, array{slug: string, category: EventCategory, weight: int, title: string, bodyTemplate: string, impacts: array, firingConditions?: array|null, severity?: string|null, noInteract?: bool}>
+     * @return array<int, array{slug: string, category: EventCategory, weight: int, title: string, bodyTemplate: string, impacts: array, firingConditions?: array|null, severity?: string|null, noInteract?: bool, chainedEvents?: array|null}>
      */
     abstract protected function buildTemplates(): array;
 
@@ -83,6 +83,7 @@ abstract class AbstractSeedEventTemplatesCommand extends Command
             $template->setFiringConditions($data['firingConditions'] ?? null);
             $template->setSeverity($data['severity'] ?? null);
             $template->setNoInteract($data['noInteract'] ?? false);
+            $template->setChainedEventsArray($data['chainedEvents'] ?? []);
         }
 
         $this->em->flush();

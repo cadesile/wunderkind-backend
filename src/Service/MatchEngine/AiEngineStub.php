@@ -11,8 +11,8 @@ use Psr\Log\LoggerInterface;
  * Stands in for Type B (AI-Assisted) and Type C (Narrative AI) in Phase 1. Both
  * identifiers are real, selectable MatchEngineIdentifier values — a template can
  * already be configured to use either — but both are served by this single stub,
- * which delegates the scoreline to DeterministicEngine and leaves narrativePayload
- * null. A template pointed at an AI tier still produces a playable round instead of
+ * which delegates the scoreline (and its already-generated narrativePayload) to
+ * DeterministicEngine. A template pointed at an AI tier still produces a playable round instead of
  * hard-failing a live tournament. Real LLM integration (prompt/data mapping) is
  * explicitly out of scope for Phase 1 per the source brief's own open question.
  */
@@ -36,6 +36,6 @@ class AiEngineStub implements MatchEngineInterface
 
         $result = $this->deterministicEngine->resolve($home, $away, $fixture);
 
-        return new MatchEngineResult($result->homeScore, $result->awayScore, $result->eventLog, null);
+        return new MatchEngineResult($result->homeScore, $result->awayScore, $result->eventLog, $result->narrativePayload, $result->homeLineup, $result->awayLineup);
     }
 }

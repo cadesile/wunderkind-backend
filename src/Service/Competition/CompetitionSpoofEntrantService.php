@@ -7,10 +7,13 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
+use App\Enum\PlayerPosition;
+use App\Enum\RecruitmentSource;
 use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Service\NameGeneratorService;
 use App\Service\NpcClubGenerationService;
+use App\Service\PlayerGenerationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Uid\UuidV7;
@@ -19,8 +22,7 @@ use Symfony\Component\Uid\UuidV7;
  * Admin-only test-data tool: clones an existing (real) CompetitionEntrant's snapshot N
  * times — renaming the club and every player/staff entry, jittering the player attributes
  * SnapshotValidator checks — and registers each clone as a new entrant in the same
- * ActiveCompetition via CompetitionRegistrationService. Spoofing always needs a real
- * snapshot as its basis; there is no from-scratch mode.
+ * ActiveCompetition via CompetitionRegistrationService.
  *
  * Calls CompetitionRegistrationService::register() directly (service-level, no HTTP/JWT/
  * eligibility) — this is a deliberate admin override, not something a real client can do.
@@ -32,15 +34,134 @@ class CompetitionSpoofEntrantService
 
     private const ATTRIBUTE_JITTER_SPREAD = 5;
 
+    /** A realistic starting XI shape: 1 GK, 4 DEF, 4 MID, 2 ATT. */
+    private const STARTING_XI_POSITIONS = [
+        PlayerPosition::GOALKEEPER,
+        PlayerPosition::DEFENDER, PlayerPosition::DEFENDER, PlayerPosition::DEFENDER, PlayerPosition::DEFENDER,
+        PlayerPosition::MIDFIELDER, PlayerPosition::MIDFIELDER, PlayerPosition::MIDFIELDER, PlayerPosition::MIDFIELDER,
+        PlayerPosition::ATTACKER, PlayerPosition::ATTACKER,
+    ];
+
+    /**
+     * No backend catalogue exists for these — they're purely client-owned display/asset
+     * identifiers (SnapshotValidator's docblock: "kit colours/badgeShape... deliberately
+     * left unchecked"). Real clients send their own values; this is just enough variety
+     * for a synthetic bootstrap entrant to render believably on-device.
+     */
+    private const BADGE_SHAPES = ['shield', 'circle', 'badge', 'crest', 'diamond'];
+    private const CLUB_TIERS   = ['elite', 'championship', 'league_one', 'league_two'];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionRegistrationService $registrationService,
         private readonly NpcClubGenerationService $npcClubGenerationService,
         private readonly NameGeneratorService $nameGenerator,
+        private readonly PlayerGenerationService $playerGenerationService,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly SnapshotValidator $snapshotValidator,
     ) {}
+
+    /**
+     * Fills an ActiveCompetition to capacity with spoof entrants in one call — for
+     * exercising result generation and round movement locally without needing any real
+     * club to register first. If the competition already has at least one real (or
+     * spoof) entrant, that earliest one is used as the clone basis exactly like
+     * generateSpoofEntrantsForCompetition(). If it has none yet, one fully-synthetic
+     * entrant is bootstrapped first (via PlayerGenerationService/NpcClubGenerationService
+     * — the same generators NPC clubs/pool players use), then that becomes the basis for
+     * the rest — so "spoof everything from empty" and "spoof the remaining slots" are the
+     * same underlying operation.
+     *
+     * @return array{created: list<CompetitionEntrant>, requested: int}
+     */
+    public function spoofAllEntrants(ActiveCompetition $activeCompetition): array
+    {
+        if ($activeCompetition->getStatus() !== ActiveCompetitionStatus::REGISTERING) {
+            throw new \RuntimeException('Spoof entrants can only be added while the competition is REGISTERING.');
+        }
+
+        $remaining = $activeCompetition->getEntrantCapacity() - $this->entrantRepository->countForCompetition($activeCompetition);
+        if ($remaining <= 0) {
+            return ['created' => [], 'requested' => 0];
+        }
+
+        if ($this->entrantRepository->countForCompetition($activeCompetition) > 0) {
+            return $this->generateSpoofEntrantsForCompetition($activeCompetition, $remaining);
+        }
+
+        $bootstrapEntrant = $this->createSpoofEntrantFromSnapshot($activeCompetition, $this->buildSyntheticSnapshot(), randomise: false);
+        $created          = [$bootstrapEntrant];
+        $remaining--;
+
+        if ($remaining > 0 && $activeCompetition->getStatus() === ActiveCompetitionStatus::REGISTERING) {
+            $rest    = $this->generateSpoofEntrantsForCompetition($activeCompetition, $remaining);
+            $created = array_merge($created, $rest['created']);
+        }
+
+        return ['created' => $created, 'requested' => count($created)];
+    }
+
+    /**
+     * Builds one club/players/staff snapshot entirely from scratch (no existing entrant to
+     * clone) — same generators used for the NPC/pool player, just discarded rather than
+     * persisted once their attributes are read into the snapshot array.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildSyntheticSnapshot(): array
+    {
+        $nationality = $this->nameGenerator->getRandomNationality();
+        $clubName    = $this->npcClubGenerationService->generateClubName('EN', []);
+        $homeColors  = $this->npcClubGenerationService->pickColorPair();
+        $awayColors  = $this->npcClubGenerationService->pickColorPair();
+
+        $players = [];
+        foreach (self::STARTING_XI_POSITIONS as $position) {
+            $player    = $this->playerGenerationService->generate($position, RecruitmentSource::SENIOR_INTAKE, $nationality);
+            $players[] = [
+                'id'             => (string) new UuidV7(),
+                'position'       => $position->value,
+                'name'           => trim($player->getFirstName() . ' ' . $player->getLastName()),
+                'nationality'    => $player->getNationality(),
+                'currentAbility' => $player->getCurrentAbility(),
+                'potential'      => $player->getPotential(),
+                'pace'           => $player->getPace(),
+                'technical'      => $player->getTechnical(),
+                'vision'         => $player->getVision(),
+                'power'          => $player->getPower(),
+                'stamina'        => $player->getStamina(),
+                'heart'          => $player->getHeart(),
+            ];
+        }
+
+        return [
+            'club' => [
+                'id'            => (string) new UuidV7(),
+                'name'          => $clubName,
+                'country'       => 'EN',
+                'reputation'    => random_int(20, 80),
+                'tier'          => self::CLUB_TIERS[array_rand(self::CLUB_TIERS)],
+                'homePrimary'   => $homeColors[0],
+                'homeSecondary' => $homeColors[1],
+                'awayPrimary'   => $awayColors[0],
+                'awaySecondary' => $awayColors[1],
+                'badgeShape'    => self::BADGE_SHAPES[array_rand(self::BADGE_SHAPES)],
+                'homeKitStyle'  => 'j' . random_int(1, 99),
+                'awayKitStyle'  => 'j' . random_int(1, 99),
+                'stadiumName'   => $this->npcClubGenerationService->generateStadiumName($clubName, 'EN'),
+                'playingStyle'  => $this->npcClubGenerationService->playingStyleForTier(4),
+            ],
+            'players' => $players,
+            'staff'   => [[
+                'id'          => (string) new UuidV7(),
+                'role'        => 'MANAGER',
+                'name'        => $this->nameGenerator->generateName($nationality),
+                'nationality' => $nationality,
+            ]],
+            'facilities' => [],
+        ];
+    }
 
     /**
      * Admin entry point for a hand-pasted snapshot (the "Create Spoof" form on
