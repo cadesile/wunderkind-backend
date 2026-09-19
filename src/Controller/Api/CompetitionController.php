@@ -269,14 +269,7 @@ class CompetitionController extends AbstractController
      */
     private function serializeResultSummary(?CompetitionResult $result): ?array
     {
-        if ($result === null) {
-            return null;
-        }
-
-        return [
-            'homeScore' => $result->getHomeScore(),
-            'awayScore' => $result->getAwayScore(),
-        ];
+        return $result?->toClientSummary();
     }
 
     private function buildSnapshotArray(array $club, array $players, array $staff, array $facilities, ?string $clientSnapshotAt): array

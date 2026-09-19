@@ -213,6 +213,58 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $this->assertStringContainsString('deterministic', $text);
     }
 
+    public function testDetailPageResultDetailsExposeFullRawPayloadAndClientSummary(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildCompetitionWithOneProcessedRound($em);
+
+        $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
+        $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $result          = self::getContainer()->get(\App\Repository\Competition\CompetitionResultRepository::class)
+            ->findByFixtureIds(
+                array_map(
+                    fn ($f) => $f->getId(),
+                    self::getContainer()->get(\App\Repository\Competition\CompetitionFixtureRepository::class)->findByRoundOrderedBySlot($round1),
+                ),
+            );
+        $firstResult = array_values($result)[0];
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+
+        $text = $crawler->text(null, true);
+        $this->assertStringContainsString('Full stored payload', $text);
+        $this->assertStringContainsString('What the device receives', $text);
+
+        // Full payload includes fields the client never receives (event log detail, engine, timestamp).
+        $this->assertStringContainsString('"eventLogJson"', $crawler->html());
+        $this->assertStringContainsString('"engineIdentifier"', $crawler->html());
+
+        // The client-summary block is exactly toClientSummary()'s output — score only.
+        $this->assertStringContainsString($firstResult->getClientSummaryPretty(), $crawler->html());
+        $this->assertStringNotContainsString('"eventLogJson"', $firstResult->getClientSummaryPretty());
+    }
+
+    public function testIndexPageRowClicksThroughToDetail(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildCompetitionWithOneProcessedRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition');
+        self::assertResponseIsSuccessful();
+
+        $link = $crawler->filter(sprintf('a[href*="%s"]', $instance->getId()))->first();
+        self::assertGreaterThan(0, $link->count(), 'index row must link through to the detail page');
+
+        $client->click($link->link());
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString($instance->getTemplate()->getName(), $client->getResponse()->getContent());
+    }
+
     public function testEditNewAndDeleteActionsAreDisabled(): void
     {
         $client = static::createClient();

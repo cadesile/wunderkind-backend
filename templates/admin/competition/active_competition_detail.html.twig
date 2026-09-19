@@ -137,8 +137,28 @@
                                                     <p class="text-muted small mb-2">No event log recorded.</p>
                                                 {% endif %}
                                                 {% if result.narrativePayloadPretty %}
-                                                    <pre class="small bg-body p-2 mb-0">{{ result.narrativePayloadPretty }}</pre>
+                                                    <pre class="small bg-body p-2 mb-2">{{ result.narrativePayloadPretty }}</pre>
                                                 {% endif %}
+
+                                                <div class="row g-2 mt-1">
+                                                    <div class="col-12 col-lg-8">
+                                                        <div class="text-muted small fw-semibold mb-1">
+                                                            <i class="fa fa-database me-1"></i>Full stored payload (CompetitionResult, raw)
+                                                        </div>
+                                                        <pre class="small bg-body p-2 mb-0" style="max-height: 320px; overflow:auto;">{{ result.fullPayloadPretty }}</pre>
+                                                    </div>
+                                                    <div class="col-12 col-lg-4">
+                                                        <div class="text-muted small fw-semibold mb-1">
+                                                            <i class="fa fa-mobile-screen me-1"></i>What the device receives
+                                                        </div>
+                                                        <pre class="small bg-body p-2 mb-0">{{ result.clientSummaryPretty }}</pre>
+                                                        <p class="text-muted small mb-0 mt-1">
+                                                            The event log, engine, and timestamp above are admin-only —
+                                                            <code>GET /api/competitions/{id}</code> currently only ever
+                                                            returns this score summary per fixture.
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>

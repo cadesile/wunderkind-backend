@@ -80,4 +80,41 @@ class CompetitionResult
             ? null
             : (json_encode($this->narrativePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
     }
+
+    /**
+     * The exact shape CompetitionController::show() sends to a real client for this
+     * fixture's "result" field — single source of truth so the admin "what the device
+     * receives" view and the public API can never drift apart (see the show() bug where
+     * this was hardcoded to null and silently never matched what was actually stored).
+     *
+     * @return array{homeScore: int, awayScore: int}
+     */
+    public function toClientSummary(): array
+    {
+        return [
+            'homeScore' => $this->homeScore,
+            'awayScore' => $this->awayScore,
+        ];
+    }
+
+    /** Read-only virtual accessor for the admin detail view: exactly what toClientSummary() returns, pretty-printed. */
+    public function getClientSummaryPretty(): string
+    {
+        return json_encode($this->toClientSummary(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
+
+    /** Read-only virtual accessor for the admin detail view: every stored field, raw, as JSON. */
+    public function getFullPayloadPretty(): string
+    {
+        return json_encode([
+            'id'               => (string) $this->id,
+            'fixtureId'        => (string) $this->fixture->getId(),
+            'homeScore'        => $this->homeScore,
+            'awayScore'        => $this->awayScore,
+            'eventLogJson'     => $this->eventLogJson,
+            'narrativePayload' => $this->narrativePayload,
+            'engineIdentifier' => $this->engineIdentifier->value,
+            'generatedAt'      => $this->generatedAt->format(DATE_ATOM),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
 }
