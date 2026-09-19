@@ -37,7 +37,7 @@ class DeterministicEngineTest extends TestCase
         // A stub, not the real port under test elsewhere (MatchNarrativeGeneratorServiceTest) —
         // this suite is only exercising DeterministicEngine's own score/lineup/card model.
         $narrativeGenerator = $this->createMock(MatchNarrativeGeneratorService::class);
-        $narrativeGenerator->method('generate')->willReturn([['minute' => 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Kick-off.', 'playerA' => null, 'playerB' => null, 'teamId' => null]]);
+        $narrativeGenerator->method('generate')->willReturn([['minute' => 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Kick-off.', 'playerA' => null, 'playerB' => null, 'side' => null]]);
 
         return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
     }

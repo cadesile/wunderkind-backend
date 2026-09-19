@@ -177,11 +177,16 @@ class CompetitionResult
      * fixture's "result" field — single source of truth so the admin "what the device
      * receives" view and the public API can never drift apart (see the show() bug where
      * this was hardcoded to null and silently never matched what was actually stored).
-     * homeClub/awayClub mirror exactly what's stored (see $homeClubJson's docblock) so the
-     * client can render kits/badges/names without a second lookup. narrativePayload is the
-     * full generated commentary timeline (see MatchNarrativeGeneratorService) — null for
-     * results generated before this field existed, which the client should treat as an
-     * absent/optional feature, not an error.
+     * homeClub/awayClub mirror what's stored (see $homeClubJson's docblock) minus `id` — see
+     * stripClubId() — so the client can render kits/badges/names without a second lookup, and
+     * without an unresolvable UUID sitting in the payload inviting a future maintainer to use
+     * it as a matching key (a tournament opponent may not exist in any local store; the only
+     * safe way to say "which club" in narrativePayload is `side`, not an id — see
+     * MatchNarrativeGeneratorService and docs/api/push-notifications.md's sibling doc,
+     * docs/api/tournament-match-result-payload.md, which this shape is contracted against).
+     * narrativePayload is the full generated commentary timeline — null for results generated
+     * before this field existed, which the client should treat as an absent/optional feature,
+     * not an error.
      *
      * wentToExtraTime/wentToPenalties/penaltyHomeScore/penaltyAwayScore record how a level
      * scoreline was actually settled — see this entity's field docblock. penaltyHomeScore/
@@ -194,14 +199,25 @@ class CompetitionResult
         return [
             'homeScore'        => $this->homeScore,
             'awayScore'        => $this->awayScore,
-            'homeClub'         => $this->homeClubJson,
-            'awayClub'         => $this->awayClubJson,
+            'homeClub'         => $this->stripClubId($this->homeClubJson),
+            'awayClub'         => $this->stripClubId($this->awayClubJson),
             'narrativePayload' => $this->narrativePayload,
             'wentToExtraTime'  => $this->wentToExtraTime,
             'wentToPenalties'  => $this->wentToPenalties,
             'penaltyHomeScore' => $this->penaltyHomeScore,
             'penaltyAwayScore' => $this->penaltyAwayScore,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $club
+     * @return array<string, mixed>
+     */
+    private function stripClubId(array $club): array
+    {
+        unset($club['id']);
+
+        return $club;
     }
 
     /** Read-only virtual accessor for the admin detail view: exactly what toClientSummary() returns, pretty-printed. */

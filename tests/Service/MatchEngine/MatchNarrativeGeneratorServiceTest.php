@@ -221,7 +221,7 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
 
         $texts = array_column($items, 'text');
         $this->assertNotContains('Full-time in normal time — this one\'s going to extra time!', $texts);
-        $this->assertSame([], array_values(array_filter($items, static fn (array $i) => $i['eventType'] === 'PENALTY_SHOOTOUT')));
+        $this->assertSame([], array_values(array_filter($items, static fn (array $i) => str_contains($i['text'], 'on penalties!'))));
     }
 
     public function testPenaltyShootoutAddsAFinalKeySummaryLineNamingTheWinnerAndScore(): void
@@ -233,10 +233,14 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
 
         $items = $service->generate($fixture, $home, $away, [], $homeLineup, $awayLineup, wentToExtraTime: true, wentToPenalties: true, penaltyHomeScore: 5, penaltyAwayScore: 4);
 
-        $shootoutEvents = array_values(array_filter($items, static fn (array $i) => $i['eventType'] === 'PENALTY_SHOOTOUT'));
+        $shootoutEvents = array_values(array_filter($items, static fn (array $i) => str_contains($i['text'], 'on penalties!')));
         $this->assertCount(1, $shootoutEvents);
         $this->assertTrue($shootoutEvents[0]['isKeyEvent']);
         $this->assertSame('Home win 5-4 on penalties!', $shootoutEvents[0]['text']);
+        // Belongs to neither side and isn't a goal/card/filler — same eventType:null convention
+        // as the half-time/full-time markers, matching the client's TournamentMatchNarrativeEvent union.
+        $this->assertNull($shootoutEvents[0]['eventType']);
+        $this->assertNull($shootoutEvents[0]['side']);
 
         // The shootout summary must be the very last item chronologically.
         $minutes = array_column($items, 'minute');
