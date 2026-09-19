@@ -36,6 +36,14 @@ use App\Service\Appearance\SeededRng;
  * MatchNarrativeGeneratorService, the admin bracket UI, and existing tests, so each goal
  * is paired with an assist (from the same position-weighted pool) at generation time
  * instead of only producing match-wide totals.
+ *
+ * Cup knockout resolution: every Competition fixture in this codebase is a single-elimination
+ * bracket match, which can never end level — a 90-minute draw triggers a real extra-time
+ * simulation (30 more minutes, same dominance ratio, genuine additional goal events), and
+ * only falls to a penalty shootout if still level after that. The shootout winner is decided
+ * by a literal coin flip (not a per-kick model) with a fabricated but plausible scoreline
+ * for display — see resolve()'s inline comments and MatchEngineResult's wentToExtraTime/
+ * wentToPenalties/penaltyHomeScore/penaltyAwayScore fields.
  */
 class DeterministicEngine implements MatchEngineInterface
 {
@@ -76,6 +84,38 @@ class DeterministicEngine implements MatchEngineInterface
         $homeGoalEvents = $this->distributeGoalsAndAssists($rng, $home, 'home', $homeGoals);
         $awayGoalEvents = $this->distributeGoalsAndAssists($rng, $away, 'away', $awayGoals);
 
+        // Knockout fixture — a level score after 90 minutes can't stand; extra time gets a
+        // genuine chance to settle it before falling back to penalties. See class docblock's
+        // "Cup knockout resolution" note.
+        $wentToExtraTime  = false;
+        $wentToPenalties  = false;
+        $penaltyHomeScore = null;
+        $penaltyAwayScore = null;
+
+        if ($homeGoals === $awayGoals) {
+            $wentToExtraTime = true;
+
+            $etExpectedGoals = $expectedTotalGoals * (30 / 90);
+            $etHomeGoals     = $this->poissonRandom($rng, $etExpectedGoals * $homeRatio);
+            $etAwayGoals     = $this->poissonRandom($rng, $etExpectedGoals * (1 - $homeRatio));
+
+            $homeGoalEvents = array_merge($homeGoalEvents, $this->distributeGoalsAndAssists($rng, $home, 'home', $etHomeGoals, $this->rollExtraTimeGoalMinute(...)));
+            $awayGoalEvents = array_merge($awayGoalEvents, $this->distributeGoalsAndAssists($rng, $away, 'away', $etAwayGoals, $this->rollExtraTimeGoalMinute(...)));
+
+            $homeGoals += $etHomeGoals;
+            $awayGoals += $etAwayGoals;
+
+            if ($homeGoals === $awayGoals) {
+                $wentToPenalties = true;
+
+                $homeWinsShootout = $rng->chance(0.5);
+                $winnerPens       = 5;
+                $loserPens        = 5 - $rng->pick([1, 2, 3]);
+                $penaltyHomeScore = $homeWinsShootout ? $winnerPens : $loserPens;
+                $penaltyAwayScore = $homeWinsShootout ? $loserPens : $winnerPens;
+            }
+        }
+
         $homeGoalStats = $this->tallyGoalStats($homeGoalEvents);
         $awayGoalStats = $this->tallyGoalStats($awayGoalEvents);
 
@@ -88,9 +128,20 @@ class DeterministicEngine implements MatchEngineInterface
         $homeLineup = $this->calculatePerformance($rng, $home, $homeGoals, $awayGoals, $homeGoalStats, $homeCardStats, $config);
         $awayLineup = $this->calculatePerformance($rng, $away, $awayGoals, $homeGoals, $awayGoalStats, $awayCardStats, $config);
 
-        $narrativePayload = $this->narrativeGenerator->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup);
+        $narrativePayload = $this->narrativeGenerator->generate(
+            $fixture,
+            $home,
+            $away,
+            $eventLog,
+            $homeLineup,
+            $awayLineup,
+            $wentToExtraTime,
+            $wentToPenalties,
+            $penaltyHomeScore,
+            $penaltyAwayScore,
+        );
 
-        return new MatchEngineResult($homeGoals, $awayGoals, $eventLog, $narrativePayload, $homeLineup, $awayLineup);
+        return new MatchEngineResult($homeGoals, $awayGoals, $eventLog, $narrativePayload, $homeLineup, $awayLineup, $wentToExtraTime, $wentToPenalties, $penaltyHomeScore, $penaltyAwayScore);
     }
 
     /** Port of ResultsEngine.ts's calculateDominance() — no RNG draws, pure function of snapshot + config. */
@@ -195,7 +246,7 @@ class DeterministicEngine implements MatchEngineInterface
      *
      * @return list<array{minute:int,type:'goal',team:string,scorer:?string,assist:?string}>
      */
-    private function distributeGoalsAndAssists(SeededRng $rng, CompetitionEntrant $entrant, string $team, int $goals): array
+    private function distributeGoalsAndAssists(SeededRng $rng, CompetitionEntrant $entrant, string $team, int $goals, ?\Closure $rollMinute = null): array
     {
         if ($goals <= 0) {
             return [];
@@ -233,7 +284,8 @@ class DeterministicEngine implements MatchEngineInterface
                 $assist = null;
             }
 
-            $events[] = ['minute' => $this->rollGoalMinute($rng), 'type' => 'goal', 'team' => $team, 'scorer' => $scorer, 'assist' => $assist];
+            $minute   = $rollMinute !== null ? $rollMinute($rng) : $this->rollGoalMinute($rng);
+            $events[] = ['minute' => $minute, 'type' => 'goal', 'team' => $team, 'scorer' => $scorer, 'assist' => $assist];
         }
 
         return $events;
@@ -275,6 +327,21 @@ class DeterministicEngine implements MatchEngineInterface
         }
 
         return (int) floor($rng->next() * 5) + 91;
+    }
+
+    /**
+     * Minute roller for the 30-minute extra-time period (91-122') — deliberately simpler
+     * than rollGoalMinute()'s four-band regulation model (no need to mirror a two-45-minute
+     * structure for two 15-minute ET halves): ~90% uniform across 91-119', ~10% in a short
+     * 120-122' stoppage window.
+     */
+    private function rollExtraTimeGoalMinute(SeededRng $rng): int
+    {
+        if ($rng->next() < 0.9) {
+            return (int) floor($rng->next() * 29) + 91;
+        }
+
+        return (int) floor($rng->next() * 3) + 120;
     }
 
     /** @param list<array{minute:int,type:'goal',team:string,scorer:?string,assist:?string}> $goalEvents

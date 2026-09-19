@@ -20,5 +20,9 @@ final class MatchEngineResult
         public readonly ?array $narrativePayload = null,
         public readonly array $homeLineup = [],
         public readonly array $awayLineup = [],
+        public readonly bool $wentToExtraTime = false,
+        public readonly bool $wentToPenalties = false,
+        public readonly ?int $penaltyHomeScore = null,
+        public readonly ?int $penaltyAwayScore = null,
     ) {}
 }

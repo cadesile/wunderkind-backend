@@ -61,9 +61,27 @@ class CompetitionResult
     #[ORM\Column(type: 'json')]
     private array $awayLineupJson;
 
-    /** @var array|null Reserved for a future narrative match engine. Always null in Phase 1. */
+    /** @var array|null Full generated commentary timeline — see MatchNarrativeGeneratorService. Null for results generated before this feature existed. */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $narrativePayload = null;
+
+    /**
+     * Every Competition fixture is a knockout-bracket match and can never end level — these
+     * four fields record how a tie was actually settled. `homeScore`/`awayScore` above are
+     * always the true final score (including extra time, if played); a shootout never
+     * changes them. See DeterministicEngine's "Cup knockout resolution" docblock note.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $wentToExtraTime = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $wentToPenalties = false;
+
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $penaltyHomeScore = null;
+
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $penaltyAwayScore = null;
 
     #[ORM\Column(type: 'string', enumType: MatchEngineIdentifier::class)]
     private MatchEngineIdentifier $engineIdentifier;
@@ -122,6 +140,21 @@ class CompetitionResult
     public function getNarrativePayload(): ?array { return $this->narrativePayload; }
     public function setNarrativePayload(?array $narrativePayload): static { $this->narrativePayload = $narrativePayload; return $this; }
 
+    public function setShootoutInfo(bool $wentToExtraTime, bool $wentToPenalties, ?int $penaltyHomeScore, ?int $penaltyAwayScore): static
+    {
+        $this->wentToExtraTime  = $wentToExtraTime;
+        $this->wentToPenalties  = $wentToPenalties;
+        $this->penaltyHomeScore = $penaltyHomeScore;
+        $this->penaltyAwayScore = $penaltyAwayScore;
+
+        return $this;
+    }
+
+    public function isWentToExtraTime(): bool { return $this->wentToExtraTime; }
+    public function isWentToPenalties(): bool { return $this->wentToPenalties; }
+    public function getPenaltyHomeScore(): ?int { return $this->penaltyHomeScore; }
+    public function getPenaltyAwayScore(): ?int { return $this->penaltyAwayScore; }
+
     public function getEngineIdentifier(): MatchEngineIdentifier { return $this->engineIdentifier; }
 
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
@@ -150,7 +183,11 @@ class CompetitionResult
      * results generated before this field existed, which the client should treat as an
      * absent/optional feature, not an error.
      *
-     * @return array{homeScore: int, awayScore: int, homeClub: array<string, mixed>, awayClub: array<string, mixed>, narrativePayload: ?array}
+     * wentToExtraTime/wentToPenalties/penaltyHomeScore/penaltyAwayScore record how a level
+     * scoreline was actually settled — see this entity's field docblock. penaltyHomeScore/
+     * penaltyAwayScore are null unless wentToPenalties is true.
+     *
+     * @return array{homeScore: int, awayScore: int, homeClub: array<string, mixed>, awayClub: array<string, mixed>, narrativePayload: ?array, wentToExtraTime: bool, wentToPenalties: bool, penaltyHomeScore: ?int, penaltyAwayScore: ?int}
      */
     public function toClientSummary(): array
     {
@@ -160,6 +197,10 @@ class CompetitionResult
             'homeClub'         => $this->homeClubJson,
             'awayClub'         => $this->awayClubJson,
             'narrativePayload' => $this->narrativePayload,
+            'wentToExtraTime'  => $this->wentToExtraTime,
+            'wentToPenalties'  => $this->wentToPenalties,
+            'penaltyHomeScore' => $this->penaltyHomeScore,
+            'penaltyAwayScore' => $this->penaltyAwayScore,
         ];
     }
 
@@ -183,6 +224,10 @@ class CompetitionResult
             'awayLineup'       => $this->awayLineupJson,
             'eventLogJson'     => $this->eventLogJson,
             'narrativePayload' => $this->narrativePayload,
+            'wentToExtraTime'  => $this->wentToExtraTime,
+            'wentToPenalties'  => $this->wentToPenalties,
+            'penaltyHomeScore' => $this->penaltyHomeScore,
+            'penaltyAwayScore' => $this->penaltyAwayScore,
             'engineIdentifier' => $this->engineIdentifier->value,
             'generatedAt'      => $this->generatedAt->format(DATE_ATOM),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';

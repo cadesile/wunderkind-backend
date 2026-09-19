@@ -42,6 +42,27 @@ class DeterministicEngineTest extends TestCase
         return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
     }
 
+    /** Same as makeEngine(), but records every call to generate() so ET/penalty flags passed to it can be asserted on. */
+    private function makeEngineCapturingNarrativeArgs(array &$capturedCalls): DeterministicEngine
+    {
+        $repo = $this->createMock(TacticalAdvantageRepository::class);
+        $repo->method('findMultiplier')->willReturn(1.0);
+
+        $configRepo = $this->createMock(GameConfigRepository::class);
+        $configRepo->method('getConfig')->willReturn(new GameConfig());
+
+        $narrativeGenerator = $this->createMock(MatchNarrativeGeneratorService::class);
+        $narrativeGenerator->method('generate')->willReturnCallback(
+            function (...$args) use (&$capturedCalls) {
+                $capturedCalls[] = ['wentToExtraTime' => $args[6], 'wentToPenalties' => $args[7], 'penaltyHomeScore' => $args[8], 'penaltyAwayScore' => $args[9]];
+
+                return [];
+            },
+        );
+
+        return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
+    }
+
     private function makeEntrant(ActiveCompetition $instance, string $name, int $strength, ?PlayingStyle $playingStyle = null): CompetitionEntrant
     {
         $user = new User("$name@example.com");
@@ -312,5 +333,72 @@ class DeterministicEngineTest extends TestCase
 
         $this->assertNotNull($result->narrativePayload);
         $this->assertNotSame([], $result->narrativePayload);
+    }
+
+    public function testALevelScoreAfterRegulationGoesToExtraTime(): void
+    {
+        $capturedCalls = [];
+        $engine        = $this->makeEngineCapturingNarrativeArgs($capturedCalls);
+
+        $foundExtraTime = false;
+
+        for ($i = 0; $i < 300 && !$foundExtraTime; $i++) {
+            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+            $instance = new ActiveCompetition($template);
+            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+            $home     = $this->makeEntrant($instance, 'Home', 15);
+            $away     = $this->makeEntrant($instance, 'Away', 15);
+            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+
+            $result = $engine->resolve($home, $away, $fixture);
+            $call   = $capturedCalls[array_key_last($capturedCalls)];
+
+            if ($call['wentToExtraTime']) {
+                $foundExtraTime = true;
+
+                // A knockout fixture is never allowed to stay a scoreless-margin draw once
+                // extra time is played and penalties weren't needed.
+                if (!$call['wentToPenalties']) {
+                    $this->assertNotSame($result->homeScore, $result->awayScore, 'Extra time without penalties must have produced a decisive score.');
+                }
+            }
+        }
+
+        $this->assertTrue($foundExtraTime, 'Expected at least one regulation-time draw across 300 equal-strength seeds.');
+    }
+
+    public function testStillLevelAfterExtraTimeGoesToACoinFlipPenaltyShootout(): void
+    {
+        $capturedCalls = [];
+        $engine        = $this->makeEngineCapturingNarrativeArgs($capturedCalls);
+
+        $foundPenalties = false;
+
+        for ($i = 0; $i < 1000 && !$foundPenalties; $i++) {
+            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+            $instance = new ActiveCompetition($template);
+            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+            $home     = $this->makeEntrant($instance, 'Home', 15);
+            $away     = $this->makeEntrant($instance, 'Away', 15);
+            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+
+            $result = $engine->resolve($home, $away, $fixture);
+            $call   = $capturedCalls[array_key_last($capturedCalls)];
+
+            if ($call['wentToPenalties']) {
+                $foundPenalties = true;
+
+                $this->assertTrue($result->wentToExtraTime);
+                $this->assertTrue($result->wentToPenalties);
+                $this->assertSame($result->homeScore, $result->awayScore, 'The recorded score must stay the true (level) AET score even when penalties decide the tie.');
+                $this->assertNotNull($result->penaltyHomeScore);
+                $this->assertNotNull($result->penaltyAwayScore);
+                $this->assertNotSame($result->penaltyHomeScore, $result->penaltyAwayScore, 'A penalty shootout must always produce a decisive tally.');
+                $this->assertSame($call['penaltyHomeScore'], $result->penaltyHomeScore);
+                $this->assertSame($call['penaltyAwayScore'], $result->penaltyAwayScore);
+            }
+        }
+
+        $this->assertTrue($foundPenalties, 'Expected at least one shootout across 1000 equal-strength seeds.');
     }
 }

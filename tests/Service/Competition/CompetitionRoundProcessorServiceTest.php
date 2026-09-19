@@ -252,4 +252,52 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
         $this->expectExceptionMessage('no longer processable');
         $this->processor->forceResolveFixture($fixture);
     }
+
+    /**
+     * A knockout fixture must never advance a bracket while looking like a draw — a tied SF
+     * fixture must be settled by extra time and/or a penalty shootout, never silently. Equal
+     * ability (10 vs 10, per buildLockedCompetition()) makes level scores common, so looping
+     * over independent competitions (fresh fixture ids each time, same idiom
+     * DeterministicEngineTest uses) reliably surfaces both outcomes without mocking the real
+     * engine.
+     */
+    public function testATiedFixtureIsResolvedByExtraTimeAndOrPenaltiesNotLeftAsADraw(): void
+    {
+        $foundExtraTime = false;
+        $foundPenalties = false;
+
+        for ($i = 0; $i < 60 && !($foundExtraTime && $foundPenalties); $i++) {
+            $instance = $this->buildLockedCompetition();
+            $this->backdateRound($instance, 1);
+            $this->processor->processDueRounds(new \DateTimeImmutable());
+
+            $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+            $fixtures = $this->fixtureRepository->findByRoundOrderedBySlot($round1);
+
+            foreach ($fixtures as $fixture) {
+                $this->assertNotNull($fixture->getWinnerEntrant(), 'Every SF fixture must produce a decisive winner, even when the scoreline stays level.');
+
+                $result = $this->em->getRepository(\App\Entity\Competition\CompetitionResult::class)->findOneBy(['fixture' => $fixture]);
+                if ($result === null) {
+                    continue;
+                }
+
+                if ($result->isWentToExtraTime()) {
+                    $foundExtraTime = true;
+                }
+
+                if ($result->isWentToPenalties()) {
+                    $foundPenalties = true;
+                    $this->assertTrue($result->isWentToExtraTime(), 'Penalties can only follow extra time.');
+                    $this->assertSame($result->getHomeScore(), $result->getAwayScore(), 'The recorded score must stay the true (level) AET score even when penalties decide the tie.');
+                    $this->assertNotNull($result->getPenaltyHomeScore());
+                    $this->assertNotNull($result->getPenaltyAwayScore());
+                    $this->assertNotSame($result->getPenaltyHomeScore(), $result->getPenaltyAwayScore(), 'A penalty shootout must always produce a decisive tally.');
+                }
+            }
+        }
+
+        $this->assertTrue($foundExtraTime, 'Expected at least one fixture to go to extra time across 60 competitions.');
+        $this->assertTrue($foundPenalties, 'Expected at least one fixture to go to penalties across 60 competitions.');
+    }
 }

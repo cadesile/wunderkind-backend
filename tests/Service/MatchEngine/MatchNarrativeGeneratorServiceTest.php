@@ -188,4 +188,58 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
 
         $this->assertSame([], $items);
     }
+
+    public function testExtraTimeAddsAGoingToExtraTimeMarkerAndExtendsTheFillerWindow(): void
+    {
+        $service = $this->makeService();
+        [$fixture, $home, $away] = $this->makeFixture();
+        $eventLog   = [['minute' => 105, 'type' => 'goal', 'team' => 'home', 'scorer' => 'Home-p8', 'assist' => null]];
+        $homeLineup = $this->lineupFor($home, ['Home-p8' => ['goals' => 1]]);
+        $awayLineup = $this->lineupFor($away);
+
+        $items = $service->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup, wentToExtraTime: true);
+
+        $texts = array_column($items, 'text');
+        $this->assertContains('Half-time.', $texts);
+        $this->assertContains('Full-time in normal time — this one\'s going to extra time!', $texts);
+        $this->assertContains('Full-time.', $texts);
+
+        $minutes = array_column($items, 'minute');
+        $this->assertGreaterThan(105, max($minutes), 'The final Full-time marker must land after the extra-time goal.');
+
+        $sorted = $minutes;
+        sort($sorted);
+        $this->assertSame($sorted, $minutes);
+    }
+
+    public function testRegulationOnlyMatchHasNoExtraTimeOrPenaltyMarkers(): void
+    {
+        $service = $this->makeService();
+        [$fixture, $home, $away] = $this->makeFixture();
+
+        $items = $service->generate($fixture, $home, $away, [], $this->lineupFor($home), $this->lineupFor($away));
+
+        $texts = array_column($items, 'text');
+        $this->assertNotContains('Full-time in normal time — this one\'s going to extra time!', $texts);
+        $this->assertSame([], array_values(array_filter($items, static fn (array $i) => $i['eventType'] === 'PENALTY_SHOOTOUT')));
+    }
+
+    public function testPenaltyShootoutAddsAFinalKeySummaryLineNamingTheWinnerAndScore(): void
+    {
+        $service = $this->makeService();
+        [$fixture, $home, $away] = $this->makeFixture();
+        $homeLineup = $this->lineupFor($home);
+        $awayLineup = $this->lineupFor($away);
+
+        $items = $service->generate($fixture, $home, $away, [], $homeLineup, $awayLineup, wentToExtraTime: true, wentToPenalties: true, penaltyHomeScore: 5, penaltyAwayScore: 4);
+
+        $shootoutEvents = array_values(array_filter($items, static fn (array $i) => $i['eventType'] === 'PENALTY_SHOOTOUT'));
+        $this->assertCount(1, $shootoutEvents);
+        $this->assertTrue($shootoutEvents[0]['isKeyEvent']);
+        $this->assertSame('Home win 5-4 on penalties!', $shootoutEvents[0]['text']);
+
+        // The shootout summary must be the very last item chronologically.
+        $minutes = array_column($items, 'minute');
+        $this->assertSame(max($minutes), $shootoutEvents[0]['minute']);
+    }
 }

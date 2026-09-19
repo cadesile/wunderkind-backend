@@ -241,13 +241,17 @@ class CompetitionRoundProcessorService
             $matchResult->awayLineup,
         );
         $result->setNarrativePayload($matchResult->narrativePayload);
+        $result->setShootoutInfo($matchResult->wentToExtraTime, $matchResult->wentToPenalties, $matchResult->penaltyHomeScore, $matchResult->penaltyAwayScore);
         $this->em->persist($result);
 
         $winner = match (true) {
             $matchResult->homeScore > $matchResult->awayScore => $home,
             $matchResult->awayScore > $matchResult->homeScore => $away,
-            // A knockout fixture can't end level — break the tie deterministically
-            // (a "shootout"), seeded independently of the scoreline draw itself.
+            $matchResult->wentToPenalties => ($matchResult->penaltyHomeScore > $matchResult->penaltyAwayScore ? $home : $away),
+            // Defensive fallback only — DeterministicEngine now guarantees a decisive result
+            // via extra time + penalties, so this branch is unreachable in practice; kept in
+            // case an engine that hasn't implemented ET/penalties yet (e.g. a future real AI
+            // tier) ever produces a level score.
             default => $this->breakTie($home, $away, $fixture),
         };
         $loser = $winner === $home ? $away : $home;
