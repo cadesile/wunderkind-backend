@@ -11,6 +11,7 @@ use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
+use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -158,5 +159,113 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
 
         $this->expectException(\RuntimeException::class);
         $this->spoofService->generateSpoofEntrantsForCompetition($activeCompetition, 1);
+    }
+
+    private function buildOpenCompetition(int $capacity): ActiveCompetition
+    {
+        $template = new CompetitionTemplate('Paste Spoof Cup', 'paste-spoof-cup-' . uniqid('', true), $capacity, CompetitionDuration::ONE_DAY);
+        $this->em->persist($template);
+
+        $activeCompetition = new ActiveCompetition($template);
+        $this->em->persist($activeCompetition);
+        $this->em->flush();
+
+        return $activeCompetition;
+    }
+
+    /** @return array<string, mixed> A minimal but structurally-valid pasted snapshot. */
+    private function pastedSnapshot(): array
+    {
+        $players = [];
+        for ($i = 0; $i < 11; $i++) {
+            $players[] = [
+                'id'             => "pasted-p$i",
+                'position'       => 'MID',
+                'name'           => "Pasted Player $i",
+                'nationality'    => 'German',
+                'currentAbility' => 50,
+                'potential'      => 70,
+            ];
+        }
+
+        return [
+            'club' => [
+                'id'         => 'client-side-id-does-not-matter',
+                'name'       => 'Oldham Warriors',
+                'reputation' => 100,
+                'playingStyle' => 'HIGH_PRESS',
+            ],
+            'players' => $players,
+            'staff'   => [
+                ['id' => 'pasted-s1', 'role' => 'MANAGER', 'name' => 'Klaus Braun', 'nationality' => 'German'],
+            ],
+            'facilities' => ['training_pitch' => 9],
+        ];
+    }
+
+    public function testCreateSpoofEntrantFromSnapshotRegistersVerbatimWhenNotRandomised(): void
+    {
+        $activeCompetition = $this->buildOpenCompetition(capacity: 8);
+
+        $entrant = $this->spoofService->createSpoofEntrantFromSnapshot($activeCompetition, $this->pastedSnapshot(), randomise: false);
+
+        self::assertTrue($entrant->getClub()->isSpoof());
+        self::assertSame('Oldham Warriors', $entrant->getClub()->getName());
+
+        $snapshot = $entrant->getSnapshotJson();
+        // club.id is resynced to the real persisted entity, everything else passes through untouched.
+        self::assertSame((string) $entrant->getClub()->getId(), $snapshot['club']['id']);
+        self::assertSame('Oldham Warriors', $snapshot['club']['name']);
+        self::assertSame('HIGH_PRESS', $snapshot['club']['playingStyle']);
+        self::assertSame('Pasted Player 0', $snapshot['players'][0]['name']);
+        self::assertSame('pasted-p0', $snapshot['players'][0]['id']);
+        self::assertSame('Klaus Braun', $snapshot['staff'][0]['name']);
+        self::assertSame(['training_pitch' => 9], $snapshot['facilities']);
+    }
+
+    public function testCreateSpoofEntrantFromSnapshotRandomisesWhenRequested(): void
+    {
+        $activeCompetition = $this->buildOpenCompetition(capacity: 8);
+
+        $entrant = $this->spoofService->createSpoofEntrantFromSnapshot($activeCompetition, $this->pastedSnapshot(), randomise: true);
+
+        self::assertNotSame('Oldham Warriors', $entrant->getClub()->getName());
+
+        $snapshot = $entrant->getSnapshotJson();
+        self::assertNotSame('Pasted Player 0', $snapshot['players'][0]['name']);
+        self::assertNotSame('pasted-p0', $snapshot['players'][0]['id']);
+        self::assertNotSame('Klaus Braun', $snapshot['staff'][0]['name']);
+    }
+
+    public function testCreateSpoofEntrantFromSnapshotThrowsOnStructuralViolations(): void
+    {
+        $activeCompetition = $this->buildOpenCompetition(capacity: 8);
+
+        $snapshot = $this->pastedSnapshot();
+        array_pop($snapshot['players']); // now only 10 players — violates the exactly-11 rule
+
+        $this->expectException(SpoofSnapshotValidationException::class);
+        $this->spoofService->createSpoofEntrantFromSnapshot($activeCompetition, $snapshot, randomise: false);
+    }
+
+    public function testCreateSpoofEntrantFromSnapshotThrowsWhenCompetitionIsFull(): void
+    {
+        // 4 entrants persisted directly (not via CompetitionRegistrationService) so the
+        // competition stays REGISTERING despite being at capacity — this exercises the
+        // capacity guard specifically, independent of the status guard.
+        $activeCompetition = $this->buildOpenCompetition(capacity: 4);
+        for ($i = 0; $i < 4; $i++) {
+            $user = new User("full-slot-$i-" . uniqid('', true) . '@example.com');
+            $user->setPassword('x');
+            $club = new Club("Filler FC $i", $user);
+            $this->em->persist($user);
+            $this->em->persist($club);
+            $this->em->persist(new CompetitionEntrant($activeCompetition, $club, $i, ['club' => ['id' => (string) $club->getId()], 'players' => []]));
+        }
+        $this->em->flush();
+        self::assertSame(ActiveCompetitionStatus::REGISTERING, $activeCompetition->getStatus());
+
+        $this->expectException(\RuntimeException::class);
+        $this->spoofService->createSpoofEntrantFromSnapshot($activeCompetition, $this->pastedSnapshot(), randomise: false);
     }
 }
