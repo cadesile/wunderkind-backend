@@ -31,6 +31,10 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`AdminMessageController`** — surfaces pending operator announcements
   and records acknowledgement. Uses `ClubResolver`,
   `AdminMessageRepository`, `AdminMessageService`.
+- **`DeviceTokenController`** — FCM push-token registration
+  (`POST /api/device-tokens`, upserts by token; `DELETE /{deviceToken}`
+  for logout). Uses `UserDeviceRepository`. See `services.md`'s
+  `Notification/PushNotificationService`.
 - **`AppLinksController`**, **`GameConfigController`**,
   **`StarterConfigController`**, **`VideoController`** — thin
   read-through controllers over `GameConfigRepository`/
@@ -113,3 +117,10 @@ actually *does* (which service/repo it calls), not restated route paths.
 via `configureFields()`/`configureActions()` — individual field
 configuration wasn't traced controller-by-controller (not architecturally
 significant beyond the pattern itself).
+
+One exception worth noting: **`AdminMessageCrudController`** overrides
+`persistEntity()`/`updateEntity()` to dispatch
+`ResolveAdminMessageAudienceForPushMessage` via Messenger the first time
+a message is saved Active with `sendAsPush` checked (`pushSentAt` guards
+against resending on later edits) — see `services.md`'s
+`Notification/` entries.

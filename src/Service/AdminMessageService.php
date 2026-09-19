@@ -130,8 +130,12 @@ class AdminMessageService
      * which. A message carrying both a manual group this club is not in and a dynamic group is
      * returned by that query on the dynamic branch alone — so each group must be re-checked on
      * its own terms here, manual ones included.
+     *
+     * Public so ResolveAdminMessageAudienceForPushMessageHandler can reuse the exact same
+     * eligibility rules for the push channel's eager (all-clubs-at-once) resolution instead of
+     * this poll path's per-request lazy check — the two must never diverge.
      */
-    private function isEligible(AdminMessage $message, Club $club): bool
+    public function isEligible(AdminMessage $message, Club $club): bool
     {
         // Broadcast and direct targeting were fully resolved in SQL.
         if ($message->getTargetType() !== MessageTargetType::GROUP_SEGMENTED) {

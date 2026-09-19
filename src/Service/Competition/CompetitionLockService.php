@@ -9,6 +9,7 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\MatchEngineIdentifier;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -22,6 +23,7 @@ class CompetitionLockService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionEntrantRepository $entrantRepository,
+        private readonly PushNotificationService $pushNotificationService,
     ) {}
 
     public function lock(ActiveCompetition $activeCompetition): void
@@ -78,5 +80,12 @@ class CompetitionLockService
             $this->em->persist($fixture);
             $slot++;
         }
+
+        $this->pushNotificationService->notifyUsers(
+            array_map(static fn ($entrant) => (string) $entrant->getClub()->getUser()->getId(), $entrants),
+            'The draw is in!',
+            'Round 1 fixtures have been set — check your opponent.',
+            ['type' => 'ROUND_DRAWN', 'competitionId' => (string) $activeCompetition->getId(), 'roundId' => (string) $firstRound->getId()],
+        );
     }
 }

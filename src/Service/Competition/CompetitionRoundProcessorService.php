@@ -17,6 +17,7 @@ use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
 use App\Service\MatchEngine\MatchEngineRegistry;
+use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -33,6 +34,7 @@ class CompetitionRoundProcessorService
         private readonly CompetitionResultRepository $resultRepository,
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
+        private readonly PushNotificationService $pushNotificationService,
     ) {}
 
     /** @return int Number of rounds this call actually processed (0 if none were due, or all were claimed by an overlapping tick). */
@@ -302,6 +304,13 @@ class CompetitionRoundProcessorService
             $this->em->persist($fixture);
             $slot++;
         }
+
+        $this->pushNotificationService->notifyUsers(
+            array_map(static fn (CompetitionEntrant $entrant) => (string) $entrant->getClub()->getUser()->getId(), $winners),
+            'Your next match is set!',
+            sprintf('The %s draw is in — see who you\'re facing.', $nextRound->getLabel()),
+            ['type' => 'ROUND_DRAWN', 'competitionId' => (string) $activeCompetition->getId(), 'roundId' => (string) $nextRound->getId()],
+        );
     }
 
     private function isFinalRound(CompetitionRound $round): bool

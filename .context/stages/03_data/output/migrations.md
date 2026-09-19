@@ -36,14 +36,38 @@ Most recent migrations (chronological):
    and related tables/indexes per `entities.md`'s Competition section),
    including the partial unique index enforcing one open
    `active_competition` per template.
-8. `Version20260918205514` (most recent) — adds
+8. `Version20260918205514` — adds
    `is_spoof BOOLEAN DEFAULT false NOT NULL` to `club`.
+9. `Version20260919163350` — adds `home_club_json`, `away_club_json`,
+   `home_lineup_json`, `away_lineup_json` to `competition_result` (full
+   stored/served match payload — club kits/badges + starting XI with
+   goals/assists/cards/ratings).
+10. `Version20260919181112` — adds `losing_team_card_multiplier_max`,
+    `losing_team_card_goal_diff_cap` to `game_config` (card-generation
+    knobs for the `ResultsEngine.ts`-ported `DeterministicEngine`).
+11. `Version20260919191910` — adds `went_to_extra_time`,
+    `went_to_penalties`, `penalty_home_score`, `penalty_away_score` to
+    `competition_result` — a knockout fixture can never end level;
+    these record how a tie was actually settled.
+12. `Version20260919211831` (most recent) — push-notification
+    infrastructure: creates `user_device` (FCM registration tokens,
+    unique `device_token`, FK to `user` `ON DELETE CASCADE`) and
+    `messenger_messages` (Symfony Messenger's Doctrine transport —
+    first use of Messenger in this codebase), and adds
+    `send_as_push BOOLEAN`, `push_sent_at TIMESTAMP` to `admin_message`.
 
 ## Takeaway
 
-Active development in mid-to-late September 2026 focused on: (a)
-building out `LiveTelemetrySnapshot` incrementally field-by-field, (b)
-standing up the full Competition subsystem in one large migration, and
-(c) a small `club.is_spoof` flag addition — consistent with
+Active development from mid-September through 2026-09-19 progressed
+through: (a) `LiveTelemetrySnapshot` built incrementally field-by-field,
+(b) the full Competition subsystem stood up in one large migration, (c)
+a `club.is_spoof` flag, (d) the match-result payload enriched with full
+club/lineup data and extra-time/penalty-shootout outcomes so a knockout
+fixture is never left looking like an unresolved draw, and (e) push
+notifications (device tokens + a Messenger-backed async send pipeline)
+added so the backend can trigger native OS notifications for
+competition events (round drawn, new registrant) and admin broadcasts —
+see `04_interfaces/output/services.md` and `services.md`'s
+`PushNotificationService` entry. Consistent with
 `02_architecture/output/git-activity.md`'s hotspot findings (Competition
 feature + admin panel polish).

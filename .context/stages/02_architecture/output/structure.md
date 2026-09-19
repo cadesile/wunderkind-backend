@@ -23,9 +23,24 @@ restated here.
   `Entity/`'s shape including its own `Competition/` subfolder.
 - **`Service/`** — the bulk of business logic (economy, leaderboards, match
   simulation, world generation, imports/exports), with sub-namespaces
-  `Admin/`, `Appearance/`, `Competition/`, `MatchEngine/`, `Personality/`.
-  e.g. `EconomicService.php`, `LeaderboardCalculationService.php`,
+  `Admin/`, `Appearance/`, `Competition/`, `MatchEngine/`, `Personality/`,
+  `Notification/` (push notifications — see below). e.g.
+  `EconomicService.php`, `LeaderboardCalculationService.php`,
   `SyncService.php`, `WorldInitializationService.php`.
+- **`Message/` / `MessageHandler/`** (added 2026-09-19) — Symfony
+  Messenger message DTOs + handlers, the **first use of Messenger in
+  this codebase**. Currently two: `SendPushNotificationMessage` (async
+  FCM send) and `ResolveAdminMessageAudienceForPushMessage` (eager
+  admin-broadcast push-audience resolution, deferred off the admin's
+  save request). Both route to a single `async` transport
+  (`config/packages/messenger.yaml`) — Doctrine transport in prod/dev
+  (`MESSENGER_TRANSPORT_DSN`, `auto_setup=1` so its table self-creates,
+  though the migration already creates it), `in-memory://` under
+  `when@test` so functional tests can assert dispatched envelopes
+  without a real consumer. Drained by `docker/messenger-consume.sh`
+  every 1 minute (see Deployment wiring below) — not a long-running
+  worker, matching this codebase's existing cron-driven-command
+  convention rather than introducing a new "daemon" pattern.
 - **`EventSubscriber/`** — 2 files, Doctrine lifecycle listeners
   (`#[AsDoctrineListener(event: Events::prePersist)]`). e.g.
   `PersonalityLifecycleSubscriber.php` auto-generates a `PersonalityProfile`
@@ -81,12 +96,14 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `docker/nginx.conf` and `docker/supervisord.conf`;
   `ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]`,
   `CMD ["/usr/bin/supervisord", ...]`. Bakes a busybox cron table into the
-  image (`/var/spool/cron/crontabs/root`) with 7 scheduled jobs:
+  image (`/var/spool/cron/crontabs/root`) with 8 scheduled jobs:
   `pool-warm.sh`/`worldpack-warm.sh` (every 6h),
   `leaderboards-generate.sh` (every 5 min),
   `post-community-stat-tick.sh` and `telemetry-generate.sh` (every 15 min),
   `competition-provision-instances.sh` (every 10 min),
-  `competition-process-rounds.sh` (every 1 min).
+  `competition-process-rounds.sh` and `messenger-consume.sh` (both every
+  1 min — the latter drains the async Messenger transport for push
+  notifications, added 2026-09-19).
 - **`docker/supervisord.conf`** — runs `php-fpm`, `nginx`, and `crond`
   together inside the container, all logging to stdout/stderr.
 - **`docker-compose.dev.yml` / `docker-compose.prod.yml`** — near-identical

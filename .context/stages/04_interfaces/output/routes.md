@@ -43,8 +43,9 @@ the end) — this file is the sole source of truth for the route surface.
 | `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
 | `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /status` |
 | `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-development`, `/most-seasons`, `/most-trophies` |
-| `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` |
-| `EventController` | `/api/events` | `GET /templates` |
+| `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` — register/resubmit also trigger push notifications (`PushNotificationService`) to other entrants |
+| `DeviceTokenController` | `/api/device-tokens` | `POST ''` (`IsGranted('ROLE_CLUB')`, upserts by `deviceToken`), `DELETE /{deviceToken}` — FCM push registration, see `services.md`'s `PushNotificationService` |
+| `EventController` | `/api/events` | `GET /templates` (optional `?category=` narrows to one `EventCategory`, e.g. `MATCH_NARRATIVE`) |
 | `ExcursionController` | `/api/excursions` | `GET` |
 | `FinanceController` | `/api/finance` | `GET /overview`, `GET /investors`, `GET /sponsors`, `POST /sponsors/{id}/terminate` |
 | `GameConfigController` | `/api` | `GET /game-config` |

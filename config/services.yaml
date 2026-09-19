@@ -66,3 +66,10 @@ services:
     App\Service\FacilityImageResolver:
         arguments:
             $projectDir: '%kernel.project_dir%'
+
+    # Built directly from the raw service-account JSON rather than kreait/firebase-bundle's
+    # own config binding — see FirebaseMessagingFactory's docblock.
+    Kreait\Firebase\Contract\Messaging:
+        factory: ['App\Service\Notification\FirebaseMessagingFactory', 'create']
+        arguments:
+            $serviceAccountJson: '%env(FIREBASE_SERVICE_ACCOUNT_JSON)%'

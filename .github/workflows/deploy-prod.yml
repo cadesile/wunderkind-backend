@@ -71,6 +71,8 @@ jobs:
             TWITTER_CLIENT_ID="${{ secrets.PROD_TWITTER_CLIENT_ID }}"
             TWITTER_CLIENT_SECRET="${{ secrets.PROD_TWITTER_CLIENT_SECRET }}"
             TWITTER_REDIRECT_URI="${{ secrets.PROD_TWITTER_REDIRECT_URI }}"
+            MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=1
+            FIREBASE_SERVICE_ACCOUNT_JSON='${{ secrets.PROD_FIREBASE_SERVICE_ACCOUNT_JSON }}'
             EOF
             sed -i 's/^[[:space:]]*//' .env
 
