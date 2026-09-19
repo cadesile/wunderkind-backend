@@ -111,8 +111,11 @@ class ActiveCompetitionCrudController extends AbstractCrudController
             ->displayIf(fn (ActiveCompetition $competition) => $competition->getStatus() === ActiveCompetitionStatus::REGISTERING
                 && $this->entrantRepository->countForCompetition($competition) > 0);
 
+        // EDIT is disabled, so EasyAdmin's default row-click fallback ([EDIT, DETAIL])
+        // needs DETAIL explicitly present in the index actions to click through to it.
         return $actions
             ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
             ->add(Crud::PAGE_INDEX, $generateSpoof)
             ->add(Crud::PAGE_DETAIL, $generateSpoof);
     }

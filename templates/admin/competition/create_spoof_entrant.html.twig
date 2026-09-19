@@ -1,0 +1,74 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12 col-lg-8">
+        <h5 class="fw-semibold mb-0">Create Spoof Club</h5>
+        <p class="text-muted small">
+            Paste a full club/players/staff/facilities snapshot (the same shape a real
+            client sends to <code>POST /api/competitions/{id}/register</code>) and register
+            it as a new spoof entrant. Useful for reproducing an exact test scenario rather
+            than cloning/randomly varying an existing one. The resulting club is tagged
+            (<code>Club.isSpoof</code>) so it's easy to tell apart from real clubs later.
+        </p>
+
+        {% if formState.errors is not empty %}
+            <div class="alert alert-danger py-2">
+                <strong class="d-block mb-1">Could not create spoof entrant:</strong>
+                <ul class="mb-0 small">
+                    {% for error in formState.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post" action="{{ path('admin', {routeName: 'admin_competition_entrant_create_spoof'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('create_spoof_entrant') }}">
+
+                    <div class="mb-3">
+                        <label for="activeCompetitionId" class="form-label">Competition</label>
+                        <select class="form-select" id="activeCompetitionId" name="activeCompetitionId" required>
+                            <option value="">Choose an open (REGISTERING) competition&hellip;</option>
+                            {% for competition in openCompetitions %}
+                                <option value="{{ competition.id }}" {{ formState.activeCompetitionId == competition.id ? 'selected' : '' }}>
+                                    {{ competition.template.name }} ({{ competition.entrantCapacity }} slots, {{ competition.durationOption.value }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if openCompetitions is empty %}
+                            <div class="form-text text-warning">No competitions are currently REGISTERING.</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="snapshot" class="form-label">Snapshot JSON</label>
+                        <textarea class="form-control font-monospace small" id="snapshot" name="snapshot"
+                                  rows="20" spellcheck="false" required
+                                  placeholder='{"club": {...}, "players": [...], "staff": [...], "facilities": {...}}'>{{ formState.snapshot }}</textarea>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="randomise" name="randomise" value="1"
+                               {{ formState.randomise ? 'checked' : '' }}>
+                        <label class="form-check-label" for="randomise">
+                            Randomise (rename club/players/staff and jitter attributes — the same
+                            transform "Generate Spoof Entrants" applies on Active Competitions)
+                        </label>
+                        <div class="form-text">
+                            Leave unchecked to register the pasted snapshot exactly as typed.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-clone"></i> Create Spoof Entrant
+                    </button>
+                    <a href="{{ indexUrl }}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

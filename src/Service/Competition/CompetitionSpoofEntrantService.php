@@ -7,6 +7,7 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
+use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Service\NameGeneratorService;
 use App\Service\NpcClubGenerationService;
@@ -38,7 +39,73 @@ class CompetitionSpoofEntrantService
         private readonly NpcClubGenerationService $npcClubGenerationService,
         private readonly NameGeneratorService $nameGenerator,
         private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly SnapshotValidator $snapshotValidator,
     ) {}
+
+    /**
+     * Admin entry point for a hand-pasted snapshot (the "Create Spoof" form on
+     * CompetitionEntrantCrudController) — unlike generateSpoofEntrants()/
+     * generateSpoofEntrantsForCompetition(), the admin supplies the exact club/players/
+     * staff data themselves (precise control for reproducing a specific test scenario),
+     * rather than cloning an existing entrant.
+     *
+     * $randomise runs the pasted snapshot through the exact same rename/jitter transform
+     * as the clone-based flow (club name, player/staff names, jittered attributes) —
+     * "per standard spoof club generation" — instead of registering it verbatim.
+     *
+     * @param array<string, mixed> $snapshot Decoded club/players/staff/facilities payload.
+     * @throws SpoofSnapshotValidationException if the snapshot fails structural validation.
+     */
+    public function createSpoofEntrantFromSnapshot(ActiveCompetition $activeCompetition, array $snapshot, bool $randomise): CompetitionEntrant
+    {
+        if ($activeCompetition->getStatus() !== ActiveCompetitionStatus::REGISTERING) {
+            throw new \RuntimeException('Spoof entrants can only be added while the competition is REGISTERING.');
+        }
+        if ($this->entrantRepository->countForCompetition($activeCompetition) >= $activeCompetition->getEntrantCapacity()) {
+            throw new \RuntimeException('This competition is already full.');
+        }
+
+        $club    = $snapshot['club'] ?? null;
+        $players = $snapshot['players'] ?? null;
+        $staff   = is_array($snapshot['staff'] ?? null) ? $snapshot['staff'] : [];
+
+        if (!is_array($club) || !is_array($players)) {
+            throw new SpoofSnapshotValidationException(['snapshot.club and snapshot.players are required']);
+        }
+
+        // Self-check: the pasted club.id just needs to be present and non-empty — there is
+        // no "authenticated club" to match against here, unlike the real HTTP register path.
+        $pastedClubId = is_string($club['id'] ?? null) ? $club['id'] : '';
+        $violations   = $this->snapshotValidator->validate($club, $players, $staff, $pastedClubId);
+        if ($violations !== []) {
+            throw new SpoofSnapshotValidationException($violations);
+        }
+
+        $countryCode = is_string($club['country'] ?? null) ? $club['country'] : null;
+        $name        = $randomise
+            ? $this->npcClubGenerationService->generateClubName($countryCode ?? 'EN', [])
+            : (is_string($club['name'] ?? null) ? $club['name'] : 'Spoof FC');
+
+        $spoofClub = $this->createSpoofClub($name, $club, jitterReputation: $randomise);
+        $this->em->persist($spoofClub->getUser());
+        $this->em->persist($spoofClub);
+        $this->em->flush();
+
+        $finalSnapshot           = $snapshot;
+        $club['id']              = (string) $spoofClub->getId();
+        $club['name']            = $spoofClub->getName();
+        $finalSnapshot['club']   = $club;
+        $finalSnapshot['players'] = $randomise
+            ? array_map(fn (array $p) => $this->renamePlayer($p), array_values(array_filter($players, 'is_array')))
+            : array_values($players);
+        $finalSnapshot['staff']  = $randomise
+            ? array_map(fn (array $m) => $this->renameStaffMember($m), array_values(array_filter($staff, 'is_array')))
+            : array_values($staff);
+
+        $result = $this->registrationService->register($activeCompetition, $spoofClub, $finalSnapshot);
+
+        return $result['entrant'];
+    }
 
     /**
      * Admin entry point from the ActiveCompetition row/detail page — the trigger lives on
@@ -101,7 +168,7 @@ class CompetitionSpoofEntrantService
         return ['created' => $created, 'requested' => $count];
     }
 
-    private function createSpoofClub(string $name, array $sourceClub): Club
+    private function createSpoofClub(string $name, array $sourceClub, bool $jitterReputation = true): Club
     {
         $email = sprintf('spoof-%s%s', bin2hex(random_bytes(8)), User::SPOOF_EMAIL_DOMAIN);
         $user  = new User($email);
@@ -116,7 +183,8 @@ class CompetitionSpoofEntrantService
             $club->setCountry($sourceClub['country']);
         }
         if (is_numeric($sourceClub['reputation'] ?? null)) {
-            $club->setReputation(max(0, $this->jitter((int) $sourceClub['reputation'], 10)));
+            $reputation = (int) $sourceClub['reputation'];
+            $club->setReputation(max(0, $jitterReputation ? $this->jitter($reputation, 10) : $reputation));
         }
 
         return $club;
