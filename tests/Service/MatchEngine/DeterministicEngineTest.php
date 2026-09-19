@@ -10,12 +10,15 @@ use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionRound;
 use App\Entity\Competition\CompetitionTemplate;
+use App\Entity\GameConfig;
 use App\Entity\User;
 use App\Enum\Competition\CompetitionDuration;
 use App\Enum\Competition\MatchEngineIdentifier;
 use App\Enum\PlayingStyle;
+use App\Repository\GameConfigRepository;
 use App\Repository\TacticalAdvantageRepository;
 use App\Service\MatchEngine\DeterministicEngine;
+use App\Service\MatchEngine\MatchNarrativeGeneratorService;
 use PHPUnit\Framework\TestCase;
 
 class DeterministicEngineTest extends TestCase
@@ -28,7 +31,15 @@ class DeterministicEngineTest extends TestCase
             static fn (PlayingStyle $style, PlayingStyle $opponentStyle) => $multipliers["{$style->value}:{$opponentStyle->value}"] ?? 1.0,
         );
 
-        return new DeterministicEngine($repo);
+        $configRepo = $this->createMock(GameConfigRepository::class);
+        $configRepo->method('getConfig')->willReturn(new GameConfig());
+
+        // A stub, not the real port under test elsewhere (MatchNarrativeGeneratorServiceTest) —
+        // this suite is only exercising DeterministicEngine's own score/lineup/card model.
+        $narrativeGenerator = $this->createMock(MatchNarrativeGeneratorService::class);
+        $narrativeGenerator->method('generate')->willReturn([['minute' => 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Kick-off.', 'playerA' => null, 'playerB' => null, 'teamId' => null]]);
+
+        return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
     }
 
     private function makeEntrant(ActiveCompetition $instance, string $name, int $strength, ?PlayingStyle $playingStyle = null): CompetitionEntrant
@@ -38,7 +49,7 @@ class DeterministicEngineTest extends TestCase
 
         $players = [];
         for ($i = 0; $i < 11; $i++) {
-            $players[] = ['id' => "$name-p$i", 'position' => 'MID', 'currentAbility' => $strength];
+            $players[] = ['id' => "$name-p$i", 'position' => 'MID', 'name' => "$name Player $i", 'currentAbility' => $strength];
         }
 
         $clubSnapshot = ['id' => (string) $club->getId(), 'name' => $name];
@@ -170,5 +181,136 @@ class DeterministicEngineTest extends TestCase
         // styleOf() handling null gracefully. Reproducibility is already covered above.
         $this->assertIsInt($result->homeScore);
         $this->assertIsInt($result->awayScore);
+    }
+
+    public function testLineupsContainAllElevenPlayersWithNamesAndPositions(): void
+    {
+        $engine = $this->makeEngine();
+        [$fixture, $home, $away] = $this->makeFixture();
+
+        $result = $engine->resolve($home, $away, $fixture);
+
+        $this->assertCount(11, $result->homeLineup);
+        $this->assertCount(11, $result->awayLineup);
+
+        foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
+            $this->assertArrayHasKey('id', $entry);
+            $this->assertArrayHasKey('name', $entry);
+            $this->assertArrayHasKey('position', $entry);
+            $this->assertSame('MID', $entry['position']);
+            $this->assertStringContainsString('Player', $entry['name']);
+        }
+    }
+
+    public function testRatingsAreAlwaysWithinTheOneToTenRange(): void
+    {
+        $engine = $this->makeEngine();
+
+        for ($i = 0; $i < 30; $i++) {
+            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+            $instance = new ActiveCompetition($template);
+            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+            $home     = $this->makeEntrant($instance, 'Home', 15);
+            $away     = $this->makeEntrant($instance, 'Away', 5);
+            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+
+            $result = $engine->resolve($home, $away, $fixture);
+
+            foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
+                $this->assertGreaterThanOrEqual(1.0, $entry['rating']);
+                $this->assertLessThanOrEqual(10.0, $entry['rating']);
+            }
+        }
+    }
+
+    public function testGoalsAndAssistsInTheEventLogAreCreditedInTheLineup(): void
+    {
+        $engine = $this->makeEngine();
+        $foundGoalWithScorer  = false;
+        $foundGoalWithAssist  = false;
+
+        // Probabilistic across independent fixture-id seeds, same idiom as the win-rate
+        // tests above — search until both cases are observed rather than assume any one
+        // fixed seed produces them.
+        for ($i = 0; $i < 100 && (!$foundGoalWithScorer || !$foundGoalWithAssist); $i++) {
+            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+            $instance = new ActiveCompetition($template);
+            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+            $home     = $this->makeEntrant($instance, 'Home', 15);
+            $away     = $this->makeEntrant($instance, 'Away', 15);
+            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+
+            $result = $engine->resolve($home, $away, $fixture);
+            $lineupById = [];
+            foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
+                $lineupById[$entry['id']] = $entry;
+            }
+
+            foreach ($result->eventLog as $event) {
+                if ($event['type'] !== 'goal' || $event['scorer'] === null) {
+                    continue;
+                }
+                $foundGoalWithScorer = true;
+                $this->assertGreaterThanOrEqual(1, $lineupById[$event['scorer']]['goals']);
+
+                if ($event['assist'] !== null) {
+                    $foundGoalWithAssist = true;
+                    $this->assertNotSame($event['scorer'], $event['assist'], 'A player cannot assist their own goal.');
+                    $this->assertGreaterThanOrEqual(1, $lineupById[$event['assist']]['assists']);
+                }
+            }
+        }
+
+        $this->assertTrue($foundGoalWithScorer, 'Expected at least one scored goal with an identified scorer across 100 seeds.');
+        $this->assertTrue($foundGoalWithAssist, 'Expected at least one assisted goal across 100 seeds.');
+    }
+
+    public function testCardsInTheEventLogAreCreditedInTheLineup(): void
+    {
+        $engine = $this->makeEngine();
+        $foundYellow = false;
+        $foundRed    = false;
+
+        for ($i = 0; $i < 200 && (!$foundYellow || !$foundRed); $i++) {
+            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+            $instance = new ActiveCompetition($template);
+            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+            $home     = $this->makeEntrant($instance, 'Home', 15);
+            $away     = $this->makeEntrant($instance, 'Away', 15);
+            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+
+            $result = $engine->resolve($home, $away, $fixture);
+            $lineupById = [];
+            foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
+                $lineupById[$entry['id']] = $entry;
+            }
+
+            foreach ($result->eventLog as $event) {
+                if (!in_array($event['type'], ['yellow_card', 'red_card'], true) || $event['player'] === null) {
+                    continue;
+                }
+                if ($event['type'] === 'yellow_card') {
+                    $foundYellow = true;
+                    $this->assertGreaterThanOrEqual(1, $lineupById[$event['player']]['yellowCards']);
+                } else {
+                    $foundRed = true;
+                    $this->assertGreaterThanOrEqual(1, $lineupById[$event['player']]['redCards']);
+                }
+            }
+        }
+
+        $this->assertTrue($foundYellow, 'Expected at least one yellow card across 200 seeds.');
+        $this->assertTrue($foundRed, 'Expected at least one red card across 200 seeds.');
+    }
+
+    public function testNarrativePayloadIsPopulatedFromTheGenerator(): void
+    {
+        $engine = $this->makeEngine();
+        [$fixture, $home, $away] = $this->makeFixture();
+
+        $result = $engine->resolve($home, $away, $fixture);
+
+        $this->assertNotNull($result->narrativePayload);
+        $this->assertNotSame([], $result->narrativePayload);
     }
 }

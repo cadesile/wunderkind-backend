@@ -4,6 +4,19 @@
     <span class="badge bg-{{ color }}-subtle text-{{ color }} border border-{{ color }}-subtle">{{ label }}</span>
 {% endmacro %}
 
+{% macro player_name(lineup, id) %}
+    {%- if id is null -%}
+        &mdash;
+    {%- else -%}
+        {%- set matches = lineup|filter(e => e.id == id) -%}
+        {%- if matches|length > 0 -%}
+            {{- (matches|first).name ?? id -}}
+        {%- else -%}
+            {{- id -}}
+        {%- endif -%}
+    {%- endif -%}
+{% endmacro %}
+
 {% set roundStatusColor = {
     pending:   'secondary',
     scheduled: 'primary',
@@ -30,11 +43,18 @@
                 {% if competition.endsAt %}&middot; ends {{ competition.endsAt|date('Y-m-d H:i') }}{% endif %}
             </p>
         </div>
-        {% if canGenerateSpoof %}
-            <a href="{{ generateSpoofUrl }}" class="btn btn-sm btn-outline-primary">
-                <i class="fa fa-clone"></i> Generate Spoof Entrants
-            </a>
-        {% endif %}
+        <div class="d-flex gap-2 flex-wrap">
+            {% if canGenerateSpoof %}
+                <a href="{{ generateSpoofUrl }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fa fa-clone"></i> Generate Spoof Entrants
+                </a>
+            {% endif %}
+            {% if canSpoofAll %}
+                <a href="{{ spoofAllUrl }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fa fa-users"></i> Spoof All Entrants
+                </a>
+            {% endif %}
+        </div>
     </div>
 
     {% if rounds is empty %}
@@ -101,14 +121,24 @@
                                                     data-bs-toggle="collapse" data-bs-target="#{{ rowId }}" aria-expanded="false">
                                                 <i class="fa fa-magnifying-glass"></i> Details
                                             </button>
+                                        {% elseif fixture.status.value == 'pending' and fixture.homeEntrant and fixture.awayEntrant %}
+                                            <form method="post" action="{{ generateResultUrlByFixtureId[fixture.id|ea_as_string] }}" class="d-inline">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('generate_fixture_result') }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fa fa-bolt"></i> Generate Result
+                                                </button>
+                                            </form>
                                         {% endif %}
                                     </td>
                                 </tr>
                                 {% if result %}
+                                    {% set homeLineup = result.homeLineupJson %}
+                                    {% set awayLineup = result.awayLineupJson %}
                                     <tr class="collapse" id="{{ rowId }}">
                                         <td colspan="5" class="bg-body-tertiary">
                                             <div class="p-3">
                                                 <div class="d-flex gap-3 mb-2 small text-muted">
+                                                    <span class="fw-semibold text-body">{{ result.homeClubJson.name ?? 'Home' }} vs {{ result.awayClubJson.name ?? 'Away' }}</span>
                                                     <span><i class="fa fa-microchip me-1"></i>{{ result.engineIdentifier.value }}</span>
                                                     <span><i class="fa fa-clock me-1"></i>{{ result.generatedAt|date('Y-m-d H:i:s') }}</span>
                                                 </div>
@@ -119,16 +149,19 @@
                                                                 <th style="width:4rem;">Min</th>
                                                                 <th>Type</th>
                                                                 <th>Team</th>
-                                                                <th>Scorer</th>
+                                                                <th>Player</th>
+                                                                <th>Assist</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             {% for event in result.eventLogJson %}
+                                                                {% set eventLineup = event.team == 'home' ? homeLineup : awayLineup %}
                                                                 <tr>
                                                                     <td>{{ event.minute ?? '' }}'</td>
                                                                     <td>{{ event.type ?? '' }}</td>
                                                                     <td>{{ event.team ?? '' }}</td>
-                                                                    <td>{{ event.scorer ?? '' }}</td>
+                                                                    <td>{{ _self.player_name(eventLineup, event.scorer ?? event.player ?? null) }}</td>
+                                                                    <td>{{ event.assist is defined ? _self.player_name(eventLineup, event.assist) : '' }}</td>
                                                                 </tr>
                                                             {% endfor %}
                                                         </tbody>
@@ -139,6 +172,65 @@
                                                 {% if result.narrativePayloadPretty %}
                                                     <pre class="small bg-body p-2 mb-2">{{ result.narrativePayloadPretty }}</pre>
                                                 {% endif %}
+
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-12 col-lg-6">
+                                                        <div class="text-muted small fw-semibold mb-1">{{ result.homeClubJson.name ?? 'Home' }} — Starting XI</div>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm mb-0">
+                                                                <thead>
+                                                                    <tr class="text-muted small">
+                                                                        <th>Player</th><th>Pos</th>
+                                                                        <th class="text-center">G</th><th class="text-center">A</th>
+                                                                        <th class="text-center">YC</th><th class="text-center">RC</th>
+                                                                        <th class="text-center">Rating</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for player in homeLineup %}
+                                                                        <tr>
+                                                                            <td>{{ player.name ?? player.id }}</td>
+                                                                            <td>{{ player.position ?? '' }}</td>
+                                                                            <td class="text-center">{{ player.goals }}</td>
+                                                                            <td class="text-center">{{ player.assists }}</td>
+                                                                            <td class="text-center">{{ player.yellowCards }}</td>
+                                                                            <td class="text-center">{{ player.redCards }}</td>
+                                                                            <td class="text-center fw-semibold">{{ player.rating }}</td>
+                                                                        </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 col-lg-6">
+                                                        <div class="text-muted small fw-semibold mb-1">{{ result.awayClubJson.name ?? 'Away' }} — Starting XI</div>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm mb-0">
+                                                                <thead>
+                                                                    <tr class="text-muted small">
+                                                                        <th>Player</th><th>Pos</th>
+                                                                        <th class="text-center">G</th><th class="text-center">A</th>
+                                                                        <th class="text-center">YC</th><th class="text-center">RC</th>
+                                                                        <th class="text-center">Rating</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for player in awayLineup %}
+                                                                        <tr>
+                                                                            <td>{{ player.name ?? player.id }}</td>
+                                                                            <td>{{ player.position ?? '' }}</td>
+                                                                            <td class="text-center">{{ player.goals }}</td>
+                                                                            <td class="text-center">{{ player.assists }}</td>
+                                                                            <td class="text-center">{{ player.yellowCards }}</td>
+                                                                            <td class="text-center">{{ player.redCards }}</td>
+                                                                            <td class="text-center fw-semibold">{{ player.rating }}</td>
+                                                                        </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
 
                                                 <div class="row g-2 mt-1">
                                                     <div class="col-12 col-lg-8">
@@ -151,11 +243,12 @@
                                                         <div class="text-muted small fw-semibold mb-1">
                                                             <i class="fa fa-mobile-screen me-1"></i>What the device receives
                                                         </div>
-                                                        <pre class="small bg-body p-2 mb-0">{{ result.clientSummaryPretty }}</pre>
+                                                        <pre class="small bg-body p-2 mb-0" style="max-height: 320px; overflow:auto;">{{ result.clientSummaryPretty }}</pre>
                                                         <p class="text-muted small mb-0 mt-1">
-                                                            The event log, engine, and timestamp above are admin-only —
-                                                            <code>GET /api/competitions/{id}</code> currently only ever
-                                                            returns this score summary per fixture.
+                                                            The event log, starting XI, ratings, engine, and timestamp
+                                                            above are admin-only — the device gets the score plus each
+                                                            club's display data (name, kit colours, badge, stadium)
+                                                            so it can render kits and names for this result.
                                                         </p>
                                                     </div>
                                                 </div>

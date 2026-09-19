@@ -67,6 +67,13 @@ class GameEventTemplate
      * player pair within a configurable time window.
      * Shape: [{ nextEventSlug: string, boostMultiplier: float, windowWeeks: int, note: string|null }]
      *
+     * MATCH_NARRATIVE is a deliberate divergence: `nextEventSlug` there is a chain-graph
+     * *node type* (e.g. "GOAL_ATTEMPT_SCORE"), not a specific template's slug, and is
+     * resolved to a random numbered row of that node type at pick time by
+     * MatchNarrativeGeneratorService. `boostMultiplier`/`windowWeeks`/`note` are inert
+     * filler for that category — every numbered row of a node type carries an identical
+     * chainedEvents array. See SeedMatchNarrativeTemplatesCommand.
+     *
      * @var array<int, array<string, mixed>>|null
      */
     #[ORM\Column(type: 'json', nullable: true)]

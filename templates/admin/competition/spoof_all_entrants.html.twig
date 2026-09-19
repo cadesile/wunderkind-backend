@@ -1,0 +1,32 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12 col-lg-6">
+        <h5 class="fw-semibold mb-0">Spoof All Entrants</h5>
+        <p class="text-muted small">
+            Fills <strong>{{ competition }}</strong> to capacity ({{ remaining }} slot{{ remaining == 1 ? '' : 's' }}
+            remaining) with spoof entrants in one go. If no real entrant has registered yet,
+            one fully-synthetic entrant is generated first (club, starting XI, and staff, via
+            the same generators NPC clubs/pool players use) and used as the basis for the
+            rest — so this works from a completely empty competition. Spoof clubs are tagged
+            (<code>Club.isSpoof</code>) so they're easy to tell apart from real clubs later.
+            Filling the last slot auto-locks the competition and generates its bracket, exactly
+            as a real registration would.
+        </p>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post" action="{{ actionUrl }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('spoof_all_entrants') }}">
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-users"></i> Spoof All {{ remaining }} Remaining Slot{{ remaining == 1 ? '' : 's' }}
+                    </button>
+                    <a href="{{ detailUrl }}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

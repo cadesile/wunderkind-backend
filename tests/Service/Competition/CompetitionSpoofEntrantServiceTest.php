@@ -268,4 +268,80 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
         $this->expectException(\RuntimeException::class);
         $this->spoofService->createSpoofEntrantFromSnapshot($activeCompetition, $this->pastedSnapshot(), randomise: false);
     }
+
+    public function testSpoofAllEntrantsFillsAnEmptyCompetitionFromScratch(): void
+    {
+        $activeCompetition = $this->buildOpenCompetition(capacity: 4);
+
+        $result = $this->spoofService->spoofAllEntrants($activeCompetition);
+
+        self::assertCount(4, $result['created']);
+        self::assertSame(4, $result['requested']);
+
+        $names = [];
+        foreach ($result['created'] as $entrant) {
+            self::assertTrue($entrant->getClub()->isSpoof());
+            self::assertTrue(User::isSpoofEmail($entrant->getClub()->getUser()->getEmail()));
+
+            $snapshot = $entrant->getSnapshotJson();
+            self::assertCount(11, $snapshot['players'], 'a full starting XI must be generated for the bootstrap entrant and every clone');
+            foreach ($snapshot['players'] as $player) {
+                self::assertNotEmpty($player['name']);
+                self::assertContains($player['position'], ['GK', 'DEF', 'MID', 'ATT']);
+            }
+
+            // Kit/badge/stadium display data must be present on every entrant — including
+            // the clones, which inherit it from the bootstrap entrant's club object — so
+            // the device can render kits/badges for this competition's matches.
+            foreach (['homePrimary', 'homeSecondary', 'awayPrimary', 'awaySecondary', 'badgeShape', 'homeKitStyle', 'awayKitStyle', 'stadiumName', 'playingStyle', 'tier'] as $field) {
+                self::assertArrayHasKey($field, $snapshot['club'], "club.$field must be present");
+                self::assertNotSame('', (string) $snapshot['club'][$field]);
+            }
+
+            $names[] = $entrant->getClub()->getName();
+        }
+        self::assertSame($names, array_unique($names), 'every spoofed club must have a distinct name');
+
+        $this->em->refresh($activeCompetition);
+        self::assertSame(ActiveCompetitionStatus::SCHEDULED, $activeCompetition->getStatus(), 'filling the last slot should auto-lock the competition');
+        self::assertSame(4, $this->entrantRepository->countForCompetition($activeCompetition));
+    }
+
+    public function testSpoofAllEntrantsUsesExistingEntrantAsBasisWhenOneAlreadyExists(): void
+    {
+        $source            = $this->seedRealEntrant(capacity: 4);
+        $activeCompetition = $source->getActiveCompetition();
+
+        $result = $this->spoofService->spoofAllEntrants($activeCompetition);
+
+        self::assertCount(3, $result['created'], 'only the 3 remaining slots should be filled — the real entrant already occupies one');
+        foreach ($result['created'] as $entrant) {
+            self::assertNotSame('Real FC', $entrant->getClub()->getName());
+        }
+
+        self::assertSame(4, $this->entrantRepository->countForCompetition($activeCompetition));
+    }
+
+    public function testSpoofAllEntrantsIsANoOpWhenAlreadyFull(): void
+    {
+        $activeCompetition = $this->buildOpenCompetition(capacity: 4);
+        $this->spoofService->spoofAllEntrants($activeCompetition);
+
+        $this->em->refresh($activeCompetition);
+        $activeCompetition->setStatus(ActiveCompetitionStatus::REGISTERING); // force back open, bypassing the real lock, purely to exercise this guard
+        $this->em->flush();
+
+        $result = $this->spoofService->spoofAllEntrants($activeCompetition);
+        self::assertSame(['created' => [], 'requested' => 0], $result);
+    }
+
+    public function testSpoofAllEntrantsThrowsWhenCompetitionIsNotRegistering(): void
+    {
+        $activeCompetition = $this->buildOpenCompetition(capacity: 4);
+        $activeCompetition->setStatus(ActiveCompetitionStatus::CANCELLED);
+        $this->em->flush();
+
+        $this->expectException(\RuntimeException::class);
+        $this->spoofService->spoofAllEntrants($activeCompetition);
+    }
 }

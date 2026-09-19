@@ -2,9 +2,11 @@
 
 namespace App\Controller\Api;
 
+use App\Enum\EventCategory;
 use App\Repository\GameEventTemplateRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -18,12 +20,15 @@ class EventController extends AbstractController
 
     /**
      * Returns all active event templates for client-side narrative simulation.
-     * Cached by the client; no session-specific data.
+     * Cached by the client; no session-specific data. Optional `?category=` narrows to a
+     * single EventCategory (e.g. `?category=MATCH_NARRATIVE`) — an unrecognised value is
+     * ignored and the full active set is returned, same fail-open behavior as omitting it.
      */
     #[Route('/templates', name: 'api_events_templates', methods: ['GET'])]
-    public function templates(): JsonResponse
+    public function templates(Request $request): JsonResponse
     {
-        $items = $this->templates->findAllActive();
+        $category = EventCategory::tryFrom((string) $request->query->get('category', ''));
+        $items    = $category !== null ? $this->templates->findByCategory($category) : $this->templates->findAllActive();
 
         $data = array_map(static fn ($t) => [
             'slug'             => $t->getSlug(),

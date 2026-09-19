@@ -150,7 +150,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
             $club    = $this->createClub($em, $name);
             $entrant = new CompetitionEntrant($instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => $name],
-                'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
+                'players' => [['id' => 'p1', 'position' => 'MID', 'name' => "{$name} Talisman", 'currentAbility' => 10]],
             ]);
             $em->persist($entrant);
         }
@@ -170,6 +170,81 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         self::assertGreaterThan(0, $processed, 'test setup: round 1 should process');
 
         return $instance;
+    }
+
+    /** Same as buildCompetitionWithOneProcessedRound() but stops right after locking — round 1's fixtures stay PENDING. */
+    private function buildLockedCompetitionWithUnprocessedRound(EntityManagerInterface $em): ActiveCompetition
+    {
+        $template = new CompetitionTemplate('Force Result Cup', 'force-result-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+        $em->persist($template);
+
+        $instance = new ActiveCompetition($template);
+        $em->persist($instance);
+
+        foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
+            $club    = $this->createClub($em, $name);
+            $entrant = new CompetitionEntrant($instance, $club, 0, [
+                'club'    => ['id' => (string) $club->getId(), 'name' => $name],
+                'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
+            ]);
+            $em->persist($entrant);
+        }
+        $em->flush();
+
+        self::getContainer()->get(CompetitionLockService::class)->lock($instance);
+        $em->flush();
+
+        return $instance;
+    }
+
+    public function testDetailPageOffersGenerateResultForPendingFixturesOnly(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildLockedCompetitionWithUnprocessedRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+
+        $this->assertStringContainsString('Generate Result', $crawler->text());
+        // No result exists yet, so there is nothing to expand.
+        $this->assertStringNotContainsString('Details', $crawler->text());
+    }
+
+    public function testGenerateResultButtonForcesAFixtureAndAdvancesTheBracketOnceRoundCompletes(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildLockedCompetitionWithUnprocessedRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+
+        $forms = $crawler->filter('form')->reduce(fn ($node) => str_contains((string) $node->attr('action'), 'generate-result'));
+        self::assertGreaterThan(0, $forms->count(), 'expected at least one Generate Result form on the page');
+
+        // Resolve both round-1 fixtures one row at a time, exactly as an admin clicking twice would.
+        $client->submit($forms->eq(0)->form());
+        self::assertResponseRedirects();
+        $client->followRedirect();
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        $forms   = $crawler->filter('form')->reduce(fn ($node) => str_contains((string) $node->attr('action'), 'generate-result'));
+        self::assertGreaterThan(0, $forms->count(), 'the second SF fixture should still be forceable');
+
+        $client->submit($forms->eq(0)->form());
+        self::assertResponseRedirects();
+        $crawler = $client->followRedirect();
+        self::assertResponseIsSuccessful();
+
+        $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
+        $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        self::assertSame(\App\Enum\Competition\CompetitionRoundStatus::COMPLETED, $round1->getStatus());
+
+        // FINAL round should now have a seeded fixture from the two SF winners.
+        $this->assertStringContainsString('FINAL', $crawler->text());
     }
 
     public function testDetailPageShowsRoundsFixturesAndScores(): void
@@ -211,6 +286,32 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $text = $crawler->text(null, true);
         $this->assertStringContainsString('deterministic', $text);
+    }
+
+    public function testDetailPageResultDetailsIncludeStartingXiWithRatings(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildCompetitionWithOneProcessedRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+
+        $text = $crawler->text(null, true);
+        $this->assertStringContainsString('Starting XI', $text);
+        // Every seeded club has exactly one named player — its lineup entry must render.
+        foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
+            $this->assertStringContainsString("{$name} Talisman", $text);
+        }
+
+        // The exact stored rating for a real lineup entry must be the one rendered.
+        $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
+        $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $fixture         = self::getContainer()->get(\App\Repository\Competition\CompetitionFixtureRepository::class)->findByRoundOrderedBySlot($round1)[0];
+        $result          = self::getContainer()->get(\App\Repository\Competition\CompetitionResultRepository::class)->findOneBy(['fixture' => $fixture]);
+        $rating          = $result->getHomeLineupJson()[0]['rating'];
+        $this->assertStringContainsString((string) $rating, $text);
     }
 
     public function testDetailPageResultDetailsExposeFullRawPayloadAndClientSummary(): void
@@ -265,7 +366,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $this->assertStringContainsString($instance->getTemplate()->getName(), $client->getResponse()->getContent());
     }
 
-    public function testEditNewAndDeleteActionsAreDisabled(): void
+    public function testEditAndNewActionsAreDisabled(): void
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
@@ -277,6 +378,54 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $client->request('GET', '/admin/active-competition/' . $instance->getId() . '/edit');
         self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testDeleteRemovesTheCompetitionAndCascadesToItsData(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em         = self::getContainer()->get(EntityManagerInterface::class);
+        $instance   = $this->buildCompetitionWithOneProcessedRound($em);
+        $instanceId = $instance->getId();
+
+        // EasyAdmin's delete action is a JS-confirmed modal, not a per-row <form> — every
+        // index page carries one shared hidden #action-confirmation-form with the real
+        // session-backed CSRF token; JS sets its action to the clicked row's delete URL
+        // before submitting. Read that same token and POST directly, rather than
+        // fabricating one outside any request context.
+        $crawler = $client->request('GET', '/admin/active-competition');
+        self::assertResponseIsSuccessful();
+
+        $token = $crawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
+        $client->request('POST', '/admin/active-competition/' . $instanceId . '/delete', ['token' => $token]);
+        self::assertResponseRedirects();
+
+        $freshEm = self::getContainer()->get(EntityManagerInterface::class);
+        self::assertNull($freshEm->find(ActiveCompetition::class, $instanceId));
+        self::assertSame(0, $freshEm->getRepository(\App\Entity\Competition\CompetitionRound::class)->count(['activeCompetition' => $instanceId]));
+    }
+
+    public function testClearAllDeletesEveryCompetition(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $this->buildCompetitionWithOneProcessedRound($em);
+        $this->buildEmptyOpenCompetition($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition');
+        $crawler = $client->click($crawler->selectLink('Clear All')->link());
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString('Delete All', $crawler->text());
+
+        $form = $crawler->filter('form')->first()->form();
+        $client->submit($form);
+        self::assertResponseRedirects();
+        $client->followRedirect();
+        self::assertResponseIsSuccessful();
+
+        $freshEm = self::getContainer()->get(EntityManagerInterface::class);
+        self::assertSame(0, $freshEm->getRepository(ActiveCompetition::class)->count([]));
     }
 
     /** Builds a REGISTERING (not yet locked) ActiveCompetition with one real entrant to use as a spoof basis. */
@@ -379,5 +528,61 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
         self::assertResponseIsSuccessful();
         $this->assertStringNotContainsString('Generate Spoof Entrants', $crawler->text());
+    }
+
+    private function buildEmptyOpenCompetition(EntityManagerInterface $em, int $capacity = 4): ActiveCompetition
+    {
+        $template = new CompetitionTemplate('Spoof All Cup', 'spoof-all-cup-' . uniqid('', true), $capacity, CompetitionDuration::ONE_DAY);
+        $em->persist($template);
+
+        $instance = new ActiveCompetition($template);
+        $em->persist($instance);
+        $em->flush();
+
+        return $instance;
+    }
+
+    public function testSpoofAllEntrantsFillsAnEmptyCompetitionAndLocksIt(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildEmptyOpenCompetition($em, capacity: 4);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString('Spoof All Entrants', $crawler->text());
+
+        $crawler = $client->click($crawler->selectLink('Spoof All Entrants')->link());
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString('4', $crawler->text());
+
+        $form = $crawler->selectButton('Spoof All 4 Remaining Slots')->form();
+        $client->submit($form);
+        self::assertResponseRedirects();
+        $client->followRedirect();
+        self::assertResponseIsSuccessful();
+
+        $freshEm  = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $freshEm->find(ActiveCompetition::class, $instance->getId());
+        self::assertSame(ActiveCompetitionStatus::SCHEDULED, $instance->getStatus());
+
+        $entrantRepository = self::getContainer()->get(CompetitionEntrantRepository::class);
+        self::assertSame(4, $entrantRepository->countForCompetition($instance));
+    }
+
+    public function testSpoofAllEntrantsIsUnavailableOnceCompetitionIsLocked(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildOpenCompetitionWithOneEntrant($em);
+
+        $instance->setStatus(ActiveCompetitionStatus::SCHEDULED);
+        $em->flush();
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+        $this->assertStringNotContainsString('Spoof All Entrants', $crawler->text());
     }
 }

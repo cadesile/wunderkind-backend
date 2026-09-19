@@ -13,6 +13,7 @@ use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
+use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
 use App\Service\MatchEngine\MatchEngineRegistry;
@@ -29,6 +30,7 @@ class CompetitionRoundProcessorService
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
+        private readonly CompetitionResultRepository $resultRepository,
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
     ) {}
@@ -82,18 +84,7 @@ class CompetitionRoundProcessorService
 
     private function processRound(CompetitionRound $round, \DateTimeImmutable $now): void
     {
-        $activeCompetition = $round->getActiveCompetition();
-
-        if ($round->getRoundIndex() === 1 && $activeCompetition->getStatus() === ActiveCompetitionStatus::SCHEDULED) {
-            $activeCompetition->setStatus(ActiveCompetitionStatus::RUNNING);
-        }
-
-        // Close the resubmission window — snapshots are locked for the duration of this round.
-        foreach ($this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition) as $entrant) {
-            if ($entrant->getStatus() === CompetitionEntrantStatus::ACTIVE) {
-                $entrant->setSnapshotLockedAt($now);
-            }
-        }
+        $this->beginRoundProcessing($round, $now);
 
         $winners = [];
         foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round) as $fixture) {
@@ -110,6 +101,95 @@ class CompetitionRoundProcessorService
                 $winners[] = $winner;
             }
         }
+
+        $this->finalizeRound($round, $now, $winners);
+    }
+
+    /**
+     * Admin-only test tool: forces a single PENDING fixture to resolve immediately,
+     * bypassing the round's scheduledAt wait entirely — for exercising round-by-round
+     * competition processing locally without waiting out real durations. Shares the same
+     * claim-lock, resolution, and round-completion/bracket-advancement logic as the
+     * scheduled cron path (processDueRounds()), just triggered per-fixture instead of
+     * per-due-round, so a forced result is indistinguishable from a naturally processed one.
+     *
+     * @throws \RuntimeException if the fixture is already resolved, is a bye (nothing to
+     *         simulate — no opposing entrant), or its round can no longer be processed
+     *         (already COMPLETED/CANCELLED).
+     */
+    public function forceResolveFixture(CompetitionFixture $fixture): CompetitionResult
+    {
+        if ($fixture->getProcessedAt() !== null) {
+            throw new \RuntimeException('This fixture has already been resolved.');
+        }
+        if ($fixture->getHomeEntrant() === null || $fixture->getAwayEntrant() === null) {
+            throw new \RuntimeException('This fixture has no opposing entrant yet — nothing to simulate.');
+        }
+
+        $round = $fixture->getRound();
+        if (!in_array($round->getStatus(), [CompetitionRoundStatus::PENDING, CompetitionRoundStatus::SCHEDULED, CompetitionRoundStatus::RUNNING], true)) {
+            throw new \RuntimeException('This round is no longer processable.');
+        }
+
+        $now = new \DateTimeImmutable();
+
+        if ($round->getStatus() !== CompetitionRoundStatus::RUNNING) {
+            if (!$this->claimRound($round, $now)) {
+                throw new \RuntimeException('Could not claim this round for processing — a scheduled tick may be running it right now. Try again.');
+            }
+            $this->beginRoundProcessing($round, $now);
+        }
+
+        $this->resolveFixture($fixture, $round, $now);
+        $this->em->flush();
+
+        $remainingFixtures = $this->fixtureRepository->findByRoundOrderedBySlot($round);
+        $roundFullyResolved = true;
+        $winners             = [];
+        foreach ($remainingFixtures as $roundFixture) {
+            if ($roundFixture->getProcessedAt() === null) {
+                $roundFullyResolved = false;
+                break;
+            }
+            if ($roundFixture->getWinnerEntrant() !== null) {
+                $winners[] = $roundFixture->getWinnerEntrant();
+            }
+        }
+
+        if ($roundFullyResolved) {
+            $this->finalizeRound($round, $now, $winners);
+        }
+
+        return $this->resultRepository->findOneBy(['fixture' => $fixture])
+            ?? throw new \RuntimeException('Fixture was resolved but no result was recorded — this should never happen.');
+    }
+
+    /** Pre-loop side effects shared by the scheduled and forced processing paths. */
+    private function beginRoundProcessing(CompetitionRound $round, \DateTimeImmutable $now): void
+    {
+        $activeCompetition = $round->getActiveCompetition();
+
+        if ($round->getRoundIndex() === 1 && $activeCompetition->getStatus() === ActiveCompetitionStatus::SCHEDULED) {
+            $activeCompetition->setStatus(ActiveCompetitionStatus::RUNNING);
+        }
+
+        // Close the resubmission window — snapshots are locked for the duration of this round.
+        foreach ($this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition) as $entrant) {
+            if ($entrant->getStatus() === CompetitionEntrantStatus::ACTIVE) {
+                $entrant->setSnapshotLockedAt($now);
+            }
+        }
+    }
+
+    /**
+     * Post-loop side effects shared by the scheduled and forced processing paths — only
+     * called once every fixture in $round has been resolved.
+     *
+     * @param list<CompetitionEntrant> $winners
+     */
+    private function finalizeRound(CompetitionRound $round, \DateTimeImmutable $now, array $winners): void
+    {
+        $activeCompetition = $round->getActiveCompetition();
 
         $round->setStatus(CompetitionRoundStatus::COMPLETED);
         $round->setCompletedAt($now);
@@ -155,6 +235,10 @@ class CompetitionRoundProcessorService
             $matchResult->awayScore,
             $matchResult->eventLog,
             $round->getMatchEngineIdentifier(),
+            $this->clubJsonOf($home),
+            $this->clubJsonOf($away),
+            $matchResult->homeLineup,
+            $matchResult->awayLineup,
         );
         $result->setNarrativePayload($matchResult->narrativePayload);
         $this->em->persist($result);
@@ -176,6 +260,14 @@ class CompetitionRoundProcessorService
         $loser->setEliminatedInRound($round);
 
         return $winner;
+    }
+
+    /** @return array<string, mixed> */
+    private function clubJsonOf(CompetitionEntrant $entrant): array
+    {
+        $club = $entrant->getSnapshotJson()['club'] ?? [];
+
+        return is_array($club) ? $club : [];
     }
 
     private function breakTie(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): CompetitionEntrant

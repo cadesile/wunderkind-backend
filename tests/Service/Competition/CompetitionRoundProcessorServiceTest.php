@@ -7,12 +7,15 @@ namespace App\Tests\Service\Competition;
 use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
+use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
 use App\Enum\Competition\CompetitionEntrantStatus;
+use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
+use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Competition\CompetitionLockService;
 use App\Service\Competition\CompetitionRoundProcessorService;
@@ -24,15 +27,17 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
     private EntityManagerInterface $em;
     private CompetitionRoundProcessorService $processor;
     private CompetitionRoundRepository $roundRepository;
+    private CompetitionFixtureRepository $fixtureRepository;
     private CompetitionLockService $lockService;
 
     protected function setUp(): void
     {
         self::bootKernel();
-        $this->em              = self::getContainer()->get(EntityManagerInterface::class);
-        $this->processor        = self::getContainer()->get(CompetitionRoundProcessorService::class);
-        $this->roundRepository    = self::getContainer()->get(CompetitionRoundRepository::class);
-        $this->lockService         = self::getContainer()->get(CompetitionLockService::class);
+        $this->em                = self::getContainer()->get(EntityManagerInterface::class);
+        $this->processor          = self::getContainer()->get(CompetitionRoundProcessorService::class);
+        $this->roundRepository      = self::getContainer()->get(CompetitionRoundRepository::class);
+        $this->fixtureRepository       = self::getContainer()->get(CompetitionFixtureRepository::class);
+        $this->lockService                = self::getContainer()->get(CompetitionLockService::class);
 
         $this->em->getConnection()->executeStatement(
             'TRUNCATE competition_entrant, competition_fixture, competition_result,
@@ -170,5 +175,81 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
         // additionally requires locked_for_processing_at IS NULL — belt and braces.
         $processed = $this->processor->processDueRounds(new \DateTimeImmutable());
         $this->assertSame(0, $processed, 'A round with locked_for_processing_at already set must not be reprocessed.');
+    }
+
+    public function testForceResolveFixtureResolvesImmediatelyAndAdvancesRoundOnlyOnceAllFixturesAreDone(): void
+    {
+        // Deliberately NOT backdated — round 1 is scheduled hours/days in the future, proving
+        // this bypasses the wait entirely rather than relying on it already being due.
+        $instance = $this->buildLockedCompetition();
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $this->assertSame(CompetitionRoundStatus::PENDING, $round1->getStatus());
+
+        $fixtures = $this->fixtureRepository->findByRoundOrderedBySlot($round1);
+        $this->assertCount(2, $fixtures, '4-entrant capacity -> 2 SF fixtures.');
+
+        $firstResult = $this->processor->forceResolveFixture($fixtures[0]);
+        $this->assertIsInt($firstResult->getHomeScore());
+        $this->assertIsInt($firstResult->getAwayScore());
+
+        $this->em->refresh($round1);
+        $this->assertSame(CompetitionRoundStatus::RUNNING, $round1->getStatus(), 'Round should stay open until every fixture is resolved.');
+        $this->em->refresh($fixtures[1]);
+        $this->assertNull($fixtures[1]->getProcessedAt(), 'The second fixture must be untouched.');
+
+        $this->processor->forceResolveFixture($fixtures[1]);
+
+        $this->em->refresh($round1);
+        $this->assertSame(CompetitionRoundStatus::COMPLETED, $round1->getStatus(), 'Resolving the last fixture must complete the round.');
+
+        $finalFixtures = $this->em->getRepository(CompetitionFixture::class)
+            ->findBy(['round' => $this->roundRepository->findByCompetitionOrderedByIndex($instance)[1]]);
+        $this->assertCount(1, $finalFixtures, 'Winners must be advanced into the FINAL round exactly as the scheduled path does.');
+        $this->assertNotNull($finalFixtures[0]->getHomeEntrant());
+        $this->assertNotNull($finalFixtures[0]->getAwayEntrant());
+    }
+
+    public function testForceResolveFixtureThrowsWhenAlreadyResolved(): void
+    {
+        $instance = $this->buildLockedCompetition();
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $fixture  = $this->fixtureRepository->findByRoundOrderedBySlot($round1)[0];
+
+        $this->processor->forceResolveFixture($fixture);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('already been resolved');
+        $this->processor->forceResolveFixture($fixture);
+    }
+
+    public function testForceResolveFixtureThrowsWhenNoOpposingEntrant(): void
+    {
+        $instance = $this->buildLockedCompetition();
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $home     = $this->fixtureRepository->findByRoundOrderedBySlot($round1)[0]->getHomeEntrant();
+
+        $byeFixture = new CompetitionFixture($round1, 99, $home, null);
+        $this->em->persist($byeFixture);
+        $this->em->flush();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('nothing to simulate');
+        $this->processor->forceResolveFixture($byeFixture);
+    }
+
+    public function testForceResolveFixtureThrowsWhenRoundIsNoLongerProcessable(): void
+    {
+        $instance = $this->buildLockedCompetition();
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $fixture  = $this->fixtureRepository->findByRoundOrderedBySlot($round1)[0];
+
+        // Force the round into a terminal state directly, independent of real processing,
+        // to exercise this guard specifically.
+        $round1->setStatus(CompetitionRoundStatus::CANCELLED);
+        $this->em->flush();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('no longer processable');
+        $this->processor->forceResolveFixture($fixture);
     }
 }

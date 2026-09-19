@@ -1,0 +1,28 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12 col-lg-6">
+        <h5 class="fw-semibold mb-0 text-danger">Clear All Competitions</h5>
+        <p class="text-muted small">
+            This permanently deletes <strong>all {{ count }} competition{{ count == 1 ? '' : 's' }}</strong>
+            — every status, not just REGISTERING ones — along with their rounds, fixtures,
+            results, entrants, and reward claims. Spoof clubs/users created for those
+            entrants are <strong>not</strong> deleted by this action. This cannot be undone.
+        </p>
+
+        <div class="card border-danger">
+            <div class="card-body">
+                <form method="post" action="{{ actionUrl }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('clear_all_active_competitions') }}">
+
+                    <button type="submit" class="btn btn-danger" {{ count < 1 ? 'disabled' : '' }}>
+                        <i class="fa fa-trash"></i> Delete All {{ count }} Competition{{ count == 1 ? '' : 's' }}
+                    </button>
+                    <a href="{{ indexUrl }}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
