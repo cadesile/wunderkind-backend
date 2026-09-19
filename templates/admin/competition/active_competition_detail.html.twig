@@ -110,6 +110,11 @@
                                     <td class="text-center fw-semibold">
                                         {% if result %}
                                             {{ result.homeScore }} &ndash; {{ result.awayScore }}
+                                            {% if result.wentToPenalties %}
+                                                <br><span class="badge bg-warning text-dark fw-normal">Pens {{ result.penaltyHomeScore }}-{{ result.penaltyAwayScore }}</span>
+                                            {% elseif result.wentToExtraTime %}
+                                                <br><span class="badge bg-info text-dark fw-normal">AET</span>
+                                            {% endif %}
                                         {% else %}
                                             <span class="text-muted">&mdash;</span>
                                         {% endif %}

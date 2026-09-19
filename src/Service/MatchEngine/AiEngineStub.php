@@ -36,6 +36,17 @@ class AiEngineStub implements MatchEngineInterface
 
         $result = $this->deterministicEngine->resolve($home, $away, $fixture);
 
-        return new MatchEngineResult($result->homeScore, $result->awayScore, $result->eventLog, $result->narrativePayload, $result->homeLineup, $result->awayLineup);
+        return new MatchEngineResult(
+            $result->homeScore,
+            $result->awayScore,
+            $result->eventLog,
+            $result->narrativePayload,
+            $result->homeLineup,
+            $result->awayLineup,
+            $result->wentToExtraTime,
+            $result->wentToPenalties,
+            $result->penaltyHomeScore,
+            $result->penaltyAwayScore,
+        );
     }
 }

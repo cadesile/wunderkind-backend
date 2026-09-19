@@ -49,8 +49,18 @@ class MatchNarrativeGeneratorService
      * @param list<array{id:?string,name:?string,position:?string,goals:int,assists:int,yellowCards:int,redCards:int,rating:float}> $awayLineup
      * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,teamId:?string}>
      */
-    public function generate(CompetitionFixture $fixture, CompetitionEntrant $home, CompetitionEntrant $away, array $eventLog, array $homeLineup, array $awayLineup): array
-    {
+    public function generate(
+        CompetitionFixture $fixture,
+        CompetitionEntrant $home,
+        CompetitionEntrant $away,
+        array $eventLog,
+        array $homeLineup,
+        array $awayLineup,
+        bool $wentToExtraTime = false,
+        bool $wentToPenalties = false,
+        ?int $penaltyHomeScore = null,
+        ?int $penaltyAwayScore = null,
+    ): array {
         $rows = $this->templates->findByCategory(EventCategory::MATCH_NARRATIVE);
         if ($rows === []) {
             return [];
@@ -73,15 +83,36 @@ class MatchNarrativeGeneratorService
             }
         }
 
-        $items = array_merge($items, $this->buildFillerItems($rng, $home, $away, $homeLineup, $awayLineup, $homeName, $awayName, $rowsByNodeType, $graph, $eventLog));
+        $items = array_merge($items, $this->buildFillerItems($rng, $home, $away, $homeLineup, $awayLineup, $homeName, $awayName, $rowsByNodeType, $graph, $eventLog, $wentToExtraTime ? 120 : 90));
 
-        $lastMinute = 90;
+        $lastMinute = $wentToExtraTime ? 120 : 90;
         foreach ($eventLog as $event) {
             $lastMinute = max($lastMinute, (int) $event['minute']);
         }
 
         $items[] = ['minute' => 45, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Half-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
-        $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+
+        if ($wentToExtraTime) {
+            $items[] = ['minute' => 90, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time in normal time — this one\'s going to extra time!', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+            $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+        } else {
+            $items[] = ['minute' => $lastMinute + 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Full-time.', 'playerA' => null, 'playerB' => null, 'teamId' => null];
+        }
+
+        if ($wentToPenalties && $penaltyHomeScore !== null && $penaltyAwayScore !== null) {
+            $winnerName = $penaltyHomeScore > $penaltyAwayScore ? $homeName : $awayName;
+            $winnerPens = max($penaltyHomeScore, $penaltyAwayScore);
+            $loserPens  = min($penaltyHomeScore, $penaltyAwayScore);
+            $items[]    = [
+                'minute'     => $lastMinute + 2,
+                'isKeyEvent' => true,
+                'eventType'  => 'PENALTY_SHOOTOUT',
+                'text'       => "{$winnerName} win {$winnerPens}-{$loserPens} on penalties!",
+                'playerA'    => null,
+                'playerB'    => null,
+                'teamId'     => null,
+            ];
+        }
 
         usort($items, static fn (array $a, array $b) => $a['minute'] <=> $b['minute']);
 
@@ -385,7 +416,7 @@ class MatchNarrativeGeneratorService
      * @param list<array{minute:int,type:string}> $eventLog
      * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,teamId:?string}>
      */
-    private function buildFillerItems(SeededRng $rng, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph, array $eventLog): array
+    private function buildFillerItems(SeededRng $rng, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph, array $eventLog, int $maxMinute = 90): array
     {
         $availableEntries = array_intersect_key(self::FILLER_ENTRY_WEIGHTS, $rowsByNodeType);
         if ($availableEntries === []) {
@@ -395,7 +426,7 @@ class MatchNarrativeGeneratorService
         $occupiedMinutes = array_map(static fn (array $e) => (int) $e['minute'], $eventLog);
         $items           = [];
 
-        for ($minute = self::FILLER_INTERVAL_MINUTES; $minute < 90; $minute += self::FILLER_INTERVAL_MINUTES) {
+        for ($minute = self::FILLER_INTERVAL_MINUTES; $minute < $maxMinute; $minute += self::FILLER_INTERVAL_MINUTES) {
             $tooClose = false;
             foreach ($occupiedMinutes as $occupied) {
                 if (abs($occupied - $minute) <= 3) {
@@ -425,7 +456,7 @@ class MatchNarrativeGeneratorService
                 }
 
                 $items[] = [
-                    'minute'     => max(1, min(89, $minute + $i)),
+                    'minute'     => max(1, min($maxMinute - 1, $minute + $i)),
                     'isKeyEvent' => false,
                     'eventType'  => 'FILLER',
                     'text'       => $this->renderTemplate($template, array_filter(['playerA' => $playerA, 'playerB' => $playerB, 'attacker' => $playerA, 'taker' => $playerA]), $teamName),
