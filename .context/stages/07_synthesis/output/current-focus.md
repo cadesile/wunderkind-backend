@@ -19,8 +19,9 @@ From `.context/stages/02_architecture/output/git-activity.md`'s
    server-side; and a first-time push-notification subsystem (FCM via
    `kreait/firebase-bundle`, Symfony Messenger — the first use of
    Messenger in this codebase) fires OS notifications for competition
-   round-draws/new-registrants and, optionally, admin broadcasts. See
-   `docs/api/push-notifications.md`,
+   round-draws/new-registrants/individual match results and, optionally,
+   admin broadcasts. See
+   `.context/stages/04_interfaces/output/push-notifications.md`,
    `docs/api/competition-registration-snapshot-v2.md`.
 
 Clusters 1-2 are corroborated by migration history

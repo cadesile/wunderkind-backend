@@ -17,6 +17,7 @@ back office. Full plain-language summary:
 | Routes/endpoints (`/api/*` and `/admin/*`) | `stages/04_interfaces/output/routes.md` |
 | What each controller does | `stages/04_interfaces/output/controllers.md` |
 | What each service does | `stages/04_interfaces/output/services.md` |
+| Push notification spec (FCM device tokens, payload contract per type) | `stages/04_interfaces/output/push-notifications.md` |
 | Admin-panel design system (colors/typography/components) — read before writing any admin UI code | `stages/05_ui/output/design-system.md` |
 | Index of existing markdown docs in this repo | `stages/06_documentation/output/index.md` |
 | Cross-stage architectural connections | `stages/07_synthesis/output/architecture-notes.md` |

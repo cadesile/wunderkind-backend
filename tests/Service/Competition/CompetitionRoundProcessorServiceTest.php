@@ -154,6 +154,39 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
         $this->assertSame($expectedUserIds, $actualUserIds, 'Only the two advancing winners should be notified, not the eliminated losers.');
     }
 
+    /**
+     * Every fixture's result gets its own push, to both sides — winner and loser alike —
+     * distinct from (and in addition to) the round-level ROUND_DRAWN push above.
+     */
+    public function testEachResolvedFixtureNotifiesBothSidesOfTheResult(): void
+    {
+        $instance = $this->buildLockedCompetition();
+        $this->backdateRound($instance, 1);
+
+        $this->processor->processDueRounds(new \DateTimeImmutable());
+
+        $transport = self::getContainer()->get('messenger.transport.async');
+        $messages  = array_map(static fn ($envelope) => $envelope->getMessage(), $transport->getSent());
+        $results   = array_values(array_filter($messages, static fn ($m) => $m->data['type'] === 'MATCH_RESULT'));
+
+        // Round 1 (SF) has 2 fixtures -> 2 MATCH_RESULT pushes, one per fixture.
+        $this->assertCount(2, $results);
+
+        $round1     = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $fixtures   = $this->fixtureRepository->findByRoundOrderedBySlot($round1);
+        $expectedFixtureIds = array_map(static fn ($f) => (string) $f->getId(), $fixtures);
+        $actualFixtureIds   = array_map(static fn ($m) => $m->data['fixtureId'], $results);
+        sort($expectedFixtureIds);
+        sort($actualFixtureIds);
+        $this->assertSame($expectedFixtureIds, $actualFixtureIds);
+
+        foreach ($results as $message) {
+            $this->assertSame((string) $instance->getId(), $message->data['competitionId']);
+            $this->assertSame((string) $round1->getId(), $message->data['roundId']);
+            $this->assertCount(2, $message->userIds, 'Both the winner and the loser of that fixture must be notified.');
+        }
+    }
+
     public function testFinalRoundCompletesTheInstanceAndCrownsAWinner(): void
     {
         $instance = $this->buildLockedCompetition(victorPrize: 500000);

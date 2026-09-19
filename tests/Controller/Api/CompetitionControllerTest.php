@@ -558,6 +558,40 @@ class CompetitionControllerTest extends WebTestCase
                     $this->assertContains($item['side'], ['HOME', 'AWAY']);
                 }
             }
+
+            // The starting XI, with this match's goals/assists/cards/rating, no player id.
+            $this->assertCount(11, $fixture['result']['homeLineup']);
+            $this->assertCount(11, $fixture['result']['awayLineup']);
+            foreach (array_merge($fixture['result']['homeLineup'], $fixture['result']['awayLineup']) as $player) {
+                $this->assertArrayNotHasKey('id', $player);
+                $this->assertArrayHasKey('name', $player);
+                $this->assertArrayHasKey('position', $player);
+                $this->assertArrayHasKey('goals', $player);
+                $this->assertArrayHasKey('assists', $player);
+                $this->assertArrayHasKey('yellowCards', $player);
+                $this->assertArrayHasKey('redCards', $player);
+                // A whole-number rating (e.g. 6.0) round-trips through JSON as an int, not a
+                // float, so assert numeric rather than assertIsFloat to avoid a flaky test.
+                $this->assertIsNumeric($player['rating']);
+                $this->assertGreaterThanOrEqual(1.0, $player['rating']);
+                $this->assertLessThanOrEqual(10.0, $player['rating']);
+            }
+
+            // Self-contained: a result handed to MatchUX on its own (not walked down from
+            // this same /api/competitions/{id} response) still knows what it's a result of.
+            // tournament/round mirror this endpoint's own top-level/round-level fields exactly.
+            $this->assertSame((string) $instance->getId(), $fixture['result']['tournament']['instanceId']);
+            $this->assertSame($body['templateName'], $fixture['result']['tournament']['templateName']);
+            $this->assertSame($body['status'], $fixture['result']['tournament']['status']);
+            $this->assertSame($body['startsAt'], $fixture['result']['tournament']['startsAt']);
+            $this->assertSame($body['endsAt'], $fixture['result']['tournament']['endsAt']);
+
+            $this->assertSame($body['rounds'][0]['roundIndex'], $fixture['result']['round']['roundIndex']);
+            $this->assertSame($body['rounds'][0]['label'], $fixture['result']['round']['label']);
+            $this->assertSame($body['rounds'][0]['status'], $fixture['result']['round']['status']);
+            $this->assertSame($body['rounds'][0]['scheduledAt'], $fixture['result']['round']['scheduledAt']);
+
+            $this->assertSame($fixture['fixtureId'], $fixture['result']['fixtureId']);
         }
     }
 }

@@ -50,7 +50,9 @@ class CompetitionResult
 
     /**
      * The starting XI as fielded, each with this match's goals/assists/cards/rating —
-     * see DeterministicEngine::buildLineup(). Admin-only detail, not sent to clients.
+     * see DeterministicEngine::buildLineup(). Sent to clients via toClientSummary()
+     * (id stripped there — see stripPlayerId()); stored here with id intact for the
+     * admin-only "full stored payload" debug view.
      *
      * @var list<array{id: ?string, name: ?string, position: ?string, goals: int, assists: int, yellowCards: int, redCards: int, rating: float}>
      */
@@ -182,8 +184,9 @@ class CompetitionResult
      * without an unresolvable UUID sitting in the payload inviting a future maintainer to use
      * it as a matching key (a tournament opponent may not exist in any local store; the only
      * safe way to say "which club" in narrativePayload is `side`, not an id — see
-     * MatchNarrativeGeneratorService and docs/api/push-notifications.md's sibling doc,
-     * docs/api/tournament-match-result-payload.md, which this shape is contracted against).
+     * MatchNarrativeGeneratorService and wunderkind-app's docs/api/tournament-match-result-payload.md,
+     * which this shape is contracted against (this repo's own push-notification spec lives at
+     * .context/stages/04_interfaces/output/push-notifications.md).
      * narrativePayload is the full generated commentary timeline — null for results generated
      * before this field existed, which the client should treat as an absent/optional feature,
      * not an error.
@@ -192,21 +195,62 @@ class CompetitionResult
      * scoreline was actually settled — see this entity's field docblock. penaltyHomeScore/
      * penaltyAwayScore are null unless wentToPenalties is true.
      *
-     * @return array{homeScore: int, awayScore: int, homeClub: array<string, mixed>, awayClub: array<string, mixed>, narrativePayload: ?array, wentToExtraTime: bool, wentToPenalties: bool, penaltyHomeScore: ?int, penaltyAwayScore: ?int}
+     * homeLineup/awayLineup are the starting XI as fielded, each with this match's
+     * goals/assists/cards/rating — same id-stripping treatment as homeClub/awayClub (a
+     * tournament opponent's players aren't in any local store either, so a player `id` is the
+     * same dead weight an unresolvable club `id` would be).
+     *
+     * tournament/round/fixtureId make this payload self-contained: a result handed to
+     * `MatchUX` on its own (not walked down from `GET /api/competitions/{id}`'s nested
+     * rounds/fixtures tree) still knows what it's a result *of*. `tournament`/`round` mirror
+     * CompetitionController::show()'s own top-level/round-level field names and shapes
+     * exactly — same values, same keys, no separate vocabulary to keep in sync by hand.
+     *
+     * @return array{homeScore: int, awayScore: int, homeClub: array<string, mixed>, awayClub: array<string, mixed>, homeLineup: list<array<string, mixed>>, awayLineup: list<array<string, mixed>>, narrativePayload: ?array, wentToExtraTime: bool, wentToPenalties: bool, penaltyHomeScore: ?int, penaltyAwayScore: ?int, tournament: array<string, mixed>, round: array<string, mixed>, fixtureId: string}
      */
     public function toClientSummary(): array
     {
+        $round             = $this->fixture->getRound();
+        $activeCompetition = $round->getActiveCompetition();
+
         return [
             'homeScore'        => $this->homeScore,
             'awayScore'        => $this->awayScore,
             'homeClub'         => $this->stripClubId($this->homeClubJson),
             'awayClub'         => $this->stripClubId($this->awayClubJson),
+            'homeLineup'       => array_map($this->stripPlayerId(...), $this->homeLineupJson),
+            'awayLineup'       => array_map($this->stripPlayerId(...), $this->awayLineupJson),
             'narrativePayload' => $this->narrativePayload,
             'wentToExtraTime'  => $this->wentToExtraTime,
             'wentToPenalties'  => $this->wentToPenalties,
             'penaltyHomeScore' => $this->penaltyHomeScore,
             'penaltyAwayScore' => $this->penaltyAwayScore,
+            'tournament'       => [
+                'instanceId'   => (string) $activeCompetition->getId(),
+                'templateName' => $activeCompetition->getTemplate()->getName(),
+                'status'       => $activeCompetition->getStatus()->value,
+                'startsAt'     => $activeCompetition->getStartsAt()?->format(DATE_ATOM),
+                'endsAt'       => $activeCompetition->getEndsAt()?->format(DATE_ATOM),
+            ],
+            'round' => [
+                'roundIndex'  => $round->getRoundIndex(),
+                'label'       => $round->getLabel(),
+                'status'      => $round->getStatus()->value,
+                'scheduledAt' => $round->getScheduledAt()->format(DATE_ATOM),
+            ],
+            'fixtureId' => (string) $this->fixture->getId(),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $player
+     * @return array<string, mixed>
+     */
+    private function stripPlayerId(array $player): array
+    {
+        unset($player['id']);
+
+        return $player;
     }
 
     /**
