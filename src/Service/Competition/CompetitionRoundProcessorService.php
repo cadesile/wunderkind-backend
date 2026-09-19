@@ -265,6 +265,24 @@ class CompetitionRoundProcessorService
         $loser->setStatus(CompetitionEntrantStatus::ELIMINATED);
         $loser->setEliminatedInRound($round);
 
+        // Every fixture's result — not just when a round completes — gets its own push, to
+        // both sides. FCM data values must be strings and the message has a hard ~4KB size
+        // cap, so (unlike this method's other side effects) the full result payload isn't
+        // embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT: the client
+        // re-fetches via GET /api/competitions/{id}, whose result field is exactly
+        // CompetitionResult::toClientSummary()'s shape.
+        $this->pushNotificationService->notifyUsers(
+            [(string) $home->getClub()->getUser()->getId(), (string) $away->getClub()->getUser()->getId()],
+            'Full-time!',
+            sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName()),
+            [
+                'type'          => 'MATCH_RESULT',
+                'competitionId' => (string) $round->getActiveCompetition()->getId(),
+                'roundId'       => (string) $round->getId(),
+                'fixtureId'     => (string) $fixture->getId(),
+            ],
+        );
+
         return $winner;
     }
 

@@ -16,7 +16,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * FCM device-token registration for push notifications — see PushNotificationService and
- * docs/api/push-notifications.md.
+ * .context/stages/04_interfaces/output/push-notifications.md.
  */
 #[Route('/api/device-tokens')]
 #[IsGranted('ROLE_CLUB')]

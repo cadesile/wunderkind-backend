@@ -5,6 +5,6 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
-- **Commit:** 535e99f1661b6ba1fcb0be19450024de50c18f6f
-- **Date:** 2026-09-19
-- **Stages touched this pass:** 02_architecture, 03_data, 04_interfaces, 06_documentation, 07_synthesis (incremental update for: Cup extra-time/penalty-shootout resolution, `DeterministicEngine` full `ResultsEngine.ts` port, `MATCH_NARRATIVE` chain-graph narrative content, and push notifications — device tokens, Messenger, FCM, admin-broadcast push channel). `01_overview`/`05_ui` untouched — nothing in this pass changed stack facts or the admin design system.
+- **Commit:** 9a5f72f34f7e02b092413285b761463ed08bb91c (as of writing — this pass's own changes are uncommitted on top of it, pending the user's usual explicit commit request)
+- **Date:** 2026-09-20
+- **Stages touched this pass:** 04_interfaces (new `push-notifications.md`, moved in from `docs/api/push-notifications.md` by explicit request — that file has been deleted; also documents the new `MATCH_RESULT` push type, fired per-fixture on `CompetitionRoundProcessorService::resolveFixture()`, to both sides), 06_documentation (index updated to point at the new location), 07_synthesis (current-focus.md repointed). `01_overview`/`02_architecture`/`03_data`/`05_ui` untouched this pass.

@@ -10,21 +10,21 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (router + `.context/stages/*/output/*.md`, all stages) | 20892 |
-| Router only (`.context/CONTEXT.md`) | 452 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 22448 |
+| Router only (`.context/CONTEXT.md`) | 484 |
 | `01_overview` (router + its `output/`) | 1649 |
 | `02_architecture` (same shape) | 3112 |
 | `03_data` (same shape) | 7607 |
-| `04_interfaces` (same shape) | 7136 |
+| `04_interfaces` (same shape) | 8772 |
 | `05_ui` (same shape) | 1906 |
-| `06_documentation` (same shape) | 1112 |
-| `07_synthesis` (same shape) | 2127 |
+| `06_documentation` (same shape) | 1392 |
+| `07_synthesis` (same shape) | 2315 |
 
 **Typical saving vs. loading everything:** 83% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-19 (02_architecture/03_data/04_interfaces
-updated for push notifications + Cup extra-time/penalties; other stages
-unchanged this pass, no per-stage `CONTEXT.md` exists in this repo so
-the shape is router + `output/` only, not router + stage-CONTEXT +
-`output/` as an earlier pass's note implied)
+**Last updated:** 2026-09-20 (04_interfaces grew by
+`push-notifications.md`, moved in from `docs/api/push-notifications.md`
+by request — that file no longer exists; 06_documentation/07_synthesis
+updated to repoint their references to the new location; other stages
+unchanged this pass)
