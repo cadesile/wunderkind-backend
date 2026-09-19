@@ -12,7 +12,11 @@ filename alone.
 - **`Admin/StatBuckets`** — bucketing helper backing dashboard facet
   charts.
 - **`AdminMessageService`** — resolves which announcements a club should
-  see and records that it has seen them.
+  see and records that it has seen them. `isEligible()` is public
+  specifically so `ResolveAdminMessageAudienceForPushMessageHandler` can
+  reuse the exact same group-targeting rules for push's eager
+  (all-clubs-at-once) resolution instead of this poll path's per-request
+  lazy check — the two must never diverge.
 - **`Appearance/AppearanceGeneratorService`** — deterministically
   generates a Player/Staff/Scout/Agent's visual appearance fields.
 - **`Appearance/SeededRng`** — seeded PRNG kept bit-identical to the
@@ -40,14 +44,18 @@ filename alone.
   as keys into `CompetitionTemplate::roundEngineConfig` and stored on
   `CompetitionRound::label`.
 - **`Competition/CompetitionLockService`** — locks a competition instance
-  and schedules its first round the instant the last slot fills.
+  and schedules its first round the instant the last slot fills; also
+  triggers a `PushNotificationService` "round drawn" push to every
+  entrant placed into round 1.
 - **`Competition/CompetitionRegistrationService`** — registers entrants,
   using `SELECT ... FOR UPDATE` on the `ActiveCompetition` row to
   serialize concurrent last-slot registrations.
 - **`Competition/CompetitionRoundProcessorService`** — core scheduling/
   idempotency/bracket-advancement logic behind the
   `app:competition:process-rounds` command (runs every 1 minute via cron
-  — see `02_architecture/output/structure.md`).
+  — see `02_architecture/output/structure.md`). Sends a
+  `PushNotificationService` "next round drawn" push to advancing winners
+  each time a round completes and the next round's fixtures are seeded.
 - **`Competition/CompetitionSpoofEntrantService`** — admin-only override
   that calls `CompetitionRegistrationService::register()` directly,
   bypassing HTTP/JWT/eligibility checks.
@@ -95,18 +103,58 @@ filename alone.
 - **`MatchEngine/AiEngineStub`** — stub match engine standing in for real
   LLM-based match resolution (explicitly out of Phase 1 scope per its own
   code).
-- **`MatchEngine/DeterministicEngine`** — deterministic match resolution;
-  playing style affects outcome, formation is display-only.
+- **`MatchEngine/DeterministicEngine`** — full port of `wunderkind-app`'s
+  `ResultsEngine.ts`: dominance score (ability/morale/condition, tactics,
+  manager, personality, cohesion) drives Poisson-distributed goals,
+  then position-weighted goals/assists/cards/ratings across the XI. A
+  Competition fixture can never end level — a 90' draw triggers a real
+  extra-time simulation, and only falls to a coin-flip penalty shootout
+  (fabricated but plausible scoreline) if still level after that. Hands
+  off to `MatchNarrativeGeneratorService` for `narrativePayload`.
+- **`MatchEngine/MatchNarrativeGeneratorService`** — walks the
+  `EventCategory::MATCH_NARRATIVE` chain-graph (ported from
+  `wunderkind-app`'s `narrativeEngine.ts`/`matchTimelineGenerator.ts`)
+  to produce the full ordered commentary timeline server-side, including
+  extra-time/penalty-shootout markers when applicable.
 - **`MatchEngine/MatchEngineInterface`** — contract for match engines
   (input: `CompetitionEntrant`/`CompetitionFixture`).
 - **`MatchEngine/MatchEngineRegistry`** — tagged-iterator dispatcher
   selecting a `MatchEngineInterface` by `MatchEngineIdentifier` (see
   `config/services.yaml`'s `_instanceof` binding).
 - **`MatchEngine/MatchEngineResult`** — plain value object for a match
-  result, persisted by the caller into `CompetitionResult`.
+  result (score, eventLog, lineups, narrativePayload,
+  wentToExtraTime/wentToPenalties/penalty scores), persisted by the
+  caller into `CompetitionResult`.
 - **`NameGeneratorService`** — generates names (players/staff/clubs).
 - **`NarrativeImportExportService`** — imports/exports narrative content
   (events, playing styles, facility/tactical/archetype templates).
+- **`Notification/PushNotificationService`** — the only thing a call site
+  should touch to send a push notification:
+  `notifyUsers(userIds, title, body, data)` dispatches
+  `SendPushNotificationMessage` via Symfony Messenger (async, first use
+  of Messenger in this codebase — see `02_architecture/output/
+  structure.md`). No call site talks to Messenger or Firebase directly.
+- **`Notification/FirebaseMessagingFactory`** — builds the Kreait
+  `Messaging` service directly from `FIREBASE_SERVICE_ACCOUNT_JSON`
+  (`json_decode` + `Factory::withServiceAccount()`), bypassing
+  `kreait/firebase-bundle`'s own YAML credential binding, which has been
+  unreliable for a multi-line JSON string with an embedded PEM private
+  key (same class of trap as `JWT_SECRET_KEY`, see
+  `docs/deploy/hetzner.md`). Wired as a DI factory in
+  `config/services.yaml`, not autowired via the bundle's own config.
+- **`MessageHandler/SendPushNotificationMessageHandler`** — the actual
+  FCM send: resolves `UserDevice` rows fresh at handle time (not
+  pre-resolved at dispatch), multicasts in chunks of ≤500 tokens (FCM's
+  own limit), and deletes any `UserDevice` FCM reports as
+  unknown/invalid.
+- **`MessageHandler/ResolveAdminMessageAudienceForPushMessageHandler`**
+  — eager, one-time audience resolution for an `AdminMessage`'s push
+  channel (`AdminMessage::$sendAsPush`) — reuses
+  `AdminMessageService::isEligible()` across every club with a
+  registered device, then dispatches chunked
+  `SendPushNotificationMessage`s. Only fires once per message
+  (`AdminMessage::$pushSentAt` guards re-sends), dispatched from
+  `AdminMessageCrudController::persistEntity()`/`updateEntity()`.
 - **`NpcClubGenerationService`** — generates NPC clubs using
   `FacilityTemplateRepository`, `GameConfigRepository`, `LeagueService`.
 - **`PeriodResolver`** — resolves stats time-period filters

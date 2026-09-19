@@ -78,12 +78,24 @@ Per environment, prefixed `PROD_` / `DEV_`:
 `JWT_SECRET_KEY`, `JWT_PUBLIC_KEY`, `MAILER_DSN`, `MAILER_FROM`, `MAILER_FROM_NAME`,
 `SOCIAL_TOKEN_ENCRYPTION_KEY`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`,
 `FACEBOOK_REDIRECT_URI`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`,
-`TWITTER_REDIRECT_URI`.
+`TWITTER_REDIRECT_URI`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
 
 Shared: `HETZNER_IP`, `HETZNER_SSH_KEY`.
 
-Two traps:
+Three traps:
 
+- **`FIREBASE_SERVICE_ACCOUNT_JSON` must be MINIFIED (single-line) JSON**, not the
+  pretty-printed multi-line file Firebase's console hands you on download. The workflow's
+  heredoc runs `sed -i 's/^[[:space:]]*//' .env` afterward to strip the YAML block's own
+  indentation from every line — a multi-line secret would have each of its own lines mangled
+  by that same strip, corrupting the JSON (and, worse, the private key's embedded `\n`
+  sequences, which are supposed to stay as the two literal characters `\` `n` inside the JSON
+  string, not real newlines). Minify before setting the secret:
+  `jq -c . service-account.json | gh secret set DEV_FIREBASE_SERVICE_ACCOUNT_JSON`. See
+  `src/Service/Notification/FirebaseMessagingFactory.php` for how the backend consumes it —
+  a factory that `json_decode()`s the raw string directly, deliberately bypassing
+  kreait/firebase-bundle's own YAML-config credential binding (which has been unreliable for
+  this same reason).
 - **`JWT_SECRET_KEY`/`JWT_PUBLIC_KEY` hold the RAW PEM, not base64.**
   `config/packages/lexik_jwt_authentication.yaml` sets `secret_key: '%env(JWT_SECRET_KEY)%'`, so
   Lexik uses the environment variable *itself* as the key material — it never reads
@@ -182,3 +194,9 @@ it the post-login redirect drops to `http://`.
 The image bakes a crontab (busybox `crond` under supervisord) running `pool-warm.sh` and
 `worldpack-warm.sh` every 6 hours and `leaderboards-generate.sh` every 5 minutes. It runs
 in **every** environment, so the dev stack does the same periodic work as prod.
+
+Also every 1 minute: `docker/messenger-consume.sh` drains the async Messenger transport
+(push notifications — see `src/Service/Notification/PushNotificationService.php`). The
+Doctrine transport's `messenger_messages` table is created by the migration in this repo, not
+by a separate `messenger:setup-transports` deploy step — `MESSENGER_TRANSPORT_DSN`'s
+`auto_setup=1` means it would also self-create on first dispatch if ever missing.

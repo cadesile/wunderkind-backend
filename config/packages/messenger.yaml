@@ -1,0 +1,24 @@
+framework:
+    messenger:
+        # Uncomment this (and the failed transport below) to send failed messages to this transport for later handling.
+        # failure_transport: failed
+
+        transports:
+            # https://symfony.com/doc/current/messenger.html#transport-configuration
+            # `auto_setup=1` on the DSN (.env) creates the Doctrine transport table on first
+            # dispatch — no separate messenger:setup-transports deploy step needed, though it
+            # remains safe (idempotent) to run by hand.
+            async: '%env(MESSENGER_TRANSPORT_DSN)%'
+
+        routing:
+            # Push notifications — see src/Service/Notification/PushNotificationService.php.
+            'App\Message\SendPushNotificationMessage': async
+            'App\Message\ResolveAdminMessageAudienceForPushMessage': async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                # In-memory transport for functional tests — dispatched envelopes are
+                # inspected via InMemoryTransport::getSent() instead of a real consumer.
+                async: 'in-memory://'

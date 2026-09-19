@@ -11,9 +11,11 @@ use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
+use App\Message\SendPushNotificationMessage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Messenger\Envelope;
 
 class CompetitionControllerTest extends WebTestCase
 {
@@ -322,6 +324,91 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(200);
         $this->assertSame('accepted', $this->responseJson()['status']);
         $this->assertSame(2, $this->responseJson()['snapshotVersion']);
+    }
+
+    /**
+     * Each authenticatedRequest() reboots the kernel (see its own docblock), so the in-memory
+     * transport must be read immediately after the request whose dispatch it's proving —
+     * a later request's reboot gives back a fresh, empty transport instance.
+     *
+     * @return list<SendPushNotificationMessage>
+     */
+    private function sentPushMessages(): array
+    {
+        $transport = self::getContainer()->get('messenger.transport.async');
+
+        return array_map(
+            static fn (Envelope $envelope) => $envelope->getMessage(),
+            $transport->getSent(),
+        );
+    }
+
+    public function testNewRegistrantNotifiesExistingEntrantsButNotTheFirstOne(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+
+        $alpha = $this->createClub('Alpha FC');
+        $this->login($alpha);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->validSnapshotPayload((string) $alpha->getId(), $alpha->getName())),
+        );
+        $this->assertResponseStatusCodeSame(201);
+        $this->assertSame([], $this->sentPushMessages(), 'The first registrant has no one to notify.');
+
+        $bravo = $this->createClub('Bravo FC');
+        $this->login($bravo);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->validSnapshotPayload((string) $bravo->getId(), $bravo->getName())),
+        );
+        $this->assertResponseStatusCodeSame(201);
+
+        $messages = $this->sentPushMessages();
+        $this->assertCount(1, $messages);
+        $this->assertSame([(string) $alpha->getUser()->getId()], $messages[0]->userIds);
+        $this->assertSame('NEW_REGISTRANT', $messages[0]->data['type']);
+        $this->assertSame((string) $instance->getId(), $messages[0]->data['competitionId']);
+    }
+
+    public function testCapacityFillAlsoNotifiesEveryEntrantThatTheirRoundIsDrawn(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+
+        $clubs = [
+            $this->createClub('Alpha FC'),
+            $this->createClub('Bravo FC'),
+            $this->createClub('Charlie FC'),
+            $this->createClub('Delta FC'),
+        ];
+
+        foreach ($clubs as $club) {
+            $this->login($club);
+            $this->authenticatedRequest(
+                'POST',
+                "/api/competitions/{$instance->getId()}/register",
+                json_encode($this->validSnapshotPayload((string) $club->getId(), $club->getName())),
+            );
+            $this->assertResponseStatusCodeSame(201);
+        }
+
+        // The 4th (capacity-filling) registration's request fires both the NEW_REGISTRANT
+        // push (to the other 3) and the ROUND_DRAWN push (to all 4, via CompetitionLockService).
+        $messages   = $this->sentPushMessages();
+        $roundDrawn = array_values(array_filter($messages, static fn ($m) => $m->data['type'] === 'ROUND_DRAWN'));
+
+        $this->assertCount(1, $roundDrawn);
+        $this->assertCount(4, $roundDrawn[0]->userIds, 'All 4 entrants placed into round 1 must be notified.');
+
+        $expectedUserIds = array_map(static fn (Club $c) => (string) $c->getUser()->getId(), $clubs);
+        sort($expectedUserIds);
+        $actualUserIds = $roundDrawn[0]->userIds;
+        sort($actualUserIds);
+        $this->assertSame($expectedUserIds, $actualUserIds);
     }
 
     public function testResubmitUnknownClubReturns404NotRegistered(): void

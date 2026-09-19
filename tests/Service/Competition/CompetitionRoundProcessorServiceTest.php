@@ -125,6 +125,35 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
         $this->assertCount(2, $results, 'One CompetitionResult per SF fixture.');
     }
 
+    public function testCompletingARoundNotifiesTheAdvancingWinnersTheirNextRoundIsDrawn(): void
+    {
+        $instance = $this->buildLockedCompetition();
+        $this->backdateRound($instance, 1);
+
+        // buildLockedCompetition() already dispatched its own ROUND_DRAWN push for round 1's
+        // draw — clear that so this only proves the round-1-COMPLETION dispatch below.
+        $transport = self::getContainer()->get('messenger.transport.async');
+        $transport->reset();
+
+        $this->processor->processDueRounds(new \DateTimeImmutable());
+
+        $this->em->refresh($instance);
+        $winners = array_filter(
+            $this->em->getRepository(CompetitionEntrant::class)->findBy(['activeCompetition' => $instance]),
+            fn ($e) => $e->getStatus() === CompetitionEntrantStatus::ACTIVE,
+        );
+
+        $messages   = array_map(static fn ($envelope) => $envelope->getMessage(), $transport->getSent());
+        $roundDrawn = array_values(array_filter($messages, static fn ($m) => $m->data['type'] === 'ROUND_DRAWN'));
+
+        $this->assertCount(1, $roundDrawn);
+        $expectedUserIds = array_map(static fn ($e) => (string) $e->getClub()->getUser()->getId(), $winners);
+        sort($expectedUserIds);
+        $actualUserIds = $roundDrawn[0]->userIds;
+        sort($actualUserIds);
+        $this->assertSame($expectedUserIds, $actualUserIds, 'Only the two advancing winners should be notified, not the eliminated losers.');
+    }
+
     public function testFinalRoundCompletesTheInstanceAndCrownsAWinner(): void
     {
         $instance = $this->buildLockedCompetition(victorPrize: 500000);

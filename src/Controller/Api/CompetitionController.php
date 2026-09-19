@@ -22,6 +22,7 @@ use App\Service\ClubResolver;
 use App\Service\Competition\CompetitionRegistrationService;
 use App\Service\Competition\EligibilityEvaluator;
 use App\Service\Competition\SnapshotValidator;
+use App\Service\Notification\PushNotificationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,6 +51,7 @@ class CompetitionController extends AbstractController
         private readonly EligibilityEvaluator $eligibilityEvaluator,
         private readonly SnapshotValidator $snapshotValidator,
         private readonly CompetitionRegistrationService $registrationService,
+        private readonly PushNotificationService $pushNotificationService,
     ) {}
 
     #[Route('/available', name: 'api_competitions_available', methods: ['GET'])]
@@ -124,6 +126,20 @@ class CompetitionController extends AbstractController
 
         $result  = $this->registrationService->register($activeCompetition, $club, $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->facilities, $dto->clientSnapshotAt));
         $entrant = $result['entrant'];
+
+        if ($result['wasNewRegistration']) {
+            $existingEntrantUserIds = array_values(array_filter(array_map(
+                static fn ($existing) => $existing->getId()->equals($entrant->getId()) ? null : (string) $existing->getClub()->getUser()->getId(),
+                $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition),
+            )));
+
+            $this->pushNotificationService->notifyUsers(
+                $existingEntrantUserIds,
+                'New challenger!',
+                sprintf('%s just joined your competition.', $club->getName()),
+                ['type' => 'NEW_REGISTRANT', 'competitionId' => (string) $activeCompetition->getId()],
+            );
+        }
 
         return $this->json([
             'entrantId'  => (string) $entrant->getId(),

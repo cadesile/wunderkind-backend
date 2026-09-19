@@ -44,3 +44,15 @@ anything time-sensitive.
   them
 - `src/Controller/Admin/CLAUDE.md` — hand-written tribal knowledge: EasyAdmin
   custom-route redirect convention (must go through EasyAdmin's entry point)
+
+## New since the last human-confirmed pass (not yet re-run through
+the questionnaire Q5 Checkpoint — added here for discoverability, not
+claiming canonical status)
+
+- `docs/api/push-notifications.md` (2026-09-19) — API spec for FCM device-token
+  registration and the push-payload contract (`ROUND_DRAWN`,
+  `NEW_REGISTRANT`, `ADMIN_MESSAGE`)
+- `docs/api/competition-registration-snapshot-v2.md` (2026-09-19) — additive
+  snapshot fields for match-engine parity, plus a `MATCH`/`MATCH_NARRATIVE`
+  client-integration section (retiring bundled `narrativeContent.json`,
+  display scoping, impacts-still-apply note)
