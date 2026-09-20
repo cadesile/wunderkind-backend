@@ -232,7 +232,12 @@ migrations are the change log (see `migrations.md`).
   auto-fill every remaining slot with spoof entrants after the delay, so
   a solo tester isn't stuck waiting on real registrants — see
   `CompetitionAutoFillService` in `04_interfaces/output/services.md`.
-  `ManyToMany` → `rewardTemplates` (`JoinTable:
+  `trophyImage:?string` (trophy silhouette slug, e.g. "trophy-3") +
+  `trophyColour:?TrophyColour(enum)` — same shape/columns as `League`'s
+  trophy fields (see `League` above); read live off the template by the
+  API rather than copied onto `ActiveCompetition`, since trophy design is
+  cosmetic, not a live-bracket-integrity concern like `entrantCapacity`/
+  `durationOption`. `ManyToMany` → `rewardTemplates` (`JoinTable:
   competition_template_reward_template`).
 - **`ActiveCompetition`** (table `active_competition`) — one live
   instance of a template. `status:ActiveCompetitionStatus(enum)`,

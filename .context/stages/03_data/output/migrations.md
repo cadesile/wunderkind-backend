@@ -64,10 +64,14 @@ Most recent migrations (chronological):
     `competition_round` — claim-lock for the new `ROUND_STARTING_SOON`
     push (`CompetitionRoundReminderService`), same idiom as
     `locked_for_processing_at`'s round-processing claim-lock.
-15. `Version20260920133550` (most recent) — adds `auto_fill_spoof_entrants`
+15. `Version20260920133550` — adds `auto_fill_spoof_entrants`
     (default false) and `auto_fill_delay_minutes` (default 20) to
     `competition_template` — dev/testing auto-fill, see `entities.md`
     and `CompetitionAutoFillService`.
+16. `Version20260920185614` (most recent) — adds `trophy_image
+    VARCHAR(20)` and `trophy_colour VARCHAR(255)` (both nullable) to
+    `competition_template`, mirroring `league`'s trophy columns — see
+    `entities.md`.
 
 ## Takeaway
 

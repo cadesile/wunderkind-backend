@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Competition\CompetitionTemplate;
 use App\Enum\Competition\CompetitionDuration;
+use App\Enum\TrophyColour;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
@@ -62,6 +63,26 @@ class CompetitionTemplateCrudController extends AbstractCrudController
         yield IntegerField::new('minClubAgeSeasons')->setHelp('Minimum successfully concluded seasons. "Future/advanced" gate — leave at 0 to not enforce.');
         yield IntegerField::new('entryFeePerRound')->setHelp('Pence, e.g. 500 = £5.00. Defined for the schema — not charged in Phase 1.');
         yield IntegerField::new('victorPrize')->setHelp('Pence, e.g. 500000 = £5,000. Synthesized into a reward delivered to the winner — no separate Reward Template needed for this.');
+
+        yield ChoiceField::new('trophyImage', 'Trophy Design')
+            ->setChoices(array_combine(
+                array_map(fn ($n) => "Trophy $n", range(1, 15)),
+                array_map(fn ($n) => "trophy-$n", range(1, 15))
+            ))
+            ->setRequired(false)
+            ->hideOnIndex()
+            ->setHelp('Select the trophy silhouette. A live preview appears below once you choose.');
+
+        yield ChoiceField::new('trophyColour', 'Trophy Colour')
+            ->setFormType(EnumType::class)
+            ->setFormTypeOptions([
+                'class'       => TrophyColour::class,
+                'required'    => false,
+                'placeholder' => '-- Not set --',
+            ])
+            ->setRequired(false)
+            ->hideOnIndex()
+            ->setHelp('Gold, Silver, or Gold & Silver — applied by the frontend when rendering the trophy.');
 
         yield CodeEditorField::new('roundEngineConfigJson', 'Round Engine Config')
             ->setLanguage('js')

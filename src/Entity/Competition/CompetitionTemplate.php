@@ -4,6 +4,7 @@ namespace App\Entity\Competition;
 
 use App\Entity\Concern\EditableJsonColumnTrait;
 use App\Enum\Competition\CompetitionDuration;
+use App\Enum\TrophyColour;
 use App\Repository\Competition\CompetitionTemplateRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -62,6 +63,13 @@ class CompetitionTemplate
     /** Pence. Synthesized into a ledger_delta reward at completion — no RewardTemplate row needed. */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $victorPrize = 0;
+
+    /** Slug of the trophy silhouette, e.g. "trophy-3". Serves /images/trophies/{slug}.svg */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $trophyImage = null;
+
+    #[ORM\Column(type: 'string', enumType: TrophyColour::class, nullable: true)]
+    private ?TrophyColour $trophyColour = null;
 
     /** @var array<string, string>|null Keyed by round label (QF/SF/FINAL/...) -> MatchEngineIdentifier value. */
     #[ORM\Column(type: 'json', nullable: true)]
@@ -163,6 +171,12 @@ class CompetitionTemplate
 
     public function getVictorPrize(): int { return $this->victorPrize; }
     public function setVictorPrize(int $victorPrize): static { $this->victorPrize = $victorPrize; return $this; }
+
+    public function getTrophyImage(): ?string { return $this->trophyImage; }
+    public function setTrophyImage(?string $v): static { $this->trophyImage = $v; return $this; }
+
+    public function getTrophyColour(): ?TrophyColour { return $this->trophyColour; }
+    public function setTrophyColour(?TrophyColour $v): static { $this->trophyColour = $v; return $this; }
 
     public function getRoundEngineConfig(): ?array { return $this->roundEngineConfig; }
     public function setRoundEngineConfig(?array $roundEngineConfig): static { $this->roundEngineConfig = $roundEngineConfig; return $this; }
