@@ -9,6 +9,7 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionResult;
+use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
@@ -76,6 +77,10 @@ class CompetitionController extends AbstractController
                 'registrationOpensAt' => $instance->getRegistrationOpenedAt()->format(DATE_ATOM),
                 'trophyImage'         => $template->getTrophyImage(),
                 'trophyColour'        => $template->getTrophyColour()?->value,
+                'durationOption'      => $instance->getDurationOption()->value,
+                'entryConditions'     => $this->serializeEntryConditions($template),
+                'nextRoundLabel'      => null, // REGISTERING instances have no rounds yet — see ActiveCompetition's class docblock
+                'nextRoundAt'         => null,
             ];
 
             if ($club !== null) {
@@ -235,15 +240,23 @@ class CompetitionController extends AbstractController
             ];
         }
 
+        $currentRound = $this->roundRepository->findCurrentRound($activeCompetition);
+
         return $this->json([
-            'instanceId'   => (string) $activeCompetition->getId(),
-            'templateName' => $activeCompetition->getTemplate()->getName(),
-            'status'       => $activeCompetition->getStatus()->value,
-            'startsAt'     => $activeCompetition->getStartsAt()?->format(DATE_ATOM),
-            'endsAt'       => $activeCompetition->getEndsAt()?->format(DATE_ATOM),
-            'trophyImage'  => $activeCompetition->getTemplate()->getTrophyImage(),
-            'trophyColour' => $activeCompetition->getTemplate()->getTrophyColour()?->value,
-            'rounds'       => $rounds,
+            'instanceId'      => (string) $activeCompetition->getId(),
+            'templateName'    => $activeCompetition->getTemplate()->getName(),
+            'status'          => $activeCompetition->getStatus()->value,
+            'startsAt'        => $activeCompetition->getStartsAt()?->format(DATE_ATOM),
+            'endsAt'          => $activeCompetition->getEndsAt()?->format(DATE_ATOM),
+            'trophyImage'     => $activeCompetition->getTemplate()->getTrophyImage(),
+            'trophyColour'    => $activeCompetition->getTemplate()->getTrophyColour()?->value,
+            'entrantCapacity' => $activeCompetition->getEntrantCapacity(),
+            'registeredCount' => $this->entrantRepository->countForCompetition($activeCompetition),
+            'durationOption'  => $activeCompetition->getDurationOption()->value,
+            'entryConditions' => $this->serializeEntryConditions($activeCompetition->getTemplate()),
+            'nextRoundLabel'  => $currentRound?->getLabel(),
+            'nextRoundAt'     => $currentRound?->getScheduledAt()->format(DATE_ATOM),
+            'rounds'          => $rounds,
         ]);
     }
 
@@ -260,15 +273,32 @@ class CompetitionController extends AbstractController
 
     private function serializeInstanceSummary(ActiveCompetition $instance): array
     {
+        $currentRound = $this->roundRepository->findCurrentRound($instance);
+
         return [
-            'instanceId'   => (string) $instance->getId(),
-            'templateName' => $instance->getTemplate()->getName(),
-            'status'       => $instance->getStatus()->value,
-            'startsAt'     => $instance->getStartsAt()?->format(DATE_ATOM),
-            'endsAt'       => $instance->getEndsAt()?->format(DATE_ATOM),
-            'completedAt'  => $instance->getCompletedAt()?->format(DATE_ATOM),
-            'trophyImage'  => $instance->getTemplate()->getTrophyImage(),
-            'trophyColour' => $instance->getTemplate()->getTrophyColour()?->value,
+            'instanceId'      => (string) $instance->getId(),
+            'templateName'    => $instance->getTemplate()->getName(),
+            'status'          => $instance->getStatus()->value,
+            'startsAt'        => $instance->getStartsAt()?->format(DATE_ATOM),
+            'endsAt'          => $instance->getEndsAt()?->format(DATE_ATOM),
+            'completedAt'     => $instance->getCompletedAt()?->format(DATE_ATOM),
+            'trophyImage'     => $instance->getTemplate()->getTrophyImage(),
+            'trophyColour'    => $instance->getTemplate()->getTrophyColour()?->value,
+            'entrantCapacity' => $instance->getEntrantCapacity(),
+            'registeredCount' => $this->entrantRepository->countForCompetition($instance),
+            'durationOption'  => $instance->getDurationOption()->value,
+            'entryConditions' => $this->serializeEntryConditions($instance->getTemplate()),
+            'nextRoundLabel'  => $currentRound?->getLabel(),
+            'nextRoundAt'     => $currentRound?->getScheduledAt()->format(DATE_ATOM),
+        ];
+    }
+
+    private function serializeEntryConditions(CompetitionTemplate $template): array
+    {
+        return [
+            'minClubReputation' => $template->getMinClubReputation(),
+            'minClubAgeSeasons' => $template->getMinClubAgeSeasons(),
+            'allowedTiers'      => $template->getAllowedTiers(),
         ];
     }
 

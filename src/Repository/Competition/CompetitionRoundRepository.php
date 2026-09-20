@@ -45,6 +45,28 @@ class CompetitionRoundRepository extends ServiceEntityRepository
     }
 
     /**
+     * The round currently in progress or next up (not yet started) — null once every round is
+     * COMPLETED/CANCELLED, or before the bracket has been drawn (a REGISTERING instance has no
+     * rounds yet).
+     */
+    public function findCurrentRound(ActiveCompetition $activeCompetition): ?CompetitionRound
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.activeCompetition = :competition')
+            ->andWhere('r.status IN (:statuses)')
+            ->setParameter('competition', $activeCompetition->getId())
+            ->setParameter('statuses', [
+                CompetitionRoundStatus::PENDING,
+                CompetitionRoundStatus::SCHEDULED,
+                CompetitionRoundStatus::RUNNING,
+            ])
+            ->orderBy('r.roundIndex', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Rounds due for execution — the query the round processor cron runs every tick.
      *
      * @return list<CompetitionRound>

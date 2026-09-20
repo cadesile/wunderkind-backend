@@ -182,6 +182,15 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertCount(1, $body['open']);
         $this->assertSame($template->getName(), $body['open'][0]['templateName']);
         $this->assertArrayNotHasKey('eligibility', $body['open'][0], 'No club context on an anonymous request.');
+
+        $this->assertSame(CompetitionDuration::TEN_HOURS->value, $body['open'][0]['durationOption']);
+        $this->assertSame([
+            'minClubReputation' => 0,
+            'minClubAgeSeasons' => 0,
+            'allowedTiers'      => null,
+        ], $body['open'][0]['entryConditions']);
+        $this->assertNull($body['open'][0]['nextRoundLabel'], 'A REGISTERING instance has no rounds yet.');
+        $this->assertNull($body['open'][0]['nextRoundAt']);
     }
 
     public function testShowIsPublicAndReturns404ForUnknownInstance(): void
@@ -528,6 +537,31 @@ class CompetitionControllerTest extends WebTestCase
         $this->client->request('GET', "/api/competitions/{$instance->getId()}");
         $this->assertResponseStatusCodeSame(200);
         $body = $this->responseJson();
+
+        // Round 1 (SF) just completed and flipped the instance to RUNNING; FINAL is next up.
+        $this->assertSame('running', $body['status']);
+        $this->assertSame(4, $body['entrantCapacity']);
+        $this->assertSame(4, $body['registeredCount']);
+        $this->assertSame(CompetitionDuration::TEN_HOURS->value, $body['durationOption']);
+        $this->assertSame([
+            'minClubReputation' => 0,
+            'minClubAgeSeasons' => 0,
+            'allowedTiers'      => null,
+        ], $body['entryConditions']);
+        $this->assertSame('FINAL', $body['nextRoundLabel']);
+        $this->assertSame($body['rounds'][1]['scheduledAt'], $body['nextRoundAt']);
+
+        // The same instance, now RUNNING, must carry the same new fields via /available.
+        $this->client->request('GET', '/api/competitions/available');
+        $this->assertResponseStatusCodeSame(200);
+        $availableBody = $this->responseJson();
+        $runningEntry  = current(array_filter($availableBody['running'], fn ($r) => $r['instanceId'] === (string) $instance->getId()));
+        $this->assertNotFalse($runningEntry, 'The RUNNING instance must appear in /available\'s running list.');
+        $this->assertSame(4, $runningEntry['entrantCapacity']);
+        $this->assertSame(4, $runningEntry['registeredCount']);
+        $this->assertSame(CompetitionDuration::TEN_HOURS->value, $runningEntry['durationOption']);
+        $this->assertSame('FINAL', $runningEntry['nextRoundLabel']);
+        $this->assertSame($body['nextRoundAt'], $runningEntry['nextRoundAt']);
 
         $round1Fixtures = $body['rounds'][0]['fixtures'];
         $this->assertNotEmpty($round1Fixtures);
