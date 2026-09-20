@@ -34,6 +34,13 @@ services:
       TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID}
       TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET}
       TWITTER_REDIRECT_URI: ${TWITTER_REDIRECT_URI}
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN}
+      # Was missing here entirely — see docker-compose.dev.yml for the full explanation.
+      # Prod only avoided this being visibly broken for MESSENGER_TRANSPORT_DSN because
+      # the image's own baked-in .env default happens to already be the correct value;
+      # FIREBASE_SERVICE_ACCOUNT_JSON's baked default ('{}') is not, so it silently used
+      # the wrong credentials instead of the real PROD_FIREBASE_SERVICE_ACCOUNT_JSON secret.
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
     networks:
       - web
       - default
