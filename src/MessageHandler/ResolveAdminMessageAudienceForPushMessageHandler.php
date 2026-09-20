@@ -32,16 +32,22 @@ class ResolveAdminMessageAudienceForPushMessageHandler
         private readonly PushNotificationService $pushNotificationService,
     ) {}
 
-    public function __invoke(ResolveAdminMessageAudienceForPushMessage $message): void
+    /**
+     * Returns the resolved recipient count — Messenger wraps a handler's return value in a
+     * `HandledStamp`, which `NotificationLoggingSubscriber` reads to tell "resolved 0 recipients
+     * and did nothing" apart from "actually dispatched pushes" in the admin's Notification Log,
+     * since both look identical as a bare `WorkerMessageHandledEvent` otherwise.
+     */
+    public function __invoke(ResolveAdminMessageAudienceForPushMessage $message): int
     {
         $adminMessage = $this->messageRepository->find($message->adminMessageId);
         if ($adminMessage === null || !$adminMessage->isActive()) {
-            return;
+            return 0;
         }
 
         $userIds = $this->resolveEligibleUserIds($adminMessage);
         if ($userIds === []) {
-            return;
+            return 0;
         }
 
         $title = $adminMessage->getTitle();
@@ -51,6 +57,8 @@ class ResolveAdminMessageAudienceForPushMessageHandler
         foreach (array_chunk($userIds, self::CHUNK_SIZE) as $chunk) {
             $this->pushNotificationService->notifyUsers($chunk, $title, $body, $data);
         }
+
+        return count($userIds);
     }
 
     /** @return list<string> */
