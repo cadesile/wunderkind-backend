@@ -100,6 +100,15 @@ class CompetitionController extends AbstractController
         ]);
     }
 
+    /** Locked-full, not-yet-completed instances — same per-item shape as available()'s running/recentlyCompleted rows. */
+    #[Route('/active', name: 'api_competitions_active', methods: ['GET'])]
+    public function active(): JsonResponse
+    {
+        return $this->json([
+            'active' => array_map($this->serializeInstanceSummary(...), $this->activeCompetitionRepository->findActive()),
+        ]);
+    }
+
     #[Route('/{id}/register', name: 'api_competitions_register', methods: ['POST'])]
     #[IsGranted('ROLE_CLUB')]
     public function register(string $id, #[MapRequestPayload] CompetitionRegisterRequest $dto): JsonResponse

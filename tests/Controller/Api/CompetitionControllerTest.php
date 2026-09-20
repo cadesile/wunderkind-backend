@@ -193,6 +193,70 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertNull($body['open'][0]['nextRoundAt']);
     }
 
+    public function testActiveExcludesOpenIncludesLockedAndExcludesCompleted(): void
+    {
+        // Still REGISTERING (not full) — must never appear in /active.
+        $openTemplate = $this->createTemplate(capacity: 4);
+        $this->createOpenInstance($openTemplate);
+
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+        $clubs    = [
+            $this->createClub('Alpha FC'),
+            $this->createClub('Bravo FC'),
+            $this->createClub('Charlie FC'),
+            $this->createClub('Delta FC'),
+        ];
+        foreach ($clubs as $club) {
+            $this->login($club);
+            $this->authenticatedRequest(
+                'POST',
+                "/api/competitions/{$instance->getId()}/register",
+                json_encode($this->validSnapshotPayload((string) $club->getId(), $club->getName())),
+            );
+            $this->assertResponseStatusCodeSame(201);
+        }
+
+        $this->client->request('GET', '/api/competitions/active');
+        $this->assertResponseStatusCodeSame(200);
+        $body = $this->responseJson();
+
+        $this->assertCount(1, $body['active'], 'Only the filled (SCHEDULED) instance should appear — the still-open one is not full.');
+        $activeEntry = $body['active'][0];
+        $this->assertSame((string) $instance->getId(), $activeEntry['instanceId']);
+        $this->assertSame('scheduled', $activeEntry['status']);
+        $this->assertSame(4, $activeEntry['entrantCapacity']);
+        $this->assertSame(4, $activeEntry['registeredCount']);
+        $this->assertSame(CompetitionDuration::TEN_HOURS->value, $activeEntry['durationOption']);
+        $this->assertArrayHasKey('entryConditions', $activeEntry);
+        $this->assertArrayHasKey('trophyImage', $activeEntry);
+        $this->assertArrayHasKey('trophyColour', $activeEntry);
+
+        // Process both rounds to completion (4-capacity -> [SF, FINAL]) and confirm the
+        // instance drops out of /active once it's COMPLETED, despite still being "full".
+        // The GET above reboots the kernel (KernelBrowser's default per-request behavior), so
+        // $this->em must be refreshed before resuming direct entity manipulation — same reason
+        // authenticatedRequest() re-fetches it after every request.
+        $this->em  = self::getContainer()->get(EntityManagerInterface::class);
+        $processor = self::getContainer()->get(\App\Service\Competition\CompetitionRoundProcessorService::class);
+        for ($i = 0; $i < 2; $i++) {
+            $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+            $round    = $this->em->getRepository(\App\Entity\Competition\CompetitionRound::class)
+                ->findByCompetitionOrderedByIndex($instance)[$i];
+            $round->setScheduledAt(new \DateTimeImmutable('-1 minute'));
+            $this->em->flush();
+            $processed = $processor->processDueRounds(new \DateTimeImmutable());
+            $this->assertGreaterThan(0, $processed);
+        }
+
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+        $this->assertSame(ActiveCompetitionStatus::COMPLETED, $instance->getStatus());
+
+        $this->client->request('GET', '/api/competitions/active');
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame([], $this->responseJson()['active'], 'A COMPLETED instance must not appear in /active.');
+    }
+
     public function testShowIsPublicAndReturns404ForUnknownInstance(): void
     {
         $this->client->request('GET', '/api/competitions/00000000-0000-0000-0000-000000000000');
