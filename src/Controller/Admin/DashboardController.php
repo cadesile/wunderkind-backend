@@ -1314,67 +1314,80 @@ class DashboardController extends AbstractDashboardController
     public function configureMenuItems(): iterable
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
-        yield MenuItem::section('Users & Clubs');
-        yield MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users');
-        yield MenuItem::linkTo(ClubCrudController::class, 'Clubs', 'fa fa-school');
-        yield MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield');
-        yield MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text');
-        yield MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash');
-        yield MenuItem::section('Competitions');
-        yield MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy');
-        yield MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift');
-        yield MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered');
-        yield MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol');
-        yield MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro');
-        yield MenuItem::section('Sync & Leaderboards');
-        yield MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate');
-        yield MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy');
-        yield MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check');
-        yield MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera');
-        yield MenuItem::section('Roster');
-        yield MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running');
-        yield MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-users');
-        yield MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars');
-        yield MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake');
-        yield MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users');
-        yield MenuItem::section('Narrative');
-        yield MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll');
-        yield MenuItem::linkToRoute('Facility Templates', 'fa fa-building', 'admin_facilities_overview');
-        yield MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater');
-        yield MenuItem::linkTo(ExcursionCrudController::class, 'Excursions', 'fa fa-bus');
-        yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content');
-        yield MenuItem::section('Configuration');
-        yield MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config');
-        yield MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config');
-        yield MenuItem::linkToRoute('Player Pool Config', 'fa fa-person-running', 'admin_player_pool_config');
-        yield MenuItem::linkToRoute('Staff Pool Config', 'fa fa-users', 'admin_staff_pool_config');
-        yield MenuItem::linkToRoute('Investor Pool Config', 'fa fa-handshake', 'admin_investor_pool_config');
-        yield MenuItem::linkToRoute('Worldpack Cache', 'fa fa-database', 'admin_worldpack_cache');
-        yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content');
-        yield MenuItem::section('System');
-        yield MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links');
-        yield MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings');
-        yield MenuItem::linkToRoute('Telemetry Config', 'fa fa-tower-broadcast', 'admin_telemetry_config');
-        yield MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs');
-        yield MenuItem::section('Messaging');
-        yield MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn');
-        yield MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group');
-        yield MenuItem::section('Notifications');
-        yield MenuItem::linkTo(NotificationLogCrudController::class, 'Notification Logs', 'fa fa-bell');
-        yield MenuItem::linkToRoute('Debug Tools', 'fa fa-bug', 'admin_notification_debug');
-        yield MenuItem::section('Social');
-        yield MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post Templates', 'fa fa-file-signature');
-        yield MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections');
-        yield MenuItem::section('Market');
-        yield MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line');
-        yield MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star');
-        yield MenuItem::section('Clubs & Leagues');
-        yield MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview');
-        yield MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved');
-        yield MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy');
-        yield MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board');
-        yield MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content');
-        yield MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content');
+
+        yield MenuItem::subMenu('Users & Clubs', 'fa fa-users')->setSubItems([
+            MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users'),
+            MenuItem::linkTo(ClubCrudController::class, 'Clubs', 'fa fa-school'),
+            MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield'),
+            MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text'),
+            MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash'),
+        ]);
+        yield MenuItem::subMenu('Competitions', 'fa fa-trophy')->setSubItems([
+            MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy'),
+            MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift'),
+            MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered'),
+            MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol'),
+            MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro'),
+        ]);
+        yield MenuItem::subMenu('Sync & Leaderboards', 'fa fa-rotate')->setSubItems([
+            MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate'),
+            MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy'),
+            MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check'),
+            MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera'),
+        ]);
+        yield MenuItem::subMenu('Roster', 'fa fa-person-running')->setSubItems([
+            MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running'),
+            MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-users'),
+            MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars'),
+            MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake'),
+            MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users'),
+        ]);
+        yield MenuItem::subMenu('Narrative', 'fa fa-scroll')->setSubItems([
+            MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll'),
+            MenuItem::linkToRoute('Facility Templates', 'fa fa-building', 'admin_facilities_overview'),
+            MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater'),
+            MenuItem::linkTo(ExcursionCrudController::class, 'Excursions', 'fa fa-bus'),
+            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content'),
+        ]);
+        yield MenuItem::subMenu('Configuration', 'fa fa-sliders')->setSubItems([
+            MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config'),
+            MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config'),
+            MenuItem::linkToRoute('Player Pool Config', 'fa fa-person-running', 'admin_player_pool_config'),
+            MenuItem::linkToRoute('Staff Pool Config', 'fa fa-users', 'admin_staff_pool_config'),
+            MenuItem::linkToRoute('Investor Pool Config', 'fa fa-handshake', 'admin_investor_pool_config'),
+            MenuItem::linkToRoute('Worldpack Cache', 'fa fa-database', 'admin_worldpack_cache'),
+            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content'),
+        ]);
+        yield MenuItem::subMenu('System', 'fa fa-gear')->setSubItems([
+            MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links'),
+            MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings'),
+            MenuItem::linkToRoute('Telemetry Config', 'fa fa-tower-broadcast', 'admin_telemetry_config'),
+            MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs'),
+        ]);
+        yield MenuItem::subMenu('Messaging', 'fa fa-bullhorn')->setSubItems([
+            MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn'),
+            MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group'),
+        ]);
+        yield MenuItem::subMenu('Notifications', 'fa fa-bell')->setSubItems([
+            MenuItem::linkTo(NotificationLogCrudController::class, 'Notification Logs', 'fa fa-bell'),
+            MenuItem::linkToRoute('Debug Tools', 'fa fa-bug', 'admin_notification_debug'),
+        ]);
+        yield MenuItem::subMenu('Social', 'fa fa-share-nodes')->setSubItems([
+            MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post Templates', 'fa fa-file-signature'),
+            MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections'),
+        ]);
+        yield MenuItem::subMenu('Market', 'fa fa-chart-line')->setSubItems([
+            MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line'),
+            MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star'),
+        ]);
+        yield MenuItem::subMenu('Clubs & Leagues', 'fa fa-table-list')->setSubItems([
+            MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview'),
+            MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved'),
+            MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy'),
+            MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board'),
+            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content'),
+            MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content'),
+        ]);
     }
 
 }
