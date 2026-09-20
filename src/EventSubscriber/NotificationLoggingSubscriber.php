@@ -12,6 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
+use Symfony\Component\Messenger\Stamp\HandledStamp;
 
 /**
  * Persists one `NotificationLog` row per push-related Messenger message actually processed —
@@ -49,11 +50,29 @@ final class NotificationLoggingSubscriber implements EventSubscriberInterface
             return;
         }
 
+        $detail = $this->detailFor($message);
+        $summary = $this->summaryFor($message);
+
+        if ($message instanceof ResolveAdminMessageAudienceForPushMessage) {
+            // The handler returns the resolved recipient count precisely so this can tell
+            // "resolved 0 recipients, dispatched nothing" apart from "actually dispatched
+            // pushes" — both fire an identical WorkerMessageHandledEvent otherwise, which is
+            // exactly what made a real "no device was ever registered for this club" case look
+            // indistinguishable from a genuine successful send in the admin's Notification Log.
+            $resolvedCount = $event->getEnvelope()->last(HandledStamp::class)?->getResult();
+            if (is_int($resolvedCount)) {
+                $detail['resolvedRecipientCount'] = $resolvedCount;
+                $summary = $resolvedCount === 0
+                    ? sprintf('%s — 0 eligible recipients found, no push dispatched', $summary)
+                    : sprintf('%s — %d recipient(s)', $summary, $resolvedCount);
+            }
+        }
+
         $this->persist(new NotificationLog(
             NotificationLogStatus::SUCCESS,
             $this->shortClassName($message),
-            $this->summaryFor($message),
-            $this->detailFor($message),
+            $summary,
+            $detail,
         ));
     }
 

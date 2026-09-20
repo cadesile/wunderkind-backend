@@ -101,6 +101,43 @@ class NotificationLoggingSubscriberTest extends KernelTestCase
         self::assertStringContainsString('admin-message-42', $log->getSummary());
     }
 
+    /**
+     * Regression test for a real incident: an admin created a broadcast, saw "success" in the
+     * Notification Log, but no device ever received it. The handler had silently resolved 0
+     * eligible recipients (no club had a registered device) and returned early — a case that
+     * looked identical to an actual successful dispatch until the handler started returning its
+     * resolved count via a HandledStamp for this subscriber to surface.
+     */
+    public function testResolveAdminMessageAudienceWithZeroRecipientsIsFlaggedInTheSummary(): void
+    {
+        $message  = new ResolveAdminMessageAudienceForPushMessage('admin-message-zero');
+        $envelope = (new Envelope($message))->with(new \Symfony\Component\Messenger\Stamp\HandledStamp(0, 'handler'));
+        $event    = new WorkerMessageHandledEvent($envelope, 'async');
+
+        $this->subscriber->onMessageHandled($event);
+
+        $log = $this->latestLogFor($message);
+        $this->cleanup[] = (string) $log->getId();
+
+        self::assertStringContainsString('0 eligible recipients found, no push dispatched', $log->getSummary());
+        self::assertSame(0, $log->getDetailJson()['resolvedRecipientCount']);
+    }
+
+    public function testResolveAdminMessageAudienceWithRecipientsReportsTheCountInTheSummary(): void
+    {
+        $message  = new ResolveAdminMessageAudienceForPushMessage('admin-message-three');
+        $envelope = (new Envelope($message))->with(new \Symfony\Component\Messenger\Stamp\HandledStamp(3, 'handler'));
+        $event    = new WorkerMessageHandledEvent($envelope, 'async');
+
+        $this->subscriber->onMessageHandled($event);
+
+        $log = $this->latestLogFor($message);
+        $this->cleanup[] = (string) $log->getId();
+
+        self::assertStringContainsString('3 recipient(s)', $log->getSummary());
+        self::assertSame(3, $log->getDetailJson()['resolvedRecipientCount']);
+    }
+
     public function testUnrelatedMessageTypesAreNotLogged(): void
     {
         $before  = $this->repo->count([]);
