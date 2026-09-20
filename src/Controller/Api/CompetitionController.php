@@ -74,6 +74,8 @@ class CompetitionController extends AbstractController
                 'registeredCount'     => $this->entrantRepository->countForCompetition($instance),
                 'status'              => $instance->getStatus()->value,
                 'registrationOpensAt' => $instance->getRegistrationOpenedAt()->format(DATE_ATOM),
+                'trophyImage'         => $template->getTrophyImage(),
+                'trophyColour'        => $template->getTrophyColour()?->value,
             ];
 
             if ($club !== null) {
@@ -239,6 +241,8 @@ class CompetitionController extends AbstractController
             'status'       => $activeCompetition->getStatus()->value,
             'startsAt'     => $activeCompetition->getStartsAt()?->format(DATE_ATOM),
             'endsAt'       => $activeCompetition->getEndsAt()?->format(DATE_ATOM),
+            'trophyImage'  => $activeCompetition->getTemplate()->getTrophyImage(),
+            'trophyColour' => $activeCompetition->getTemplate()->getTrophyColour()?->value,
             'rounds'       => $rounds,
         ]);
     }
@@ -263,6 +267,8 @@ class CompetitionController extends AbstractController
             'startsAt'     => $instance->getStartsAt()?->format(DATE_ATOM),
             'endsAt'       => $instance->getEndsAt()?->format(DATE_ATOM),
             'completedAt'  => $instance->getCompletedAt()?->format(DATE_ATOM),
+            'trophyImage'  => $instance->getTemplate()->getTrophyImage(),
+            'trophyColour' => $instance->getTemplate()->getTrophyColour()?->value,
         ];
     }
 
