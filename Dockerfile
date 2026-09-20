@@ -37,6 +37,7 @@ COPY docker/telemetry-generate.sh /usr/local/bin/telemetry-generate.sh
 COPY docker/competition-provision-instances.sh /usr/local/bin/competition-provision-instances.sh
 COPY docker/competition-process-rounds.sh /usr/local/bin/competition-process-rounds.sh
 COPY docker/competition-send-round-reminders.sh /usr/local/bin/competition-send-round-reminders.sh
+COPY docker/competition-auto-fill-spoof-entrants.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh
 COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
@@ -62,6 +63,11 @@ COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 #     for any CompetitionRound due within its 15-minute reminder lead time (see
 #     CompetitionRoundReminderService). Slack in the lead time means this doesn't
 #     need process-rounds' 1-minute cadence.
+#   every 1 min — competition-auto-fill-spoof-entrants: dev/testing convenience —
+#     fills any REGISTERING instance whose template opted in
+#     (CompetitionTemplate::$autoFillSpoofEntrants) with spoof entrants once its
+#     configured delay (minimum 5 min) has passed since the first real entrant
+#     registered, so a solo tester isn't stuck waiting on a full bracket.
 #   every 1 min — messenger-consume: drains the async Messenger transport (push
 #     notifications + admin-broadcast push-audience resolution). Same tight
 #     cadence as competition-process-rounds since a delayed push is a stale one.
@@ -76,11 +82,12 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/10 * * * * /usr/local/bin/competition-provision-instances.sh >> /var/log/competition-provision-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/competition-process-rounds.sh      >> /var/log/competition-process-cron.log   2>&1' \
     '*/5 * * * *  /usr/local/bin/competition-send-round-reminders.sh >> /var/log/competition-reminders-cron.log 2>&1' \
+    '* * * * *    /usr/local/bin/competition-auto-fill-spoof-entrants.sh >> /var/log/competition-auto-fill-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/messenger-consume.sh               >> /var/log/messenger-consume-cron.log     2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-process-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/messenger-consume.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-process-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

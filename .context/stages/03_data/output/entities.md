@@ -225,7 +225,13 @@ migrations are the change log (see `migrations.md`).
 - **`CompetitionTemplate`** — a competition's static rules. `name/slug`,
   `entrantCapacity`, `durationOption:CompetitionDuration(enum)`,
   `allowedTiers:?array`, `minClubReputation/minClubAgeSeasons/
-  entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`.
+  entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`,
+  `autoFillSpoofEntrants:bool` (default false) + `autoFillDelayMinutes:int`
+  (default 20, one of `ALLOWED_AUTO_FILL_DELAY_MINUTES` = [5,10,20,30,60])
+  — dev/testing convenience: once an instance's first entrant registers,
+  auto-fill every remaining slot with spoof entrants after the delay, so
+  a solo tester isn't stuck waiting on real registrants — see
+  `CompetitionAutoFillService` in `04_interfaces/output/services.md`.
   `ManyToMany` → `rewardTemplates` (`JoinTable:
   competition_template_reward_template`).
 - **`ActiveCompetition`** (table `active_competition`) — one live

@@ -68,9 +68,21 @@ filename alone.
   `CompetitionRoundProcessorService::claimRound()` (a `reminderSentAt`
   column on `CompetitionRound`), kept as a fully separate service so a
   reminder bug can't threaten bracket-processing correctness.
+- **`Competition/CompetitionAutoFillService`** — dev/testing convenience:
+  once an instance has at least one entrant and its template opted in
+  (`CompetitionTemplate::$autoFillSpoofEntrants`), fills every remaining
+  slot with spoof entrants a configurable delay (5/10/20/30/60 min,
+  `$autoFillDelayMinutes`) after that first entrant's `registeredAt`, via
+  the `app:competition:auto-fill-spoof-entrants` command (every 1 min —
+  the finest delay is 5 min). Delegates the actual fill to
+  `CompetitionSpoofEntrantService::spoofAllEntrants()`, so a filled
+  instance auto-locks/draws round 1 exactly like a genuinely full house.
+  No separate "already filled" flag — an instance that reaches capacity
+  stops being `REGISTERING` and so naturally drops out of eligibility.
 - **`Competition/CompetitionSpoofEntrantService`** — admin-only override
   that calls `CompetitionRegistrationService::register()` directly,
-  bypassing HTTP/JWT/eligibility checks.
+  bypassing HTTP/JWT/eligibility checks. `spoofAllEntrants()` is also the
+  engine behind `CompetitionAutoFillService` above.
 - **`Competition/EligibilityEvaluator`** — evaluates every competition
   eligibility rule with no short-circuit, so all blocking reasons are
   reported at once. Also drives `NEW_COMPETITION_OPEN`'s audience filter

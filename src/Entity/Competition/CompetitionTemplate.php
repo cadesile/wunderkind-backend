@@ -25,6 +25,9 @@ class CompetitionTemplate
 
     public const ALLOWED_ENTRANT_CAPACITIES = [4, 8, 16, 32, 64];
 
+    /** Minutes after the first entrant registers before auto-fill kicks in — see $autoFillSpoofEntrants. */
+    public const ALLOWED_AUTO_FILL_DELAY_MINUTES = [5, 10, 20, 30, 60];
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
@@ -71,6 +74,21 @@ class CompetitionTemplate
 
     #[ORM\Column(options: ['default' => true])]
     private bool $isActive = true;
+
+    /**
+     * Dev/testing convenience: once the first entrant registers into an instance of this
+     * template, automatically fill every remaining slot with spoof entrants (cloned from
+     * that first entrant) after $autoFillDelayMinutes — so a solo tester isn't stuck waiting
+     * on real registrants to fill a bracket. Filling to capacity triggers the exact same
+     * auto-lock/round-1-draw path a real full house would (CompetitionRegistrationService::
+     * register()), so from that point on an auto-filled instance behaves identically to a
+     * genuinely full one. See CompetitionAutoFillService.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $autoFillSpoofEntrants = false;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => 15])]
+    private int $autoFillDelayMinutes = 20;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
@@ -200,6 +218,12 @@ class CompetitionTemplate
     public function isActive(): bool { return $this->isActive; }
     public function setIsActive(bool $isActive): static { $this->isActive = $isActive; return $this; }
 
+    public function isAutoFillSpoofEntrants(): bool { return $this->autoFillSpoofEntrants; }
+    public function setAutoFillSpoofEntrants(bool $autoFillSpoofEntrants): static { $this->autoFillSpoofEntrants = $autoFillSpoofEntrants; return $this; }
+
+    public function getAutoFillDelayMinutes(): int { return $this->autoFillDelayMinutes; }
+    public function setAutoFillDelayMinutes(int $autoFillDelayMinutes): static { $this->autoFillDelayMinutes = $autoFillDelayMinutes; return $this; }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 
@@ -214,6 +238,11 @@ class CompetitionTemplate
         }
         if ($this->minClubReputation < 0 || $this->minClubReputation > 100) {
             throw new \InvalidArgumentException('minClubReputation must be between 0 and 100');
+        }
+        if (!in_array($this->autoFillDelayMinutes, self::ALLOWED_AUTO_FILL_DELAY_MINUTES, true)) {
+            throw new \InvalidArgumentException(
+                'autoFillDelayMinutes must be one of: ' . implode(', ', self::ALLOWED_AUTO_FILL_DELAY_MINUTES)
+            );
         }
         $this->updatedAt = new \DateTimeImmutable();
     }

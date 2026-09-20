@@ -102,4 +102,42 @@ class SendPushNotificationMessageHandlerTest extends TestCase
         $handler = new SendPushNotificationMessageHandler($messaging, $deviceRepository, $em);
         $handler(new SendPushNotificationMessage(['user-1'], 'Title', 'Body'));
     }
+
+    /**
+     * Regression test: without an explicit per-message collapse key, FCM defaults to
+     * collapsing on the app's own package/bundle id — meaning every push this app ever sends
+     * would share one collapse slot regardless of type or which specific event it's about. A
+     * device offline when two unrelated pushes queue up would then only ever receive the
+     * later one. Two distinct events (different fixtureId) must get distinct collapse keys;
+     * the exact same event dispatched twice may legitimately collapse.
+     */
+    public function testDistinctEventsGetDistinctCollapseKeys(): void
+    {
+        $deviceRepository = $this->createMock(UserDeviceRepository::class);
+        $deviceRepository->method('findByUserIds')->willReturn([$this->makeDevice('token')]);
+
+        $sentMessages = [];
+        $messaging    = $this->createMock(Messaging::class);
+        $messaging->method('sendMulticast')->willReturnCallback(function (CloudMessage $message) use (&$sentMessages) {
+            $sentMessages[] = $message;
+
+            return MulticastSendReport::withItems([SendReport::success(MessageTarget::with('token', 'token'), [])]);
+        });
+
+        $em     = $this->createMock(EntityManagerInterface::class);
+        $handler = new SendPushNotificationMessageHandler($messaging, $deviceRepository, $em);
+
+        $handler(new SendPushNotificationMessage(['user-1'], 'Full-time!', 'Home 1-0 Away', ['type' => 'MATCH_RESULT', 'fixtureId' => 'fixture-1']));
+        $handler(new SendPushNotificationMessage(['user-1'], 'Full-time!', 'Home 2-1 Away', ['type' => 'MATCH_RESULT', 'fixtureId' => 'fixture-2']));
+        $handler(new SendPushNotificationMessage(['user-1'], 'Full-time!', 'Home 1-0 Away', ['type' => 'MATCH_RESULT', 'fixtureId' => 'fixture-1']));
+
+        $collapseKeys = array_map(
+            static fn (CloudMessage $m) => $m->jsonSerialize()['android']['collapse_key'],
+            $sentMessages,
+        );
+
+        $this->assertNotSame($collapseKeys[0], $collapseKeys[1], 'Two different fixtures must not collapse each other.');
+        $this->assertSame($collapseKeys[0], $collapseKeys[2], 'The exact same event may legitimately share a collapse key.');
+        $this->assertLessThanOrEqual(64, strlen($collapseKeys[0]), 'apns-collapse-id is capped at 64 bytes by Apple.');
+    }
 }

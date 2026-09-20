@@ -34,7 +34,13 @@ class NotificationLogCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW, Action::EDIT, Action::DELETE);
+        // DETAIL isn't a default index-page row action here — EasyAdmin only auto-adds
+        // EDIT/DELETE, and disabling those (this is a read-only audit log) leaves the actions
+        // column empty rather than falling back to DETAIL, so it must be added explicitly for
+        // setDefaultRowAction(Action::DETAIL) below (configureCrud()) to have anything to find.
+        return $actions
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE);
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -43,7 +49,11 @@ class NotificationLogCrudController extends AbstractCrudController
             ->setEntityLabelInSingular('Notification Log')
             ->setEntityLabelInPlural('Notification Logs')
             ->setDefaultSort(['createdAt' => 'DESC'])
-            ->setHelp('index', 'Audit trail for every push-notification message the async Messenger transport has processed, success or failure. Filter by status "Failed" to find sends that need attention.');
+            // EasyAdmin's row-click-to-navigate is opt-in, not automatic just because DETAIL is
+            // enabled — without this, clicking a row does nothing, which is exactly why the
+            // index's compact "Payload" column (necessarily truncated) looked like a dead end.
+            ->setDefaultRowAction(Action::DETAIL)
+            ->setHelp('index', 'Audit trail for every push-notification message the async Messenger transport has processed, success or failure. Filter by status "Failed" to find sends that need attention. Click a row to see its full payload.');
     }
 
     public function configureFilters(Filters $filters): Filters
