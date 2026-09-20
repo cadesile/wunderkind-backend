@@ -21,6 +21,7 @@ framework:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
             'App\Message\SendPushNotificationMessage': async
             'App\Message\ResolveAdminMessageAudienceForPushMessage': async
+            'App\Message\ResolveNewCompetitionAudienceForPushMessage': async
 
 when@test:
     framework:

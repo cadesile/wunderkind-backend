@@ -248,8 +248,11 @@ migrations are the change log (see `migrations.md`).
   competition. `roundIndex`, `label`,
   `status:CompetitionRoundStatus(enum)`, `scheduledAt`, `startedAt/
   completedAt`, `matchEngineIdentifier:?MatchEngineIdentifier(enum)`,
-  `lockedForProcessingAt`. `ManyToOne` → `activeCompetition` (not
-  nullable, `CASCADE`).
+  `lockedForProcessingAt` (claim-lock for round processing),
+  `reminderSentAt` (claim-lock for the separate `ROUND_STARTING_SOON`
+  push — see `CompetitionRoundReminderService` in `04_interfaces/output/
+  services.md`). `ManyToOne` → `activeCompetition` (not nullable,
+  `CASCADE`).
 - **`CompetitionFixture`** (table `competition_fixture`) — one matchup
   within a round. `slotIndex`, `status:CompetitionFixtureStatus(enum)`,
   `processedAt`. `ManyToOne` → `round` (not nullable, `CASCADE`);

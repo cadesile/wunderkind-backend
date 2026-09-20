@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Message\ResolveNewCompetitionAudienceForPushMessage;
 use App\Repository\Competition\CompetitionTemplateRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -9,6 +10,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\UuidV7;
 
 /**
@@ -30,6 +32,7 @@ class CompetitionProvisionInstancesCommand extends Command
     public function __construct(
         private readonly CompetitionTemplateRepository $templateRepository,
         private readonly EntityManagerInterface $em,
+        private readonly MessageBusInterface $messageBus,
     ) {
         parent::__construct();
     }
@@ -61,6 +64,7 @@ class CompetitionProvisionInstancesCommand extends Command
             if ($affected > 0) {
                 $provisioned++;
                 $io->writeln("Provisioned instance for template: {$template->getName()}");
+                $this->messageBus->dispatch(new ResolveNewCompetitionAudienceForPushMessage($id->toRfc4122()));
             }
         }
 

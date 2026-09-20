@@ -55,13 +55,28 @@ filename alone.
   `app:competition:process-rounds` command (runs every 1 minute via cron
   — see `02_architecture/output/structure.md`). Sends a
   `PushNotificationService` "next round drawn" push to advancing winners
-  each time a round completes and the next round's fixtures are seeded.
+  each time a round completes and the next round's fixtures are seeded;
+  a personalized `MATCH_RESULT` push per side (winner "Victory!" / loser
+  "Eliminated", same `data` payload either way) for every fixture
+  resolved; and, when the final round completes, a `COMPETITION_COMPLETED`
+  push to the champion(s) (`result: "WON"`) and the final's loser(s)
+  (`result: "RUNNER_UP"`) — see `finalizeRound()`.
+- **`Competition/CompetitionRoundReminderService`** — sends a
+  `ROUND_STARTING_SOON` push to a round's actual participants 15 minutes
+  before its `scheduledAt`, via the `app:competition:send-round-reminders`
+  command (every 5 min). Same atomic-UPDATE claim-lock idiom as
+  `CompetitionRoundProcessorService::claimRound()` (a `reminderSentAt`
+  column on `CompetitionRound`), kept as a fully separate service so a
+  reminder bug can't threaten bracket-processing correctness.
 - **`Competition/CompetitionSpoofEntrantService`** — admin-only override
   that calls `CompetitionRegistrationService::register()` directly,
   bypassing HTTP/JWT/eligibility checks.
 - **`Competition/EligibilityEvaluator`** — evaluates every competition
   eligibility rule with no short-circuit, so all blocking reasons are
-  reported at once.
+  reported at once. Also drives `NEW_COMPETITION_OPEN`'s audience filter
+  (`ResolveNewCompetitionAudienceForPushMessageHandler`) — only clubs that
+  would actually be allowed to register for a newly-opened instance are
+  notified.
 - **`Competition/EligibilityResult`** — value object carrying every
   blocking reason for register/available endpoints.
 - **`Competition/RewardApplierService`** — applies competition rewards to
@@ -149,8 +164,10 @@ filename alone.
   unknown/invalid.
 - **`EventSubscriber/NotificationLoggingSubscriber`** — listens to
   Messenger's `WorkerMessageHandledEvent`/`WorkerMessageFailedEvent`
-  (filtered to `SendPushNotificationMessage`/
-  `ResolveAdminMessageAudienceForPushMessage`), persisting one
+  (filtered to `SendPushNotificationMessage` and any
+  `App\Message\AudienceResolutionMessage` — currently
+  `ResolveAdminMessageAudienceForPushMessage` and
+  `ResolveNewCompetitionAudienceForPushMessage`), persisting one
   `NotificationLog` row per message actually processed. Deliberately the
   *only* place this is logged — not the handlers — since this event pair
   is the one place that uniformly catches both a handler's own thrown
@@ -159,7 +176,12 @@ filename alone.
   `FIREBASE_SERVICE_ACCOUNT_JSON` is missing/malformed — a real incident
   this subscriber exists to make visible; previously such a failure
   discarded the message with zero trace, since
-  `config/packages/messenger.yaml` had no `failure_transport`).
+  `config/packages/messenger.yaml` had no `failure_transport`). For an
+  `AudienceResolutionMessage`, the handler's return value (the resolved
+  recipient count) is read back via Messenger's `HandledStamp` and folded
+  into the log summary — another real incident (an admin broadcast logged
+  "success" with 0 actual recipients, indistinguishable from a genuine
+  send, because 0 registered devices existed) this exists to make visible.
 - **`Notification/FirebaseConnectionValidator`** — "is Firebase actually
   configured correctly right now," for the admin debug page
   (`NotificationDebugController`). Two tiers: (1) structural — does
@@ -175,6 +197,17 @@ filename alone.
   `SendPushNotificationMessage`s. Only fires once per message
   (`AdminMessage::$pushSentAt` guards re-sends), dispatched from
   `AdminMessageCrudController::persistEntity()`/`updateEntity()`.
+  Implements `App\Message\AudienceResolutionMessage` (shared with
+  `ResolveNewCompetitionAudienceForPushMessage` below) so
+  `NotificationLoggingSubscriber` can log both uniformly.
+- **`MessageHandler/ResolveNewCompetitionAudienceForPushMessageHandler`**
+  — the `NEW_COMPETITION_OPEN` counterpart, dispatched from
+  `app:competition:provision-instances` only when it actually creates a
+  new instance (not on every tick that finds one still open). Same
+  broadcast-to-every-device-holding-club shape as the AdminMessage
+  handler, but filtered by `EligibilityEvaluator::evaluate()` (the
+  template's own fixed entry constraints) instead of an arbitrary
+  `AudienceGroup` criteria bag.
 - **`NpcClubGenerationService`** — generates NPC clubs using
   `FacilityTemplateRepository`, `GameConfigRepository`, `LeagueService`.
 - **`PeriodResolver`** — resolves stats time-period filters

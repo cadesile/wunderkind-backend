@@ -55,12 +55,15 @@ Most recent migrations (chronological):
     Messenger's Doctrine transport — first use of Messenger in this
     codebase), and adds `send_as_push BOOLEAN`, `push_sent_at TIMESTAMP`
     to `admin_message`.
-13. `Version20260920075918` (most recent) — creates `notification_log`
-    (see `entities.md`), the audit trail for the push pipeline. Reuses
-    the existing `messenger_messages` table for the new `failed`
-    transport (`config/packages/messenger.yaml`) via a distinct
-    `queue_name` rather than a separate table — no migration needed for
-    that part.
+13. `Version20260920075918` — creates `notification_log` (see
+    `entities.md`), the audit trail for the push pipeline. Reuses the
+    existing `messenger_messages` table for the new `failed` transport
+    (`config/packages/messenger.yaml`) via a distinct `queue_name` rather
+    than a separate table — no migration needed for that part.
+14. `Version20260920114451` (most recent) — adds `reminder_sent_at` to
+    `competition_round` — claim-lock for the new `ROUND_STARTING_SOON`
+    push (`CompetitionRoundReminderService`), same idiom as
+    `locked_for_processing_at`'s round-processing claim-lock.
 
 ## Takeaway
 
@@ -75,7 +78,11 @@ added so the backend can trigger native OS notifications for
 competition events (round drawn, new registrant, match result) and
 admin broadcasts, later followed by (f) a `NotificationLog` audit trail
 + admin debug tooling once a missing `FIREBASE_SERVICE_ACCOUNT_JSON`
-secret caused sends to fail invisibly — see
+secret caused sends to fail invisibly, and (g) three more competition
+push types (`COMPETITION_COMPLETED`, `NEW_COMPETITION_OPEN`,
+`ROUND_STARTING_SOON`) filling the remaining gaps identified once the
+pipeline was actually confirmed working end-to-end on a real device —
+see
 `04_interfaces/output/services.md` and `services.md`'s
 `PushNotificationService`/`NotificationLoggingSubscriber` entries.
 Consistent with

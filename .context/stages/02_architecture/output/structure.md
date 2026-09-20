@@ -96,11 +96,15 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `docker/nginx.conf` and `docker/supervisord.conf`;
   `ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]`,
   `CMD ["/usr/bin/supervisord", ...]`. Bakes a busybox cron table into the
-  image (`/var/spool/cron/crontabs/root`) with 8 scheduled jobs:
+  image (`/var/spool/cron/crontabs/root`) with 9 scheduled jobs:
   `pool-warm.sh`/`worldpack-warm.sh` (every 6h),
-  `leaderboards-generate.sh` (every 5 min),
+  `leaderboards-generate.sh` and `competition-send-round-reminders.sh`
+  (every 5 min — the latter pushes `ROUND_STARTING_SOON`, added
+  2026-09-20, see `CompetitionRoundReminderService`),
   `post-community-stat-tick.sh` and `telemetry-generate.sh` (every 15 min),
-  `competition-provision-instances.sh` (every 10 min),
+  `competition-provision-instances.sh` (every 10 min — since 2026-09-20
+  also dispatches `NEW_COMPETITION_OPEN`'s audience resolution whenever it
+  actually creates a new instance, not on every tick),
   `competition-process-rounds.sh` and `messenger-consume.sh` (both every
   1 min — the latter drains the async Messenger transport for push
   notifications, added 2026-09-19).

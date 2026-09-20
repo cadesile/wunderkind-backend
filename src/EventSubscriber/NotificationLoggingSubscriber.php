@@ -6,7 +6,7 @@ namespace App\EventSubscriber;
 
 use App\Entity\NotificationLog;
 use App\Enum\NotificationLogStatus;
-use App\Message\ResolveAdminMessageAudienceForPushMessage;
+use App\Message\AudienceResolutionMessage;
 use App\Message\SendPushNotificationMessage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -53,7 +53,7 @@ final class NotificationLoggingSubscriber implements EventSubscriberInterface
         $detail = $this->detailFor($message);
         $summary = $this->summaryFor($message);
 
-        if ($message instanceof ResolveAdminMessageAudienceForPushMessage) {
+        if ($message instanceof AudienceResolutionMessage) {
             // The handler returns the resolved recipient count precisely so this can tell
             // "resolved 0 recipients, dispatched nothing" apart from "actually dispatched
             // pushes" — both fire an identical WorkerMessageHandledEvent otherwise, which is
@@ -104,7 +104,7 @@ final class NotificationLoggingSubscriber implements EventSubscriberInterface
     private function isLoggable(object $message): bool
     {
         return $message instanceof SendPushNotificationMessage
-            || $message instanceof ResolveAdminMessageAudienceForPushMessage;
+            || $message instanceof AudienceResolutionMessage;
     }
 
     private function shortClassName(object $message): string
@@ -126,8 +126,8 @@ final class NotificationLoggingSubscriber implements EventSubscriberInterface
             ];
         }
 
-        if ($message instanceof ResolveAdminMessageAudienceForPushMessage) {
-            return ['adminMessageId' => $message->adminMessageId];
+        if ($message instanceof AudienceResolutionMessage) {
+            return ['subject' => $message->auditSubject()];
         }
 
         return [];
@@ -141,8 +141,8 @@ final class NotificationLoggingSubscriber implements EventSubscriberInterface
             return sprintf('Push to %d user(s): %s', $count, $message->title);
         }
 
-        if ($message instanceof ResolveAdminMessageAudienceForPushMessage) {
-            return sprintf('Resolve push audience for AdminMessage %s', $message->adminMessageId);
+        if ($message instanceof AudienceResolutionMessage) {
+            return sprintf('Resolve push audience for %s', $message->auditSubject());
         }
 
         return $this->shortClassName($message);
