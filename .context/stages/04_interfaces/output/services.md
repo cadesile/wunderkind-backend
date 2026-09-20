@@ -147,6 +147,26 @@ filename alone.
   pre-resolved at dispatch), multicasts in chunks of ≤500 tokens (FCM's
   own limit), and deletes any `UserDevice` FCM reports as
   unknown/invalid.
+- **`EventSubscriber/NotificationLoggingSubscriber`** — listens to
+  Messenger's `WorkerMessageHandledEvent`/`WorkerMessageFailedEvent`
+  (filtered to `SendPushNotificationMessage`/
+  `ResolveAdminMessageAudienceForPushMessage`), persisting one
+  `NotificationLog` row per message actually processed. Deliberately the
+  *only* place this is logged — not the handlers — since this event pair
+  is the one place that uniformly catches both a handler's own thrown
+  exception and a handler-*construction* failure (e.g.
+  `FirebaseMessagingFactory::create()` throwing because
+  `FIREBASE_SERVICE_ACCOUNT_JSON` is missing/malformed — a real incident
+  this subscriber exists to make visible; previously such a failure
+  discarded the message with zero trace, since
+  `config/packages/messenger.yaml` had no `failure_transport`).
+- **`Notification/FirebaseConnectionValidator`** — "is Firebase actually
+  configured correctly right now," for the admin debug page
+  (`NotificationDebugController`). Two tiers: (1) structural — does
+  `FirebaseMessagingFactory::create()` succeed, no network call; (2)
+  live — a `validateOnly: true` send to a dummy token, triaging kreait's
+  `Messaging` exception classes to tell "credentials are bad" apart from
+  "credentials are fine, the dummy token was correctly rejected."
 - **`MessageHandler/ResolveAdminMessageAudienceForPushMessageHandler`**
   — eager, one-time audience resolution for an `AdminMessage`'s push
   channel (`AdminMessage::$sendAsPush`) — reuses

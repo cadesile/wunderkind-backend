@@ -1,7 +1,11 @@
 framework:
     messenger:
-        # Uncomment this (and the failed transport below) to send failed messages to this transport for later handling.
-        # failure_transport: failed
+        # A failure here is also always recorded in NotificationLog (see
+        # NotificationLoggingSubscriber) for visibility — this transport is for *recovery*: a
+        # legitimately transient failure (FCM briefly unreachable, say) becomes retryable by
+        # hand via `messenger:failed:retry` instead of being discarded after Symfony's default
+        # retry attempts.
+        failure_transport: failed
 
         transports:
             # https://symfony.com/doc/current/messenger.html#transport-configuration
@@ -9,6 +13,9 @@ framework:
             # dispatch — no separate messenger:setup-transports deploy step needed, though it
             # remains safe (idempotent) to run by hand.
             async: '%env(MESSENGER_TRANSPORT_DSN)%'
+            # Same underlying `messenger_messages` table as `async` — Doctrine transports are
+            # differentiated by `queue_name`, not by table, so this needs no separate migration.
+            failed: 'doctrine://default?queue_name=failed'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
@@ -22,3 +29,4 @@ when@test:
                 # In-memory transport for functional tests — dispatched envelopes are
                 # inspected via InMemoryTransport::getSent() instead of a real consumer.
                 async: 'in-memory://'
+                failed: 'in-memory://'

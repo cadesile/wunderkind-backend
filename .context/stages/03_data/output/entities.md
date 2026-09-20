@@ -35,6 +35,19 @@ migrations are the change log (see `migrations.md`).
   `lastActiveAt/createdAt`. `ManyToOne` → `User` (not nullable,
   `CASCADE`). Registered via `POST /api/device-tokens`, sent to by
   `PushNotificationService` — see `services.md`.
+- **`NotificationLog`** (table `notification_log`) — audit record of one
+  push-related Messenger message actually processed (success or failure),
+  one row per `SendPushNotificationMessage`/
+  `ResolveAdminMessageAudienceForPushMessage` handled. `status:NotificationLogStatus(enum:
+  SUCCESS, FAILED)`, `messageType:string` (short class name), `summary`,
+  `detailJson:array` (message properties + exception detail on failure),
+  `errorMessage:?string` (truncated to 255, same convention as
+  `DeletionRequest::$failureReason`), `createdAt`. No entity relations —
+  written by `NotificationLoggingSubscriber` (see `services.md`), not by
+  the handlers themselves, since that's the only place that uniformly
+  catches both a handler's own exception and a handler-*construction*
+  failure (the exact bug class — a missing `FIREBASE_SERVICE_ACCOUNT_JSON`
+  — that motivated this table).
 
 ## Core game / club
 

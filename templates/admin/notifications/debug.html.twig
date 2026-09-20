@@ -1,0 +1,145 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Notification Debug Tools</h5>
+        <p class="text-muted small mb-0">Manual controls for the push-notification pipeline — see the Notification Logs list for the audit trail these actions write to.</p>
+    </div>
+
+    {# ── Validate Firebase connection ─────────────────────────────────── #}
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title fw-semibold small">
+                    <i class="fa fa-plug text-secondary me-1"></i> Validate Firebase Connection
+                </h6>
+                <p class="card-text text-muted small">
+                    Checks whether <code>FIREBASE_SERVICE_ACCOUNT_JSON</code> is present/well-formed, then a validate-only send to confirm Google actually accepts the credentials — no real push is sent.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                <form method="POST" action="{{ path('admin_notification_validate_firebase') }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('notification_validate_firebase') }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">
+                        <i class="fa fa-play me-1"></i> Validate
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Force process queue ──────────────────────────────────────────── #}
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title fw-semibold small">
+                    <i class="fa fa-forward text-secondary me-1"></i> Force Process Queue
+                </h6>
+                <p class="card-text text-muted small">
+                    Runs <code>messenger:consume async</code> immediately (capped at 20s / 200 messages), instead of waiting up to a minute for the cron.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                <form method="POST" action="{{ path('admin_notification_force_process_queue') }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('notification_force_process_queue') }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">
+                        <i class="fa fa-play me-1"></i> Process Now
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Force-trigger a test push ────────────────────────────────────── #}
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title fw-semibold small">
+                    <i class="fa fa-paper-plane text-secondary me-1"></i> Send Test Push
+                </h6>
+                <p class="card-text text-muted small">
+                    Dispatches a clearly-marked <code>[TEST]</code> push of the chosen type to one club's device(s) — synthetic ids, not tied to any real competition/message. Use "Force Process Queue" above (or wait for the cron) to actually send it.
+                </p>
+                {% if clubs|length == 0 %}
+                    <p class="text-muted small mb-0"><em>No clubs exist yet.</em></p>
+                {% endif %}
+            </div>
+            {% if clubs|length > 0 %}
+            <div class="card-footer bg-transparent">
+                <div class="d-flex flex-column gap-2">
+                    {% for type in triggerTypes %}
+                    <form method="POST" action="{{ path('admin_notification_trigger', {type: type, club: 'CLUB_ID_PLACEHOLDER'}) }}"
+                          class="d-flex gap-2 align-items-center notification-trigger-form" data-type="{{ type }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('notification_trigger') }}">
+                        <select name="club_select" class="form-select form-select-sm" style="max-width: 12rem;">
+                            {% for club in clubs %}
+                                <option value="{{ club.id }}">{{ club.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-outline-secondary btn-sm text-nowrap">{{ type }}</button>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Recent log entries ───────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-bell text-muted me-1"></i> Recent Notification Log Entries</span>
+                <a href="{{ ea_url().setController('App\\Controller\\Admin\\NotificationLogCrudController').setAction('index') }}" class="small">View all &rarr;</a>
+            </div>
+            <div class="card-body p-0">
+                {% if recentLogs|length == 0 %}
+                    <div class="text-muted small text-center py-4">No notification activity yet.</div>
+                {% else %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Type</th>
+                            <th>Summary</th>
+                            <th>When</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recentLogs %}
+                        <tr>
+                            <td>
+                                {% if log.status.value == 'success' %}
+                                    <span class="badge bg-success">Success</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Failed</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">{{ log.messageType }}</td>
+                            <td class="small">{{ log.summary }}{% if log.errorMessage %} — <span class="text-danger">{{ log.errorMessage }}</span>{% endif %}</td>
+                            <td class="small text-muted text-nowrap">{{ log.createdAt|date('Y-m-d H:i:s') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// The trigger route needs {club} baked into the URL path (a Doctrine-typed route parameter,
+// not a query/body field) — rewrite the placeholder to the selected club's id right before
+// submit, since Twig has no way to interpolate a client-side <select> choice into path().
+document.querySelectorAll('.notification-trigger-form').forEach(function (form) {
+    form.addEventListener('submit', function () {
+        var clubId = form.querySelector('select[name="club_select"]').value;
+        form.action = form.action.replace('CLUB_ID_PLACEHOLDER', encodeURIComponent(clubId));
+    });
+});
+</script>
+{% endblock %}

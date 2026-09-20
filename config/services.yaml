@@ -73,3 +73,10 @@ services:
         factory: ['App\Service\Notification\FirebaseMessagingFactory', 'create']
         arguments:
             $serviceAccountJson: '%env(FIREBASE_SERVICE_ACCOUNT_JSON)%'
+
+    # Deliberately takes the raw env value directly (not the `Messaging` service above) —
+    # FirebaseConnectionValidator needs to catch a construction failure itself as its first
+    # check, so it can't depend on a service that's already failed to construct.
+    App\Service\Notification\FirebaseConnectionValidator:
+        arguments:
+            $serviceAccountJson: '%env(FIREBASE_SERVICE_ACCOUNT_JSON)%'

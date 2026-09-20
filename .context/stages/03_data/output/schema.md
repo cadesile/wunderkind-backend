@@ -6,7 +6,7 @@ constraints. Don't restate field lists here.
 
 ## Table index (by domain, matches `entities.md` grouping)
 
-- **Auth/user:** `user`, `admin`, `guardian`, `email_verification`, `refresh_tokens`, `beta_request`, `deletion_request`, `user_device` (FCM push tokens)
+- **Auth/user:** `user`, `admin`, `guardian`, `email_verification`, `refresh_tokens`, `beta_request`, `deletion_request`, `user_device` (FCM push tokens), `notification_log` (push-pipeline audit trail)
 - **Core game/club:** `club`, `club_facility`, `facility_template`, `league`, `league_sponsor_income`, `npc_club`, `transfer`, `sync_record`, `season_record`, `season_snapshot`, `season_ratings_snapshot`, `match_result`, `leaderboard_entry`, `tactical_advantage`
 - **Player/squad:** `player` (embeds `PersonalityProfile` — no separate table), `player_archetype`, `player_career_stat`, `player_career_stat_snapshot`, `agent`, `scout`, `staff`, `player_siblings` (self-referential join table)
 - **Sponsorship/finance:** `sponsor`, `investor`
@@ -14,7 +14,7 @@ constraints. Don't restate field lists here.
 - **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_round`, `competition_fixture`, `competition_result`, `reward_template`, `entrant_reward_claim`
 - **Config/singleton:** `game_config`, `pool_config`, `starter_config`
 - **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
-- **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table (async push-notification dispatch); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
+- **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table, shared by the `async` and `failed` transports (differentiated by `queue_name`, not by table — see `config/packages/messenger.yaml`); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
 
 ## Notable constraints (beyond ordinary FKs — see `entities.md` for those)
 

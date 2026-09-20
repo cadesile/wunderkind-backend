@@ -26,5 +26,8 @@ stages, all of which now have output)
 **Last updated:** 2026-09-20 (04_interfaces grew by
 `push-notifications.md`, moved in from `docs/api/push-notifications.md`
 by request — that file no longer exists; 06_documentation/07_synthesis
-updated to repoint their references to the new location; other stages
-unchanged this pass)
+updated to repoint their references to the new location; same-session
+follow-up pass added notification-observability content to `03_data`
+(entities/schema/migrations) and `04_interfaces`
+(routes/controllers/services) — small incremental growth on both, not
+re-measured precisely; other stages unchanged this pass)
