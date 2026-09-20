@@ -9,13 +9,12 @@ use App\Repository\ClubRepository;
 use App\Repository\NotificationLogRepository;
 use App\Service\Notification\FirebaseConnectionValidator;
 use App\Service\Notification\PushNotificationService;
-use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Component\Process\PhpExecutableFinder;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -23,9 +22,17 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Manual debug tools for the push-notification pipeline — kept separate from the already-large
  * DashboardController per the "developer tools" precedent it already establishes there
  * (cleanup-entities, generate-leaderboards). Every action here mirrors that controller's own
- * conventions exactly: CSRF-protected POST, `Symfony\Bundle\FrameworkBundle\Console\Application`
- * run in-process with a `BufferedOutput` for anything that shells out to a console command,
- * flash the result, redirect back to the debug page.
+ * conventions for CSRF-protected POST + flash + redirect back to the debug page — with one
+ * deliberate exception: `forceProcessQueue()` shells out to a genuinely separate PHP process
+ * (`Symfony\Component\Process\Process`) instead of running in-process via
+ * `Symfony\Bundle\FrameworkBundle\Console\Application`, the way `cleanupEntities()`/
+ * `generateLeaderboards()` do. `messenger:consume` is a long-running *worker* command, not a
+ * quick one-shot script — Messenger's `Worker` calls `services_resetter->reset()` after every
+ * message it processes (to stop state leaking between messages in a real long-running worker),
+ * and that reset includes `security.token_storage`'s `setToken` reset method. Run in-process,
+ * sharing this web request's own container, that reset wipes the *current admin's own
+ * authenticated token* mid-request — logging them out the moment this action's response is
+ * written. A separate process has its own container, so it can't touch this one's security state.
  */
 #[IsGranted('ROLE_ADMIN')]
 class NotificationDebugController extends AbstractController
@@ -76,21 +83,24 @@ class NotificationDebugController extends AbstractController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_notification_debug']));
         }
 
-        $application = new Application($kernel);
-        $application->setAutoExit(false);
+        $php = (new PhpExecutableFinder())->find();
+        if ($php === false) {
+            $this->addFlash('danger', 'Could not locate the PHP binary to run messenger:consume.');
 
-        $input  = new ArrayInput([
-            'command'          => 'messenger:consume',
-            'receivers'        => ['async'],
-            '--time-limit'     => 20,
-            '--limit'          => 200,
-            '--no-interaction' => true,
-        ]);
-        $output = new BufferedOutput();
-        $application->run($input, $output);
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_notification_debug']));
+        }
 
-        $this->addFlash('success', 'Queue processed.');
-        $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));
+        $process = new Process(
+            [$php, 'bin/console', 'messenger:consume', 'async', '--time-limit=20', '--limit=200', '--no-interaction'],
+            $kernel->getProjectDir(),
+        );
+        // A little over the command's own --time-limit, so a hung process is still killed
+        // rather than blocking this request indefinitely.
+        $process->setTimeout(30);
+        $process->run();
+
+        $this->addFlash($process->isSuccessful() ? 'success' : 'danger', 'Queue processed.');
+        $this->addFlash('info', nl2br(htmlspecialchars(trim($process->getOutput() . $process->getErrorOutput()))));
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_notification_debug']));
     }

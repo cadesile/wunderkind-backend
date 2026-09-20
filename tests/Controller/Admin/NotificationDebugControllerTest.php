@@ -124,4 +124,31 @@ class NotificationDebugControllerTest extends WebTestCase
 
         self::assertResponseRedirects();
     }
+
+    /**
+     * Regression test: `messenger:consume` run in-process (via
+     * Symfony\Bundle\FrameworkBundle\Console\Application, sharing this request's own
+     * container) logged the admin out — Messenger's Worker calls
+     * services_resetter->reset() after each processed message, which resets
+     * security.token_storage's authenticated token. force-process-queue must run
+     * messenger:consume as a genuinely separate process instead, so it can't touch this
+     * request's own security state.
+     */
+    public function testForceProcessQueueDoesNotLogTheAdminOut(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler   = $client->request('GET', '/admin', ['routeName' => 'admin_notification_debug']);
+        $csrfToken = $crawler->filter('form[action$="force-process-queue"] input[name="_csrf_token"]')->attr('value');
+
+        $client->request('POST', '/admin/notifications/debug/force-process-queue', [
+            '_csrf_token' => $csrfToken,
+        ]);
+        $client->followRedirect();
+
+        // Any other authenticated admin page — if the token got wiped, this redirects to
+        // /admin/login instead of rendering.
+        self::assertResponseIsSuccessful();
+    }
 }
