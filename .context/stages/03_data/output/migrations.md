@@ -49,12 +49,18 @@ Most recent migrations (chronological):
     `went_to_penalties`, `penalty_home_score`, `penalty_away_score` to
     `competition_result` — a knockout fixture can never end level;
     these record how a tie was actually settled.
-12. `Version20260919211831` (most recent) — push-notification
-    infrastructure: creates `user_device` (FCM registration tokens,
-    unique `device_token`, FK to `user` `ON DELETE CASCADE`) and
-    `messenger_messages` (Symfony Messenger's Doctrine transport —
-    first use of Messenger in this codebase), and adds
-    `send_as_push BOOLEAN`, `push_sent_at TIMESTAMP` to `admin_message`.
+12. `Version20260919211831` — push-notification infrastructure: creates
+    `user_device` (FCM registration tokens, unique `device_token`, FK to
+    `user` `ON DELETE CASCADE`) and `messenger_messages` (Symfony
+    Messenger's Doctrine transport — first use of Messenger in this
+    codebase), and adds `send_as_push BOOLEAN`, `push_sent_at TIMESTAMP`
+    to `admin_message`.
+13. `Version20260920075918` (most recent) — creates `notification_log`
+    (see `entities.md`), the audit trail for the push pipeline. Reuses
+    the existing `messenger_messages` table for the new `failed`
+    transport (`config/packages/messenger.yaml`) via a distinct
+    `queue_name` rather than a separate table — no migration needed for
+    that part.
 
 ## Takeaway
 
@@ -66,8 +72,12 @@ club/lineup data and extra-time/penalty-shootout outcomes so a knockout
 fixture is never left looking like an unresolved draw, and (e) push
 notifications (device tokens + a Messenger-backed async send pipeline)
 added so the backend can trigger native OS notifications for
-competition events (round drawn, new registrant) and admin broadcasts —
-see `04_interfaces/output/services.md` and `services.md`'s
-`PushNotificationService` entry. Consistent with
+competition events (round drawn, new registrant, match result) and
+admin broadcasts, later followed by (f) a `NotificationLog` audit trail
++ admin debug tooling once a missing `FIREBASE_SERVICE_ACCOUNT_JSON`
+secret caused sends to fail invisibly — see
+`04_interfaces/output/services.md` and `services.md`'s
+`PushNotificationService`/`NotificationLoggingSubscriber` entries.
+Consistent with
 `02_architecture/output/git-activity.md`'s hotspot findings (Competition
 feature + admin panel polish).
