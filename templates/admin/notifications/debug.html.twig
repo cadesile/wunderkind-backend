@@ -87,6 +87,49 @@
         </div>
     </div>
 
+    {# ── Registered devices ───────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small">
+                    <i class="fa fa-mobile-screen text-muted me-1"></i> Registered Devices
+                    <span class="badge {{ deviceCount > 0 ? 'bg-secondary' : 'bg-danger' }} ms-1">{{ deviceCount }}</span>
+                </span>
+            </div>
+            <div class="card-body p-0">
+                {% if deviceCount == 0 %}
+                    <div class="text-muted small text-center py-4">
+                        <strong class="text-danger">No device has ever registered for push.</strong><br>
+                        A push notification has nothing to deliver to until the app successfully calls
+                        <code>POST /api/device-tokens</code> — this is a frontend/app-side gap, not a backend
+                        one (the in-app poll-delivered overlay is a separate path and works independently of this).
+                    </div>
+                {% else %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Platform</th>
+                            <th>User</th>
+                            <th>Last Active</th>
+                            <th>Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in recentDevices %}
+                        <tr>
+                            <td class="small">{{ device.platform.value }}</td>
+                            <td class="small">{{ device.user.email }}</td>
+                            <td class="small text-muted text-nowrap">{{ device.lastActiveAt|date('Y-m-d H:i:s') }}</td>
+                            <td class="small text-muted text-nowrap">{{ device.createdAt|date('Y-m-d H:i:s') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     {# ── Recent log entries ───────────────────────────────────────────── #}
     <div class="col-12">
         <div class="card">

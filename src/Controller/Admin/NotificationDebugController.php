@@ -7,6 +7,7 @@ namespace App\Controller\Admin;
 use App\Entity\Club;
 use App\Repository\ClubRepository;
 use App\Repository\NotificationLogRepository;
+use App\Repository\UserDeviceRepository;
 use App\Service\Notification\FirebaseConnectionValidator;
 use App\Service\Notification\PushNotificationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -62,15 +63,23 @@ class NotificationDebugController extends AbstractController
         private readonly NotificationLogRepository $notificationLogRepository,
         private readonly PushNotificationService $pushNotificationService,
         private readonly FirebaseConnectionValidator $firebaseConnectionValidator,
+        private readonly UserDeviceRepository $userDeviceRepository,
     ) {}
 
     #[Route('/admin/notifications/debug', name: 'admin_notification_debug', methods: ['GET'])]
     public function debug(): Response
     {
         return $this->render('admin/notifications/debug.html.twig', [
-            'clubs'        => $this->clubRepository->findBy([], ['name' => 'ASC']),
-            'recentLogs'   => $this->notificationLogRepository->findBy([], ['createdAt' => 'DESC'], 20),
-            'triggerTypes' => array_keys(self::DEBUG_TRIGGERS),
+            'clubs'          => $this->clubRepository->findBy([], ['name' => 'ASC']),
+            'recentLogs'     => $this->notificationLogRepository->findBy([], ['createdAt' => 'DESC'], 20),
+            'triggerTypes'   => array_keys(self::DEBUG_TRIGGERS),
+            // Surfaces the exact question "has ANY device ever actually registered for push"
+            // directly, instead of only being inferable after the fact from a Notification Log
+            // entry saying "0 eligible recipients found" — a real incident where an admin
+            // broadcast's poll-delivered in-app overlay arrived fine but no OS push notification
+            // did, because zero UserDevice rows existed at all.
+            'recentDevices'  => $this->userDeviceRepository->findBy([], ['lastActiveAt' => 'DESC'], 10),
+            'deviceCount'    => $this->userDeviceRepository->count([]),
         ]);
     }
 
