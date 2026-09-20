@@ -82,8 +82,25 @@ Per environment, prefixed `PROD_` / `DEV_`:
 
 Shared: `HETZNER_IP`, `HETZNER_SSH_KEY`.
 
-Three traps:
+Four traps:
 
+- **A secret being correctly written into `/mnt/volume-wkf/wunderkind/{env}/.env` on the
+  server does NOT mean the container receives it.** That `.env` is only used for
+  docker-compose's own `${VAR}` interpolation *while parsing* `docker-compose.{dev,prod}.yml`
+  — a variable is only actually injected into the `app` container if it's listed under that
+  service's own `environment:` block. `FIREBASE_SERVICE_ACCOUNT_JSON` and
+  `MESSENGER_TRANSPORT_DSN` were both missing from that block for months; `MESSENGER_TRANSPORT_DSN`
+  never visibly broke because the image's own committed `.env` default
+  (`doctrine://default?auto_setup=1`) happens to already be the correct production value, but
+  `FIREBASE_SERVICE_ACCOUNT_JSON`'s baked default (`'{}'`) is a placeholder — so the container
+  silently ran on `{}` (which decodes to an empty array, producing
+  `Kreait\Firebase\Exception\InvalidArgumentException: Could not map type ServiceAccount: ...
+  Value *missing*` for every field) regardless of how correct the GitHub secret was. Fixed in
+  both compose files by adding the variable to `environment:`. **The lesson generalizes**: any
+  new env-driven secret/config value must be added in *three* places, not two — the GitHub
+  Actions secret, the deploy workflow's `.env` heredoc, *and* the compose file's `environment:`
+  block — missing the third one fails exactly like this, silently, with the app falling back to
+  whatever default is baked into the image's own `.env`.
 - **`FIREBASE_SERVICE_ACCOUNT_JSON` must be MINIFIED (single-line) JSON**, not the
   pretty-printed multi-line file Firebase's console hands you on download. The workflow's
   heredoc runs `sed -i 's/^[[:space:]]*//' .env` afterward to strip the YAML block's own
