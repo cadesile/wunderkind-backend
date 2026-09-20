@@ -86,6 +86,20 @@ class NotificationLog
         return json_encode($this->detailJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 
+    /**
+     * Read-only virtual accessor for the admin list view — a `SendPushNotificationMessage` row's
+     * FCM `data` payload is exactly what a device actually received (the `type` discriminator
+     * plus deep-link ids), which is precisely what's useful to eyeball across many rows at once
+     * without opening each one's detail page. Other message types (e.g. the audience-resolve
+     * step) carry no `data` key, so this is "—" for those.
+     */
+    public function getDataJsonCompact(): string
+    {
+        $data = $this->detailJson['data'] ?? null;
+
+        return is_array($data) ? (json_encode($data, JSON_UNESCAPED_UNICODE) ?: '—') : '—';
+    }
+
     public function getErrorMessage(): ?string { return $this->errorMessage; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }

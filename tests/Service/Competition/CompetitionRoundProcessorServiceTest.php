@@ -169,21 +169,67 @@ class CompetitionRoundProcessorServiceTest extends KernelTestCase
         $messages  = array_map(static fn ($envelope) => $envelope->getMessage(), $transport->getSent());
         $results   = array_values(array_filter($messages, static fn ($m) => $m->data['type'] === 'MATCH_RESULT'));
 
-        // Round 1 (SF) has 2 fixtures -> 2 MATCH_RESULT pushes, one per fixture.
-        $this->assertCount(2, $results);
+        // Round 1 (SF) has 2 fixtures, each personalized per side (winner "Victory!" / loser
+        // "Eliminated") -> 4 MATCH_RESULT pushes, 2 per fixture.
+        $this->assertCount(4, $results);
 
         $round1     = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
         $fixtures   = $this->fixtureRepository->findByRoundOrderedBySlot($round1);
         $expectedFixtureIds = array_map(static fn ($f) => (string) $f->getId(), $fixtures);
-        $actualFixtureIds   = array_map(static fn ($m) => $m->data['fixtureId'], $results);
-        sort($expectedFixtureIds);
-        sort($actualFixtureIds);
-        $this->assertSame($expectedFixtureIds, $actualFixtureIds);
+
+        $winnerTitles = array_values(array_filter($results, static fn ($m) => $m->title === 'Victory!'));
+        $loserTitles  = array_values(array_filter($results, static fn ($m) => $m->title === 'Eliminated'));
+        $this->assertCount(2, $winnerTitles, 'One "Victory!" push per fixture.');
+        $this->assertCount(2, $loserTitles, 'One "Eliminated" push per fixture.');
 
         foreach ($results as $message) {
+            $this->assertContains($message->data['fixtureId'], $expectedFixtureIds);
             $this->assertSame((string) $instance->getId(), $message->data['competitionId']);
             $this->assertSame((string) $round1->getId(), $message->data['roundId']);
-            $this->assertCount(2, $message->userIds, 'Both the winner and the loser of that fixture must be notified.');
+            $this->assertCount(1, $message->userIds, 'Each side gets its own personalized push, not a shared one.');
+        }
+
+        // Same fixture -> same scoreline body regardless of which side received it.
+        foreach ($fixtures as $fixture) {
+            $forFixture = array_values(array_filter($results, static fn ($m) => $m->data['fixtureId'] === (string) $fixture->getId()));
+            $this->assertCount(2, $forFixture);
+            $this->assertSame($forFixture[0]->body, $forFixture[1]->body);
+        }
+    }
+
+    public function testTournamentCompletionNotifiesTheChampionAndTheRunnerUp(): void
+    {
+        $instance = $this->buildLockedCompetition();
+        $this->backdateRound($instance, 1);
+        $this->processor->processDueRounds(new \DateTimeImmutable());
+
+        $transport = self::getContainer()->get('messenger.transport.async');
+        $transport->reset();
+
+        $this->backdateRound($instance, 2);
+        $this->processor->processDueRounds(new \DateTimeImmutable());
+
+        $this->em->refresh($instance);
+        $entrants = $this->em->getRepository(CompetitionEntrant::class)->findBy(['activeCompetition' => $instance]);
+        $champion = array_values(array_filter($entrants, fn ($e) => $e->getStatus() === CompetitionEntrantStatus::WINNER))[0];
+
+        $round2      = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[1];
+        $finalFixture = $this->fixtureRepository->findByRoundOrderedBySlot($round2)[0];
+        $runnerUpId   = (string) ($finalFixture->getWinnerEntrant()->getId()->equals($finalFixture->getHomeEntrant()->getId())
+            ? $finalFixture->getAwayEntrant()->getClub()->getUser()->getId()
+            : $finalFixture->getHomeEntrant()->getClub()->getUser()->getId());
+
+        $messages  = array_map(static fn ($envelope) => $envelope->getMessage(), $transport->getSent());
+        $completed = array_values(array_filter($messages, static fn ($m) => $m->data['type'] === 'COMPETITION_COMPLETED'));
+        $this->assertCount(2, $completed, 'One push for the champion, one for the runner-up.');
+
+        $wonPush     = array_values(array_filter($completed, static fn ($m) => $m->data['result'] === 'WON'))[0];
+        $runnerUpPush = array_values(array_filter($completed, static fn ($m) => $m->data['result'] === 'RUNNER_UP'))[0];
+
+        $this->assertSame([(string) $champion->getClub()->getUser()->getId()], $wonPush->userIds);
+        $this->assertSame([$runnerUpId], $runnerUpPush->userIds);
+        foreach ($completed as $message) {
+            $this->assertSame((string) $instance->getId(), $message->data['competitionId']);
         }
     }
 

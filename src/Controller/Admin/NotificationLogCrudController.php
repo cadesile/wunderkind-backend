@@ -66,6 +66,9 @@ class NotificationLogCrudController extends AbstractCrudController
             ]);
         yield TextField::new('messageType', 'Type');
         yield TextField::new('summary');
+        yield TextField::new('dataJsonCompact', 'Payload')
+            ->onlyOnIndex()
+            ->setHelp('The FCM `data` payload actually sent — exactly what the device received.');
         yield TextField::new('errorMessage', 'Error')->hideOnIndex();
         yield DateTimeField::new('createdAt')->setFormat('yyyy-MM-dd HH:mm:ss');
         yield CodeEditorField::new('detailJsonPretty', 'Detail')

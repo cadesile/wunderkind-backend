@@ -197,12 +197,40 @@ class CompetitionRoundProcessorService
         $round->setCompletedAt($now);
 
         if ($this->isFinalRound($round)) {
+            // The final's losers aren't passed in $winners — re-derive them from the round's own
+            // fixtures (cheap: only ever runs once per competition, when it actually ends) so the
+            // runner-up(s) can be told the tournament is over too, not just the champion.
+            $runnersUp = [];
+            foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round) as $fixture) {
+                $fixtureWinner = $fixture->getWinnerEntrant();
+                $home          = $fixture->getHomeEntrant();
+                $away          = $fixture->getAwayEntrant();
+                if ($fixtureWinner !== null && $home !== null && $away !== null) {
+                    $runnersUp[] = $fixtureWinner === $home ? $away : $home;
+                }
+            }
+
             foreach ($winners as $winner) {
                 $winner->setStatus(CompetitionEntrantStatus::WINNER);
                 $this->rewardApplierService->applyVictorPrize($winner, $activeCompetition);
             }
             $activeCompetition->setStatus(ActiveCompetitionStatus::COMPLETED);
             $activeCompetition->setCompletedAt($now);
+
+            $this->pushNotificationService->notifyUsers(
+                array_map(static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(), $winners),
+                'Champions!',
+                'You won the tournament! Check your inbox for your prize.',
+                ['type' => 'COMPETITION_COMPLETED', 'competitionId' => (string) $activeCompetition->getId(), 'result' => 'WON'],
+            );
+            if ($runnersUp !== []) {
+                $this->pushNotificationService->notifyUsers(
+                    array_map(static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(), $runnersUp),
+                    'Tournament complete',
+                    'The final has been played — the tournament has ended.',
+                    ['type' => 'COMPETITION_COMPLETED', 'competitionId' => (string) $activeCompetition->getId(), 'result' => 'RUNNER_UP'],
+                );
+            }
         } else {
             $this->populateNextRoundFixtures($round, $winners);
         }
@@ -266,21 +294,33 @@ class CompetitionRoundProcessorService
         $loser->setEliminatedInRound($round);
 
         // Every fixture's result — not just when a round completes — gets its own push, to
-        // both sides. FCM data values must be strings and the message has a hard ~4KB size
-        // cap, so (unlike this method's other side effects) the full result payload isn't
-        // embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT: the client
-        // re-fetches via GET /api/competitions/{id}, whose result field is exactly
+        // both sides, each with a title reflecting their own outcome (a distinct "Eliminated"
+        // signal rather than the same neutral wording both sides used to get) — but an identical
+        // `data` payload for both, so client-side handling (fetch by fixtureId) is unaffected by
+        // which side received it. FCM data values must be strings and the message has a hard
+        // ~4KB size cap, so (unlike this method's other side effects) the full result payload
+        // isn't embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT: the
+        // client re-fetches via GET /api/competitions/{id}, whose result field is exactly
         // CompetitionResult::toClientSummary()'s shape.
+        $scoreline  = sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName());
+        $resultData = [
+            'type'          => 'MATCH_RESULT',
+            'competitionId' => (string) $round->getActiveCompetition()->getId(),
+            'roundId'       => (string) $round->getId(),
+            'fixtureId'     => (string) $fixture->getId(),
+        ];
+
         $this->pushNotificationService->notifyUsers(
-            [(string) $home->getClub()->getUser()->getId(), (string) $away->getClub()->getUser()->getId()],
-            'Full-time!',
-            sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName()),
-            [
-                'type'          => 'MATCH_RESULT',
-                'competitionId' => (string) $round->getActiveCompetition()->getId(),
-                'roundId'       => (string) $round->getId(),
-                'fixtureId'     => (string) $fixture->getId(),
-            ],
+            [(string) $winner->getClub()->getUser()->getId()],
+            'Victory!',
+            $scoreline,
+            $resultData,
+        );
+        $this->pushNotificationService->notifyUsers(
+            [(string) $loser->getClub()->getUser()->getId()],
+            'Eliminated',
+            $scoreline,
+            $resultData,
         );
 
         return $winner;

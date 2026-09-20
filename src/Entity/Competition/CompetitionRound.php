@@ -55,6 +55,14 @@ class CompetitionRound
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $lockedForProcessingAt = null;
 
+    /**
+     * Claim marker for CompetitionRoundReminderService — set the instant a "starting soon"
+     * push is actually dispatched, so an overlapping cron tick can't send it twice. Same
+     * atomic-UPDATE claim idiom as lockedForProcessingAt, just for a different action.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $reminderSentAt = null;
+
     public function __construct(ActiveCompetition $activeCompetition, int $roundIndex, string $label, \DateTimeImmutable $scheduledAt)
     {
         $this->id                = new UuidV7();
@@ -90,6 +98,9 @@ class CompetitionRound
 
     public function getLockedForProcessingAt(): ?\DateTimeImmutable { return $this->lockedForProcessingAt; }
     public function setLockedForProcessingAt(?\DateTimeImmutable $lockedForProcessingAt): static { $this->lockedForProcessingAt = $lockedForProcessingAt; return $this; }
+
+    public function getReminderSentAt(): ?\DateTimeImmutable { return $this->reminderSentAt; }
+    public function setReminderSentAt(?\DateTimeImmutable $reminderSentAt): static { $this->reminderSentAt = $reminderSentAt; return $this; }
 
     public function __toString(): string
     {

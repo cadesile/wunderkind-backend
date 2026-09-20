@@ -60,4 +60,27 @@ class CompetitionRoundRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Rounds starting within the reminder lead time that haven't been reminded about yet —
+     * see CompetitionRoundReminderService. `scheduledAt > $now` excludes rounds already due
+     * (or overdue): those get processed outright by the round processor, so a "starting soon"
+     * push for one would be stale by the time it's delivered.
+     *
+     * @return list<CompetitionRound>
+     */
+    public function findDueForReminder(\DateTimeImmutable $now, \DateTimeImmutable $windowEnd): array
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.status IN (:statuses)')
+            ->andWhere('r.reminderSentAt IS NULL')
+            ->andWhere('r.scheduledAt > :now')
+            ->andWhere('r.scheduledAt <= :windowEnd')
+            ->setParameter('statuses', [CompetitionRoundStatus::PENDING, CompetitionRoundStatus::SCHEDULED])
+            ->setParameter('now', $now)
+            ->setParameter('windowEnd', $windowEnd)
+            ->orderBy('r.scheduledAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

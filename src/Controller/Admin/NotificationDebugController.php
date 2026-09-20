@@ -52,6 +52,18 @@ class NotificationDebugController extends AbstractController
             'title' => '[TEST] Match result',
             'data'  => ['type' => 'MATCH_RESULT', 'competitionId' => 'debug-test', 'roundId' => 'debug-test', 'fixtureId' => 'debug-test'],
         ],
+        'COMPETITION_COMPLETED' => [
+            'title' => '[TEST] Tournament complete',
+            'data'  => ['type' => 'COMPETITION_COMPLETED', 'competitionId' => 'debug-test', 'result' => 'WON'],
+        ],
+        'NEW_COMPETITION_OPEN' => [
+            'title' => '[TEST] New tournament open',
+            'data'  => ['type' => 'NEW_COMPETITION_OPEN', 'competitionId' => 'debug-test'],
+        ],
+        'ROUND_STARTING_SOON' => [
+            'title' => '[TEST] Round starting soon',
+            'data'  => ['type' => 'ROUND_STARTING_SOON', 'competitionId' => 'debug-test', 'roundId' => 'debug-test'],
+        ],
         'ADMIN_MESSAGE' => [
             'title' => '[TEST] Admin message',
             'data'  => ['type' => 'ADMIN_MESSAGE', 'adminMessageId' => 'debug-test'],
@@ -129,7 +141,7 @@ class NotificationDebugController extends AbstractController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_notification_debug']));
     }
 
-    #[Route('/admin/notifications/debug/trigger/{type}/{club}', name: 'admin_notification_trigger', methods: ['POST'], requirements: ['type' => 'ROUND_DRAWN|NEW_REGISTRANT|MATCH_RESULT|ADMIN_MESSAGE'])]
+    #[Route('/admin/notifications/debug/trigger/{type}/{club}', name: 'admin_notification_trigger', methods: ['POST'], requirements: ['type' => 'ROUND_DRAWN|NEW_REGISTRANT|MATCH_RESULT|COMPETITION_COMPLETED|NEW_COMPETITION_OPEN|ROUND_STARTING_SOON|ADMIN_MESSAGE'])]
     public function trigger(Request $request, string $type, Club $club): Response
     {
         if (!$this->isCsrfTokenValid('notification_trigger', $request->request->get('_csrf_token'))) {
