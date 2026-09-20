@@ -40,6 +40,25 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Instances that filled to capacity and locked, but haven't finished yet — SCHEDULED
+     * (locked, not started) or RUNNING. A REGISTERING instance can never be "full": filling
+     * the last slot flips it straight to SCHEDULED in the same transaction (see
+     * CompetitionLockService), so there's no separate capacity check to make here.
+     * CANCELLED is deliberately excluded — not "active" in any useful sense.
+     *
+     * @return list<ActiveCompetition>
+     */
+    public function findActive(): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.status IN (:statuses)')
+            ->setParameter('statuses', [ActiveCompetitionStatus::SCHEDULED, ActiveCompetitionStatus::RUNNING])
+            ->orderBy('a.createdAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return list<ActiveCompetition> Most recently completed instances, for "historical winners." */
     public function findRecentlyCompleted(int $limit): array
     {
