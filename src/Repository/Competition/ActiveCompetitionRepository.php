@@ -51,4 +51,24 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Candidates for CompetitionAutoFillService — still REGISTERING, opted into auto-fill,
+     * with at least one entrant already registered (the delay is measured from that
+     * entrant's registeredAt, checked by the caller since it varies per-template and isn't
+     * worth expressing as SQL interval arithmetic here — this result set is always small).
+     *
+     * @return list<ActiveCompetition>
+     */
+    public function findEligibleForAutoFill(): array
+    {
+        return $this->createQueryBuilder('a')
+            ->innerJoin('a.template', 't')
+            ->where('a.status = :status')
+            ->andWhere('t.autoFillSpoofEntrants = true')
+            ->andWhere('EXISTS (SELECT 1 FROM App\Entity\Competition\CompetitionEntrant e WHERE e.activeCompetition = a)')
+            ->setParameter('status', ActiveCompetitionStatus::REGISTERING)
+            ->getQuery()
+            ->getResult();
+    }
 }

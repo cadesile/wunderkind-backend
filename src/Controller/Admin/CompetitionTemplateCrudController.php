@@ -83,5 +83,22 @@ class CompetitionTemplateCrudController extends AbstractCrudController
 
         yield BooleanField::new('isActive')->renderAsSwitch(true)
             ->setHelp('Inactive templates are skipped by the instance-provisioning cron and hidden from GET /available.');
+
+        yield BooleanField::new('autoFillSpoofEntrants', 'Auto-fill with Spoof Entrants')->renderAsSwitch(true)
+            ->setHelp('Dev/testing convenience. Once the first entrant registers into an instance of this template, automatically fill every remaining slot with spoof entrants after the delay below — useful when only one or two real testers are available to fill a bracket. Filling to capacity triggers the exact same auto-lock/round-1-draw as a genuinely full house.');
+        yield ChoiceField::new('autoFillDelayMinutes', 'Auto-fill Delay')
+            ->setChoices(array_combine(
+                array_map(static fn (int $m) => $m === 60 ? '1 hour' : "{$m} minutes", CompetitionTemplate::ALLOWED_AUTO_FILL_DELAY_MINUTES),
+                CompetitionTemplate::ALLOWED_AUTO_FILL_DELAY_MINUTES,
+            ))
+            // Without this, EasyAdmin renders a blank placeholder option as the initially
+            // "selected" one in the raw HTML regardless of the entity's actual (non-null)
+            // default — its ea-autocomplete JS widget corrects this visually for a real
+            // admin in a browser, but submitting the form before that JS runs (or via any
+            // non-JS client) would post an empty value, which the non-nullable int property
+            // then rejects with a 500. No placeholder means the first real choice is always
+            // the one selected server-side, so a submission is never null.
+            ->setFormTypeOption('placeholder', false)
+            ->setHelp('How long to wait after the first entrant registers before auto-filling. Only used when "Auto-fill with Spoof Entrants" above is on.');
     }
 }

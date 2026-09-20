@@ -60,10 +60,14 @@ Most recent migrations (chronological):
     existing `messenger_messages` table for the new `failed` transport
     (`config/packages/messenger.yaml`) via a distinct `queue_name` rather
     than a separate table — no migration needed for that part.
-14. `Version20260920114451` (most recent) — adds `reminder_sent_at` to
+14. `Version20260920114451` — adds `reminder_sent_at` to
     `competition_round` — claim-lock for the new `ROUND_STARTING_SOON`
     push (`CompetitionRoundReminderService`), same idiom as
     `locked_for_processing_at`'s round-processing claim-lock.
+15. `Version20260920133550` (most recent) — adds `auto_fill_spoof_entrants`
+    (default false) and `auto_fill_delay_minutes` (default 20) to
+    `competition_template` — dev/testing auto-fill, see `entities.md`
+    and `CompetitionAutoFillService`.
 
 ## Takeaway
 
