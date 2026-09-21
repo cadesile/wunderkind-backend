@@ -180,6 +180,7 @@ class CompetitionControllerTest extends WebTestCase
 
         $body = $this->responseJson();
         $this->assertCount(1, $body['open']);
+        $this->assertSame((string) $template->getId(), $body['open'][0]['templateId']);
         $this->assertSame($template->getName(), $body['open'][0]['templateName']);
         $this->assertArrayNotHasKey('eligibility', $body['open'][0], 'No club context on an anonymous request.');
 
@@ -224,6 +225,7 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertCount(1, $body['active'], 'Only the filled (SCHEDULED) instance should appear — the still-open one is not full.');
         $activeEntry = $body['active'][0];
         $this->assertSame((string) $instance->getId(), $activeEntry['instanceId']);
+        $this->assertSame((string) $template->getId(), $activeEntry['templateId']);
         $this->assertSame('scheduled', $activeEntry['status']);
         $this->assertSame(4, $activeEntry['entrantCapacity']);
         $this->assertSame(4, $activeEntry['registeredCount']);
@@ -604,6 +606,7 @@ class CompetitionControllerTest extends WebTestCase
 
         // Round 1 (SF) just completed and flipped the instance to RUNNING; FINAL is next up.
         $this->assertSame('running', $body['status']);
+        $this->assertSame((string) $template->getId(), $body['templateId']);
         $this->assertSame(4, $body['entrantCapacity']);
         $this->assertSame(4, $body['registeredCount']);
         $this->assertSame(CompetitionDuration::TEN_HOURS->value, $body['durationOption']);
@@ -621,6 +624,7 @@ class CompetitionControllerTest extends WebTestCase
         $availableBody = $this->responseJson();
         $runningEntry  = current(array_filter($availableBody['running'], fn ($r) => $r['instanceId'] === (string) $instance->getId()));
         $this->assertNotFalse($runningEntry, 'The RUNNING instance must appear in /available\'s running list.');
+        $this->assertSame((string) $template->getId(), $runningEntry['templateId']);
         $this->assertSame(4, $runningEntry['entrantCapacity']);
         $this->assertSame(4, $runningEntry['registeredCount']);
         $this->assertSame(CompetitionDuration::TEN_HOURS->value, $runningEntry['durationOption']);
