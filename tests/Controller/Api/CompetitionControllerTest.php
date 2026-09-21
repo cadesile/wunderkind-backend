@@ -8,6 +8,7 @@ use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionTemplate;
+use App\Entity\Competition\RewardTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
@@ -233,6 +234,9 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertArrayHasKey('entryConditions', $activeEntry);
         $this->assertArrayHasKey('trophyImage', $activeEntry);
         $this->assertArrayHasKey('trophyColour', $activeEntry);
+        $this->assertArrayHasKey('entryFeePerRound', $activeEntry);
+        $this->assertArrayHasKey('victorPrize', $activeEntry['prizes']);
+        $this->assertArrayHasKey('bonusRewards', $activeEntry['prizes']);
 
         // Process both rounds to completion (4-capacity -> [SF, FINAL]) and confirm the
         // instance drops out of /active once it's COMPLETED, despite still being "full".
@@ -557,6 +561,54 @@ class CompetitionControllerTest extends WebTestCase
         $this->client->request('GET', "/api/competitions/{$instance->getId()}");
         $this->assertResponseStatusCodeSame(200);
         $this->assertStringNotContainsString('potential', $this->client->getResponse()->getContent());
+    }
+
+    public function testAvailableAndShowExposeEntryFeePrizesAndEntrantBadgeKitData(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $template->setEntryFeePerRound(500);
+        $template->setVictorPrize(10000);
+        $reward = new RewardTemplate('champions-medal', 'Champions Medal', [
+            ['type' => 'unique_asset_grant', 'assetType' => 'medal'],
+        ]);
+        $this->em->persist($reward);
+        $template->addRewardTemplate($reward);
+        $this->em->flush();
+
+        $instance = $this->createOpenInstance($template);
+        $club     = $this->createClub('Kit FC');
+
+        $this->login($club);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->snapshotPayloadWithNewFields((string) $club->getId(), 'Kit FC')),
+        );
+        $this->assertResponseStatusCodeSame(201);
+
+        // /available: the open entry carries the fee, prizes, and the registering entrant's badge/kit.
+        $this->client->request('GET', '/api/competitions/available');
+        $this->assertResponseStatusCodeSame(200);
+        $open = $this->responseJson()['open'][0];
+        $this->assertSame(500, $open['entryFeePerRound']);
+        $this->assertSame(10000, $open['prizes']['victorPrize']);
+        $this->assertSame('champions-medal', $open['prizes']['bonusRewards'][0]['slug']);
+        $this->assertCount(1, $open['entrants'], 'One club has registered so far, before the bracket is drawn.');
+        $this->assertSame('Kit FC', $open['entrants'][0]['clubName']);
+        $this->assertSame('shield', $open['entrants'][0]['badgeShape']);
+        $this->assertSame('#E53935', $open['entrants'][0]['homePrimary']);
+        $this->assertArrayHasKey('registeredAt', $open['entrants'][0]);
+        $this->assertSame('registered', $open['entrants'][0]['status']);
+
+        // /{id}: same fee/prizes/entrants exposure, still before the bracket is drawn.
+        $this->client->request('GET', "/api/competitions/{$instance->getId()}");
+        $this->assertResponseStatusCodeSame(200);
+        $body = $this->responseJson();
+        $this->assertSame(500, $body['entryFeePerRound']);
+        $this->assertSame(10000, $body['prizes']['victorPrize']);
+        $this->assertCount(1, $body['entrants']);
+        $this->assertSame('shield', $body['entrants'][0]['badgeShape']);
+        $this->assertSame([], $body['rounds'], 'Bracket not drawn yet — entrants[] is how the client shows who has registered so far.');
     }
 
     /**

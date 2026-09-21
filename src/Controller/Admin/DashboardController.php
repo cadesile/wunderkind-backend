@@ -1322,18 +1322,26 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text'),
             MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash'),
         ]);
+        yield MenuItem::subMenu('Sync & Leaderboards', 'fa fa-rotate')->setSubItems([
+            MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate'),
+            MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy'),
+            MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check'),
+            MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera'),
+        ]);
+        yield MenuItem::subMenu('Clubs & Leagues', 'fa fa-table-list')->setSubItems([
+            MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview'),
+            MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved'),
+            MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy'),
+            MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board'),
+            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content'),
+            MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content'),
+        ]);
         yield MenuItem::subMenu('Competitions', 'fa fa-trophy')->setSubItems([
             MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy'),
             MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift'),
             MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered'),
             MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol'),
             MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro'),
-        ]);
-        yield MenuItem::subMenu('Sync & Leaderboards', 'fa fa-rotate')->setSubItems([
-            MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate'),
-            MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy'),
-            MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check'),
-            MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera'),
         ]);
         yield MenuItem::subMenu('Roster', 'fa fa-person-running')->setSubItems([
             MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running'),
@@ -1379,14 +1387,6 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::subMenu('Market', 'fa fa-chart-line')->setSubItems([
             MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line'),
             MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star'),
-        ]);
-        yield MenuItem::subMenu('Clubs & Leagues', 'fa fa-table-list')->setSubItems([
-            MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview'),
-            MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved'),
-            MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy'),
-            MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board'),
-            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content'),
-            MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content'),
         ]);
     }
 

@@ -54,6 +54,8 @@ every stage's `output/` for every task.
   actually saved across real tasks that consulted `.context/` instead of
   exploring raw source — capped detail rows plus an ever-incrementing
   running total, updated on its own Triggers-table row, not step 5.
+  Stage `01_overview` bootstraps it at zero if missing (so it's visible
+  from the first run), but only that trigger ever adds real entries to it.
 - **One-Way Cross-References.** If A points to B, B does not point back to A.
 - **Every output is an edit surface.** A human can hand-edit any file under
   `.context/stages/*/output/` directly. The next time you touch that stage,
