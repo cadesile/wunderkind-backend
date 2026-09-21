@@ -253,6 +253,7 @@ class CompetitionController extends AbstractController
 
         return $this->json([
             'instanceId'      => (string) $activeCompetition->getId(),
+            'templateId'      => (string) $activeCompetition->getTemplate()->getId(),
             'templateName'    => $activeCompetition->getTemplate()->getName(),
             'status'          => $activeCompetition->getStatus()->value,
             'startsAt'        => $activeCompetition->getStartsAt()?->format(DATE_ATOM),
@@ -286,6 +287,7 @@ class CompetitionController extends AbstractController
 
         return [
             'instanceId'      => (string) $instance->getId(),
+            'templateId'      => (string) $instance->getTemplate()->getId(),
             'templateName'    => $instance->getTemplate()->getName(),
             'status'          => $instance->getStatus()->value,
             'startsAt'        => $instance->getStartsAt()?->format(DATE_ATOM),
