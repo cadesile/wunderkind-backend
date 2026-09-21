@@ -8,6 +8,14 @@
 data model, and interfaces — read `.context/CONTEXT.md` first; it routes
 you to the stage relevant to your task.
 
+**Before exploring this codebase for ANY task** — including spawning a
+sub-agent, grepping, or reading manifests/config/source files directly —
+check `.context/CONTEXT.md` and the relevant stage's `output/` for
+the answer first. This applies even when the task isn't phrased as an
+architecture question (e.g. "check dependencies for security updates"
+still needs facts a stage may already document). Only explore raw source
+for what's missing or possibly stale.
+
 Read and follow `.agents/skills/icm-codebase-context/SKILL.md` for how to use and maintain `.context/`.
 
 **If this is the first time you (any agent) are reading this file in a
