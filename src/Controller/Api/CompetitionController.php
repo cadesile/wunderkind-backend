@@ -10,6 +10,7 @@ use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionResult;
 use App\Entity\Competition\CompetitionTemplate;
+use App\Entity\Competition\RewardTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
@@ -79,6 +80,12 @@ class CompetitionController extends AbstractController
                 'trophyColour'        => $template->getTrophyColour()?->value,
                 'durationOption'      => $instance->getDurationOption()->value,
                 'entryConditions'     => $this->serializeEntryConditions($template),
+                'entryFeePerRound'    => $template->getEntryFeePerRound(),
+                'prizes'              => $this->serializePrizes($template),
+                'entrants'            => array_map(
+                    $this->serializeEntrantPreview(...),
+                    $this->entrantRepository->findByCompetitionOrderedByRegistration($instance),
+                ),
                 'nextRoundLabel'      => null, // REGISTERING instances have no rounds yet — see ActiveCompetition's class docblock
                 'nextRoundAt'         => null,
             ];
@@ -264,6 +271,12 @@ class CompetitionController extends AbstractController
             'registeredCount' => $this->entrantRepository->countForCompetition($activeCompetition),
             'durationOption'  => $activeCompetition->getDurationOption()->value,
             'entryConditions' => $this->serializeEntryConditions($activeCompetition->getTemplate()),
+            'entryFeePerRound' => $activeCompetition->getTemplate()->getEntryFeePerRound(),
+            'prizes'          => $this->serializePrizes($activeCompetition->getTemplate()),
+            'entrants'        => array_map(
+                $this->serializeEntrantPreview(...),
+                $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition),
+            ),
             'nextRoundLabel'  => $currentRound?->getLabel(),
             'nextRoundAt'     => $currentRound?->getScheduledAt()->format(DATE_ATOM),
             'rounds'          => $rounds,
@@ -299,8 +312,31 @@ class CompetitionController extends AbstractController
             'registeredCount' => $this->entrantRepository->countForCompetition($instance),
             'durationOption'  => $instance->getDurationOption()->value,
             'entryConditions' => $this->serializeEntryConditions($instance->getTemplate()),
+            'entryFeePerRound' => $instance->getTemplate()->getEntryFeePerRound(),
+            'prizes'          => $this->serializePrizes($instance->getTemplate()),
             'nextRoundLabel'  => $currentRound?->getLabel(),
             'nextRoundAt'     => $currentRound?->getScheduledAt()->format(DATE_ATOM),
+        ];
+    }
+
+    /**
+     * Only a winner-facing prize exists in the data model today — there is no per-round
+     * prize concept (CompetitionTemplate has a single victorPrize plus optional
+     * rewardTemplates, both applied once at completion; see RewardApplierService). Pence.
+     */
+    private function serializePrizes(CompetitionTemplate $template): array
+    {
+        return [
+            'victorPrize'  => $template->getVictorPrize(),
+            'bonusRewards' => array_map(
+                static fn (RewardTemplate $reward) => [
+                    'slug'        => $reward->getSlug(),
+                    'name'        => $reward->getName(),
+                    'description' => $reward->getDescription(),
+                    'effects'     => $reward->getEffects(),
+                ],
+                $template->getRewardTemplates()->toArray(),
+            ),
         ];
     }
 
@@ -313,16 +349,38 @@ class CompetitionController extends AbstractController
         ];
     }
 
+    /**
+     * Badge/kit fields are read straight off the entrant's snapshot club object — see
+     * SnapshotValidator's docblock: those keys are client-supplied and deliberately
+     * unchecked, so any of them may be absent on an older or malformed snapshot.
+     */
     private function serializeEntrantSummary(?CompetitionEntrant $entrant): ?array
     {
         if ($entrant === null) {
             return null;
         }
 
+        $club = $entrant->getSnapshotJson()['club'] ?? [];
+
         return [
-            'entrantId' => (string) $entrant->getId(),
-            'clubName'  => $entrant->getSnapshotJson()['club']['name'] ?? null,
-            'seed'      => $entrant->getSeed(),
+            'entrantId'     => (string) $entrant->getId(),
+            'clubName'      => $club['name'] ?? null,
+            'seed'          => $entrant->getSeed(),
+            'badgeShape'    => $club['badgeShape'] ?? null,
+            'homePrimary'   => $club['homePrimary'] ?? null,
+            'homeSecondary' => $club['homeSecondary'] ?? null,
+            'awayPrimary'   => $club['awayPrimary'] ?? null,
+            'awaySecondary' => $club['awaySecondary'] ?? null,
+        ];
+    }
+
+    /** Pre-bracket entrant listing (used before rounds/fixtures exist) — same club display fields as serializeEntrantSummary(), plus registration metadata. */
+    private function serializeEntrantPreview(CompetitionEntrant $entrant): array
+    {
+        return [
+            ...$this->serializeEntrantSummary($entrant),
+            'registeredAt' => $entrant->getRegisteredAt()->format(DATE_ATOM),
+            'status'       => $entrant->getStatus()->value,
         ];
     }
 
