@@ -13,11 +13,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * Cron entry point (every 5 min — the reminder's own 15-minute lead time has plenty of
- * slack, unlike app:competition:process-rounds' 1-minute cadence).
+ * slack, unlike app:competition:draw-rounds/app:competition:resolve-rounds' 1-minute
+ * cadence).
  */
 #[AsCommand(
     name: 'app:competition:send-round-reminders',
-    description: 'Sends a "starting soon" push for every CompetitionRound due within its reminder lead time.',
+    description: 'Sends a "results incoming" push for every DRAWN CompetitionRound due within its reminder lead time.',
 )]
 class CompetitionSendRoundRemindersCommand extends Command
 {

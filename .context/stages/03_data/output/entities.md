@@ -226,6 +226,11 @@ migrations are the change log (see `migrations.md`).
   `entrantCapacity`, `durationOption:CompetitionDuration(enum)`,
   `allowedTiers:?array`, `minClubReputation/minClubAgeSeasons/
   entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`,
+  `intermissionRatio:float` (default 0.3, validated strictly `0 < x < 1`
+  in the same `validate()` method) — fraction of each round's time-budget
+  spent in the post-results intermission before the next draw (also
+  governs the lead time before round 1's own draw); see
+  `CompetitionScheduleCalculator` in `04_interfaces/output/services.md`.
   `autoFillSpoofEntrants:bool` (default false) + `autoFillDelayMinutes:int`
   (default 20, one of `ALLOWED_AUTO_FILL_DELAY_MINUTES` = [5,10,20,30,60])
   — dev/testing convenience: once an instance's first entrant registers,
@@ -257,11 +262,23 @@ migrations are the change log (see `migrations.md`).
   one entry per club per competition.
 - **`CompetitionRound`** (table `competition_round`) — one round of a
   competition. `roundIndex`, `label`,
-  `status:CompetitionRoundStatus(enum)`, `scheduledAt`, `startedAt/
-  completedAt`, `matchEngineIdentifier:?MatchEngineIdentifier(enum)`,
-  `lockedForProcessingAt` (claim-lock for round processing),
-  `reminderSentAt` (claim-lock for the separate `ROUND_STARTING_SOON`
-  push — see `CompetitionRoundReminderService` in `04_interfaces/output/
+  `status:CompetitionRoundStatus(enum: DRAW_PENDING|DRAWN|
+  RESULTS_PUBLISHED|CANCELLED)`. Draw and resolve are two decoupled,
+  independently-scheduled/claimed phases (see `CompetitionDrawService`/
+  `CompetitionResultsService` in `04_interfaces/output/services.md`):
+  `scheduledAt` = this round's **draw** due-time (round 1 fixed at lock
+  time; round N>1 (re)written by `CompetitionResultsService` the instant
+  round N-1's results publish, not fixed up front); `startedAt` = when
+  actually drawn; `matchesResolveAt:?\DateTimeImmutable` = this round's
+  **resolve** due-time, set the instant it's drawn; `completedAt` = when
+  results actually published. `matchEngineIdentifier:?MatchEngineIdentifier
+  (enum)`. Two separate claim-lock columns — `drawLockedAt` (draw-phase
+  claim) and `resolveLockedAt` (resolve-phase claim) — since the same row
+  is claimed twice in its life; one shared column can't safely serve both
+  (the second claim would be indistinguishable from "already drawn").
+  `reminderSentAt` (claim-lock for the separate `ROUND_RESOLVING_SOON`
+  push, sent to a DRAWN round nearing its `matchesResolveAt` — see
+  `CompetitionRoundReminderService` in `04_interfaces/output/
   services.md`). `ManyToOne` → `activeCompetition` (not nullable,
   `CASCADE`).
 - **`CompetitionFixture`** (table `competition_fixture`) — one matchup

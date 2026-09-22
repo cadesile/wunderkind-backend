@@ -62,12 +62,12 @@ A push notification's payload has two parts, same as any FCM message:
 
 | `type` | Additional `data` keys | Fired when |
 |---|---|---|
-| `ROUND_DRAWN` | `competitionId`, `roundId` | Fixtures for a round are seeded — either the initial round when a competition's capacity fills, or the next round once the prior one completes. Sent only to the entrants placed into that specific round. |
+| `ROUND_DRAWN` | `competitionId`, `roundId` | Fixtures for a round are seeded — round 1 or any later round, all drawn the same way now (`CompetitionDrawService::drawRound()`), decoupled from that round's own resolution. Sent only to the entrants placed into that specific round. |
 | `NEW_REGISTRANT` | `competitionId` | A new club registers into a competition you're already registered in. Sent to every other currently-registered entrant, not the new joiner. |
-| `MATCH_RESULT` | `competitionId`, `roundId`, `fixtureId` | A single fixture's result has just been generated (`CompetitionRoundProcessorService::resolveFixture()` — the scheduled cron path and the admin "Generate Result" force-resolve path both go through this). Sent to **both** sides of that one fixture as two separate, personalized pushes — winner gets `notification.title` `"Victory!"`, loser gets `"Eliminated"` — but with an **identical** `data` payload and `notification.body` (the same plain-text scoreline, e.g. `"Oxford Harriers 0-1 Bristol Wednesday"`) either way, so client-side handling (fetch by `fixtureId`) doesn't need to branch on which side it landed on. Unlike `ROUND_DRAWN`, this fires per fixture, not per round. |
-| `COMPETITION_COMPLETED` | `competitionId`, `result` (`"WON"` or `"RUNNER_UP"`) | The tournament's final round has just been resolved (`CompetitionRoundProcessorService::finalizeRound()`). Sent as two separate pushes: the champion(s) get `result: "WON"` (`notification.title` `"Champions!"`), the final's loser(s) get `result: "RUNNER_UP"` (`notification.title` `"Tournament complete"`). Distinct from — and in addition to — the `MATCH_RESULT` push both sides already got for that same final fixture; this one specifically marks the *tournament* ending, not just that one match. |
+| `MATCH_RESULT` | `competitionId`, `roundId`, `fixtureId` | A single fixture's result has just been generated (`CompetitionResultsService::resolveFixture()` — the scheduled cron path and the admin "Generate Result" force-resolve path both go through this). Sent to **both** sides of that one fixture as two separate, personalized pushes — winner gets `notification.title` `"Victory!"`, loser gets `"Eliminated"` — but with an **identical** `data` payload and `notification.body` (the same plain-text scoreline, e.g. `"Oxford Harriers 0-1 Bristol Wednesday"`) either way, so client-side handling (fetch by `fixtureId`) doesn't need to branch on which side it landed on. Unlike `ROUND_DRAWN`, this fires per fixture, not per round. |
+| `COMPETITION_COMPLETED` | `competitionId`, `result` (`"WON"` or `"RUNNER_UP"`) | The tournament's final round has just had its results published (`CompetitionResultsService::finalizeRound()`). Sent as two separate pushes: the champion(s) get `result: "WON"` (`notification.title` `"Champions!"`), the final's loser(s) get `result: "RUNNER_UP"` (`notification.title` `"Tournament complete"`). Distinct from — and in addition to — the `MATCH_RESULT` push both sides already got for that same final fixture; this one specifically marks the *tournament* ending, not just that one match. |
 | `NEW_COMPETITION_OPEN` | `competitionId` | A new instance was just provisioned for a `CompetitionTemplate` (`app:competition:provision-instances`, run every 10 min — only fires when a **new** instance is actually created, not on every tick that finds one still open). Sent only to clubs the template's own entry constraints would actually let register (`EligibilityEvaluator`, the same check `POST /api/competitions/{id}/register` itself enforces) — a club outside the template's tier/country/etc. restrictions never sees this. |
-| `ROUND_STARTING_SOON` | `competitionId`, `roundId` | A round you're still in is scheduled to start within 15 minutes (`app:competition:send-round-reminders`, run every 5 min; `CompetitionRoundReminderService`). Sent once per round, only to that round's actual participants (the entrants with a fixture seeded into it) — an eliminated entrant from an earlier round never receives this for a round they're no longer in. |
+| `ROUND_RESOLVING_SOON` | `competitionId`, `roundId` | A round you're still in (already drawn — `DRAWN` status) is due to have its results published within 15 minutes (`app:competition:send-round-reminders`, run every 5 min; `CompetitionRoundReminderService`). Sent once per round, only to that round's actual participants (the entrants with a fixture seeded into it) — a `DRAW_PENDING` round has no fixtures yet, so it's never eligible for this reminder. |
 | `ADMIN_MESSAGE` | `adminMessageId` | An operator-authored broadcast (`/admin/admin-messages`) was published with its "Also send as push" option checked. `notification.body` is the message's `bodyHtml` with tags stripped to plain text — if you want to render rich text, poll `GET /api/messages/pending` for the full `bodyHtml` using `adminMessageId` (this push is a nudge to check the inbox, not a replacement for polling it). |
 
 No other push types exist yet. Treat an unrecognized `type` as a no-op
@@ -103,12 +103,11 @@ without a client update if a graceful unknown-type fallback exists.
 - Reference implementation server-side: `src/Service/Notification/
   PushNotificationService.php` (dispatch), `src/MessageHandler/
   SendPushNotificationMessageHandler.php` (the actual FCM send),
-  `src/Service/Competition/CompetitionLockService.php` /
-  `CompetitionRoundProcessorService.php` / `src/Controller/Api/
-  CompetitionController.php` (trigger points for `ROUND_DRAWN`/
-  `NEW_REGISTRANT`/`MATCH_RESULT`/`COMPETITION_COMPLETED`),
+  `src/Service/Competition/CompetitionDrawService.php` (`ROUND_DRAWN`) /
+  `CompetitionResultsService.php` (`MATCH_RESULT`/`COMPETITION_COMPLETED`)
+  / `src/Controller/Api/CompetitionController.php` (`NEW_REGISTRANT`),
   `src/MessageHandler/ResolveNewCompetitionAudienceForPushMessageHandler.php`
   (`NEW_COMPETITION_OPEN`'s eligibility-filtered audience resolution, mirroring
   `ResolveAdminMessageAudienceForPushMessageHandler`'s pattern via the shared
   `App\Message\AudienceResolutionMessage` interface), `src/Service/Competition/
-  CompetitionRoundReminderService.php` (`ROUND_STARTING_SOON`).
+  CompetitionRoundReminderService.php` (`ROUND_RESOLVING_SOON`).

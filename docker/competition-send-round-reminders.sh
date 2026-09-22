@@ -1,7 +1,8 @@
 #!/bin/sh
-# Sends a "starting soon" push for every CompetitionRound due within its 15-minute
-# reminder lead time. Runs every 5 minutes (see the Dockerfile crontab) — plenty of
-# slack for the lead time, unlike competition-process-rounds' 1-minute cadence.
+# Sends a "results incoming" push for every DRAWN CompetitionRound due within its
+# 15-minute reminder lead time. Runs every 5 minutes (see the Dockerfile crontab) —
+# plenty of slack for the lead time, unlike competition-draw-rounds.sh/
+# competition-resolve-rounds.sh's 1-minute cadence.
 #
 # A flock guard is defense-in-depth alongside the DB-level claim-lock
 # (CompetitionRoundReminderService::claimReminder) against crond starting a new

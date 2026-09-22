@@ -13,12 +13,18 @@ use Symfony\Component\Uid\UuidV7;
  * round-creation time (keyed by label - QF/SF/FINAL/etc), not re-read live, so a later
  * template edit can't retroactively change an already-scheduled round's engine.
  *
- * The (status, scheduledAt) index is the exact due-row query the round processor runs:
- * WHERE status IN (PENDING, SCHEDULED) AND scheduled_at <= NOW().
+ * Draw and resolve are two independently-scheduled, independently-claimed passes over the
+ * same row: (status, scheduledAt) is the draw-due query CompetitionDrawService runs
+ * (WHERE status = DRAW_PENDING AND scheduled_at <= NOW()), (status, matchesResolveAt) is
+ * the resolve-due query CompetitionResultsService runs (WHERE status = DRAWN AND
+ * matches_resolve_at <= NOW()). Each pass has its own claim column (drawLockedAt/
+ * resolveLockedAt) — a single shared claim column can't serve both without the second
+ * claim being indistinguishable from "already drawn".
  */
 #[ORM\Entity(repositoryClass: CompetitionRoundRepository::class)]
 #[ORM\Table(name: 'competition_round')]
 #[ORM\Index(columns: ['status', 'scheduled_at'], name: 'idx_competition_round_status_scheduled')]
+#[ORM\Index(columns: ['status', 'matches_resolve_at'], name: 'idx_competition_round_status_resolve')]
 #[ORM\Index(columns: ['active_competition_id', 'round_index'], name: 'idx_competition_round_competition_index')]
 #[ORM\UniqueConstraint(name: 'uq_competition_round_competition_index', columns: ['active_competition_id', 'round_index'])]
 class CompetitionRound
@@ -40,25 +46,39 @@ class CompetitionRound
     #[ORM\Column(type: 'string', enumType: CompetitionRoundStatus::class)]
     private CompetitionRoundStatus $status;
 
+    /** This round's DRAW due-time. Round 1: fixed at lock time. Round N>1: (re)written by
+     *  CompetitionResultsService the moment round N-1's results publish. */
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $scheduledAt;
 
+    /** When this round was actually drawn (fixtures published). */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $startedAt = null;
 
+    /** This round's RESOLVE due-time, set the instant it's drawn. */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $matchesResolveAt = null;
+
+    /** When this round's results were actually published. */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $completedAt = null;
 
     #[ORM\Column(type: 'string', enumType: MatchEngineIdentifier::class, nullable: true)]
     private ?MatchEngineIdentifier $matchEngineIdentifier = null;
 
+    /** Claim marker for CompetitionDrawService::claimDraw() — see class docblock. */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
-    private ?\DateTimeImmutable $lockedForProcessingAt = null;
+    private ?\DateTimeImmutable $drawLockedAt = null;
+
+    /** Claim marker for CompetitionResultsService::claimResults() — see class docblock. */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $resolveLockedAt = null;
 
     /**
-     * Claim marker for CompetitionRoundReminderService — set the instant a "starting soon"
-     * push is actually dispatched, so an overlapping cron tick can't send it twice. Same
-     * atomic-UPDATE claim idiom as lockedForProcessingAt, just for a different action.
+     * Claim marker for CompetitionRoundReminderService — set the instant a "results
+     * incoming" push is actually dispatched, so an overlapping cron tick can't send it
+     * twice. Same atomic-UPDATE claim idiom as drawLockedAt/resolveLockedAt, just for a
+     * different action.
      */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $reminderSentAt = null;
@@ -69,7 +89,7 @@ class CompetitionRound
         $this->activeCompetition = $activeCompetition;
         $this->roundIndex        = $roundIndex;
         $this->label              = $label;
-        $this->status              = CompetitionRoundStatus::PENDING;
+        $this->status              = CompetitionRoundStatus::DRAW_PENDING;
         $this->scheduledAt         = $scheduledAt;
     }
 
@@ -90,14 +110,20 @@ class CompetitionRound
     public function getStartedAt(): ?\DateTimeImmutable { return $this->startedAt; }
     public function setStartedAt(?\DateTimeImmutable $startedAt): static { $this->startedAt = $startedAt; return $this; }
 
+    public function getMatchesResolveAt(): ?\DateTimeImmutable { return $this->matchesResolveAt; }
+    public function setMatchesResolveAt(?\DateTimeImmutable $matchesResolveAt): static { $this->matchesResolveAt = $matchesResolveAt; return $this; }
+
     public function getCompletedAt(): ?\DateTimeImmutable { return $this->completedAt; }
     public function setCompletedAt(?\DateTimeImmutable $completedAt): static { $this->completedAt = $completedAt; return $this; }
 
     public function getMatchEngineIdentifier(): ?MatchEngineIdentifier { return $this->matchEngineIdentifier; }
     public function setMatchEngineIdentifier(?MatchEngineIdentifier $matchEngineIdentifier): static { $this->matchEngineIdentifier = $matchEngineIdentifier; return $this; }
 
-    public function getLockedForProcessingAt(): ?\DateTimeImmutable { return $this->lockedForProcessingAt; }
-    public function setLockedForProcessingAt(?\DateTimeImmutable $lockedForProcessingAt): static { $this->lockedForProcessingAt = $lockedForProcessingAt; return $this; }
+    public function getDrawLockedAt(): ?\DateTimeImmutable { return $this->drawLockedAt; }
+    public function setDrawLockedAt(?\DateTimeImmutable $drawLockedAt): static { $this->drawLockedAt = $drawLockedAt; return $this; }
+
+    public function getResolveLockedAt(): ?\DateTimeImmutable { return $this->resolveLockedAt; }
+    public function setResolveLockedAt(?\DateTimeImmutable $resolveLockedAt): static { $this->resolveLockedAt = $resolveLockedAt; return $this; }
 
     public function getReminderSentAt(): ?\DateTimeImmutable { return $this->reminderSentAt; }
     public function setReminderSentAt(?\DateTimeImmutable $reminderSentAt): static { $this->reminderSentAt = $reminderSentAt; return $this; }

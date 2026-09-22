@@ -43,31 +43,69 @@ filename alone.
 - **`Competition/BracketLabeler`** — generates stable round labels used
   as keys into `CompetitionTemplate::roundEngineConfig` and stored on
   `CompetitionRound::label`.
+- **`Competition/CompetitionScheduleCalculator`** — pure, stateless
+  interval math (no DB): splits a round's time-budget
+  (`totalDurationSeconds / roundCount`, via `intervalSeconds()`) into a
+  pre-resolve "reveal" window and a post-results "intermission" window
+  (`splitInterval()`, ratio from `CompetitionTemplate::intermissionRatio`,
+  floored at 120s per half — under that, the split is skipped entirely
+  and the whole budget goes to reveal), plus `firstRoundLeadTimeSeconds()`
+  (round 1's own pre-draw lead time, reusing the same ratio against round
+  1's own budget rather than a second config value). Shared by
+  `CompetitionLockService`, `CompetitionDrawService` and
+  `CompetitionResultsService` below.
 - **`Competition/CompetitionLockService`** — locks a competition instance
-  and schedules its first round the instant the last slot fills; also
-  triggers a `PushNotificationService` "round drawn" push to every
-  entrant placed into round 1.
+  the instant the last slot fills: computes the full round schedule and
+  persists every `CompetitionRound` row as `DRAW_PENDING` (round 1's
+  `scheduledAt` = now + `CompetitionScheduleCalculator`'s lead time; later
+  rounds get a non-binding placeholder, overwritten before ever queried).
+  No fixtures are seeded here and no push is sent — drawing (including
+  round 1's) is exclusively `CompetitionDrawService`'s job now, symmetric
+  across every round.
 - **`Competition/CompetitionRegistrationService`** — registers entrants,
   using `SELECT ... FOR UPDATE` on the `ActiveCompetition` row to
   serialize concurrent last-slot registrations.
-- **`Competition/CompetitionRoundProcessorService`** — core scheduling/
-  idempotency/bracket-advancement logic behind the
-  `app:competition:process-rounds` command (runs every 1 minute via cron
-  — see `02_architecture/output/structure.md`). Sends a
-  `PushNotificationService` "next round drawn" push to advancing winners
-  each time a round completes and the next round's fixtures are seeded;
-  a personalized `MATCH_RESULT` push per side (winner "Victory!" / loser
-  "Eliminated", same `data` payload either way) for every fixture
-  resolved; and, when the final round completes, a `COMPETITION_COMPLETED`
-  push to the champion(s) (`result: "WON"`) and the final's loser(s)
-  (`result: "RUNNER_UP"`) — see `finalizeRound()`.
+- **`Competition/CompetitionDrawService`** — owns the draw phase
+  (`DRAW_PENDING` → `DRAWN`) behind `app:competition:draw-rounds` (every 1
+  min via cron — see `02_architecture/output/structure.md`). Atomically
+  claims + draws every due round (round 1: pairs entrants by seed; round
+  N>1: pairs the previous round's winners), sets `startedAt` +
+  `matchesResolveAt` (via `CompetitionScheduleCalculator`), flips
+  `ActiveCompetition` `SCHEDULED`→`RUNNING` on round 1, and sends a
+  `PushNotificationService` `ROUND_DRAWN` push to every entrant placed
+  into the round. `forceDrawRound()` is an admin-only bypass of a round's
+  `scheduledAt` wait (mirrors `CompetitionResultsService::
+  forceResolveFixture()` below).
+- **`Competition/CompetitionResultsService`** — owns the resolve +
+  finalization phase (`DRAWN` → `RESULTS_PUBLISHED`) behind
+  `app:competition:resolve-rounds` (every 1 min). Atomically claims (via
+  `resolveLockedAt`, which deliberately does **not** flip `status` away
+  from `DRAWN` — a round can sit "claimed, partially resolved" across
+  multiple `forceResolveFixture()` admin calls) + resolves every due
+  round's fixtures, sending a personalized `MATCH_RESULT` push per side
+  (winner "Victory!" / loser "Eliminated", same `data` payload either
+  way) for every fixture; for a non-final round, writes the **next**
+  round's `scheduledAt` (`completedAt + intermissionSeconds`) without
+  drawing it — that's a later `CompetitionDrawService` tick; for the
+  final round, crowns the winner(s), applies the prize via
+  `RewardApplierService`, completes the `ActiveCompetition`, and sends a
+  `COMPETITION_COMPLETED` push to the champion(s) (`result: "WON"`) and
+  the final's loser(s) (`result: "RUNNER_UP"`) — see `finalizeRound()`.
+  `forceResolveFixture()` is an admin-only bypass of a fixture's round's
+  `matchesResolveAt` wait, sharing the same claim/resolve/finalize
+  machinery as the scheduled path. (Replaces the old fused
+  `CompetitionRoundProcessorService`, which drew a round's next fixtures
+  and resolved its own results in the same pass — see
+  `03_data/output/migrations.md`'s most recent entry.)
 - **`Competition/CompetitionRoundReminderService`** — sends a
-  `ROUND_STARTING_SOON` push to a round's actual participants 15 minutes
-  before its `scheduledAt`, via the `app:competition:send-round-reminders`
-  command (every 5 min). Same atomic-UPDATE claim-lock idiom as
-  `CompetitionRoundProcessorService::claimRound()` (a `reminderSentAt`
-  column on `CompetitionRound`), kept as a fully separate service so a
-  reminder bug can't threaten bracket-processing correctness.
+  `ROUND_RESOLVING_SOON` push to a `DRAWN` round's actual participants 15
+  minutes before its `matchesResolveAt` (a `DRAW_PENDING` round has no
+  fixtures yet to remind anyone about), via the
+  `app:competition:send-round-reminders` command (every 5 min). Same
+  atomic-UPDATE claim-lock idiom as `CompetitionDrawService::claimDraw()`/
+  `CompetitionResultsService::claimResults()` (a `reminderSentAt` column
+  on `CompetitionRound`), kept as a fully separate service so a reminder
+  bug can't threaten bracket-processing correctness.
 - **`Competition/CompetitionAutoFillService`** — dev/testing convenience:
   once an instance has at least one entrant and its template opted in
   (`CompetitionTemplate::$autoFillSpoofEntrants`), fills every remaining
@@ -76,7 +114,9 @@ filename alone.
   the `app:competition:auto-fill-spoof-entrants` command (every 1 min —
   the finest delay is 5 min). Delegates the actual fill to
   `CompetitionSpoofEntrantService::spoofAllEntrants()`, so a filled
-  instance auto-locks/draws round 1 exactly like a genuinely full house.
+  instance auto-locks exactly like a genuinely full house (round 1 then
+  draws on `CompetitionDrawService`'s own schedule, same as any other
+  round — no longer synchronous with locking).
   No separate "already filled" flag — an instance that reaches capacity
   stops being `REGISTERING` and so naturally drops out of eligibility.
 - **`Competition/CompetitionSpoofEntrantService`** — admin-only override

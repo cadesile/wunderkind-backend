@@ -17,12 +17,19 @@
     {%- endif -%}
 {% endmacro %}
 
+{% set competitionStatusColor = {
+    registering: 'secondary',
+    scheduled:   'primary',
+    running:     'warning',
+    completed:   'success',
+    cancelled:   'danger',
+} %}
+
 {% set roundStatusColor = {
-    pending:   'secondary',
-    scheduled: 'primary',
-    running:   'warning',
-    completed: 'success',
-    cancelled: 'danger',
+    draw_pending:      'secondary',
+    drawn:              'warning',
+    results_published: 'success',
+    cancelled:          'danger',
 } %}
 
 {% set fixtureStatusColor = {
@@ -37,7 +44,7 @@
         <div>
             <h5 class="fw-semibold mb-0">{{ competition.template.name }}</h5>
             <p class="text-muted small mb-0">
-                {{ _self.status_badge(roundStatusColor[competition.status.value] ?? 'secondary', competition.status.value) }}
+                {{ _self.status_badge(competitionStatusColor[competition.status.value] ?? 'secondary', competition.status.value) }}
                 &middot; {{ competition.entrantCapacity }} entrants &middot; {{ competition.durationOption.value }}
                 {% if competition.startsAt %}&middot; starts {{ competition.startsAt|date('Y-m-d H:i') }}{% endif %}
                 {% if competition.endsAt %}&middot; ends {{ competition.endsAt|date('Y-m-d H:i') }}{% endif %}
@@ -73,7 +80,19 @@
                     {% if round.matchEngineIdentifier %}
                         <span class="badge bg-dark-subtle text-dark border border-dark-subtle">{{ round.matchEngineIdentifier.value }}</span>
                     {% endif %}
-                    <span class="ms-auto text-muted small">scheduled {{ round.scheduledAt|date('Y-m-d H:i') }}</span>
+                    {% if round.status.value == 'draw_pending' %}
+                        <span class="ms-auto text-muted small">draw due {{ round.scheduledAt|date('Y-m-d H:i') }}</span>
+                        <form method="post" action="{{ forceDrawUrlByRoundId[round.id|ea_as_string] }}" class="d-inline">
+                            <input type="hidden" name="_token" value="{{ csrf_token('force_draw_round') }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="fa fa-bolt"></i> Force Draw
+                            </button>
+                        </form>
+                    {% elseif round.status.value == 'drawn' %}
+                        <span class="ms-auto text-muted small">results due {{ round.matchesResolveAt|date('Y-m-d H:i') }}</span>
+                    {% else %}
+                        <span class="ms-auto text-muted small">completed {{ round.completedAt|date('Y-m-d H:i') }}</span>
+                    {% endif %}
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0 small align-middle">

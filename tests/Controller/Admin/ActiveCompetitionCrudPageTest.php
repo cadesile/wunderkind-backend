@@ -14,8 +14,9 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
+use App\Service\Competition\CompetitionDrawService;
 use App\Service\Competition\CompetitionLockService;
-use App\Service\Competition\CompetitionRoundProcessorService;
+use App\Service\Competition\CompetitionResultsService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -137,7 +138,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         return $club;
     }
 
-    /** Builds a locked, 4-entrant ActiveCompetition (round 1 = SF, round 2 = FINAL) and processes round 1. */
+    /** Builds a locked, drawn, 4-entrant ActiveCompetition (round 1 = SF, round 2 = FINAL) and resolves round 1. */
     private function buildCompetitionWithOneProcessedRound(EntityManagerInterface $em): ActiveCompetition
     {
         $template = new CompetitionTemplate('Admin View Cup', 'admin-view-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
@@ -162,18 +163,32 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
         $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
-        $round1->setScheduledAt(new \DateTimeImmutable('-1 minute'));
-        $em->flush();
+        self::getContainer()->get(CompetitionDrawService::class)->forceDrawRound($round1);
 
-        $processor = self::getContainer()->get(CompetitionRoundProcessorService::class);
-        $processed = $processor->processDueRounds(new \DateTimeImmutable());
-        self::assertGreaterThan(0, $processed, 'test setup: round 1 should process');
+        $em->refresh($round1);
+        $fixtureRepository = self::getContainer()->get(\App\Repository\Competition\CompetitionFixtureRepository::class);
+        $resultsService     = self::getContainer()->get(CompetitionResultsService::class);
+        foreach ($fixtureRepository->findByRoundOrderedBySlot($round1) as $fixture) {
+            $resultsService->forceResolveFixture($fixture);
+        }
 
         return $instance;
     }
 
-    /** Same as buildCompetitionWithOneProcessedRound() but stops right after locking — round 1's fixtures stay PENDING. */
+    /** Same as buildCompetitionWithOneProcessedRound() but stops right after drawing — round 1's fixtures stay PENDING. */
     private function buildLockedCompetitionWithUnprocessedRound(EntityManagerInterface $em): ActiveCompetition
+    {
+        $instance = $this->buildLockedCompetitionWithUndrawnRound($em);
+
+        $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
+        $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        self::getContainer()->get(CompetitionDrawService::class)->forceDrawRound($round1);
+
+        return $instance;
+    }
+
+    /** Stops right after locking — round 1 stays DRAW_PENDING with no fixtures at all. */
+    private function buildLockedCompetitionWithUndrawnRound(EntityManagerInterface $em): ActiveCompetition
     {
         $template = new CompetitionTemplate('Force Result Cup', 'force-result-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
         $em->persist($template);
@@ -241,10 +256,37 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
         $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
-        self::assertSame(\App\Enum\Competition\CompetitionRoundStatus::COMPLETED, $round1->getStatus());
+        self::assertSame(\App\Enum\Competition\CompetitionRoundStatus::RESULTS_PUBLISHED, $round1->getStatus());
 
-        // FINAL round should now have a seeded fixture from the two SF winners.
+        // FINAL round is scheduled to draw next but has no fixtures yet — drawing it is
+        // CompetitionDrawService's job, on a later tick.
         $this->assertStringContainsString('FINAL', $crawler->text());
+    }
+
+    public function testForceDrawButtonDrawsADrawPendingRoundImmediately(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em       = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->buildLockedCompetitionWithUndrawnRound($em);
+
+        $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString('Force Draw', $crawler->text());
+        $this->assertStringContainsString('No fixtures.', $crawler->text());
+
+        $forms = $crawler->filter('form')->reduce(fn ($node) => str_contains((string) $node->attr('action'), 'force-draw'));
+        self::assertGreaterThan(0, $forms->count(), 'expected at least one Force Draw form on the page');
+
+        $client->submit($forms->eq(0)->form());
+        self::assertResponseRedirects();
+        $crawler = $client->followRedirect();
+        self::assertResponseIsSuccessful();
+
+        $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
+        $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        self::assertSame(\App\Enum\Competition\CompetitionRoundStatus::DRAWN, $round1->getStatus());
+        $this->assertStringContainsString('Generate Result', $crawler->text());
     }
 
     public function testDetailPageShowsRoundsFixturesAndScores(): void

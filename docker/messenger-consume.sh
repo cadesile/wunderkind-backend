@@ -7,7 +7,7 @@
 #
 # flock guards against crond stacking a second consumer on top of one that's
 # still flushing a batch when a run overruns --time-limit — see
-# competition-process-rounds.sh for the same pattern.
+# competition-draw-rounds.sh/competition-resolve-rounds.sh for the same pattern.
 
 CONSOLE=/var/www/html/bin/console
 LOCKFILE=/tmp/messenger-consume.lock

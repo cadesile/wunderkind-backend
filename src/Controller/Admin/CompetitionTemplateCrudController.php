@@ -14,6 +14,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 
@@ -52,6 +53,12 @@ class CompetitionTemplateCrudController extends AbstractCrudController
         yield ChoiceField::new('durationOption', 'Duration')
             ->setFormType(EnumType::class)
             ->setFormTypeOptions(['class' => CompetitionDuration::class]);
+
+        yield NumberField::new('intermissionRatio', 'Intermission Ratio')
+            ->setNumDecimals(2)
+            ->setFormTypeOptions(['scale' => 2, 'html5' => true, 'attr' => ['min' => '0.01', 'max' => '0.99', 'step' => '0.01']])
+            ->hideOnIndex()
+            ->setHelp('Fraction (strictly between 0 and 1) of each round\'s time budget spent in the post-results intermission before the next draw; the rest is the pre-resolve "fixtures revealed" window. Also sets the lead time before round 1\'s own draw. Default 0.3 (30% intermission / 70% reveal).');
 
         yield CodeEditorField::new('allowedTiersJson', 'Allowed Tiers')
             ->setLanguage('js')
