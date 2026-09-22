@@ -29,15 +29,26 @@ class CompetitionRoundRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /** True iff resubmission is currently allowed — a round exists that has not started running yet. */
+    public function findByCompetitionAndIndex(ActiveCompetition $activeCompetition, int $roundIndex): ?CompetitionRound
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.activeCompetition = :competition')
+            ->andWhere('r.roundIndex = :roundIndex')
+            ->setParameter('competition', $activeCompetition->getId())
+            ->setParameter('roundIndex', $roundIndex)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /** True iff resubmission is currently allowed — a round exists that has not been drawn yet. */
     public function hasUpcomingRound(ActiveCompetition $activeCompetition): bool
     {
         $count = $this->createQueryBuilder('r')
             ->select('COUNT(r.id)')
             ->where('r.activeCompetition = :competition')
-            ->andWhere('r.status IN (:statuses)')
+            ->andWhere('r.status = :status')
             ->setParameter('competition', $activeCompetition->getId())
-            ->setParameter('statuses', [CompetitionRoundStatus::PENDING, CompetitionRoundStatus::SCHEDULED])
+            ->setParameter('status', CompetitionRoundStatus::DRAW_PENDING)
             ->getQuery()
             ->getSingleScalarResult();
 
@@ -46,8 +57,8 @@ class CompetitionRoundRepository extends ServiceEntityRepository
 
     /**
      * The round currently in progress or next up (not yet started) — null once every round is
-     * COMPLETED/CANCELLED, or before the bracket has been drawn (a REGISTERING instance has no
-     * rounds yet).
+     * RESULTS_PUBLISHED/CANCELLED, or before the bracket has been drawn (a REGISTERING instance
+     * has no rounds yet).
      */
     public function findCurrentRound(ActiveCompetition $activeCompetition): ?CompetitionRound
     {
@@ -56,9 +67,8 @@ class CompetitionRoundRepository extends ServiceEntityRepository
             ->andWhere('r.status IN (:statuses)')
             ->setParameter('competition', $activeCompetition->getId())
             ->setParameter('statuses', [
-                CompetitionRoundStatus::PENDING,
-                CompetitionRoundStatus::SCHEDULED,
-                CompetitionRoundStatus::RUNNING,
+                CompetitionRoundStatus::DRAW_PENDING,
+                CompetitionRoundStatus::DRAWN,
             ])
             ->orderBy('r.roundIndex', 'ASC')
             ->setMaxResults(1)
@@ -67,16 +77,16 @@ class CompetitionRoundRepository extends ServiceEntityRepository
     }
 
     /**
-     * Rounds due for execution — the query the round processor cron runs every tick.
+     * Rounds due to be drawn — the query CompetitionDrawService's cron pass runs every tick.
      *
      * @return list<CompetitionRound>
      */
-    public function findDueRounds(\DateTimeImmutable $now): array
+    public function findDueForDraw(\DateTimeImmutable $now): array
     {
         return $this->createQueryBuilder('r')
-            ->where('r.status IN (:statuses)')
+            ->where('r.status = :status')
             ->andWhere('r.scheduledAt <= :now')
-            ->setParameter('statuses', [CompetitionRoundStatus::PENDING, CompetitionRoundStatus::SCHEDULED])
+            ->setParameter('status', CompetitionRoundStatus::DRAW_PENDING)
             ->setParameter('now', $now)
             ->orderBy('r.scheduledAt', 'ASC')
             ->getQuery()
@@ -84,24 +94,42 @@ class CompetitionRoundRepository extends ServiceEntityRepository
     }
 
     /**
-     * Rounds starting within the reminder lead time that haven't been reminded about yet —
-     * see CompetitionRoundReminderService. `scheduledAt > $now` excludes rounds already due
-     * (or overdue): those get processed outright by the round processor, so a "starting soon"
-     * push for one would be stale by the time it's delivered.
+     * Rounds due to have their results published — the query CompetitionResultsService's
+     * cron pass runs every tick.
+     *
+     * @return list<CompetitionRound>
+     */
+    public function findDueForResults(\DateTimeImmutable $now): array
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.status = :status')
+            ->andWhere('r.matchesResolveAt <= :now')
+            ->setParameter('status', CompetitionRoundStatus::DRAWN)
+            ->setParameter('now', $now)
+            ->orderBy('r.matchesResolveAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Drawn rounds whose results resolve within the reminder lead time and haven't been
+     * reminded about yet — see CompetitionRoundReminderService. `matchesResolveAt > $now`
+     * excludes rounds already due (or overdue): those get resolved outright by the results
+     * service, so a "results incoming" push for one would be stale by the time it's delivered.
      *
      * @return list<CompetitionRound>
      */
     public function findDueForReminder(\DateTimeImmutable $now, \DateTimeImmutable $windowEnd): array
     {
         return $this->createQueryBuilder('r')
-            ->where('r.status IN (:statuses)')
+            ->where('r.status = :status')
             ->andWhere('r.reminderSentAt IS NULL')
-            ->andWhere('r.scheduledAt > :now')
-            ->andWhere('r.scheduledAt <= :windowEnd')
-            ->setParameter('statuses', [CompetitionRoundStatus::PENDING, CompetitionRoundStatus::SCHEDULED])
+            ->andWhere('r.matchesResolveAt > :now')
+            ->andWhere('r.matchesResolveAt <= :windowEnd')
+            ->setParameter('status', CompetitionRoundStatus::DRAWN)
             ->setParameter('now', $now)
             ->setParameter('windowEnd', $windowEnd)
-            ->orderBy('r.scheduledAt', 'ASC')
+            ->orderBy('r.matchesResolveAt', 'ASC')
             ->getQuery()
             ->getResult();
     }

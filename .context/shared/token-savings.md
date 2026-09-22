@@ -10,24 +10,22 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (router + `.context/stages/*/output/*.md`, all stages) | 22448 |
-| Router only (`.context/CONTEXT.md`) | 484 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 27450 |
+| Router only (`.context/CONTEXT.md`) | 483 |
 | `01_overview` (router + its `output/`) | 1649 |
-| `02_architecture` (same shape) | 3112 |
-| `03_data` (same shape) | 7607 |
-| `04_interfaces` (same shape) | 8772 |
+| `02_architecture` (same shape) | 3351 |
+| `03_data` (same shape) | 9123 |
+| `04_interfaces` (same shape) | 11601 |
 | `05_ui` (same shape) | 1906 |
 | `06_documentation` (same shape) | 1392 |
 | `07_synthesis` (same shape) | 2315 |
 
-**Typical saving vs. loading everything:** 83% (average across all 7
+**Typical saving vs. loading everything:** 84% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-20 (04_interfaces grew by
-`push-notifications.md`, moved in from `docs/api/push-notifications.md`
-by request — that file no longer exists; 06_documentation/07_synthesis
-updated to repoint their references to the new location; same-session
-follow-up pass added notification-observability content to `03_data`
-(entities/schema/migrations) and `04_interfaces`
-(routes/controllers/services) — small incremental growth on both, not
-re-measured precisely; other stages unchanged this pass)
+**Last updated:** 2026-09-22 (competition round lifecycle draw/resolve
+decoupling — `02_architecture`, `03_data`, `04_interfaces` rows
+re-measured precisely with `wc -c` this pass, superseding the prior
+"not re-measured precisely" drift on `03_data`/`04_interfaces` from the
+2026-09-20 follow-up pass; `01_overview`/`05_ui`/`06_documentation`/
+`07_synthesis` untouched this pass, figures carried forward unchanged)

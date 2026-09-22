@@ -9,8 +9,10 @@ use App\Enum\Competition\CompetitionDuration;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
+use App\Entity\Competition\CompetitionRound;
 use App\Repository\Competition\CompetitionRoundRepository;
-use App\Service\Competition\CompetitionRoundProcessorService;
+use App\Service\Competition\CompetitionDrawService;
+use App\Service\Competition\CompetitionResultsService;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -53,7 +55,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * its entrants, not the reverse), so those are orphaned here by design and would need
  * separate cleanup if that matters.
  *
- * Four deliberate exceptions to "never hand-edited", all admin test tools:
+ * Five deliberate exceptions to "never hand-edited", all admin test tools:
  *
  * - "Generate Spoof Entrants" clones an existing real entrant's snapshot into N new spoof
  *   entrants in the same competition (see
@@ -64,10 +66,15 @@ use Symfony\Component\Routing\Attribute\Route;
  *   CompetitionSpoofEntrantService::spoofAllEntrants()) — for standing up an entire test
  *   competition (registration through to result generation) without any real club ever
  *   registering.
+ * - "Force Draw" (per round row on the detail page) draws a single DRAW_PENDING round
+ *   immediately, bypassing its scheduledAt wait — since round 1 no longer draws
+ *   synchronously at lock time, this is what lets an admin move a freshly-locked test
+ *   competition (e.g. from "Spoof All Entrants" above) straight to its first fixtures
+ *   without waiting out the real lead time. See CompetitionDrawService::forceDrawRound().
  * - "Generate Result" (per fixture row on the detail page) forces a single PENDING
- *   fixture to resolve immediately, bypassing its round's scheduledAt wait — for
+ *   fixture to resolve immediately, bypassing its round's matchesResolveAt wait — for
  *   exercising round-by-round processing locally without waiting out real durations. See
- *   CompetitionRoundProcessorService::forceResolveFixture().
+ *   CompetitionResultsService::forceResolveFixture().
  * - "Clear All" deletes every ActiveCompetition row in one confirmed action — the bulk
  *   equivalent of selecting every row and using batch-delete, for wiping all local test
  *   competitions in one go.
@@ -116,6 +123,11 @@ class ActiveCompetitionCrudController extends AbstractCrudController
             $generateResultUrlByFixtureId[$fixtureId->toRfc4122()] = $this->generateUrl('admin_active_competition_fixture_generate_result', ['fixture' => (string) $fixtureId]);
         }
 
+        $forceDrawUrlByRoundId = [];
+        foreach ($rounds as $round) {
+            $forceDrawUrlByRoundId[$round->getId()->toRfc4122()] = $this->generateUrl('admin_active_competition_round_force_draw', ['round' => (string) $round->getId()]);
+        }
+
         return $this->render('admin/competition/active_competition_detail.html.twig', [
             'competition'                   => $competition,
             'rounds'                        => $rounds,
@@ -132,6 +144,7 @@ class ActiveCompetitionCrudController extends AbstractCrudController
                 'routeParams' => ['activeCompetition' => (string) $competition->getId()],
             ]),
             'generateResultUrlByFixtureId' => $generateResultUrlByFixtureId,
+            'forceDrawUrlByRoundId'        => $forceDrawUrlByRoundId,
         ]);
     }
 
@@ -310,7 +323,7 @@ class ActiveCompetitionCrudController extends AbstractCrudController
      * /admin?routeName=... forwarding trick; a plain direct route works fine here.
      */
     #[Route('/admin/active-competition/fixture/{fixture}/generate-result', name: 'admin_active_competition_fixture_generate_result', methods: ['POST'])]
-    public function generateFixtureResult(CompetitionFixture $fixture, Request $request, CompetitionRoundProcessorService $processor): Response
+    public function generateFixtureResult(CompetitionFixture $fixture, Request $request, CompetitionResultsService $resultsService): Response
     {
         $activeCompetition = $fixture->getRound()->getActiveCompetition();
         $detailUrl         = $this->generateUrl('admin_active_competition_detail', ['entityId' => (string) $activeCompetition->getId()]);
@@ -321,8 +334,34 @@ class ActiveCompetitionCrudController extends AbstractCrudController
         }
 
         try {
-            $result = $processor->forceResolveFixture($fixture);
+            $result = $resultsService->forceResolveFixture($fixture);
             $this->addFlash('success', sprintf('Generated result: %d – %d.', $result->getHomeScore(), $result->getAwayScore()));
+        } catch (\RuntimeException $e) {
+            $this->addFlash('danger', $e->getMessage());
+        }
+
+        return $this->redirect($detailUrl);
+    }
+
+    /**
+     * POST-only, no confirmation page — same shape as generateFixtureResult() above.
+     * Draws a single DRAW_PENDING round immediately, bypassing its scheduledAt wait — see
+     * class docblock's "Force Draw" entry.
+     */
+    #[Route('/admin/active-competition/round/{round}/force-draw', name: 'admin_active_competition_round_force_draw', methods: ['POST'])]
+    public function forceDrawRound(CompetitionRound $round, Request $request, CompetitionDrawService $drawService): Response
+    {
+        $activeCompetition = $round->getActiveCompetition();
+        $detailUrl         = $this->generateUrl('admin_active_competition_detail', ['entityId' => (string) $activeCompetition->getId()]);
+
+        if (!$this->isCsrfTokenValid('force_draw_round', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($detailUrl);
+        }
+
+        try {
+            $drawService->forceDrawRound($round);
+            $this->addFlash('success', sprintf('Drew %s.', $round->getLabel()));
         } catch (\RuntimeException $e) {
             $this->addFlash('danger', $e->getMessage());
         }

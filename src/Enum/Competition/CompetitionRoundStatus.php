@@ -4,9 +4,8 @@ namespace App\Enum\Competition;
 
 enum CompetitionRoundStatus: string
 {
-    case PENDING   = 'pending';
-    case SCHEDULED = 'scheduled';
-    case RUNNING   = 'running';
-    case COMPLETED = 'completed';
-    case CANCELLED = 'cancelled';
+    case DRAW_PENDING      = 'draw_pending';
+    case DRAWN             = 'drawn';
+    case RESULTS_PUBLISHED = 'results_published';
+    case CANCELLED         = 'cancelled';
 }

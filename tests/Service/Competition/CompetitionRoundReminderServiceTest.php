@@ -12,6 +12,7 @@ use App\Entity\User;
 use App\Enum\Competition\CompetitionDuration;
 use App\Message\SendPushNotificationMessage;
 use App\Repository\Competition\CompetitionRoundRepository;
+use App\Service\Competition\CompetitionDrawService;
 use App\Service\Competition\CompetitionLockService;
 use App\Service\Competition\CompetitionRoundReminderService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -55,8 +56,8 @@ class CompetitionRoundReminderServiceTest extends KernelTestCase
         return $club;
     }
 
-    /** Builds a locked, 4-entrant ActiveCompetition — round 1 starts ~10 minutes from now. */
-    private function buildLockedCompetitionStartingSoon(): ActiveCompetition
+    /** Builds a locked, drawn, 4-entrant ActiveCompetition — round 1 resolves ~10 minutes from now. */
+    private function buildDrawnCompetitionResolvingSoon(): ActiveCompetition
     {
         $template = new CompetitionTemplate('Reminder Cup', 'reminder-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
         $this->em->persist($template);
@@ -79,28 +80,31 @@ class CompetitionRoundReminderServiceTest extends KernelTestCase
         $this->em->flush();
 
         $round1 = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
-        $round1->setScheduledAt(new \DateTimeImmutable('+10 minutes'));
+        self::getContainer()->get(CompetitionDrawService::class)->forceDrawRound($round1);
+
+        $round1 = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $round1->setMatchesResolveAt(new \DateTimeImmutable('+10 minutes'));
         $this->em->flush();
 
         return $instance;
     }
 
-    public function testSendsAReminderForARoundStartingWithinTheLeadTime(): void
+    public function testSendsAReminderForARoundResolvingWithinTheLeadTime(): void
     {
-        $instance = $this->buildLockedCompetitionStartingSoon();
+        $instance = $this->buildDrawnCompetitionResolvingSoon();
         $this->transport()->reset();
 
         $sent = $this->reminderService->sendDueReminders(new \DateTimeImmutable());
         $this->assertSame(1, $sent);
 
-        $round1  = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $round1 = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
         $this->em->refresh($round1);
         $this->assertNotNull($round1->getReminderSentAt());
 
         $messages = array_values(array_filter(array_map(
             static fn (Envelope $e) => $e->getMessage(),
             $this->transport()->getSent(),
-        ), static fn ($m) => $m instanceof SendPushNotificationMessage && ($m->data['type'] ?? null) === 'ROUND_STARTING_SOON'));
+        ), static fn ($m) => $m instanceof SendPushNotificationMessage && ($m->data['type'] ?? null) === 'ROUND_RESOLVING_SOON'));
 
         $this->assertCount(1, $messages);
         $this->assertCount(4, $messages[0]->userIds, 'All 4 round-1 participants should be reminded.');
@@ -109,7 +113,7 @@ class CompetitionRoundReminderServiceTest extends KernelTestCase
 
     public function testARoundAlreadyRemindedIsNotRemindedAgain(): void
     {
-        $this->buildLockedCompetitionStartingSoon();
+        $this->buildDrawnCompetitionResolvingSoon();
         $this->transport()->reset();
 
         $first = $this->reminderService->sendDueReminders(new \DateTimeImmutable());
@@ -122,13 +126,40 @@ class CompetitionRoundReminderServiceTest extends KernelTestCase
 
     public function testARoundOutsideTheLeadTimeWindowIsNotReminded(): void
     {
-        $instance = $this->buildLockedCompetitionStartingSoon();
+        $instance = $this->buildDrawnCompetitionResolvingSoon();
         $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
-        $round1->setScheduledAt(new \DateTimeImmutable('+2 hours'));
+        $round1->setMatchesResolveAt(new \DateTimeImmutable('+2 hours'));
         $this->em->flush();
         $this->transport()->reset();
 
         $sent = $this->reminderService->sendDueReminders(new \DateTimeImmutable());
+        $this->assertSame(0, $sent);
+    }
+
+    public function testADrawPendingRoundIsNotReminded(): void
+    {
+        $template = new CompetitionTemplate('Reminder Cup', 'reminder-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+        $this->em->persist($template);
+        $instance = new ActiveCompetition($template);
+        $this->em->persist($instance);
+        foreach (['Alpha', 'Bravo', 'Charlie', 'Delta'] as $name) {
+            $club    = $this->createClub($name);
+            $entrant = new CompetitionEntrant($instance, $club, 0, [
+                'club'    => ['id' => (string) $club->getId(), 'name' => $name],
+                'players' => [],
+            ]);
+            $this->em->persist($entrant);
+        }
+        $this->em->flush();
+
+        self::getContainer()->get(CompetitionLockService::class)->lock($instance);
+        $this->em->flush();
+
+        $this->transport()->reset();
+        // Round 1 is still DRAW_PENDING (never drawn) — no fixtures exist, so even if its
+        // scheduledAt happened to fall within the reminder window there's nothing to remind
+        // anyone about; findDueForReminder() only looks at DRAWN rounds at all.
+        $sent = $this->reminderService->sendDueReminders(new \DateTimeImmutable('+1 day'));
         $this->assertSame(0, $sent);
     }
 }

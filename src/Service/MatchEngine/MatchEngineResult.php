@@ -3,7 +3,7 @@
 namespace App\Service\MatchEngine;
 
 /**
- * Plain value object — the caller (CompetitionRoundProcessorService) is responsible for
+ * Plain value object — the caller (CompetitionResultsService) is responsible for
  * persisting this into a CompetitionResult.
  */
 final class MatchEngineResult

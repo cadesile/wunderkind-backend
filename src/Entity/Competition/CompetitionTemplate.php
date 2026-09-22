@@ -98,6 +98,16 @@ class CompetitionTemplate
     #[ORM\Column(type: 'smallint', options: ['default' => 15])]
     private int $autoFillDelayMinutes = 20;
 
+    /**
+     * Fraction (0,1) of each round's time-budget spent in the post-results/pre-next-draw
+     * intermission; the remainder is the pre-resolve "fixtures revealed" reveal window.
+     * Also governs the lead time before round 1's own draw (applied to round 1's own
+     * budget) — see CompetitionScheduleCalculator. 0/1 are disallowed since either would
+     * silently mean "no reveal window ever"/"no intermission ever".
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 0.3])]
+    private float $intermissionRatio = 0.3;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -238,6 +248,9 @@ class CompetitionTemplate
     public function getAutoFillDelayMinutes(): int { return $this->autoFillDelayMinutes; }
     public function setAutoFillDelayMinutes(int $autoFillDelayMinutes): static { $this->autoFillDelayMinutes = $autoFillDelayMinutes; return $this; }
 
+    public function getIntermissionRatio(): float { return $this->intermissionRatio; }
+    public function setIntermissionRatio(float $intermissionRatio): static { $this->intermissionRatio = $intermissionRatio; return $this; }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 
@@ -257,6 +270,9 @@ class CompetitionTemplate
             throw new \InvalidArgumentException(
                 'autoFillDelayMinutes must be one of: ' . implode(', ', self::ALLOWED_AUTO_FILL_DELAY_MINUTES)
             );
+        }
+        if ($this->intermissionRatio <= 0.0 || $this->intermissionRatio >= 1.0) {
+            throw new \InvalidArgumentException('intermissionRatio must be strictly between 0 and 1');
         }
         $this->updatedAt = new \DateTimeImmutable();
     }

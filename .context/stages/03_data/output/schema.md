@@ -65,10 +65,11 @@ constraints. Don't restate field lists here.
   `findAllSummaries` — cache invalidation/versioning.
 - **`Competition\ActiveCompetitionRepository`** — `findOpenForTemplate`
   (enforces the one-open-per-template invariant at the app layer too).
-- **`Competition\CompetitionRoundRepository`** — `findDueRounds
-  (\DateTimeImmutable $now)`, `hasUpcomingRound` — drives round-
-  processing scheduling (see `04_interfaces/output/services.md`'s
-  `CompetitionRoundProcessorService`).
+- **`Competition\CompetitionRoundRepository`** — `findDueForDraw`/
+  `findDueForResults` (\DateTimeImmutable $now)`, `findByCompetitionAndIndex`,
+  `hasUpcomingRound` — drives the two decoupled round-processing cron
+  passes (see `04_interfaces/output/services.md`'s `CompetitionDrawService`
+  / `CompetitionResultsService`).
 - **`SyncRecordRepository`** — `deleteByClubFromWeek` (rollback
   support), `countRollbacksByClub`, `findValidPayloadsSince`.
 - **`DeletionRequestRepository`** — `countRecentFailuresByIp`

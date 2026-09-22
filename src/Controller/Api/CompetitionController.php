@@ -9,11 +9,13 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionResult;
+use App\Entity\Competition\CompetitionRound;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\Competition\RewardTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
+use App\Enum\Competition\CompetitionRoundStatus;
 use App\Repository\Competition\ActiveCompetitionRepository;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
@@ -248,11 +250,13 @@ class CompetitionController extends AbstractController
             );
 
             $rounds[] = [
-                'roundIndex'  => $round->getRoundIndex(),
-                'label'       => $round->getLabel(),
-                'status'      => $round->getStatus()->value,
-                'scheduledAt' => $round->getScheduledAt()->format(DATE_ATOM),
-                'fixtures'    => $fixtures,
+                'roundIndex'       => $round->getRoundIndex(),
+                'label'            => $round->getLabel(),
+                'status'           => $round->getStatus()->value,
+                'scheduledAt'      => $round->getScheduledAt()->format(DATE_ATOM),
+                'startedAt'        => $round->getStartedAt()?->format(DATE_ATOM),
+                'matchesResolveAt' => $round->getMatchesResolveAt()?->format(DATE_ATOM),
+                'fixtures'         => $fixtures,
             ];
         }
 
@@ -278,12 +282,31 @@ class CompetitionController extends AbstractController
                 $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition),
             ),
             'nextRoundLabel'  => $currentRound?->getLabel(),
-            'nextRoundAt'     => $currentRound?->getScheduledAt()->format(DATE_ATOM),
+            'nextRoundAt'     => $this->nextRoundDueAt($currentRound),
             'rounds'          => $rounds,
         ]);
     }
 
     /** No auth requirement on this action — best-effort: personalize if a valid JWT was presented, else omit club-specific fields. */
+    /**
+     * Whichever timestamp is next relevant for $currentRound: the draw due-time while it's
+     * still DRAW_PENDING, or the resolve due-time once it's DRAWN — keeps the pre-existing
+     * "nextRoundAt is when the next thing happens" client contract working unchanged across
+     * the decoupled draw/resolve phases.
+     */
+    private function nextRoundDueAt(?CompetitionRound $currentRound): ?string
+    {
+        if ($currentRound === null) {
+            return null;
+        }
+
+        $dueAt = $currentRound->getStatus() === CompetitionRoundStatus::DRAWN
+            ? $currentRound->getMatchesResolveAt()
+            : $currentRound->getScheduledAt();
+
+        return $dueAt?->format(DATE_ATOM);
+    }
+
     private function resolveOptionalClub(): ?Club
     {
         $user = $this->getUser();
@@ -315,7 +338,7 @@ class CompetitionController extends AbstractController
             'entryFeePerRound' => $instance->getTemplate()->getEntryFeePerRound(),
             'prizes'          => $this->serializePrizes($instance->getTemplate()),
             'nextRoundLabel'  => $currentRound?->getLabel(),
-            'nextRoundAt'     => $currentRound?->getScheduledAt()->format(DATE_ATOM),
+            'nextRoundAt'     => $this->nextRoundDueAt($currentRound),
         ];
     }
 

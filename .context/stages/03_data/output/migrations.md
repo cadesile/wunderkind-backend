@@ -68,10 +68,25 @@ Most recent migrations (chronological):
     (default false) and `auto_fill_delay_minutes` (default 20) to
     `competition_template` — dev/testing auto-fill, see `entities.md`
     and `CompetitionAutoFillService`.
-16. `Version20260920185614` (most recent) — adds `trophy_image
-    VARCHAR(20)` and `trophy_colour VARCHAR(255)` (both nullable) to
-    `competition_template`, mirroring `league`'s trophy columns — see
-    `entities.md`.
+16. `Version20260920185614` — adds `trophy_image VARCHAR(20)` and
+    `trophy_colour VARCHAR(255)` (both nullable) to `competition_template`,
+    mirroring `league`'s trophy columns — see `entities.md`.
+17. `Version20260922095155` (most recent) — decouples the competition
+    round lifecycle's draw and resolve phases (previously fused into one
+    `CompetitionRoundProcessorService` pass — now `CompetitionDrawService`
+    + `CompetitionResultsService`, see `04_interfaces/output/services.md`).
+    On `competition_round`: `locked_for_processing_at` is **renamed** (via
+    `RENAME COLUMN`, not drop+add) to `draw_locked_at`; a new
+    `resolve_locked_at` column is added (the resolve phase's own claim
+    column — a round is now claimed twice in its life, once per phase);
+    a new `matches_resolve_at` column is added (this round's resolve
+    due-time, set the instant it's drawn); a data-only `UPDATE` remaps
+    existing `status` values (`pending`/`scheduled`→`draw_pending`,
+    `running`→`drawn`, `completed`→`results_published`); a new
+    `(status, matches_resolve_at)` index backs the resolve-due query
+    alongside the existing `(status, scheduled_at)` draw-due index. On
+    `competition_template`: adds `intermission_ratio DOUBLE PRECISION
+    NOT NULL DEFAULT 0.3` — see `entities.md`.
 
 ## Takeaway
 

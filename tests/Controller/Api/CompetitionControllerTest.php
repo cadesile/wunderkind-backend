@@ -7,12 +7,15 @@ namespace App\Tests\Controller\Api;
 use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
+use App\Entity\Competition\CompetitionRound;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\Competition\RewardTemplate;
 use App\Entity\User;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
 use App\Message\SendPushNotificationMessage;
+use App\Service\Competition\CompetitionDrawService;
+use App\Service\Competition\CompetitionResultsService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -171,6 +174,26 @@ class CompetitionControllerTest extends WebTestCase
         return json_decode($this->client->getResponse()->getContent(), true);
     }
 
+    /**
+     * Drives one round through the real two-phase draw -> resolve path, backdating each
+     * phase's due-timestamp so it fires immediately rather than waiting out the real
+     * schedule — the decoupled-lifecycle equivalent of what a single
+     * CompetitionRoundProcessorService::processDueRounds() call used to do in one pass.
+     */
+    private function drawAndResolveRound(CompetitionRound $round): void
+    {
+        $round->setScheduledAt(new \DateTimeImmutable('-1 minute'));
+        $this->em->flush();
+        $drawn = self::getContainer()->get(CompetitionDrawService::class)->drawDueRounds(new \DateTimeImmutable());
+        $this->assertGreaterThan(0, $drawn, 'Round should have been due and drawn.');
+
+        $this->em->refresh($round);
+        $round->setMatchesResolveAt(new \DateTimeImmutable('-1 minute'));
+        $this->em->flush();
+        $resolved = self::getContainer()->get(CompetitionResultsService::class)->publishDueResults(new \DateTimeImmutable());
+        $this->assertGreaterThan(0, $resolved, 'Round should have been due and resolved.');
+    }
+
     public function testAvailableIsPublicAndListsOpenInstance(): void
     {
         $template = $this->createTemplate();
@@ -243,16 +266,12 @@ class CompetitionControllerTest extends WebTestCase
         // The GET above reboots the kernel (KernelBrowser's default per-request behavior), so
         // $this->em must be refreshed before resuming direct entity manipulation — same reason
         // authenticatedRequest() re-fetches it after every request.
-        $this->em  = self::getContainer()->get(EntityManagerInterface::class);
-        $processor = self::getContainer()->get(\App\Service\Competition\CompetitionRoundProcessorService::class);
+        $this->em = self::getContainer()->get(EntityManagerInterface::class);
         for ($i = 0; $i < 2; $i++) {
             $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
-            $round    = $this->em->getRepository(\App\Entity\Competition\CompetitionRound::class)
+            $round    = $this->em->getRepository(CompetitionRound::class)
                 ->findByCompetitionOrderedByIndex($instance)[$i];
-            $round->setScheduledAt(new \DateTimeImmutable('-1 minute'));
-            $this->em->flush();
-            $processed = $processor->processDueRounds(new \DateTimeImmutable());
-            $this->assertGreaterThan(0, $processed);
+            $this->drawAndResolveRound($round);
         }
 
         $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
@@ -387,7 +406,8 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertCount(2, $body['rounds']);
         $this->assertSame('SF', $body['rounds'][0]['label']);
         $this->assertSame('FINAL', $body['rounds'][1]['label']);
-        $this->assertCount(2, $body['rounds'][0]['fixtures'], 'Round 1 pairs all 4 entrants into 2 fixtures.');
+        $this->assertSame('draw_pending', $body['rounds'][0]['status'], 'Round 1 no longer draws synchronously at lock time.');
+        $this->assertCount(0, $body['rounds'][0]['fixtures'], 'Fixtures appear once CompetitionDrawService actually draws the round, on a later tick.');
 
         // A resubmission is allowed immediately after lock — round 1 exists and hasn't started.
         $club = $clubs[0];
@@ -475,17 +495,30 @@ class CompetitionControllerTest extends WebTestCase
             $this->assertResponseStatusCodeSame(201);
         }
 
-        // The 4th (capacity-filling) registration's request fires both the NEW_REGISTRANT
-        // push (to the other 3) and the ROUND_DRAWN push (to all 4, via CompetitionLockService).
+        // The 4th (capacity-filling) registration's request fires the NEW_REGISTRANT push
+        // (to the other 3) and locks the instance — but drawing round 1 is now
+        // CompetitionDrawService's job on a later tick, not something lock() does
+        // synchronously, so no ROUND_DRAWN push fires here yet.
         $messages   = $this->sentPushMessages();
         $roundDrawn = array_values(array_filter($messages, static fn ($m) => $m->data['type'] === 'ROUND_DRAWN'));
+        $this->assertCount(0, $roundDrawn, 'Round 1 is not drawn synchronously at lock time.');
 
-        $this->assertCount(1, $roundDrawn);
-        $this->assertCount(4, $roundDrawn[0]->userIds, 'All 4 entrants placed into round 1 must be notified.');
+        // Drawing it (via the cron path, exercised through CompetitionDrawService directly
+        // here) sends exactly that push to all 4 entrants placed into round 1.
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+        $round1   = $this->em->getRepository(CompetitionRound::class)->findByCompetitionOrderedByIndex($instance)[0];
+        self::getContainer()->get(CompetitionDrawService::class)->forceDrawRound($round1);
+
+        $roundDrawnAfterDraw = array_values(array_filter(
+            array_map(static fn (Envelope $e) => $e->getMessage(), self::getContainer()->get('messenger.transport.async')->getSent()),
+            static fn ($m) => $m instanceof SendPushNotificationMessage && $m->data['type'] === 'ROUND_DRAWN',
+        ));
+        $this->assertCount(1, $roundDrawnAfterDraw);
+        $this->assertCount(4, $roundDrawnAfterDraw[0]->userIds, 'All 4 entrants placed into round 1 must be notified.');
 
         $expectedUserIds = array_map(static fn (Club $c) => (string) $c->getUser()->getId(), $clubs);
         sort($expectedUserIds);
-        $actualUserIds = $roundDrawn[0]->userIds;
+        $actualUserIds = $roundDrawnAfterDraw[0]->userIds;
         sort($actualUserIds);
         $this->assertSame($expectedUserIds, $actualUserIds);
     }
@@ -642,15 +675,11 @@ class CompetitionControllerTest extends WebTestCase
 
         $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
 
-        // Backdate round 1 so it's due, then run the same processor the cron command runs.
-        $round1 = $this->em->getRepository(\App\Entity\Competition\CompetitionRound::class)
+        // Draw round 1 then resolve it — the decoupled equivalent of what a single
+        // CompetitionRoundProcessorService::processDueRounds() call used to do in one pass.
+        $round1 = $this->em->getRepository(CompetitionRound::class)
             ->findByCompetitionOrderedByIndex($instance)[0];
-        $round1->setScheduledAt(new \DateTimeImmutable('-1 minute'));
-        $this->em->flush();
-
-        $processor = self::getContainer()->get(\App\Service\Competition\CompetitionRoundProcessorService::class);
-        $processed = $processor->processDueRounds(new \DateTimeImmutable());
-        $this->assertGreaterThan(0, $processed, 'Round 1 should be due and processed.');
+        $this->drawAndResolveRound($round1);
 
         $this->client->request('GET', "/api/competitions/{$instance->getId()}");
         $this->assertResponseStatusCodeSame(200);

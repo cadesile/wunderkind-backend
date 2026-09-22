@@ -11,7 +11,6 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
-use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
@@ -21,103 +20,57 @@ use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * The core scheduling/idempotency/bracket-advancement logic behind
- * app:competition:process-rounds. Split out from the command for testability.
+ * Owns the entire resolution + finalization phase (DRAWN -> RESULTS_PUBLISHED), and, for
+ * a non-final round, schedules the next round's draw (writes its scheduledAt — the actual
+ * draw itself is CompetitionDrawService's job, on a later tick). Behind
+ * app:competition:resolve-rounds (cron every 1 min).
+ *
+ * The resolve claim (resolveLockedAt) deliberately does NOT flip status away from DRAWN —
+ * unlike the draw claim, a round can sit "claimed, partially resolved" for a while under
+ * forceResolveFixture() (one admin click per fixture); status only becomes
+ * RESULTS_PUBLISHED once every fixture is actually processed, inside finalizeRound(). The
+ * resolveLockedAt column alone is sufficient to keep an overlapping scheduled tick out —
+ * findDueForResults() still matches a DRAWN row mid-force-resolution, but the claim's
+ * `resolveLockedAt IS NULL` condition correctly rejects that second claim.
  */
-class CompetitionRoundProcessorService
+class CompetitionResultsService
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
-        private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionResultRepository $resultRepository,
+        private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
         private readonly PushNotificationService $pushNotificationService,
     ) {}
 
-    /** @return int Number of rounds this call actually processed (0 if none were due, or all were claimed by an overlapping tick). */
-    public function processDueRounds(\DateTimeImmutable $now): int
+    /** @return int Number of rounds this call actually published results for. */
+    public function publishDueResults(\DateTimeImmutable $now): int
     {
-        $processed = 0;
-        foreach ($this->roundRepository->findDueRounds($now) as $round) {
-            if ($this->claimRound($round, $now)) {
-                $this->processRound($round, $now);
-                $processed++;
+        $published = 0;
+        foreach ($this->roundRepository->findDueForResults($now) as $round) {
+            if ($this->claimResults($round, $now)) {
+                $this->publishResults($round, $now);
+                $published++;
             }
         }
 
-        return $processed;
+        return $published;
     }
 
     /**
-     * Claim-lock: an atomic conditional UPDATE, not ORM flush+catch. If 0 rows are
-     * affected, another overlapping tick already claimed this round — the guard
-     * against double-execution.
-     */
-    private function claimRound(CompetitionRound $round, \DateTimeImmutable $now): bool
-    {
-        $affected = $this->em->getConnection()->executeStatement(
-            <<<'SQL'
-            UPDATE competition_round
-               SET status = :running, locked_for_processing_at = :now
-             WHERE id = :id
-               AND status IN (:pending, :scheduled)
-               AND locked_for_processing_at IS NULL
-            SQL,
-            [
-                'running'   => CompetitionRoundStatus::RUNNING->value,
-                'now'       => $now->format('Y-m-d H:i:s'),
-                'id'        => $round->getId()->toRfc4122(),
-                'pending'   => CompetitionRoundStatus::PENDING->value,
-                'scheduled' => CompetitionRoundStatus::SCHEDULED->value,
-            ],
-        );
-
-        if ($affected === 0) {
-            return false;
-        }
-
-        $this->em->refresh($round);
-
-        return true;
-    }
-
-    private function processRound(CompetitionRound $round, \DateTimeImmutable $now): void
-    {
-        $this->beginRoundProcessing($round, $now);
-
-        $winners = [];
-        foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round) as $fixture) {
-            if ($fixture->getProcessedAt() !== null) {
-                // Defensive: already resolved by a prior partial run.
-                if ($fixture->getWinnerEntrant() !== null) {
-                    $winners[] = $fixture->getWinnerEntrant();
-                }
-                continue;
-            }
-
-            $winner = $this->resolveFixture($fixture, $round, $now);
-            if ($winner !== null) {
-                $winners[] = $winner;
-            }
-        }
-
-        $this->finalizeRound($round, $now, $winners);
-    }
-
-    /**
-     * Admin-only test tool: forces a single PENDING fixture to resolve immediately,
-     * bypassing the round's scheduledAt wait entirely — for exercising round-by-round
-     * competition processing locally without waiting out real durations. Shares the same
-     * claim-lock, resolution, and round-completion/bracket-advancement logic as the
-     * scheduled cron path (processDueRounds()), just triggered per-fixture instead of
-     * per-due-round, so a forced result is indistinguishable from a naturally processed one.
+     * Admin-only test tool: forces a single DRAWN round's PENDING fixture to resolve
+     * immediately, bypassing the round's matchesResolveAt wait entirely — for exercising
+     * round-by-round competition processing locally without waiting out real durations.
+     * Shares the same claim, resolution, and round-finalization logic as the scheduled
+     * cron path (publishDueResults()), just triggered per-fixture instead of per-due-round,
+     * so a forced result is indistinguishable from a naturally processed one.
      *
      * @throws \RuntimeException if the fixture is already resolved, is a bye (nothing to
-     *         simulate — no opposing entrant), or its round can no longer be processed
-     *         (already COMPLETED/CANCELLED).
+     *         simulate — no opposing entrant), or its round isn't currently DRAWN (not yet
+     *         drawn, or already RESULTS_PUBLISHED/CANCELLED).
      */
     public function forceResolveFixture(CompetitionFixture $fixture): CompetitionResult
     {
@@ -129,23 +82,22 @@ class CompetitionRoundProcessorService
         }
 
         $round = $fixture->getRound();
-        if (!in_array($round->getStatus(), [CompetitionRoundStatus::PENDING, CompetitionRoundStatus::SCHEDULED, CompetitionRoundStatus::RUNNING], true)) {
+        if ($round->getStatus() !== CompetitionRoundStatus::DRAWN) {
             throw new \RuntimeException('This round is no longer processable.');
         }
 
         $now = new \DateTimeImmutable();
 
-        if ($round->getStatus() !== CompetitionRoundStatus::RUNNING) {
-            if (!$this->claimRound($round, $now)) {
+        if ($round->getResolveLockedAt() === null) {
+            if (!$this->claimResults($round, $now)) {
                 throw new \RuntimeException('Could not claim this round for processing — a scheduled tick may be running it right now. Try again.');
             }
-            $this->beginRoundProcessing($round, $now);
         }
 
         $this->resolveFixture($fixture, $round, $now);
         $this->em->flush();
 
-        $remainingFixtures = $this->fixtureRepository->findByRoundOrderedBySlot($round);
+        $remainingFixtures  = $this->fixtureRepository->findByRoundOrderedBySlot($round);
         $roundFullyResolved = true;
         $winners             = [];
         foreach ($remainingFixtures as $roundFixture) {
@@ -166,26 +118,59 @@ class CompetitionRoundProcessorService
             ?? throw new \RuntimeException('Fixture was resolved but no result was recorded — this should never happen.');
     }
 
-    /** Pre-loop side effects shared by the scheduled and forced processing paths. */
-    private function beginRoundProcessing(CompetitionRound $round, \DateTimeImmutable $now): void
+    /**
+     * Claim-lock: an atomic conditional UPDATE, not ORM flush+catch. Deliberately leaves
+     * `status` at DRAWN — see class docblock.
+     */
+    private function claimResults(CompetitionRound $round, \DateTimeImmutable $now): bool
     {
-        $activeCompetition = $round->getActiveCompetition();
+        $affected = $this->em->getConnection()->executeStatement(
+            <<<'SQL'
+            UPDATE competition_round
+               SET resolve_locked_at = :now
+             WHERE id = :id
+               AND status = :drawn
+               AND resolve_locked_at IS NULL
+            SQL,
+            [
+                'now'   => $now->format('Y-m-d H:i:s'),
+                'id'    => $round->getId()->toRfc4122(),
+                'drawn' => CompetitionRoundStatus::DRAWN->value,
+            ],
+        );
 
-        if ($round->getRoundIndex() === 1 && $activeCompetition->getStatus() === ActiveCompetitionStatus::SCHEDULED) {
-            $activeCompetition->setStatus(ActiveCompetitionStatus::RUNNING);
+        if ($affected === 0) {
+            return false;
         }
 
-        // Close the resubmission window — snapshots are locked for the duration of this round.
-        foreach ($this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition) as $entrant) {
-            if ($entrant->getStatus() === CompetitionEntrantStatus::ACTIVE) {
-                $entrant->setSnapshotLockedAt($now);
+        $this->em->refresh($round);
+
+        return true;
+    }
+
+    private function publishResults(CompetitionRound $round, \DateTimeImmutable $now): void
+    {
+        $winners = [];
+        foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round) as $fixture) {
+            if ($fixture->getProcessedAt() !== null) {
+                // Defensive: already resolved by a prior partial run (e.g. forceResolveFixture).
+                if ($fixture->getWinnerEntrant() !== null) {
+                    $winners[] = $fixture->getWinnerEntrant();
+                }
+                continue;
+            }
+
+            $winner = $this->resolveFixture($fixture, $round, $now);
+            if ($winner !== null) {
+                $winners[] = $winner;
             }
         }
+
+        $this->finalizeRound($round, $now, $winners);
     }
 
     /**
-     * Post-loop side effects shared by the scheduled and forced processing paths — only
-     * called once every fixture in $round has been resolved.
+     * Post-loop side effects — only called once every fixture in $round has been resolved.
      *
      * @param list<CompetitionEntrant> $winners
      */
@@ -193,7 +178,7 @@ class CompetitionRoundProcessorService
     {
         $activeCompetition = $round->getActiveCompetition();
 
-        $round->setStatus(CompetitionRoundStatus::COMPLETED);
+        $round->setStatus(CompetitionRoundStatus::RESULTS_PUBLISHED);
         $round->setCompletedAt($now);
 
         if ($this->isFinalRound($round)) {
@@ -232,10 +217,27 @@ class CompetitionRoundProcessorService
                 );
             }
         } else {
-            $this->populateNextRoundFixtures($round, $winners);
+            $this->scheduleNextRoundDraw($round, $now);
         }
 
         $this->em->flush();
+    }
+
+    /** Writes the next round's scheduledAt = now + intermissionSeconds. Drawing it is CompetitionDrawService's job, on a later tick. */
+    private function scheduleNextRoundDraw(CompetitionRound $completedRound, \DateTimeImmutable $now): void
+    {
+        $activeCompetition = $completedRound->getActiveCompetition();
+        $nextRound         = $this->roundRepository->findByCompetitionAndIndex($activeCompetition, $completedRound->getRoundIndex() + 1);
+        if ($nextRound === null) {
+            return;
+        }
+
+        $roundCount          = count(BracketLabeler::labelsForCapacity($activeCompetition->getEntrantCapacity()));
+        $totalSeconds         = $activeCompetition->getEndsAt()->getTimestamp() - $activeCompetition->getStartsAt()->getTimestamp();
+        $intervalSeconds       = $this->scheduleCalculator->intervalSeconds($totalSeconds, $roundCount);
+        [, $intermissionSeconds] = $this->scheduleCalculator->splitInterval($intervalSeconds, $activeCompetition->getTemplate()->getIntermissionRatio());
+
+        $nextRound->setScheduledAt($now->modify(sprintf('+%d seconds', $intermissionSeconds)));
     }
 
     private function resolveFixture(CompetitionFixture $fixture, CompetitionRound $round, \DateTimeImmutable $now): ?CompetitionEntrant
@@ -339,36 +341,6 @@ class CompetitionRoundProcessorService
         $rng = new SeededRng(SeededRng::hashId($fixture->getId()->toRfc4122() . ':tiebreak'));
 
         return $rng->chance(0.5) ? $home : $away;
-    }
-
-    /** @param list<CompetitionEntrant> $winners In slot order — adjacent winners (0&1, 2&3, ...) meet in the next round. */
-    private function populateNextRoundFixtures(CompetitionRound $completedRound, array $winners): void
-    {
-        $activeCompetition = $completedRound->getActiveCompetition();
-        $rounds            = $this->roundRepository->findByCompetitionOrderedByIndex($activeCompetition);
-        // Rounds are 0-indexed by array position but 1-based by roundIndex, so the round
-        // right after $completedRound sits at array offset == completedRound's roundIndex.
-        $nextRound = $rounds[$completedRound->getRoundIndex()] ?? null;
-
-        if ($nextRound === null) {
-            return;
-        }
-
-        $slot = 0;
-        for ($i = 0; $i < count($winners); $i += 2) {
-            $home    = $winners[$i] ?? null;
-            $away     = $winners[$i + 1] ?? null;
-            $fixture   = new CompetitionFixture($nextRound, $slot, $home, $away);
-            $this->em->persist($fixture);
-            $slot++;
-        }
-
-        $this->pushNotificationService->notifyUsers(
-            array_map(static fn (CompetitionEntrant $entrant) => (string) $entrant->getClub()->getUser()->getId(), $winners),
-            'Your next match is set!',
-            sprintf('The %s draw is in — see who you\'re facing.', $nextRound->getLabel()),
-            ['type' => 'ROUND_DRAWN', 'competitionId' => (string) $activeCompetition->getId(), 'roundId' => (string) $nextRound->getId()],
-        );
     }
 
     private function isFinalRound(CompetitionRound $round): bool

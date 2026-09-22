@@ -35,7 +35,8 @@ COPY docker/post-community-stat.sh /usr/local/bin/post-community-stat.sh
 COPY docker/post-community-stat-tick.sh /usr/local/bin/post-community-stat-tick.sh
 COPY docker/telemetry-generate.sh /usr/local/bin/telemetry-generate.sh
 COPY docker/competition-provision-instances.sh /usr/local/bin/competition-provision-instances.sh
-COPY docker/competition-process-rounds.sh /usr/local/bin/competition-process-rounds.sh
+COPY docker/competition-draw-rounds.sh /usr/local/bin/competition-draw-rounds.sh
+COPY docker/competition-resolve-rounds.sh /usr/local/bin/competition-resolve-rounds.sh
 COPY docker/competition-send-round-reminders.sh /usr/local/bin/competition-send-round-reminders.sh
 COPY docker/competition-auto-fill-spoof-entrants.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh
 COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
@@ -56,13 +57,18 @@ COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 #     CompetitionTemplate has an open (REGISTERING) instance. Not time-precision
 #     sensitive — capacity-fill itself locks an instance synchronously, this just
 #     replenishes the slot that leaves behind.
-#   every 1 min — competition-process-rounds: executes any CompetitionRound whose
-#     scheduledAt is due. Matches must fire close to their scheduled timestamp,
-#     unlike the other entries here, hence the tighter cadence.
-#   every 5 min — competition-send-round-reminders: pushes a "starting soon" notice
-#     for any CompetitionRound due within its 15-minute reminder lead time (see
-#     CompetitionRoundReminderService). Slack in the lead time means this doesn't
-#     need process-rounds' 1-minute cadence.
+#   every 1 min — competition-draw-rounds: draws any CompetitionRound whose
+#     scheduledAt (draw due-time) is due. Matches must fire close to their
+#     scheduled timestamp, unlike most other entries here, hence the tighter
+#     cadence.
+#   every 1 min — competition-resolve-rounds: publishes results for any
+#     CompetitionRound whose matchesResolveAt (resolve due-time) is due — the
+#     decoupled second half of what competition-draw-rounds used to do in one
+#     fused pass. Same tight cadence, same reasoning.
+#   every 5 min — competition-send-round-reminders: pushes a "results incoming"
+#     notice for any DRAWN CompetitionRound due within its 15-minute reminder
+#     lead time (see CompetitionRoundReminderService). Slack in the lead time
+#     means this doesn't need the draw/resolve entries' 1-minute cadence.
 #   every 1 min — competition-auto-fill-spoof-entrants: dev/testing convenience —
 #     fills any REGISTERING instance whose template opted in
 #     (CompetitionTemplate::$autoFillSpoofEntrants) with spoof entrants once its
@@ -70,7 +76,8 @@ COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 #     registered, so a solo tester isn't stuck waiting on a full bracket.
 #   every 1 min — messenger-consume: drains the async Messenger transport (push
 #     notifications + admin-broadcast push-audience resolution). Same tight
-#     cadence as competition-process-rounds since a delayed push is a stale one.
+#     cadence as competition-draw-rounds/-resolve-rounds since a delayed push is
+#     a stale one.
 # pool-warm/worldpack-warm run every 6 hours with 256 MB PHP memory limit (set inside each script).
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
@@ -80,14 +87,15 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/15 * * * * /usr/local/bin/post-community-stat-tick.sh >> /var/log/post-stat-cron.log 2>&1' \
     '*/15 * * * * /usr/local/bin/telemetry-generate.sh     >> /var/log/telemetry-cron.log     2>&1' \
     '*/10 * * * * /usr/local/bin/competition-provision-instances.sh >> /var/log/competition-provision-cron.log 2>&1' \
-    '* * * * *    /usr/local/bin/competition-process-rounds.sh      >> /var/log/competition-process-cron.log   2>&1' \
+    '* * * * *    /usr/local/bin/competition-draw-rounds.sh         >> /var/log/competition-draw-cron.log      2>&1' \
+    '* * * * *    /usr/local/bin/competition-resolve-rounds.sh      >> /var/log/competition-resolve-cron.log   2>&1' \
     '*/5 * * * *  /usr/local/bin/competition-send-round-reminders.sh >> /var/log/competition-reminders-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/competition-auto-fill-spoof-entrants.sh >> /var/log/competition-auto-fill-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/messenger-consume.sh               >> /var/log/messenger-consume-cron.log     2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-process-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

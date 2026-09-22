@@ -11,14 +11,16 @@ use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Sends a "starting soon" push to a round's actual participants — the entrants with a fixture
- * seeded into that round — a fixed lead time before its scheduledAt. Separate from
- * CompetitionRoundProcessorService deliberately: this only ever reads/reminds, never resolves
- * or advances anything, so a reminder bug can't threaten bracket-processing correctness.
+ * Sends a "results incoming" push to a drawn round's actual participants — the entrants
+ * with a fixture seeded into that round — a fixed lead time before its matchesResolveAt.
+ * Only DRAWN rounds are eligible (a DRAW_PENDING round has no fixtures yet to remind
+ * anyone about). Separate from CompetitionResultsService deliberately: this only ever
+ * reads/reminds, never resolves or advances anything, so a reminder bug can't threaten
+ * bracket-processing correctness.
  */
 class CompetitionRoundReminderService
 {
-    /** How far ahead of a round's scheduledAt to send its reminder. */
+    /** How far ahead of a round's matchesResolveAt to send its reminder. */
     private const REMINDER_LEAD_MINUTES = 15;
 
     public function __construct(
@@ -46,8 +48,8 @@ class CompetitionRoundReminderService
 
     /**
      * Claim-lock: an atomic conditional UPDATE, not ORM flush+catch — same idiom as
-     * CompetitionRoundProcessorService::claimRound(), guarding against an overlapping cron
-     * tick sending the same round's reminder twice.
+     * CompetitionDrawService::claimDraw()/CompetitionResultsService::claimResults(),
+     * guarding against an overlapping cron tick sending the same round's reminder twice.
      */
     private function claimReminder(CompetitionRound $round, \DateTimeImmutable $now): bool
     {
@@ -82,10 +84,10 @@ class CompetitionRoundReminderService
 
         $this->pushNotificationService->notifyUsers(
             $userIds,
-            'Kickoff soon!',
-            sprintf('%s starts in about %d minutes.', $round->getLabel(), self::REMINDER_LEAD_MINUTES),
+            'Results incoming!',
+            sprintf('%s results land in about %d minutes.', $round->getLabel(), self::REMINDER_LEAD_MINUTES),
             [
-                'type'          => 'ROUND_STARTING_SOON',
+                'type'          => 'ROUND_RESOLVING_SOON',
                 'competitionId' => (string) $round->getActiveCompetition()->getId(),
                 'roundId'       => (string) $round->getId(),
             ],
