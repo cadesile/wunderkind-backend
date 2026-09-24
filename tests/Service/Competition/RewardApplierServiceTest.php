@@ -75,6 +75,7 @@ class RewardApplierServiceTest extends KernelTestCase
         $this->assertCount(1, $messages);
         $this->assertSame(MessageSenderType::COMPETITION, $messages[0]->getSenderType());
         $this->assertSame(250000, $messages[0]->getOfferData()['effects'][0]['amountPence']);
+        $this->assertSame((string) $instance->getId(), $messages[0]->getOfferData()['competitionId']);
         $this->assertSame(0, $club->getBalance(), 'Club balance must be untouched until the message is accepted.');
     }
 
