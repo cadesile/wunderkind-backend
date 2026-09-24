@@ -94,7 +94,10 @@ class RewardApplierService
                 ? "Congratulations — your club won the {$templateName}. Accept to claim your prize."
                 : "You've earned a reward from the {$templateName}. Accept to claim it.",
         );
-        $message->setOfferData(['effects' => $effects]);
+        $message->setOfferData([
+            'effects'       => $effects,
+            'competitionId' => (string) $entrant->getActiveCompetition()->getId(),
+        ]);
         $message->setRelatedEntityType('EntrantRewardClaim');
         $message->setRelatedEntityId((string) $id);
 
