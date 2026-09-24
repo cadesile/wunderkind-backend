@@ -34,9 +34,23 @@ filename alone.
   starter-config wiring).
 - **`ClubNameNormalizer`** — normalizes club names; mirrored exactly by
   the client's `clubName.ts` — cross-repo invariant.
-- **`ClubResolver`** — resolves the acting `Club` from the current
-  request (explicit id header, falling back to `findByUser()` for legacy
-  clients).
+- **`ClubResolver`** — resolves *which* club a request is about, for
+  accounts that own more than one (one club per local save/game). Live
+  requests (`InboxController`, `CompetitionController`, `ClubController`,
+  `FinanceController`, `LeagueController`, `MarketController`,
+  `AdminMessageController`, `InitializeController`) call
+  `resolveFromRequest()`, which reads the **`X-Club-Id` header** — the
+  client sets it from whichever save is currently loaded. Deferred/queued
+  payloads that are built on-device and may be delivered long after the
+  save has switched (`SyncRequest`, `ConcludeSeasonRequest`) instead carry
+  a `clubId` field in the request **body**, resolved via `resolve($user,
+  $clubId)`. Either path throws `ClubMismatchException` (→ 4xx) if the id
+  names a club the caller doesn't own. Omitting the id — the only
+  behavior pre-dating this mechanism — falls back to
+  `ClubRepository::findByUser()`, i.e. a guess at "the newest club",
+  kept only so older, unpatched clients keep working. Not documented in
+  `docs/api/` as of 2026-09-24; this entry is the source of truth for the
+  header name/contract until a proper API doc exists.
 - **`CommunityStatsService`** — computes community-wide stats (most
   transfers/development/seasons/trophies) from match/transfer/season
   repositories.
