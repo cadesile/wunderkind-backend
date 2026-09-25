@@ -1431,6 +1431,19 @@ class NpcClubGenerationService
         ];
     }
 
+    /**
+     * @return string[] [primary, secondary] — a WCAG-contrast-checked pair
+     * from the KitColor palette. Kept as a thin public wrapper around
+     * randomKitVariant() for callers that just need a color pair, not a full
+     * kit (e.g. CompetitionSpoofEntrantService's synthetic club snapshot,
+     * which predates and is independent of the identity/kit system).
+     */
+    public function pickColorPair(): array
+    {
+        $variant = $this->randomKitVariant();
+        return [$variant['primary'], $variant['secondary']];
+    }
+
     /** One kit variant (home or away): kit style + contrasting colors + shorts/socks. */
     private function randomKitVariant(): array
     {
