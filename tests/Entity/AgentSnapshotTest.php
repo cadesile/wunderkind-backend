@@ -20,7 +20,7 @@ class AgentSnapshotTest extends TestCase
         $snap = $agent->toSnapshotArray();
 
         $this->assertSame(
-            ['id', 'name', 'commissionRate', 'reputation', 'experience', 'rating', 'nationality', 'dateOfBirth'],
+            ['id', 'name', 'commissionRate', 'reputation', 'experience', 'rating', 'nationality', 'dateOfBirth', 'appearance'],
             array_keys($snap),
         );
         $this->assertSame($agent->getId()->toRfc4122(), $snap['id']);
@@ -31,6 +31,24 @@ class AgentSnapshotTest extends TestCase
         $this->assertSame(85, $snap['rating']);
         $this->assertSame('Portuguese', $snap['nationality']);
         $this->assertSame('1966-01-07', $snap['dateOfBirth']);
+        // Only AppearanceLifecycleSubscriber's prePersist hook fills this — a
+        // plain, never-persisted Agent (as here) stays null.
+        $this->assertNull($snap['appearance']);
+    }
+
+    public function testSnapshotIncludesAppearanceVerbatimWhenSet(): void
+    {
+        $agent = new Agent('With Appearance');
+        $appearance = [
+            'hair' => 'crop', 'hairColor' => '#c8602a', 'headband' => false, 'skin' => 's1',
+            'face' => 'neutral', 'facial' => 'none', 'lip' => '#c9575e',
+            'primary' => '#c8202f', 'secondary' => '#f4f3ee',
+            'kit' => 'stripes', 'shorts' => 'black', 'socks' => 'primary',
+            'outfit' => 'coat', 'trousers' => 'black', 'glasses' => false,
+        ];
+        $agent->setAppearance($appearance);
+
+        $this->assertSame($appearance, $agent->toSnapshotArray()['appearance']);
     }
 
     public function testDateOfBirthIsNullWhenUnset(): void

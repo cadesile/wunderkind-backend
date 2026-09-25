@@ -14,10 +14,14 @@ filename alone.
 - **`AdminMessageService`** — resolves which announcements a club should
   see and records that it has seen them.
 - **`Appearance/AppearanceGeneratorService`** — deterministically
-  generates a Player/Staff/Scout/Agent's visual appearance fields.
-- **`Appearance/SeededRng`** — seeded PRNG kept bit-identical to the
-  frontend's `SeededRng` (wunderkind-app) for appearance generation —
-  cross-repo invariant, don't change independently.
+  generates a Player/Staff/Scout/Agent's 15-key sprite `appearance` config
+  (id/role/age/nationality-seeded). As of the pixel-sprite rewrite there is
+  **no frontend generator to stay bit-identical with** for this shape — only
+  rendering code (`sprite.ts`/`PlayerSprite.tsx`) exists in `wunderkind-app`
+  — so the draw order is a backend-only design, not a cross-repo invariant.
+- **`Appearance/SeededRng`** — seeded LCG PRNG used by the generator above.
+  No longer load-bearing as a cross-repo bit-parity contract (see above);
+  kept as the generator's RNG utility.
 - **`ArchetypeResolverService`** — read-only preview of archetype
   matching against `PlayerArchetype::$traitWeights`.
 - **`ArchetypeShowcaseService`** — picks a best-match positive/negative
@@ -81,7 +85,8 @@ filename alone.
   `TagAwareCacheInterface`, `app.leaderboard_cache` pool) leaderboard
   entries from career stats/transfers.
 - **`LeagueImportExportService`** — imports/exports league/NPC-club
-  config (formations, reputation tiers, trophy colours, city sizes).
+  config (formations, reputation tiers, trophy colours, city sizes,
+  kit+badge `identity`).
 - **`LeagueService`** — league lifecycle logic (season conclusion,
   leaderboard categories), using `LeagueRepository`,
   `GameConfigRepository`.
@@ -108,7 +113,12 @@ filename alone.
 - **`NarrativeImportExportService`** — imports/exports narrative content
   (events, playing styles, facility/tactical/archetype templates).
 - **`NpcClubGenerationService`** — generates NPC clubs using
-  `FacilityTemplateRepository`, `GameConfigRepository`, `LeagueService`.
+  `FacilityTemplateRepository`, `GameConfigRepository`, `LeagueService`;
+  each club also gets a `generateIdentity()`-produced home+away kit+badge
+  config (`randomKitVariant()` run twice). The home kit's colors become the
+  club's `primaryColor`/`secondaryColor` via `NpcClub::setIdentity()`'s
+  auto-sync — there's no separate color-pair generator any more (see
+  CLAUDE.md's "Kit & Badge Identity").
 - **`PeriodResolver`** — resolves stats time-period filters
   (`StatsPeriod`) into query constraints against `SeasonRecord`.
 - **`Personality/PersonalityContext`** — builds role-specific

@@ -19,6 +19,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * created before AppearanceLifecycleSubscriber existed. Reuses the exact
  * same fill() logic as the prePersist subscriber so backfilled rows are
  * generated identically to freshly created ones.
+ *
+ * Both passes iterate via Doctrine's `toIterable()` and periodically clear the
+ * EntityManager rather than loading the whole result set at once — this
+ * command previously OOM'd production on ~36.5k rows via a single findBy()
+ * and is deliberately excluded from the post-deploy sequence for that reason
+ * (see docs/deploy/hetzner.md); run it manually.
  */
 #[AsCommand(name: 'app:backfill-appearances', description: 'Generate appearance for existing pool rows that lack one')]
 final class BackfillAppearancesCommand extends Command
@@ -35,53 +41,77 @@ final class BackfillAppearancesCommand extends Command
     protected function configure(): void
     {
         $this->addOption(
-            'regenerate-skin-tone',
+            'force',
             null,
             InputOption::VALUE_NONE,
-            'Also recompute skinTone on rows that already have an appearance, applying the '
-            . 'region-weighted distribution. Leaves the other nine appearance fields untouched.',
+            'Also regenerate appearance on rows that already have one, overwriting it entirely. '
+            . 'Use this once after a change to the Appearance shape, to migrate already-persisted '
+            . 'rows onto the new fields.',
         );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io           = new SymfonyStyle($input, $output);
-        $regenerate   = (bool) $input->getOption('regenerate-skin-tone');
+        $io    = new SymfonyStyle($input, $output);
+        $force = (bool) $input->getOption('force');
 
         foreach ([Player::class, Staff::class, Scout::class, Agent::class] as $class) {
-            $rows = $this->em->getRepository($class)->findBy(['appearance' => null]);
-            $io->text(sprintf('%s: %d row(s) to backfill', $class, count($rows)));
-            $n = 0;
-            foreach ($rows as $entity) {
-                $this->filler->fill($entity);
-                if (++$n % self::BATCH_SIZE === 0) {
-                    $this->em->flush();
-                }
-            }
-            $this->em->flush();
+            $n = $this->iterate(
+                $class,
+                ['appearance' => null],
+                fn (object $entity) => $this->filler->fill($entity),
+            );
+            $io->text(sprintf('%s: %d row(s) backfilled', $class, $n));
 
-            if (!$regenerate) {
+            if (!$force) {
                 continue;
             }
 
-            // Re-fetch: the rows just filled above are already correct, but the
-            // pre-existing ones still carry a uniformly-picked tone.
-            $existing = $this->em->getRepository($class)->findAll();
-            $changed  = 0;
-            $n        = 0;
-            foreach ($existing as $entity) {
-                if ($this->filler->refreshSkinTone($entity)) {
-                    $changed++;
-                }
-                if (++$n % self::BATCH_SIZE === 0) {
-                    $this->em->flush();
-                }
-            }
-            $this->em->flush();
-            $io->text(sprintf('%s: %d skin tone(s) regenerated', $class, $changed));
+            $changed = $this->iterate(
+                $class,
+                [],
+                fn (object $entity) => $this->filler->regenerate($entity),
+            );
+            $io->text(sprintf('%s: %d row(s) regenerated', $class, $changed));
         }
 
         $io->success('Appearance backfill complete.');
         return Command::SUCCESS;
+    }
+
+    /**
+     * Streams rows of $class matching $criteria via toIterable(), applying
+     * $action to each and flushing/clearing every BATCH_SIZE rows so memory
+     * stays flat regardless of table size. Every iterated row already matches
+     * $criteria (a valid appearance-bearing subclass), so the returned count
+     * is simply how many rows were processed.
+     *
+     * @param class-string           $class
+     * @param array<string,mixed>    $criteria
+     * @param callable(object):mixed $action
+     */
+    private function iterate(string $class, array $criteria, callable $action): int
+    {
+        $qb = $this->em->getRepository($class)->createQueryBuilder('e');
+        foreach ($criteria as $field => $value) {
+            if ($value === null) {
+                $qb->andWhere("e.$field IS NULL");
+            } else {
+                $qb->andWhere("e.$field = :$field")->setParameter($field, $value);
+            }
+        }
+
+        $n = 0;
+        foreach ($qb->getQuery()->toIterable() as $entity) {
+            $action($entity);
+            if (++$n % self::BATCH_SIZE === 0) {
+                $this->em->flush();
+                $this->em->clear();
+            }
+        }
+        $this->em->flush();
+        $this->em->clear();
+
+        return $n;
     }
 }

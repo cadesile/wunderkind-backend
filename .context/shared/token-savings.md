@@ -10,17 +10,18 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (`.context/stages/*/output/*.md`, all stages) | 17996 |
+| Everything (`.context/stages/*/output/*.md`, all stages) | 19776 |
 | Router only (`.context/CONTEXT.md`) | 51 |
-| `01_overview` (router + its `CONTEXT.md` + its `output/`) | 1649 |
+| `01_overview` (router + its `CONTEXT.md` + its `output/`) | 2286 |
 | `02_architecture` (same shape) | 2928 |
-| `03_data` (same shape) | 6638 |
-| `04_interfaces` (same shape) | 6285 |
-| `05_ui` (same shape) | 1906 |
+| `03_data` (same shape) | 6916 |
+| `04_interfaces` (same shape) | 6401 |
+| `05_ui` (same shape) | 2349 |
 | `06_documentation` (same shape) | 1112 |
-| `07_synthesis` (same shape) | 2127 |
+| `07_synthesis` (same shape) | 2176 |
 
-**Typical saving vs. loading everything:** 82% (average across all 7
+**Typical saving vs. loading everything:** 80% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-18 (after stage 07_synthesis)
+**Last updated:** 2026-09-25 (after restructuring NpcClub kit+badge identity
+to nested home/away kits + the shorts/socks color-chip fix)

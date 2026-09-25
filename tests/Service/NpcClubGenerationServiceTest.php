@@ -90,6 +90,49 @@ class NpcClubGenerationServiceTest extends TestCase
         }
     }
 
+    // ── Kit + badge identity ─────────────────────────────────────────────────
+
+    public function testIdentityHasTheFullNestedKitConfigShape(): void
+    {
+        $service  = $this->makeService();
+        $identity = $service->generateClubs(1, 3, 'ES')[0]->getIdentity();
+
+        $this->assertSame(
+            ['home', 'away', 'badgeShape', 'badgePattern', 'badgeCentre', 'initials', 'badgeFill', 'badgeTrim', 'badgeSymbol'],
+            array_keys($identity),
+        );
+        foreach (['home', 'away'] as $variant) {
+            $this->assertSame(['kit', 'primary', 'secondary', 'shorts', 'socks'], array_keys($identity[$variant]));
+        }
+    }
+
+    public function testIdentityRulesHoldAcrossManyClubs(): void
+    {
+        $service = $this->makeService();
+        $clubs   = $service->generateClubs(100, 3, 'ES');
+
+        foreach ($clubs as $club) {
+            $identity = $club->getIdentity();
+            foreach (['home', 'away'] as $variant) {
+                $this->assertNotSame($identity[$variant]['primary'], $identity[$variant]['secondary']);
+            }
+            $this->assertNotSame('none', $identity['badgeCentre'], 'the generator should never roll a blank badge centre');
+            $this->assertNotSame($identity['badgeFill'], $identity['badgeTrim']);
+            $this->assertNotSame($identity['badgeFill'], $identity['badgeSymbol']);
+            $this->assertNotSame('', trim($identity['initials']));
+            $this->assertLessThanOrEqual(3, strlen($identity['initials']));
+        }
+    }
+
+    public function testHomeKitColorsBecomeTheClubsCanonicalColors(): void
+    {
+        $service = $this->makeService();
+        $club    = $service->generateClubs(1, 3, 'ES')[0];
+
+        $this->assertSame($club->getIdentity()['home']['primary'], $club->getPrimaryColor());
+        $this->assertSame($club->getIdentity()['home']['secondary'], $club->getSecondaryColor());
+    }
+
     public function testGetPlaceNamesReturnsKnownCountryData(): void
     {
         $service = $this->makeService();

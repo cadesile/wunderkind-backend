@@ -2,116 +2,134 @@
 namespace App\Service\Appearance;
 
 use App\Enum\Appearance\AppearanceRole;
+use App\Enum\Appearance\Face;
+use App\Enum\Appearance\HairColor;
+use App\Enum\Appearance\HairStyle;
+use App\Enum\Appearance\KitColor;
+use App\Enum\Appearance\KitPart;
+use App\Enum\Appearance\KitStyle;
+use App\Enum\Appearance\LipColor;
+use App\Enum\Appearance\Outfit;
+use App\Enum\Appearance\SkinId;
 use App\Enum\Appearance\WorldRegion;
 
 /**
- * Faithful PHP port of generateAppearance() from
- * wunderkind-app/src/engine/appearance.ts. Deterministic from (id, role, age)
- * plus an optional nationality, which biases skin tone towards the distribution
- * of the corresponding WorldRegion. Emits the 10 rendered fields only (dead
- * fields expression/earSize/eyebrowStyle are omitted). faceShape/eyeShape are
- * emitted as their frontend defaults.
+ * Generates the 15-key sprite Appearance config (see App\Form\Type\AppearanceType
+ * for the full key list). Deterministic from (id, role, age) plus an optional
+ * nationality, which biases `skin` towards the distribution of the
+ * corresponding WorldRegion.
+ *
+ * All 15 keys are always present regardless of role — per the sprite's own
+ * documented convention that a saved config may hold both player and staff
+ * keys harmlessly (each type ignores the other's). Whichever group doesn't
+ * apply to the role is filled with the sprite's DEFAULT_CONFIG values rather
+ * than spending an RNG draw on something that won't render.
+ *
+ * Unlike the design this replaces, no cross-repo RNG-stream bit-parity
+ * invariant is preserved here — no frontend generator exists yet for this
+ * shape (only rendering code was provided), so the draw order below is a
+ * fresh design, not pinned to any frontend counterpart.
  */
 final class AppearanceGeneratorService
 {
-    private const SKIN_TONES = ['#f5dcc8', '#e8c49a', '#dfaa80', '#c47d4a', '#8b4c1e', '#5c2d0a'];
-    private const HAIR_COLORS = ['blonde', 'light_brown', 'brown', 'dark_brown', 'black'];
-    private const PLAYER_TRIMS = ['#f5c842', '#e8852a', '#3a8fd4', '#d94040', '#2eab5a', '#9b59b6'];
-    private const STAFF_TRIMS = ['#4a5568', '#2d3748', '#374151', '#1e3a5f'];
+    private const DEFAULT_KIT      = 'stripes';
+    private const DEFAULT_SHORTS   = 'black';
+    private const DEFAULT_SOCKS    = 'primary';
+    private const DEFAULT_OUTFIT   = 'coat';
+    private const DEFAULT_TROUSERS = 'black';
 
     /** @return array<string, mixed> */
     public function generate(string $id, AppearanceRole $role, int $age, ?string $nationality = null): array
     {
-        $rng = new SeededRng(SeededRng::hashId($id));
+        $rng      = new SeededRng(SeededRng::hashId($id));
+        $isPlayer = $role === AppearanceRole::PLAYER;
 
-        // Skin tone — weighted by world region when the nationality is known,
-        // uniform otherwise. Both paths consume exactly one RNG draw, so every
-        // field below is unaffected by whether a nationality was supplied.
-        $region   = WorldRegion::fromNationality($nationality);
-        $skinTone = $region === null
-            ? $rng->pick(self::SKIN_TONES)
-            : $rng->weightedPick(self::SKIN_TONES, array_values($region->skinToneWeights()));
+        // Skin — weighted by world region when nationality is known, uniform otherwise.
+        $region     = WorldRegion::fromNationality($nationality);
+        $skinValues = array_map(static fn (SkinId $s) => $s->value, SkinId::cases());
+        $skin       = $region === null
+            ? $rng->pick($skinValues)
+            : $rng->weightedPick($skinValues, array_values($region->skinWeights()));
 
-        // Hair style — older staff skews smart/bald
+        // Hair style — older entities skew toward shorter/balder styles.
         if ($age > 45) {
-            $hairStylePool = ['smart', 'smart', 'classic', 'bald', 'bald'];
+            $hairPool = ['crop', 'crop', 'buzz', 'bald', 'bald'];
         } elseif ($age > 35) {
-            $hairStylePool = ['smart', 'classic', 'usual', 'round', 'bald'];
+            $hairPool = ['crop', 'buzz', 'quiff', 'bald'];
         } else {
-            $hairStylePool = ['classic', 'messy', 'spike', 'usual', 'smart', 'round', 'bald'];
+            $hairPool = array_map(static fn (HairStyle $h) => $h->value, HairStyle::cases());
         }
-        $hairStyle = $rng->pick($hairStylePool);
+        $hair = $rng->pick($hairPool);
 
-        // Hair color — older coaches/scouts skew darker
-        if ($hairStyle === 'bald') {
-            $hairColor = 'brown'; // irrelevant; won't render
-        } elseif ($role === AppearanceRole::COACH && $age > 42 && $rng->chance(0.5)) {
-            $hairColor = 'dark_brown';
-        } elseif ($age > 38 && $rng->chance(0.3)) {
-            $hairColor = 'dark_brown';
+        // Hair color — older entities skew grey.
+        $hairColor = ($age > 45 && $rng->chance(0.4))
+            ? HairColor::GREY->value
+            : $rng->pick(array_map(static fn (HairColor $c) => $c->value, HairColor::cases()));
+
+        // Face — pure cosmetic pick, no morale/personality coupling.
+        $face = $rng->pick(array_map(static fn (Face $f) => $f->value, Face::cases()));
+
+        // Facial hair — players always none.
+        $facial = 'none';
+        if (!$isPlayer && $age >= 20 && !$rng->chance(0.40)) {
+            $pool = $age > 45
+                ? ['stubble', 'beard', 'beard']
+                : ['stubble', 'stubble', 'beard'];
+            $facial = $rng->pick($pool);
+        }
+
+        // Lip color — applies regardless of role.
+        $lip = $rng->pick(array_map(static fn (LipColor $c) => $c->value, LipColor::cases()));
+
+        // Kit colors — always two different values, matching the sprite builder's own randomiser.
+        $kitColors = array_map(static fn (KitColor $c) => $c->value, KitColor::cases());
+        $primary   = $rng->pick($kitColors);
+        do {
+            $secondary = $rng->pick($kitColors);
+        } while ($secondary === $primary);
+
+        // Headband — independent of role.
+        $headband = $rng->chance(0.20);
+
+        // Player-only fields.
+        if ($isPlayer) {
+            $kitPartValues = array_map(static fn (KitPart $p) => $p->value, KitPart::cases());
+            $kit    = $rng->pick(array_map(static fn (KitStyle $s) => $s->value, KitStyle::cases()));
+            $shorts = $rng->pick($kitPartValues);
+            $socks  = $rng->pick($kitPartValues);
         } else {
-            $hairColor = $rng->pick(self::HAIR_COLORS);
+            $kit    = self::DEFAULT_KIT;
+            $shorts = self::DEFAULT_SHORTS;
+            $socks  = self::DEFAULT_SOCKS;
         }
 
-        // NOTE: the JS reads one rng value for `expression` here (dead field). We
-        // consume it too so downstream picks keep the same stream position.
-        $rng->pick([0, 0, 1, 2]);
-
-        // Role-specific accessory
-        $accessory = null;
-        if ($role === AppearanceRole::COACH) {
-            if ($age > 40 && $rng->chance(0.38)) {
-                $accessory = 'glasses';
-            } elseif ($rng->chance(0.12)) {
-                $accessory = 'beanie';
-            } elseif ($rng->chance(0.08)) {
-                $accessory = 'sunglasses';
-            } elseif ($rng->chance(0.22)) {
-                $accessory = 'whistle';
-            }
-        } elseif ($role === AppearanceRole::SCOUT) {
-            $roll = $rng->next();
-            if ($roll < 0.25) { $accessory = 'headset'; }
-            elseif ($roll < 0.45) { $accessory = 'glasses'; }
-        } elseif ($role === AppearanceRole::AGENT) {
-            if ($rng->chance(0.30)) { $accessory = 'glasses'; }
-        } elseif ($role === AppearanceRole::PLAYER && $age >= 20) {
-            $roll = $rng->next();
-            if ($roll < 0.06) { $accessory = 'face_tattoo'; }
-            elseif ($roll < 0.12) { $accessory = 'neck_tattoo'; }
+        // Staff-only fields (also used for Scout/Agent, which render as the staff shape).
+        if (!$isPlayer) {
+            $outfit   = $rng->pick(array_map(static fn (Outfit $o) => $o->value, Outfit::cases()));
+            $trousers = $rng->pick(array_map(static fn (KitPart $p) => $p->value, KitPart::cases()));
+            $glasses  = $rng->chance(0.30);
+        } else {
+            $outfit   = self::DEFAULT_OUTFIT;
+            $trousers = self::DEFAULT_TROUSERS;
+            $glasses  = false;
         }
-
-        // Kit trim
-        $kitTrim = $role === AppearanceRole::PLAYER
-            ? $rng->pick(self::PLAYER_TRIMS)
-            : $rng->pick(self::STAFF_TRIMS);
-
-        // Facial hair — players always none
-        $facialHair = 'none';
-        if ($role !== AppearanceRole::PLAYER && $age >= 20) {
-            if (!$rng->chance(0.40)) {
-                $pool = $age > 45
-                    ? ['stubble', 'stubble', 'beard', 'beard', 'moustache']
-                    : ['stubble', 'stubble', 'moustache', 'goatee', 'beard', 'fench_2', 'french_smile'];
-                $facialHair = $rng->pick($pool);
-            }
-        }
-
-        // Nose and jersey
-        $noseType      = $rng->pick(['normal', 'normal', 'small']);
-        $jerseyVariant = (int) floor($rng->next() * 3) + 1;
 
         return [
-            'skinTone'      => $skinTone,
-            'hairStyle'     => $hairStyle,
-            'hairColor'     => $hairColor,
-            'accessory'     => $accessory,
-            'kitTrim'       => $kitTrim,
-            'facialHair'    => $facialHair,
-            'faceShape'     => 'oval',
-            'eyeShape'      => 'narrow',
-            'noseType'      => $noseType,
-            'jerseyVariant' => $jerseyVariant,
+            'hair'      => $hair,
+            'hairColor' => $hairColor,
+            'headband'  => $headband,
+            'skin'      => $skin,
+            'face'      => $face,
+            'facial'    => $facial,
+            'lip'       => $lip,
+            'primary'   => $primary,
+            'secondary' => $secondary,
+            'kit'       => $kit,
+            'shorts'    => $shorts,
+            'socks'     => $socks,
+            'outfit'    => $outfit,
+            'trousers'  => $trousers,
+            'glasses'   => $glasses,
         ];
     }
 }

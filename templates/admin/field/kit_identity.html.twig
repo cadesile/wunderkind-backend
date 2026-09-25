@@ -1,0 +1,152 @@
+{# Custom widget for KitIdentityType: visual swatch/grid picker + live SVG
+   kit/badge preview + Randomise. Included from
+   templates/admin/form/kit_identity_theme.html.twig's `kit_identity_widget`
+   block, so `form` here refers to the KitIdentityType FormView (its children
+   are homeKit, homePrimary, homeSecondary, homeShorts, homeSocks, awayKit,
+   awayPrimary, awaySecondary, awayShorts, awaySocks, badgeShape,
+   badgePattern, badgeCentre, initials, badgeFill, badgeTrim, badgeSymbol —
+   the stored `identity` array nests these back into `home`/`away`/flat-badge
+   groups; see KitIdentityType's class docblock).
+
+   The real Symfony fields stay in the DOM — rendered via form_label/
+   form_widget/form_errors with `.visually-hidden` (not display:none) — so
+   accessibility, validation and form submission are unchanged. The visible
+   picker UI below (built by kit-identity-widget.js) drives those hidden
+   fields' values and dispatches native `change` events, which the render()
+   script at the bottom already listens for.
+
+   Three tabs — Kit Home / Kit Away / Badge — and the live preview itself
+   switches content with the active tab (unlike the player appearance
+   widget's single combined preview). Home's primary/secondary double as the
+   club's canonical primaryColor/secondaryColor (see NpcClub::setIdentity()). #}
+<div class="appearance-editor appearance-editor-v2" data-kit-badge-editor>
+    {% for child in form.children %}
+        {{ form_label(child, null, {'label_attr': {'class': 'visually-hidden'}}) }}
+        {{ form_widget(child, {'attr': {'class': 'visually-hidden'}}) }}
+        {{ form_errors(child) }}
+    {% endfor %}
+
+    <div class="ap-preview-col">
+        <div data-kb-preview class="ap-preview-panel"></div>
+        <small class="text-muted">Live preview</small>
+        <button type="button" class="ap-randomise-btn" data-kb-randomise>Randomise</button>
+    </div>
+
+    <div class="ap-fields-col">
+        <div class="ap-tabs" role="tablist">
+            <button type="button" class="ap-tab-btn" data-kb-tab="home" aria-selected="true">Kit Home</button>
+            <button type="button" class="ap-tab-btn" data-kb-tab="away" aria-selected="false">Kit Away</button>
+            <button type="button" class="ap-tab-btn" data-kb-tab="badge" aria-selected="false">Badge</button>
+        </div>
+
+        {% for variant, variantLabel in {'home': 'Home', 'away': 'Away'} %}
+            <div data-kb-panel="{{ variant }}" data-kb-variant="{{ variant }}"{{ variant == 'home' ? '' : ' hidden' }}>
+                <div class="ap-section">
+                    <div class="ap-section-label">Kit style</div>
+                    <div data-kb-field="{{ variant }}Kit" data-kb-mode="grid"></div>
+                </div>
+                <div class="ap-section">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div class="ap-section-label">Primary colour</div>
+                        <button type="button" class="ap-tab-btn" style="padding:2px 8px" data-kb-swap="{{ variant }}">Swap colours</button>
+                    </div>
+                    <div data-kb-field="{{ variant }}Primary" data-kb-mode="swatch"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Secondary colour</div>
+                    <div data-kb-field="{{ variant }}Secondary" data-kb-mode="swatch"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Shorts</div>
+                    <div data-kb-field="{{ variant }}Shorts" data-kb-mode="colorpart"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Socks</div>
+                    <div data-kb-field="{{ variant }}Socks" data-kb-mode="colorpart"></div>
+                </div>
+            </div>
+        {% endfor %}
+
+        <div data-kb-panel="badge" hidden>
+            <div class="ap-section">
+                <div class="ap-section-label">Shape</div>
+                <div data-kb-field="badgeShape" data-kb-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Pattern</div>
+                <div data-kb-field="badgePattern" data-kb-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Centre</div>
+                <div data-kb-field="badgeCentre" data-kb-mode="grid"></div>
+            </div>
+            <div class="ap-section" data-kb-initials-wrap>
+                <div class="ap-section-label">Initials</div>
+                <div data-kb-field="initials" data-kb-mode="text"></div>
+            </div>
+            <div class="ap-section">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div class="ap-section-label">Fill colour</div>
+                    <button type="button" class="ap-tab-btn" style="padding:2px 8px" data-kb-match-kit>Match home kit</button>
+                </div>
+                <div data-kb-field="badgeFill" data-kb-mode="swatch"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Trim colour</div>
+                <div data-kb-field="badgeTrim" data-kb-mode="swatch"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Symbol colour</div>
+                <div data-kb-field="badgeSymbol" data-kb-mode="swatch"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% set cacheBust = 'now'|date('YmdHis') %}
+<link rel="stylesheet" href="{{ asset('admin-appearance-widget.css') }}?v={{ cacheBust }}">
+<script src="{{ asset('assets/kit-compositor.js') }}?v={{ cacheBust }}"></script>
+<script src="{{ asset('assets/kit-identity-widget.js') }}?v={{ cacheBust }}"></script>
+<script>
+(function () {
+    var root = document.currentScript.closest('[data-kit-badge-editor]')
+        || document.querySelector('[data-kit-badge-editor]');
+    if (!root) return;
+    var preview = root.querySelector('[data-kb-preview]');
+
+    function val(name) {
+        var el = root.querySelector('[id$="_' + name + '"]');
+        return el ? el.value : '';
+    }
+    function activeTab() {
+        var btn = root.querySelector('[data-kb-tab][aria-selected="true"]');
+        return btn ? btn.getAttribute('data-kb-tab') : 'home';
+    }
+    function kitConfigFor(variant) {
+        return {
+            kit: val(variant + 'Kit'), primary: val(variant + 'Primary'), secondary: val(variant + 'Secondary'),
+            shorts: val(variant + 'Shorts'), socks: val(variant + 'Socks'),
+        };
+    }
+    function render() {
+        if (typeof window.composeKitSvg !== 'function') return;
+        var tab = activeTab();
+        if (tab === 'badge') {
+            var badgeConfig = {
+                badgeShape: val('badgeShape'), badgePattern: val('badgePattern'), badgeCentre: val('badgeCentre'),
+                initials: val('initials'), badgeFill: val('badgeFill'), badgeTrim: val('badgeTrim'), badgeSymbol: val('badgeSymbol'),
+            };
+            preview.innerHTML = window.composeKitSvg(badgeConfig, 'badge', null, 6);
+        } else {
+            preview.innerHTML = window.composeKitSvg(kitConfigFor(tab), 'kit', 'large', 8);
+        }
+    }
+    root.addEventListener('change', render);
+    root.addEventListener('input', render);
+    render();
+
+    if (typeof window.initKitIdentityWidget === 'function') {
+        window.initKitIdentityWidget(root);
+    }
+})();
+</script>

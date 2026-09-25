@@ -8,7 +8,7 @@ namespace App\Enum\Appearance;
  * The weights are footballing-population distributions, not census ones: modern
  * British, French and Dutch squads carry a substantial non-white minority, which
  * a naive "European = pale" table would erase. Each region's weights are
- * percentages over SkinTone::cases() in enum order (lightest → darkest) and sum
+ * percentages over SkinId::cases() in enum order (lightest → darkest) and sum
  * to 100 — WorldRegionTest enforces both.
  */
 enum WorldRegion
@@ -62,13 +62,13 @@ enum WorldRegion
     }
 
     /**
-     * Percentage weights keyed by SkinTone hex value, in SkinTone enum order.
+     * Percentage weights keyed by SkinId value, in SkinId enum order.
      *
      * @return array<string, int>
      */
-    public function skinToneWeights(): array
+    public function skinWeights(): array
     {
-        // [VERY_LIGHT, LIGHT, MEDIUM, TAN, BROWN, DARK]
+        // [S1, S2, S3, S4, S5, S6] (lightest → darkest)
         $weights = match ($this) {
             self::BRITAIN_IRELAND => [40, 25, 10,  6, 11,  8],
             self::WESTERN_EUROPE  => [33, 24, 11,  7, 14, 11],
@@ -82,7 +82,7 @@ enum WorldRegion
         };
 
         return array_combine(
-            array_map(static fn (SkinTone $t) => $t->value, SkinTone::cases()),
+            array_map(static fn (SkinId $s) => $s->value, SkinId::cases()),
             $weights,
         );
     }

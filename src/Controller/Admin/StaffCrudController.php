@@ -155,6 +155,7 @@ class StaffCrudController extends AbstractCrudController
 
         yield Field::new('appearance')
             ->setFormType(AppearanceType::class)
+            ->setFormTypeOptions(['person_type' => 'staff'])
             ->onlyOnForms();
     }
 

@@ -12,9 +12,11 @@ class AppearanceColumnTest extends TestCase
     public function testAllFourEntitiesRoundTripAppearance(): void
     {
         $appearance = [
-            'skinTone' => '#dfaa80', 'hairStyle' => 'messy', 'hairColor' => 'dark_brown',
-            'accessory' => null, 'kitTrim' => '#3a8fd4', 'facialHair' => 'none',
-            'faceShape' => 'oval', 'eyeShape' => 'narrow', 'noseType' => 'normal', 'jerseyVariant' => 2,
+            'hair' => 'quiff', 'hairColor' => '#4a2c1a', 'headband' => false, 'skin' => 's3',
+            'face' => 'focused', 'facial' => 'none', 'lip' => '#c9575e',
+            'primary' => '#c8202f', 'secondary' => '#f4f3ee',
+            'kit' => 'stripes', 'shorts' => 'black', 'socks' => 'primary',
+            'outfit' => 'coat', 'trousers' => 'black', 'glasses' => false,
         ];
 
         foreach ([new Player(), new Staff(), new Scout(), new Agent('A')] as $entity) {
