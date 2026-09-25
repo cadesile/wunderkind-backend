@@ -1374,11 +1374,13 @@ class NpcClubGenerationService
             $badgeSymbol = $pick($kitColors);
         } while ($badgeSymbol === $badgeFill);
 
-        // badgeCentre excludes NONE here — a blank badge isn't a useful
-        // default to roll, though it stays a valid manual admin choice.
+        // badgeCentre excludes NONE (a blank badge isn't a useful default to
+        // roll) and INITIALS (a generated club's initials are a mechanical
+        // abbreviation, not a designed badge centre) — both stay valid manual
+        // admin choices.
         $centreOptions = array_values(array_filter(
             BadgeCentre::cases(),
-            static fn (BadgeCentre $c) => $c !== BadgeCentre::NONE,
+            static fn (BadgeCentre $c) => !in_array($c, [BadgeCentre::NONE, BadgeCentre::INITIALS], true),
         ));
 
         $initials = strtoupper(substr(
@@ -1400,17 +1402,15 @@ class NpcClubGenerationService
         ];
     }
 
-    /** One kit variant (home or away): kit style + two distinct colors + shorts/socks. */
+    /** One kit variant (home or away): kit style + contrasting colors + shorts/socks. */
     private function randomKitVariant(): array
     {
         $kitColors = array_map(static fn (KitColor $c) => $c->value, KitColor::cases());
         $kitParts  = array_map(static fn (KitPart $p) => $p->value, KitPart::cases());
         $pick      = static fn (array $arr) => $arr[array_rand($arr)];
 
-        $primary = $pick($kitColors);
-        do {
-            $secondary = $pick($kitColors);
-        } while ($secondary === $primary);
+        $primary   = $pick($kitColors);
+        $secondary = $this->pickContrastingKitColor($primary, $kitColors);
 
         return [
             'kit'       => $pick(array_map(static fn (KitStyle $s) => $s->value, KitStyle::cases())),
@@ -1419,6 +1419,64 @@ class NpcClubGenerationService
             'shorts'    => $pick($kitParts),
             'socks'     => $pick($kitParts),
         ];
+    }
+
+    /**
+     * Picks a color from $palette that both differs from and has a real WCAG
+     * contrast ratio (>= 3.0) against $primary, so a generated kit's two
+     * colors are actually visually distinguishable rather than merely
+     * different. Reintroduces the contrast rule this service used to apply to
+     * the club's flat primary/secondary color pair (removed when `identity`
+     * replaced it — see `pickColorPair()`/`contrastRatio()`/`relativeLuminance()`
+     * on `master`), adapted to the smaller 12-color KitColor palette and
+     * applied per kit variant (home and away independently).
+     */
+    private function pickContrastingKitColor(string $primary, array $palette): string
+    {
+        // Try up to 20 random picks for a contrasting color.
+        for ($i = 0; $i < 20; $i++) {
+            $candidate = $palette[array_rand($palette)];
+            if ($candidate !== $primary && $this->contrastRatio($primary, $candidate) >= 3.0) {
+                return $candidate;
+            }
+        }
+
+        // Fallback: whichever palette color yields the highest contrast.
+        $best      = null;
+        $bestRatio = 0.0;
+        foreach ($palette as $candidate) {
+            if ($candidate === $primary) {
+                continue;
+            }
+            $ratio = $this->contrastRatio($primary, $candidate);
+            if ($ratio > $bestRatio) {
+                $bestRatio = $ratio;
+                $best      = $candidate;
+            }
+        }
+
+        return $best ?? $palette[0];
+    }
+
+    private function contrastRatio(string $hexA, string $hexB): float
+    {
+        $la = $this->relativeLuminance($hexA);
+        $lb = $this->relativeLuminance($hexB);
+        [$lighter, $darker] = $la > $lb ? [$la, $lb] : [$lb, $la];
+        return ($lighter + 0.05) / ($darker + 0.05);
+    }
+
+    private function relativeLuminance(string $hex): float
+    {
+        $hex = ltrim($hex, '#');
+        $r   = hexdec(substr($hex, 0, 2)) / 255;
+        $g   = hexdec(substr($hex, 2, 2)) / 255;
+        $b   = hexdec(substr($hex, 4, 2)) / 255;
+
+        $linearise = static fn (float $c): float =>
+            $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+
+        return 0.2126 * $linearise($r) + 0.7152 * $linearise($g) + 0.0722 * $linearise($b);
     }
 
     private function playingStyleForTier(int $tier): string

@@ -24,6 +24,7 @@ class AppearanceEnumsTest extends TestCase
         $this->assertSame('shout', Face::SHOUT->value);
         $this->assertSame('beard', FacialHair::BEARD->value);
         $this->assertSame('#c9575e', LipColor::ROSE->value);
+        $this->assertSame('#5c3822', LipColor::DEEP_BROWN->value);
         $this->assertSame('#1a1a1a', KitColor::BLACK->value);
         $this->assertSame('sleeves', KitStyle::SLEEVES->value);
         $this->assertSame('secondary', KitPart::SECONDARY->value);
@@ -38,7 +39,7 @@ class AppearanceEnumsTest extends TestCase
         $this->assertCount(6, HairColor::cases());
         $this->assertCount(9, Face::cases());
         $this->assertCount(3, FacialHair::cases());
-        $this->assertCount(6, LipColor::cases());
+        $this->assertCount(7, LipColor::cases());
         $this->assertCount(12, KitColor::cases());
         $this->assertCount(7, KitStyle::cases());
         $this->assertCount(4, KitPart::cases());

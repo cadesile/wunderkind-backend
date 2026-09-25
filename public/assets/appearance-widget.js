@@ -274,13 +274,20 @@
     var randomiseBtn = root.querySelector('[data-appearance-randomise]');
     if (randomiseBtn) {
       randomiseBtn.addEventListener('click', function () {
-        ['hair', 'hairColor', 'skin', 'facial', 'lip', 'face'].forEach(function (name) {
+        // Players always default to a neutral expression; only staff/scout/agent get a varied one.
+        var randomFields = personType === 'player'
+          ? ['hair', 'hairColor', 'skin', 'facial', 'lip']
+          : ['hair', 'hairColor', 'skin', 'facial', 'lip', 'face'];
+        randomFields.forEach(function (name) {
           var opts = selectOptions(root, name);
           if (!opts.length) return;
           var pick = opts[Math.floor(Math.random() * opts.length)];
           setField(root, name, pick.value, { dispatch: false });
         });
-        setField(root, 'headband', Math.random() < 0.20, { dispatch: false });
+        if (personType === 'player') {
+          setField(root, 'face', 'neutral', { dispatch: false });
+        }
+        setField(root, 'headband', Math.random() < (personType === 'player' ? 0.001 : 0.20), { dispatch: false });
 
         var kitColorOpts = selectOptions(root, 'primary');
         if (kitColorOpts.length) {
