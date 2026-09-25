@@ -25,7 +25,7 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         $player = new Player();
         $this->sub->fill($player);
         $this->assertNotNull($player->getAppearance());
-        $this->assertSame('none', $player->getAppearance()['facialHair']); // player rule
+        $this->assertSame('none', $player->getAppearance()['facial']); // player rule
     }
 
     public function testFillsStaffScoutAgent(): void
@@ -33,16 +33,16 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         foreach ([new Staff(), new Scout('S'), new Agent('A')] as $e) {
             $this->sub->fill($e);
             $this->assertNotNull($e->getAppearance());
-            $this->assertArrayHasKey('jerseyVariant', $e->getAppearance());
+            $this->assertArrayHasKey('outfit', $e->getAppearance());
         }
     }
 
     public function testDoesNotOverwriteExisting(): void
     {
         $player = new Player();
-        $player->setAppearance(['skinTone' => '#000000']);
+        $player->setAppearance(['skin' => 's6']);
         $this->sub->fill($player);
-        $this->assertSame(['skinTone' => '#000000'], $player->getAppearance());
+        $this->assertSame(['skin' => 's6'], $player->getAppearance());
     }
 
     public function testFillPassesNationalityThroughToTheGenerator(): void
@@ -53,46 +53,35 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         $player->setNationality('Nigerian');
         $this->sub->fill($player);
 
-        $this->assertContains($player->getAppearance()['skinTone'], ['#c47d4a', '#8b4c1e', '#5c2d0a']);
+        $this->assertContains($player->getAppearance()['skin'], ['s4', 's5', 's6']);
     }
 
-    // ── refreshSkinTone ───────────────────────────────────────────────────────
+    // ── regenerate ───────────────────────────────────────────────────────────
 
-    public function testRefreshSkinToneRewritesOnlySkinTone(): void
+    public function testRegenerateOverwritesExistingAppearance(): void
     {
         $player = new Player();
-        $player->setNationality('Nigerian');
-        $this->sub->fill($player);
-        $before = $player->getAppearance();
+        $player->setAppearance(['skin' => 's6']); // simulates a row under an old shape
 
-        // Simulate a legacy row whose tone predates the region table.
-        $player->setAppearance(array_replace($before, ['skinTone' => '#f5dcc8']));
+        $this->assertTrue($this->sub->regenerate($player));
 
-        $this->assertTrue($this->sub->refreshSkinTone($player));
-
-        $this->assertSame($before, $player->getAppearance());
+        $appearance = $player->getAppearance();
+        $this->assertNotSame(['skin' => 's6'], $appearance);
+        $this->assertArrayHasKey('hair', $appearance);
+        $this->assertArrayHasKey('outfit', $appearance);
     }
 
-    public function testRefreshSkinToneReportsNoChangeWhenAlreadyCorrect(): void
+    public function testRegenerateWorksEvenWithoutAnExistingAppearance(): void
     {
         $player = new Player();
-        $player->setNationality('Nigerian');
-        $this->sub->fill($player);
-
-        $this->assertFalse($this->sub->refreshSkinTone($player));
+        $this->assertTrue($this->sub->regenerate($player));
+        $this->assertNotNull($player->getAppearance());
     }
 
-    public function testRefreshSkinToneSkipsRowsWithoutAnAppearance(): void
-    {
-        $player = new Player();
-        $this->assertFalse($this->sub->refreshSkinTone($player));
-        $this->assertNull($player->getAppearance());
-    }
-
-    public function testRefreshSkinToneIgnoresUnrelatedEntities(): void
+    public function testRegenerateIgnoresUnrelatedEntities(): void
     {
         $club = new Club('Test FC', new User('owner@example.com'));
-        $this->assertFalse($this->sub->refreshSkinTone($club));
+        $this->assertFalse($this->sub->regenerate($club));
     }
 
     public function testIgnoresUnrelatedEntities(): void

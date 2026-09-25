@@ -6,9 +6,16 @@ namespace App\Service;
 
 use App\Entity\FacilityTemplate;
 use App\Entity\NpcClub;
+use App\Enum\Appearance\BadgeCentre;
+use App\Enum\Appearance\BadgePattern;
+use App\Enum\Appearance\BadgeShape;
+use App\Enum\Appearance\KitColor;
+use App\Enum\Appearance\KitPart;
+use App\Enum\Appearance\KitStyle;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
+use App\Service\ClubInitializationService;
 use App\Service\LeagueService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -1040,13 +1047,6 @@ class NpcClubGenerationService
         'PT' => ['Estádio %s', 'Estádio Municipal de %s', 'Estádio do %s'],
     ];
 
-    private const COLORS = [
-        '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#f39c12',
-        '#16a085', '#d35400', '#2c3e50', '#e74c3c', '#1abc9c',
-        '#3498db', '#9b59b6', '#e67e22', '#1a252f', '#ffffff',
-        '#2ecc71', '#e8d44d', '#34495e', '#922b21', '#1f618d',
-    ];
-
     /**
      * Facility level ranges by tier band.
      * Each entry: [min, max, training range, stands range, other range]
@@ -1178,7 +1178,7 @@ class NpcClubGenerationService
             $reputation     = $this->reputationForTier($tier, $citySize);
             $balance        = $this->balanceForTier($tier, $citySize);
             $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
-            $colors         = $this->pickColorPair();
+            $identity       = $this->generateIdentity($name);
             $stadiumName    = $this->generateStadiumName($place['name'], $country);
 
             $club = new NpcClub(
@@ -1186,8 +1186,8 @@ class NpcClubGenerationService
                 country:        $country,
                 tier:           $tier,
                 reputation:     $reputation,
-                primaryColor:   $colors[0],
-                secondaryColor: $colors[1],
+                primaryColor:   $identity['home']['primary'],
+                secondaryColor: $identity['home']['secondary'],
                 balance:        $balance,
                 facilities:     $facilities,
                 region:         $place['region'] ?? null,
@@ -1199,6 +1199,7 @@ class NpcClubGenerationService
             $club->setPlayingStyle($this->playingStyleForTier($tier));
             $club->setFinancialApproach($this->financialApproachForTier($tier));
             $club->setManagerTemperament(random_int(30, 80));
+            $club->setIdentity($identity);
 
             $this->em->persist($club);
             $this->leagueService->assignClubToLeague($club);
@@ -1375,24 +1376,104 @@ class NpcClubGenerationService
         return random_int($skewMin, $skewMax);
     }
 
-    /** @return string[] [primaryColor, secondaryColor] */
-    public function pickColorPair(): array
+    /**
+     * Kit + badge identity: a home kit, an away kit (each independently
+     * random, same rules), and a shared badge. The home kit's primary/
+     * secondary become the club's canonical primaryColor/secondaryColor (see
+     * NpcClub::setIdentity()) — there's no separate color-pair generation any
+     * more; this sprite's 12-color KitColor palette is the single source of
+     * truth. Mirrors the frontend Kit Builder's randomKitConfig() rules
+     * one-to-one (run independently for each of home/away).
+     *
+     * @return array<string, mixed>
+     */
+    private function generateIdentity(string $name): array
     {
-        $colors  = self::COLORS;
-        $primary = $colors[array_rand($colors)];
+        $home = $this->randomKitVariant();
+        $away = $this->randomKitVariant();
 
-        // Try up to 20 random picks for a contrasting secondary
+        $kitColors = array_map(static fn (KitColor $c) => $c->value, KitColor::cases());
+        $pick      = static fn (array $arr) => $arr[array_rand($arr)];
+
+        $badgeFill = random_int(0, 1) === 1 ? $home['primary'] : $pick($kitColors);
+        do {
+            $badgeTrim = $pick($kitColors);
+        } while ($badgeTrim === $badgeFill);
+        do {
+            $badgeSymbol = $pick($kitColors);
+        } while ($badgeSymbol === $badgeFill);
+
+        // badgeCentre excludes NONE (a blank badge isn't a useful default to
+        // roll) and INITIALS (a generated club's initials are a mechanical
+        // abbreviation, not a designed badge centre) — both stay valid manual
+        // admin choices.
+        $centreOptions = array_values(array_filter(
+            BadgeCentre::cases(),
+            static fn (BadgeCentre $c) => !in_array($c, [BadgeCentre::NONE, BadgeCentre::INITIALS], true),
+        ));
+
+        $initials = strtoupper(substr(
+            preg_replace('/[^A-Za-z0-9]/', '', ClubInitializationService::generateAbbreviation($name)) ?? '',
+            0,
+            3,
+        ));
+
+        return [
+            'home'         => $home,
+            'away'         => $away,
+            'badgeShape'   => $pick(array_map(static fn (BadgeShape $s) => $s->value, BadgeShape::cases())),
+            'badgePattern' => $pick(array_map(static fn (BadgePattern $p) => $p->value, BadgePattern::cases())),
+            'badgeCentre'  => $pick(array_map(static fn (BadgeCentre $c) => $c->value, $centreOptions)),
+            'initials'     => $initials !== '' ? $initials : 'FC',
+            'badgeFill'    => $badgeFill,
+            'badgeTrim'    => $badgeTrim,
+            'badgeSymbol'  => $badgeSymbol,
+        ];
+    }
+
+    /** One kit variant (home or away): kit style + contrasting colors + shorts/socks. */
+    private function randomKitVariant(): array
+    {
+        $kitColors = array_map(static fn (KitColor $c) => $c->value, KitColor::cases());
+        $kitParts  = array_map(static fn (KitPart $p) => $p->value, KitPart::cases());
+        $pick      = static fn (array $arr) => $arr[array_rand($arr)];
+
+        $primary   = $pick($kitColors);
+        $secondary = $this->pickContrastingKitColor($primary, $kitColors);
+
+        return [
+            'kit'       => $pick(array_map(static fn (KitStyle $s) => $s->value, KitStyle::cases())),
+            'primary'   => $primary,
+            'secondary' => $secondary,
+            'shorts'    => $pick($kitParts),
+            'socks'     => $pick($kitParts),
+        ];
+    }
+
+    /**
+     * Picks a color from $palette that both differs from and has a real WCAG
+     * contrast ratio (>= 3.0) against $primary, so a generated kit's two
+     * colors are actually visually distinguishable rather than merely
+     * different. Reintroduces the contrast rule this service used to apply to
+     * the club's flat primary/secondary color pair (removed when `identity`
+     * replaced it — see `pickColorPair()`/`contrastRatio()`/`relativeLuminance()`
+     * on `master`), adapted to the smaller 12-color KitColor palette and
+     * applied per kit variant (home and away independently).
+     */
+    private function pickContrastingKitColor(string $primary, array $palette): string
+    {
+        // Try up to 20 random picks for a contrasting color.
         for ($i = 0; $i < 20; $i++) {
-            $secondary = $colors[array_rand($colors)];
-            if ($secondary !== $primary && $this->contrastRatio($primary, $secondary) >= 3.0) {
-                return [$primary, $secondary];
+            $candidate = $palette[array_rand($palette)];
+            if ($candidate !== $primary && $this->contrastRatio($primary, $candidate) >= 3.0) {
+                return $candidate;
             }
         }
 
-        // Fallback: pick whichever available color yields the highest contrast
+        // Fallback: whichever palette color yields the highest contrast.
         $best      = null;
         $bestRatio = 0.0;
-        foreach ($colors as $candidate) {
+        foreach ($palette as $candidate) {
             if ($candidate === $primary) {
                 continue;
             }
@@ -1403,7 +1484,7 @@ class NpcClubGenerationService
             }
         }
 
-        return [$primary, $best ?? $colors[0]];
+        return $best ?? $palette[0];
     }
 
     private function contrastRatio(string $hexA, string $hexB): float
@@ -1421,7 +1502,7 @@ class NpcClubGenerationService
         $g   = hexdec(substr($hex, 2, 2)) / 255;
         $b   = hexdec(substr($hex, 4, 2)) / 255;
 
-        $linearise = static fn(float $c): float =>
+        $linearise = static fn (float $c): float =>
             $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
 
         return 0.2126 * $linearise($r) + 0.7152 * $linearise($g) + 0.0722 * $linearise($b);

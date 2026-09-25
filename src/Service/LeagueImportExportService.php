@@ -70,6 +70,7 @@ class LeagueImportExportService
                 'citySize'          => $c->getCitySize()->value,
                 'populationSize'    => $c->getPopulationSize(),
                 'isCapital'         => $c->isCapital(),
+                'identity'          => $c->getIdentity(),
             ];
         }
 
@@ -218,6 +219,7 @@ class LeagueImportExportService
                 if (isset($row['citySize']))                      $club->setCitySize(CitySize::from((string) $row['citySize']));
                 if (array_key_exists('populationSize', $row))     $club->setPopulationSize((int) $row['populationSize']);
                 if (array_key_exists('isCapital', $row))          $club->setIsCapital((bool) $row['isCapital']);
+                if (array_key_exists('identity', $row))           $club->setIdentity($row['identity'] !== null ? (array) $row['identity'] : null);
             } catch (\Throwable $e) {
                 if ($created !== null) {
                     $this->em->detach($created);

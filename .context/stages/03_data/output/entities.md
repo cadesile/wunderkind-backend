@@ -83,11 +83,17 @@ migrations are the change log (see `migrations.md`).
   `league_sponsor_income`). `rolledValue:int`. `ManyToOne` → `League`,
   `Sponsor` (both `CASCADE`).
 - **`NpcClub`** — AI-controlled club. `name/country`, `tier/reputation`,
-  `primaryColor/secondaryColor`, `abbreviation`, `stadiumName`, `balance`,
+  `primaryColor/secondaryColor` (synced from `identity.home`, not
+  independently admin-editable), `abbreviation`, `stadiumName`, `balance`,
   `playingStyle('DIRECT')`, `financialApproach('BALANCED')`,
   `managerTemperament:int(50)`, `facilities:array`, `region`,
   `citySize:CitySize(enum)`, `populationSize`, `isCapital`,
-  `formation:Formation(enum)`. `ManyToOne` → `League` (nullable).
+  `formation:Formation(enum)`. `identity:array|null` (json) — nested
+  `{home: KitVariant, away: KitVariant, badgeShape, badgePattern,
+  badgeCentre, initials, badgeFill, badgeTrim, badgeSymbol}`, where a
+  `KitVariant` is `{kit, primary, secondary, shorts, socks}` (shared enums
+  with the player sprite's `kit`/`primary`/`secondary`/`shorts`/`socks`) —
+  see CLAUDE.md's "Kit & Badge Identity". `ManyToOne` → `League` (nullable).
 - **`Transfer`** — a transfer event record. `playerName/playerPosition/
   clubLeaving`, `destinationClubName`, `type:TransferType(enum)`,
   `fee/agentCommission/netProceeds/developmentPoints/reputationGained`,

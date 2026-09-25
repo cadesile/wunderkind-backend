@@ -81,6 +81,7 @@ class Agent
             'rating'         => $this->rating,
             'nationality'    => $this->nationality,
             'dateOfBirth'    => $this->dob?->format('Y-m-d'),
+            'appearance'     => $this->appearance,
         ];
     }
 

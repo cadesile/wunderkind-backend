@@ -397,6 +397,7 @@ class WorldInitializationService
             'startingBalance' => $club->getBalance(),
             'primaryColor'   => $club->getPrimaryColor(),
             'secondaryColor' => $club->getSecondaryColor(),
+            'identity'       => $club->getIdentity(),
             'stadiumName'    => $club->getStadiumName(),
             'facilities'     => $club->getFacilities(),
             'region'         => $club->getRegion(),

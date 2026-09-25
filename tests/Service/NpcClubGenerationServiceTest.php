@@ -90,6 +90,92 @@ class NpcClubGenerationServiceTest extends TestCase
         }
     }
 
+    // ── Kit + badge identity ─────────────────────────────────────────────────
+
+    public function testIdentityHasTheFullNestedKitConfigShape(): void
+    {
+        $service  = $this->makeService();
+        $identity = $service->generateClubs(1, 3, 'ES')[0]->getIdentity();
+
+        $this->assertSame(
+            ['home', 'away', 'badgeShape', 'badgePattern', 'badgeCentre', 'initials', 'badgeFill', 'badgeTrim', 'badgeSymbol'],
+            array_keys($identity),
+        );
+        foreach (['home', 'away'] as $variant) {
+            $this->assertSame(['kit', 'primary', 'secondary', 'shorts', 'socks'], array_keys($identity[$variant]));
+        }
+    }
+
+    public function testIdentityRulesHoldAcrossManyClubs(): void
+    {
+        $service = $this->makeService();
+        $clubs   = $service->generateClubs(100, 3, 'ES');
+
+        foreach ($clubs as $club) {
+            $identity = $club->getIdentity();
+            foreach (['home', 'away'] as $variant) {
+                $this->assertNotSame($identity[$variant]['primary'], $identity[$variant]['secondary']);
+            }
+            $this->assertNotSame('none', $identity['badgeCentre'], 'the generator should never roll a blank badge centre');
+            $this->assertNotSame('initials', $identity['badgeCentre'], 'the generator should never roll an initials-only badge centre');
+            $this->assertNotSame($identity['badgeFill'], $identity['badgeTrim']);
+            $this->assertNotSame($identity['badgeFill'], $identity['badgeSymbol']);
+            $this->assertNotSame('', trim($identity['initials']));
+            $this->assertLessThanOrEqual(3, strlen($identity['initials']));
+        }
+    }
+
+    public function testHomeAndAwayKitColorsMeetMinimumContrast(): void
+    {
+        $service = $this->makeService();
+        $clubs   = $service->generateClubs(50, 3, 'ES');
+
+        foreach ($clubs as $club) {
+            $identity = $club->getIdentity();
+            foreach (['home', 'away'] as $variant) {
+                $primary   = $identity[$variant]['primary'];
+                $secondary = $identity[$variant]['secondary'];
+                $ratio     = $this->contrastRatio($primary, $secondary);
+                $this->assertGreaterThanOrEqual(
+                    3.0,
+                    $ratio,
+                    "$variant kit primary/secondary ($primary/$secondary) should meet WCAG contrast >= 3.0, got $ratio",
+                );
+            }
+        }
+    }
+
+    /** Independent reimplementation of the service's WCAG contrast math, so this test doesn't reach into private internals. */
+    private function contrastRatio(string $hexA, string $hexB): float
+    {
+        $la = $this->relativeLuminance($hexA);
+        $lb = $this->relativeLuminance($hexB);
+        [$lighter, $darker] = $la > $lb ? [$la, $lb] : [$lb, $la];
+        return ($lighter + 0.05) / ($darker + 0.05);
+    }
+
+    private function relativeLuminance(string $hex): float
+    {
+        $hex = ltrim($hex, '#');
+        $r   = hexdec(substr($hex, 0, 2)) / 255;
+        $g   = hexdec(substr($hex, 2, 2)) / 255;
+        $b   = hexdec(substr($hex, 4, 2)) / 255;
+
+        $linearise = static fn (float $c): float =>
+            $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+
+        return 0.2126 * $linearise($r) + 0.7152 * $linearise($g) + 0.0722 * $linearise($b);
+    }
+
+    public function testHomeKitColorsBecomeTheClubsCanonicalColors(): void
+    {
+        $service = $this->makeService();
+        $club    = $service->generateClubs(1, 3, 'ES')[0];
+
+        $this->assertSame($club->getIdentity()['home']['primary'], $club->getPrimaryColor());
+        $this->assertSame($club->getIdentity()['home']['secondary'], $club->getSecondaryColor());
+    }
+
     public function testGetPlaceNamesReturnsKnownCountryData(): void
     {
         $service = $this->makeService();

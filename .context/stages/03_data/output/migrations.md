@@ -12,7 +12,7 @@ during migration to PostgreSQL (2026-03-26). Do not run these... A
 single fresh baseline migration replaces them for Postgres."* Dead
 history — not part of the live migration chain.
 
-## Live migration chain: `migrations/` (133 files)
+## Live migration chain: `migrations/` (143 files)
 
 Most recent migrations (chronological):
 
@@ -71,7 +71,7 @@ Most recent migrations (chronological):
 16. `Version20260920185614` — adds `trophy_image VARCHAR(20)` and
     `trophy_colour VARCHAR(255)` (both nullable) to `competition_template`,
     mirroring `league`'s trophy columns — see `entities.md`.
-17. `Version20260922095155` (most recent) — decouples the competition
+17. `Version20260922095155` — decouples the competition
     round lifecycle's draw and resolve phases (previously fused into one
     `CompetitionRoundProcessorService` pass — now `CompetitionDrawService`
     + `CompetitionResultsService`, see `04_interfaces/output/services.md`).
@@ -87,25 +87,36 @@ Most recent migrations (chronological):
     alongside the existing `(status, scheduled_at)` draw-due index. On
     `competition_template`: adds `intermission_ratio DOUBLE PRECISION
     NOT NULL DEFAULT 0.3` — see `entities.md`.
+18. `Version20260924230000` — adds nullable `secondary_position` to `player`
+    (an optional secondary position, same `PlayerPosition` enum as `position`).
+19. `Version20260925120000` (most recent) — adds nullable `identity JSON` to
+    `npc_club` (kit + badge config; see `entities.md`'s `NpcClub` entry and
+    CLAUDE.md's "Kit & Badge Identity"). This session's follow-up avatar/kit
+    generation demographic-rules pass (age-banded hair weighting, skin-linked
+    lip color, rare ginger hair, player-only face/headband defaults, NPC club
+    badge-centre exclusion + kit contrast checks) is pure generation-logic —
+    no new migration.
 
 ## Takeaway
 
-Active development from mid-September through 2026-09-19 progressed
+Active development from mid-September through 2026-09-25 progressed
 through: (a) `LiveTelemetrySnapshot` built incrementally field-by-field,
 (b) the full Competition subsystem stood up in one large migration, (c)
 a `club.is_spoof` flag, (d) the match-result payload enriched with full
 club/lineup data and extra-time/penalty-shootout outcomes so a knockout
-fixture is never left looking like an unresolved draw, and (e) push
+fixture is never left looking like an unresolved draw, (e) push
 notifications (device tokens + a Messenger-backed async send pipeline)
 added so the backend can trigger native OS notifications for
 competition events (round drawn, new registrant, match result) and
 admin broadcasts, later followed by (f) a `NotificationLog` audit trail
 + admin debug tooling once a missing `FIREBASE_SERVICE_ACCOUNT_JSON`
-secret caused sends to fail invisibly, and (g) three more competition
-push types (`COMPETITION_COMPLETED`, `NEW_COMPETITION_OPEN`,
+secret caused sends to fail invisibly, (g) three more competition push
+types (`COMPETITION_COMPLETED`, `NEW_COMPETITION_OPEN`,
 `ROUND_STARTING_SOON`) filling the remaining gaps identified once the
-pipeline was actually confirmed working end-to-end on a real device —
-see
+pipeline was actually confirmed working end-to-end on a real device, and
+(h), on a separate `sprites` branch merged in afterward, two small
+additive columns — `player.secondary_position` and `npc_club.identity`
+— for the new pixel-art sprite/kit system's admin-editable config. See
 `04_interfaces/output/services.md` and `services.md`'s
 `PushNotificationService`/`NotificationLoggingSubscriber` entries.
 Consistent with

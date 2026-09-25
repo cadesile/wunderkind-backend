@@ -10,22 +10,22 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (router + `.context/stages/*/output/*.md`, all stages) | 27450 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 29567 |
 | Router only (`.context/CONTEXT.md`) | 483 |
-| `01_overview` (router + its `output/`) | 1649 |
+| `01_overview` (router + its `output/`) | 1755 |
 | `02_architecture` (same shape) | 3351 |
-| `03_data` (same shape) | 9123 |
-| `04_interfaces` (same shape) | 11601 |
-| `05_ui` (same shape) | 1906 |
+| `03_data` (same shape) | 9536 |
+| `04_interfaces` (same shape) | 12023 |
+| `05_ui` (same shape) | 1993 |
 | `06_documentation` (same shape) | 1392 |
-| `07_synthesis` (same shape) | 2315 |
+| `07_synthesis` (same shape) | 2416 |
 
 **Typical saving vs. loading everything:** 84% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-22 (competition round lifecycle draw/resolve
-decoupling — `02_architecture`, `03_data`, `04_interfaces` rows
-re-measured precisely with `wc -c` this pass, superseding the prior
-"not re-measured precisely" drift on `03_data`/`04_interfaces` from the
-2026-09-20 follow-up pass; `01_overview`/`05_ui`/`06_documentation`/
-`07_synthesis` untouched this pass, figures carried forward unchanged)
+**Last updated:** 2026-09-26 (merged `sprites` into `dev` — avatar/kit
+generation demographic rules on top of this session's earlier NpcClub
+kit+badge identity restructure and the competition round lifecycle
+draw/resolve decoupling; all 7 stage rows re-measured precisely with
+`wc -c` against the merged tree, reconciling the two branches' divergent
+figures)
