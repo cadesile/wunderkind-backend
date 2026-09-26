@@ -36,7 +36,7 @@ class OwnerAvatarControllerTest extends WebTestCase
     }
 
     /** @see AdminMessageControllerTest for why this reboot dance is necessary. */
-    private function authenticatedRequest(string $content): void
+    private function authenticatedRequest(string $content, string $method = 'POST'): void
     {
         self::ensureKernelShutdown();
         $this->client = static::createClient();
@@ -46,17 +46,38 @@ class OwnerAvatarControllerTest extends WebTestCase
         $this->client->loginUser($user, 'api');
 
         $this->client->request(
-            'POST',
+            $method,
             '/api/owner-avatar',
             server: ['CONTENT_TYPE' => 'application/json'],
-            content: $content,
+            content: $method === 'GET' ? null : $content,
         );
     }
 
-    public function testUnauthenticatedRequestIsRejected(): void
+    public function testUnauthenticatedPostIsRejected(): void
     {
         $this->client->request('POST', '/api/owner-avatar', server: ['CONTENT_TYPE' => 'application/json'], content: '{}');
         $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testUnauthenticatedGetIsRejected(): void
+    {
+        $this->client->request('GET', '/api/owner-avatar');
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testGetReturnsThePreviouslySetOwnerIdentity(): void
+    {
+        $this->createUser();
+
+        $this->authenticatedRequest(json_encode(['name' => 'Alex Owner', 'nationality' => 'English']));
+        $this->assertResponseStatusCodeSame(200);
+        $posted = json_decode($this->client->getResponse()->getContent(), true);
+
+        $this->authenticatedRequest('', 'GET');
+        $this->assertResponseStatusCodeSame(200);
+        $fetched = json_decode($this->client->getResponse()->getContent(), true);
+
+        $this->assertSame($posted, $fetched);
     }
 
     public function testSettingNameOnlyLeavesOtherFieldsUntouched(): void

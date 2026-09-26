@@ -15,7 +15,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Sets/updates the real account holder's own owner identity (name,
+ * Reads/sets/updates the real account holder's own owner identity (name,
  * nationality, gender, DOB) and avatar — the single owner profile every club
  * that account creates reads live via `Club::getUser()`, replacing the old
  * per-club `Club::$managerProfile`/ad hoc `User::$managerProfile` blobs.
@@ -25,6 +25,16 @@ class OwnerAvatarController extends AbstractController
 {
     /** Fallback age when dob is null — matches AppearanceLifecycleSubscriber::DEFAULT_STAFF_AGE. */
     private const DEFAULT_OWNER_AGE = 40;
+
+    #[Route('', name: 'api_owner_avatar_get', methods: ['GET'])]
+    #[IsGranted('ROLE_CLUB')]
+    public function get(): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        return $this->json($this->serialize($user));
+    }
 
     #[Route('', name: 'api_owner_avatar_set', methods: ['POST'])]
     #[IsGranted('ROLE_CLUB')]
@@ -75,13 +85,19 @@ class OwnerAvatarController extends AbstractController
 
         $em->flush();
 
-        return $this->json([
+        return $this->json($this->serialize($user));
+    }
+
+    /** @return array{name: ?string, nationality: ?string, gender: ?string, dob: ?string, avatar: ?array} */
+    private function serialize(User $user): array
+    {
+        return [
             'name'        => $user->getName(),
             'nationality' => $user->getNationality(),
             'gender'      => $user->getGender(),
             'dob'         => $user->getDob()?->format('Y-m-d'),
             'avatar'      => $user->getAppearance(),
-        ]);
+        ];
     }
 
     private function ageFromDob(?\DateTimeImmutable $dob): int
