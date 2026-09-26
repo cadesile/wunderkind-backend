@@ -7,9 +7,13 @@ migrations are the change log (see `migrations.md`).
 ## Auth / user
 
 - **`User`** — auth identity (`UserInterface`). `email`, `password`,
-  `roles:array`, `managerProfile:?array`, `isVerified`, `verifiedAt`,
-  `lastLoginAt`, `createdAt`. `OneToMany` → `clubs:Collection<Club>`
-  (cascade persist/remove).
+  `roles:array`, `isVerified`, `verifiedAt`, `lastLoginAt`, `createdAt`.
+  Owner identity (replaces the old `managerProfile:?array` blob):
+  `name:?string`, `nationality:?string`, `gender:?string`, `dob:?date`,
+  `appearance:?array` (json, 15-key sprite shape — see
+  `04_interfaces/output/services.md`'s Avatar Appearance /
+  `OwnerAvatarController` entries). `OneToMany` → `clubs:Collection<Club>`
+  (cascade persist/remove); no uniqueness constraint on the FK.
 - **`Admin`** — separate back-office auth identity (`UserInterface`).
   `email`, `password`, `name`, `department`, `accessLevel:int(1)`.
   `getRoles()` hardcodes `['ROLE_ADMIN']`. No entity relations.
@@ -56,7 +60,9 @@ migrations are the change log (see `migrations.md`).
   `lastSyncedAt`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
   `country`, `abbreviation`, `worldInitializedAt/starterInitializedAt/
   tutorialCompletedAt`, `paName`, `managerTemperament/managerDiscipline/
-  managerAmbition:int(50)`, `balance:int`, `managerProfile:?array`,
+  managerAmbition:int(50)`, `balance:int` (the old `managerProfile:?array`
+  blob is gone — the owning `User`'s own name/nationality/gender/dob is
+  the single owner identity now, see Owner Identity in CLAUDE.md),
   `currentSeason:int(1)`, `formation:Formation(enum, F_442)`,
   `fanCount/fanSentiment/fanMorale`, `lastWeeklyAttendance/
   totalSeasonAttendance`, `isSpoof:bool(false)` (added by migration

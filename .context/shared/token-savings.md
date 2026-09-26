@@ -10,12 +10,12 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (router + `.context/stages/*/output/*.md`, all stages) | 29567 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 30077 |
 | Router only (`.context/CONTEXT.md`) | 483 |
 | `01_overview` (router + its `output/`) | 1755 |
 | `02_architecture` (same shape) | 3351 |
-| `03_data` (same shape) | 9536 |
-| `04_interfaces` (same shape) | 12023 |
+| `03_data` (same shape) | 9991 |
+| `04_interfaces` (same shape) | 12076 |
 | `05_ui` (same shape) | 1993 |
 | `06_documentation` (same shape) | 1392 |
 | `07_synthesis` (same shape) | 2416 |
@@ -23,9 +23,8 @@
 **Typical saving vs. loading everything:** 84% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-26 (merged `sprites` into `dev` — avatar/kit
-generation demographic rules on top of this session's earlier NpcClub
-kit+badge identity restructure and the competition round lifecycle
-draw/resolve decoupling; all 7 stage rows re-measured precisely with
-`wc -c` against the merged tree, reconciling the two branches' divergent
-figures)
+**Last updated:** 2026-09-27 (merged `development` into `dev` — User owner
+identity on top of this session's earlier NpcClub kit+badge identity
+restructure and the competition round lifecycle draw/resolve decoupling;
+all 7 stage rows re-measured precisely with `wc -c` against the merged
+tree, reconciling the two branches' divergent figures)

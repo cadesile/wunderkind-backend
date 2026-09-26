@@ -12,7 +12,7 @@ during migration to PostgreSQL (2026-03-26). Do not run these... A
 single fresh baseline migration replaces them for Postgres."* Dead
 history — not part of the live migration chain.
 
-## Live migration chain: `migrations/` (143 files)
+## Live migration chain: `migrations/` (144 files)
 
 Most recent migrations (chronological):
 
@@ -89,17 +89,22 @@ Most recent migrations (chronological):
     NOT NULL DEFAULT 0.3` — see `entities.md`.
 18. `Version20260924230000` — adds nullable `secondary_position` to `player`
     (an optional secondary position, same `PlayerPosition` enum as `position`).
-19. `Version20260925120000` (most recent) — adds nullable `identity JSON` to
+19. `Version20260925120000` — adds nullable `identity JSON` to
     `npc_club` (kit + badge config; see `entities.md`'s `NpcClub` entry and
-    CLAUDE.md's "Kit & Badge Identity"). This session's follow-up avatar/kit
+    CLAUDE.md's "Kit & Badge Identity"). The follow-up avatar/kit
     generation demographic-rules pass (age-banded hair weighting, skin-linked
     lip color, rare ginger hair, player-only face/headband defaults, NPC club
     badge-centre exclusion + kit contrast checks) is pure generation-logic —
-    no new migration.
+    no migration of its own.
+20. `Version20260927120000` (most recent) — adds nullable `name VARCHAR(100)`,
+    `nationality VARCHAR(60)`, `gender VARCHAR(10)`, `dob DATE`,
+    `appearance JSON` to `"user"` (owner identity — see `entities.md`'s
+    `User` entry and CLAUDE.md's "Owner Identity"), and drops the now-unused
+    `manager_profile` column from both `"user"` and `club`.
 
 ## Takeaway
 
-Active development from mid-September through 2026-09-25 progressed
+Active development from mid-September through 2026-09-27 progressed
 through: (a) `LiveTelemetrySnapshot` built incrementally field-by-field,
 (b) the full Competition subsystem stood up in one large migration, (c)
 a `club.is_spoof` flag, (d) the match-result payload enriched with full
@@ -113,10 +118,13 @@ admin broadcasts, later followed by (f) a `NotificationLog` audit trail
 secret caused sends to fail invisibly, (g) three more competition push
 types (`COMPETITION_COMPLETED`, `NEW_COMPETITION_OPEN`,
 `ROUND_STARTING_SOON`) filling the remaining gaps identified once the
-pipeline was actually confirmed working end-to-end on a real device, and
+pipeline was actually confirmed working end-to-end on a real device,
 (h), on a separate `sprites` branch merged in afterward, two small
 additive columns — `player.secondary_position` and `npc_club.identity`
-— for the new pixel-art sprite/kit system's admin-editable config. See
+— for the new pixel-art sprite/kit system's admin-editable config, and
+(i) consolidating the previously-duplicated, never-serialized "manager
+profile" concept (separate ad hoc blobs on both `user` and `club`) into
+one structured owner identity on `"user"` alone. See
 `04_interfaces/output/services.md` and `services.md`'s
 `PushNotificationService`/`NotificationLoggingSubscriber` entries.
 Consistent with

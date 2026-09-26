@@ -5,6 +5,7 @@ use App\Entity\Agent;
 use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Staff;
+use App\Entity\User;
 use App\Enum\Appearance\AppearanceRole;
 use App\Service\Appearance\AppearanceGeneratorService;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
@@ -12,14 +13,17 @@ use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Events;
 
 /**
- * Auto-fills a generated appearance for any Player/Staff/Scout/Agent persisted
- * without one. Centralises appearance generation across every creation path
- * (services, commands, admin) so no construction site can forget it.
+ * Auto-fills a generated appearance for any Player/Staff/Scout/Agent/User
+ * persisted without one. Centralises appearance generation across every
+ * creation path (services, commands, admin) so no construction site can
+ * forget it. For User this only ever gives a default staff-shaped avatar at
+ * registration — POST /api/owner-avatar is where the real account holder
+ * customizes name/nationality/DOB/avatar afterward.
  */
 #[AsDoctrineListener(event: Events::prePersist)]
 final class AppearanceLifecycleSubscriber
 {
-    /** Fallback age for staff/scout/agent whose dob is null. */
+    /** Fallback age for staff/scout/agent/user whose dob is null. */
     private const DEFAULT_STAFF_AGE = 40;
 
     public function __construct(
@@ -37,7 +41,8 @@ final class AppearanceLifecycleSubscriber
         if (!$entity instanceof Player
             && !$entity instanceof Staff
             && !$entity instanceof Scout
-            && !$entity instanceof Agent) {
+            && !$entity instanceof Agent
+            && !$entity instanceof User) {
             return;
         }
         if ($entity->getAppearance() !== null) {
@@ -70,7 +75,8 @@ final class AppearanceLifecycleSubscriber
         if (!$entity instanceof Player
             && !$entity instanceof Staff
             && !$entity instanceof Scout
-            && !$entity instanceof Agent) {
+            && !$entity instanceof Agent
+            && !$entity instanceof User) {
             return false;
         }
 
@@ -88,7 +94,7 @@ final class AppearanceLifecycleSubscriber
     }
 
     /** @return array{0: AppearanceRole, 1: int} */
-    private function roleAndAge(Player|Staff|Scout|Agent $entity): array
+    private function roleAndAge(Player|Staff|Scout|Agent|User $entity): array
     {
         if ($entity instanceof Player) {
             return [AppearanceRole::PLAYER, $this->ageFromDob($entity->getDateOfBirth())];
@@ -98,6 +104,9 @@ final class AppearanceLifecycleSubscriber
         }
         if ($entity instanceof Scout) {
             return [AppearanceRole::SCOUT, $this->ageFromDob($entity->getDob())];
+        }
+        if ($entity instanceof User) {
+            return [AppearanceRole::OWNER, $this->ageFromDob($entity->getDob())];
         }
         return [AppearanceRole::AGENT, $this->ageFromDob($entity->getDob())];
     }

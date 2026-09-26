@@ -5,6 +5,7 @@ use App\Entity\Agent;
 use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Staff;
+use App\Entity\User;
 use App\EventSubscriber\AppearanceLifecycleSubscriber;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -15,7 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Backfills `appearance` for existing Player/Staff/Scout/Agent pool rows
+ * Backfills `appearance` for existing Player/Staff/Scout/Agent/User rows
  * created before AppearanceLifecycleSubscriber existed. Reuses the exact
  * same fill() logic as the prePersist subscriber so backfilled rows are
  * generated identically to freshly created ones.
@@ -55,7 +56,7 @@ final class BackfillAppearancesCommand extends Command
         $io    = new SymfonyStyle($input, $output);
         $force = (bool) $input->getOption('force');
 
-        foreach ([Player::class, Staff::class, Scout::class, Agent::class] as $class) {
+        foreach ([Player::class, Staff::class, Scout::class, Agent::class, User::class] as $class) {
             $n = $this->iterate(
                 $class,
                 ['appearance' => null],
