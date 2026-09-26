@@ -37,6 +37,15 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         }
     }
 
+    public function testFillsUserWithNullAppearance(): void
+    {
+        $user = new User('owner@example.com');
+        $this->sub->fill($user);
+        $this->assertNotNull($user->getAppearance());
+        $this->assertArrayHasKey('outfit', $user->getAppearance()); // owner renders as staff shape
+        $this->assertContains($user->getAppearance()['facial'], ['none', 'stubble', 'beard']);
+    }
+
     public function testDoesNotOverwriteExisting(): void
     {
         $player = new Player();
@@ -54,6 +63,15 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         $this->sub->fill($player);
 
         $this->assertContains($player->getAppearance()['skin'], ['s4', 's5', 's6']);
+    }
+
+    public function testFillPassesNationalityThroughForUser(): void
+    {
+        $user = new User('owner-nigerian@example.com');
+        $user->setNationality('Nigerian');
+        $this->sub->fill($user);
+
+        $this->assertContains($user->getAppearance()['skin'], ['s4', 's5', 's6']);
     }
 
     // ── regenerate ───────────────────────────────────────────────────────────
@@ -76,6 +94,14 @@ class AppearanceLifecycleSubscriberTest extends TestCase
         $player = new Player();
         $this->assertTrue($this->sub->regenerate($player));
         $this->assertNotNull($player->getAppearance());
+    }
+
+    public function testRegenerateWorksForUser(): void
+    {
+        $user = new User('owner-regen@example.com');
+        $this->assertTrue($this->sub->regenerate($user));
+        $this->assertNotNull($user->getAppearance());
+        $this->assertArrayHasKey('outfit', $user->getAppearance());
     }
 
     public function testRegenerateIgnoresUnrelatedEntities(): void

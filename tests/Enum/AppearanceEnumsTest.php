@@ -30,10 +30,12 @@ class AppearanceEnumsTest extends TestCase
         $this->assertSame('secondary', KitPart::SECONDARY->value);
         $this->assertSame('track', Outfit::TRACK->value);
         $this->assertSame('SCOUT', AppearanceRole::SCOUT->value);
+        $this->assertSame('OWNER', AppearanceRole::OWNER->value);
     }
 
     public function testCaseCounts(): void
     {
+        $this->assertCount(5, AppearanceRole::cases());
         $this->assertCount(6, SkinId::cases());
         $this->assertCount(9, HairStyle::cases());
         $this->assertCount(6, HairColor::cases());

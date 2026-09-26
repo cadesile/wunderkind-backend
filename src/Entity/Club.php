@@ -87,13 +87,6 @@ class Club
     #[ORM\Column(type: 'bigint')]
     private int $balance = 0;
 
-    /**
-     * Club manager profile: { name, dateOfBirth, gender, nationality }
-     * Stored as JSON for schema flexibility.
-     */
-    #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $managerProfile = null;
-
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -237,9 +230,6 @@ class Club
 
     public function hasDebt(): bool { return $this->balance < 0; }
     public function getDebtAmount(): int { return max(0, -$this->balance); }
-
-    public function getManagerProfile(): ?array { return $this->managerProfile; }
-    public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

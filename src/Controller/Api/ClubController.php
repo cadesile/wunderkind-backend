@@ -93,15 +93,8 @@ class ClubController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        $managerProfile = $dto->manager !== null ? [
-            'name'        => $dto->manager->name,
-            'dateOfBirth' => $dto->manager->dateOfBirth,
-            'gender'      => $dto->manager->gender,
-            'nationality' => $dto->manager->nationality,
-        ] : null;
-
         try {
-            $club = $service->initializeClub($user, $dto->clubName, $dto->country, $managerProfile);
+            $club = $service->initializeClub($user, $dto->clubName, $dto->country);
         } catch (ClubNameTakenException $e) {
             // Distinct from the 409 below, which means "this user already has a club".
             return $this->json(

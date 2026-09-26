@@ -5,6 +5,19 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** (uncommitted at writing, on top of 0a73371 — this pass's own
+  changes pending the user's usual explicit commit request)
+- **Date:** 2026-09-27
+- **Stages touched this pass:** 03_data, 04_interfaces (added owner identity
+  — `name`/`nationality`/`gender`/`dob`/`appearance` — to `User`, replacing
+  the redundant `User::$managerProfile`/`Club::$managerProfile` blobs;
+  new `AppearanceRole::OWNER` case wired into `AppearanceLifecycleSubscriber`
+  and `app:backfill-appearances`; new `POST /api/owner-avatar` partial-update
+  endpoint; `UserCrudController` EDIT enabled with an Owner Identity
+  fieldset + the appearance widget; migration `Version20260927120000`)
+
+---
+
 - **Commit:** 36c6d31562c41bb91f27f352f7180df4e85f52e6
 - **Date:** 2026-09-25
 - **Stages touched this pass:** 03_data, 04_interfaces, 05_ui (restructured
