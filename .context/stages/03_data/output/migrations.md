@@ -36,14 +36,28 @@ Most recent migrations (chronological):
    and related tables/indexes per `entities.md`'s Competition section),
    including the partial unique index enforcing one open
    `active_competition` per template.
-8. `Version20260918205514` (most recent) — adds
+8. `Version20260918205514` — adds
    `is_spoof BOOLEAN DEFAULT false NOT NULL` to `club`.
+9. `Version20260924230000` — adds nullable `secondary_position` to `player`
+   (an optional secondary position, same `PlayerPosition` enum as `position`).
+10. `Version20260925120000` (most recent) — adds nullable `identity JSON` to
+    `npc_club` (kit + badge config; see `entities.md`'s `NpcClub` entry and
+    CLAUDE.md's "Kit & Badge Identity").
+
+Note: several migrations landed on `origin/development` between
+`Version20260918205514` and these two that this doc doesn't yet itemize
+(dev-DB migration status shows the chain running through
+`Version20260922095155` before these) — worth a fuller re-sync of this file
+next time migrations are reviewed, rather than trusting this list as exhaustive
+between 09-18 and 09-24.
 
 ## Takeaway
 
 Active development in mid-to-late September 2026 focused on: (a)
 building out `LiveTelemetrySnapshot` incrementally field-by-field, (b)
-standing up the full Competition subsystem in one large migration, and
-(c) a small `club.is_spoof` flag addition — consistent with
+standing up the full Competition subsystem in one large migration, (c) a
+small `club.is_spoof` flag addition, and (d) two small additive columns —
+`player.secondary_position` and `npc_club.identity` — for admin-editable
+domain concepts that don't yet have gameplay consumers — consistent with
 `02_architecture/output/git-activity.md`'s hotspot findings (Competition
 feature + admin panel polish).

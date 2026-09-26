@@ -34,6 +34,10 @@ class Player
     #[ORM\Column(enumType: PlayerPosition::class)]
     private PlayerPosition $position;
 
+    /** Optional secondary position the player can also play, e.g. a CM who can cover CDM. */
+    #[ORM\Column(enumType: PlayerPosition::class, nullable: true)]
+    private ?PlayerPosition $secondaryPosition = null;
+
     #[ORM\Column(enumType: PlayerStatus::class)]
     private PlayerStatus $status = PlayerStatus::ACTIVE;
 
@@ -161,6 +165,9 @@ class Player
     public function getPosition(): PlayerPosition { return $this->position; }
     public function setPosition(PlayerPosition $position): void { $this->position = $position; }
     public function getPositionValue(): string { return $this->position->value; }
+
+    public function getSecondaryPosition(): ?PlayerPosition { return $this->secondaryPosition; }
+    public function setSecondaryPosition(?PlayerPosition $secondaryPosition): void { $this->secondaryPosition = $secondaryPosition; }
 
     public function getStatus(): PlayerStatus { return $this->status; }
     public function setStatus(PlayerStatus $status): void { $this->status = $status; }

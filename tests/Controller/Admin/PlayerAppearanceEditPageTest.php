@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Controller\Admin;
 
 use App\Entity\Admin;
+use App\Entity\Agent;
 use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Staff;
@@ -14,11 +15,12 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /**
  * Proves the custom appearance widget (Task 8) actually renders on every
- * EasyAdmin edit page it was wired into — Player, Staff and Scout — i.e. the
- * `appearance_widget` form-theme block is picked up, the AppearanceType child
- * dropdowns render, and the live-preview container + compositor asset are
- * present. This is the server-side half of the verification; the live on-change
- * SVG update is browser-only.
+ * EasyAdmin edit page it was wired into — Player, Staff, Scout and Agent —
+ * i.e. the `appearance_widget` form-theme block is picked up, the
+ * AppearanceType child dropdowns render, and the live-preview container +
+ * compositor asset are present. This is the server-side half of the
+ * verification; the live on-change SVG update and the swatch/grid picker
+ * overlay built by appearance-widget.js are browser-only.
  *
  * It also guards the EasyAdmin regression fixed alongside it: a `json` property
  * makes EasyAdmin inject CollectionType options into the custom form type, which
@@ -45,26 +47,32 @@ class PlayerAppearanceEditPageTest extends WebTestCase
 
     public function testPlayerEditPageRendersAppearanceEditor(): void
     {
-        $this->assertEditorRenders(new Player('Avatar', 'Tester'), 'player');
+        $this->assertEditorRenders(new Player('Avatar', 'Tester'), 'player', 'player');
     }
 
     public function testStaffEditPageRendersAppearanceEditor(): void
     {
-        $this->assertEditorRenders(new Staff('Avatar', 'Coach'), 'staff');
+        $this->assertEditorRenders(new Staff('Avatar', 'Coach'), 'staff', 'staff');
     }
 
     public function testScoutEditPageRendersAppearanceEditor(): void
     {
-        $this->assertEditorRenders(new Scout('Avatar Scout'), 'scout');
+        $this->assertEditorRenders(new Scout('Avatar Scout'), 'scout', 'staff');
+    }
+
+    public function testAgentEditPageRendersAppearanceEditor(): void
+    {
+        $this->assertEditorRenders(new Agent('Avatar Agent'), 'agent', 'staff');
     }
 
     /**
      * Persists $entity (prePersist fills its appearance), requests its EasyAdmin
      * edit page, and asserts the appearance editor + preview + compositor asset
      * + dropdowns render. $adminSlug is the EasyAdmin pretty-URL segment
-     * (/admin/{slug}/{id}/edit).
+     * (/admin/{slug}/{id}/edit). $expectedPersonType is the person_type the
+     * widget should have been wired with (player-shaped vs staff-shaped).
      */
-    private function assertEditorRenders(object $entity, string $adminSlug): void
+    private function assertEditorRenders(object $entity, string $adminSlug, string $expectedPersonType): void
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
@@ -98,13 +106,18 @@ class PlayerAppearanceEditPageTest extends WebTestCase
             $this->assertStringNotContainsString('admin/avatar-compositor.js', $html);
             $this->assertGreaterThan(
                 0,
-                $crawler->filter('select[id$="_skinTone"]')->count(),
-                "skinTone dropdown should render on the {$adminSlug} edit page",
+                $crawler->filter('select[id$="_skin"]')->count(),
+                "skin dropdown should render on the {$adminSlug} edit page",
             );
             $this->assertGreaterThan(
                 0,
-                $crawler->filter('select[id$="_hairStyle"]')->count(),
-                "hairStyle dropdown should render on the {$adminSlug} edit page",
+                $crawler->filter('select[id$="_hair"]')->count(),
+                "hair dropdown should render on the {$adminSlug} edit page",
+            );
+            $this->assertSame(
+                $expectedPersonType,
+                $crawler->filter('[data-appearance-editor]')->attr('data-person-type'),
+                "person_type should be {$expectedPersonType} on the {$adminSlug} edit page",
             );
         } finally {
             $em->remove($entity);

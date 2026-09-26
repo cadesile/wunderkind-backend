@@ -14,9 +14,11 @@ class AppearanceSerializationTest extends TestCase
     public function testBuildScoutSnapshotIncludesAppearanceVerbatim(): void
     {
         $appearance = [
-            'skinTone' => '#c68642', 'hairStyle' => 'short', 'hairColor' => 'black',
-            'accessory' => 'glasses', 'kitTrim' => '#1a1a1a', 'facialHair' => 'beard',
-            'faceShape' => 'square', 'eyeShape' => 'round', 'noseType' => 'wide', 'jerseyVariant' => 1,
+            'hair' => 'mohawk', 'hairColor' => '#1c1410', 'headband' => false, 'skin' => 's5',
+            'face' => 'cool', 'facial' => 'beard', 'lip' => '#8a4a3a',
+            'primary' => '#1a1a1a', 'secondary' => '#f4f3ee',
+            'kit' => 'stripes', 'shorts' => 'black', 'socks' => 'primary',
+            'outfit' => 'suit', 'trousers' => 'black', 'glasses' => true,
         ];
         $scout = new Scout('Test Scout');
         $scout->setAppearance($appearance);
@@ -34,9 +36,11 @@ class AppearanceSerializationTest extends TestCase
     public function testBuildPlayerSnapshotIncludesAppearanceVerbatim(): void
     {
         $appearance = [
-            'skinTone' => '#dfaa80', 'hairStyle' => 'messy', 'hairColor' => 'dark_brown',
-            'accessory' => null, 'kitTrim' => '#3a8fd4', 'facialHair' => 'none',
-            'faceShape' => 'oval', 'eyeShape' => 'narrow', 'noseType' => 'normal', 'jerseyVariant' => 2,
+            'hair' => 'quiff', 'hairColor' => '#4a2c1a', 'headband' => false, 'skin' => 's3',
+            'face' => 'focused', 'facial' => 'none', 'lip' => '#c9575e',
+            'primary' => '#c8202f', 'secondary' => '#f4f3ee',
+            'kit' => 'hoops', 'shorts' => 'white', 'socks' => 'secondary',
+            'outfit' => 'coat', 'trousers' => 'black', 'glasses' => false,
         ];
         $player = new Player('Test', 'Player');
         $player->setAppearance($appearance);

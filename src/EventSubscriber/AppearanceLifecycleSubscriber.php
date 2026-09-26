@@ -56,14 +56,16 @@ final class AppearanceLifecycleSubscriber
     }
 
     /**
-     * Recomputes just the `skinTone` of an entity that already has an
-     * appearance, leaving the other nine fields untouched. Used to roll the
-     * region-weighted distribution over rows generated before it existed, so
-     * existing avatars keep their hair, accessory and kit.
+     * Unconditionally regenerates an entity's appearance, overwriting whatever
+     * it already held. Used by `app:backfill-appearances --force` to migrate
+     * rows generated under an old Appearance shape onto the current one — as
+     * opposed to `fill()`, which only ever fills a null appearance.
      *
-     * @return bool True when the tone actually changed.
+     * @return bool True when the entity was one of the four appearance-bearing
+     *              types (regardless of whether the resulting value differs
+     *              from what was there before).
      */
-    public function refreshSkinTone(object $entity): bool
+    public function regenerate(object $entity): bool
     {
         if (!$entity instanceof Player
             && !$entity instanceof Staff
@@ -72,24 +74,15 @@ final class AppearanceLifecycleSubscriber
             return false;
         }
 
-        $appearance = $entity->getAppearance();
-        if ($appearance === null) {
-            return false;
-        }
-
         [$role, $age] = $this->roleAndAge($entity);
-        $skinTone = $this->generator->generate(
-            (string) $entity->getId(),
-            $role,
-            $age,
-            $entity->getNationality(),
-        )['skinTone'];
-
-        if (($appearance['skinTone'] ?? null) === $skinTone) {
-            return false;
-        }
-
-        $entity->setAppearance(array_replace($appearance, ['skinTone' => $skinTone]));
+        $entity->setAppearance(
+            $this->generator->generate(
+                (string) $entity->getId(),
+                $role,
+                $age,
+                $entity->getNationality(),
+            )
+        );
 
         return true;
     }

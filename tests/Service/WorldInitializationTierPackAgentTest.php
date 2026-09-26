@@ -113,7 +113,7 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
                 $this->assertArrayHasKey('agent', $playerSnap);
                 $this->assertNotNull($playerSnap['agent'], 'every world-pack player should carry an agent');
                 $this->assertSame(
-                    ['id', 'name', 'commissionRate', 'reputation', 'experience', 'rating', 'nationality', 'dateOfBirth'],
+                    ['id', 'name', 'commissionRate', 'reputation', 'experience', 'rating', 'nationality', 'dateOfBirth', 'appearance'],
                     array_keys($playerSnap['agent']),
                 );
                 $agentIdsAcrossAllPlayers[] = $playerSnap['agent']['id'];

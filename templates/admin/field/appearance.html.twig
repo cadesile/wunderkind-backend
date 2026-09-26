@@ -1,52 +1,154 @@
-{# Custom widget for AppearanceType: dropdowns + live SVG preview.
-   Included from templates/admin/form/appearance_theme.html.twig's
-   `appearance_widget` block, so `form` here refers to the AppearanceType
-   FormView (its children are skinTone, hairStyle, hairColor, accessory,
-   facialHair, faceShape, eyeShape, noseType, kitTrim, jerseyVariant). #}
-<div class="appearance-editor" data-appearance-editor>
-    <div class="row">
-        <div class="col-md-8">
-            <div class="row">
-                {% for child in form.children %}
-                    <div class="col-md-6 mb-2">
-                        {{ form_row(child) }}
-                    </div>
-                {% endfor %}
-            </div>
+{# Custom widget for AppearanceType: visual swatch/grid picker + big live SVG
+   sprite preview + Randomise. Included from
+   templates/admin/form/appearance_theme.html.twig's `appearance_widget` block,
+   so `form` here refers to the AppearanceType FormView (its children are
+   hair, hairColor, headband, skin, face, facial, lip, primary, secondary,
+   kit, shorts, socks, outfit, trousers, glasses).
+
+   The real Symfony fields stay in the DOM — rendered via form_label/
+   form_widget/form_errors with `.visually-hidden` (not display:none, which
+   would break native validation-bubble anchoring and remove them from the
+   tab order) — so accessibility, validation and form submission are all
+   unchanged. The visible picker UI below (built by appearance-widget.js)
+   drives those hidden fields' values and dispatches native `change` events,
+   which the render() script at the bottom already listens for.
+
+   `person_type` ('player' | 'staff', set per CrudController via
+   ->setFormType(AppearanceType::class, ['person_type' => ...])) only decides
+   which body shape the live preview draws and which of the kit/shorts/socks
+   vs outfit/trousers/glasses fields are shown — every entity still stores all
+   15 keys regardless (see AppearanceType's class docblock). #}
+{% set personType = form.vars.person_type %}
+<div class="appearance-editor appearance-editor-v2" data-appearance-editor data-person-type="{{ personType }}">
+    {% for child in form.children %}
+        {{ form_label(child, null, {'label_attr': {'class': 'visually-hidden'}}) }}
+        {{ form_widget(child, {'attr': {'class': 'visually-hidden'}}) }}
+        {{ form_errors(child) }}
+    {% endfor %}
+
+    <div class="ap-preview-col">
+        <div data-appearance-preview class="ap-preview-panel"></div>
+        <small class="text-muted">Live preview</small>
+        <button type="button" class="ap-randomise-btn" data-appearance-randomise>Randomise</button>
+    </div>
+
+    <div class="ap-fields-col">
+        <div class="ap-tabs" role="tablist">
+            <button type="button" class="ap-tab-btn" data-appearance-tab="head" aria-selected="true">Head</button>
+            <button type="button" class="ap-tab-btn" data-appearance-tab="kit" aria-selected="false">{{ personType == 'player' ? 'Kit' : 'Outfit' }}</button>
         </div>
-        <div class="col-md-4 text-center">
-            <div data-appearance-preview
-                 style="width:160px;height:160px;margin:0 auto;background:#fff;border:3px solid #333;"></div>
-            <small class="text-muted">Live preview</small>
+
+        <div data-appearance-panel="head">
+            <div class="ap-section">
+                <div class="ap-section-label">Hair style</div>
+                <div data-ap-field="hair" data-ap-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Hair colour</div>
+                <div data-ap-field="hairColor" data-ap-mode="swatch"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Skin tone</div>
+                <div data-ap-field="skin" data-ap-mode="skinswatch"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Facial hair</div>
+                <div data-ap-field="facial" data-ap-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Lip colour</div>
+                <div data-ap-field="lip" data-ap-mode="swatch"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Expression</div>
+                <div data-ap-field="face" data-ap-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div data-ap-field="headband" data-ap-mode="toggle" data-ap-label="Headband"></div>
+            </div>
+            {% if personType == 'staff' %}
+                <div class="ap-section">
+                    <div data-ap-field="glasses" data-ap-mode="toggle" data-ap-label="Glasses"></div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div data-appearance-panel="kit" hidden>
+            <div class="ap-section">
+                <div class="ap-section-label">Primary colour</div>
+                <div data-ap-field="primary" data-ap-mode="swatch"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Secondary colour</div>
+                <div data-ap-field="secondary" data-ap-mode="swatch"></div>
+            </div>
+            {% if personType == 'player' %}
+                <div class="ap-section">
+                    <div class="ap-section-label">Kit style</div>
+                    <div data-ap-field="kit" data-ap-mode="grid"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Shorts</div>
+                    <div data-ap-field="shorts" data-ap-mode="colorpart"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Socks</div>
+                    <div data-ap-field="socks" data-ap-mode="colorpart"></div>
+                </div>
+            {% else %}
+                <div class="ap-section">
+                    <div class="ap-section-label">Outfit</div>
+                    <div data-ap-field="outfit" data-ap-mode="grid"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Trousers</div>
+                    <div data-ap-field="trousers" data-ap-mode="colorpart"></div>
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
-<script src="{{ asset('assets/avatar-compositor.js') }}"></script>
+{# These plain static files have no Symfony asset-versioning strategy configured
+   and no explicit Cache-Control header, so a browser that fetched them before an
+   edit can keep serving the stale copy indefinitely (silently — window.composePlayerSpriteSvg
+   just stays undefined and the live preview/thumbnails render blank with no error).
+   They're tiny and admin-only/low-traffic, so always busting the cache is simpler
+   and more robust than hand-maintaining a version number. #}
+{% set cacheBust = 'now'|date('YmdHis') %}
+<link rel="stylesheet" href="{{ asset('admin-appearance-widget.css') }}?v={{ cacheBust }}">
+<script src="{{ asset('assets/avatar-compositor.js') }}?v={{ cacheBust }}"></script>
+<script src="{{ asset('assets/appearance-widget.js') }}?v={{ cacheBust }}"></script>
 <script>
 (function () {
     var root = document.currentScript.closest('[data-appearance-editor]')
         || document.querySelector('[data-appearance-editor]');
     if (!root) return;
     var preview = root.querySelector('[data-appearance-preview]');
+    var personType = root.getAttribute('data-person-type') || 'staff';
 
     function val(name) {
         var el = root.querySelector('[id$="_' + name + '"]');
-        return el ? el.value : '';
+        if (!el) return '';
+        return el.type === 'checkbox' ? el.checked : el.value;
     }
     function render() {
-        if (typeof window.composeAvatarSvg !== 'function') return;
+        if (typeof window.composePlayerSpriteSvg !== 'function') return;
         var appearance = {
-            skinTone: val('skinTone'), hairStyle: val('hairStyle'), hairColor: val('hairColor'),
-            accessory: val('accessory') || null, kitTrim: val('kitTrim'), facialHair: val('facialHair'),
-            faceShape: val('faceShape'), eyeShape: val('eyeShape'), noseType: val('noseType'),
-            jerseyVariant: parseInt(val('jerseyVariant') || '1', 10)
+            hair: val('hair'), hairColor: val('hairColor'), headband: !!val('headband'), skin: val('skin'),
+            face: val('face'), facial: val('facial'), lip: val('lip'),
+            primary: val('primary'), secondary: val('secondary'),
+            kit: val('kit'), shorts: val('shorts'), socks: val('socks'),
+            outfit: val('outfit'), trousers: val('trousers'), glasses: !!val('glasses')
         };
-        var kitHex = appearance.kitTrim || '#3a8fd4';
-        preview.innerHTML = window.composeAvatarSvg(appearance, 70, kitHex, 160);
+        preview.innerHTML = window.composePlayerSpriteSvg(appearance, personType, 'large', 12);
     }
     root.addEventListener('change', render);
     root.addEventListener('input', render);
     render();
+
+    if (typeof window.initAppearanceWidget === 'function') {
+        window.initAppearanceWidget(root, personType);
+    }
 })();
 </script>

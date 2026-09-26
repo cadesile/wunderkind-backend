@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\NpcClub;
 use App\Enum\CitySize;
+use App\Form\Type\KitIdentityType;
 use App\Repository\NpcClubRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
@@ -11,6 +12,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ColorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
@@ -28,7 +31,9 @@ class NpcClubCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['name' => 'ASC']);
+        return $crud
+            ->setDefaultSort(['name' => 'ASC'])
+            ->addFormTheme('admin/form/kit_identity_theme.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
@@ -49,8 +54,11 @@ class NpcClubCrudController extends AbstractCrudController
             ->setFormTypeOptions(['currency' => 'GBP', 'divisor' => 100])
             ->formatValue(fn($v) => $v !== null ? '£' . number_format((int) $v / 100) : '—')
             ->setHelp('Starting budget in pounds.');
-        yield ColorField::new('primaryColor')->hideOnIndex();
-        yield ColorField::new('secondaryColor')->hideOnIndex();
+        // Not independently editable — the home kit in "Kit & Badge" below is
+        // the single source of truth and keeps these in sync on save (see
+        // NpcClub::setIdentity()). Still shown read-only on the detail page.
+        yield ColorField::new('primaryColor')->hideOnIndex()->hideOnForm();
+        yield ColorField::new('secondaryColor')->hideOnIndex()->hideOnForm();
         yield TextField::new('stadiumName')
             ->setHelp('Optional stadium name, e.g. Estadio El Cid')
             ->hideOnIndex();
@@ -85,5 +93,12 @@ class NpcClubCrudController extends AbstractCrudController
             ->setHelp('JSON: {"training_pitch": 6, "north_stand": 4, ...}')
             ->hideOnIndex();
         yield DateTimeField::new('createdAt')->hideOnForm();
+
+        // ── Panel: Kit & Badge ────────────────────────────────────────────────
+        yield FormField::addFieldset('Kit & Badge', 'fa fa-shirt')->hideOnIndex();
+
+        yield Field::new('identity')
+            ->setFormType(KitIdentityType::class)
+            ->onlyOnForms();
     }
 }
