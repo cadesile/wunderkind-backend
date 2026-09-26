@@ -53,7 +53,7 @@ the end) — this file is the sole source of truth for the route surface.
 | `LeaderboardController` | `/api` | `GET /leaderboard/{category}` |
 | `LeagueController` | `/api/league` | `POST /conclude-season`, `GET /season-history`, `GET /season-history/{season}` |
 | `MarketController` | `/api/market` | `GET /data`, `POST /assign`, `POST /consume`, `GET /legacy` |
-| `OwnerAvatarController` | `/api/owner-avatar` | `POST` (`IsGranted('ROLE_CLUB')`) — partial-update the account holder's owner identity (name/nationality/gender/dob) + avatar; see "Owner Identity" in CLAUDE.md |
+| `OwnerAvatarController` | `/api/owner-avatar` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the account holder's owner identity (name/nationality/gender/dob) + avatar; see "Owner Identity" in CLAUDE.md |
 | `PoolController` | `/api/pool` | `POST /ensure` (`IsGranted('IS_AUTHENTICATED_FULLY')`) |
 | `ScoutSearchController` | `/api/scout` | `GET /foreign-clubs`, `GET /search` |
 | `StarterConfigController` | `/api` | `GET /starter-config` |
