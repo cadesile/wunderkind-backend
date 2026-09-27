@@ -77,6 +77,14 @@ class NpcClub
     #[ORM\Column(enumType: Formation::class, options: ['default' => '4-4-2'])]
     private Formation $formation = Formation::F_442;
 
+    /**
+     * Kit + badge config (sprite KitConfig shape, 12 keys). Independent of
+     * primaryColor/secondaryColor — see CLAUDE.md's NpcClub entry. Null until
+     * generated/backfilled.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $identity = null;
+
     public function __construct(
         string $name,
         string $country,
@@ -178,4 +186,22 @@ class NpcClub
 
     public function getFormation(): Formation { return $this->formation; }
     public function setFormation(Formation $v): static { $this->formation = $v; return $this; }
+
+    public function getIdentity(): ?array { return $this->identity; }
+
+    /**
+     * Setting a non-null identity with a home kit also syncs primaryColor/
+     * secondaryColor from `identity['home']` — the home kit is now the single
+     * source of truth for a club's colors, so there's no separate admin field
+     * for them to drift out of sync with (see CLAUDE.md's "Kit & Badge Identity").
+     */
+    public function setIdentity(?array $v): static
+    {
+        $this->identity = $v;
+        if ($v !== null && isset($v['home']['primary'], $v['home']['secondary'])) {
+            $this->primaryColor   = $v['home']['primary'];
+            $this->secondaryColor = $v['home']['secondary'];
+        }
+        return $this;
+    }
 }

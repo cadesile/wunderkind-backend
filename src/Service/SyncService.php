@@ -714,6 +714,7 @@ class SyncService
                 'tier'           => $c->getTier(),
                 'primaryColor'   => $c->getPrimaryColor(),
                 'secondaryColor' => $c->getSecondaryColor(),
+                'identity'       => $c->getIdentity(),
                 'stadiumName'    => $c->getStadiumName(),
                 'facilities'     => $c->getFacilities(),
                 'formation'      => $c->getFormation()->value,

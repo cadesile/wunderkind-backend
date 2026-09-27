@@ -7,4 +7,5 @@ enum AppearanceRole: string
     case COACH  = 'COACH';
     case SCOUT  = 'SCOUT';
     case AGENT  = 'AGENT';
+    case OWNER  = 'OWNER';
 }

@@ -29,20 +29,25 @@ Connections backed by content actually present in the stages they link.
   Symfony's own scheduler.
 - **Admin panel customization goes deeper than most Symfony/EasyAdmin
   apps.** `.context/stages/05_ui/output/design-system.md`'s themed
-  palette/typography and the custom compound-field widget
-  (`appearance_theme.html.twig` + `avatar-compositor.js`) are wired
-  through `Controller/Admin/DashboardController.php` and
-  `PlayerCrudController`/`ScoutCrudController`/`StaffCrudController` —
-  exactly the controllers `.context/stages/02_architecture/output/git-activity.md`
-  flags as one of the two active hotspot clusters. Admin-panel changes
-  in this repo are as much UI work as backend work.
-- **Two independent, cross-repo "must stay bit-identical" invariants.**
-  `.context/stages/04_interfaces/output/services.md` flags
-  `Appearance/SeededRng` (must match the client's `SeededRng`) and
-  `ClubNameNormalizer` (must match the client's `clubName.ts`). Neither
-  is enforced by a shared package or test in this repo — changing either
-  without checking the frontend repo would silently desync client/server
-  appearance or name validation.
+  palette/typography and the custom compound-field widgets
+  (`appearance_theme.html.twig` + `appearance-widget.js` +
+  `avatar-compositor.js`; and the sibling `kit_identity_theme.html.twig` +
+  `kit-identity-widget.js` + `kit-compositor.js` for NpcClub kit/badge) are
+  wired through `Controller/Admin/DashboardController.php` and
+  `PlayerCrudController`/`ScoutCrudController`/`StaffCrudController`/
+  `AgentCrudController`/`NpcClubCrudController` — exactly the controllers
+  `.context/stages/02_architecture/output/git-activity.md` flags as one of
+  the two active hotspot clusters. Admin-panel changes in this repo are as
+  much UI work as backend work.
+- **One remaining cross-repo "must stay bit-identical" invariant: `ClubNameNormalizer`**
+  (must match the client's `clubName.ts` — not enforced by a shared package
+  or test, changing it without checking the frontend repo would silently
+  desync client/server name validation). The Appearance generator used to
+  carry a second such invariant against a frontend `SeededRng`/
+  `generateAppearance`; the pixel-sprite rewrite retired it — `sprite.ts`/
+  `PlayerSprite.tsx` in `wunderkind-app` are pure rendering with no
+  generation/RNG code, so there is currently no frontend counterpart for
+  `AppearanceGeneratorService` to stay bit-identical with.
 - **`SyncService` overwrites, not accumulates, club balance.**
   (`services.md`) A client resync applies `Club::setBalance()` as an
   absolute value. Combined with `SyncRecord.isRollback` tracking

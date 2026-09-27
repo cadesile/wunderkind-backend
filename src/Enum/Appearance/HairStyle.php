@@ -3,11 +3,13 @@ namespace App\Enum\Appearance;
 
 enum HairStyle: string
 {
-    case BALD    = 'bald';
-    case CLASSIC = 'classic';
-    case MESSY   = 'messy';
-    case ROUND   = 'round';
-    case SMART   = 'smart';
-    case SPIKE   = 'spike';
-    case USUAL   = 'usual';
+    case BALD     = 'bald';
+    case BUZZ     = 'buzz';
+    case CROP     = 'crop';
+    case QUIFF    = 'quiff';
+    case MOHAWK   = 'mohawk';
+    case AFRO     = 'afro';
+    case LONG     = 'long';
+    case BUN      = 'bun';
+    case CORNROWS = 'cornrows';
 }

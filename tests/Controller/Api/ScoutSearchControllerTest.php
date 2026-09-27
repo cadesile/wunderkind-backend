@@ -43,9 +43,11 @@ class ScoutSearchControllerTest extends TestCase
     public function testSerializePlayerIncludesAppearanceVerbatim(): void
     {
         $appearance = [
-            'skinTone' => '#e0ac69', 'hairStyle' => 'curly', 'hairColor' => 'blonde',
-            'accessory' => 'headband', 'kitTrim' => '#d43a3a', 'facialHair' => 'stubble',
-            'faceShape' => 'round', 'eyeShape' => 'wide', 'noseType' => 'small', 'jerseyVariant' => 3,
+            'hair' => 'afro', 'hairColor' => '#e6bd55', 'headband' => true, 'skin' => 's2',
+            'face' => 'happy', 'facial' => 'none', 'lip' => '#d98a7e',
+            'primary' => '#d94040', 'secondary' => '#f2c230',
+            'kit' => 'sash', 'shorts' => 'primary', 'socks' => 'black',
+            'outfit' => 'coat', 'trousers' => 'black', 'glasses' => false,
         ];
         $player = new Player('A', 'B');
         $player->setAppearance($appearance);

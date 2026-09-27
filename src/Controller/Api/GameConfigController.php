@@ -4,6 +4,7 @@ namespace App\Controller\Api;
 
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
+use App\Repository\StarterConfigRepository;
 use App\Service\FacilityImageResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,6 +17,7 @@ class GameConfigController extends AbstractController
         private readonly GameConfigRepository      $gameConfigRepository,
         private readonly FacilityTemplateRepository $facilityTemplateRepository,
         private readonly FacilityImageResolver       $facilityImageResolver,
+        private readonly StarterConfigRepository     $starterConfigRepository,
     ) {}
 
     #[Route('/game-config', name: 'api_game_config', methods: ['GET'])]
@@ -258,8 +260,10 @@ class GameConfigController extends AbstractController
 
             'staffRoles' => array_column(\App\Enum\StaffRole::cases(), 'value'),
 
-            // NPC Squad Config — per-tier squad composition and recruitment balance
-            'npcSquadConfig' => $config->getNpcSquadConfig(),
+            // NPC Squad Config — per-tier squad composition and recruitment balance.
+            // Sourced from StarterConfig (the live config that actually drives NPC
+            // world-pack generation), not GameConfig.
+            'npcSquadConfig' => $this->starterConfigRepository->getConfig()->getNpcSquadConfig(),
 
             // Facility templates — defines per-level gameplay effects for each facility type.
             // Client applies these during the weekly tick on top of the GameConfig baselines above.

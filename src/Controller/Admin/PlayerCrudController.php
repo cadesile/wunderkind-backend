@@ -113,6 +113,21 @@ class PlayerCrudController extends AbstractCrudController
         // ── Detail-only fields ────────────────────────────────────────────────
         yield IdField::new('id')->onlyOnDetail();
 
+        yield IntegerField::new('overall', 'Overall')
+            ->hideOnForm()
+            ->hideOnIndex()
+            ->setHelp('(pace+technical+vision+power+stamina+heart) / 6');
+
+        yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
+
+        // ── Panel: Identity ───────────────────────────────────────────────────
+        yield FormField::addFieldset('Identity', 'fa fa-user')->hideOnIndex();
+
+        yield TextField::new('firstName')->setColumns(6)->hideOnIndex();
+        yield TextField::new('lastName')->setColumns(6)->hideOnIndex();
+        yield DateField::new('dateOfBirth')->setFormat('yyyy-MM-dd')->setColumns(4)->hideOnIndex();
+        yield TextField::new('nationality')->setColumns(4)->hideOnIndex();
+
         yield ChoiceField::new('position')
             ->setChoices([
                 'Goalkeeper' => PlayerPosition::GOALKEEPER,
@@ -126,6 +141,25 @@ class PlayerCrudController extends AbstractCrudController
                 PlayerPosition::MIDFIELDER->value => 'primary',
                 PlayerPosition::ATTACKER->value   => 'danger',
             ])
+            ->setColumns(4)
+            ->hideOnIndex();
+
+        yield ChoiceField::new('secondaryPosition', 'Secondary Position')
+            ->setChoices([
+                'Goalkeeper' => PlayerPosition::GOALKEEPER,
+                'Defender'   => PlayerPosition::DEFENDER,
+                'Midfielder' => PlayerPosition::MIDFIELDER,
+                'Attacker'   => PlayerPosition::ATTACKER,
+            ])
+            ->renderAsBadges([
+                PlayerPosition::GOALKEEPER->value => 'warning',
+                PlayerPosition::DEFENDER->value   => 'success',
+                PlayerPosition::MIDFIELDER->value => 'primary',
+                PlayerPosition::ATTACKER->value   => 'danger',
+            ])
+            ->setFormTypeOption('required', false)
+            ->setFormTypeOption('placeholder', 'None')
+            ->setColumns(4)
             ->hideOnIndex();
 
         yield ChoiceField::new('status')
@@ -143,22 +177,16 @@ class PlayerCrudController extends AbstractCrudController
                 PlayerStatus::TRANSFERRED_VIA_AGENT->value => 'secondary',
                 PlayerStatus::RETIRED->value               => 'secondary',
             ])
+            ->setColumns(4)
             ->hideOnIndex();
 
-        yield IntegerField::new('overall', 'Overall')
-            ->hideOnForm()
-            ->hideOnIndex()
-            ->setHelp('(pace+technical+vision+power+stamina+heart) / 6');
+        // ── Panel: Appearance ─────────────────────────────────────────────────
+        yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
 
-        yield DateTimeField::new('createdAt')->hideOnForm()->hideOnIndex();
-
-        // ── Panel: Identity ───────────────────────────────────────────────────
-        yield FormField::addFieldset('Identity', 'fa fa-user')->hideOnIndex();
-
-        yield TextField::new('firstName')->setColumns(6)->hideOnIndex();
-        yield TextField::new('lastName')->setColumns(6)->hideOnIndex();
-        yield DateField::new('dateOfBirth')->setFormat('yyyy-MM-dd')->setColumns(4)->hideOnIndex();
-        yield TextField::new('nationality')->setColumns(4)->hideOnIndex();
+        yield Field::new('appearance')
+            ->setFormType(AppearanceType::class)
+            ->setFormTypeOptions(['person_type' => 'player'])
+            ->onlyOnForms();
 
 // ── Panel: Ability ────────────────────────────────────────────────────
         yield FormField::addFieldset('Ability', 'fa fa-chart-bar')->hideOnIndex();
@@ -214,13 +242,6 @@ class PlayerCrudController extends AbstractCrudController
 
         yield AssociationField::new('agent')->setRequired(false)->setColumns(6)->hideOnIndex();
         yield AssociationField::new('guardians', 'Guardians')->onlyOnDetail();
-
-        // ── Panel: Appearance ─────────────────────────────────────────────────
-        yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
-
-        yield Field::new('appearance')
-            ->setFormType(AppearanceType::class)
-            ->onlyOnForms();
     }
 
     /**

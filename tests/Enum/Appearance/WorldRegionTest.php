@@ -1,7 +1,7 @@
 <?php
 namespace App\Tests\Enum\Appearance;
 
-use App\Enum\Appearance\SkinTone;
+use App\Enum\Appearance\SkinId;
 use App\Enum\Appearance\WorldRegion;
 use App\Service\NameGeneratorService;
 use PHPUnit\Framework\TestCase;
@@ -47,17 +47,17 @@ class WorldRegionTest extends TestCase
         $this->assertSame(WorldRegion::EAST_ASIA,       WorldRegion::fromNationality('Japanese'));
     }
 
-    /** Weights must cover every SkinTone, in enum order, and sum to 100. */
+    /** Weights must cover every SkinId, in enum order, and sum to 100. */
     public function testEveryRegionHasCompleteNormalisedWeights(): void
     {
-        $expectedKeys = array_map(static fn (SkinTone $t) => $t->value, SkinTone::cases());
+        $expectedKeys = array_map(static fn (SkinId $s) => $s->value, SkinId::cases());
 
         foreach (WorldRegion::cases() as $region) {
-            $weights = $region->skinToneWeights();
+            $weights = $region->skinWeights();
             $this->assertSame(
                 $expectedKeys,
                 array_keys($weights),
-                sprintf('%s weights must list every SkinTone in enum order', $region->name),
+                sprintf('%s weights must list every SkinId in enum order', $region->name),
             );
             $this->assertSame(
                 100,
@@ -72,15 +72,15 @@ class WorldRegionTest extends TestCase
 
     public function testWestAfricaIsOverwhelminglyDark(): void
     {
-        $w = WorldRegion::WEST_AFRICA->skinToneWeights();
-        $dark = $w[SkinTone::BROWN->value] + $w[SkinTone::DARK->value];
+        $w = WorldRegion::WEST_AFRICA->skinWeights();
+        $dark = $w[SkinId::S5->value] + $w[SkinId::S6->value];
         $this->assertGreaterThanOrEqual(95, $dark);
     }
 
     public function testNorthernEuropeIsMajorityLight(): void
     {
-        $w = WorldRegion::NORTHERN_EUROPE->skinToneWeights();
-        $light = $w[SkinTone::VERY_LIGHT->value] + $w[SkinTone::LIGHT->value];
+        $w = WorldRegion::NORTHERN_EUROPE->skinWeights();
+        $light = $w[SkinId::S1->value] + $w[SkinId::S2->value];
         $this->assertGreaterThan(50, $light);
     }
 }

@@ -7,9 +7,13 @@ migrations are the change log (see `migrations.md`).
 ## Auth / user
 
 - **`User`** — auth identity (`UserInterface`). `email`, `password`,
-  `roles:array`, `managerProfile:?array`, `isVerified`, `verifiedAt`,
-  `lastLoginAt`, `createdAt`. `OneToMany` → `clubs:Collection<Club>`
-  (cascade persist/remove).
+  `roles:array`, `isVerified`, `verifiedAt`, `lastLoginAt`, `createdAt`.
+  Owner identity (replaces the old `managerProfile:?array` blob):
+  `name:?string`, `nationality:?string`, `gender:?string`, `dob:?date`,
+  `appearance:?array` (json, 15-key sprite shape — see
+  `04_interfaces/output/services.md`'s Avatar Appearance /
+  `OwnerAvatarController` entries). `OneToMany` → `clubs:Collection<Club>`
+  (cascade persist/remove); no uniqueness constraint on the FK.
 - **`Admin`** — separate back-office auth identity (`UserInterface`).
   `email`, `password`, `name`, `department`, `accessLevel:int(1)`.
   `getRoles()` hardcodes `['ROLE_ADMIN']`. No entity relations.
@@ -56,7 +60,9 @@ migrations are the change log (see `migrations.md`).
   `lastSyncedAt`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
   `country`, `abbreviation`, `worldInitializedAt/starterInitializedAt/
   tutorialCompletedAt`, `paName`, `managerTemperament/managerDiscipline/
-  managerAmbition:int(50)`, `balance:int`, `managerProfile:?array`,
+  managerAmbition:int(50)`, `balance:int` (the old `managerProfile:?array`
+  blob is gone — the owning `User`'s own name/nationality/gender/dob is
+  the single owner identity now, see Owner Identity in CLAUDE.md),
   `currentSeason:int(1)`, `formation:Formation(enum, F_442)`,
   `fanCount/fanSentiment/fanMorale`, `lastWeeklyAttendance/
   totalSeasonAttendance`, `isSpoof:bool(false)` (added by migration
@@ -83,11 +89,17 @@ migrations are the change log (see `migrations.md`).
   `league_sponsor_income`). `rolledValue:int`. `ManyToOne` → `League`,
   `Sponsor` (both `CASCADE`).
 - **`NpcClub`** — AI-controlled club. `name/country`, `tier/reputation`,
-  `primaryColor/secondaryColor`, `abbreviation`, `stadiumName`, `balance`,
+  `primaryColor/secondaryColor` (synced from `identity.home`, not
+  independently admin-editable), `abbreviation`, `stadiumName`, `balance`,
   `playingStyle('DIRECT')`, `financialApproach('BALANCED')`,
   `managerTemperament:int(50)`, `facilities:array`, `region`,
   `citySize:CitySize(enum)`, `populationSize`, `isCapital`,
-  `formation:Formation(enum)`. `ManyToOne` → `League` (nullable).
+  `formation:Formation(enum)`. `identity:array|null` (json) — nested
+  `{home: KitVariant, away: KitVariant, badgeShape, badgePattern,
+  badgeCentre, initials, badgeFill, badgeTrim, badgeSymbol}`, where a
+  `KitVariant` is `{kit, primary, secondary, shorts, socks}` (shared enums
+  with the player sprite's `kit`/`primary`/`secondary`/`shorts`/`socks`) —
+  see CLAUDE.md's "Kit & Badge Identity". `ManyToOne` → `League` (nullable).
 - **`Transfer`** — a transfer event record. `playerName/playerPosition/
   clubLeaving`, `destinationClubName`, `type:TransferType(enum)`,
   `fee/agentCommission/netProceeds/developmentPoints/reputationGained`,
@@ -321,12 +333,15 @@ Each is effectively a single global-config row.
   sponsor/investor, cooldown, squad-role, and social-post tuning
   constants. Notable array fields: `bankruptcyDeductionTiers`,
   `maxSponsorsByTier`, `maxInvestorsByTier`, `npcClubBalanceRanges`,
-  `npcFacilityLevelRanges`, `npcClubSizeWeights`, `npcSquadConfig`,
+  `npcFacilityLevelRanges`, `npcClubSizeWeights`,
   `squadRoleAppearanceExpectations/MoraleDecayPerWeek/
   MoraleBoostPerWeek/AutoAssignThresholds`, `leaguePlayerAbilityRanges`,
   `wageMultiplierTiers`, `leagueWinPoints`, `pyramidNewsConfig`,
   `statPostRotation/Schedule/LastRunAt`. Fetched/created via
-  `GameConfigRepository::getConfig()`. No relations.
+  `GameConfigRepository::getConfig()`. No relations. Its own dead,
+  differently-shaped `npcSquadConfig` field (never read by generation code,
+  formerly exposed verbatim at `GET /api/game-config`) was removed —
+  `StarterConfig::$npcSquadConfig` below is, and always was, the real config.
 - **`PoolConfig`** — singleton tuning for recruitment-pool generation
   ranges (player/coach/scout/agent age/ability/height/weight ranges and
   pool targets per role). No relations.
@@ -336,6 +351,15 @@ Each is effectively a single global-config row.
   `starterReputationTier`, `enabledCountries`, `leagueAbilityRanges`,
   `npcSquadConfig`, `fanBaseRanges`, promotion/relegation fan-base
   multipliers). `id:int = 1` fixed. No relations.
+  `npcSquadConfig` is keyed by tier string `"1"`-`"8"`, each entry:
+  `playerMin/playerMax, managerCount/coachCount/chairmanCount,
+  directorOfFootballCount/facilityManagerCount/scoutCount, foreignPercent`
+  — this is the live config that sizes every NPC club's staff/scouts during
+  world-pack generation (`WorldInitializationService`), edited via the "NPC
+  Squad Config" admin screen (`DashboardController::starterConfig()`), and
+  the same shape exposed at `GET /api/game-config`'s `npcSquadConfig` key
+  (sourced from here, not `GameConfig`). See
+  `docs/api/npc-club-staff-scouts.md`.
 
 ## Misc / cache / analytics
 

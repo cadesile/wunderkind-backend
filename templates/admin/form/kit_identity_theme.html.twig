@@ -1,0 +1,13 @@
+{# Form theme for App\Form\Type\KitIdentityType.
+   KitIdentityType's block prefix is "kit_identity" (StringUtil::fqcnToBlockPrefix
+   strips the "Type" suffix and snake_cases "KitIdentity" -> "kit_identity"), so
+   Symfony/EasyAdmin look for a block named "kit_identity_widget" when
+   rendering this compound field's widget. Registered per-controller via:
+     $crud->addFormTheme('admin/form/kit_identity_theme.html.twig')
+   This block fully replaces the default compound-widget rendering (which
+   would just loop form_rows over the children) with the swatch/grid picker +
+   live SVG preview markup — see templates/admin/field/kit_identity.html.twig,
+   the sibling pattern to admin/form/appearance_theme.html.twig. #}
+{% block kit_identity_widget %}
+    {{ include('admin/field/kit_identity.html.twig') }}
+{% endblock kit_identity_widget %}

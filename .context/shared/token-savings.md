@@ -10,22 +10,23 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (router + `.context/stages/*/output/*.md`, all stages) | 27450 |
-| Router only (`.context/CONTEXT.md`) | 483 |
-| `01_overview` (router + its `output/`) | 1649 |
-| `02_architecture` (same shape) | 3351 |
-| `03_data` (same shape) | 9123 |
-| `04_interfaces` (same shape) | 11601 |
-| `05_ui` (same shape) | 1906 |
-| `06_documentation` (same shape) | 1392 |
-| `07_synthesis` (same shape) | 2315 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 20526 |
+| Router only (`.context/CONTEXT.md`) | 451 |
+| `01_overview` (router + its `output/`) | 1723 |
+| `02_architecture` (same shape) | 2832 |
+| `03_data` (same shape) | 7033 |
+| `04_interfaces` (same shape) | 6343 |
+| `05_ui` (same shape) | 1961 |
+| `06_documentation` (same shape) | 1161 |
+| `07_synthesis` (same shape) | 2180 |
 
-**Typical saving vs. loading everything:** 84% (average across all 7
+**Typical saving vs. loading everything:** 81% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-22 (competition round lifecycle draw/resolve
-decoupling — `02_architecture`, `03_data`, `04_interfaces` rows
-re-measured precisely with `wc -c` this pass, superseding the prior
-"not re-measured precisely" drift on `03_data`/`04_interfaces` from the
-2026-09-20 follow-up pass; `01_overview`/`05_ui`/`06_documentation`/
-`07_synthesis` untouched this pass, figures carried forward unchanged)
+**Last updated:** 2026-09-27 (added User owner identity — all 7 stage rows
+re-measured precisely with `wc -c`; the prior "Router only: 51" figure was
+stale/wrong, corrected here to the actual `.context/CONTEXT.md` size). Not
+yet re-measured against the 2026-09-27 merge of `development` into
+`competition` (Facility Manager/DOF/scout staff config, owner identity,
+NpcClub kit+badge identity) — these figures will drift low again until the
+next precise pass.

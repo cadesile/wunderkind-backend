@@ -609,12 +609,15 @@ class DashboardController extends AbstractDashboardController
         $npcSquadConfig = [];
         foreach ($npcConfigInput as $tier => $fields) {
             $npcSquadConfig[$tier] = [
-                'playerMin'      => (int) ($fields['playerMin'] ?? 15),
-                'playerMax'      => (int) ($fields['playerMax'] ?? 25),
-                'managerCount'   => (int) ($fields['managerCount'] ?? 1),
-                'coachCount'     => (int) ($fields['coachCount'] ?? 1),
-                'chairmanCount'  => (int) ($fields['chairmanCount'] ?? 1),
-                'foreignPercent' => (int) ($fields['foreignPercent'] ?? 0),
+                'playerMin'               => (int) ($fields['playerMin'] ?? 15),
+                'playerMax'               => (int) ($fields['playerMax'] ?? 25),
+                'managerCount'            => (int) ($fields['managerCount'] ?? 1),
+                'coachCount'              => (int) ($fields['coachCount'] ?? 1),
+                'chairmanCount'           => (int) ($fields['chairmanCount'] ?? 1),
+                'directorOfFootballCount' => (int) ($fields['directorOfFootballCount'] ?? 0),
+                'facilityManagerCount'    => (int) ($fields['facilityManagerCount'] ?? 0),
+                'scoutCount'              => (int) ($fields['scoutCount'] ?? 0),
+                'foreignPercent'          => (int) ($fields['foreignPercent'] ?? 0),
             ];
             // Ensure min <= max
             if ($npcSquadConfig[$tier]['playerMin'] > $npcSquadConfig[$tier]['playerMax']) {

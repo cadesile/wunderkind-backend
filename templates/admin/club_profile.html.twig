@@ -365,15 +365,15 @@
     <div class="col-lg-5">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-header py-2 bg-transparent border-bottom">
-                <span class="fw-semibold small"><i class="fa fa-user-tie me-1 text-muted"></i> Manager Profile</span>
+                <span class="fw-semibold small"><i class="fa fa-user-tie me-1 text-muted"></i> Owner</span>
             </div>
             <div class="card-body">
-                {% if club.managerProfile is defined and club.managerProfile %}
+                {% if club.user.name %}
                     <div class="mb-3">
-                        <div class="fw-semibold">{{ club.managerProfile.name ?? '—' }}</div>
+                        <div class="fw-semibold">{{ club.user.name }}</div>
                         <div class="text-muted small">
-                            {% if club.managerProfile.nationality is defined %}{{ club.managerProfile.nationality }}{% endif %}
-                            {% if club.managerProfile.dateOfBirth is defined %}&middot; b. {{ club.managerProfile.dateOfBirth }}{% endif %}
+                            {% if club.user.nationality %}{{ club.user.nationality }}{% endif %}
+                            {% if club.user.dob %}&middot; b. {{ club.user.dob|date('Y-m-d') }}{% endif %}
                         </div>
                     </div>
                     <hr class="my-2">

@@ -198,8 +198,26 @@
                                         </div>
                                         <div class="col-4">
                                             <label class="small fw-bold mb-0">Chair</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][chairmanCount]" 
+                                            <input type="number" name="npcConfig[{{ tier }}][chairmanCount]"
                                                    class="form-control form-control-sm" value="{{ tc.chairmanCount ?? 1 }}" min="0">
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-1 mb-2">
+                                        <div class="col-4">
+                                            <label class="small fw-bold mb-0">DoF</label>
+                                            <input type="number" name="npcConfig[{{ tier }}][directorOfFootballCount]"
+                                                   class="form-control form-control-sm" value="{{ tc.directorOfFootballCount ?? 0 }}" min="0">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="small fw-bold mb-0">Fac Mgr</label>
+                                            <input type="number" name="npcConfig[{{ tier }}][facilityManagerCount]"
+                                                   class="form-control form-control-sm" value="{{ tc.facilityManagerCount ?? 0 }}" min="0">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="small fw-bold mb-0">Scout</label>
+                                            <input type="number" name="npcConfig[{{ tier }}][scoutCount]"
+                                                   class="form-control form-control-sm" value="{{ tc.scoutCount ?? 0 }}" min="0">
                                         </div>
                                     </div>
 

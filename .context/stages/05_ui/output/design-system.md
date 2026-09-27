@@ -61,9 +61,37 @@ scrollbars, and Select2 — a full theming pass, not a one-off tweak.
   form-widget theme, registered per-controller via
   `$crud->addFormTheme('admin/form/appearance_theme.html.twig')` in
   `PlayerCrudController.php`, `ScoutCrudController.php`,
-  `StaffCrudController.php`. Replaces EasyAdmin's default compound-field
-  rendering with a two-column layout plus a live SVG avatar preview,
-  driven by `public/assets/avatar-compositor.js`.
+  `StaffCrudController.php`, `AgentCrudController.php`. Replaces EasyAdmin's
+  default compound-field rendering with a two-column layout (big live pixel
+  sprite preview + Randomise button, plus tabbed swatch/icon-grid pickers
+  driven by `public/assets/appearance-widget.js`), rendering the sprite via
+  `public/assets/avatar-compositor.js`. Takes a `person_type` form-type
+  option (`->setFormType(AppearanceType::class)->setFormTypeOptions([...])`
+  — this EasyAdmin version's `setFormType()` takes only the class name) that
+  picks the preview's body shape ('player' vs 'staff') without changing what
+  fields exist or what's stored.
+- **`templates/admin/form/kit_identity_theme.html.twig`** +
+  **`templates/admin/field/kit_identity.html.twig`** — the same custom-widget
+  pattern as the appearance widget above, registered in
+  `NpcClubCrudController.php` for a club's kit + badge `identity`. Three tabs
+  — **Kit Home / Kit Away / Badge** — and the live preview itself swaps
+  between home-kit-only, away-kit-only, and badge-only content depending on
+  the active tab (the appearance widget's preview always shows everything at
+  once). The form's own fields are flat and prefixed (`homeKit`,
+  `awayPrimary`, ...), nested back into `home`/`away` by `KitIdentityType`'s
+  custom `DataMapperInterface` on submit. Shorts/socks render as plain color
+  chips (`.ap-chip`), not a kit thumbnail — a full sprite render can't show
+  which part-color option is selected, since shorts/socks sit outside the
+  shirt-only crop used for kit-style thumbnails. Rendered via
+  `public/assets/kit-compositor.js`, picker logic in
+  `public/assets/kit-identity-widget.js`; reuses `admin-appearance-widget.css`
+  as-is (its `.ap-*` classes, including the newer `.ap-chip*` ones, aren't
+  appearance-specific).
+- Both custom widgets append a `?v={{ 'now'|date('YmdHis') }}` cache-buster
+  to their CSS/JS `asset()` URLs — this repo has no asset-versioning strategy
+  configured, so a browser that fetched one of these files before an edit
+  will otherwise keep serving the stale copy indefinitely with no visible
+  error (the live preview just silently renders blank).
 
 ## What's just stock/default (not part of the design system)
 

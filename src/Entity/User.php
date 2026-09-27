@@ -55,8 +55,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'user', targetEntity: Club::class, cascade: ['persist', 'remove'])]
     private Collection $clubs;
 
+    /** Owner identity — the real account holder's own name/nationality/gender/DOB, set via POST /api/owner-avatar. */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $name = null;
+
+    #[ORM\Column(length: 60, nullable: true)]
+    private ?string $nationality = null;
+
+    #[ORM\Column(length: 10, nullable: true)]
+    private ?string $gender = null;
+
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $dob = null;
+
+    /** Owner avatar (frontend Appearance shape). Null until generated/set. See "Avatar Appearance" in CLAUDE.md. */
     #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $managerProfile = null;
+    private ?array $appearance = null;
 
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private bool $isVerified = false;
@@ -97,8 +111,20 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /** @return Collection<int, Club> */
     public function getClubs(): Collection { return $this->clubs; }
 
-    public function getManagerProfile(): ?array { return $this->managerProfile; }
-    public function setManagerProfile(?array $profile): void { $this->managerProfile = $profile; }
+    public function getName(): ?string { return $this->name; }
+    public function setName(?string $name): void { $this->name = $name; }
+
+    public function getNationality(): ?string { return $this->nationality; }
+    public function setNationality(?string $nationality): void { $this->nationality = $nationality; }
+
+    public function getGender(): ?string { return $this->gender; }
+    public function setGender(?string $gender): void { $this->gender = $gender; }
+
+    public function getDob(): ?\DateTimeImmutable { return $this->dob; }
+    public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
+
+    public function getAppearance(): ?array { return $this->appearance; }
+    public function setAppearance(?array $appearance): void { $this->appearance = $appearance; }
 
     public function isVerified(): bool { return $this->isVerified; }
     public function setIsVerified(bool $isVerified): void { $this->isVerified = $isVerified; }

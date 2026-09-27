@@ -136,6 +136,10 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         self::assertTrue($club->isCapital());
         self::assertSame('Probe Region', $club->getRegion());
         self::assertSame('PRV', $club->getAbbreviation());
+        self::assertSame('hoops', $club->getIdentity()['home']['kit']);
+        self::assertSame('plain', $club->getIdentity()['away']['kit']);
+        self::assertSame('round', $club->getIdentity()['badgeShape']);
+        self::assertSame('#1f8a4c', $club->getPrimaryColor(), 'primaryColor must stay synced to the home kit after reimport');
 
         $league = $this->leagues->findOneBy(['country' => self::COUNTRY]);
         self::assertSame(6, $league->getSponsorCount());
@@ -206,6 +210,12 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         $club->setFinancialApproach('CAUTIOUS');
         $club->setManagerTemperament(61);
         $club->setFormation(Formation::F_433);
+        $club->setIdentity([
+            'home' => ['kit' => 'hoops', 'primary' => '#1f8a4c', 'secondary' => '#f4f3ee', 'shorts' => 'white', 'socks' => 'primary'],
+            'away' => ['kit' => 'plain', 'primary' => '#1a1a1a', 'secondary' => '#f2c230', 'shorts' => 'black', 'socks' => 'black'],
+            'badgeShape' => 'round', 'badgePattern' => 'stripes', 'badgeCentre' => 'initials',
+            'initials' => 'PRV', 'badgeFill' => '#1b2a4a', 'badgeTrim' => '#f2c230', 'badgeSymbol' => '#f4f3ee',
+        ]);
         $this->em->persist($club);
 
         $this->em->flush();
