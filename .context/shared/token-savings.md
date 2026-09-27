@@ -10,18 +10,19 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (`.context/stages/*/output/*.md`, all stages) | 19776 |
-| Router only (`.context/CONTEXT.md`) | 51 |
-| `01_overview` (router + its `CONTEXT.md` + its `output/`) | 2286 |
-| `02_architecture` (same shape) | 2928 |
-| `03_data` (same shape) | 6916 |
-| `04_interfaces` (same shape) | 6401 |
-| `05_ui` (same shape) | 2349 |
-| `06_documentation` (same shape) | 1112 |
-| `07_synthesis` (same shape) | 2176 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 20526 |
+| Router only (`.context/CONTEXT.md`) | 451 |
+| `01_overview` (router + its `output/`) | 1723 |
+| `02_architecture` (same shape) | 2832 |
+| `03_data` (same shape) | 7033 |
+| `04_interfaces` (same shape) | 6343 |
+| `05_ui` (same shape) | 1961 |
+| `06_documentation` (same shape) | 1161 |
+| `07_synthesis` (same shape) | 2180 |
 
-**Typical saving vs. loading everything:** 80% (average across all 7
+**Typical saving vs. loading everything:** 81% (average across all 7
 stages, all of which now have output)
 
-**Last updated:** 2026-09-25 (after restructuring NpcClub kit+badge identity
-to nested home/away kits + the shorts/socks color-chip fix)
+**Last updated:** 2026-09-27 (added User owner identity — all 7 stage rows
+re-measured precisely with `wc -c`; the prior "Router only: 51" figure was
+stale/wrong, corrected here to the actual `.context/CONTEXT.md` size)

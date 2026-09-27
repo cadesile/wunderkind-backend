@@ -48,6 +48,15 @@
                                     </span>
                                 {% endif %}
                             </div>
+                            {# ── Owner identity: one profile, shared across every club below ── #}
+                            {% if user.name %}
+                                <div class="text-muted small mt-1">
+                                    <i class="fa fa-user me-1" aria-hidden="true"></i>
+                                    {{ user.name }}
+                                    {% if user.nationality %}&middot; {{ user.nationality }}{% endif %}
+                                    {% if user.dob %}&middot; b. {{ user.dob|date('Y-m-d') }}{% endif %}
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -83,8 +92,7 @@
                             <thead class="table-light">
                                 <tr>
                                     {# finding 7: hide low-priority columns on mobile #}
-                                    <th class="ps-4 d-none d-md-table-cell">Manager Name</th>
-                                    <th>Club Name</th>
+                                    <th class="ps-4">Club Name</th>
                                     <th class="d-none d-sm-table-cell">Country</th>
                                     <th class="d-none d-lg-table-cell">Last Sync Week</th>
                                     <th class="d-none d-md-table-cell">Last Sync Date</th>
@@ -94,18 +102,10 @@
                             </thead>
                             <tbody>
                                 {% for club in clubs %}
-                                    {% set mgr = club.managerProfile %}
                                     {% set clubUrl = ea_url().setController('App\\Controller\\Admin\\ClubCrudController').setAction('detail').setEntityId(club.id) %}
                                     {# finding 6: whole row is clickable #}
                                     <tr style="cursor:pointer;" onclick="window.location='{{ clubUrl }}'">
-                                        <td class="ps-4 d-none d-md-table-cell">
-                                            {% if mgr and mgr.name is defined and mgr.name %}
-                                                {{ mgr.name }}
-                                            {% else %}
-                                                <span class="text-muted">—</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="fw-semibold">{{ club.name }}</td>
+                                        <td class="ps-4 fw-semibold">{{ club.name }}</td>
                                         <td class="d-none d-sm-table-cell">
                                             {% if club.country %}
                                                 {{ club.country }}

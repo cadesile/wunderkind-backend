@@ -40,9 +40,14 @@ Most recent migrations (chronological):
    `is_spoof BOOLEAN DEFAULT false NOT NULL` to `club`.
 9. `Version20260924230000` — adds nullable `secondary_position` to `player`
    (an optional secondary position, same `PlayerPosition` enum as `position`).
-10. `Version20260925120000` (most recent) — adds nullable `identity JSON` to
+10. `Version20260925120000` — adds nullable `identity JSON` to
     `npc_club` (kit + badge config; see `entities.md`'s `NpcClub` entry and
     CLAUDE.md's "Kit & Badge Identity").
+11. `Version20260927120000` (most recent) — adds nullable `name VARCHAR(100)`,
+    `nationality VARCHAR(60)`, `gender VARCHAR(10)`, `dob DATE`,
+    `appearance JSON` to `"user"` (owner identity — see `entities.md`'s
+    `User` entry and CLAUDE.md's "Owner Identity"), and drops the now-unused
+    `manager_profile` column from both `"user"` and `club`.
 
 Note: several migrations landed on `origin/development` between
 `Version20260918205514` and these two that this doc doesn't yet itemize
@@ -56,8 +61,11 @@ between 09-18 and 09-24.
 Active development in mid-to-late September 2026 focused on: (a)
 building out `LiveTelemetrySnapshot` incrementally field-by-field, (b)
 standing up the full Competition subsystem in one large migration, (c) a
-small `club.is_spoof` flag addition, and (d) two small additive columns —
+small `club.is_spoof` flag addition, (d) two small additive columns —
 `player.secondary_position` and `npc_club.identity` — for admin-editable
-domain concepts that don't yet have gameplay consumers — consistent with
+domain concepts that don't yet have gameplay consumers, and (e)
+consolidating the previously-duplicated, never-serialized "manager
+profile" concept (separate ad hoc blobs on both `user` and `club`) into
+one structured owner identity on `"user"` alone — consistent with
 `02_architecture/output/git-activity.md`'s hotspot findings (Competition
 feature + admin panel polish).

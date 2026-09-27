@@ -81,10 +81,6 @@ class SyncController extends AbstractController
         $user->setRoles([User::ROLE_CLUB]);
         // isVerified defaults to false
 
-        if (!empty($data['manager']) && is_array($data['manager'])) {
-            $user->setManagerProfile($data['manager']);
-        }
-
         if ($isGuest) {
             // Synthetic address — can never receive a real verification email.
             $user->setIsVerified(true);

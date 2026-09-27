@@ -3,15 +3,21 @@
 namespace App\Controller\Admin;
 
 use App\Entity\User;
+use App\Form\Type\AppearanceType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\HttpFoundation\Response;
 
 class UserCrudController extends AbstractCrudController
@@ -29,7 +35,9 @@ class UserCrudController extends AbstractCrudController
             ->setCssClass('btn btn-sm btn-outline-danger');
 
         return $actions
-            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            // NEW/DELETE stay disabled — accounts are created via registration
+            // and removed via the account-deletion flow, not admin.
+            ->disable(Action::NEW, Action::DELETE)
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
             ->add(Crud::PAGE_INDEX, $deleteAction)
             ->add(Crud::PAGE_DETAIL, $deleteAction);
@@ -39,7 +47,8 @@ class UserCrudController extends AbstractCrudController
     {
         return $crud
             ->setDefaultSort(['createdAt' => 'DESC'])
-            ->setSearchFields(['email']);
+            ->setSearchFields(['email'])
+            ->addFormTheme('admin/form/appearance_theme.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
@@ -48,12 +57,31 @@ class UserCrudController extends AbstractCrudController
         yield EmailField::new('email');
         yield IntegerField::new('clubs.count', 'Clubs')
             ->formatValue(fn($v, User $u) => $u->getClubs()->count())
-            ->setSortable(false);
+            ->setSortable(false)
+            ->hideOnForm();
+        // Both are system-managed timestamps (createdAt has no setter at all) —
+        // read-only everywhere now that EDIT is enabled, not just displayed.
         yield DateTimeField::new('lastLoginAt', 'Last Login')
             ->setFormat('yyyy-MM-dd HH:mm')
-            ->setRequired(false);
+            ->hideOnForm();
         yield DateTimeField::new('createdAt', 'Created')
-            ->setFormat('yyyy-MM-dd HH:mm');
+            ->setFormat('yyyy-MM-dd HH:mm')
+            ->hideOnForm();
+
+        // ── Panel: Owner Identity ────────────────────────────────────────────
+        yield FormField::addFieldset('Owner Identity', 'fa fa-user-circle')->hideOnIndex();
+
+        yield TextField::new('name')->setRequired(false);
+        yield TextField::new('nationality')->setRequired(false);
+        yield ChoiceField::new('gender')
+            ->setChoices(['Male' => 'male', 'Female' => 'female'])
+            ->setRequired(false);
+        yield DateField::new('dob')->setLabel('Date of Birth')->setRequired(false);
+
+        yield Field::new('appearance')
+            ->setFormType(AppearanceType::class)
+            ->setFormTypeOptions(['person_type' => 'staff'])
+            ->onlyOnForms();
     }
 
     public function detail(AdminContext $context): Response

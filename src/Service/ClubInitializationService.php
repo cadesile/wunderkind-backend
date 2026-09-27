@@ -44,7 +44,7 @@ class ClubInitializationService
      * @throws \OverflowException        if any entity pool has too few entries
      * @throws ClubNameTakenException    if an NPC club in the same country already uses this name
      */
-    public function initializeClub(User $user, string $clubName, ?string $country = null, ?array $managerProfile = null): Club
+    public function initializeClub(User $user, string $clubName, ?string $country = null): Club
     {
         // The user picks their name from the same place/suffix pools the NPC
         // generator uses, so without this the pyramid can contain two clubs
@@ -64,9 +64,6 @@ class ClubInitializationService
 
         if ($country !== null) {
             $club->setCountry($country);
-        }
-        if ($managerProfile !== null) {
-            $club->setManagerProfile($managerProfile);
         }
 
         $this->em->persist($club);

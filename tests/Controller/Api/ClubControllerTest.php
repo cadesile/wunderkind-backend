@@ -4,10 +4,52 @@ declare(strict_types=1);
 
 namespace App\Tests\Controller\Api;
 
+use App\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class ClubControllerTest extends WebTestCase
 {
+    /**
+     * ClubInitRequest no longer declares a `manager` property (owner identity
+     * moved to User, see OwnerAvatarController) — a client still sending one
+     * in the body must not error; Symfony's #[MapRequestPayload] denormalizes
+     * against the DTO's own declared properties and silently ignores unmapped
+     * JSON keys.
+     */
+    public function testInitializeIgnoresLegacyManagerPayload(): void
+    {
+        $client = static::createClient();
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+
+        $user = new User('legacy-manager-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $user->setRoles([User::ROLE_CLUB]);
+        $em->persist($user);
+        $em->flush();
+
+        $client->loginUser($user, 'api');
+        $client->request(
+            'POST',
+            '/api/club/initialize',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: json_encode([
+                'clubName' => 'Legacy FC ' . uniqid('', true),
+                'country'  => 'EN',
+                'manager'  => [
+                    'name'        => 'Old Field',
+                    'dateOfBirth' => '1980-01-01',
+                    'gender'      => 'male',
+                    'nationality' => 'English',
+                ],
+            ]),
+        );
+
+        $this->assertResponseStatusCodeSame(201);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertArrayHasKey('id', $data);
+    }
+
     public function testNameOptionsIsPubliclyAccessible(): void
     {
         $client = static::createClient();
