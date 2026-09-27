@@ -44,8 +44,15 @@ class WorldInitializationService
      *
      * ⚠️ Run `app:backfill-personalities` BEFORE bumping this, or the rebuilt
      * packs just re-serialise the same default matrices.
+     *
+     * 2 — NPC club `staff[]` may now include `director_of_football`/
+     *     `facility_manager` entries, and each club snapshot gains a new
+     *     `scouts[]` array (see `StarterConfig::$npcSquadConfig`'s
+     *     directorOfFootballCount/facilityManagerCount/scoutCount). Packs
+     *     cached under version 1 lack these entirely and are treated as a
+     *     miss on next read.
      */
-    public const WORLD_PACK_VERSION = 1;
+    public const WORLD_PACK_VERSION = 2;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -173,7 +180,13 @@ class WorldInitializationService
                 $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,   (int) $tierConf['managerCount']);
                 $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,     (int) $tierConf['coachCount']);
                 $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,  (int) $tierConf['chairmanCount']);
-                $staff    = array_merge($managers, $coaches, $chairmen);
+                // Unlike Manager/Coach/Chairman above (unfiltered — long-standing NPC-club
+                // precedent), DOF/Facility Manager/Scout are nationality-filtered with
+                // backfill, matching StarterPackService's pattern for the player's own club.
+                $dofs     = $this->fillStaffRole(StaffRole::DIRECTOR_OF_FOOTBALL, (int) ($tierConf['directorOfFootballCount'] ?? 0), $nationality);
+                $facMgrs  = $this->fillStaffRole(StaffRole::FACILITY_MANAGER,     (int) ($tierConf['facilityManagerCount'] ?? 0),    $nationality);
+                $staff    = array_merge($managers, $coaches, $chairmen, $dofs, $facMgrs);
+                $scouts   = $this->fillScouts((int) ($tierConf['scoutCount'] ?? 0), $nationality);
 
                 foreach ($players as $p) {
                     $id = (string) $p->getId();
@@ -181,8 +194,10 @@ class WorldInitializationService
                     $assignedPlayerIds[] = $id; // exclude from all subsequent club draws
                 }
                 foreach ($staff as $s) { $npcStaffIds[] = (string) $s->getId(); }
+                // Scouts are NOT added to $npcStaffIds — Scout has no club FK and is never
+                // deleted on consumption (shared pool, like Agent).
 
-                $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff);
+                $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff, $scouts);
             }
 
             $fixtures      = $this->fixtureGenerationService->generate($allClubIds);
@@ -285,7 +300,13 @@ class WorldInitializationService
             $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,  (int) $tierConf['managerCount']);
             $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,    (int) $tierConf['coachCount']);
             $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN, (int) $tierConf['chairmanCount']);
-            $staff    = array_merge($managers, $coaches, $chairmen);
+            // Unlike Manager/Coach/Chairman above (unfiltered — long-standing NPC-club
+            // precedent), DOF/Facility Manager/Scout are nationality-filtered with
+            // backfill, matching StarterPackService's pattern for the player's own club.
+            $dofs     = $this->fillStaffRole(StaffRole::DIRECTOR_OF_FOOTBALL, (int) ($tierConf['directorOfFootballCount'] ?? 0), $nationality);
+            $facMgrs  = $this->fillStaffRole(StaffRole::FACILITY_MANAGER,     (int) ($tierConf['facilityManagerCount'] ?? 0),    $nationality);
+            $staff    = array_merge($managers, $coaches, $chairmen, $dofs, $facMgrs);
+            $scouts   = $this->fillScouts((int) ($tierConf['scoutCount'] ?? 0), $nationality);
 
             foreach ($players as $p) {
                 $id = (string) $p->getId();
@@ -293,8 +314,10 @@ class WorldInitializationService
                 $assignedPlayerIds[] = $id; // exclude from all subsequent club draws
             }
             foreach ($staff as $s) { $npcStaffIds[] = (string) $s->getId(); }
+            // Scouts are NOT added to $npcStaffIds — Scout has no club FK and is never
+            // deleted on consumption (shared pool, like Agent).
 
-            $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff);
+            $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff, $scouts);
         }
 
         $fixtures   = $this->fixtureGenerationService->generate($allClubIds);
@@ -386,7 +409,7 @@ class WorldInitializationService
         return $total;
     }
 
-    private function buildClubSnapshot(NpcClub $club, array $players, array $staff): array
+    private function buildClubSnapshot(NpcClub $club, array $players, array $staff, array $scouts = []): array
     {
         return [
             'id'              => (string) $club->getId(),
@@ -411,6 +434,7 @@ class WorldInitializationService
             ],
             'players' => array_map(fn(Player $p) => $this->buildPlayerSnapshot($p), $players),
             'staff'   => array_map(fn(Staff $s) => $this->buildStaffSnapshot($s), $staff),
+            'scouts'  => array_map(fn(Scout $s) => $this->buildScoutSnapshot($s), $scouts),
         ];
     }
 
@@ -539,13 +563,27 @@ class WorldInitializationService
         ];
     }
 
+    /** Fetch up to $limit scouts matching $nationality; backfill with any-nationality if short. */
+    private function fillScouts(int $limit, string $nationality): array
+    {
+        $results = $this->scoutRepository->findInPool($limit, nationality: $nationality);
+        if (count($results) < $limit) {
+            $deficit = $limit - count($results);
+            $results = array_merge(
+                $results,
+                $this->scoutRepository->findInPool($deficit),
+            );
+        }
+        return $results;
+    }
+
     private function defaultTierConfig(int $tier): array
     {
         return match (true) {
-            $tier <= 2 => ['playerMin' => 20, 'playerMax' => 24, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 60],
-            $tier <= 4 => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 25],
-            $tier <= 6 => ['playerMin' => 13, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 12],
-            default    => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'foreignPercent' => 4],
+            $tier <= 2 => ['playerMin' => 20, 'playerMax' => 24, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 1, 'facilityManagerCount' => 1, 'scoutCount' => 2, 'foreignPercent' => 60],
+            $tier <= 4 => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 0, 'facilityManagerCount' => 1, 'scoutCount' => 1, 'foreignPercent' => 25],
+            $tier <= 6 => ['playerMin' => 13, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 0, 'facilityManagerCount' => 0, 'scoutCount' => 1, 'foreignPercent' => 12],
+            default    => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 0, 'facilityManagerCount' => 0, 'scoutCount' => 0, 'foreignPercent' => 4],
         };
     }
 }

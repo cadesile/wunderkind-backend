@@ -7,10 +7,12 @@ use App\Entity\Club;
 use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Entity\Player;
+use App\Entity\Scout;
 use App\Entity\Staff;
 use App\Entity\User;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
+use App\Repository\StarterConfigRepository;
 use App\Service\WorldInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -188,6 +190,94 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
         $this->assertSame('BIG', $clubSnap['citySize']);
         $this->assertSame(500_000, $clubSnap['populationSize']);
         $this->assertTrue($clubSnap['isCapital']);
+    }
+
+    public function testGeneratedTierPackIncludesDirectorOfFootballFacilityManagerAndScouts(): void
+    {
+        // Tier config in the (shared, singleton) StarterConfig row may predate this
+        // feature and lack the new keys entirely — override tier 8 with non-zero
+        // counts for the duration of this test, then restore the original value.
+        /** @var StarterConfigRepository $starterConfigRepository */
+        $starterConfigRepository = self::getContainer()->get(StarterConfigRepository::class);
+        $starterConfig           = $starterConfigRepository->getConfig();
+        $originalNpcSquadConfig  = $starterConfig->getNpcSquadConfig();
+
+        $npcSquadConfig = $originalNpcSquadConfig;
+        $npcSquadConfig[(string) self::TIER] = [
+            'playerMin'               => 11,
+            'playerMax'               => 14,
+            'managerCount'            => 1,
+            'coachCount'              => 1,
+            'chairmanCount'           => 1,
+            'directorOfFootballCount' => 1,
+            'facilityManagerCount'    => 1,
+            'scoutCount'              => 2,
+            'foreignPercent'          => 0,
+        ];
+        $starterConfig->setNpcSquadConfig($npcSquadConfig);
+        $this->em->persist($starterConfig);
+        $this->em->flush();
+
+        try {
+            $league = new League(self::COUNTRY, self::TIER, 'Staff Scout Test League');
+            $this->em->persist($league);
+            $this->track($league);
+
+            $npc = new NpcClub('Delta FC', self::COUNTRY, self::TIER, 20, '#111111', '#eeeeee', 1_000_000, []);
+            $npc->setLeague($league);
+            $this->em->persist($npc);
+            $this->track($npc);
+
+            foreach (PlayerPosition::cases() as $position) {
+                $p = new Player('Pool', $position->value, new \DateTimeImmutable('-17 years'), self::COUNTRY, $position);
+                $p->setCurrentAbility(17);
+                $p->setPotential(25);
+                $this->em->persist($p);
+            }
+
+            foreach ([StaffRole::MANAGER, StaffRole::COACH, StaffRole::CHAIRMAN, StaffRole::DIRECTOR_OF_FOOTBALL, StaffRole::FACILITY_MANAGER] as $role) {
+                $this->em->persist(new Staff('Staff', $role->value, $role));
+            }
+
+            for ($i = 0; $i < 2; $i++) {
+                $this->em->persist(new Scout("Scout $i"));
+            }
+
+            $user = new User('staffscout-tierpack-test@example.com');
+            $user->setPassword('x');
+            $this->em->persist($user);
+            $this->track($user);
+            $club = new Club('Human Club 3', $user);
+            $this->em->persist($club);
+            $this->track($club);
+
+            $this->em->flush();
+
+            /** @var WorldInitializationService $svc */
+            $svc  = self::getContainer()->get(WorldInitializationService::class);
+            $pack = $svc->buildTierPack($club, self::COUNTRY, self::TIER);
+
+            $this->assertNotEmpty($pack['clubs']);
+            $clubSnap = $pack['clubs'][0];
+
+            $staffRoles = array_column($clubSnap['staff'], 'role');
+            $this->assertContains('director_of_football', $staffRoles);
+            $this->assertContains('facility_manager', $staffRoles);
+
+            $this->assertArrayHasKey('scouts', $clubSnap);
+            $this->assertCount(2, $clubSnap['scouts']);
+            $this->assertSame(
+                ['id', 'name', 'dateOfBirth', 'nationality', 'experience', 'tier', 'judgements', 'appearance', 'personality'],
+                array_keys($clubSnap['scouts'][0]),
+            );
+        } finally {
+            // Restore the original config so other tests (and other runs) see the
+            // singleton row unchanged.
+            $starterConfig = $starterConfigRepository->getConfig();
+            $starterConfig->setNpcSquadConfig($originalNpcSquadConfig);
+            $this->em->persist($starterConfig);
+            $this->em->flush();
+        }
     }
 
     private function track(object $entity): void
