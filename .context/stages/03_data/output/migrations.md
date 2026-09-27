@@ -96,11 +96,16 @@ Most recent migrations (chronological):
     lip color, rare ginger hair, player-only face/headband defaults, NPC club
     badge-centre exclusion + kit contrast checks) is pure generation-logic —
     no migration of its own.
-20. `Version20260927120000` (most recent) — adds nullable `name VARCHAR(100)`,
+20. `Version20260927120000` — adds nullable `name VARCHAR(100)`,
     `nationality VARCHAR(60)`, `gender VARCHAR(10)`, `dob DATE`,
     `appearance JSON` to `"user"` (owner identity — see `entities.md`'s
     `User` entry and CLAUDE.md's "Owner Identity"), and drops the now-unused
     `manager_profile` column from both `"user"` and `club`.
+21. `Version20260927181328` (most recent) — drops the dead, never-read
+    `npc_squad_config JSON` column from `game_config` (see `entities.md`'s
+    `GameConfig` entry — the real, live per-tier squad/staff config lives on
+    `StarterConfig` and was untouched by this migration, since it only grew
+    new keys inside its existing JSON payload).
 
 ## Takeaway
 

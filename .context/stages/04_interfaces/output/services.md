@@ -311,6 +311,14 @@ filename alone.
   transfer leaderboards from `TransferRepository`.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
+  `buildLeaguesPack()`/`buildTierPack()` draw each NPC club's full staff —
+  Manager/Coach/Chairman (unfiltered draw) plus Director of Football/Facility
+  Manager/Scouts (nationality-filtered with backfill, via `fillStaffRole()`/
+  `fillScouts()`) — sized per league tier by
+  `StarterConfig::$npcSquadConfig`. Staff (all 5 roles) are pool-deleted on
+  consumption like players; Scouts are not (shared pool, like Agent) and are
+  surfaced in a new `scouts[]` array on each NPC club snapshot
+  (`buildClubSnapshot()`). See `docs/api/npc-club-staff-scouts.md`.
 - **`WorldOverviewService`** — builds world overview figures, consumed
   both by `GET /api/world/overview` and directly by `LandingController`
   for server-rendering.
