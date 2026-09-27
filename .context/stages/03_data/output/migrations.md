@@ -43,11 +43,16 @@ Most recent migrations (chronological):
 10. `Version20260925120000` — adds nullable `identity JSON` to
     `npc_club` (kit + badge config; see `entities.md`'s `NpcClub` entry and
     CLAUDE.md's "Kit & Badge Identity").
-11. `Version20260927120000` (most recent) — adds nullable `name VARCHAR(100)`,
+11. `Version20260927120000` — adds nullable `name VARCHAR(100)`,
     `nationality VARCHAR(60)`, `gender VARCHAR(10)`, `dob DATE`,
     `appearance JSON` to `"user"` (owner identity — see `entities.md`'s
     `User` entry and CLAUDE.md's "Owner Identity"), and drops the now-unused
     `manager_profile` column from both `"user"` and `club`.
+12. `Version20260927181328` (most recent) — drops the dead, never-read
+    `npc_squad_config JSON` column from `game_config` (see `entities.md`'s
+    `GameConfig` entry — the real, live per-tier squad/staff config lives on
+    `StarterConfig` and was untouched by this migration, since it only grew
+    new keys inside its existing JSON payload).
 
 Note: several migrations landed on `origin/development` between
 `Version20260918205514` and these two that this doc doesn't yet itemize
