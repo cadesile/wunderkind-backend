@@ -31,6 +31,10 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`AdminMessageController`** — surfaces pending operator announcements
   and records acknowledgement. Uses `ClubResolver`,
   `AdminMessageRepository`, `AdminMessageService`.
+- **`DeviceTokenController`** — FCM push-token registration
+  (`POST /api/device-tokens`, upserts by token; `DELETE /{deviceToken}`
+  for logout). Uses `UserDeviceRepository`. See `services.md`'s
+  `Notification/PushNotificationService`.
 - **`AppLinksController`**, **`GameConfigController`**,
   **`StarterConfigController`**, **`VideoController`** — thin
   read-through controllers over `GameConfigRepository`/
@@ -105,11 +109,33 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`CompetitionEntrantCrudController`** — standard CRUD plus a custom
   "generate spoof entrant" admin action (see
   `CompetitionSpoofEntrantService` in `services.md`).
+- **`NotificationDebugController`** — kept deliberately separate from
+  `DashboardController` despite following the exact same "developer
+  tools" shape (CSRF-protected POST, in-process `Application($kernel)` +
+  `BufferedOutput` for the force-process-queue action). Force-triggers
+  each of the 4 push types at an admin-chosen `Club`
+  (`PushNotificationService`) and runs `FirebaseConnectionValidator`'s
+  two-tier check — both added after a real incident where a missing
+  `FIREBASE_SERVICE_ACCOUNT_JSON` secret silently discarded every push
+  send with zero trace.
 
 ## `src/Controller/Admin/*CrudController.php`
 
-31 EasyAdmin CRUD controllers, one per entity (full list in
+32 EasyAdmin CRUD controllers, one per entity (full list in
 `routes.md`). Each provides standard index/detail/edit/new/delete screens
 via `configureFields()`/`configureActions()` — individual field
 configuration wasn't traced controller-by-controller (not architecturally
 significant beyond the pattern itself).
+
+**`NotificationLogCrudController`** — read-only (new/edit/delete
+disabled), styled directly on `DeletionRequestCrudController`: a
+`ChoiceField` status badge + `ChoiceFilter`, `TextFilter` on
+`messageType`/`summary`/`errorMessage`, and a `CodeEditorField` JSON
+detail view (`detailJsonPretty`) shown only on the detail page.
+
+One exception worth noting: **`AdminMessageCrudController`** overrides
+`persistEntity()`/`updateEntity()` to dispatch
+`ResolveAdminMessageAudienceForPushMessage` via Messenger the first time
+a message is saved Active with `sendAsPush` checked (`pushSentAt` guards
+against resending on later edits) — see `services.md`'s
+`Notification/` entries.

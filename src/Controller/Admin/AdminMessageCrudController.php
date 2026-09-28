@@ -7,6 +7,7 @@ use App\Entity\AdminMessage;
 use App\Enum\MessageDisplayType;
 use App\Enum\MessagePriority;
 use App\Enum\MessageTargetType;
+use App\Message\ResolveAdminMessageAudienceForPushMessage;
 use App\Repository\MessageDeliveryRepository;
 use App\Service\AdminMessageService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -20,6 +21,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Authoring UI for server-driven announcements.
@@ -33,6 +35,7 @@ class AdminMessageCrudController extends AbstractCrudController
     public function __construct(
         private readonly AdminMessageService $adminMessageService,
         private readonly MessageDeliveryRepository $deliveryRepository,
+        private readonly MessageBusInterface $messageBus,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -92,6 +95,14 @@ class AdminMessageCrudController extends AbstractCrudController
         yield BooleanField::new('isActive', 'Active')
             ->setHelp('Inactive messages are never delivered, regardless of the validity window.');
 
+        yield BooleanField::new('sendAsPush', 'Also send as push')
+            ->setHelp('Sends an OS push notification to every matching device, once, in addition to the normal poll delivery — fires the first time this message is saved Active with this checked. Re-saving afterward does not resend it.');
+
+        yield DateTimeField::new('pushSentAt', 'Push sent at')
+            ->setFormat('yyyy-MM-dd HH:mm')
+            ->onlyOnDetail()
+            ->setHelp('Null means the push has not fired yet (either "Also send as push" is off, or the message has never been saved Active with it on).');
+
         yield DateTimeField::new('validFrom')->setFormat('yyyy-MM-dd HH:mm');
         yield DateTimeField::new('validUntil')
             ->setFormat('yyyy-MM-dd HH:mm')
@@ -120,6 +131,10 @@ class AdminMessageCrudController extends AbstractCrudController
         }
 
         parent::persistEntity($entityManager, $entityInstance);
+
+        if ($entityInstance instanceof AdminMessage) {
+            $this->dispatchPushIfDue($entityInstance, $entityManager);
+        }
     }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
@@ -129,11 +144,34 @@ class AdminMessageCrudController extends AbstractCrudController
         }
 
         parent::updateEntity($entityManager, $entityInstance);
+
+        if ($entityInstance instanceof AdminMessage) {
+            $this->dispatchPushIfDue($entityInstance, $entityManager);
+        }
     }
 
     private function sanitizeBody(AdminMessage $message): void
     {
         $message->setBodyHtml($this->adminMessageService->sanitize($message->getBodyHtml()));
+    }
+
+    /**
+     * Fires the push-resolution dispatch exactly once per message — the first time it's saved
+     * Active with "send as push" checked. pushSentAt is the guard against every later re-save
+     * resending it. Dispatched (not resolved inline) so a large broadcast's audience
+     * resolution never blocks this admin's save request — see
+     * ResolveAdminMessageAudienceForPushMessageHandler.
+     */
+    private function dispatchPushIfDue(AdminMessage $message, EntityManagerInterface $entityManager): void
+    {
+        if (!$message->isActive() || !$message->isSendAsPush() || $message->getPushSentAt() !== null) {
+            return;
+        }
+
+        $message->markPushSent(new \DateTimeImmutable());
+        $entityManager->flush();
+
+        $this->messageBus->dispatch(new ResolveAdminMessageAudienceForPushMessage((string) $message->getId()));
     }
 
     private function formatDeliveryStats(AdminMessage $message): string

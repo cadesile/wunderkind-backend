@@ -82,9 +82,16 @@ security:
         - { path: ^/api/account/delete-request, roles: PUBLIC_ACCESS }
         - { path: ^/api/world/overview,        roles: PUBLIC_ACCESS }
         - { path: ^/api/videos,                roles: PUBLIC_ACCESS }
+        # Bracket/results data has no sensitive info (like /api/archetypes) — public so
+        # the web landing page can hit it directly. Order matters: register/resubmit
+        # below must be listed (or otherwise anchored) before this, since PUBLIC_ACCESS
+        # here is `$`-anchored to the bare /{id} path and won't match their longer paths.
+        - { path: ^/api/competitions/available,          roles: PUBLIC_ACCESS }
+        - { path: ^/api/competitions/[^/]+$,             roles: PUBLIC_ACCESS }
         - { path: ^/api/admin/,   roles: ROLE_ADMIN }
         - { path: ^/api/pool,             roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/sync,             roles: ROLE_CLUB }
+        - { path: ^/api/competitions/[^/]+/(register|resubmit)$, roles: ROLE_CLUB }
         - { path: ^/api/market/data,     roles: ROLE_CLUB }
         - { path: ^/api/market/assign,   roles: ROLE_CLUB }
         - { path: ^/api/club/,        roles: ROLE_CLUB }

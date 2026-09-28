@@ -28,6 +28,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return str_ends_with($email, self::GUEST_EMAIL_DOMAIN);
     }
 
+    /**
+     * Domain used for admin-generated spoof users backing spoof Clubs (see
+     * CompetitionSpoofEntrantService). Never created by a real client flow.
+     */
+    public const SPOOF_EMAIL_DOMAIN = '@spoof.buildmyclub.local';
+
+    public static function isSpoofEmail(string $email): bool
+    {
+        return str_ends_with($email, self::SPOOF_EMAIL_DOMAIN);
+    }
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;

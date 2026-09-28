@@ -25,4 +25,8 @@ stages, all of which now have output)
 
 **Last updated:** 2026-09-27 (added User owner identity — all 7 stage rows
 re-measured precisely with `wc -c`; the prior "Router only: 51" figure was
-stale/wrong, corrected here to the actual `.context/CONTEXT.md` size)
+stale/wrong, corrected here to the actual `.context/CONTEXT.md` size). Not
+yet re-measured against the 2026-09-27 merge of `development` into
+`competition` (Facility Manager/DOF/scout staff config, owner identity,
+NpcClub kit+badge identity) — these figures will drift low again until the
+next precise pass.
