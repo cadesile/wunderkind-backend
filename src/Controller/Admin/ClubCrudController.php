@@ -74,6 +74,9 @@ class ClubCrudController extends AbstractCrudController
         $recentTransfers = $this->em->getRepository(Transfer::class)
             ->findBy(['club' => $club], ['occurredAt' => 'DESC'], 5);
 
+        $seasonRecords = $this->em->getRepository(SeasonRecord::class)
+            ->findBy(['club' => $club], ['season' => 'DESC']);
+
         $debugLogs = $this->em->createQueryBuilder()
             ->select('s')
             ->from(SyncRecord::class, 's')
@@ -91,6 +94,7 @@ class ClubCrudController extends AbstractCrudController
             'latestValidSync'    => $latestValidSync,
             'leaderboardEntries' => $leaderboardEntries,
             'recentTransfers'    => $recentTransfers,
+            'seasonRecords'      => $seasonRecords,
             'debugLogs'          => $debugLogs,
         ]);
     }
