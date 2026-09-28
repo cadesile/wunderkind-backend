@@ -108,6 +108,30 @@ fields still exist and are still served (see §3), but they're a read-only mirro
 of the home kit for any consumer that isn't kit-aware yet. Don't write them
 directly; write `identity.home` instead.
 
+## 2a. `homeKitConfig` / `awayKitConfig` / `badgeConfig` — the real Club's own identity
+
+The **real, player-owned `Club`** (not `NpcClub`) has its own kit + badge
+identity, chairman-customized on-device and synced up via
+`POST /api/club/kit-identity` — same shapes as `identity.home`/`identity.away`/
+the flat badge keys above, but as **three separate nullable properties**
+instead of one nested object (`NpcClub.identity` predates this and wasn't
+restructured to match — don't conflate the two). Full endpoint contract:
+`docs/api/club-kit-identity.md`.
+
+```json
+{
+  "homeKitConfig": { "kit": "stripes", "primary": "#c8202f", "secondary": "#f4f3ee", "shorts": "black", "socks": "primary" },
+  "awayKitConfig": { "kit": "hoops", "primary": "#1f4fb8", "secondary": "#f4f3ee", "shorts": "white", "socks": "secondary" },
+  "badgeConfig": { "badgeShape": "shield", "badgePattern": "plain", "badgeCentre": "initials", "initials": "FC", "badgeFill": "#c8202f", "badgeTrim": "#f4f3ee", "badgeSymbol": "#f2c230" }
+}
+```
+
+Same `KitStyle`/`KitColor`/`KitPart`/`BadgeShape`/`BadgePattern`/`BadgeCentre`
+enums as §2 — see §3 below for exact values. All three are `null` until the
+chairman customizes them (no auto-generation, unlike `NpcClub.identity`) and
+are stored **verbatim, with no server-side per-field validation** — same trust
+model as `avatar` in `docs/api/owner-avatar.md`.
+
 ## 3. Enum value tables (exact hex / string values)
 
 **SkinId** (base fill → shade, lightest → darkest):
@@ -144,6 +168,9 @@ outfits alike): `red #c8202f` · `maroon #7a1f2b` · `orange #f07a1a` ·
 | `POST /api/market/consume` | `appearance` on the returned player/staff snapshot |
 | `GET /api/scout/search` | `appearance` on each returned player, and on the nested `agent` object |
 | every player snapshot's nested `agent` object (world pack, market, scout search) | `appearance` — the shared `Agent::toSnapshotArray()` shape now includes it |
+| `GET`/`POST /api/club/kit-identity` | `homeKitConfig`/`awayKitConfig`/`badgeConfig` — the real Club's own identity, see §2a |
+| `GET /api/club/status` | same three fields, mirrored for convenience |
+| `GET /api/leaderboard/{category}` | same three fields on every entry (public leaderboard rows) |
 
 `Agent` objects are nested wherever a player is serialized, in this exact shape
 (now 9 keys, was 8):

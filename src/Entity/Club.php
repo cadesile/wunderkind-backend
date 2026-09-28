@@ -71,6 +71,30 @@ class Club
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $paName = null;
 
+    /**
+     * Home kit config — {kit, primary, secondary, shorts, socks}, same shape/enums
+     * as NpcClub::$identity's per-variant KitVariant (see CLAUDE.md's Kit & Badge
+     * Identity section) and the player/staff appearance system's KitStyle/KitColor/
+     * KitPart. Client-supplied and stored verbatim — the app's own kit builder is
+     * the source of truth, no server-side per-field validation, same trust model as
+     * User::$appearance. Null until the chairman customizes it; renders as
+     * kit-compositor.js's DEFAULT_KIT_CONFIG until then.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $homeKitConfig = null;
+
+    /** Away kit config — same shape as $homeKitConfig. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $awayKitConfig = null;
+
+    /**
+     * Badge config — {badgeShape, badgePattern, badgeCentre, initials, badgeFill,
+     * badgeTrim, badgeSymbol}, same shape as NpcClub::$identity's flat badge* keys.
+     * Client-supplied, stored verbatim — see $homeKitConfig.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $badgeConfig = null;
+
     /** Manager personality trait: how hot or cold-tempered the manager is (0–100) */
     #[ORM\Column(type: 'smallint', options: ['unsigned' => true, 'default' => 50])]
     private int $managerTemperament = 50;
@@ -208,6 +232,15 @@ class Club
 
     public function getPaName(): ?string { return $this->paName; }
     public function setPaName(?string $paName): void { $this->paName = $paName; }
+
+    public function getHomeKitConfig(): ?array { return $this->homeKitConfig; }
+    public function setHomeKitConfig(?array $v): void { $this->homeKitConfig = $v; }
+
+    public function getAwayKitConfig(): ?array { return $this->awayKitConfig; }
+    public function setAwayKitConfig(?array $v): void { $this->awayKitConfig = $v; }
+
+    public function getBadgeConfig(): ?array { return $this->badgeConfig; }
+    public function setBadgeConfig(?array $v): void { $this->badgeConfig = $v; }
 
     public function getManagerTemperament(): int { return $this->managerTemperament; }
     public function setManagerTemperament(int $v): void { $this->managerTemperament = max(0, min(100, $v)); }

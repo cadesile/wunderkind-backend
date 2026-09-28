@@ -73,9 +73,13 @@
                  data-detail="{{ event.detail }}"
                  data-amount="{{ event.amountExact }}"
                  data-timestamp="{{ event.timestampIso }}"
-                 data-meta="{{ event.meta|json_encode|e('html_attr') }}">
+                 data-meta="{{ event.meta|json_encode|e('html_attr') }}"
+                 data-club-badge="{{ event.clubBadge|json_encode|e('html_attr') }}">
                 <span class="terminal-feed-category pixel">{{ event.categoryLabel }}</span>
-                <span class="terminal-feed-line"><span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}</span>
+                <span class="terminal-feed-line">
+                    <span class="terminal-feed-badge" aria-hidden="true"></span>
+                    <span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}
+                </span>
             </div>
         {% else %}
             <div class="terminal-feed-item active vt">No activity to report in the last 24 hours.</div>
