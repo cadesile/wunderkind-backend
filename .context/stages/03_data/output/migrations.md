@@ -30,6 +30,11 @@ Most recent migrations (chronological):
    `results_wins`, adds `results_draws`, `results_losses`.
 6. `Version20260915233540` — adds `active_clubs`, `weeks_played` to
    `live_telemetry_snapshot`.
+6a. `Version20260928190000` — adds `dressing_room_fallout_count`,
+    `community_morale_delta`, `dilution_equity_percent`,
+    `dilution_club_name`, `dilution_counterparty`, `covenant_active_count`,
+    `covenant_seasonal_value_pence` to `live_telemetry_snapshot`, for the
+    redesigned categorized "Boardroom Incident & Consequence Feed".
 7. `Version20260916112510` — large migration creating the entire
    Competition module schema (`active_competition`,
    `competition_entrant`, `competition_fixture`, `competition_result`,

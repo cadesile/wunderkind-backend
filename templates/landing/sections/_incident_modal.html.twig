@@ -1,0 +1,31 @@
+<!-- ═══════════════════════════════ INCIDENT INSPECTOR MODAL ═══════════════════════════════
+     Chairman's dispatch report for a clicked ticker item / the terminal CTA. Filled
+     client-side from the clicked .terminal-feed-item's data-* attributes (see
+     landing.js) — no server round-trip, since the underlying data is a periodically
+     cached snapshot, not something worth a live endpoint. -->
+<div class="incident-overlay" id="incident-overlay" role="dialog" aria-modal="true" aria-labelledby="incident-title">
+    <div class="incident-modal">
+        <div class="incident-header">
+            <h2 id="incident-title"><span id="incident-category">CHAIRMAN'S DISPATCH</span></h2>
+            <button class="incident-close" id="incident-close" aria-label="Close">✕ CLOSE</button>
+        </div>
+        <div class="incident-body">
+            <div class="incident-row">
+                <span class="incident-row-label">Club</span>
+                <span class="incident-row-value" id="incident-club">—</span>
+            </div>
+            <div class="incident-row">
+                <span class="incident-row-label">Logged</span>
+                <span class="incident-row-value" id="incident-timestamp">—</span>
+            </div>
+            <div class="incident-row" id="incident-amount-row">
+                <span class="incident-row-label">Value</span>
+                <span class="incident-row-value" id="incident-amount">—</span>
+            </div>
+
+            <p class="incident-detail" id="incident-detail"></p>
+
+            <div class="incident-meta" id="incident-meta-extra"></div>
+        </div>
+    </div>
+</div>

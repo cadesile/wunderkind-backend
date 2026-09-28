@@ -368,12 +368,19 @@ Each is effectively a single global-config row.
   `payload:array`, `generatedAt`, `payloadVersion`. No relations. See
   also `state.md`.
 - **`LiveTelemetrySnapshot`** — singleton-style live-activity feed row
-  (per `LiveTelemetrySnapshotRepository::getSnapshot()`).
-  `fixturesSimulated`, `capitalDeployedPence`, `resultsWins/Draws/
-  Losses`, `activeClubs`, `weeksPlayed`, `recentEvents:array`,
-  `generatedAt`. Built up incrementally across migrations
-  `Version20260915213526` → `Version20260915233540` — see
-  `migrations.md`. No relations.
+  (per `LiveTelemetrySnapshotRepository::getSnapshot()`) backing the landing
+  page's "Boardroom Incident & Consequence Feed" widget. `fixturesSimulated`,
+  `capitalDeployedPence`, `resultsWins/Draws/Losses`, `activeClubs`,
+  `weeksPlayed`, `recentEvents:array` (enriched per-item shape: `time, text,
+  category, categoryLabel, club, detail, amountExact, timestampIso, meta` —
+  see `LiveTelemetryService`), `dressingRoomFalloutCount`,
+  `communityMoraleDelta:?int`, `dilutionEquityPercent:?int`,
+  `dilutionClubName/dilutionCounterparty:?string`, `covenantActiveCount`,
+  `covenantSeasonalValuePence:bigint`, `generatedAt`. `formatPenceExact()` is
+  a non-compact `£31,000`-style currency formatter alongside the older
+  compact `formatPence()` (£K/£M). Built up incrementally across migrations
+  `Version20260915213526` → `Version20260928190000` — see `migrations.md`.
+  No relations.
 
 ## Not an entity
 
