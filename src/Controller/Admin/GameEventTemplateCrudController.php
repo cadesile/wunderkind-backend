@@ -254,7 +254,7 @@ class GameEventTemplateCrudController extends AbstractCrudController
                     <tr><td><code>note</code></td><td>free text</td><td>Admin-only — stripped before the API sends it to the client.</td></tr>
                 </tbody>
             </table>
-            <p class="mt-1 mb-0 text-muted" style="font-size:0.8rem">Consumed on the <strong>NPC interaction</strong> path only. Chains on any other category are ignored.</p>
+            <p class="mt-1 mb-0 text-muted" style="font-size:0.8rem">Consumed on the <strong>NPC interaction</strong> path (boost semantics above) and on <strong>Match Narrative</strong>, where it means something different: <code>nextEventSlug</code> is a chain-graph <em>node type</em> (e.g. <code>GOAL_ATTEMPT_SCORE</code>), not a specific template's slug, and <code>boostMultiplier</code>/<code>windowWeeks</code>/<code>note</code> are unused — see <code>SeedMatchNarrativeTemplatesCommand</code>. Chains on any other category are ignored.</p>
         HTML;
     }
 }

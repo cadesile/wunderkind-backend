@@ -34,6 +34,13 @@
 5. Draft `.context/shared/stack.md` (copied from this skill's
    `shared/stack.md` template) with every `{{PLACEHOLDER}}` filled in,
    including your reasoning.
+6. If `.context/shared/usage-savings-log.md` doesn't exist yet, copy it
+   from this skill's `shared/usage-savings-log.md` template as-is, with
+   `{{TASKS_LOGGED_COUNT}}` and `{{CUMULATIVE_TOKENS_SAVED}}` both set to
+   `0`, `{{MAX_ENTRIES}}` set to `20`, and the recent-tasks table left
+   empty (header row only). This just makes the log visible from the
+   start — don't invent a task entry to fill it; real entries are added
+   later, per `SKILL.md`'s usage-savings trigger.
 
 ## Checkpoints
 
@@ -54,7 +61,7 @@ catch what you got wrong before stage 02+ builds on it.
 Before writing `.context/shared/stack.md` or
 `.context/stages/01_overview/output/environment.md`:
 
-- [ ] No `{{PLACEHOLDER}}` tokens remain in either file
+- [ ] No `{{PLACEHOLDER}}` tokens remain in either file, or in `usage-savings-log.md` if you created it this run
 - [ ] The value you're writing matches what the human confirmed at the checkpoint (not your original pre-checkpoint guess, if they corrected it)
 - [ ] The app directory path you recorded actually exists — you opened at least one real file inside it
 - [ ] The dev-environment section states only what a config file actually says, nothing inferred or guessed
@@ -67,5 +74,6 @@ first and fix later.
 | File | Content |
 |---|---|
 | `.context/shared/stack.md` | Canonical stack facts — the only home for this; every other stage references it, none restates it |
+| `.context/shared/usage-savings-log.md` | Only if it doesn't already exist — initialized at zero, so it's visible from the first run rather than only appearing after the first logged task |
 | `.context/stages/01_overview/output/environment.md` | Dev environment, database(s), required tooling |
 | `.context/stages/01_overview/output/tribal-knowledge.md` | Only if `setup/questionnaire.md` was run this session — the human's answers to questions 4 and 5 |

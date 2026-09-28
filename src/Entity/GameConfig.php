@@ -1727,6 +1727,14 @@ class GameConfig
     #[ORM\Column(type: 'float')]
     private float $temperamentCardScale = 1.0;
 
+    /** Max card-probability multiplier for a team losing by losingTeamCardGoalDiffCap or more. Default: 1.5 */
+    #[ORM\Column(type: 'float')]
+    private float $losingTeamCardMultiplierMax = 1.5;
+
+    /** Goal deficit at which the losing-team card multiplier reaches its max. Default: 3 */
+    #[ORM\Column(type: 'integer')]
+    private int $losingTeamCardGoalDiffCap = 3;
+
     public function getYellowCardBaseChance(): float { return $this->yellowCardBaseChance; }
     public function setYellowCardBaseChance(float $v): static { $this->yellowCardBaseChance = max(0.0, $v); return $this; }
 
@@ -1741,6 +1749,12 @@ class GameConfig
 
     public function getTemperamentCardScale(): float { return $this->temperamentCardScale; }
     public function setTemperamentCardScale(float $v): static { $this->temperamentCardScale = max(0.0, $v); return $this; }
+
+    public function getLosingTeamCardMultiplierMax(): float { return $this->losingTeamCardMultiplierMax; }
+    public function setLosingTeamCardMultiplierMax(float $v): static { $this->losingTeamCardMultiplierMax = max(1.0, $v); return $this; }
+
+    public function getLosingTeamCardGoalDiffCap(): int { return $this->losingTeamCardGoalDiffCap; }
+    public function setLosingTeamCardGoalDiffCap(int $v): static { $this->losingTeamCardGoalDiffCap = max(1, $v); return $this; }
 
     // ── Competition History ───────────────────────────────────────────────────
 

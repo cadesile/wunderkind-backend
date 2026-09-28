@@ -38,6 +38,14 @@ services:
       TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID}
       TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET}
       TWITTER_REDIRECT_URI: ${TWITTER_REDIRECT_URI}
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN}
+      # Was missing here entirely — the deploy workflow wrote the real secret into this
+      # directory's .env (used only for docker-compose's own ${...} interpolation, not
+      # auto-injected into the container), so the app always fell back to the placeholder
+      # baked into the image's own committed .env (FIREBASE_SERVICE_ACCOUNT_JSON='{}'),
+      # which decodes to an empty object — exactly the "every field missing" error this
+      # entry fixes, regardless of how correct the GitHub secret itself was.
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
     networks:
       - web
       - default

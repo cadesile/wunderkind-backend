@@ -21,6 +21,16 @@ services:
     App\:
         resource: '../src/'
 
+    # Pluggable competition match engines (DeterministicEngine, AiEngineStub) — tagged so
+    # MatchEngineRegistry can iterate and dispatch by MatchEngineIdentifier::supports().
+    _instanceof:
+        App\Service\MatchEngine\MatchEngineInterface:
+            tags: ['app.match_engine']
+
+    App\Service\MatchEngine\MatchEngineRegistry:
+        arguments:
+            $engines: !tagged_iterator app.match_engine
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
@@ -56,3 +66,17 @@ services:
     App\Service\FacilityImageResolver:
         arguments:
             $projectDir: '%kernel.project_dir%'
+
+    # Built directly from the raw service-account JSON rather than kreait/firebase-bundle's
+    # own config binding — see FirebaseMessagingFactory's docblock.
+    Kreait\Firebase\Contract\Messaging:
+        factory: ['App\Service\Notification\FirebaseMessagingFactory', 'create']
+        arguments:
+            $serviceAccountJson: '%env(FIREBASE_SERVICE_ACCOUNT_JSON)%'
+
+    # Deliberately takes the raw env value directly (not the `Messaging` service above) —
+    # FirebaseConnectionValidator needs to catch a construction failure itself as its first
+    # check, so it can't depend on a service that's already failed to construct.
+    App\Service\Notification\FirebaseConnectionValidator:
+        arguments:
+            $serviceAccountJson: '%env(FIREBASE_SERVICE_ACCOUNT_JSON)%'

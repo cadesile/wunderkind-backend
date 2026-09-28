@@ -38,37 +38,88 @@ Most recent migrations (chronological):
    `active_competition` per template.
 8. `Version20260918205514` — adds
    `is_spoof BOOLEAN DEFAULT false NOT NULL` to `club`.
-9. `Version20260924230000` — adds nullable `secondary_position` to `player`
-   (an optional secondary position, same `PlayerPosition` enum as `position`).
-10. `Version20260925120000` — adds nullable `identity JSON` to
+9. `Version20260919163350` — adds `home_club_json`, `away_club_json`,
+   `home_lineup_json`, `away_lineup_json` to `competition_result` (full
+   stored/served match payload — club kits/badges + starting XI with
+   goals/assists/cards/ratings).
+10. `Version20260919181112` — adds `losing_team_card_multiplier_max`,
+    `losing_team_card_goal_diff_cap` to `game_config` (card-generation
+    knobs for the `ResultsEngine.ts`-ported `DeterministicEngine`).
+11. `Version20260919191910` — adds `went_to_extra_time`,
+    `went_to_penalties`, `penalty_home_score`, `penalty_away_score` to
+    `competition_result` — a knockout fixture can never end level;
+    these record how a tie was actually settled.
+12. `Version20260919211831` — push-notification infrastructure: creates
+    `user_device` (FCM registration tokens, unique `device_token`, FK to
+    `user` `ON DELETE CASCADE`) and `messenger_messages` (Symfony
+    Messenger's Doctrine transport — first use of Messenger in this
+    codebase), and adds `send_as_push BOOLEAN`, `push_sent_at TIMESTAMP`
+    to `admin_message`.
+13. `Version20260920075918` — creates `notification_log` (see
+    `entities.md`), the audit trail for the push pipeline. Reuses the
+    existing `messenger_messages` table for the new `failed` transport
+    (`config/packages/messenger.yaml`) via a distinct `queue_name` rather
+    than a separate table — no migration needed for that part.
+14. `Version20260920114451` — adds `reminder_sent_at` to
+    `competition_round` — claim-lock for the new `ROUND_STARTING_SOON`
+    push (`CompetitionRoundReminderService`), same idiom as
+    `locked_for_processing_at`'s round-processing claim-lock.
+15. `Version20260920133550` — adds `auto_fill_spoof_entrants`
+    (default false) and `auto_fill_delay_minutes` (default 20) to
+    `competition_template` — dev/testing auto-fill, see `entities.md`
+    and `CompetitionAutoFillService`.
+16. `Version20260920185614` — adds `trophy_image VARCHAR(20)` and
+    `trophy_colour VARCHAR(255)` (both nullable) to `competition_template`,
+    mirroring `league`'s trophy columns — see `entities.md`.
+17. `Version20260922095155` — decouples the competition
+    round lifecycle's draw and resolve phases (previously fused into one
+    `CompetitionRoundProcessorService` pass — now `CompetitionDrawService`
+    + `CompetitionResultsService`, see `04_interfaces/output/services.md`).
+    On `competition_round`: `locked_for_processing_at` is **renamed** (via
+    `RENAME COLUMN`, not drop+add) to `draw_locked_at`; a new
+    `resolve_locked_at` column is added (the resolve phase's own claim
+    column — a round is now claimed twice in its life, once per phase);
+    a new `matches_resolve_at` column is added (this round's resolve
+    due-time, set the instant it's drawn); a data-only `UPDATE` remaps
+    existing `status` values (`pending`/`scheduled`→`draw_pending`,
+    `running`→`drawn`, `completed`→`results_published`); a new
+    `(status, matches_resolve_at)` index backs the resolve-due query
+    alongside the existing `(status, scheduled_at)` draw-due index. On
+    `competition_template`: adds `intermission_ratio DOUBLE PRECISION
+    NOT NULL DEFAULT 0.3` — see `entities.md`.
+18. `Version20260924230000` — adds nullable `secondary_position` to `player`
+    (an optional secondary position, same `PlayerPosition` enum as `position`).
+19. `Version20260925120000` — adds nullable `identity JSON` to
     `npc_club` (kit + badge config; see `entities.md`'s `NpcClub` entry and
     CLAUDE.md's "Kit & Badge Identity").
-11. `Version20260927120000` — adds nullable `name VARCHAR(100)`,
+20. `Version20260927120000` — adds nullable `name VARCHAR(100)`,
     `nationality VARCHAR(60)`, `gender VARCHAR(10)`, `dob DATE`,
     `appearance JSON` to `"user"` (owner identity — see `entities.md`'s
     `User` entry and CLAUDE.md's "Owner Identity"), and drops the now-unused
     `manager_profile` column from both `"user"` and `club`.
-12. `Version20260927181328` (most recent) — drops the dead, never-read
+21. `Version20260927181328` (most recent) — drops the dead, never-read
     `npc_squad_config JSON` column from `game_config` (see `entities.md`'s
     `GameConfig` entry — the real, live per-tier squad/staff config lives on
     `StarterConfig` and was untouched by this migration, since it only grew
     new keys inside its existing JSON payload).
 
-Note: several migrations landed on `origin/development` between
-`Version20260918205514` and these two that this doc doesn't yet itemize
-(dev-DB migration status shows the chain running through
-`Version20260922095155` before these) — worth a fuller re-sync of this file
-next time migrations are reviewed, rather than trusting this list as exhaustive
-between 09-18 and 09-24.
-
 ## Takeaway
 
-Active development in mid-to-late September 2026 focused on: (a)
-building out `LiveTelemetrySnapshot` incrementally field-by-field, (b)
-standing up the full Competition subsystem in one large migration, (c) a
-small `club.is_spoof` flag addition, (d) two small additive columns —
+Active development from mid-September through late September 2026 progressed
+through: (a) `LiveTelemetrySnapshot` built incrementally field-by-field,
+(b) the full Competition subsystem stood up in one large migration, (c)
+a `club.is_spoof` flag, (d) the match-result payload enriched with full
+club/lineup data and extra-time/penalty-shootout outcomes so a knockout
+fixture is never left looking like an unresolved draw, (e) push
+notifications (device tokens + a Messenger-backed async send pipeline)
+added so the backend can trigger native OS notifications for
+competition events (round drawn, new registrant, match result) and
+admin broadcasts, (f) a `NotificationLog` audit trail
++ admin debug tooling once a missing `FIREBASE_SERVICE_ACCOUNT_JSON`
+secret caused sends to fail invisibly, (g) decoupling the competition
+round lifecycle's draw/resolve phases, (h) two small additive columns —
 `player.secondary_position` and `npc_club.identity` — for admin-editable
-domain concepts that don't yet have gameplay consumers, and (e)
+domain concepts that don't yet have gameplay consumers, and (i)
 consolidating the previously-duplicated, never-serialized "manager
 profile" concept (separate ad hoc blobs on both `user` and `club`) into
 one structured owner identity on `"user"` alone — consistent with

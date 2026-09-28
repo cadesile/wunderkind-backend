@@ -71,6 +71,8 @@ jobs:
             TWITTER_CLIENT_ID="${{ secrets.DEV_TWITTER_CLIENT_ID }}"
             TWITTER_CLIENT_SECRET="${{ secrets.DEV_TWITTER_CLIENT_SECRET }}"
             TWITTER_REDIRECT_URI="${{ secrets.DEV_TWITTER_REDIRECT_URI }}"
+            MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=1
+            FIREBASE_SERVICE_ACCOUNT_JSON='${{ secrets.DEV_FIREBASE_SERVICE_ACCOUNT_JSON }}'
             EOF
             sed -i 's/^[[:space:]]*//' .env
 
@@ -104,6 +106,12 @@ jobs:
             # templates (e.g. the dressing-room cohesion events).
             docker compose -f docker-compose.dev.yml exec -T app \
               php bin/console app:seed-game-events
+            # Seeds the MATCH_NARRATIVE chain-graph content (ported from
+            # wunderkind-app's narrativeContent.json) that MatchNarrativeGeneratorService
+            # walks to build a Competition result's narrativePayload. Same idempotent
+            # skip-existing-slug behavior as app:seed-game-events above.
+            docker compose -f docker-compose.dev.yml exec -T app \
+              php bin/console app:seed-match-narrative
             # NOTE: app:backfill-appearances is deliberately NOT run here. It
             # hydrates every matching row in one findBy(), which exhausted the
             # 128MB container limit on prod's 36,569 appearance-less Staff rows

@@ -11,6 +11,7 @@ enum EventCategory: string
     case NPC_INTERACTION = 'NPC_INTERACTION';
     case GUARDIAN        = 'GUARDIAN';
     case MATCH           = 'MATCH';
+    case MATCH_NARRATIVE = 'MATCH_NARRATIVE';
     case PRESS              = 'press';
     case PLAYER_REPUTATION  = 'player_reputation';
     case PLAYER_MILESTONE   = 'player_milestone';
@@ -32,6 +33,7 @@ enum EventCategory: string
             self::NPC_INTERACTION    => 'NPC interaction',
             self::GUARDIAN           => 'Guardian',
             self::MATCH              => 'Match',
+            self::MATCH_NARRATIVE    => 'Match Narrative',
             self::PRESS              => 'Press',
             self::PLAYER_REPUTATION  => 'Player reputation',
             self::PLAYER_MILESTONE   => 'Player milestone',

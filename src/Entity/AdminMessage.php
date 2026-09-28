@@ -61,6 +61,22 @@ class AdminMessage
     #[ORM\Column(options: ['default' => false])]
     private bool $isActive = false;
 
+    /**
+     * When true, this message also sends an OS push notification (in addition to sitting in
+     * the poll queue) to every device matching its targeting — see
+     * ResolveAdminMessageAudienceForPushMessageHandler. Fires once, at creation/activation,
+     * not on every poll match.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $sendAsPush = false;
+
+    /**
+     * Set the moment the push-resolution dispatch fires (persistEntity()/updateEntity()) — the
+     * guard against re-sending on every subsequent edit/save of an already-pushed message.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $pushSentAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -196,6 +212,30 @@ class AdminMessage
     public function setIsActive(bool $isActive): self
     {
         $this->isActive = $isActive;
+
+        return $this;
+    }
+
+    public function isSendAsPush(): bool
+    {
+        return $this->sendAsPush;
+    }
+
+    public function setSendAsPush(bool $sendAsPush): self
+    {
+        $this->sendAsPush = $sendAsPush;
+
+        return $this;
+    }
+
+    public function getPushSentAt(): ?\DateTimeImmutable
+    {
+        return $this->pushSentAt;
+    }
+
+    public function markPushSent(\DateTimeImmutable $at): self
+    {
+        $this->pushSentAt = $at;
 
         return $this;
     }

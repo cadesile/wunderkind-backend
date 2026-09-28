@@ -30,6 +30,28 @@ migrations are the change log (see `migrations.md`).
 - **`DeletionRequest`** — GDPR deletion tracking. `email`,
   `status:DeletionRequestStatus(enum)`, `ipAddress`, `failureReason`,
   `clubsDeleted:int`, `requestedAt/completedAt`.
+- **`UserDevice`** (table `user_device`) — an FCM registration token
+  for one app installation (push notifications). `deviceToken`
+  (**unique across the table, not per-user** — a token identifies an
+  installation, not an account; re-registering an existing token under
+  a different user reassigns it), `platform:DevicePlatform(enum: ios,
+  android)`, `deviceId:?string` (client-generated, unused so far),
+  `lastActiveAt/createdAt`. `ManyToOne` → `User` (not nullable,
+  `CASCADE`). Registered via `POST /api/device-tokens`, sent to by
+  `PushNotificationService` — see `services.md`.
+- **`NotificationLog`** (table `notification_log`) — audit record of one
+  push-related Messenger message actually processed (success or failure),
+  one row per `SendPushNotificationMessage`/
+  `ResolveAdminMessageAudienceForPushMessage` handled. `status:NotificationLogStatus(enum:
+  SUCCESS, FAILED)`, `messageType:string` (short class name), `summary`,
+  `detailJson:array` (message properties + exception detail on failure),
+  `errorMessage:?string` (truncated to 255, same convention as
+  `DeletionRequest::$failureReason`), `createdAt`. No entity relations —
+  written by `NotificationLoggingSubscriber` (see `services.md`), not by
+  the handlers themselves, since that's the only place that uniformly
+  catches both a handler's own exception and a handler-*construction*
+  failure (the exact bug class — a missing `FIREBASE_SERVICE_ACCOUNT_JSON`
+  — that motivated this table).
 
 ## Core game / club
 
@@ -165,7 +187,13 @@ migrations are the change log (see `migrations.md`).
 - **`AdminMessage`** (table `admin_message`) — operator announcement.
   `title`, `bodyHtml`, `targetType:MessageTargetType(enum)`,
   `priority:MessagePriority(enum)`,
-  `displayType:MessageDisplayType(enum)`, `validFrom/Until`, `isActive`.
+  `displayType:MessageDisplayType(enum)`, `validFrom/Until`, `isActive`,
+  `sendAsPush:bool(false)`, `pushSentAt:?DateTimeImmutable` — when
+  `sendAsPush` is checked, the message also triggers an OS push
+  notification (in addition to the normal poll queue) once, the first
+  time it's saved Active with it on; `pushSentAt` is the guard against
+  resending on a later edit. See `PushNotificationService` /
+  `ResolveAdminMessageAudienceForPushMessageHandler` in `services.md`.
   `ManyToOne` → `createdBy:?Admin` (`SET NULL`); `ManyToMany` →
   `audienceGroups` (`JoinTable: admin_message_audience_group`);
   `ManyToOne` → `targetClub:?Club` (nullable, `CASCADE`).
@@ -188,7 +216,13 @@ migrations are the change log (see `migrations.md`).
   `category:EventCategory(enum)`, `weight`, `title`, `bodyTemplate`,
   `impacts:array`, `firingConditions:?array`, `severity`, `noInteract`,
   `chainedEvents:?array`. No relations. See also
-  `docs/event-guide.md`.
+  `docs/event-guide.md`. The `MATCH_NARRATIVE` category (added
+  2026-09-19) diverges from the description above: rows are chain-graph
+  nodes (slug `{NODE_TYPE}_{N}`, ported verbatim from
+  `wunderkind-app`'s `narrativeContent.json`), and `chainedEvents`
+  there means a node-type graph edge, not an NPC-interaction weight
+  boost — see `MatchNarrativeGeneratorService` in `services.md` and
+  `SeedMatchNarrativeTemplatesCommand`.
 - **`SocialAccountConnection`** — OAuth connection to a social platform.
   `platform:SocialPlatform(enum)`, `displayName`, `externalAccountId`,
   `accessToken` (encrypted, see `TokenEncryptionService`),
@@ -203,8 +237,24 @@ migrations are the change log (see `migrations.md`).
 - **`CompetitionTemplate`** — a competition's static rules. `name/slug`,
   `entrantCapacity`, `durationOption:CompetitionDuration(enum)`,
   `allowedTiers:?array`, `minClubReputation/minClubAgeSeasons/
-  entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`.
-  `ManyToMany` → `rewardTemplates` (`JoinTable:
+  entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`,
+  `intermissionRatio:float` (default 0.3, validated strictly `0 < x < 1`
+  in the same `validate()` method) — fraction of each round's time-budget
+  spent in the post-results intermission before the next draw (also
+  governs the lead time before round 1's own draw); see
+  `CompetitionScheduleCalculator` in `04_interfaces/output/services.md`.
+  `autoFillSpoofEntrants:bool` (default false) + `autoFillDelayMinutes:int`
+  (default 20, one of `ALLOWED_AUTO_FILL_DELAY_MINUTES` = [5,10,20,30,60])
+  — dev/testing convenience: once an instance's first entrant registers,
+  auto-fill every remaining slot with spoof entrants after the delay, so
+  a solo tester isn't stuck waiting on real registrants — see
+  `CompetitionAutoFillService` in `04_interfaces/output/services.md`.
+  `trophyImage:?string` (trophy silhouette slug, e.g. "trophy-3") +
+  `trophyColour:?TrophyColour(enum)` — same shape/columns as `League`'s
+  trophy fields (see `League` above); read live off the template by the
+  API rather than copied onto `ActiveCompetition`, since trophy design is
+  cosmetic, not a live-bracket-integrity concern like `entrantCapacity`/
+  `durationOption`. `ManyToMany` → `rewardTemplates` (`JoinTable:
   competition_template_reward_template`).
 - **`ActiveCompetition`** (table `active_competition`) — one live
   instance of a template. `status:ActiveCompetitionStatus(enum)`,
@@ -224,20 +274,47 @@ migrations are the change log (see `migrations.md`).
   one entry per club per competition.
 - **`CompetitionRound`** (table `competition_round`) — one round of a
   competition. `roundIndex`, `label`,
-  `status:CompetitionRoundStatus(enum)`, `scheduledAt`, `startedAt/
-  completedAt`, `matchEngineIdentifier:?MatchEngineIdentifier(enum)`,
-  `lockedForProcessingAt`. `ManyToOne` → `activeCompetition` (not
-  nullable, `CASCADE`).
+  `status:CompetitionRoundStatus(enum: DRAW_PENDING|DRAWN|
+  RESULTS_PUBLISHED|CANCELLED)`. Draw and resolve are two decoupled,
+  independently-scheduled/claimed phases (see `CompetitionDrawService`/
+  `CompetitionResultsService` in `04_interfaces/output/services.md`):
+  `scheduledAt` = this round's **draw** due-time (round 1 fixed at lock
+  time; round N>1 (re)written by `CompetitionResultsService` the instant
+  round N-1's results publish, not fixed up front); `startedAt` = when
+  actually drawn; `matchesResolveAt:?\DateTimeImmutable` = this round's
+  **resolve** due-time, set the instant it's drawn; `completedAt` = when
+  results actually published. `matchEngineIdentifier:?MatchEngineIdentifier
+  (enum)`. Two separate claim-lock columns — `drawLockedAt` (draw-phase
+  claim) and `resolveLockedAt` (resolve-phase claim) — since the same row
+  is claimed twice in its life; one shared column can't safely serve both
+  (the second claim would be indistinguishable from "already drawn").
+  `reminderSentAt` (claim-lock for the separate `ROUND_RESOLVING_SOON`
+  push, sent to a DRAWN round nearing its `matchesResolveAt` — see
+  `CompetitionRoundReminderService` in `04_interfaces/output/
+  services.md`). `ManyToOne` → `activeCompetition` (not nullable,
+  `CASCADE`).
 - **`CompetitionFixture`** (table `competition_fixture`) — one matchup
   within a round. `slotIndex`, `status:CompetitionFixtureStatus(enum)`,
   `processedAt`. `ManyToOne` → `round` (not nullable, `CASCADE`);
   `homeEntrant/awayEntrant/winnerEntrant:?CompetitionEntrant` (all
   nullable, `SET NULL`).
 - **`CompetitionResult`** (table `competition_result`) — a fixture's
-  outcome. `homeScore/awayScore`, `eventLogJson:array`,
-  `narrativePayload:?array`, `engineIdentifier:MatchEngineIdentifier
-  (enum)`, `generatedAt`. `OneToOne` → `fixture:CompetitionFixture` (not
-  nullable, unique, `CASCADE`) — one result per fixture.
+  outcome. `homeScore/awayScore` (the true final score, including extra
+  time if played — never affected by a shootout), `eventLogJson:array`,
+  `homeClubJson/awayClubJson:array` (denormalized club display data —
+  kit colours, badge, stadium — copied from the entrant snapshot so a
+  client can render kits without a second lookup),
+  `homeLineupJson/awayLineupJson:array` (starting XI with
+  goals/assists/cards/ratings, admin-only), `narrativePayload:?array`
+  (full generated commentary timeline, see
+  `MatchNarrativeGeneratorService` in `services.md`),
+  `wentToExtraTime/wentToPenalties:bool(false)`,
+  `penaltyHomeScore/penaltyAwayScore:?int` (a knockout fixture can never
+  end level — these record how a tie was actually settled; the shootout
+  winner is a literal coin flip, see `DeterministicEngine`),
+  `engineIdentifier:MatchEngineIdentifier(enum)`, `generatedAt`.
+  `OneToOne` → `fixture:CompetitionFixture` (not nullable, unique,
+  `CASCADE`) — one result per fixture.
 - **`RewardTemplate`** (table `reward_template`) — a claimable reward
   definition. `slug/name`, `description`, `effects:array`, `isActive`.
   Reverse side of `CompetitionTemplate`'s `ManyToMany`; referenced by

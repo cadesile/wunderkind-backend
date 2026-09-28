@@ -43,8 +43,9 @@ the end) — this file is the sole source of truth for the route surface.
 | `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
 | `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /status` |
 | `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-development`, `/most-seasons`, `/most-trophies` |
-| `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` |
-| `EventController` | `/api/events` | `GET /templates` |
+| `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` — register/resubmit also trigger push notifications (`PushNotificationService`) to other entrants |
+| `DeviceTokenController` | `/api/device-tokens` | `POST ''` (`IsGranted('ROLE_CLUB')`, upserts by `deviceToken`), `DELETE /{deviceToken}` — FCM push registration, see `services.md`'s `PushNotificationService` |
+| `EventController` | `/api/events` | `GET /templates` (optional `?category=` narrows to one `EventCategory`, e.g. `MATCH_NARRATIVE`) |
 | `ExcursionController` | `/api/excursions` | `GET` |
 | `FinanceController` | `/api/finance` | `GET /overview`, `GET /investors`, `GET /sponsors`, `POST /sponsors/{id}/terminate` |
 | `GameConfigController` | `/api` | `GET /game-config` |
@@ -100,6 +101,21 @@ the end) — this file is the sole source of truth for the route surface.
 - **`CompetitionEntrantCrudController`** — in addition to being an
   EasyAdmin CRUD controller (see below), declares one custom action:
   `GET|POST /admin/competition-entrant/{entrant}/generate-spoof`.
+- **`NotificationDebugController`** — manual controls for the
+  push-notification pipeline, kept separate from `DashboardController`
+  per its own "developer tools" precedent: `GET
+  /admin/notifications/debug` (reached via `/admin?routeName=...`, same
+  as `admin_logs`); `POST
+  /admin/notifications/debug/force-process-queue` (runs
+  `messenger:consume async` in-process, same `Application($kernel)` +
+  `BufferedOutput` shape as `DashboardController::cleanupEntities()`);
+  `POST /admin/notifications/debug/validate-firebase`
+  (`FirebaseConnectionValidator`); `POST
+  /admin/notifications/debug/trigger/{type}/{club}` (`type` restricted
+  to `ROUND_DRAWN|NEW_REGISTRANT|MATCH_RESULT|ADMIN_MESSAGE`,
+  `Club $club` a Doctrine-typed route parameter) — dispatches a
+  clearly-marked `[TEST]`-prefixed synthetic push to one club, for
+  testing raw FCM delivery without a real competition/message behind it.
 
 ## `src/Controller/Admin/*CrudController.php` — EasyAdmin CRUD
 
@@ -109,12 +125,14 @@ controller per entity, each mapping via `getEntityFqcn()`:
 `BetaRequest`, `Club`, `CompetitionEntrant`, `CompetitionRound`,
 `CompetitionTemplate`, `DeletionRequest`, `Excursion`,
 `FacilityTemplate`, `GameEventTemplate`, `Guardian`, `Investor`,
-`LeaderboardEntry`, `League`, `NpcClub`, `PlayerArchetype`, `Player`,
-`RewardTemplate`, `Scout`, `SeasonRecord`, `SeasonSnapshot`,
-`SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
+`LeaderboardEntry`, `League`, `NotificationLog`, `NpcClub`,
+`PlayerArchetype`, `Player`, `RewardTemplate`, `Scout`, `SeasonRecord`,
+`SeasonSnapshot`, `SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
 `TacticalAdvantage`, `Transfer`, `User`. Each gives standard EasyAdmin
 CRUD screens (index/detail/edit/new/delete) plus whatever its own
 `configureFields()`/`configureActions()` customizes.
+`NotificationLogCrudController` is read-only (disables new/edit/delete),
+styled directly on `DeletionRequestCrudController`.
 
 ## API spec
 
