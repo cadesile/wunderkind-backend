@@ -86,6 +86,61 @@
     </div>
 
     {# ══════════════════════════════════════════════════════════════════ #}
+    {# KIT & BADGE IDENTITY                                               #}
+    {# Read-only — chairman/device-set via POST /api/club/kit-identity,   #}
+    {# not admin-editable. Rendered client-side with composeKitSvg() (see #}
+    {# public/assets/kit-compositor.js), the same renderer the NpcClub    #}
+    {# kit-identity form widget and the public landing page use.         #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% if club.homeKitConfig or club.awayKitConfig or club.badgeConfig %}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
+            Kit &amp; Badge Identity
+        </h6>
+    </div>
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body d-flex flex-wrap gap-4 align-items-center justify-content-around py-4">
+                <div class="text-center">
+                    <div data-kit-preview="home" class="mb-2" style="min-height:56px;display:flex;align-items:center;justify-content:center;"></div>
+                    <div class="text-muted small">Home Kit</div>
+                </div>
+                <div class="text-center">
+                    <div data-kit-preview="away" class="mb-2" style="min-height:56px;display:flex;align-items:center;justify-content:center;"></div>
+                    <div class="text-muted small">Away Kit</div>
+                </div>
+                <div class="text-center">
+                    <div data-badge-preview class="mb-2" style="min-height:56px;display:flex;align-items:center;justify-content:center;"></div>
+                    <div class="text-muted small">Badge</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ asset('assets/kit-compositor.js') }}?v={{ 'now'|date('YmdHis') }}"></script>
+    <script>
+        (function () {
+            if (typeof composeKitSvg !== 'function') return;
+            var home  = {{ club.homeKitConfig ? club.homeKitConfig|json_encode|raw : 'null' }};
+            var away  = {{ club.awayKitConfig ? club.awayKitConfig|json_encode|raw : 'null' }};
+            var badge = {{ club.badgeConfig ? club.badgeConfig|json_encode|raw : 'null' }};
+            var cfg = function (kit, b) {
+                var merged = {};
+                for (var k in (kit || {})) merged[k] = kit[k];
+                for (var k2 in (b || {})) merged[k2] = b[k2];
+                return merged;
+            };
+            var homeSlot = document.querySelector('[data-kit-preview="home"]');
+            var awaySlot = document.querySelector('[data-kit-preview="away"]');
+            var badgeSlot = document.querySelector('[data-badge-preview]');
+            if (homeSlot && home) homeSlot.innerHTML = composeKitSvg(cfg(home, badge), 'kit', 'large', 2.4);
+            if (awaySlot && away) awaySlot.innerHTML = composeKitSvg(cfg(away, badge), 'kit', 'large', 2.4);
+            if (badgeSlot && badge) badgeSlot.innerHTML = composeKitSvg(cfg(home, badge), 'badge', null, 2.4);
+        }());
+    </script>
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
     {# CORE STATS                                                         #}
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-sm-6 col-xl-3">
@@ -255,6 +310,65 @@
     {% endif %}
 
     {# ══════════════════════════════════════════════════════════════════ #}
+    {# SEASON HISTORY (concluded seasons — LeagueService::concludeSeason) #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% if seasonRecords|length > 0 %}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
+            Season History
+        </h6>
+    </div>
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Season</th>
+                            <th class="small text-muted fw-semibold">Tier</th>
+                            <th class="small text-muted fw-semibold text-center">Pos</th>
+                            <th class="small text-muted fw-semibold text-center">W-D-L</th>
+                            <th class="small text-muted fw-semibold text-center">GD</th>
+                            <th class="small text-muted fw-semibold text-center">Pts</th>
+                            <th class="small text-muted fw-semibold">Outcome</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sr_row in seasonRecords %}
+                        <tr>
+                            <td class="small fw-semibold">{{ sr_row.season }}</td>
+                            <td class="small">Tier {{ sr_row.league.tier }}</td>
+                            <td class="small text-center">
+                                <span class="{{ sr_row.finalPosition == 1 ? 'fw-bold text-warning' : '' }}">{{ sr_row.finalPosition }}</span>
+                            </td>
+                            <td class="small text-center text-muted">{{ sr_row.wins }}-{{ sr_row.draws }}-{{ sr_row.losses }}</td>
+                            <td class="small text-center">
+                                {% set sgd = sr_row.goalsFor - sr_row.goalsAgainst %}
+                                <span class="{{ sgd >= 0 ? 'text-success' : 'text-danger' }}">{{ sgd >= 0 ? '+' : '' }}{{ sgd }}</span>
+                            </td>
+                            <td class="small text-center fw-semibold">{{ sr_row.points }}</td>
+                            <td class="small">
+                                {% if sr_row.finalPosition == 1 %}
+                                    <span class="badge bg-warning text-dark"><i class="fa fa-trophy me-1"></i>Champion</span>
+                                {% elseif sr_row.promoted %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-arrow-up me-1"></i>Promoted</span>
+                                {% elseif sr_row.relegated %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fa fa-arrow-down me-1"></i>Relegated</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
     {# LATEST SYNC SNAPSHOT + MANAGER PROFILE                            #}
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12 mt-1">
@@ -300,6 +414,29 @@
                             </div>
                             <div class="text-muted" style="font-size:.75rem;">Rep Δ</div>
                         </div>
+                        {% if payload.attendance is defined and payload.attendance is not empty %}
+                        {% set att = payload.attendance %}
+                        <div class="col-6 col-md-3">
+                            <div class="fw-bold fs-5">{{ att.weeklyAttendance ?? '—' }}</div>
+                            <div class="text-muted" style="font-size:.75rem;">Weekly Attendance</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="fw-bold fs-5 {{ (att.fanSentiment ?? 50) >= 60 ? 'text-success' : ((att.fanSentiment ?? 50) <= 30 ? 'text-danger' : '') }}">
+                                {{ att.fanSentiment ?? '—' }}<span class="fs-6 text-muted">/100</span>
+                            </div>
+                            <div class="text-muted" style="font-size:.75rem;">Fan Sentiment</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="fw-bold fs-5 {{ (att.fanMorale ?? 50) >= 60 ? 'text-success' : ((att.fanMorale ?? 50) <= 30 ? 'text-danger' : '') }}">
+                                {{ att.fanMorale ?? '—' }}<span class="fs-6 text-muted">/100</span>
+                            </div>
+                            <div class="text-muted" style="font-size:.75rem;">Fan Morale</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="fw-bold fs-5">{{ att.fanCount is defined ? att.fanCount|number_format : '—' }}</div>
+                            <div class="text-muted" style="font-size:.75rem;">Fan Base</div>
+                        </div>
+                        {% endif %}
                     </div>
 
                     {# Facility levels #}
@@ -400,6 +537,219 @@
             </div>
         </div>
     </div>
+
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# SQUAD CULTURE — toxic relationships + excursion outcomes           #}
+    {# Same "real data only" lens as the landing page's Boardroom feed:   #}
+    {# only surfaces relationships/excursions the client actually sends. #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% set toxicBonds = (payload.relationships ?? [])|filter(r => (r.bondValue ?? 0) < 0) %}
+    {% if toxicBonds|length > 0 or (payload.excursions ?? [])|length > 0 %}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
+            Squad Culture
+        </h6>
+    </div>
+
+    {% if toxicBonds|length > 0 %}
+    <div class="col-lg-6">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-heart-crack me-1 text-danger"></i> Toxic Pairings</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">{{ toxicBonds|length }}</span>
+            </div>
+            <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <tbody>
+                        {% for bond in toxicBonds|sort((a, b) => a.bondValue <=> b.bondValue) %}
+                        <tr>
+                            <td class="small">
+                                {{ bond.playerName ?? bond.playerId }}
+                                <span class="text-muted mx-1">vs</span>
+                                {{ bond.otherName ?? bond.otherId }}
+                                {% if bond.kind == 'player_staff' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">staff</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-end text-danger fw-semibold">{{ bond.bondValue }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if (payload.excursions ?? [])|length > 0 %}
+    <div class="col-lg-6">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
+                <span class="fw-semibold small"><i class="fa fa-people-group me-1 text-muted"></i> Excursions</span>
+            </div>
+            <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <tbody>
+                        {% for excursion in payload.excursions %}
+                        <tr>
+                            <td class="small">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span class="fw-semibold">{{ excursion.slug|replace({'-': ' '})|title }}</span>
+                                    <span class="badge {{ excursion.status == 'resolved' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}">
+                                        {{ excursion.status }}
+                                    </span>
+                                </div>
+                                {% if excursion.outcome is defined and excursion.outcome and excursion.outcome.summary is defined %}
+                                    <div class="text-muted mt-1" style="font-size:.8rem;">{{ excursion.outcome.summary }}</div>
+                                    {% if excursion.outcome.frictionCount is defined and excursion.outcome.frictionCount > 0 %}
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle mt-1">{{ excursion.outcome.frictionCount }} fallout{{ excursion.outcome.frictionCount > 1 ? 's' : '' }}</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# FINANCIAL ACTIVITY — ledger + commercial promises                  #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% if (payload.ledger ?? [])|length > 0 or (payload.promises ?? [])|length > 0 %}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
+            Financial Activity
+        </h6>
+    </div>
+
+    {% if (payload.ledger ?? [])|length > 0 %}
+    <div class="col-lg-7">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
+                <span class="fw-semibold small"><i class="fa fa-receipt me-1 text-muted"></i> Ledger (Latest Sync)</span>
+            </div>
+            <div class="table-responsive" style="max-height:320px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Category</th>
+                            <th class="small text-muted fw-semibold">Description</th>
+                            <th class="small text-muted fw-semibold text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in payload.ledger %}
+                        <tr>
+                            <td class="small">
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ entry.category|replace({'_': ' '}) }}</span>
+                            </td>
+                            <td class="small text-muted">{{ entry.description }}</td>
+                            <td class="small text-end fw-semibold {{ entry.amount >= 0 ? 'text-success' : 'text-danger' }}">
+                                {{ entry.amount >= 0 ? '+' : '' }}{{ fmt_currency(entry.amount) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if (payload.promises ?? [])|length > 0 %}
+    <div class="col-lg-5">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom">
+                <span class="fw-semibold small"><i class="fa fa-file-contract me-1 text-muted"></i> Investor &amp; Sponsor Contracts</span>
+            </div>
+            <div class="table-responsive" style="max-height:320px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <tbody>
+                        {% for promise in payload.promises %}
+                        <tr>
+                            <td class="small">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <strong>{{ promise.partyA.name ?? '—' }}</strong>
+                                    <span class="badge {{ promise.status == 'active' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}">
+                                        {{ promise.status }}
+                                    </span>
+                                </div>
+                                <div class="text-muted" style="font-size:.8rem;">
+                                    {{ promise.type|replace({'_': ' '})|title }}
+                                    {% if promise.offer is defined %}
+                                        &middot; {{ fmt_currency(promise.offer.amountPence ?? 0) }}{{ promise.offer.type == 'weekly_payment' ? '/wk' : '/season' }}
+                                    {% endif %}
+                                </div>
+                                {% if promise.condition is defined %}
+                                    <div class="text-muted" style="font-size:.75rem;">
+                                        <i class="fa fa-triangle-exclamation me-1"></i>
+                                        {% if promise.condition.type == 'league_position' %}
+                                            voids below P{{ promise.condition.target }}
+                                        {% elseif promise.condition.type == 'tier_reached' %}
+                                            voids if tier {{ promise.condition.target }} not reached
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# RECENT FIXTURES                                                    #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {% if (payload.fixtures ?? [])|length > 0 %}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
+            Recent Fixtures
+        </h6>
+    </div>
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="small text-muted fw-semibold">Home</th>
+                            <th class="small text-muted fw-semibold text-center">Score</th>
+                            <th class="small text-muted fw-semibold">Away</th>
+                            <th class="small text-muted fw-semibold">Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fx in payload.fixtures %}
+                        {% set won = (fx.homeClubId == club.id and fx.result == 'HOME_WIN') or (fx.awayClubId == club.id and fx.result == 'AWAY_WIN') %}
+                        {% set drew = fx.result == 'DRAW' %}
+                        <tr>
+                            <td class="small {{ fx.homeClubId == club.id ? 'fw-bold' : '' }}">{{ fx.homeClubName }}</td>
+                            <td class="small text-center fw-semibold">{{ fx.homeGoals }} - {{ fx.awayGoals }}</td>
+                            <td class="small {{ fx.awayClubId == club.id ? 'fw-bold' : '' }}">{{ fx.awayClubName }}</td>
+                            <td class="small">
+                                <span class="badge {{ won ? 'bg-success-subtle text-success border border-success-subtle' : (drew ? 'bg-secondary-subtle text-secondary border border-secondary-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle') }}">
+                                    {{ won ? 'W' : (drew ? 'D' : 'L') }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {# ══════════════════════════════════════════════════════════════════ #}
     {# TRANSFER HISTORY                                                   #}
