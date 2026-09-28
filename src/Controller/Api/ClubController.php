@@ -156,6 +156,12 @@ class ClubController extends AbstractController
             'activeSponsors'      => $club->getActiveSponsors()->count(),
             'activeInvestors'     => $activeInvestorCount,
             'tutorialCompletedAt' => $club->getTutorialCompletedAt()?->format(\DateTimeInterface::ATOM),
+            // Kit + badge identity — set via GET/POST /api/club/kit-identity,
+            // mirrored here for convenience since this is the general club-state
+            // poll. See docs/api/club-kit-identity.md.
+            'homeKitConfig'       => $club->getHomeKitConfig(),
+            'awayKitConfig'       => $club->getAwayKitConfig(),
+            'badgeConfig'         => $club->getBadgeConfig(),
         ]);
     }
 }

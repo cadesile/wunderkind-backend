@@ -109,12 +109,15 @@ class SeasonRecordRepository extends ServiceEntityRepository
      * "Chairman's Terminal" real-events feed (see LiveTelemetryService). (Previously
      * anonymised to tier + outcome only — reversed by product decision.)
      *
-     * @return array<array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable, clubName: string}>
+     * homeKitConfig/awayKitConfig/badgeConfig are the club's own chairman-customized
+     * kit+badge identity — see Club entity / docs/api/club-kit-identity.md.
+     *
+     * @return array<array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable, clubName: string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>
      */
     public function findRecentPyramidEvents(\DateTimeImmutable $since, int $limit): array
     {
         return $this->createQueryBuilder('sr')
-            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt', 'c.name AS clubName')
+            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
             ->innerJoin('sr.league', 'l')
             ->innerJoin('sr.club', 'c')
             ->where('sr.createdAt >= :since')

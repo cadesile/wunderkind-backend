@@ -81,12 +81,17 @@ lando php bin/console lexik:jwt:generate-keypair --no-pass --overwrite
 # After adding/changing entities, generate a new migration
 lando php bin/console doctrine:migrations:diff
 
-# Seed data (run in this order on a fresh DB)
+# Seed data (run in this order on a fresh DB) — matches the deploy workflow's seeder
+# sequence (.github/workflows/deploy-dev.yml); missing any of these behaves like the
+# real feature is broken (e.g. skipping app:seed-match-narrative makes every
+# Competition result's narrativePayload come back empty, not an obvious "seed this" error)
 lando php bin/console app:seed-game-events        # narrative event templates
+lando php bin/console app:seed-match-narrative    # MATCH_NARRATIVE chain-graph content (Competition result narrativePayload)
 lando php bin/console app:seed-player-events      # player event templates
 lando php bin/console app:seed:morale-events      # morale event templates
 lando php bin/console app:seed-archetypes         # 20 curated archetypes (10 positive, 10 negative)
 lando php bin/console app:seed-social-post-templates  # social media post templates
+lando php bin/console app:seed-excursions         # team-bonding excursion catalogue
 lando php bin/console app:generate-market-data    # agents, scouts, investors, sponsors
 lando php bin/console app:market:generate         # generate market pool entities
 lando php bin/console app:pool:warm               # pre-warm the market entity pool
@@ -114,6 +119,29 @@ lando php bin/console debug:firewall
   lando php bin/console doctrine:migrations:up-to-date --env=test
   lando psql -d wunderkind_test -c "<sql>"   # inspect the test DB directly
   ```
+  **This doesn't catch everything.** `doctrine:schema:update`/`schema:create` only
+  reconcile what's declared in Doctrine ORM mapping attributes. Two kinds of
+  drift are invisible to it and need a manual, one-time fix per test DB:
+  - **Raw-SQL partial unique indexes** (Postgres `CREATE UNIQUE INDEX ... WHERE
+    (...)`, e.g. `uq_active_competition_one_open_per_template`,
+    `uq_entrant_reward_claim_with_template`/`_without_template` from
+    `Version20260916112510`) aren't representable as ORM metadata, so
+    `schema:create` never builds them. Code that does `INSERT ... ON CONFLICT
+    DO NOTHING`/`ON CONFLICT (col) WHERE (...) DO NOTHING` against one of these
+    (e.g. `CompetitionProvisionInstancesCommand`, `RewardApplierService`) will
+    silently insert duplicate rows in tests instead of no-op'ing — symptom:
+    "actual size N matches expected size 1"-style count assertions failing, or
+    a `PDOException: ... no unique or exclusion constraint matching the ON
+    CONFLICT specification`. Fix: re-run the `CREATE UNIQUE INDEX ...` statement
+    from the relevant migration directly against `wunderkind_test` via `lando
+    psql -d wunderkind_test`.
+  - **Seed commands aren't run against `wunderkind_test` by anything.** If a
+    functional test's behavior depends on seeded rows (e.g.
+    `MatchNarrativeGeneratorService` reading `MATCH_NARRATIVE`-category
+    `GameEventTemplate` rows seeded by `app:seed-match-narrative`), a fresh
+    `wunderkind_test` has none — symptom: an assertion like "must carry a
+    non-empty narrative timeline" failing with an empty array, not an obvious
+    missing-data error. Fix: run the relevant seed command with `--env=test`.
 - **API functional-test login is single-use.** `$client->loginUser($user, 'api')` authenticates
   **exactly one request** against the stateless JWT firewall — the next request on the same
   client returns `401 JWT Token not found`, and calling `loginUser()` again does not recover it.

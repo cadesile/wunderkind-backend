@@ -239,7 +239,7 @@ class LiveTelemetryService
                 continue;
             }
 
-            $events[] = self::event($row['createdAt'], $now, 'PYRAMID', '[PYRAMID // MOVEMENT]', $clubName, $text);
+            $events[] = self::event($row['createdAt'], $now, 'PYRAMID', '[PYRAMID // MOVEMENT]', $clubName, $text, clubBadge: self::clubBadge($row));
         }
 
         return $events;
@@ -281,6 +281,7 @@ class LiveTelemetryService
                     'description'     => $description,
                     'clubName'        => $row['clubName'],
                     'serverTimestamp' => $row['serverTimestamp'],
+                    'clubBadge'       => self::clubBadge($row),
                 ];
             }
         }
@@ -296,6 +297,7 @@ class LiveTelemetryService
                 $entry['clubName'],
                 sprintf('%s spent %s: %s', $entry['clubName'], LiveTelemetrySnapshot::formatPence(abs($entry['amountPence'])), $entry['description']),
                 amountExact: LiveTelemetrySnapshot::formatPenceExact(abs($entry['amountPence'])),
+                clubBadge: $entry['clubBadge'],
             ),
             array_slice($entries, 0, $limit),
         );
@@ -320,6 +322,7 @@ class LiveTelemetryService
                 '[TURNSTILES // ATTENDANCE]',
                 $row['clubName'],
                 sprintf('%s recorded attendance of %s!', $row['clubName'], number_format($row['weeklyAttendance'])),
+                clubBadge: self::clubBadge($row),
             ),
             $rows,
         );
@@ -371,6 +374,7 @@ class LiveTelemetryService
                         'frictions'     => self::sanitizePairs($outcome['frictions'] ?? []),
                         'bonds'         => self::sanitizePairs($outcome['bonds'] ?? []),
                     ],
+                    clubBadge: self::clubBadge($row),
                 );
             }
         }
@@ -429,6 +433,7 @@ class LiveTelemetryService
                         'equityPercent' => $equityPercent,
                         'counterparty'  => $counterparty,
                     ],
+                    clubBadge: self::clubBadge($row),
                 );
             }
         }
@@ -485,6 +490,7 @@ class LiveTelemetryService
                         'offerType'       => $promise['offer']['type'] ?? null,
                         'partyAName'      => $partyAName,
                     ],
+                    clubBadge: self::clubBadge($row),
                 );
             }
         }
@@ -549,6 +555,7 @@ class LiveTelemetryService
                         'assists'      => $assists,
                         'appearances'  => $appearances,
                     ],
+                    clubBadge: self::clubBadge($row),
                 );
             }
 
@@ -569,6 +576,7 @@ class LiveTelemetryService
                         'peakRating'   => $peakGk['rating'],
                         'goalsAgainst' => $goalsAgainst,
                     ],
+                    clubBadge: self::clubBadge($row),
                 );
             }
         }
@@ -613,6 +621,7 @@ class LiveTelemetryService
                     '[COMMUNITY // SENTIMENT]',
                     $row['clubName'],
                     sprintf('%s invested in fan initiative: %s', $row['clubName'], $description),
+                    clubBadge: self::clubBadge($row),
                 );
             }
 
@@ -634,6 +643,7 @@ class LiveTelemetryService
                     $row['clubName'],
                     sprintf('%s boardroom mood: fan morale %d/100, sentiment %d/100.', $row['clubName'], (int) $morale, (int) $sentiment),
                     meta: ['fanMorale' => $morale, 'fanSentiment' => $sentiment],
+                    clubBadge: self::clubBadge($row),
                 );
             }
         }
@@ -773,6 +783,7 @@ class LiveTelemetryService
                 'amountExact'   => $event['amountExact'],
                 'timestampIso'  => $event['timestampIso'],
                 'meta'          => $event['meta'],
+                'clubBadge'     => $event['clubBadge'],
             ],
             $events,
         );
@@ -789,6 +800,7 @@ class LiveTelemetryService
         ?string $detail = null,
         ?string $amountExact = null,
         array $meta = [],
+        ?array $clubBadge = null,
     ): array {
         return [
             'time'          => self::relativeTime($at, $now),
@@ -800,7 +812,27 @@ class LiveTelemetryService
             'amountExact'   => $amountExact,
             'timestampIso'  => $at->format(\DateTimeInterface::ATOM),
             'meta'          => $meta,
+            'clubBadge'     => $clubBadge,
             'at'            => $at,
+        ];
+    }
+
+    /**
+     * Bundles a row's home/away kit + badge config into the event shape's `clubBadge`
+     * field — same {home, away, badge} grouping consumed by kit-compositor.js's
+     * composeKitSvg() client-side (see docs/api/club-kit-identity.md). Every row
+     * fetched by findValidPayloadsSince()/findTopAttendanceSince()/
+     * findRecentPyramidEvents() carries these three keys.
+     *
+     * @param array<string, mixed> $row
+     * @return array{home: ?array, away: ?array, badge: ?array}
+     */
+    private static function clubBadge(array $row): array
+    {
+        return [
+            'home'  => $row['homeKitConfig'] ?? null,
+            'away'  => $row['awayKitConfig'] ?? null,
+            'badge' => $row['badgeConfig'] ?? null,
         ];
     }
 

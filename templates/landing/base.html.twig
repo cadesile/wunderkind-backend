@@ -38,6 +38,11 @@
 </head>
 <body>
 {% block body %}{% endblock %}
+<!-- Read-only kit/badge sprite rendering (composeKitSvg) — shared verbatim with the
+     admin kit-identity widget, see public/assets/kit-compositor.js's own docblock
+     for the "port it verbatim if it ever changes" rule. Must load before landing.js,
+     which calls composeKitSvg() for leaderboard rows and telemetry ticker items. -->
+<script src="{{ asset('assets/kit-compositor.js') }}?v={{ landing_v }}"></script>
 <script src="{{ asset('landing.js') }}?v={{ landing_v }}"></script>
 {% block javascripts %}{% endblock %}
 </body>

@@ -57,12 +57,17 @@ class SyncRecordRepository extends ServiceEntityRepository
      * no moderation risk). Joins to club (previously payload+serverTimestamp only) —
      * still cheap over idx_sync_record_server_timestamp since it's a single indexed FK.
      *
-     * @return array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}>
+     * homeKitConfig/awayKitConfig/badgeConfig are the club's own chairman-customized
+     * kit+badge identity (see Club entity, set via POST /api/club/kit-identity) —
+     * attached so the telemetry feed can render a club's real kit/badge, not just
+     * its name. See docs/api/club-kit-identity.md.
+     *
+     * @return array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>
      */
     public function findValidPayloadsSince(\DateTimeImmutable $since): array
     {
         $rows = $this->createQueryBuilder('s')
-            ->select('s.payload', 's.serverTimestamp', 'c.name AS clubName')
+            ->select('s.payload', 's.serverTimestamp', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
             ->innerJoin('s.club', 'c')
             ->where('s.isValid = true')
             ->andWhere('s.serverTimestamp >= :since')
@@ -75,6 +80,9 @@ class SyncRecordRepository extends ServiceEntityRepository
                 'payload'         => $row['payload'],
                 'serverTimestamp' => $row['serverTimestamp'],
                 'clubName'        => (string) $row['clubName'],
+                'homeKitConfig'   => $row['homeKitConfig'],
+                'awayKitConfig'   => $row['awayKitConfig'],
+                'badgeConfig'     => $row['badgeConfig'],
             ],
             $rows,
         );
@@ -97,6 +105,9 @@ class SyncRecordRepository extends ServiceEntityRepository
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
             "SELECT c.name AS club_name,
+                    c.home_kit_config AS home_kit_config,
+                    c.away_kit_config AS away_kit_config,
+                    c.badge_config AS badge_config,
                     (sr.payload->'attendance'->>'weeklyAttendance')::int AS weekly_attendance,
                     sr.server_timestamp AS server_timestamp
              FROM sync_record sr
@@ -113,11 +124,20 @@ class SyncRecordRepository extends ServiceEntityRepository
         return array_map(
             static fn (array $row): array => [
                 'clubName'         => (string) $row['club_name'],
+                'homeKitConfig'    => self::decodeJsonColumn($row['home_kit_config']),
+                'awayKitConfig'    => self::decodeJsonColumn($row['away_kit_config']),
+                'badgeConfig'      => self::decodeJsonColumn($row['badge_config']),
                 'weeklyAttendance' => (int) $row['weekly_attendance'],
                 'serverTimestamp'  => new \DateTimeImmutable($row['server_timestamp']),
             ],
             $rows,
         );
+    }
+
+    /** Raw SQL JSON columns come back as a string, not auto-decoded like DQL's getArrayResult(). */
+    private static function decodeJsonColumn(?string $json): ?array
+    {
+        return $json === null ? null : json_decode($json, true);
     }
 
     /**
