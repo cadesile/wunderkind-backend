@@ -14,10 +14,13 @@
        activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads.
        weeksPlayed is sync count * 4 (each sync ~= 4 on-device weekly ticks) — an
        approximation, not a true weeks-elapsed count.
-     - telemetry.getDilutionSummaryFormatted() / getCovenantFalloutSummaryFormatted() —
-       the redesigned 3rd/4th stat boxes: the most notable investor_income equity
-       event this window, and active commercial-covenant count paired with
-       dressing-room fallout count.
+     - telemetry.getDilutionPercentFormatted()/getDilutionCounterpartyFormatted() and
+       getCovenantFalloutCompactFormatted() — the redesigned 3rd/4th stat boxes: the
+       most notable investor_income equity event this window, and active
+       commercial-covenant count paired with dressing-room fallout count. Each box's
+       big pixel-font value is kept short (a percentage, or "N / N") with the
+       descriptive text in the smaller sub-line — a full sentence in the pixel font
+       wraps and overflows the box.
      - telemetry.recentEvents — up to 18 merged, newest-first items across 7 real
        sources: pyramid promotion/relegation/title (SeasonRecord), boardroom outlay
        (top ledger spend), turnstile attendance, dressing-room rift (resolved
@@ -51,13 +54,13 @@
         </div>
         <div class="terminal-stat">
             <span class="terminal-stat-label pixel">Boardroom Dilution</span>
-            <span class="terminal-stat-val" style="color:var(--gold);">{{ telemetry.getDilutionSummaryFormatted() }}</span>
-            <span class="terminal-stat-sub vt">Equity Sold</span>
+            <span class="terminal-stat-val" style="color:var(--gold);">{{ telemetry.getDilutionPercentFormatted() }}</span>
+            <span class="terminal-stat-sub vt">{{ telemetry.getDilutionCounterpartyFormatted() }}</span>
         </div>
         <div class="terminal-stat">
             <span class="terminal-stat-label pixel">Covenants &amp; Fallout</span>
-            <span class="terminal-stat-val" style="color:var(--red);">{{ telemetry.getCovenantFalloutSummaryFormatted() }}</span>
-            <span class="terminal-stat-sub vt">Active Risk</span>
+            <span class="terminal-stat-val" style="color:var(--red);">{{ telemetry.getCovenantFalloutCompactFormatted() }}</span>
+            <span class="terminal-stat-sub vt">Covenants / Fallout</span>
         </div>
     </div>
 
