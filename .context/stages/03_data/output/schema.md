@@ -32,6 +32,51 @@ constraints. Don't restate field lists here.
   identifies an app installation; re-registering it under a different
   user reassigns rather than duplicates).
 
+## `sync_record.payload` field conventions (financial correctness — read before touching any of this data)
+
+`sync_record.payload` archives the raw client `SyncRequest` verbatim — the
+loose array fields (`ledger`, `promises`, `transfers`, `excursions`,
+`relationships`, `fixtures`) carry no server-side validation or sub-shape
+typing (see `SyncRequest.php`'s docblocks). Most monetary fields in this
+payload are genuine pence (`£ = value / 100`) — **`ledger[].amount` is the
+one exception, and it is a real, confirmed bug, not a false lead:**
+
+- **`ledger[].amount` is 100x true pence**, not real pence. Real pence =
+  `amount / 100`; real pounds = `amount / 10_000`.
+- Confirmed two ways: (1) cross-referencing `excursions[].costPence` (an
+  exact, independently-typed field) against its matching `fan_initiative`
+  ledger line for the same booking — the ledger amount is always exactly
+  100x `costPence`; (2) comparing a real sync payload's raw `ledger[].amount`
+  values against the same club's own in-game live ledger screen — every
+  category checked (matchday income, sponsor income, upkeep, wages, investor
+  equity, transfer fee) showed the identical 100x ratio.
+- This originates client-side (`wunderkind-app`'s on-device game engine
+  writes the inflated value before syncing) — out of this repo's scope to
+  fix at the source (backend-only scope is a standing project convention).
+  The backend's job is to **correctly interpret** the value it receives, not
+  trust it as labeled.
+- **Every consumer of `ledger[].amount` must divide by 100 before treating
+  it as pence.** Two canonical, tested implementations exist — reuse one,
+  don't add a third ad hoc conversion:
+  - PHP: `LiveTelemetryService::ledgerAmountToPence()` (private static
+    helper — used by `aggregate()`'s `capitalDeployedPence` and
+    `buildLedgerEvents()`'s `amountPence`/`amountExact`).
+  - Twig: the `ledgerCurrency()` macro in
+    `templates/admin/_macros.html.twig` (used by
+    `templates/admin/club_profile.html.twig`'s Ledger table). Never pass a
+    raw `ledger[].amount` straight to the plain `currency()` macro — that
+    macro assumes real pence.
+- Every *other* monetary payload field is genuine, uncorrected pence and
+  needs no adjustment: `earningsDelta`, `balance`, `totalCareerEarnings`,
+  `signings[].fee`, `transfers[].grossFee/agentCommission/netProceeds`,
+  `promises[].offer.amountPence`, `excursions[].costPence`. That's also why
+  `buildDilutionEvents()`/`buildCovenantEvents()` in `LiveTelemetryService`
+  deliberately source their exact figures from `promises[].offer.amountPence`
+  instead of `ledger[].amount` — see that class's docblock.
+- If you add a new consumer of `ledger[].amount` (a new admin view, report,
+  or telemetry aggregation), apply the same /100 correction — or, better,
+  route through one of the two canonical implementations above.
+
 ## Repository query patterns worth knowing
 
 - **Recruitment-pool repositories** (`AgentRepository`, `ScoutRepository`,

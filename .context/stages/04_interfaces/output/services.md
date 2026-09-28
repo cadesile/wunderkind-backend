@@ -182,6 +182,12 @@ filename alone.
 - **`LiveTelemetryService`** — feeds the landing page's live activity
   feed; some entries (sackings, contract disputes, youth intake) are
   illustrative and have no backing data — don't treat as real metrics.
+  Any figure derived from `payload.ledger[].amount` (`capitalDeployedPence`,
+  `buildLedgerEvents()`'s spend lines) goes through the class's
+  `ledgerAmountToPence()` helper to correct for that field's 100x-true-pence
+  convention — see `03_data/output/schema.md`'s "`sync_record.payload` field
+  conventions" section. `promises[].offer.amountPence` needs no such
+  correction.
 - **`MarketDataService`** — assembles market listing data (agents/
   investors/scouts/sponsors/staff) into `MarketDataResponse`.
 - **`MarketPoolService`** — manages the shared unassigned-entity pool

@@ -103,7 +103,11 @@
                                         <tr>
                                             <td><code>ledger[].amount</code></td>
                                             <td>Capital Deployed</td>
-                                            <td><code>|amount|</code> summed for <code>category</code> in <code>upkeep</code>/<code>wages</code> only (excludes revenue categories).</td>
+                                            <td>
+                                                <code>|amount|</code> summed for <code>category</code> in <code>upkeep</code>/<code>wages</code> only (excludes revenue categories).
+                                                Raw <code>amount</code> is <strong>100x true pence</strong> — divided by 100 via <code>ledgerAmountToPence()</code> before summing. See
+                                                the "Ledger unit convention" note in <code>LiveTelemetryService</code>'s class docblock and <code>.context/stages/03_data/output/schema.md</code>.
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td><code>transfers[].grossFee</code></td>

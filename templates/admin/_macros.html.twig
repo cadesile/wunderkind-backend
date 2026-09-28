@@ -10,3 +10,19 @@
         {{ sign }}£{{ abs|number_format(0) }}
     {%- endif -%}
 {% endmacro %}
+
+{#
+ # Formats a raw payload.ledger[].amount value. Unlike every other money field on
+ # this page (club.balance, signing.fee, promise.offer.amountPence — all real
+ # pence), ledger[].amount arrives from the client at 100x true pence — confirmed
+ # by cross-referencing payload.excursions[].costPence (exact) against its matching
+ # fan_initiative ledger line: the ledger amount is always exactly 100x costPence.
+ # See the "Ledger unit convention" note in LiveTelemetryService's class docblock
+ # (same source data, same correction) and .context/stages/03_data/output/schema.md.
+ # Never pass a raw ledger[].amount straight to currency() — divide by 100 first, as
+ # below.
+ #}
+{% macro ledgerCurrency(rawAmount) %}
+    {%- import _self as macros -%}
+    {{- macros.currency(rawAmount / 100) -}}
+{% endmacro %}
