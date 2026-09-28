@@ -1,25 +1,33 @@
 {#
    The Chairman's Terminal — hero widget, replaces the phone screenshot carousel.
+   Now the "Boardroom Incident & Consequence Feed": a categorized ticker dramatizing
+   the "you're the chairman, not the gaffer" pitch with real dressing-room fallout,
+   boardroom equity dilution, commercial covenant risk, standout players, and
+   community sentiment — on top of the original pyramid/spend/attendance feed.
 
    Real, live data only (refreshed by app:telemetry:generate) — no illustrative/
    placeholder filler. Previously padded with six static sackings/boardroom-clash/
    contract-dispute/youth-intake lines with no backing data; removed by product
-   decision so every line shown is real:
+   decision so every line shown is real — that constraint governs every category
+   added here too. See LiveTelemetryService for exactly how each is built:
      - telemetry.fixturesSimulated / getCapitalDeployedFormatted() / getResultsFormatted() /
-       activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads (see
-       LiveTelemetryService). weeksPlayed is sync count * 4 (each sync ~= 4 on-device
-       weekly ticks) — an approximation, not a true weeks-elapsed count.
-     - telemetry.recentEvents — a blend of three real sources, every one naming the
-       real club (safe: club names come from a curated, server-generated set of
-       options — /api/club/name-options — not free text), built in
-       LiveTelemetryService::refresh():
-         1. promotion/relegation/title lines from SeasonRecord (see
-            SeasonRecordRepository::findRecentPyramidEvents());
-         2. the highest-cost ledger[] spends from recent syncs, club name + the
-            entry's own client-generated description (may name a player, generated
-            fiction);
-         3. top attendance figures from recent syncs (see
-            SyncRecordRepository::findTopAttendanceSince()).
+       activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads.
+       weeksPlayed is sync count * 4 (each sync ~= 4 on-device weekly ticks) — an
+       approximation, not a true weeks-elapsed count.
+     - telemetry.getDilutionSummaryFormatted() / getCovenantFalloutSummaryFormatted() —
+       the redesigned 3rd/4th stat boxes: the most notable investor_income equity
+       event this window, and active commercial-covenant count paired with
+       dressing-room fallout count.
+     - telemetry.recentEvents — up to 18 merged, newest-first items across 7 real
+       sources: pyramid promotion/relegation/title (SeasonRecord), boardroom outlay
+       (top ledger spend), turnstile attendance, dressing-room rift (resolved
+       excursions[] with friction), boardroom dilution (investor_income ledger +
+       matching promises[] contracts), commercial covenant risk (active promises[]
+       with a league-position/tier termination clause), and talisman/community
+       highlights (playerStats[]/fixtures[] outliers, fan_initiative spend, extreme
+       fan sentiment). Each item carries {time, text, category, categoryLabel, club,
+       detail, amountExact, timestampIso, meta} — the enriched fields feed the
+       incident inspector modal (see _incident_modal.html.twig / landing.js).
 #}
 <div class="terminal">
     <div class="terminal-header">
@@ -32,9 +40,9 @@
 
     <div class="terminal-stats">
         <div class="terminal-stat">
-            <span class="terminal-stat-label pixel">Fixtures Simulated</span>
+            <span class="terminal-stat-label pixel">Fixtures &amp; Form</span>
             <span class="terminal-stat-val">{{ telemetry.fixturesSimulated|number_format }}</span>
-            <span class="terminal-stat-sub vt">Last 24 hours</span>
+            <span class="terminal-stat-sub vt">{{ telemetry.getResultsFormatted() }} (W-D-L)</span>
         </div>
         <div class="terminal-stat">
             <span class="terminal-stat-label pixel">Capital Deployed</span>
@@ -42,16 +50,29 @@
             <span class="terminal-stat-sub vt">Transfers &amp; Infra</span>
         </div>
         <div class="terminal-stat">
-            <span class="terminal-stat-label pixel">Results W/D/L</span>
-            <span class="terminal-stat-val">{{ telemetry.getResultsFormatted() }}</span>
-            <span class="terminal-stat-sub vt">Last 24 hours</span>
+            <span class="terminal-stat-label pixel">Boardroom Dilution</span>
+            <span class="terminal-stat-val" style="color:var(--gold);">{{ telemetry.getDilutionSummaryFormatted() }}</span>
+            <span class="terminal-stat-sub vt">Equity Sold</span>
+        </div>
+        <div class="terminal-stat">
+            <span class="terminal-stat-label pixel">Covenants &amp; Fallout</span>
+            <span class="terminal-stat-val" style="color:var(--red);">{{ telemetry.getCovenantFalloutSummaryFormatted() }}</span>
+            <span class="terminal-stat-sub vt">Active Risk</span>
         </div>
     </div>
 
     <div class="terminal-feed" aria-live="off">
         {% for event in telemetry.recentEvents %}
-            <div class="terminal-feed-item{{ loop.first ? ' active' }} vt">
-                <span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}
+            <div class="terminal-feed-item{{ loop.first ? ' active' }} vt cat-{{ event.category|lower }}"
+                 tabindex="0" role="button"
+                 data-category-label="{{ event.categoryLabel }}"
+                 data-club="{{ event.club }}"
+                 data-detail="{{ event.detail }}"
+                 data-amount="{{ event.amountExact }}"
+                 data-timestamp="{{ event.timestampIso }}"
+                 data-meta="{{ event.meta|json_encode|e('html_attr') }}">
+                <span class="terminal-feed-category pixel">{{ event.categoryLabel }}</span>
+                <span class="terminal-feed-line"><span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}</span>
             </div>
         {% else %}
             <div class="terminal-feed-item active vt">No activity to report in the last 24 hours.</div>
@@ -60,6 +81,6 @@
 
     <div class="terminal-footer vt">
         <span>{{ telemetry.activeClubs }} ACTIVE CLUBS // {{ telemetry.weeksPlayed }} WEEKS PLAYED // OFFLINE-FIRST ENGINE</span>
-        <a href="#download" class="terminal-cta pixel">[ TAP TO ENTER THE BOARDROOM ]</a>
+        <a href="#download" class="terminal-cta pixel" id="terminal-cta">[ TAP TO ENTER THE BOARDROOM ]</a>
     </div>
 </div>

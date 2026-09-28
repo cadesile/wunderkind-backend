@@ -299,7 +299,7 @@
         }
         .terminal-stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 8px;
             padding-bottom: 16px;
             margin-bottom: 16px;
@@ -333,7 +333,7 @@
         }
         .terminal-feed {
             position: relative;
-            height: 74px;
+            height: 96px;
             overflow: hidden;
             padding-bottom: 16px;
             margin-bottom: 12px;
@@ -342,17 +342,38 @@
         .terminal-feed-item {
             position: absolute;
             inset: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
             opacity: 0;
             transform: translateY(6px);
             transition: opacity 0.5s ease, transform 0.5s ease;
             font-size: 18px;
             line-height: 1.4;
             color: var(--text);
+            cursor: pointer;
         }
         .terminal-feed-item.active {
             opacity: 1;
             transform: translateY(0);
         }
+        .terminal-feed-item[role="button"]:focus-visible {
+            outline: 1px dashed var(--gold);
+            outline-offset: 2px;
+        }
+        .terminal-feed-category {
+            font-size: 7px;
+            letter-spacing: 0.04em;
+            color: var(--text);
+        }
+        .terminal-feed-item.cat-dressing_room .terminal-feed-category { color: var(--red); }
+        .terminal-feed-item.cat-dilution      .terminal-feed-category { color: var(--gold); }
+        .terminal-feed-item.cat-covenant      .terminal-feed-category { color: var(--gold-dim); }
+        .terminal-feed-item.cat-talisman      .terminal-feed-category { color: var(--mint); }
+        .terminal-feed-item.cat-community     .terminal-feed-category { color: var(--orange); }
+        .terminal-feed-item.cat-outlay        .terminal-feed-category { color: var(--text-muted); }
+        .terminal-feed-item.cat-attendance    .terminal-feed-category { color: var(--mint-dim); }
+        .terminal-feed-line { display: block; }
         .terminal-feed-time {
             color: var(--mint);
             font-weight: bold;
@@ -842,6 +863,7 @@
             .stats-inner     { grid-template-columns: 1fr 1fr; }
             .stat-block:nth-child(2) { border-right: none; }
             .leagues-inner   { grid-template-columns: 1fr; gap: 48px; }
+            .terminal-stats  { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 600px) {
             section          { padding: 60px 0; }
@@ -1181,6 +1203,94 @@
         }
         .beta-msg.success { color: var(--mint); display: block; }
         .beta-msg.error   { color: var(--red);  display: block; }
+
+        /* ════════════════════════════════
+           INCIDENT INSPECTOR MODAL
+           Same overlay/modal structure and tokens as the beta modal above —
+           the "raw chairman dispatch report" for a clicked ticker item.
+        ════════════════════════════════ */
+        .incident-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: rgba(8, 24, 21, 0.94);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .incident-overlay.open { display: flex; }
+        .incident-modal {
+            background: var(--card);
+            border: 1px solid var(--gold-dim);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 48px rgba(245,200,66,.1);
+            max-width: 480px;
+            width: 100%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .incident-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .incident-header h2 {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: var(--gold);
+            line-height: 1.6;
+        }
+        .incident-close {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
+            line-height: 1;
+        }
+        .incident-close:hover { border-color: var(--gold); color: var(--gold); }
+        .incident-body { padding: 24px; overflow-y: auto; }
+        .incident-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .incident-row-label { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .incident-row-value { color: var(--text); text-align: right; }
+        .incident-detail {
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            color: var(--text);
+            line-height: 1.5;
+            margin: 20px 0;
+        }
+        .incident-meta { display: flex; flex-direction: column; gap: 6px; }
+        .incident-meta-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--gold-dim);
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .incident-meta-pair,
+        .incident-meta-line {
+            font-family: 'VT323', monospace;
+            font-size: 17px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
 
         /* ════════════════════════════════
            FACILITIES SECTION
