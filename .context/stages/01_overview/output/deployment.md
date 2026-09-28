@@ -18,15 +18,19 @@ This file covers the **git branching/merge policy** that decides what lands on
   release-ready. **Don't assume `dev` and `development` share a clean linear
   history** — merging `development` into `dev` may need real conflict
   resolution even when the same merge into `master` is clean.
-- **`development`** — branched from `master` (not from `dev`). This is the
-  integration branch for active work headed to both `dev` and `master`.
+- **`development`** — a direct child of `master` (not of `dev`). **This is the
+  working branch for most tasks** — commit directly on `development` rather
+  than via a feature branch/PR; it's also the integration branch active work
+  propagates to `dev` and `master` from.
 
 ## Rules
 
-1. Branch new work from `development`, after confirming it's up to date with
-   `origin/development`. Do not branch from `dev`.
-2. Land finished work on `development` first. From there, propagate to `dev`
-   and `master` as two **separate** merges.
+1. Do most work directly on `development`, after confirming it's up to date
+   with `origin/development` first. Never commit directly to `master` or
+   `dev` — those are only ever reached by merging `development` in.
+2. When a task is complete: merge `development` → `dev` and push (external
+   dev/staging testing), then merge `development` → `master` and push
+   (production release) — two **separate** merges, in that order.
 3. Use a real `git merge` to move changes between `development`, `dev`, and
    `master` — never `git cherry-pick` as the standard propagation method.
    Cherry-pick is only acceptable as a one-off fix to transplant a specific

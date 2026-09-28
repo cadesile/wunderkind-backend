@@ -155,22 +155,23 @@ lando php bin/console debug:firewall
 
 ## Git Workflow
 
-Always use feature branches — never commit directly to `master` or `development`.
+`development` is the working branch for most tasks — commit directly there
+(it's a direct child of `master`). Never commit directly to `master` or
+`dev`; those are only ever reached by merging `development` in.
 
 ```bash
-git checkout -b feat/<short-description>   # branched from development, not master or dev
-git push -u origin HEAD
-gh pr create --title "..." --body "..." --base development
+git checkout development
+git pull origin development
+# ...work, commit directly on development...
+git push origin development
 ```
 
-Branch naming: `feat/`, `fix/`, `chore/` prefixes. Base branch is `development`.
-
-**Three branches: `development` → `dev` → `master`, propagated by merge, never cherry-pick.**
-`development` (branched from `master`) is the integration branch feature work lands on first;
-from there it's merged separately into `dev` (dev/staging deploy) and `master` (production
-deploy) — `dev` can sit ahead of and diverge from `development`/`master` for a long time, so
-those merges aren't always clean. Full policy (propagation rules, verify-before-push,
-conflict handling): `.context/stages/01_overview/output/deployment.md`.
+**Three branches: `development` → `dev` and `development` → `master`, propagated by merge,
+never cherry-pick.** When a task is complete: merge `development` → `dev` and push (external
+dev/staging testing), then merge `development` → `master` and push (production release) — two
+**separate** merges, in that order. `dev` can sit ahead of and diverge from `development`/
+`master` for a long time, so those merges aren't always clean. Full policy (propagation rules,
+verify-before-push, conflict handling): `.context/stages/01_overview/output/deployment.md`.
 
 ## Deployment
 

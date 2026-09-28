@@ -5,7 +5,22 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
-- **Commit:** 5cf9851 (development, merged into dev)
+- **Commit:** df082fe (development, merged into dev)
+- **Date:** 2026-09-28
+- **Stages touched this pass:** 01_overview (corrected the git branching
+  policy in `output/deployment.md`, and synced `CLAUDE.md`'s Git Workflow
+  section to match, per explicit user correction: `development` is the
+  working branch for most tasks — commit directly there, it's a direct
+  child of `master` — not a mandatory feature-branch + PR workflow as
+  previously documented. `dev`/`master` are still only ever reached by
+  merging `development` in, propagated as two separate merges in that
+  order. Also recorded as a standing feedback memory outside this repo, as
+  a backstop in case this doc drifts again.)
+
+---
+
+- **Commit:** 5cf9851 (also merged into `dev` and `master` this pass — see
+  the merge-tagged entry immediately below)
 - **Date:** 2026-09-28
 - **Stages touched this pass:** 03_data, 04_interfaces (targeted fix + doc
   pass, not a full stage regen — `.context/` was ~28 commits stale going
