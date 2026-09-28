@@ -18,20 +18,20 @@ class LeagueRepositoryTest extends TestCase
 
     public function testFindLowestTierForCountryReturnsNullWhenNoLeaguesFound(): void
     {
-        $query = $this->createMock(\Doctrine\ORM\Query::class);
+        $query = $this->createStub(\Doctrine\ORM\Query::class);
         $query->method('getOneOrNullResult')->willReturn(null);
 
-        $qb = $this->createMock(\Doctrine\ORM\QueryBuilder::class);
+        $qb = $this->createStub(\Doctrine\ORM\QueryBuilder::class);
         $qb->method('andWhere')->willReturnSelf();
         $qb->method('setParameter')->willReturnSelf();
         $qb->method('orderBy')->willReturnSelf();
         $qb->method('setMaxResults')->willReturnSelf();
         $qb->method('getQuery')->willReturn($query);
 
-        $repo = $this->getMockBuilder(LeagueRepository::class)
+        $repo = $this->getStubBuilder(LeagueRepository::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['createQueryBuilder'])
-            ->getMock();
+            ->getStub();
         $repo->method('createQueryBuilder')->willReturn($qb);
 
         $result = $repo->findLowestTierForCountry('EN');
@@ -42,20 +42,20 @@ class LeagueRepositoryTest extends TestCase
     {
         $league = new League('EN', 8, 'League 8');
 
-        $query = $this->createMock(\Doctrine\ORM\Query::class);
+        $query = $this->createStub(\Doctrine\ORM\Query::class);
         $query->method('getOneOrNullResult')->willReturn($league);
 
-        $qb = $this->createMock(\Doctrine\ORM\QueryBuilder::class);
+        $qb = $this->createStub(\Doctrine\ORM\QueryBuilder::class);
         $qb->method('andWhere')->willReturnSelf();
         $qb->method('setParameter')->willReturnSelf();
         $qb->method('orderBy')->willReturnSelf();
         $qb->method('setMaxResults')->willReturnSelf();
         $qb->method('getQuery')->willReturn($query);
 
-        $repo = $this->getMockBuilder(LeagueRepository::class)
+        $repo = $this->getStubBuilder(LeagueRepository::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['createQueryBuilder'])
-            ->getMock();
+            ->getStub();
         $repo->method('createQueryBuilder')->willReturn($qb);
 
         $result = $repo->findLowestTierForCountry('EN');
@@ -65,7 +65,7 @@ class LeagueRepositoryTest extends TestCase
 
     public function testFindLowestTierForCountryOrdersByTierDesc(): void
     {
-        $query = $this->createMock(\Doctrine\ORM\Query::class);
+        $query = $this->createStub(\Doctrine\ORM\Query::class);
         $query->method('getOneOrNullResult')->willReturn(null);
 
         $qb = $this->createMock(\Doctrine\ORM\QueryBuilder::class);
@@ -79,10 +79,10 @@ class LeagueRepositoryTest extends TestCase
             ->with('l.tier', 'DESC')
             ->willReturnSelf();
 
-        $repo = $this->getMockBuilder(LeagueRepository::class)
+        $repo = $this->getStubBuilder(LeagueRepository::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['createQueryBuilder'])
-            ->getMock();
+            ->getStub();
         $repo->method('createQueryBuilder')->willReturn($qb);
 
         $repo->findLowestTierForCountry('EN');

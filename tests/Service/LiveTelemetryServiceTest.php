@@ -239,7 +239,7 @@ class LiveTelemetryServiceTest extends TestCase
     {
         $now = new \DateTimeImmutable();
         $rows = [
-            ['clubName' => 'Stoke-on-Trent City', 'fanCount' => 32776, 'serverTimestamp' => $now->modify('-10 minutes')],
+            ['clubName' => 'Stoke-on-Trent City', 'weeklyAttendance' => 32776, 'serverTimestamp' => $now->modify('-10 minutes')],
         ];
 
         $events = LiveTelemetryService::buildAttendanceEvents($rows, $now);
@@ -263,7 +263,7 @@ class LiveTelemetryServiceTest extends TestCase
         ], $now, 5);
 
         $attendanceEvents = LiveTelemetryService::buildAttendanceEvents([
-            ['clubName' => 'Attendance Club', 'fanCount' => 1000, 'serverTimestamp' => $now->modify('-5 hours')],
+            ['clubName' => 'Attendance Club', 'weeklyAttendance' => 1000, 'serverTimestamp' => $now->modify('-5 hours')],
         ], $now);
 
         $merged = LiveTelemetryService::mergeEventsByRecency($pyramidEvents, $ledgerEvents, $attendanceEvents);

@@ -5,6 +5,27 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** 160ac7a (development, merged into dev)
+- **Date:** 2026-09-28
+- **Stages touched this pass:** 02_architecture (World Pack Cache generation
+  rewritten to generate every club's players/staff/scouts fresh, in-memory,
+  rather than drawing from the shared pool — new `WorldPackClubGenerationService`,
+  a tracking schema (`WorldPackGenerationRun`/`TierRun`/`ClubRun`, migration
+  `Version20260928151627`), and Messenger-driven tier/club batching
+  (`WorldPackGenerationOrchestrator`, `WarmWorldPackTierMessageHandler`,
+  `WarmWorldPackClubMessageHandler`, `WorldPackTierAssemblyService`); admin UI
+  (`worldpack_cache.html.twig`) reworked to trigger regenerates and poll live
+  per-country/tier/club progress instead of a client-side synchronous loop;
+  removed the now-unneeded `pool-warm.sh`/`worldpack-warm.sh` cron jobs; split
+  World Pack messages onto their own `worldpack` Messenger transport, separate
+  from `async` (push notifications) — a country regenerate's 100+ club-generation
+  messages were sharing one queue with push sends and delaying each other, so a
+  new `docker/worldpack-consume.sh` cron entry drains it independently). Also
+  fixed the pre-existing PHPUnit "mock without expectations" notices across the
+  suite (`createMock()` → `createStub()` where no `->expects()` is used).
+
+---
+
 - **Commit:** 790e98f (development, merged into dev)
 - **Date:** 2026-09-27
 - **Stages touched this pass:** 03_data, 04_interfaces (added owner identity

@@ -11,7 +11,7 @@ class SeasonSnapshotTest extends TestCase
 {
     public function testConstructorAndGetters(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test FC', $user);
         $data    = ['amp' => ['leagueTier' => 8, 'finalPosition' => 1], 'pyramid' => []];
 

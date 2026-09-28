@@ -97,4 +97,24 @@ class WorldPackCacheService
     {
         return $this->cacheRepository->deleteByCountry($country);
     }
+
+    /**
+     * Atomically replaces the cache entry for (country, tier) with an already-built
+     * payload — a thin variant of forceRebuild() for callers (WorldPackTierAssemblyService)
+     * that assembled the payload themselves rather than handing over a generator closure.
+     * Same guarantee: the old entry is only removed after the new one is ready to persist,
+     * so a failure here never leaves the cache empty.
+     */
+    public function replaceWithPayload(string $country, int $tier, array $payload): void
+    {
+        $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
+        if ($existing !== null) {
+            $this->em->remove($existing);
+            $this->em->flush();
+        }
+
+        $entry = new CountryWorldPackCache($country, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
+        $this->em->persist($entry);
+        $this->em->flush();
+    }
 }

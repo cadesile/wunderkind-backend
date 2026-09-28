@@ -25,7 +25,7 @@ class ClubResolverTest extends TestCase
 {
     private function user(UuidV7 $id): User
     {
-        $user = $this->createMock(User::class);
+        $user = $this->createStub(User::class);
         $user->method('getId')->willReturn($id);
 
         return $user;
@@ -33,7 +33,7 @@ class ClubResolverTest extends TestCase
 
     private function club(User $owner): Club
     {
-        $club = $this->createMock(Club::class);
+        $club = $this->createStub(Club::class);
         $club->method('getUser')->willReturn($owner);
 
         return $club;
@@ -93,7 +93,7 @@ class ClubResolverTest extends TestCase
         $otherOwner = $this->user(Uuid::v7());
         $clubId     = (string) Uuid::v7();
 
-        $repo = $this->createMock(ClubRepository::class);
+        $repo = $this->createStub(ClubRepository::class);
         $repo->method('find')->willReturn($this->club($otherOwner));
 
         // Never silently fall back — a wrong id must fail, not get re-attributed.
@@ -105,7 +105,7 @@ class ClubResolverTest extends TestCase
     {
         $user = $this->user(Uuid::v7());
 
-        $repo = $this->createMock(ClubRepository::class);
+        $repo = $this->createStub(ClubRepository::class);
         $repo->method('find')->willReturn(null);
 
         $this->expectException(ClubMismatchException::class);

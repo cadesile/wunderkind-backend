@@ -18,12 +18,13 @@ use App\Service\AdminMessageService;
 use App\Service\AudienceCriteriaEvaluator;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerInterface;
 
 class AdminMessageServiceTest extends TestCase
 {
-    private AdminMessageRepository&MockObject $messageRepository;
+    private AdminMessageRepository&Stub $messageRepository;
     private AudienceGroupMemberRepository&MockObject $memberRepository;
     private AudienceCriteriaEvaluator&MockObject $criteriaEvaluator;
     private Connection&MockObject $connection;
@@ -33,7 +34,7 @@ class AdminMessageServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->messageRepository = $this->createMock(AdminMessageRepository::class);
+        $this->messageRepository = $this->createStub(AdminMessageRepository::class);
         $this->memberRepository  = $this->createMock(AudienceGroupMemberRepository::class);
         $this->criteriaEvaluator = $this->createMock(AudienceCriteriaEvaluator::class);
         $this->connection        = $this->createMock(Connection::class);

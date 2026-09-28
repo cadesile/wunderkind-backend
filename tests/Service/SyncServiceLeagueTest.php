@@ -21,10 +21,10 @@ class SyncServiceLeagueTest extends TestCase
         // no league set — currentLeague is null
 
         // Call the private method via reflection
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
             ->onlyMethods([])
-            ->getMock();
+            ->getStub();
 
         $gameConfig = new GameConfig();
 
@@ -50,10 +50,10 @@ class SyncServiceLeagueTest extends TestCase
 
         $gameConfig = new GameConfig();
 
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
             ->onlyMethods([])
-            ->getMock();
+            ->getStub();
 
         // Inject the npcClubRepository via reflection since constructor is disabled
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
@@ -97,10 +97,10 @@ class SyncServiceLeagueTest extends TestCase
         $gameConfig = new \App\Entity\GameConfig();
         $gameConfig->setLeaguePositionDecreasePercent(8);
 
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
             ->onlyMethods([])
-            ->getMock();
+            ->getStub();
 
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $npcRepo);
@@ -132,10 +132,10 @@ class SyncServiceLeagueTest extends TestCase
         $em = $this->createMock(\Doctrine\ORM\EntityManagerInterface::class);
         $em->expects($this->once())->method('persist')->with($userClub);
 
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
             ->onlyMethods([])
-            ->getMock();
+            ->getStub();
 
         $leagueRepoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueRepository');
         $leagueRepoProp->setValue($service, $leagueRepo);
@@ -160,10 +160,10 @@ class SyncServiceLeagueTest extends TestCase
         $leagueRepo = $this->createMock(LeagueRepository::class);
         $leagueRepo->expects($this->never())->method('findLowestTierForCountry');
 
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
             ->onlyMethods([])
-            ->getMock();
+            ->getStub();
 
         $leagueRepoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueRepository');
         $leagueRepoProp->setValue($service, $leagueRepo);
@@ -182,10 +182,10 @@ class SyncServiceLeagueTest extends TestCase
         $leagueRepo = $this->createMock(LeagueRepository::class);
         $leagueRepo->expects($this->never())->method('findLowestTierForCountry');
 
-        $service = $this->getMockBuilder(\App\Service\SyncService::class)
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
             ->disableOriginalConstructor()
             ->onlyMethods([])
-            ->getMock();
+            ->getStub();
 
         $leagueRepoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueRepository');
         $leagueRepoProp->setValue($service, $leagueRepo);

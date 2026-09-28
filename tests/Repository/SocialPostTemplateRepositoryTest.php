@@ -14,7 +14,7 @@ class SocialPostTemplateRepositoryTest extends KernelTestCase
 {
     public function testFindAllOrderedOrdersByCategoryThenPlatform(): void
     {
-        $query = $this->createMock(\Doctrine\ORM\Query::class);
+        $query = $this->createStub(\Doctrine\ORM\Query::class);
         $query->method('getResult')->willReturn([]);
 
         $qb = $this->createMock(\Doctrine\ORM\QueryBuilder::class);

@@ -2,7 +2,6 @@
 
 namespace App\Repository;
 
-use App\Entity\Guardian;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
@@ -238,35 +237,6 @@ class PlayerRepository extends ServiceEntityRepository
         }
 
         return $qb->getQuery()->getResult();
-    }
-
-    /**
-     * Bulk-delete players by UUID array. Used after world-init dispatch.
-     * Guardians referencing these players are deleted first to satisfy the FK constraint.
-     * @param string[] $ids
-     */
-    public function deleteByIds(array $ids): void
-    {
-        if (empty($ids)) {
-            return;
-        }
-
-        // Delete guardians first — DQL bulk DELETE bypasses Doctrine cascade,
-        // so the DB FK (guardian.player_id → player.id) must be cleared manually.
-        $this->getEntityManager()
-            ->createQueryBuilder()
-            ->delete(Guardian::class, 'g')
-            ->where('g.player IN (:ids)')
-            ->setParameter('ids', $ids)
-            ->getQuery()
-            ->execute();
-
-        $this->createQueryBuilder('p')
-            ->delete()
-            ->where('p.id IN (:ids)')
-            ->setParameter('ids', $ids)
-            ->getQuery()
-            ->execute();
     }
 
     /**

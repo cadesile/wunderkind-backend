@@ -11,7 +11,7 @@ class ClubLeagueFieldsTest extends TestCase
 {
     public function testDefaultValues(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test FC', $user);
 
         $this->assertNull($club->getCurrentLeague());
@@ -20,7 +20,7 @@ class ClubLeagueFieldsTest extends TestCase
 
     public function testSetCurrentLeague(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test FC', $user);
         $league  = new League('EN', 8, 'League 8');
 
@@ -33,7 +33,7 @@ class ClubLeagueFieldsTest extends TestCase
 
     public function testSetCurrentSeason(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test FC', $user);
 
         $club->setCurrentSeason(3);

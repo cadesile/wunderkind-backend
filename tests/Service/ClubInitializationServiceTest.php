@@ -12,7 +12,7 @@ class ClubInitializationServiceTest extends TestCase
 {
     public function testNewClubReceivesPaName(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test Club', $user);
 
         // PA name should be null until explicitly set
@@ -24,7 +24,7 @@ class ClubInitializationServiceTest extends TestCase
 
     public function testManagerTraitsAreClampedAtBoundaries(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test Club', $user);
 
         $club->setManagerTemperament(150);
@@ -39,7 +39,7 @@ class ClubInitializationServiceTest extends TestCase
 
     public function testManagerTraitsDefaultToFifty(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test Club', $user);
 
         $this->assertSame(50, $club->getManagerTemperament());

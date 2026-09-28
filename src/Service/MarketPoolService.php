@@ -26,7 +26,6 @@ use App\Repository\ScoutRepository;
 use App\Repository\SponsorRepository;
 use App\Repository\StaffRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use App\Service\WorldInitializationService;
 
 class MarketPoolService
 {
@@ -146,7 +145,9 @@ class MarketPoolService
         private readonly PoolConfigRepository   $poolConfigRepo,
         private readonly \App\Repository\GameConfigRepository $gameConfigRepo,
         private readonly PlayerGenerationService $playerGen,
-        private readonly WorldInitializationService $worldInitializationService,
+        private readonly WorldPackSnapshotBuilder $snapshotBuilder,
+        private readonly StaffGenerationService $staffGen,
+        private readonly ScoutGenerationService $scoutGen,
     ) {}
 
     // ── Generate ─────────────────────────────────────────────────────────────
@@ -228,41 +229,10 @@ class MarketPoolService
     /** @return Staff[] */
     public function generateStaffForRole(StaffRole $role, int $count, ?string $nationality = null): array
     {
-        $cfg   = $this->poolConfigRepo->getConfig();
         $staff = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $ability        = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
-            $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();
-            $name           = $this->nameGenerator->generateName($nat);
-            [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
-
-            $member = new Staff(
-                firstName: $first,
-                lastName:  $last,
-                role:      $role,
-            );
-
-            $member->setNationality($nat);
-            $member->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
-            $member->setCoachingAbility($ability);
-            $member->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
-            $member->setSpecialisms(
-                $role === StaffRole::MANAGER
-                    ? $this->generateManagerSpecialisms()
-                    : $this->generateSpecialisms()
-            );
-
-            $multipliers = $this->getWageMultiplier($ability);
-            $baseSalary = match ($role) {
-                StaffRole::COACH                => random_int(2000, 8000),
-                StaffRole::MANAGER              => random_int(10000, 30000),
-                StaffRole::DIRECTOR_OF_FOOTBALL => random_int(12000, 35000),
-                StaffRole::FACILITY_MANAGER     => random_int(3000, 8500),
-                StaffRole::CHAIRMAN             => random_int(20000, 60000),
-                default                         => random_int(2000, 8000),
-            };
-            $member->setWeeklySalary((int) ($baseSalary * $multipliers['staff']));
+            $member = $this->staffGen->build($role, $nationality);
 
             $this->em->persist($member);
             $staff[] = $member;
@@ -280,26 +250,10 @@ class MarketPoolService
     /** @return Scout[] */
     public function generateScouts(int $count, ?string $nationality = null): array
     {
-        $cfg    = $this->poolConfigRepo->getConfig();
         $scouts = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $age        = random_int($cfg->getScoutAgeMin(), $cfg->getScoutAgeMax());
-            $experience = random_int($cfg->getScoutExperienceMin(), $cfg->getScoutExperienceMax());
-            $scoutNat   = $nationality ?? $this->nameGenerator->getRandomNationality();
-            $scoutName  = $this->nameGenerator->generateName($scoutNat);
-
-            $scout = new Scout($scoutName);
-            $scout->setDob($this->dobFromAge($age));
-            $scout->setNationality($scoutNat);
-            $scout->setExperience($experience);
-            $scout->setJudgements([
-                'potential'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-                'technical'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-                'physical'    => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-                'mental'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-                'personality' => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-            ]);
+            $scout = $this->scoutGen->build($nationality);
 
             $this->em->persist($scout);
             $scouts[] = $scout;
@@ -456,14 +410,14 @@ class MarketPoolService
         $now = new \DateTimeImmutable();
 
         if ($entity instanceof Player) {
-            $snapshot = $this->worldInitializationService->buildPlayerSnapshot($entity);
+            $snapshot = $this->snapshotBuilder->buildPlayerSnapshot($entity);
             $this->em->remove($entity);
             $this->em->flush();
             return $snapshot;
         }
 
         if ($entity instanceof Staff) {
-            $snapshot = $this->worldInitializationService->buildStaffSnapshot($entity);
+            $snapshot = $this->snapshotBuilder->buildStaffSnapshot($entity);
             $this->em->remove($entity);
             $this->em->flush();
             return $snapshot;
@@ -762,35 +716,5 @@ class MarketPoolService
         }
 
         return $attrs;
-    }
-
-    /**
-     * Generate 1–2 random coaching specialisms.
-     * 40% chance single specialism, 60% chance dual. Values 50–90.
-     */
-    private function generateSpecialisms(): array
-    {
-        $keys = self::ATTRIBUTE_KEYS;
-        shuffle($keys);
-        $count       = random_int(1, 100) <= 40 ? 1 : 2;
-        $specialisms = [];
-        foreach (array_slice($keys, 0, $count) as $key) {
-            $specialisms[$key] = random_int(50, 90);
-        }
-        return $specialisms;
-    }
-
-    private const MANAGER_PLAYING_STYLES = ['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'];
-    private const MANAGER_FORMATIONS     = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '5-3-2', '4-5-1', '5-4-1'];
-
-    /**
-     * Generate manager-specific specialisms: a preferred playing style and formation.
-     */
-    private function generateManagerSpecialisms(): array
-    {
-        return [
-            'playingStyle' => $this->pick(self::MANAGER_PLAYING_STYLES),
-            'formation'    => $this->pick(self::MANAGER_FORMATIONS),
-        ];
     }
 }

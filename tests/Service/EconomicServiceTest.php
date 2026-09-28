@@ -24,11 +24,11 @@ class EconomicServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $em              = $this->createMock(EntityManagerInterface::class);
-        $inboxService    = $this->createMock(InboxService::class);
-        $investorRepo    = $this->createMock(InvestorRepository::class);
-        $sponsorRepo     = $this->createMock(SponsorRepository::class);
-        $gameConfigRepo  = $this->createMock(GameConfigRepository::class);
+        $em              = $this->createStub(EntityManagerInterface::class);
+        $inboxService    = $this->createStub(InboxService::class);
+        $investorRepo    = $this->createStub(InvestorRepository::class);
+        $sponsorRepo     = $this->createStub(SponsorRepository::class);
+        $gameConfigRepo  = $this->createStub(GameConfigRepository::class);
 
         $this->service = new EconomicService($em, $inboxService, $investorRepo, $sponsorRepo, $gameConfigRepo);
     }

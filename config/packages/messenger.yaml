@@ -16,12 +16,23 @@ framework:
             # Same underlying `messenger_messages` table as `async` — Doctrine transports are
             # differentiated by `queue_name`, not by table, so this needs no separate migration.
             failed: 'doctrine://default?queue_name=failed'
+            # Deliberately separate from `async`: World Pack Cache regeneration can queue 100+
+            # club-generation messages per country, each doing real DB-heavy generation work.
+            # Sharing one queue with push notifications meant a large regenerate (or a backlog
+            # of failing/retrying push sends) delayed the other — drained by its own consumer
+            # (docker/worldpack-consume.sh), not messenger-consume.sh, so the two make
+            # independent progress. See docs/deploy/hetzner.md's Cron section.
+            worldpack: 'doctrine://default?queue_name=worldpack'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
             'App\Message\SendPushNotificationMessage': async
             'App\Message\ResolveAdminMessageAudienceForPushMessage': async
             'App\Message\ResolveNewCompetitionAudienceForPushMessage': async
+            # Admin-triggered World Pack Cache regeneration — see WorldPackGenerationOrchestrator.
+            # Own transport (`worldpack`, not `async`) — see the transport comment above.
+            'App\Message\WorldPack\WarmWorldPackTierMessage': worldpack
+            'App\Message\WorldPack\WarmWorldPackClubMessage': worldpack
 
 when@test:
     framework:
@@ -31,3 +42,4 @@ when@test:
                 # inspected via InMemoryTransport::getSent() instead of a real consumer.
                 async: 'in-memory://'
                 failed: 'in-memory://'
+                worldpack: 'in-memory://'

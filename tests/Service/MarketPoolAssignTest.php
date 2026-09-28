@@ -21,38 +21,42 @@ use App\Repository\StaffRepository;
 use App\Service\MarketPoolService;
 use App\Service\NameGeneratorService;
 use App\Service\PlayerGenerationService;
-use App\Service\WorldInitializationService;
+use App\Service\ScoutGenerationService;
+use App\Service\StaffGenerationService;
+use App\Service\WorldPackSnapshotBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
 class MarketPoolAssignTest extends TestCase
 {
-    private function makeService(EntityManagerInterface $em, WorldInitializationService $worldInit): MarketPoolService
+    private function makeService(EntityManagerInterface $em, WorldPackSnapshotBuilder $snapshotBuilder): MarketPoolService
     {
         return new MarketPoolService(
             $em,
-            $this->createMock(PlayerRepository::class),
-            $this->createMock(StaffRepository::class),
-            $this->createMock(ScoutRepository::class),
-            $this->createMock(AgentRepository::class),
-            $this->createMock(SponsorRepository::class),
-            $this->createMock(InvestorRepository::class),
-            $this->createMock(NameGeneratorService::class),
-            $this->createMock(PoolConfigRepository::class),
-            $this->createMock(GameConfigRepository::class),
-            $this->createMock(PlayerGenerationService::class),
-            $worldInit,
+            $this->createStub(PlayerRepository::class),
+            $this->createStub(StaffRepository::class),
+            $this->createStub(ScoutRepository::class),
+            $this->createStub(AgentRepository::class),
+            $this->createStub(SponsorRepository::class),
+            $this->createStub(InvestorRepository::class),
+            $this->createStub(NameGeneratorService::class),
+            $this->createStub(PoolConfigRepository::class),
+            $this->createStub(GameConfigRepository::class),
+            $this->createStub(PlayerGenerationService::class),
+            $snapshotBuilder,
+            $this->createStub(StaffGenerationService::class),
+            $this->createStub(ScoutGenerationService::class),
         );
     }
 
     public function testPlayerAssignDeletesEntityAndReturnsSnapshot(): void
     {
-        $player   = $this->createMock(Player::class);
-        $club     = $this->createMock(Club::class);
+        $player   = $this->createStub(Player::class);
+        $club     = $this->createStub(Club::class);
         $snapshot = ['id' => 'uuid-player', 'firstName' => 'Test'];
 
-        $worldInit = $this->createMock(WorldInitializationService::class);
-        $worldInit->expects($this->once())
+        $snapshotBuilder = $this->createMock(WorldPackSnapshotBuilder::class);
+        $snapshotBuilder->expects($this->once())
             ->method('buildPlayerSnapshot')
             ->with($player)
             ->willReturn($snapshot);
@@ -61,7 +65,7 @@ class MarketPoolAssignTest extends TestCase
         $em->expects($this->once())->method('remove')->with($player);
         $em->expects($this->once())->method('flush');
 
-        $service = $this->makeService($em, $worldInit);
+        $service = $this->makeService($em, $snapshotBuilder);
         $result  = $service->assignToClub($player, $club);
 
         $this->assertSame($snapshot, $result);
@@ -69,12 +73,12 @@ class MarketPoolAssignTest extends TestCase
 
     public function testStaffAssignDeletesEntityAndReturnsSnapshot(): void
     {
-        $staff    = $this->createMock(Staff::class);
-        $club     = $this->createMock(Club::class);
+        $staff    = $this->createStub(Staff::class);
+        $club     = $this->createStub(Club::class);
         $snapshot = ['id' => 'uuid-staff', 'role' => 'coach'];
 
-        $worldInit = $this->createMock(WorldInitializationService::class);
-        $worldInit->expects($this->once())
+        $snapshotBuilder = $this->createMock(WorldPackSnapshotBuilder::class);
+        $snapshotBuilder->expects($this->once())
             ->method('buildStaffSnapshot')
             ->with($staff)
             ->willReturn($snapshot);
@@ -83,7 +87,7 @@ class MarketPoolAssignTest extends TestCase
         $em->expects($this->once())->method('remove')->with($staff);
         $em->expects($this->once())->method('flush');
 
-        $service = $this->makeService($em, $worldInit);
+        $service = $this->makeService($em, $snapshotBuilder);
         $result  = $service->assignToClub($staff, $club);
 
         $this->assertSame($snapshot, $result);
@@ -91,14 +95,14 @@ class MarketPoolAssignTest extends TestCase
 
     public function testScoutAssignIsNoOpAndReturnsNull(): void
     {
-        $scout = $this->createMock(Scout::class);
-        $club  = $this->createMock(Club::class);
+        $scout = $this->createStub(Scout::class);
+        $club  = $this->createStub(Club::class);
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->never())->method('remove');
         $em->expects($this->never())->method('flush');
 
-        $service = $this->makeService($em, $this->createMock(WorldInitializationService::class));
+        $service = $this->makeService($em, $this->createStub(WorldPackSnapshotBuilder::class));
         $result  = $service->assignToClub($scout, $club);
 
         $this->assertNull($result);
@@ -111,12 +115,12 @@ class MarketPoolAssignTest extends TestCase
         $sponsor->expects($this->once())->method('setClub');
         $sponsor->expects($this->once())->method('setAssignedAt');
 
-        $club = $this->createMock(Club::class);
+        $club = $this->createStub(Club::class);
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->once())->method('flush');
 
-        $service = $this->makeService($em, $this->createMock(WorldInitializationService::class));
+        $service = $this->makeService($em, $this->createStub(WorldPackSnapshotBuilder::class));
         $result  = $service->assignToClub($sponsor, $club);
 
         $this->assertNull($result);

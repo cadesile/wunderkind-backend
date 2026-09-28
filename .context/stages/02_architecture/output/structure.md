@@ -96,8 +96,12 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `docker/nginx.conf` and `docker/supervisord.conf`;
   `ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]`,
   `CMD ["/usr/bin/supervisord", ...]`. Bakes a busybox cron table into the
-  image (`/var/spool/cron/crontabs/root`) with 11 scheduled jobs:
-  `pool-warm.sh`/`worldpack-warm.sh` (every 6h),
+  image (`/var/spool/cron/crontabs/root`) with 10 scheduled jobs
+  (`pool-warm.sh`/`worldpack-warm.sh`, every 6h, removed 2026-09-28 — World
+  Pack Cache generation no longer draws from the shared pool, so there's
+  nothing left for a scheduled top-up to feed; `app:pool:warm`/
+  `app:worldpack:warm` remain real, manually-runnable commands, just no
+  longer scheduled — see `docs/deploy/hetzner.md`'s Cron section):
   `leaderboards-generate.sh` and `competition-send-round-reminders.sh`
   (every 5 min — the latter pushes `ROUND_RESOLVING_SOON` to `DRAWN`
   rounds nearing `matchesResolveAt`, see `CompetitionRoundReminderService`),
@@ -112,10 +116,14 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `CompetitionResultsService` in `04_interfaces/output/services.md`),
   `competition-auto-fill-spoof-entrants.sh`
   (dev/testing convenience added 2026-09-20 — see
-  `CompetitionAutoFillService`), and `messenger-consume.sh` (all four
-  every 1 min — the finest auto-fill delay is 5 min, and the last one
-  drains the async Messenger transport for push notifications, added
-  2026-09-19).
+  `CompetitionAutoFillService`), `messenger-consume.sh`, and
+  `worldpack-consume.sh` (all five every 1 min — the finest auto-fill delay
+  is 5 min; the last two drain separate Messenger transports, `async` for
+  push notifications (added 2026-09-19) and `worldpack` for World Pack Cache
+  tier/club generation (added 2026-09-28, split out from `async` once a
+  country regenerate's 100+ DB-heavy club-generation messages started
+  delaying push delivery by sharing one queue — see
+  `config/packages/messenger.yaml`).
 - **`docker/supervisord.conf`** — runs `php-fpm`, `nginx`, and `crond`
   together inside the container, all logging to stdout/stderr.
 - **`docker-compose.dev.yml` / `docker-compose.prod.yml`** — near-identical

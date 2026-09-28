@@ -6,12 +6,7 @@ use App\Entity\Agent;
 use App\Entity\Club;
 use App\Entity\League;
 use App\Entity\NpcClub;
-use App\Entity\Player;
-use App\Entity\Scout;
-use App\Entity\Staff;
 use App\Entity\User;
-use App\Enum\PlayerPosition;
-use App\Enum\StaffRole;
 use App\Repository\StarterConfigRepository;
 use App\Service\WorldInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -20,17 +15,18 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 /**
  * End-to-end proof that a generated world pack (buildTierPack) associates agents
  * with NPC-club players and that one agent is shared across 2+ players
- * (many-to-one). Uses a synthetic country so nationality resolves to the raw
- * string (countryToNationality falls back to the country) and the seed is
- * self-contained.
+ * (many-to-one). Uses a real country (EN) since world-pack generation now builds
+ * every player/staff/scout fresh via NameGeneratorService, which requires a
+ * recognised nationality — unlike the old pool-draw path, there's no longer a
+ * "fall back to whatever's in the pool" safety net for an unmapped nationality.
  */
 class WorldInitializationTierPackAgentTest extends KernelTestCase
 {
-    private const COUNTRY = 'zx'; // synthetic 2-letter code (country is a varchar(2) ISO code); no nationality mapping → falls back to 'zx'
+    private const COUNTRY = 'EN'; // real country → nationality 'English', recognised by NameGeneratorService
     private const TIER    = 8; // tier 8 → ABILITY_RANGES fallback [10,25]
 
     private EntityManagerInterface $em;
-    /** @var object[] entities to remove in tearDown (players/staff are deleted by buildTierPack itself) */
+    /** @var object[] entities to remove in tearDown */
     private array $cleanup = [];
 
     protected function setUp(): void
@@ -63,22 +59,6 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
             $npc->setLeague($league);
             $this->em->persist($npc);
             $this->track($npc);
-        }
-
-        // Ample pool players (15 per position) with ability inside [10,25] and the
-        // synthetic nationality, so per-club position draws never run short.
-        foreach (PlayerPosition::cases() as $position) {
-            for ($i = 0; $i < 15; $i++) {
-                $p = new Player('Pool', $position->value . $i, new \DateTimeImmutable('-17 years'), self::COUNTRY, $position);
-                $p->setCurrentAbility(17);
-                $p->setPotential(25);
-                $this->em->persist($p); // prePersist fills appearance
-            }
-        }
-
-        // One of each staff role the tier pack draws.
-        foreach ([StaffRole::MANAGER, StaffRole::COACH, StaffRole::CHAIRMAN] as $role) {
-            $this->em->persist(new Staff('Staff', $role->value, $role));
         }
 
         // A LARGE agent pool (50) — the world pack must NOT spread players across all
@@ -158,17 +138,6 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
         $this->em->persist($npc);
         $this->track($npc);
 
-        foreach (PlayerPosition::cases() as $position) {
-            $p = new Player('Pool', $position->value, new \DateTimeImmutable('-17 years'), self::COUNTRY, $position);
-            $p->setCurrentAbility(17);
-            $p->setPotential(25);
-            $this->em->persist($p);
-        }
-
-        foreach ([StaffRole::MANAGER, StaffRole::COACH, StaffRole::CHAIRMAN] as $role) {
-            $this->em->persist(new Staff('Staff', $role->value, $role));
-        }
-
         $user = new User('citysize-tierpack-test@example.com');
         $user->setPassword('x');
         $this->em->persist($user);
@@ -227,21 +196,6 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
             $npc->setLeague($league);
             $this->em->persist($npc);
             $this->track($npc);
-
-            foreach (PlayerPosition::cases() as $position) {
-                $p = new Player('Pool', $position->value, new \DateTimeImmutable('-17 years'), self::COUNTRY, $position);
-                $p->setCurrentAbility(17);
-                $p->setPotential(25);
-                $this->em->persist($p);
-            }
-
-            foreach ([StaffRole::MANAGER, StaffRole::COACH, StaffRole::CHAIRMAN, StaffRole::DIRECTOR_OF_FOOTBALL, StaffRole::FACILITY_MANAGER] as $role) {
-                $this->em->persist(new Staff('Staff', $role->value, $role));
-            }
-
-            for ($i = 0; $i < 2; $i++) {
-                $this->em->persist(new Scout("Scout $i"));
-            }
 
             $user = new User('staffscout-tierpack-test@example.com');
             $user->setPassword('x');
