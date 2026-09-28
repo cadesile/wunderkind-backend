@@ -97,8 +97,8 @@ GET /api/leaderboard/{category}?period=all-time&page=1&pageSize=20
   "category": "golden_boot",
   "period": "all-time",
   "entries": [
-    { "rank": 1, "clubId": "019f3282-491b-75c7-9ea7-c7f84712b2b1", "clubName": "Fixture Club A", "score": 24, "displayLabel": "Zayden Sloane" },
-    { "rank": 2, "clubId": "019f3282-491f-7479-847b-27624e80a662", "clubName": "Fixture Club B", "score": 15, "displayLabel": "Marcelo Pereira" }
+    { "rank": 1, "clubId": "019f3282-491b-75c7-9ea7-c7f84712b2b1", "clubName": "Fixture Club A", "score": 24, "displayLabel": "Zayden Sloane", "homeKitConfig": null, "awayKitConfig": null, "badgeConfig": null },
+    { "rank": 2, "clubId": "019f3282-491f-7479-847b-27624e80a662", "clubName": "Fixture Club B", "score": 15, "displayLabel": "Marcelo Pereira", "homeKitConfig": null, "awayKitConfig": null, "badgeConfig": null }
   ],
   "total": 5,
   "page": 1,
@@ -114,6 +114,7 @@ GET /api/leaderboard/{category}?period=all-time&page=1&pageSize=20
 | `entries[].clubName` | string | |
 | `entries[].score` | int | Raw value — see the per-category table above for units. `career_earnings`, `transfer_record` and `transfer_spend` are **pence/cents**, divide by 100 before formatting as currency. |
 | `entries[].displayLabel` | string \| null | Only populated for `golden_boot`, `playmaker`, `iron_man`, `transfer_record`, `transfer_spend` |
+| `entries[].homeKitConfig` / `awayKitConfig` / `badgeConfig` | object \| null | That club's own kit/badge identity, set via `POST /api/club/kit-identity` — see `docs/api/club-kit-identity.md`. `null` until the club customizes it. |
 | `total` | int | Total clubs ranked in this category/period (across all pages) |
 | `hasNextPage` | bool | Whether `page + 1` has more results |
 

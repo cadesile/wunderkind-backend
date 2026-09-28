@@ -66,7 +66,12 @@ migrations are the change log (see `migrations.md`).
   `currentSeason:int(1)`, `formation:Formation(enum, F_442)`,
   `fanCount/fanSentiment/fanMorale`, `lastWeeklyAttendance/
   totalSeasonAttendance`, `isSpoof:bool(false)` (added by migration
-  `Version20260918205514`). Relationships: `ManyToOne` → `User` (not
+  `Version20260918205514`), `homeKitConfig/awayKitConfig/badgeConfig:?array`
+  (added by `Version20260928200000`) — the chairman's own kit+badge identity,
+  same shape as `NpcClub.identity` but three separate nullable properties;
+  client-supplied verbatim via `GET`/`POST /api/club/kit-identity`, no
+  server-side validation, `null` until customized (no auto-generation, unlike
+  `NpcClub.identity`) — see `docs/api/club-kit-identity.md`. Relationships: `ManyToOne` → `User` (not
   nullable); `OneToMany` → `transfers`, `syncRecords` (cascade
   persist/remove), `leaderboardEntries` (cascade persist/remove),
   `investors`, `sponsors`, `inboxMessages` (cascade persist/remove);

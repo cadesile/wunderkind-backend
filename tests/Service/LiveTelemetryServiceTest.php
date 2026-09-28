@@ -290,11 +290,41 @@ class LiveTelemetryServiceTest extends TestCase
         $merged = LiveTelemetryService::mergeEventsByRecency($ledgerEvents);
 
         $this->assertSame([
-            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta',
+            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge',
         ], array_keys($merged[0]));
         $this->assertSame('[BOARDROOM // OUTLAY]', $merged[0]['categoryLabel']);
         $this->assertSame('Ledger Club', $merged[0]['club']);
         $this->assertSame('£5', $merged[0]['amountExact']);
+        $this->assertSame(['home' => null, 'away' => null, 'badge' => null], $merged[0]['clubBadge']);
+    }
+
+    public function testEventsCarryTheClubsKitAndBadgeConfigWhenPresentOnTheRow(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            [
+                'serverTimestamp' => $now,
+                'clubName'        => 'Toro SD',
+                'homeKitConfig'   => ['kit' => 'stripes', 'primary' => '#c8202f', 'secondary' => '#f4f3ee'],
+                'awayKitConfig'   => ['kit' => 'hoops', 'primary' => '#000000', 'secondary' => '#ffffff'],
+                'badgeConfig'     => ['badgeShape' => 'shield', 'initials' => 'TSD'],
+                'payload'         => ['ledger' => [
+                    ['category' => 'wages', 'amount' => -500, 'description' => 'Week 1 payroll'],
+                ]],
+            ],
+        ];
+
+        $events = LiveTelemetryService::buildLedgerEvents($syncRows, $now, 5);
+
+        $this->assertSame(
+            ['kit' => 'stripes', 'primary' => '#c8202f', 'secondary' => '#f4f3ee'],
+            $events[0]['clubBadge']['home'],
+        );
+        $this->assertSame(
+            ['kit' => 'hoops', 'primary' => '#000000', 'secondary' => '#ffffff'],
+            $events[0]['clubBadge']['away'],
+        );
+        $this->assertSame(['badgeShape' => 'shield', 'initials' => 'TSD'], $events[0]['clubBadge']['badge']);
     }
 
     public function testLedgerEventsExcludeInvestorIncomeAndFanInitiativeCategories(): void

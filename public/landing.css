@@ -374,6 +374,14 @@
         .terminal-feed-item.cat-outlay        .terminal-feed-category { color: var(--text-muted); }
         .terminal-feed-item.cat-attendance    .terminal-feed-category { color: var(--mint-dim); }
         .terminal-feed-line { display: block; }
+        .terminal-feed-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+        .terminal-feed-badge svg { display: inline-block; vertical-align: middle; image-rendering: pixelated; }
         .terminal-feed-time {
             color: var(--mint);
             font-weight: bold;
@@ -1258,6 +1266,16 @@
         }
         .incident-close:hover { border-color: var(--gold); color: var(--gold); }
         .incident-body { padding: 24px; overflow-y: auto; }
+        .incident-crest {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .incident-crest svg { display: block; image-rendering: pixelated; }
         .incident-row {
             display: flex;
             justify-content: space-between;
@@ -1680,6 +1698,16 @@
             color: var(--gold);
             min-width: 28px;
         }
+        /* Club badge + kit sprite icons, composed client-side by composeKitSvg()
+           (public/assets/kit-compositor.js) from the row's homeKitConfig/badgeConfig —
+           read-only, no editing controls. */
+        .lbg-row-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .lbg-row-badge svg { display: block; image-rendering: pixelated; }
         .lbg-row.rank-1 .lbg-row-rank { color: var(--gold); text-shadow: 0 0 10px rgba(245,200,66,.5); }
         .lbg-row.rank-2 .lbg-row-rank { color: #cfd6c9; }
         .lbg-row.rank-3 .lbg-row-rank { color: #c98a4b; }

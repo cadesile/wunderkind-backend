@@ -5,6 +5,29 @@
    Plain ES5-compatible DOM code, no dependencies, no build step.
    ══════════════════════════════════════════════════════════════════════ */
 
+// ── Club kit/badge rendering (shared by the ticker, incident modal, and leaderboard) ──
+//
+// Read-only display, no editing controls — reuses composeKitSvg() from
+// public/assets/kit-compositor.js verbatim (must load before this file, see
+// base.html.twig), the same pixel-sprite renderer the admin kit-identity widget
+// uses. clubBadge is always {home: ?object, away: ?object, badge: ?object} — home
+// and badge configs are merged into one object since composeKitSvg() only reads
+// the keys relevant to the type ('kit' or 'badge') it's asked to draw; a null/
+// missing config still renders composeKitSvg's own built-in defaults, so every
+// club shows *something* even before it customizes its identity.
+function clubBadgeIconsHtml(clubBadge) {
+    if (typeof composeKitSvg !== 'function') return '';
+
+    var cfg = {};
+    var home = (clubBadge && clubBadge.home) || {};
+    var badge = (clubBadge && clubBadge.badge) || {};
+    var key;
+    for (key in home) if (Object.prototype.hasOwnProperty.call(home, key)) cfg[key] = home[key];
+    for (key in badge) if (Object.prototype.hasOwnProperty.call(badge, key)) cfg[key] = badge[key];
+
+    return composeKitSvg(cfg, 'badge', null, 1.4) + composeKitSvg(cfg, 'kit', 'small', 1.4);
+}
+
 // ── Boardroom Incident & Consequence Feed (ticker + incident inspector modal) ──
 (function () {
     var items = document.querySelectorAll('.terminal-feed-item');
@@ -32,9 +55,21 @@
 
     startRotation();
 
+    // Render each ticker item's kit+badge once up front — cheap (≤18 items) and
+    // avoids re-composing the same SVG every time the rotation reveals a row.
+    for (var badgeIdx = 0; badgeIdx < items.length; badgeIdx++) {
+        var badgeSlot = items[badgeIdx].querySelector('.terminal-feed-badge');
+        if (!badgeSlot) continue;
+        var rawBadge = items[badgeIdx].getAttribute('data-club-badge');
+        var parsedBadge = null;
+        try { parsedBadge = rawBadge ? JSON.parse(rawBadge) : null; } catch (e) { parsedBadge = null; }
+        badgeSlot.innerHTML = clubBadgeIconsHtml(parsedBadge);
+    }
+
     // ── Incident inspector modal ──
     var overlay      = document.getElementById('incident-overlay');
     var closeBtn      = document.getElementById('incident-close');
+    var crestEl       = document.getElementById('incident-crest');
     var categoryEl    = document.getElementById('incident-category');
     var clubEl        = document.getElementById('incident-club');
     var timestampEl   = document.getElementById('incident-timestamp');
@@ -94,6 +129,11 @@
         } catch (e) {
             meta = {};
         }
+
+        var rawClubBadge = item.getAttribute('data-club-badge');
+        var clubBadge = null;
+        try { clubBadge = rawClubBadge ? JSON.parse(rawClubBadge) : null; } catch (e) { clubBadge = null; }
+        if (crestEl) crestEl.innerHTML = clubBadgeIconsHtml(clubBadge);
 
         categoryEl.textContent = item.getAttribute('data-category-label') || "CHAIRMAN'S DISPATCH";
         clubEl.textContent = item.getAttribute('data-club') || '—';
@@ -550,11 +590,15 @@ function openBetaModal() {
             li.className = 'lbg-row rank-' + entry.rank;
             li.innerHTML =
                 '<span class="lbg-row-rank">' + String(entry.rank).padStart(2, '0') + '</span>' +
+                '<span class="lbg-row-badge" aria-hidden="true"></span>' +
                 '<span class="lbg-row-main">' +
                     '<span class="lbg-row-name"></span>' +
                     (entry.displayLabel ? '<span class="lbg-row-tag"></span>' : '') +
                 '</span>' +
                 '<span class="lbg-row-value"></span>';
+            li.querySelector('.lbg-row-badge').innerHTML = clubBadgeIconsHtml({
+                home: entry.homeKitConfig, away: entry.awayKitConfig, badge: entry.badgeConfig,
+            });
             li.querySelector('.lbg-row-name').textContent = entry.clubName;
             if (entry.displayLabel) {
                 li.querySelector('.lbg-row-tag').textContent = entry.displayLabel;
