@@ -5,12 +5,13 @@
    Plain ES5-compatible DOM code, no dependencies, no build step.
    ══════════════════════════════════════════════════════════════════════ */
 
-// ── Chairman's Terminal feed ─────────────────────────────────────────────────
+// ── Boardroom Incident & Consequence Feed (ticker + incident inspector modal) ──
 (function () {
     var items = document.querySelectorAll('.terminal-feed-item');
     if (!items.length) return;
 
     var current = 0;
+    var rotateTimer = null;
 
     function next() {
         items[current].classList.remove('active');
@@ -18,7 +19,133 @@
         items[current].classList.add('active');
     }
 
-    setInterval(next, 4500);
+    function startRotation() {
+        if (rotateTimer !== null) return;
+        rotateTimer = setInterval(next, 4500);
+    }
+
+    function stopRotation() {
+        if (rotateTimer === null) return;
+        clearInterval(rotateTimer);
+        rotateTimer = null;
+    }
+
+    startRotation();
+
+    // ── Incident inspector modal ──
+    var overlay      = document.getElementById('incident-overlay');
+    var closeBtn      = document.getElementById('incident-close');
+    var categoryEl    = document.getElementById('incident-category');
+    var clubEl        = document.getElementById('incident-club');
+    var timestampEl   = document.getElementById('incident-timestamp');
+    var amountRowEl   = document.getElementById('incident-amount-row');
+    var amountEl      = document.getElementById('incident-amount');
+    var detailEl      = document.getElementById('incident-detail');
+    var metaExtraEl   = document.getElementById('incident-meta-extra');
+    var ctaLink       = document.getElementById('terminal-cta');
+
+    if (!overlay || !closeBtn) return;
+
+    function formatTimestamp(iso) {
+        if (!iso) return '—';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleString();
+    }
+
+    function renderMetaExtra(meta) {
+        metaExtraEl.innerHTML = '';
+        if (!meta || typeof meta !== 'object') return;
+
+        var frictions = meta.frictions;
+        if (frictions && frictions.length) {
+            var frictionTitle = document.createElement('div');
+            frictionTitle.className = 'incident-meta-title';
+            frictionTitle.textContent = 'AFFECTED BONDS';
+            metaExtraEl.appendChild(frictionTitle);
+
+            for (var i = 0; i < frictions.length; i++) {
+                var f = frictions[i];
+                var row = document.createElement('div');
+                row.className = 'incident-meta-pair';
+                row.textContent = f.a + ' vs ' + f.b + ' (Bond ' + (f.delta > 0 ? '+' : '') + f.delta + ')';
+                metaExtraEl.appendChild(row);
+            }
+            return;
+        }
+
+        var skip = { frictions: 1, bonds: 1, counterparty: 1, equityPercent: 1 };
+        for (var key in meta) {
+            if (!Object.prototype.hasOwnProperty.call(meta, key) || skip[key]) continue;
+            var value = meta[key];
+            if (value === null || value === undefined || value === '') continue;
+
+            var line = document.createElement('div');
+            line.className = 'incident-meta-line';
+            line.textContent = key + ': ' + value;
+            metaExtraEl.appendChild(line);
+        }
+    }
+
+    function openIncident(item) {
+        var meta = {};
+        try {
+            meta = JSON.parse(item.getAttribute('data-meta') || '{}');
+        } catch (e) {
+            meta = {};
+        }
+
+        categoryEl.textContent = item.getAttribute('data-category-label') || "CHAIRMAN'S DISPATCH";
+        clubEl.textContent = item.getAttribute('data-club') || '—';
+        timestampEl.textContent = formatTimestamp(item.getAttribute('data-timestamp'));
+
+        var amount = item.getAttribute('data-amount');
+        if (amount) {
+            amountEl.textContent = amount;
+            amountRowEl.style.display = '';
+        } else {
+            amountRowEl.style.display = 'none';
+        }
+
+        detailEl.textContent = item.getAttribute('data-detail') || '';
+        renderMetaExtra(meta);
+
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        stopRotation();
+        closeBtn.focus();
+    }
+
+    function closeIncident() {
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+        startRotation();
+    }
+
+    for (var idx = 0; idx < items.length; idx++) {
+        (function (item) {
+            item.addEventListener('click', function () { openIncident(item); });
+            item.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openIncident(item);
+                }
+            });
+        }(items[idx]));
+    }
+
+    if (ctaLink) {
+        ctaLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            openIncident(items[current]);
+        });
+    }
+
+    closeBtn.addEventListener('click', closeIncident);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeIncident(); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) closeIncident();
+    });
 }());
 
 // ── Download links ──────────────────────────────────────────────────────────

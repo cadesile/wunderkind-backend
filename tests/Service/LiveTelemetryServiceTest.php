@@ -268,10 +268,367 @@ class LiveTelemetryServiceTest extends TestCase
 
         $merged = LiveTelemetryService::mergeEventsByRecency($pyramidEvents, $ledgerEvents, $attendanceEvents);
 
+        $this->assertSame(['1h ago', '3h ago', '5h ago'], array_column($merged, 'time'));
         $this->assertSame([
-            ['time' => '1h ago', 'text' => 'Ledger Club spent £5: Week 1 payroll'],
-            ['time' => '3h ago', 'text' => 'Pyramid Club won promotion from Tier 2.'],
-            ['time' => '5h ago', 'text' => 'Attendance Club recorded attendance of 1,000!'],
-        ], $merged);
+            'Ledger Club spent £5: Week 1 payroll',
+            'Pyramid Club won promotion from Tier 2.',
+            'Attendance Club recorded attendance of 1,000!',
+        ], array_column($merged, 'text'));
+        $this->assertSame(['OUTLAY', 'PYRAMID', 'ATTENDANCE'], array_column($merged, 'category'));
+    }
+
+    public function testMergedEventsCarryTheEnrichedShapeForModalRendering(): void
+    {
+        $now = new \DateTimeImmutable();
+
+        $ledgerEvents = LiveTelemetryService::buildLedgerEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Ledger Club', 'payload' => ['ledger' => [
+                ['category' => 'wages', 'amount' => -500, 'description' => 'Week 1 payroll'],
+            ]]],
+        ], $now, 5);
+
+        $merged = LiveTelemetryService::mergeEventsByRecency($ledgerEvents);
+
+        $this->assertSame([
+            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta',
+        ], array_keys($merged[0]));
+        $this->assertSame('[BOARDROOM // OUTLAY]', $merged[0]['categoryLabel']);
+        $this->assertSame('Ledger Club', $merged[0]['club']);
+        $this->assertSame('£5', $merged[0]['amountExact']);
+    }
+
+    public function testLedgerEventsExcludeInvestorIncomeAndFanInitiativeCategories(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['ledger' => [
+                ['category' => 'investor_income', 'amount' => -100, 'description' => 'Equity deal'],
+                ['category' => 'fan_initiative', 'amount' => -100, 'description' => 'Fan event'],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildLedgerEvents($syncRows, $now, 5);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testDressingRoomEventsSurfaceResolvedExcursionsWithFriction(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['excursions' => [
+                [
+                    'slug'    => 'escape-room-challenge',
+                    'outcome' => [
+                        'frictionCount' => 3,
+                        'attendeeCount' => 20,
+                        'moraleDelta'   => 5,
+                        'summary'       => 'Submarine Escape Room was soured by 3 fallouts. Morale +5 across 20, 4 relationships strengthened.',
+                        'frictions'     => [
+                            ['playerName' => 'Alfonso Iglesias', 'otherName' => 'Jonay Domínguez', 'delta' => -7],
+                        ],
+                        'bonds' => [],
+                    ],
+                ],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildDressingRoomEvents($syncRows, $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('[DRESSING ROOM // RIFT]', $events[0]['categoryLabel']);
+        $this->assertSame(
+            'Toro SD — Submarine Escape Room was soured by 3 fallouts. Morale +5 across 20, 4 relationships strengthened.',
+            $events[0]['text'],
+        );
+        $this->assertSame(3, $events[0]['meta']['frictionCount']);
+        $this->assertSame(
+            [['a' => 'Alfonso Iglesias', 'b' => 'Jonay Domínguez', 'delta' => -7]],
+            $events[0]['meta']['frictions'],
+        );
+    }
+
+    public function testDressingRoomEventsExcludeExcursionsWithoutFrictionOrUnresolved(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['excursions' => [
+                ['slug' => 'a', 'outcome' => null],
+                ['slug' => 'b', 'outcome' => ['frictionCount' => 0, 'summary' => 'Fine']],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildDressingRoomEvents($syncRows, $now);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testDressingRoomEventsHandleMissingExcursionsKeyGracefully(): void
+    {
+        $events = LiveTelemetryService::buildDressingRoomEvents([
+            ['serverTimestamp' => new \DateTimeImmutable(), 'clubName' => 'Toro SD', 'payload' => []],
+        ], new \DateTimeImmutable());
+
+        $this->assertSame([], $events);
+    }
+
+    public function testDilutionEventsParseEquityPercentAndCrossMatchPromiseAmount(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => [
+                'ledger' => [
+                    ['category' => 'investor_income', 'amount' => 310000000, 'description' => "Bert's Fencing — season 1 payment (5% equity)"],
+                ],
+                'promises' => [
+                    ['type' => 'investment_contract', 'partyA' => ['name' => "Bert's Fencing"], 'offer' => ['type' => 'seasonal_payment', 'amountPence' => 3100000, 'repeatSeasons' => 3]],
+                ],
+            ]],
+        ];
+
+        $events = LiveTelemetryService::buildDilutionEvents($syncRows, $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame(5, $events[0]['meta']['equityPercent']);
+        $this->assertSame("Bert's Fencing", $events[0]['meta']['counterparty']);
+        $this->assertSame('£31,000', $events[0]['amountExact']);
+    }
+
+    public function testDilutionEventsOmitAmountWhenNoMatchingPromiseFound(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => [
+                'ledger'   => [
+                    ['category' => 'investor_income', 'amount' => 999999999, 'description' => 'Mystery Investor — season 1 payment (10% equity)'],
+                ],
+                'promises' => [],
+            ]],
+        ];
+
+        $events = LiveTelemetryService::buildDilutionEvents($syncRows, $now);
+
+        $this->assertNull($events[0]['amountExact']);
+        $this->assertSame(10, $events[0]['meta']['equityPercent']);
+    }
+
+    public function testDilutionEventsIgnoreNonInvestorIncomeLedgerCategories(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildDilutionEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['ledger' => [
+                ['category' => 'upkeep', 'amount' => -100, 'description' => 'Facility maintenance'],
+            ]]],
+        ], $now);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testCovenantEventsSurfaceActiveLeaguePositionTerminationRisk(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [
+                [
+                    'id'        => 'p1',
+                    'type'      => 'investment_contract',
+                    'status'    => 'active',
+                    'partyA'    => ['name' => "Bert's Fencing"],
+                    'offer'     => ['type' => 'seasonal_payment', 'amountPence' => 3100000, 'repeatSeasons' => 3],
+                    'condition' => ['type' => 'league_position', 'target' => 5],
+                ],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildCovenantEvents($syncRows, $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame("Toro SD: Bert's Fencing covenant voids if league position slips below 5", $events[0]['text']);
+        $this->assertSame('£93,000 total', $events[0]['amountExact']);
+    }
+
+    public function testCovenantEventsExcludeInactiveOrUnrelatedConditionPromises(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [
+                ['id' => 'p1', 'status' => 'voided', 'condition' => ['type' => 'league_position', 'target' => 5]],
+                ['id' => 'p2', 'status' => 'active', 'condition' => ['type' => 'something_else', 'target' => 5]],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildCovenantEvents($syncRows, $now);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testCovenantEventsShowPerWeekAmountForWeeklyPaymentOffers(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [
+                [
+                    'id'        => 'p1',
+                    'status'    => 'active',
+                    'partyA'    => ['name' => 'The County Works'],
+                    'offer'     => ['type' => 'weekly_payment', 'amountPence' => 132024],
+                    'condition' => ['type' => 'tier_reached', 'target' => 8],
+                ],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildCovenantEvents($syncRows, $now);
+
+        $this->assertSame('£1,320/week', $events[0]['amountExact']);
+    }
+
+    public function testTalismanEventsSurfaceHighestRatedQualifyingPlayerPerClub(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['playerStats' => [
+                ['playerName' => 'Manolo Garrido', 'playerAge' => 27, 'appearances' => 3, 'goals' => 3, 'assists' => 1, 'averageRating' => 8.5],
+                ['playerName' => 'Álvaro López', 'playerAge' => 28, 'appearances' => 4, 'goals' => 0, 'assists' => 5, 'averageRating' => 8.275],
+                ['playerName' => 'Low Rated Guy', 'playerAge' => 20, 'appearances' => 2, 'goals' => 0, 'assists' => 0, 'averageRating' => 6.0],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildTalismanEvents($syncRows, $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('Manolo Garrido', $events[0]['meta']['playerName']);
+        $this->assertSame(8.5, $events[0]['meta']['rating']);
+    }
+
+    public function testTalismanEventsExcludePlayersBelowRatingThreshold(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildTalismanEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['playerStats' => [
+                ['playerName' => 'Average Joe', 'averageRating' => 7.9],
+            ]]],
+        ], $now);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testTalismanEventsSurfaceGoalkeeperPeakRatingFromFixtures(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildTalismanEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => [
+                'seasonRecord' => ['goalsAgainst' => 2],
+                'fixtures'     => [
+                    ['homePlayerRatings' => [
+                        ['playerName' => 'Vicente Cruz', 'position' => 'GK', 'rating' => 9.6],
+                    ], 'awayPlayerRatings' => []],
+                ],
+            ]],
+        ], $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('Toro SD: Vicente Cruz peak rated 9.6, 2 conceded this window.', $events[0]['text']);
+    }
+
+    public function testCommunityEventsSurfaceFanInitiativeSpend(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildCommunityEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['ledger' => [
+                ['category' => 'fan_initiative', 'amount' => -400000000, 'description' => 'Fan event — venue & catering'],
+            ]]],
+        ], $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('Toro SD invested in fan initiative: Fan event — venue & catering', $events[0]['text']);
+        $this->assertNull($events[0]['amountExact']);
+    }
+
+    public function testCommunityEventsSurfaceExtremeSentimentReadings(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildCommunityEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['attendance' => ['fanSentiment' => 90, 'fanMorale' => 95]]],
+        ], $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame(90, $events[0]['meta']['fanSentiment']);
+    }
+
+    public function testCommunityEventsExcludeModerateSentiment(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildCommunityEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['attendance' => ['fanSentiment' => 62, 'fanMorale' => 66]]],
+        ], $now);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testComputeCommunityMoraleDeltaAveragesAcrossQualifyingClubs(): void
+    {
+        $now = new \DateTimeImmutable();
+        $rows = [
+            ['serverTimestamp' => $now->modify('-2 hours'), 'clubName' => 'Toro SD', 'payload' => ['attendance' => ['fanMorale' => 60]]],
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['attendance' => ['fanMorale' => 70]]],
+        ];
+
+        $this->assertSame(10, LiveTelemetryService::computeCommunityMoraleDelta($rows));
+    }
+
+    public function testComputeCommunityMoraleDeltaExcludesClubsWithOnlyOneReading(): void
+    {
+        $rows = [
+            ['serverTimestamp' => new \DateTimeImmutable(), 'clubName' => 'Toro SD', 'payload' => ['attendance' => ['fanMorale' => 60]]],
+        ];
+
+        $this->assertNull(LiveTelemetryService::computeCommunityMoraleDelta($rows));
+    }
+
+    public function testComputeCommunityMoraleDeltaReturnsNullForEmptyInput(): void
+    {
+        $this->assertNull(LiveTelemetryService::computeCommunityMoraleDelta([]));
+    }
+
+    public function testBuildDilutionSummaryPicksHighestPercentEntry(): void
+    {
+        $events = [
+            ['club' => 'Club A', 'meta' => ['equityPercent' => 5, 'counterparty' => 'Bert']],
+            ['club' => 'Club B', 'meta' => ['equityPercent' => 10, 'counterparty' => 'Walt']],
+        ];
+
+        $summary = LiveTelemetryService::buildDilutionSummary($events);
+
+        $this->assertSame(10, $summary['percent']);
+        $this->assertSame('Walt', $summary['counterparty']);
+    }
+
+    public function testBuildDilutionSummaryReturnsNullForEmptyInput(): void
+    {
+        $this->assertNull(LiveTelemetryService::buildDilutionSummary([]));
+    }
+
+    public function testBuildCovenantSummaryCountsAndSumsDistinctActiveCovenantsWithoutDoubleCounting(): void
+    {
+        $now = new \DateTimeImmutable();
+        $promise = ['id' => 'p1', 'status' => 'active', 'condition' => ['type' => 'league_position', 'target' => 5], 'offer' => ['type' => 'seasonal_payment', 'amountPence' => 1000000, 'repeatSeasons' => 2]];
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [$promise]]],
+            // Same promise synced again this window — must not be double counted.
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [$promise]]],
+        ];
+
+        $summary = LiveTelemetryService::buildCovenantSummary($syncRows);
+
+        $this->assertSame(1, $summary['count']);
+        $this->assertSame(2000000, $summary['valuePence']);
+    }
+
+    public function testBuildCovenantSummaryReturnsZerosForEmptyInput(): void
+    {
+        $summary = LiveTelemetryService::buildCovenantSummary([]);
+
+        $this->assertSame(0, $summary['count']);
+        $this->assertSame(0, $summary['valuePence']);
     }
 }
