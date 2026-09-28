@@ -16,7 +16,7 @@ use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\StarterPackService;
-use App\Service\WorldInitializationService;
+use App\Service\WorldPackSnapshotBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -24,7 +24,7 @@ class StarterPackServiceTest extends TestCase
 {
     public function testInitializeDeletesConsumedPlayersAndStaff(): void
     {
-        $config = $this->createMock(StarterConfig::class);
+        $config = $this->createStub(StarterConfig::class);
         $config->method('getStarterPlayerCount')->willReturn(2);
         $config->method('getStarterCoachCount')->willReturn(1);
         $config->method('getStarterManagerCount')->willReturn(0);
@@ -34,19 +34,19 @@ class StarterPackServiceTest extends TestCase
         $config->method('getStarterScoutCount')->willReturn(1);
         $config->method('getLeagueAbilityRanges')->willReturn([]);
 
-        $starterConfigRepo = $this->createMock(StarterConfigRepository::class);
+        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
         $starterConfigRepo->method('getConfig')->willReturn($config);
 
-        $club = $this->createMock(Club::class);
+        $club = $this->createStub(Club::class);
         $club->method('getCountry')->willReturn('EN');
         $club->method('getCurrentLeague')->willReturn(null);
         $club->method('isStarterInitialized')->willReturn(false);
 
         // Two mock Player entities in the pool
-        $player1 = $this->createMock(Player::class);
-        $player2 = $this->createMock(Player::class);
+        $player1 = $this->createStub(Player::class);
+        $player2 = $this->createStub(Player::class);
 
-        $playerRepo = $this->createMock(PlayerRepository::class);
+        $playerRepo = $this->createStub(PlayerRepository::class);
         $playerCallCount = 0;
         $playerRepo->method('findForWorldInitByPositionAndNationality')
             ->willReturnCallback(function () use (&$playerCallCount, $player1, $player2) {
@@ -55,30 +55,30 @@ class StarterPackServiceTest extends TestCase
             });
         $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
 
-        $staff1 = $this->createMock(Staff::class);
-        $staffRepo = $this->createMock(StaffRepository::class);
+        $staff1 = $this->createStub(Staff::class);
+        $staffRepo = $this->createStub(StaffRepository::class);
         $staffRepo->method('findInPoolByRoleRandom')->willReturn([$staff1]);
 
-        $scout1 = $this->createMock(Scout::class);
-        $scoutRepo = $this->createMock(ScoutRepository::class);
+        $scout1 = $this->createStub(Scout::class);
+        $scoutRepo = $this->createStub(ScoutRepository::class);
         $scoutRepo->method('findInPool')->willReturn([$scout1]);
 
-        $poolConfig = $this->createMock(\App\Entity\PoolConfig::class);
+        $poolConfig = $this->createStub(\App\Entity\PoolConfig::class);
         $poolConfig->method('getPositionWeightGk')->willReturn(1);
         $poolConfig->method('getPositionWeightDef')->willReturn(1);
         $poolConfig->method('getPositionWeightMid')->willReturn(0);
         $poolConfig->method('getPositionWeightAtt')->willReturn(0);
-        $poolConfigRepo = $this->createMock(PoolConfigRepository::class);
+        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
         $poolConfigRepo->method('getConfig')->willReturn($poolConfig);
 
-        $worldInit = $this->createMock(WorldInitializationService::class);
-        $worldInit->method('distributeByPosition')->willReturn([
+        $snapshotBuilder = $this->createStub(WorldPackSnapshotBuilder::class);
+        $snapshotBuilder->method('distributeByPosition')->willReturn([
             'GK'  => 1,
             'DEF' => 1,
         ]);
-        $worldInit->method('buildPlayerSnapshot')->willReturn(['id' => 'player-uuid']);
-        $worldInit->method('buildStaffSnapshot')->willReturn(['id' => 'staff-uuid']);
-        $worldInit->method('buildScoutSnapshot')->willReturn(['id' => 'scout-uuid']);
+        $snapshotBuilder->method('buildPlayerSnapshot')->willReturn(['id' => 'player-uuid']);
+        $snapshotBuilder->method('buildStaffSnapshot')->willReturn(['id' => 'staff-uuid']);
+        $snapshotBuilder->method('buildScoutSnapshot')->willReturn(['id' => 'scout-uuid']);
 
         // Key assertion: em->remove() must be called for each consumed Player and Staff
         $em = $this->createMock(EntityManagerInterface::class);
@@ -97,7 +97,7 @@ class StarterPackServiceTest extends TestCase
             $scoutRepo,
             $starterConfigRepo,
             $poolConfigRepo,
-            $worldInit,
+            $snapshotBuilder,
             $em,
         );
 

@@ -225,7 +225,7 @@ class LiveTelemetryService
      * club — see findTopAttendanceSince()'s docblock for why that's not a moderation risk
      * here (curated name-options, not free text).
      *
-     * @param array<int, array{clubName: string, fanCount: int, serverTimestamp: \DateTimeImmutable}> $rows
+     * @param array<int, array{clubName: string, weeklyAttendance: int, serverTimestamp: \DateTimeImmutable}> $rows
      * @return array<int, array{time: string, text: string, at: \DateTimeImmutable}>
      */
     public static function buildAttendanceEvents(array $rows, \DateTimeImmutable $now): array
@@ -233,7 +233,7 @@ class LiveTelemetryService
         return array_map(
             static fn (array $row): array => [
                 'time' => self::relativeTime($row['serverTimestamp'], $now),
-                'text' => sprintf('%s recorded attendance of %s!', $row['clubName'], number_format($row['fanCount'])),
+                'text' => sprintf('%s recorded attendance of %s!', $row['clubName'], number_format($row['weeklyAttendance'])),
                 'at'   => $row['serverTimestamp'],
             ],
             $rows,

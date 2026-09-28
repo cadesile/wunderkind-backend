@@ -11,7 +11,7 @@ class MatchResultTest extends TestCase
 {
     public function testConstructorAndGetters(): void
     {
-        $user     = $this->createMock(User::class);
+        $user     = $this->createStub(User::class);
         $userClub = new Club('Test FC', $user);
 
         $result = new MatchResult(

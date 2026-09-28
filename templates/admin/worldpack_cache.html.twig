@@ -22,111 +22,7 @@
         </p>
     </div>
 
-    {# ── Status grid ─────────────────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-database text-muted"></i>
-                <span class="fw-semibold small">Cache Status</span>
-                <span class="ms-auto badge bg-secondary">{{ totalEntries }} total entries</span>
-            </div>
-            <div class="card-body p-0">
-                {% if byCountry is empty %}
-                    <p class="text-muted small p-3 mb-0">No cache entries found. Use the Regenerate panel below to warm the cache.</p>
-                {% else %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0 small">
-                            <thead class="table-light">
-                                <tr>
-                                    <th class="ps-3">Country</th>
-                                    {% for tier in 1..8 %}
-                                        <th class="text-center">T{{ tier }}</th>
-                                    {% endfor %}
-                                    <th class="text-end pe-3">Cached</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for code, tiers in byCountry %}
-                                    <tr>
-                                        <td class="ps-3 fw-semibold">
-                                            {{ COUNTRIES[code] ?? code }}
-                                            <span class="text-muted fw-normal">({{ code }})</span>
-                                        </td>
-                                        {% for tier in 1..8 %}
-                                            <td class="text-center">
-                                                {% if tiers[tier] is defined %}
-                                                    <span class="badge bg-success bg-opacity-75">✓</span>
-                                                {% else %}
-                                                    <span class="text-muted">—</span>
-                                                {% endif %}
-                                            </td>
-                                        {% endfor %}
-                                        <td class="text-end pe-3 fw-semibold">{{ tiers|length }} / 8</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    {# ── Entry detail table ──────────────────────────────────────────────── #}
-    {% if entries is not empty %}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-list text-muted"></i>
-                <span class="fw-semibold small">All Entries</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 small">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3">Country</th>
-                                <th class="text-center">Tier</th>
-                                <th class="text-center">Clubs</th>
-                                <th class="text-center">Players</th>
-                                <th>Generated</th>
-                                <th class="pe-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for entry in entries %}
-                                <tr>
-                                    <td class="ps-3 fw-semibold">
-                                        {{ COUNTRIES[entry.country] ?? entry.country }}
-                                        <span class="text-muted fw-normal">({{ entry.country }})</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary bg-opacity-75">{{ entry.tier }}</span>
-                                    </td>
-                                    <td class="text-center">{{ entry.clubCount }}</td>
-                                    <td class="text-center">{{ entry.playerCount }}</td>
-                                    <td class="text-muted">{{ entry.generatedAt|date('Y-m-d H:i') }}</td>
-                                    <td class="pe-3 text-end">
-                                        <form method="POST"
-                                              action="{{ path('admin_worldpack_delete_entry', {id: entry.id}) }}"
-                                              onsubmit="return confirm('Delete {{ COUNTRIES[entry.country] ?? entry.country }} Tier {{ entry.tier }} cache entry?')">
-                                            <input type="hidden" name="_token" value="{{ csrf_token('worldpack_delete_entry') }}">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {# ── Regenerate (multi-country checkbox + queue) ─────────────────────── #}
+    {# ── Regenerate (multi-country trigger + live per-country/tier/club progress) ── #}
     <div class="col-12">
         <div class="card">
             <div class="card-header py-2 d-flex align-items-center gap-2">
@@ -135,23 +31,23 @@
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-3">
-                    Select one or more countries, then click <strong>Build Queue</strong>.
-                    Each tier is warmed sequentially via background requests so the page never times out.
-                    Requires leagues to be seeded for the selected countries.
+                    Select one or more countries, then click <strong>Regenerate</strong>.
+                    Every player/coach/scout is generated fresh, per club — nothing is drawn
+                    from a shared pool. Progress is tracked per tier, then per club below, and
+                    stays visible after the run finishes. Requires leagues to be seeded for the
+                    selected countries.
                 </p>
 
                 <div class="row g-3">
                     {# ── Left: country checkboxes ────────────────────────────── #}
-                    <div class="col-12 col-md-5">
+                    <div class="col-12 col-md-4">
                         <div class="border rounded p-3" style="max-height:340px;overflow-y:auto">
-                            {# Select all toggle #}
                             <div class="form-check border-bottom pb-2 mb-2">
                                 <input class="form-check-input" type="checkbox" id="select-all-countries">
                                 <label class="form-check-label fw-semibold small" for="select-all-countries">
                                     Select All
                                 </label>
                             </div>
-                            {# Per-country checkboxes #}
                             {% for code, name in enabledCountries %}
                                 <div class="form-check">
                                     <input class="form-check-input country-checkbox" type="checkbox"
@@ -163,60 +59,136 @@
                                 </div>
                             {% endfor %}
                         </div>
-                        <div class="mt-2 d-flex gap-2">
-                            <button id="build-queue-btn" class="btn btn-primary btn-sm" onclick="buildQueue()">
-                                <i class="fa fa-list-check me-1"></i>Build Queue
-                            </button>
-                            <button id="run-queue-btn" class="btn btn-success btn-sm d-none" onclick="runQueue()">
-                                <i class="fa fa-play me-1"></i>Run Queue
-                            </button>
-                            <button id="clear-queue-btn" class="btn btn-outline-secondary btn-sm d-none" onclick="clearQueue()">
-                                Clear
+                        <div class="mt-2">
+                            <button id="regenerate-btn" class="btn btn-primary btn-sm" onclick="regenerateSelected()">
+                                <i class="fa fa-play me-1"></i>Regenerate
                             </button>
                         </div>
                     </div>
 
-                    {# ── Right: queue + progress ─────────────────────────────── #}
-                    <div class="col-12 col-md-7">
-
-                        {# Overall progress (hidden until running) #}
-                        <div id="overall-progress" class="d-none mb-3">
-                            <div class="d-flex justify-content-between align-items-center small mb-1">
-                                <span id="overall-status" class="text-muted fw-semibold">Idle</span>
-                                <span id="overall-fraction" class="fw-semibold text-muted">0 / 0</span>
-                            </div>
-                            <div class="progress" style="height:10px">
-                                <div id="overall-bar"
-                                     class="progress-bar progress-bar-striped progress-bar-animated"
-                                     role="progressbar" style="width:0%"></div>
-                            </div>
+                    {# ── Right: one progress panel per country, stacked ─────── #}
+                    <div class="col-12 col-md-8">
+                        <div id="progress-empty" class="text-muted small fst-italic">
+                            No runs started yet this session. Select countries and click <em>Regenerate</em>.
                         </div>
-
-                        {# Queue list (empty state) #}
-                        <div id="queue-empty" class="text-muted small fst-italic">
-                            No queue built yet. Select countries and click <em>Build Queue</em>.
-                        </div>
-
-                        {# Queue table #}
-                        <div id="queue-wrap" class="d-none border rounded" style="max-height:300px;overflow-y:auto">
-                            <table class="table table-sm mb-0 small">
-                                <thead class="table-light sticky-top">
-                                    <tr>
-                                        <th class="ps-3">#</th>
-                                        <th>Country</th>
-                                        <th class="text-center">Tier</th>
-                                        <th class="text-end pe-3">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="queue-tbody"></tbody>
-                            </table>
-                        </div>
-
+                        <div id="progress-panels" class="d-flex flex-column gap-3"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    {# ── Status grid (secondary — collapsed by default) ───────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2" style="cursor:pointer"
+                 data-bs-toggle="collapse" data-bs-target="#cache-status-body" aria-expanded="false">
+                <i class="fa fa-database text-muted"></i>
+                <span class="fw-semibold small">Cache Status</span>
+                <span class="ms-auto badge bg-secondary">{{ totalEntries }} total entries</span>
+                <i class="fa fa-chevron-down text-muted small"></i>
+            </div>
+            <div id="cache-status-body" class="collapse">
+                <div class="card-body p-0">
+                    {% if byCountry is empty %}
+                        <p class="text-muted small p-3 mb-0">No cache entries found. Use the Regenerate panel above to warm the cache.</p>
+                    {% else %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Country</th>
+                                        {% for tier in 1..8 %}
+                                            <th class="text-center">T{{ tier }}</th>
+                                        {% endfor %}
+                                        <th class="text-end pe-3">Cached</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for code, tiers in byCountry %}
+                                        <tr>
+                                            <td class="ps-3 fw-semibold">
+                                                {{ COUNTRIES[code] ?? code }}
+                                                <span class="text-muted fw-normal">({{ code }})</span>
+                                            </td>
+                                            {% for tier in 1..8 %}
+                                                <td class="text-center">
+                                                    {% if tiers[tier] is defined %}
+                                                        <span class="badge bg-success bg-opacity-75">✓</span>
+                                                    {% else %}
+                                                        <span class="text-muted">—</span>
+                                                    {% endif %}
+                                                </td>
+                                            {% endfor %}
+                                            <td class="text-end pe-3 fw-semibold">{{ tiers|length }} / 8</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Entry detail table (secondary — collapsed by default) ───────────── #}
+    {% if entries is not empty %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2" style="cursor:pointer"
+                 data-bs-toggle="collapse" data-bs-target="#all-entries-body" aria-expanded="false">
+                <i class="fa fa-list text-muted"></i>
+                <span class="fw-semibold small">All Entries</span>
+                <i class="fa fa-chevron-down text-muted small ms-auto"></i>
+            </div>
+            <div id="all-entries-body" class="collapse">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Country</th>
+                                    <th class="text-center">Tier</th>
+                                    <th class="text-center">Clubs</th>
+                                    <th class="text-center">Players</th>
+                                    <th>Generated</th>
+                                    <th class="pe-3"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in entries %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold">
+                                            {{ COUNTRIES[entry.country] ?? entry.country }}
+                                            <span class="text-muted fw-normal">({{ entry.country }})</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-primary bg-opacity-75">{{ entry.tier }}</span>
+                                        </td>
+                                        <td class="text-center">{{ entry.clubCount }}</td>
+                                        <td class="text-center">{{ entry.playerCount }}</td>
+                                        <td class="text-muted">{{ entry.generatedAt|date('Y-m-d H:i') }}</td>
+                                        <td class="pe-3 text-end">
+                                            <form method="POST"
+                                                  action="{{ path('admin_worldpack_delete_entry', {id: entry.id}) }}"
+                                                  onsubmit="return confirm('Delete {{ COUNTRIES[entry.country] ?? entry.country }} Tier {{ entry.tier }} cache entry?')">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('worldpack_delete_entry') }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {# ── Delete country ──────────────────────────────────────────────────── #}
     <div class="col-12 col-lg-6">
@@ -255,18 +227,19 @@
 </div>
 
 <script>
-const TIERS_URL_TPL = '{{ path('admin_worldpack_tiers', {country: '__CC__'}) }}';
-const WARM_TIER_URL = '{{ path('admin_worldpack_warm_tier') }}';
-const CSRF_TOKEN    = '{{ csrf_token('worldpack_warm_tier') }}';
+const REGENERATE_URL_TPL   = '{{ path('admin_worldpack_regenerate_country') }}';
+const RUN_STATUS_URL_TPL   = '{{ path('admin_worldpack_run_status', {country: '__CC__'}) }}';
+const RETRY_FAILED_URL_TPL = '{{ path('admin_worldpack_retry_failed_clubs', {tierRunId: '__ID__'}) }}';
+const REGENERATE_TOKEN     = '{{ csrf_token('worldpack_regenerate_country') }}';
+const RETRY_TOKEN          = '{{ csrf_token('worldpack_retry_failed_clubs') }}';
+const COUNTRY_NAMES        = {{ enabledCountries|json_encode|raw }};
 
-// COUNTRY_NAMES maps code → display name for queue rows
-const COUNTRY_NAMES = {{ enabledCountries|json_encode|raw }};
+const TERMINAL_RUN_STATUSES = ['completed', 'completed_with_errors', 'failed'];
+const POLL_INTERVAL_MS = 2500;
 
-// --- State ---
-let queue   = [];   // [{country, tier, rowEl}, ...]
-let running = false;
+// country -> { panelEl, polling: bool }
+const activePanels = {};
 
-// --- Select All toggle ---
 document.getElementById('select-all-countries').addEventListener('change', function () {
     document.querySelectorAll('.country-checkbox').forEach(cb => cb.checked = this.checked);
 });
@@ -278,172 +251,198 @@ document.querySelectorAll('.country-checkbox').forEach(cb => {
     });
 });
 
-// --- Build Queue ---
-async function buildQueue() {
-    if (running) return;
-
+async function regenerateSelected() {
     const selected = [...document.querySelectorAll('.country-checkbox:checked')].map(cb => cb.value);
     if (selected.length === 0) {
         alert('Select at least one country.');
         return;
     }
 
-    const btn = document.getElementById('build-queue-btn');
+    const btn = document.getElementById('regenerate-btn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Fetching tiers…';
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Starting…';
 
-    queue = [];
-    const tbody = document.getElementById('queue-tbody');
-    tbody.innerHTML = '';
-
-    let rowIndex = 1;
     for (const code of selected) {
-        const url = TIERS_URL_TPL.replace('__CC__', code);
-        try {
-            const res  = await fetch(url);
-            const data = await res.json();
-            if (!res.ok || data.error) {
-                appendErrorRow(tbody, rowIndex++, code, data.error ?? 'Failed to load tiers');
-                continue;
-            }
-            for (const tier of data.tiers) {
-                const rowEl = appendQueueRow(tbody, rowIndex++, code, tier, 'pending');
-                queue.push({ country: code, tier, rowEl });
-            }
-        } catch (e) {
-            appendErrorRow(tbody, rowIndex++, code, e.message);
-        }
+        await startRunForCountry(code);
     }
-
-    document.getElementById('queue-empty').classList.add('d-none');
-    document.getElementById('queue-wrap').classList.remove('d-none');
-    document.getElementById('run-queue-btn').classList.remove('d-none');
-    document.getElementById('clear-queue-btn').classList.remove('d-none');
 
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa fa-list-check me-1"></i>Rebuild Queue';
+    btn.innerHTML = '<i class="fa fa-play me-1"></i>Regenerate';
 }
 
-// --- Run Queue ---
-async function runQueue() {
-    if (running || queue.length === 0) return;
-    running = true;
+async function startRunForCountry(country) {
+    const body = new FormData();
+    body.append('_token', REGENERATE_TOKEN);
+    body.append('country', country);
 
-    document.getElementById('run-queue-btn').disabled  = true;
-    document.getElementById('build-queue-btn').disabled = true;
-    document.getElementById('clear-queue-btn').disabled = true;
+    let data;
+    try {
+        const res = await fetch(REGENERATE_URL_TPL, { method: 'POST', body });
+        data = await res.json();
+        if (!data.success) {
+            ensurePanel(country).innerHTML = errorPanelHtml(country, data.error ?? 'Failed to start run');
+            return;
+        }
+    } catch (e) {
+        ensurePanel(country).innerHTML = errorPanelHtml(country, e.message);
+        return;
+    }
 
-    const overallProgress = document.getElementById('overall-progress');
-    const overallBar      = document.getElementById('overall-bar');
-    const overallStatus   = document.getElementById('overall-status');
-    const overallFraction = document.getElementById('overall-fraction');
-    overallProgress.classList.remove('d-none');
+    document.getElementById('progress-empty').classList.add('d-none');
+    beginPolling(country);
+}
 
-    const total = queue.length;
-    let done = 0, failed = 0;
+function ensurePanel(country) {
+    let panel = activePanels[country]?.panelEl;
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.className = 'border rounded p-2';
+        panel.id = `panel-${country}`;
+        document.getElementById('progress-panels').prepend(panel);
+        activePanels[country] = { panelEl: panel, polling: false };
+    }
+    return panel;
+}
 
-    for (const item of queue) {
-        setRowStatus(item.rowEl, 'processing');
-        item.rowEl.scrollIntoView({ block: 'nearest' });
-        overallStatus.textContent   = `${COUNTRY_NAMES[item.country] ?? item.country} — Tier ${item.tier}…`;
-        overallFraction.textContent = `${done} / ${total}`;
+function errorPanelHtml(country, msg) {
+    return `<div class="d-flex align-items-center gap-2 small">
+        <span class="fw-semibold">${COUNTRY_NAMES[country] ?? country} (${country})</span>
+        <span class="badge bg-danger">${escHtml(msg)}</span>
+    </div>`;
+}
 
-        const body = new FormData();
-        body.append('_token',  CSRF_TOKEN);
-        body.append('country', item.country);
-        body.append('tier',    item.tier);
-        body.append('force',   '1');
+function beginPolling(country) {
+    ensurePanel(country);
+    if (activePanels[country].polling) return;
+    activePanels[country].polling = true;
+
+    const poll = async () => {
+        if (!activePanels[country] || !activePanels[country].polling) return;
 
         try {
-            const res  = await fetch(WARM_TIER_URL, { method: 'POST', body });
+            const res  = await fetch(RUN_STATUS_URL_TPL.replace('__CC__', country));
             const data = await res.json();
+            renderPanel(country, data.run);
 
-            if (data.success) {
-                const detail = data.cached
-                    ? 'already cached'
-                    : `${data.clubCount} clubs, ${data.playerCount} players`;
-                setRowStatus(item.rowEl, 'done', detail);
-            } else {
-                setRowStatus(item.rowEl, 'failed', data.error ?? 'Unknown error');
-                failed++;
+            if (data.run && TERMINAL_RUN_STATUSES.includes(data.run.status)) {
+                activePanels[country].polling = false;
+                return; // stop polling — panel stays rendered as-is
             }
         } catch (e) {
-            setRowStatus(item.rowEl, 'failed', e.message);
-            failed++;
+            // transient — keep polling, next tick may recover
         }
 
-        done++;
-        const pct = Math.round(done / total * 100);
-        overallBar.style.width      = pct + '%';
-        overallFraction.textContent = `${done} / ${total}`;
+        setTimeout(poll, POLL_INTERVAL_MS);
+    };
+
+    poll();
+}
+
+function renderPanel(country, run) {
+    const panel = ensurePanel(country);
+    if (!run) {
+        panel.innerHTML = `<div class="small text-muted">${COUNTRY_NAMES[country] ?? country} (${country}) — no run found.</div>`;
+        return;
     }
 
-    // Finished
-    overallBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-    if (failed === 0) {
-        overallBar.classList.add('bg-success');
-        overallStatus.textContent = `Done — ${total} tiers warmed.`;
-        setTimeout(() => location.reload(), 1400);
-    } else {
-        overallBar.classList.add('bg-warning');
-        overallStatus.textContent = `Finished with ${failed} failure(s).`;
-        document.getElementById('run-queue-btn').disabled   = false;
-        document.getElementById('build-queue-btn').disabled = false;
-        document.getElementById('clear-queue-btn').disabled = false;
+    const header = `
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="fw-semibold small">${COUNTRY_NAMES[country] ?? country} <span class="text-muted fw-normal">(${country})</span></span>
+            ${runStatusBadge(run.status)}
+        </div>`;
+
+    const tiers = run.tiers.map(t => renderTier(t)).join('');
+
+    panel.innerHTML = header + `<div class="d-flex flex-column gap-2">${tiers}</div>`;
+}
+
+function renderTier(t) {
+    const current = t.status === 'in_progress'
+        ? t.clubs.find(c => !['pending', 'completed', 'failed'].includes(c.status))
+        : null;
+
+    const completedClubs = t.clubs.filter(c => c.status === 'completed');
+    const failedClubs    = t.clubs.filter(c => c.status === 'failed');
+    const pendingClubs    = t.clubs.filter(c => c.status === 'pending');
+
+    let clubsHtml = '';
+    if (current) {
+        clubsHtml += `<div class="small"><i class="fa fa-spinner fa-spin me-1 text-primary"></i><strong>${escHtml(current.name)}</strong>: ${clubStepLabel(current.status)}</div>`;
+    }
+    if (completedClubs.length) {
+        clubsHtml += `<div class="small text-muted">${completedClubs.length} club(s) complete: ${completedClubs.map(c => escHtml(c.name)).join(', ')}</div>`;
+    }
+    if (failedClubs.length) {
+        clubsHtml += `<div class="small text-danger">${failedClubs.length} failed: ${failedClubs.map(c => escHtml(c.name) + (c.error ? ' (' + escHtml(c.error) + ')' : '')).join('; ')}</div>`;
+    }
+    if (pendingClubs.length && !current) {
+        clubsHtml += `<div class="small text-muted">${pendingClubs.length} club(s) queued</div>`;
     }
 
-    running = false;
+    const retryBtn = failedClubs.length
+        ? `<button class="btn btn-outline-danger btn-sm py-0 px-2 ms-2" onclick="retryFailedClubs('${t.tierRunId}', this)">Retry ${failedClubs.length} failed</button>`
+        : '';
+
+    return `
+        <div class="border rounded p-2 ${t.status === 'in_progress' ? 'border-primary' : ''}">
+            <div class="d-flex align-items-center gap-2 small">
+                <span class="fw-semibold">Tier ${t.tier}</span>
+                ${tierStatusBadge(t.status)}
+                <span class="text-muted">${t.completedClubs + t.failedClubs} / ${t.totalClubs} clubs</span>
+                ${retryBtn}
+            </div>
+            <div class="mt-1 ps-1">${clubsHtml}</div>
+        </div>`;
 }
 
-// --- Clear Queue ---
-function clearQueue() {
-    if (running) return;
-    queue = [];
-    document.getElementById('queue-tbody').innerHTML = '';
-    document.getElementById('queue-wrap').classList.add('d-none');
-    document.getElementById('queue-empty').classList.remove('d-none');
-    document.getElementById('run-queue-btn').classList.add('d-none');
-    document.getElementById('clear-queue-btn').classList.add('d-none');
-    document.getElementById('overall-progress').classList.add('d-none');
-    document.getElementById('build-queue-btn').innerHTML = '<i class="fa fa-list-check me-1"></i>Build Queue';
+async function retryFailedClubs(tierRunId, btn) {
+    btn.disabled = true;
+    const body = new FormData();
+    body.append('_token', RETRY_TOKEN);
+    try {
+        await fetch(RETRY_FAILED_URL_TPL.replace('__ID__', tierRunId), { method: 'POST', body });
+    } finally {
+        // The country this tier belongs to will pick up the change on its next poll —
+        // find it from the panel currently showing this tierRunId and resume polling.
+        for (const country of Object.keys(activePanels)) {
+            if (activePanels[country].panelEl.innerHTML.includes(tierRunId)) {
+                activePanels[country].polling = true;
+                beginPolling(country);
+                break;
+            }
+        }
+    }
 }
 
-// --- DOM helpers ---
-function appendQueueRow(tbody, index, country, tier, state) {
-    const tr = document.createElement('tr');
-    tr.dataset.country = country;
-    tr.dataset.tier    = tier;
-    tr.innerHTML = `
-        <td class="ps-3 text-muted">${index}</td>
-        <td class="fw-semibold">${COUNTRY_NAMES[country] ?? country} <span class="text-muted fw-normal">(${country})</span></td>
-        <td class="text-center"><span class="badge bg-primary bg-opacity-75">${tier}</span></td>
-        <td class="text-end pe-3">${statusBadge(state)}</td>`;
-    tbody.appendChild(tr);
-    return tr;
+function runStatusBadge(status) {
+    switch (status) {
+        case 'pending':               return '<span class="badge bg-secondary">Pending</span>';
+        case 'in_progress':           return '<span class="badge bg-primary"><i class="fa fa-spinner fa-spin me-1"></i>In progress</span>';
+        case 'completed':             return '<span class="badge bg-success">Completed</span>';
+        case 'completed_with_errors': return '<span class="badge bg-warning text-dark">Completed with errors</span>';
+        case 'failed':                return '<span class="badge bg-danger">Failed</span>';
+        default:                      return '';
+    }
 }
 
-function appendErrorRow(tbody, index, country, msg) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-        <td class="ps-3 text-muted">${index}</td>
-        <td class="fw-semibold text-danger">${COUNTRY_NAMES[country] ?? country} <span class="fw-normal">(${country})</span></td>
-        <td class="text-center">—</td>
-        <td class="text-end pe-3"><span class="badge bg-danger">Error: ${escHtml(msg)}</span></td>`;
-    tbody.appendChild(tr);
+function tierStatusBadge(status) {
+    switch (status) {
+        case 'pending':     return '<span class="badge bg-secondary bg-opacity-75">pending</span>';
+        case 'in_progress': return '<span class="badge bg-primary bg-opacity-75">in progress</span>';
+        case 'assembling':  return '<span class="badge bg-info text-dark">assembling</span>';
+        case 'completed':   return '<span class="badge bg-success bg-opacity-75">done</span>';
+        case 'failed':      return '<span class="badge bg-danger bg-opacity-75">failed</span>';
+        default:            return '';
+    }
 }
 
-function setRowStatus(rowEl, state, detail) {
-    const cell = rowEl.querySelector('td:last-child');
-    cell.innerHTML = statusBadge(state, detail);
-}
-
-function statusBadge(state, detail) {
-    switch (state) {
-        case 'pending':    return '<span class="badge bg-secondary">Pending</span>';
-        case 'processing': return '<span class="badge bg-primary"><i class="fa fa-spinner fa-spin me-1"></i>Processing…</span>';
-        case 'done':       return `<span class="badge bg-success">Done${detail ? ' — ' + escHtml(detail) : ''}</span>`;
-        case 'failed':     return `<span class="badge bg-danger">Failed${detail ? ': ' + escHtml(detail) : ''}</span>`;
-        default:           return '';
+function clubStepLabel(status) {
+    switch (status) {
+        case 'generating_players': return 'generating players…';
+        case 'generating_staff':   return 'generating staff…';
+        case 'generating_scouts':  return 'generating scouts…';
+        case 'assigning':          return 'assigning to club…';
+        default:                   return status;
     }
 }
 

@@ -81,26 +81,30 @@ class SyncRecordRepository extends ServiceEntityRepository
     }
 
     /**
-     * Top valid syncs in the window by attendance fanCount, with the club's real name
-     * attached. Club names here come from a curated, server-generated set of options
+     * Top valid syncs in the window by actual match attendance, with the club's real name
+     * attached. Reads `attendance.weeklyAttendance` — the crowd actually charged for that
+     * week's fixture (see SyncRequest's attendance shape) — not `attendance.fanCount`,
+     * which is the club's total supporter base and is an order of magnitude larger; the
+     * two are easy to conflate since both live under the same `attendance` payload key.
+     * Club names here come from a curated, server-generated set of options
      * (see /api/club/name-options) rather than free text, so this carries no
      * moderation risk despite naming a specific club — unlike SeasonRecordRepository's
      * anonymised events, which avoid the club entirely for other reasons (see there).
      *
-     * @return array<int, array{clubName: string, fanCount: int, serverTimestamp: \DateTimeImmutable}>
+     * @return array<int, array{clubName: string, weeklyAttendance: int, serverTimestamp: \DateTimeImmutable}>
      */
     public function findTopAttendanceSince(\DateTimeImmutable $since, int $limit): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
             "SELECT c.name AS club_name,
-                    (sr.payload->'attendance'->>'fanCount')::int AS fan_count,
+                    (sr.payload->'attendance'->>'weeklyAttendance')::int AS weekly_attendance,
                     sr.server_timestamp AS server_timestamp
              FROM sync_record sr
              JOIN club c ON c.id = sr.club_id
              WHERE sr.is_valid = true
                AND sr.server_timestamp >= :since
-               AND (sr.payload->'attendance'->>'fanCount') IS NOT NULL
-             ORDER BY fan_count DESC
+               AND (sr.payload->'attendance'->>'weeklyAttendance') IS NOT NULL
+             ORDER BY weekly_attendance DESC
              LIMIT :limit",
             ['since' => $since->format('Y-m-d H:i:sP'), 'limit' => $limit],
             ['limit' => ParameterType::INTEGER],
@@ -108,9 +112,9 @@ class SyncRecordRepository extends ServiceEntityRepository
 
         return array_map(
             static fn (array $row): array => [
-                'clubName'        => (string) $row['club_name'],
-                'fanCount'        => (int) $row['fan_count'],
-                'serverTimestamp' => new \DateTimeImmutable($row['server_timestamp']),
+                'clubName'         => (string) $row['club_name'],
+                'weeklyAttendance' => (int) $row['weekly_attendance'],
+                'serverTimestamp'  => new \DateTimeImmutable($row['server_timestamp']),
             ],
             $rows,
         );

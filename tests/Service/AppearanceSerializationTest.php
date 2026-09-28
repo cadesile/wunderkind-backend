@@ -6,7 +6,7 @@ namespace App\Tests\Service;
 
 use App\Entity\Player;
 use App\Entity\Scout;
-use App\Service\WorldInitializationService;
+use App\Service\WorldPackSnapshotBuilder;
 use PHPUnit\Framework\TestCase;
 
 class AppearanceSerializationTest extends TestCase
@@ -23,9 +23,6 @@ class AppearanceSerializationTest extends TestCase
         $scout = new Scout('Test Scout');
         $scout->setAppearance($appearance);
 
-        // buildScoutSnapshot is a pure mapper — it reads only the passed entity,
-        // not any constructor-injected collaborators. Instantiate the service
-        // without invoking its constructor to avoid unrelated DI setup.
         $svc = static::buildService();
         $snap = $svc->buildScoutSnapshot($scout);
 
@@ -45,9 +42,6 @@ class AppearanceSerializationTest extends TestCase
         $player = new Player('Test', 'Player');
         $player->setAppearance($appearance);
 
-        // buildPlayerSnapshot is a pure mapper — it reads only the passed entity,
-        // not any constructor-injected collaborators. Instantiate the service
-        // without invoking its constructor to avoid unrelated DI setup.
         $svc = static::buildService();
         $snap = $svc->buildPlayerSnapshot($player);
 
@@ -55,9 +49,8 @@ class AppearanceSerializationTest extends TestCase
         $this->assertSame($appearance, $snap['appearance']);
     }
 
-    private static function buildService(): WorldInitializationService
+    private static function buildService(): WorldPackSnapshotBuilder
     {
-        return (new \ReflectionClass(WorldInitializationService::class))
-            ->newInstanceWithoutConstructor();
+        return new WorldPackSnapshotBuilder();
     }
 }

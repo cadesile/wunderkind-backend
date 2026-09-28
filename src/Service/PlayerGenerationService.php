@@ -26,9 +26,16 @@ class PlayerGenerationService
         private readonly PersonalityGeneratorService $personalityGenerator = new PersonalityGeneratorService(),
     ) {}
 
-    public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null): Player
+    /**
+     * @param array{min: int, max: int}|null $potentialRange Overrides PoolConfig's flat
+     *        potential range when given — e.g. a world-pack tier's ability band, so
+     *        higher tiers generate genuinely stronger players. Mean is the range's
+     *        midpoint in that case rather than PoolConfig's own configured mean, since
+     *        that mean may fall outside a narrower override range.
+     */
+    public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null, ?array $potentialRange = null): Player
     {
-        $blueprint = $this->buildAnchors($position, $source, $nationality);
+        $blueprint = $this->buildAnchors($position, $source, $nationality, $potentialRange);
         $blueprint = $this->buildAbilityTarget($blueprint);
         $blueprint = $this->buildPersonality($blueprint);
         $blueprint = $this->buildAttributes($blueprint);
@@ -37,18 +44,18 @@ class PlayerGenerationService
 
     // ── Stub implementations (replaced in subsequent tasks) ──────────────────
 
-    private function buildAnchors(PlayerPosition $position, RecruitmentSource $source, ?string $nationality): PlayerBlueprint
+    /** @param array{min: int, max: int}|null $potentialRange */
+    private function buildAnchors(PlayerPosition $position, RecruitmentSource $source, ?string $nationality, ?array $potentialRange = null): PlayerBlueprint
     {
         $nat = $nationality ?? $this->nameGenerator->getRandomNationality();
         ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
 
-        $cfg       = $this->poolConfigRepo->getConfig();
-        $age       = random_int($cfg->getPlayerAgeMin(), $cfg->getPlayerAgeMax());
-        $potential = $this->bellCurveInt(
-            $cfg->getPlayerPotentialMin(),
-            $cfg->getPlayerPotentialMax(),
-            $cfg->getPlayerPotentialMean(),
-        );
+        $cfg           = $this->poolConfigRepo->getConfig();
+        $age           = random_int($cfg->getPlayerAgeMin(), $cfg->getPlayerAgeMax());
+        $potentialMin  = $potentialRange['min'] ?? $cfg->getPlayerPotentialMin();
+        $potentialMax  = $potentialRange['max'] ?? $cfg->getPlayerPotentialMax();
+        $potentialMean = $potentialRange !== null ? (int) round(($potentialMin + $potentialMax) / 2) : $cfg->getPlayerPotentialMean();
+        $potential     = $this->bellCurveInt($potentialMin, $potentialMax, $potentialMean);
 
         // Height: base range 163–203 cm; GKs receive an additional 3–8 cm upward bias
         $baseHeight = random_int(163, 203);

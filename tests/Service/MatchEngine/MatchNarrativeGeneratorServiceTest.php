@@ -26,8 +26,8 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     private function seededRows(): array
     {
         $command = new SeedMatchNarrativeTemplatesCommand(
-            $this->createMock(GameEventTemplateRepository::class),
-            $this->createMock(EntityManagerInterface::class),
+            $this->createStub(GameEventTemplateRepository::class),
+            $this->createStub(EntityManagerInterface::class),
         );
 
         $reflection = new \ReflectionMethod($command, 'buildTemplates');
@@ -43,7 +43,7 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
 
     private function makeService(): MatchNarrativeGeneratorService
     {
-        $repo = $this->createMock(GameEventTemplateRepository::class);
+        $repo = $this->createStub(GameEventTemplateRepository::class);
         $repo->method('findByCategory')->willReturnCallback(
             fn (EventCategory $category) => $category === EventCategory::MATCH_NARRATIVE ? $this->seededRows() : [],
         );
@@ -179,7 +179,7 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
 
     public function testEmptyTemplateSetReturnsEmptyPayload(): void
     {
-        $repo = $this->createMock(GameEventTemplateRepository::class);
+        $repo = $this->createStub(GameEventTemplateRepository::class);
         $repo->method('findByCategory')->willReturn([]);
         $service = new MatchNarrativeGeneratorService($repo);
 

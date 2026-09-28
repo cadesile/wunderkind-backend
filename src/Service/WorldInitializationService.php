@@ -6,28 +6,16 @@ namespace App\Service;
 
 use App\Entity\Club;
 use App\Entity\GameConfig;
-use App\Entity\NpcClub;
 use App\Entity\League;
-use App\Entity\Player;
-use App\Entity\PoolConfig;
-use App\Entity\Scout;
-use App\Entity\Staff;
 use App\Enum\CompanySize;
-use App\Enum\PlayerPosition;
-use App\Enum\StaffRole;
-use App\Enum\Tier;
 use App\Entity\Agent;
 use App\Repository\AgentRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
-use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
-use App\Repository\ScoutRepository;
-use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ClubInitializationService;
-use Doctrine\ORM\EntityManagerInterface;
 
 class WorldInitializationService
 {
@@ -69,159 +57,26 @@ class WorldInitializationService
     public function __construct(
         private readonly LeagueRepository         $leagueRepository,
         private readonly NpcClubRepository        $npcClubRepository,
-        private readonly PlayerRepository         $playerRepository,
         private readonly AgentRepository          $agentRepository,
-        private readonly ScoutRepository          $scoutRepository,
-        private readonly StaffRepository          $staffRepository,
         private readonly StarterConfigRepository  $starterConfigRepository,
         private readonly GameConfigRepository     $gameConfigRepository,
         private readonly PoolConfigRepository     $poolConfigRepository,
         private readonly FixtureGenerationService $fixtureGenerationService,
-        private readonly EntityManagerInterface   $em,
+        private readonly WorldPackSnapshotBuilder $snapshotBuilder,
+        private readonly WorldPackClubGenerationService $clubGenerator,
     ) {}
 
     /**
-     * Builds the full NPC league pack for a country: all tiers, with fresh squads drawn from
-     * the player pool and fixtures generated. NPC players/staff used for snapshots are deleted
-     * from the pool immediately (DQL, no flush required).
-     *
-     * Safe to call independently of initialize() — used by LeagueService on season conclusion.
-     *
-     * @return array{leagues: array}
-     */
-    public function buildLeaguesPack(Club $club, string $country): array
-    {
-        $starterConfig = $this->starterConfigRepository->getConfig();
-        $npcConfig     = $starterConfig->getNpcSquadConfig();
-        $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
-
-        $poolConfig   = $this->poolConfigRepository->getConfig();
-        $gameConfig   = $this->gameConfigRepository->getConfig();
-        $agents       = $this->agentRepository->findAll(); // shared agent pool — many players may reference one
-        $leagues      = $this->leagueRepository->findByCountry($country);
-        $leaguesData       = [];
-        $npcPlayerIds      = [];
-        $npcStaffIds       = [];
-        $assignedPlayerIds = []; // cross-club exclusion list — prevents the same pool player appearing in multiple rosters
-        $nationality       = ClubInitializationService::countryToNationality($country) ?? $country;
-
-        // Bound the agent pool to ~worldPackPlayersPerAgent players per agent across the whole
-        // country pack. Pre-pass estimates total NPC players (clubs × average squad per tier).
-        $estimatedPlayers = 0.0;
-        foreach ($leagues as $estLeague) {
-            $estTierConf       = $npcConfig[(string) $estLeague->getTier()] ?? $this->defaultTierConfig($estLeague->getTier());
-            $avgSquad          = ((int) $estTierConf['playerMin'] + (int) $estTierConf['playerMax']) / 2;
-            $estimatedPlayers += count($this->npcClubRepository->findByLeague($estLeague)) * $avgSquad;
-        }
-        $agents = $this->selectBoundedAgentPool($agents, (int) ceil($estimatedPlayers), $starterConfig->getWorldPackPlayersPerAgent());
-
-        foreach ($leagues as $league) {
-            $tier         = $league->getTier();
-            $tierKey      = (string) $tier;
-            $tierConf     = $npcConfig[$tierKey] ?? $this->defaultTierConfig($tier);
-
-            // Use configured ranges if available and non-zero, otherwise fallback to hardcoded defaults
-            $configured   = $leagueRanges[$country][$tierKey] ?? null;
-            $abilityRange = ($configured && ($configured['min'] ?? 0) > 0)
-                ? ['min' => (int) $configured['min'], 'max' => (int) $configured['max']]
-                : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
-
-            $npcClubs   = $this->npcClubRepository->findByLeague($league);
-            $clubsData  = [];
-            $allClubIds = [];
-
-            // Add the player's club to the fixture list if it belongs to this league
-            if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
-                $allClubIds[] = (string) $club->getId();
-            }
-
-            foreach ($npcClubs as $npcClub) {
-                $allClubIds[] = (string) $npcClub->getId();
-                $totalPlayers = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
-                $foreignPct   = (int) $tierConf['foreignPercent'];
-
-                // Distribute squad size across positions using PoolConfig weights
-                $posCounts = $this->distributeByPosition($totalPlayers, $poolConfig);
-                $players   = [];
-
-                foreach ($posCounts as $posValue => $posTotal) {
-                    $position      = PlayerPosition::from($posValue);
-                    $foreignCount  = (int) round($posTotal * $foreignPct / 100);
-                    $domesticCount = $posTotal - $foreignCount;
-
-                    $domestic = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                        $abilityRange['min'], $abilityRange['max'], $position, $nationality, $domesticCount, $assignedPlayerIds
-                    );
-                    if (count($domestic) < $domesticCount) {
-                        $deficit  = $domesticCount - count($domestic);
-                        $extra    = $this->playerRepository->findForeignForWorldInitByPosition(
-                            $abilityRange['min'], $abilityRange['max'], '__none__', $position, $deficit, $assignedPlayerIds
-                        );
-                        $domestic = array_merge($domestic, $extra);
-                    }
-
-                    $foreign = $this->playerRepository->findForeignForWorldInitByPosition(
-                        $abilityRange['min'], $abilityRange['max'], $nationality, $position, $foreignCount, $assignedPlayerIds
-                    );
-                    if (count($foreign) < $foreignCount) {
-                        $deficit = $foreignCount - count($foreign);
-                        $extra   = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                            $abilityRange['min'], $abilityRange['max'], $position, $nationality, $deficit, $assignedPlayerIds
-                        );
-                        $foreign = array_merge($foreign, $extra);
-                    }
-
-                    $players = array_merge($players, $domestic, $foreign);
-                }
-
-                // Deduplicate within this club's own draw (domestic/foreign overlap edge case).
-                $players  = array_values(array_unique($players, SORT_REGULAR));
-                $this->assignAgents($players, $agents); // associate agents before snapshotting + deletion
-                $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,   (int) $tierConf['managerCount']);
-                $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,     (int) $tierConf['coachCount']);
-                $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN,  (int) $tierConf['chairmanCount']);
-                // Unlike Manager/Coach/Chairman above (unfiltered — long-standing NPC-club
-                // precedent), DOF/Facility Manager/Scout are nationality-filtered with
-                // backfill, matching StarterPackService's pattern for the player's own club.
-                $dofs     = $this->fillStaffRole(StaffRole::DIRECTOR_OF_FOOTBALL, (int) ($tierConf['directorOfFootballCount'] ?? 0), $nationality);
-                $facMgrs  = $this->fillStaffRole(StaffRole::FACILITY_MANAGER,     (int) ($tierConf['facilityManagerCount'] ?? 0),    $nationality);
-                $staff    = array_merge($managers, $coaches, $chairmen, $dofs, $facMgrs);
-                $scouts   = $this->fillScouts((int) ($tierConf['scoutCount'] ?? 0), $nationality);
-
-                foreach ($players as $p) {
-                    $id = (string) $p->getId();
-                    $npcPlayerIds[]      = $id;
-                    $assignedPlayerIds[] = $id; // exclude from all subsequent club draws
-                }
-                foreach ($staff as $s) { $npcStaffIds[] = (string) $s->getId(); }
-                // Scouts are NOT added to $npcStaffIds — Scout has no club FK and is never
-                // deleted on consumption (shared pool, like Agent).
-
-                $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff, $scouts);
-            }
-
-            $fixtures      = $this->fixtureGenerationService->generate($allClubIds);
-            $sponsorPot    = $this->rollLeagueSponsors($league, $gameConfig);
-            $leaguesData[] = $this->buildLeagueSnapshot($league, $clubsData, $fixtures, $sponsorPot, $gameConfig);
-        }
-
-        $this->playerRepository->deleteByIds($npcPlayerIds);
-        $this->staffRepository->deleteByIds($npcStaffIds);
-
-        return ['leagues' => $leaguesData];
-    }
-
-    /**
      * Builds the NPC club + player + fixture pack for a single league tier in a country.
-     * Consumes (deletes) pool players and staff used for NPC snapshots.
+     * Every player/coach/scout/DoF/chairman/facility-manager a club needs is generated
+     * fresh, in memory, directly into the cache — never drawn from or deleted out of the
+     * shared pool (see WorldPackClubGenerationService).
      *
      * @return array{id: string, tier: int, name: string, clubs: array, fixtures: array, ...}
      */
     public function buildTierPack(Club $club, string $country, int $tier): array
     {
         $starterConfig = $this->starterConfigRepository->getConfig();
-        $npcConfig     = $starterConfig->getNpcSquadConfig();
-        $leagueRanges  = $starterConfig->getLeagueAbilityRanges();
         $poolConfig    = $this->poolConfigRepository->getConfig();
         $gameConfig    = $this->gameConfigRepository->getConfig();
         $agents        = $this->agentRepository->findAll(); // shared agent pool — many players may reference one
@@ -232,14 +87,10 @@ class WorldInitializationService
         }
 
         $nationality  = ClubInitializationService::countryToNationality($country) ?? $country;
-        $tierKey      = (string) $tier;
-        $tierConf     = $npcConfig[$tierKey] ?? $this->defaultTierConfig($tier);
-        $configured   = $leagueRanges[$country][$tierKey] ?? null;
-        $abilityRange = ($configured && ($configured['min'] ?? 0) > 0)
-            ? ['min' => (int) $configured['min'], 'max' => (int) $configured['max']]
-            : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
+        $tierConf     = $this->resolveTierConfig($tier);
+        $abilityRange = $this->resolveAbilityRange($country, $tier);
 
-        $npcClubs        = $this->npcClubRepository->findByLeague($league);
+        $npcClubs = $this->npcClubRepository->findByLeague($league);
 
         // Bound the agent pool to ~worldPackPlayersPerAgent players per agent for this tier,
         // so distinct agents surfaced don't scale with the whole pool.
@@ -247,11 +98,8 @@ class WorldInitializationService
         $estimated = (int) ceil(count($npcClubs) * $avgSquad);
         $agents    = $this->selectBoundedAgentPool($agents, $estimated, $starterConfig->getWorldPackPlayersPerAgent());
 
-        $clubsData       = [];
-        $allClubIds      = [];
-        $npcPlayerIds    = [];
-        $npcStaffIds     = [];
-        $assignedPlayerIds = []; // cross-club exclusion list — prevents the same pool player appearing in multiple rosters
+        $clubsData  = [];
+        $allClubIds = [];
 
         if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
             $allClubIds[] = (string) $club->getId();
@@ -259,116 +107,22 @@ class WorldInitializationService
 
         foreach ($npcClubs as $npcClub) {
             $allClubIds[] = (string) $npcClub->getId();
-            $totalPlayers = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
-            $foreignPct   = (int) $tierConf['foreignPercent'];
-            $posCounts    = $this->distributeByPosition($totalPlayers, $poolConfig);
-            $players      = [];
 
-            foreach ($posCounts as $posValue => $posTotal) {
-                $position      = PlayerPosition::from($posValue);
-                $foreignCount  = (int) round($posTotal * $foreignPct / 100);
-                $domesticCount = $posTotal - $foreignCount;
+            $players = $this->clubGenerator->generatePlayers($tierConf, $abilityRange, $nationality, $poolConfig, $agents);
+            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality);
+            $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality);
 
-                $domestic = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                    $abilityRange['min'], $abilityRange['max'], $position, $nationality, $domesticCount, $assignedPlayerIds
-                );
-                if (count($domestic) < $domesticCount) {
-                    $deficit  = $domesticCount - count($domestic);
-                    $extra    = $this->playerRepository->findForeignForWorldInitByPosition(
-                        $abilityRange['min'], $abilityRange['max'], '__none__', $position, $deficit, $assignedPlayerIds
-                    );
-                    $domestic = array_merge($domestic, $extra);
-                }
-
-                $foreign = $this->playerRepository->findForeignForWorldInitByPosition(
-                    $abilityRange['min'], $abilityRange['max'], $nationality, $position, $foreignCount, $assignedPlayerIds
-                );
-                if (count($foreign) < $foreignCount) {
-                    $deficit = $foreignCount - count($foreign);
-                    $extra   = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                        $abilityRange['min'], $abilityRange['max'], $position, $nationality, $deficit, $assignedPlayerIds
-                    );
-                    $foreign = array_merge($foreign, $extra);
-                }
-
-                $players = array_merge($players, $domestic, $foreign);
-            }
-
-            // Deduplicate within this club's own draw (domestic/foreign overlap edge case).
-            $players  = array_values(array_unique($players, SORT_REGULAR));
-            $this->assignAgents($players, $agents); // associate agents before snapshotting + deletion
-            $managers = $this->staffRepository->findInPoolByRoleRandom(StaffRole::MANAGER,  (int) $tierConf['managerCount']);
-            $coaches  = $this->staffRepository->findInPoolByRoleRandom(StaffRole::COACH,    (int) $tierConf['coachCount']);
-            $chairmen = $this->staffRepository->findInPoolByRoleRandom(StaffRole::CHAIRMAN, (int) $tierConf['chairmanCount']);
-            // Unlike Manager/Coach/Chairman above (unfiltered — long-standing NPC-club
-            // precedent), DOF/Facility Manager/Scout are nationality-filtered with
-            // backfill, matching StarterPackService's pattern for the player's own club.
-            $dofs     = $this->fillStaffRole(StaffRole::DIRECTOR_OF_FOOTBALL, (int) ($tierConf['directorOfFootballCount'] ?? 0), $nationality);
-            $facMgrs  = $this->fillStaffRole(StaffRole::FACILITY_MANAGER,     (int) ($tierConf['facilityManagerCount'] ?? 0),    $nationality);
-            $staff    = array_merge($managers, $coaches, $chairmen, $dofs, $facMgrs);
-            $scouts   = $this->fillScouts((int) ($tierConf['scoutCount'] ?? 0), $nationality);
-
-            foreach ($players as $p) {
-                $id = (string) $p->getId();
-                $npcPlayerIds[]      = $id;
-                $assignedPlayerIds[] = $id; // exclude from all subsequent club draws
-            }
-            foreach ($staff as $s) { $npcStaffIds[] = (string) $s->getId(); }
-            // Scouts are NOT added to $npcStaffIds — Scout has no club FK and is never
-            // deleted on consumption (shared pool, like Agent).
-
-            $clubsData[] = $this->buildClubSnapshot($npcClub, $players, $staff, $scouts);
+            $clubsData[] = $this->clubGenerator->buildSnapshot($npcClub, $players, $staff, $scouts);
         }
 
         $fixtures   = $this->fixtureGenerationService->generate($allClubIds);
         $sponsorPot = $this->rollLeagueSponsors($league, $gameConfig);
 
-        $this->playerRepository->deleteByIds($npcPlayerIds);
-        $this->staffRepository->deleteByIds($npcStaffIds);
-
         return $this->buildLeagueSnapshot($league, $clubsData, $fixtures, $sponsorPot, $gameConfig);
     }
 
-    /**
-     * Distributes $total players across GK/DEF/MID/ATT using PoolConfig position weights.
-     * Uses the largest-remainder method so the counts always sum exactly to $total.
-     *
-     * @return array<string, int>  Keys are PlayerPosition backed-enum values ('GK','DEF','MID','ATT')
-     */
-    public function distributeByPosition(int $total, PoolConfig $config): array
-    {
-        $weights = [
-            PlayerPosition::GOALKEEPER->value => $config->getPositionWeightGk(),
-            PlayerPosition::DEFENDER->value   => $config->getPositionWeightDef(),
-            PlayerPosition::MIDFIELDER->value => $config->getPositionWeightMid(),
-            PlayerPosition::ATTACKER->value   => $config->getPositionWeightAtt(),
-        ];
-
-        $totalWeight = array_sum($weights);
-        $counts      = [];
-        $fractions   = [];
-        $assigned    = 0;
-
-        foreach ($weights as $pos => $weight) {
-            $exact        = $total * $weight / $totalWeight;
-            $counts[$pos] = (int) floor($exact);
-            $fractions[$pos] = $exact - $counts[$pos];
-            $assigned    += $counts[$pos];
-        }
-
-        // Distribute remainder to positions with the largest fractional parts
-        $remainder = $total - $assigned;
-        arsort($fractions);
-        foreach (array_keys($fractions) as $pos) {
-            if ($remainder <= 0) break;
-            $counts[$pos]++;
-            $remainder--;
-        }
-
-        return $counts;
-    }
-
-    private function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures, int $sponsorPot, GameConfig $gameConfig): array
+    /** Public: also called by WorldPackTierAssemblyService when folding per-club async generation results into the final payload. */
+    public function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures, int $sponsorPot, GameConfig $gameConfig): array
     {
         return [
             'id'                            => (string) $league->getId(),
@@ -393,7 +147,8 @@ class WorldInitializationService
      * Rolls sponsor pot for a league: randomises each LeagueSponsor's value within
      * the GameConfig band for its CompanySize, persists rolled values, returns the total.
      */
-    private function rollLeagueSponsors(League $league, GameConfig $config): int
+    /** Public: also called by WorldPackTierAssemblyService when folding per-club async generation results into the final payload. */
+    public function rollLeagueSponsors(League $league, GameConfig $config): int
     {
         $total = 0;
         foreach ($league->getLeagueSponsors() as $ls) {
@@ -407,55 +162,6 @@ class WorldInitializationService
             $total += $value;
         }
         return $total;
-    }
-
-    private function buildClubSnapshot(NpcClub $club, array $players, array $staff, array $scouts = []): array
-    {
-        return [
-            'id'              => (string) $club->getId(),
-            'name'            => $club->getName(),
-            'abbreviation'    => $club->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($club->getName()),
-            'tier'            => $club->getTier(),
-            'reputation'      => $club->getReputation(),
-            'startingBalance' => $club->getBalance(),
-            'primaryColor'   => $club->getPrimaryColor(),
-            'secondaryColor' => $club->getSecondaryColor(),
-            'identity'       => $club->getIdentity(),
-            'stadiumName'    => $club->getStadiumName(),
-            'facilities'     => $club->getFacilities(),
-            'region'         => $club->getRegion(),
-            'citySize'       => $club->getCitySize()->value,
-            'populationSize' => $club->getPopulationSize(),
-            'isCapital'      => $club->isCapital(),
-            'personality'    => [
-                'playingStyle'       => $club->getPlayingStyle(),
-                'financialApproach'  => $club->getFinancialApproach(),
-                'managerTemperament' => $club->getManagerTemperament(),
-            ],
-            'players' => array_map(fn(Player $p) => $this->buildPlayerSnapshot($p), $players),
-            'staff'   => array_map(fn(Staff $s) => $this->buildStaffSnapshot($s), $staff),
-            'scouts'  => array_map(fn(Scout $s) => $this->buildScoutSnapshot($s), $scouts),
-        ];
-    }
-
-    /**
-     * Reassigns each player a random agent from the available agent pool. Multiple
-     * players may reference the same agent — a many-to-one relationship is the
-     * intended shape (one agent represents several players). No-op when the pool is
-     * empty. Called at world-pack generation time, before players are snapshotted
-     * and deleted, so the in-memory FK is read straight into the snapshot with no flush.
-     *
-     * @param Player[] $players
-     * @param Agent[]  $agents
-     */
-    public function assignAgents(array $players, array $agents): void
-    {
-        if ($agents === []) {
-            return;
-        }
-        foreach ($players as $player) {
-            $player->setAgent($agents[array_rand($agents)]);
-        }
     }
 
     /**
@@ -479,102 +185,35 @@ class WorldInitializationService
         return array_slice($agents, 0, $target);
     }
 
-    public function buildPlayerSnapshot(Player $player): array
+    /**
+     * Per-tier squad composition config, live from StarterConfig with a hardcoded
+     * fallback — same source of truth buildTierPack() has always used. Public so the
+     * async per-club Messenger handler (WarmWorldPackClubMessageHandler) can resolve
+     * the same config a synchronous buildTierPack() call would, without duplicating
+     * this lookup.
+     */
+    public function resolveTierConfig(int $tier): array
     {
-        // getPersonality() returns PersonalityProfile (embedded object)
-        // getPosition() returns PlayerPosition backed enum — use ->value
-        $p = $player->getPersonality();
-        return [
-            'id'                => (string) $player->getId(),
-            'firstName'         => $player->getFirstName(),
-            'lastName'          => $player->getLastName(),
-            'position'          => $player->getPosition()->value,
-            'nationality'       => $player->getNationality(),
-            'dateOfBirth'       => $player->getDateOfBirth()->format('Y-m-d'),
-            'contractValue'     => $player->getContractValue(),
-            'potential'         => $player->getPotential(),
-            'currentAbility'    => $player->getCurrentAbility(),
-            'morale'            => $player->getMorale(),
-            'recruitmentSource' => $player->getRecruitmentSource()->value,
-            'isActive'          => $player->getStatus()->value === 'active',
-            'physical'    => [
-                'height' => $player->getHeight(),
-                'weight' => $player->getWeight(),
-            ],
-            'pace'        => $player->getPace(),
-            'technical'   => $player->getTechnical(),
-            'vision'      => $player->getVision(),
-            'power'       => $player->getPower(),
-            'stamina'     => $player->getStamina(),
-            'heart'       => $player->getHeart(),
-            'personality' => $p->toArray(),
-            'appearance' => $player->getAppearance(),
-            'agent'      => $player->getAgent()?->toSnapshotArray(),
-        ];
+        $npcConfig = $this->starterConfigRepository->getConfig()->getNpcSquadConfig();
+
+        return $npcConfig[(string) $tier] ?? $this->defaultTierConfig($tier);
     }
 
-    public function buildStaffSnapshot(Staff $staff): array
+    /**
+     * Per-tier player ability range: StarterConfig's admin-configured league ranges
+     * for this country/tier if set, else the hardcoded ABILITY_RANGES fallback. Public
+     * for the same reason as resolveTierConfig() above.
+     *
+     * @return array{min: int, max: int}
+     */
+    public function resolveAbilityRange(string $country, int $tier): array
     {
-        // getRole() returns StaffRole backed enum — use ->value
-        return [
-            'id'              => (string) $staff->getId(),
-            'firstName'       => $staff->getFirstName(),
-            'lastName'        => $staff->getLastName(),
-            'dateOfBirth'     => $staff->getDob()?->format('Y-m-d'),
-            'nationality'     => $staff->getNationality() ?? '',
-            'role'            => $staff->getRole()->value,
-            'tier'            => Tier::fromScore($staff->getCoachingAbility())->value,
-            'coachingAbility' => $staff->getCoachingAbility(),
-            'scoutingRange'   => $staff->getScoutingRange(),
-            'weeklySalary'    => $staff->getWeeklySalary(),
-            'morale'          => $staff->getMorale(),
-            'specialisms'     => $staff->getSpecialisms() ?? [],
-            'appearance'      => $staff->getAppearance(),
-            'personality'     => $staff->getPersonality()->toArray(),
-        ];
-    }
+        $leagueRanges = $this->starterConfigRepository->getConfig()->getLeagueAbilityRanges();
+        $configured   = $leagueRanges[$country][(string) $tier] ?? null;
 
-    /** Fetch up to $limit staff of $role matching $nationality; backfill with any-nationality if short. */
-    private function fillStaffRole(StaffRole $role, int $limit, string $nationality): array
-    {
-        $results = $this->staffRepository->findInPoolByRoleRandom($role, $limit, $nationality);
-        if (count($results) < $limit) {
-            $deficit = $limit - count($results);
-            $results = array_merge(
-                $results,
-                $this->staffRepository->findInPoolByRoleRandom($role, $deficit),
-            );
-        }
-        return $results;
-    }
-
-    public function buildScoutSnapshot(Scout $scout): array
-    {
-        return [
-            'id'          => (string) $scout->getId(),
-            'name'        => $scout->getName(),
-            'dateOfBirth' => $scout->getDob()?->format('Y-m-d'),
-            'nationality' => $scout->getNationality() ?? '',
-            'experience'  => $scout->getExperience(),
-            'tier'        => Tier::fromScore($scout->getExperience())->value,
-            'judgements'  => $scout->getJudgements(),
-            'appearance'  => $scout->getAppearance(),
-            'personality' => $scout->getPersonality()->toArray(),
-        ];
-    }
-
-    /** Fetch up to $limit scouts matching $nationality; backfill with any-nationality if short. */
-    private function fillScouts(int $limit, string $nationality): array
-    {
-        $results = $this->scoutRepository->findInPool($limit, nationality: $nationality);
-        if (count($results) < $limit) {
-            $deficit = $limit - count($results);
-            $results = array_merge(
-                $results,
-                $this->scoutRepository->findInPool($deficit),
-            );
-        }
-        return $results;
+        return ($configured && ($configured['min'] ?? 0) > 0)
+            ? ['min' => (int) $configured['min'], 'max' => (int) $configured['max']]
+            : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
     }
 
     private function defaultTierConfig(int $tier): array

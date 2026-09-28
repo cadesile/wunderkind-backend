@@ -14,7 +14,7 @@ class ClubFinancialYearTest extends TestCase
 {
     private function club(): Club
     {
-        return new Club('Test FC', $this->createMock(User::class));
+        return new Club('Test FC', $this->createStub(User::class));
     }
 
     public function testBatchSpanningWeek52FiresOnce(): void

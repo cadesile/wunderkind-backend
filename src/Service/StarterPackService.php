@@ -26,7 +26,7 @@ class StarterPackService
         private readonly ScoutRepository            $scoutRepository,
         private readonly StarterConfigRepository    $starterConfigRepository,
         private readonly PoolConfigRepository       $poolConfigRepository,
-        private readonly WorldInitializationService $worldInitializationService,
+        private readonly WorldPackSnapshotBuilder   $snapshotBuilder,
         private readonly EntityManagerInterface     $em,
     ) {}
 
@@ -43,7 +43,7 @@ class StarterPackService
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
         $poolConfig = $this->poolConfigRepository->getConfig();
-        $posCounts  = $this->worldInitializationService->distributeByPosition(
+        $posCounts  = $this->snapshotBuilder->distributeByPosition(
             $starterConfig->getStarterPlayerCount(),
             $poolConfig
         );
@@ -100,15 +100,15 @@ class StarterPackService
 
         // Build snapshots before deletion (entities must exist to serialise)
         $playerSnapshots = array_map(
-            fn(Player $p) => $this->worldInitializationService->buildPlayerSnapshot($p),
+            fn(Player $p) => $this->snapshotBuilder->buildPlayerSnapshot($p),
             $ampPlayers
         );
         $staffSnapshots = array_map(
-            fn(Staff $s) => $this->worldInitializationService->buildStaffSnapshot($s),
+            fn(Staff $s) => $this->snapshotBuilder->buildStaffSnapshot($s),
             $ampStaff
         );
         $scoutSnapshots = array_map(
-            fn(Scout $s) => $this->worldInitializationService->buildScoutSnapshot($s),
+            fn(Scout $s) => $this->snapshotBuilder->buildScoutSnapshot($s),
             $ampScouts
         );
 

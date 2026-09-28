@@ -22,7 +22,7 @@ class PlayerGenerationServiceTest extends TestCase
 
     private function makeService(): PlayerGenerationService
     {
-        $nameGen = $this->createMock(NameGeneratorService::class);
+        $nameGen = $this->createStub(NameGeneratorService::class);
         $nameGen->method('getRandomNationality')->willReturn('English');
         $nameGen->method('generatePlayerName')->willReturn([
             'firstName' => 'Test',
@@ -73,7 +73,7 @@ class PlayerGenerationServiceTest extends TestCase
         // 12-13), so this test sets an explicit range to verify generation
         // honors whatever PoolConfig specifies, rather than pinning to
         // whichever default happens to be configured today.
-        $nameGen = $this->createMock(NameGeneratorService::class);
+        $nameGen = $this->createStub(NameGeneratorService::class);
         $nameGen->method('getRandomNationality')->willReturn('English');
         $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Test', 'lastName' => 'Player']);
 
@@ -126,7 +126,7 @@ class PlayerGenerationServiceTest extends TestCase
 
     private function makeServiceWithAgeRange(int $min, int $max): PlayerGenerationService
     {
-        $nameGen = $this->createMock(NameGeneratorService::class);
+        $nameGen = $this->createStub(NameGeneratorService::class);
         $nameGen->method('getRandomNationality')->willReturn('English');
         $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Test', 'lastName' => 'Player']);
 
@@ -174,7 +174,7 @@ class PlayerGenerationServiceTest extends TestCase
 
     public function testForcedNationalityIsRespected(): void
     {
-        $nameGen = $this->createMock(NameGeneratorService::class);
+        $nameGen = $this->createStub(NameGeneratorService::class);
         $nameGen->method('getRandomNationality')->willReturn('English');
         $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Carlos', 'lastName' => 'Ruiz']);
         $svc = new PlayerGenerationService($nameGen, $this->makePoolConfigRepo());

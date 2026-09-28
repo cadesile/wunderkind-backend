@@ -26,17 +26,17 @@ class DeterministicEngineTest extends TestCase
     /** Neutral (1.0 for every pairing) unless a specific multiplier map is supplied. */
     private function makeEngine(array $multipliers = []): DeterministicEngine
     {
-        $repo = $this->createMock(TacticalAdvantageRepository::class);
+        $repo = $this->createStub(TacticalAdvantageRepository::class);
         $repo->method('findMultiplier')->willReturnCallback(
             static fn (PlayingStyle $style, PlayingStyle $opponentStyle) => $multipliers["{$style->value}:{$opponentStyle->value}"] ?? 1.0,
         );
 
-        $configRepo = $this->createMock(GameConfigRepository::class);
+        $configRepo = $this->createStub(GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn(new GameConfig());
 
         // A stub, not the real port under test elsewhere (MatchNarrativeGeneratorServiceTest) —
         // this suite is only exercising DeterministicEngine's own score/lineup/card model.
-        $narrativeGenerator = $this->createMock(MatchNarrativeGeneratorService::class);
+        $narrativeGenerator = $this->createStub(MatchNarrativeGeneratorService::class);
         $narrativeGenerator->method('generate')->willReturn([['minute' => 1, 'isKeyEvent' => false, 'eventType' => null, 'text' => 'Kick-off.', 'playerA' => null, 'playerB' => null, 'side' => null]]);
 
         return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
@@ -45,13 +45,13 @@ class DeterministicEngineTest extends TestCase
     /** Same as makeEngine(), but records every call to generate() so ET/penalty flags passed to it can be asserted on. */
     private function makeEngineCapturingNarrativeArgs(array &$capturedCalls): DeterministicEngine
     {
-        $repo = $this->createMock(TacticalAdvantageRepository::class);
+        $repo = $this->createStub(TacticalAdvantageRepository::class);
         $repo->method('findMultiplier')->willReturn(1.0);
 
-        $configRepo = $this->createMock(GameConfigRepository::class);
+        $configRepo = $this->createStub(GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn(new GameConfig());
 
-        $narrativeGenerator = $this->createMock(MatchNarrativeGeneratorService::class);
+        $narrativeGenerator = $this->createStub(MatchNarrativeGeneratorService::class);
         $narrativeGenerator->method('generate')->willReturnCallback(
             function (...$args) use (&$capturedCalls) {
                 $capturedCalls[] = ['wentToExtraTime' => $args[6], 'wentToPenalties' => $args[7], 'penaltyHomeScore' => $args[8], 'penaltyAwayScore' => $args[9]];

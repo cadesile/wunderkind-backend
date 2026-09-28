@@ -14,12 +14,12 @@ class NpcClubGenerationServiceLeagueTest extends TestCase
 {
     public function testGenerateClubsCallsAssignForEachClub(): void
     {
-        $facilityRepo = $this->createMock(FacilityTemplateRepository::class);
+        $facilityRepo = $this->createStub(FacilityTemplateRepository::class);
         $facilityRepo->method('findBy')->willReturn([]);
 
-        $npcClubRepo = $this->createMock(NpcClubRepository::class);
+        $npcClubRepo = $this->createStub(NpcClubRepository::class);
 
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
 
         $leagueService = $this->createMock(LeagueService::class);
         $leagueService->expects($this->exactly(2))

@@ -4,15 +4,14 @@ namespace App\Tests\Service;
 
 use App\Entity\Agent;
 use App\Entity\Player;
-use App\Service\WorldInitializationService;
+use App\Service\WorldPackSnapshotBuilder;
 use PHPUnit\Framework\TestCase;
 
 class WorldInitializationAgentAssignmentTest extends TestCase
 {
-    private function service(): WorldInitializationService
+    private function service(): WorldPackSnapshotBuilder
     {
-        // assignAgents is a pure mapper over its arguments — no constructor deps needed.
-        return (new \ReflectionClass(WorldInitializationService::class))->newInstanceWithoutConstructor();
+        return new WorldPackSnapshotBuilder();
     }
 
     public function testEveryPlayerGetsAnAgentAndAgentsAreSharedWhenFewerThanPlayers(): void

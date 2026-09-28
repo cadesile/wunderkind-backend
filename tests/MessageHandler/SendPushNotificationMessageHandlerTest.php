@@ -35,7 +35,7 @@ class SendPushNotificationMessageHandlerTest extends TestCase
         $unknownDevice = $this->makeDevice('unknown-token');
         $invalidDevice = $this->makeDevice('invalid-token');
 
-        $deviceRepository = $this->createMock(UserDeviceRepository::class);
+        $deviceRepository = $this->createStub(UserDeviceRepository::class);
         $deviceRepository->method('findByUserIds')->willReturn([$goodDevice, $unknownDevice, $invalidDevice]);
 
         $report = MulticastSendReport::withItems([
@@ -67,7 +67,7 @@ class SendPushNotificationMessageHandlerTest extends TestCase
 
     public function testNoDevicesMeansNoFirebaseCall(): void
     {
-        $deviceRepository = $this->createMock(UserDeviceRepository::class);
+        $deviceRepository = $this->createStub(UserDeviceRepository::class);
         $deviceRepository->method('findByUserIds')->willReturn([]);
 
         $messaging = $this->createMock(Messaging::class);
@@ -87,7 +87,7 @@ class SendPushNotificationMessageHandlerTest extends TestCase
             $devices[] = $this->makeDevice("token-{$i}");
         }
 
-        $deviceRepository = $this->createMock(UserDeviceRepository::class);
+        $deviceRepository = $this->createStub(UserDeviceRepository::class);
         $deviceRepository->method('findByUserIds')->willReturn($devices);
 
         $messaging = $this->createMock(Messaging::class);
@@ -97,7 +97,7 @@ class SendPushNotificationMessageHandlerTest extends TestCase
                 array_map(static fn (string $t) => SendReport::success(MessageTarget::with('token', $t), []), $tokens),
             ));
 
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
 
         $handler = new SendPushNotificationMessageHandler($messaging, $deviceRepository, $em);
         $handler(new SendPushNotificationMessage(['user-1'], 'Title', 'Body'));
@@ -113,18 +113,18 @@ class SendPushNotificationMessageHandlerTest extends TestCase
      */
     public function testDistinctEventsGetDistinctCollapseKeys(): void
     {
-        $deviceRepository = $this->createMock(UserDeviceRepository::class);
+        $deviceRepository = $this->createStub(UserDeviceRepository::class);
         $deviceRepository->method('findByUserIds')->willReturn([$this->makeDevice('token')]);
 
         $sentMessages = [];
-        $messaging    = $this->createMock(Messaging::class);
+        $messaging    = $this->createStub(Messaging::class);
         $messaging->method('sendMulticast')->willReturnCallback(function (CloudMessage $message) use (&$sentMessages) {
             $sentMessages[] = $message;
 
             return MulticastSendReport::withItems([SendReport::success(MessageTarget::with('token', 'token'), [])]);
         });
 
-        $em     = $this->createMock(EntityManagerInterface::class);
+        $em     = $this->createStub(EntityManagerInterface::class);
         $handler = new SendPushNotificationMessageHandler($messaging, $deviceRepository, $em);
 
         $handler(new SendPushNotificationMessage(['user-1'], 'Full-time!', 'Home 1-0 Away', ['type' => 'MATCH_RESULT', 'fixtureId' => 'fixture-1']));

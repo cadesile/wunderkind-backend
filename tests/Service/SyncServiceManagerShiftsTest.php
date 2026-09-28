@@ -12,7 +12,7 @@ class SyncServiceManagerShiftsTest extends TestCase
 {
     public function testManagerShiftIncreasesTemperament(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test', $user);
         $club->setManagerTemperament(50);
 
@@ -23,7 +23,7 @@ class SyncServiceManagerShiftsTest extends TestCase
 
     public function testManagerShiftClampsAtMaximum(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test', $user);
         $club->setManagerTemperament(98);
 
@@ -34,7 +34,7 @@ class SyncServiceManagerShiftsTest extends TestCase
 
     public function testManagerShiftClampsAtMinimum(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test', $user);
         $club->setManagerDiscipline(3);
 
@@ -45,7 +45,7 @@ class SyncServiceManagerShiftsTest extends TestCase
 
     public function testEmptyShiftsDoNotChangeTraits(): void
     {
-        $user    = $this->createMock(User::class);
+        $user    = $this->createStub(User::class);
         $club = new Club('Test', $user);
 
         $before = [

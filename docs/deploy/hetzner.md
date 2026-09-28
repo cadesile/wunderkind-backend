@@ -208,12 +208,44 @@ it the post-login redirect drops to `http://`.
 
 ## Cron
 
-The image bakes a crontab (busybox `crond` under supervisord) running `pool-warm.sh` and
-`worldpack-warm.sh` every 6 hours and `leaderboards-generate.sh` every 5 minutes. It runs
-in **every** environment, so the dev stack does the same periodic work as prod.
+The image bakes a crontab (busybox `crond` under supervisord) running
+`leaderboards-generate.sh` every 5 minutes, among other entries — see the comment block
+above the crontab `RUN` step in the `Dockerfile` for the full schedule. It runs in
+**every** environment, so the dev stack does the same periodic work as prod.
 
-Also every 1 minute: `docker/messenger-consume.sh` drains the async Messenger transport
-(push notifications — see `src/Service/Notification/PushNotificationService.php`). The
-Doctrine transport's `messenger_messages` table is created by the migration in this repo, not
-by a separate `messenger:setup-transports` deploy step — `MESSENGER_TRANSPORT_DSN`'s
-`auto_setup=1` means it would also self-create on first dispatch if ever missing.
+**Pool/world-pack warming is no longer cron-scheduled.** `docker/pool-warm.sh` and
+`docker/worldpack-warm.sh` (and their crontab entries) were removed once World Pack Cache
+generation stopped drawing Player/Staff/Scout from the shared pool — each country/tier
+regenerate now generates everything it needs fresh, so there's nothing left for a
+scheduled pool top-up to feed. `app:pool:warm` and `app:worldpack:warm` are still real,
+manually-runnable console commands (`lando php bin/console app:pool:warm <country>` /
+via `docker compose exec app` in prod) — just no longer scheduled. Note this means the
+shared pool (still consumed by `StarterPackService`'s starter-squad draw and
+`MarketController`'s live "sign from market" feature) has **no automatic replenishment**
+going forward and will drain over time; run `app:pool:warm` by hand if it does. This
+isn't a bug to "fix" by re-adding the cron — it's a deliberate tradeoff, so don't assume
+a future "market/starter-pack pool ran dry" report points at a regression here.
+
+Also every 1 minute: `docker/messenger-consume.sh` drains the `async` Messenger transport
+(push notifications — see `src/Service/Notification/PushNotificationService.php`), and
+`docker/worldpack-consume.sh` separately drains the `worldpack` transport (World Pack Cache
+tier/club generation — see `WorldPackGenerationOrchestrator`). These are two independent
+consumers, not one consumer reading two transports: a country regenerate can queue 100+
+DB-heavy club-generation messages, and the two transports used to share one queue, so a
+large regenerate (or a backlog of failing/retrying push sends) delayed the other. Splitting
+them into separate `queue_name`s (`config/packages/messenger.yaml`) with their own
+cron-scheduled consumer means each makes independent progress. Both use the same
+underlying Doctrine `messenger_messages` table (`queue_name` differentiates rows, not the
+table), created by the migration in this repo, not a separate `messenger:setup-transports`
+deploy step — `MESSENGER_TRANSPORT_DSN`'s `auto_setup=1` means it would also self-create on
+first dispatch if ever missing.
+
+**Local lando dev does not run this crontab at all** — `.lando.yml` uses Lando's generic
+`symfony` recipe, not this repo's `Dockerfile`, so none of its baked-in cron entries
+(including both Messenger consumers) ever run locally. Queued messages just sit in
+`messenger_messages` until drained by hand: `lando php bin/console messenger:consume async
+-vv` / `messenger:consume worldpack -vv` (add `--time-limit`/`--limit` to bound a run). This
+is why a local "Regenerate Country Cache" can appear to hang at "already active" — the run
+is genuinely still queued, not stuck; draining `worldpack` resolves it. The deployed dev/
+staging/prod environments below **do** run the real Dockerfile crontab, so this gap is
+lando-only.

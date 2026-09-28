@@ -9,7 +9,7 @@ use App\Entity\Scout;
 use App\Entity\Staff;
 use App\Enum\StaffRole;
 use App\Service\MarketDataService;
-use App\Service\WorldInitializationService;
+use App\Service\WorldPackSnapshotBuilder;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -73,9 +73,9 @@ class PersonalitySerializationTest extends TestCase
         $this->assertSame(2, $scout['personality']['consistency']);
     }
 
-    private function world(): WorldInitializationService
+    private function world(): WorldPackSnapshotBuilder
     {
-        return (new \ReflectionClass(WorldInitializationService::class))->newInstanceWithoutConstructor();
+        return new WorldPackSnapshotBuilder();
     }
 
     private function callPrivate(object $svc, string $method, object $arg): array

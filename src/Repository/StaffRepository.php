@@ -86,23 +86,6 @@ class StaffRepository extends ServiceEntityRepository
     }
 
     /**
-     * Bulk-delete staff by UUID array. Used after world-init dispatch.
-     * @param string[] $ids
-     */
-    public function deleteByIds(array $ids): void
-    {
-        if (empty($ids)) {
-            return;
-        }
-        $this->createQueryBuilder('s')
-            ->delete()
-            ->where('s.id IN (:ids)')
-            ->setParameter('ids', $ids)
-            ->getQuery()
-            ->execute();
-    }
-
-    /**
      * Pool breakdown for the admin dashboard. Same shape as
      * {@see \App\Repository\PlayerRepository::getPoolBreakdown()}, nested on role
      * rather than nationality — role is the axis that actually differentiates staff.

@@ -28,8 +28,6 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --no-script
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/jwt-entrypoint.sh /usr/local/bin/jwt-entrypoint.sh
-COPY docker/pool-warm.sh /usr/local/bin/pool-warm.sh
-COPY docker/worldpack-warm.sh /usr/local/bin/worldpack-warm.sh
 COPY docker/leaderboards-generate.sh /usr/local/bin/leaderboards-generate.sh
 COPY docker/post-community-stat.sh /usr/local/bin/post-community-stat.sh
 COPY docker/post-community-stat-tick.sh /usr/local/bin/post-community-stat-tick.sh
@@ -40,10 +38,9 @@ COPY docker/competition-resolve-rounds.sh /usr/local/bin/competition-resolve-rou
 COPY docker/competition-send-round-reminders.sh /usr/local/bin/competition-send-round-reminders.sh
 COPY docker/competition-auto-fill-spoof-entrants.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh
 COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
+COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
-#   :00 — pool-warm:              top up player/staff/scout pool for all 19 countries
-#   :30 — worldpack-warm:         rebuild NPC league caches (consumes from the freshly stocked pool)
 #   every 5 min — leaderboards-generate: recompute scores/ranks + invalidate leaderboard cache
 #   every 15 min — post-community-stat-tick: checks GameConfig's admin-editable
 #     auto-post schedule (enabled + interval-hours) per period tier and runs
@@ -78,11 +75,14 @@ COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 #     notifications + admin-broadcast push-audience resolution). Same tight
 #     cadence as competition-draw-rounds/-resolve-rounds since a delayed push is
 #     a stale one.
-# pool-warm/worldpack-warm run every 6 hours with 256 MB PHP memory limit (set inside each script).
+#   every 1 min — worldpack-consume: drains the separate `worldpack` Messenger
+#     transport (World Pack Cache tier/club generation). Split from
+#     messenger-consume.sh's `async` transport deliberately — a country
+#     regenerate can queue 100+ DB-heavy club-generation messages, and sharing
+#     one queue with push notifications meant each delayed the other. Own
+#     lockfile/log, so a slow generation batch never blocks push delivery.
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
-    '0  */6 * * * /usr/local/bin/pool-warm.sh              >> /var/log/pool-cron.log         2>&1' \
-    '30 */6 * * * /usr/local/bin/worldpack-warm.sh         >> /var/log/worldpack-cron.log     2>&1' \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
     '*/15 * * * * /usr/local/bin/post-community-stat-tick.sh >> /var/log/post-stat-cron.log 2>&1' \
     '*/15 * * * * /usr/local/bin/telemetry-generate.sh     >> /var/log/telemetry-cron.log     2>&1' \
@@ -92,10 +92,11 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/5 * * * *  /usr/local/bin/competition-send-round-reminders.sh >> /var/log/competition-reminders-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/competition-auto-fill-spoof-entrants.sh >> /var/log/competition-auto-fill-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/messenger-consume.sh               >> /var/log/messenger-consume-cron.log     2>&1' \
+    '* * * * *    /usr/local/bin/worldpack-consume.sh                >> /var/log/worldpack-consume-cron.log    2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/pool-warm.sh /usr/local/bin/worldpack-warm.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

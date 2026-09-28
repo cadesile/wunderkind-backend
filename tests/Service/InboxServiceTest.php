@@ -23,8 +23,8 @@ class InboxServiceTest extends TestCase
     protected function setUp(): void
     {
         $this->em         = $this->createMock(EntityManagerInterface::class);
-        $sponsorRepo    = $this->createMock(SponsorRepository::class);
-        $investorRepo   = $this->createMock(InvestorRepository::class);
+        $sponsorRepo    = $this->createStub(SponsorRepository::class);
+        $investorRepo   = $this->createStub(InvestorRepository::class);
         $this->service    = new InboxService($this->em, $sponsorRepo, $investorRepo);
     }
 
@@ -74,10 +74,10 @@ class InboxServiceTest extends TestCase
         $sponsor->expects($this->once())->method('setClub')->with($club);
         $sponsor->expects($this->once())->method('setMonthlyPayment')->with(5000_00);
 
-        $sponsorRepo = $this->createMock(SponsorRepository::class);
+        $sponsorRepo = $this->createStub(SponsorRepository::class);
         $sponsorRepo->method('find')->willReturn($sponsor);
 
-        $investorRepo = $this->createMock(InvestorRepository::class);
+        $investorRepo = $this->createStub(InvestorRepository::class);
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->once())->method('flush');
@@ -97,7 +97,7 @@ class InboxServiceTest extends TestCase
             'durationMonths' => 12,
         ]);
 
-        $mockUser = $this->createMock(User::class);
+        $mockUser = $this->createStub(User::class);
         $service->acceptMessage($message, $mockUser);
 
         $this->assertSame(MessageStatus::ACCEPTED, $message->getStatus());

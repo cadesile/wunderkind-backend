@@ -28,7 +28,7 @@ class EligibilityEvaluatorTest extends TestCase
 
     private function makeEvaluator(int $seasonsCompleted = 0): EligibilityEvaluator
     {
-        $seasonRecordRepository = $this->createMock(SeasonRecordRepository::class);
+        $seasonRecordRepository = $this->createStub(SeasonRecordRepository::class);
         $seasonRecordRepository->method('countByClub')->willReturn($seasonsCompleted);
 
         return new EligibilityEvaluator($seasonRecordRepository, new NullLogger());
