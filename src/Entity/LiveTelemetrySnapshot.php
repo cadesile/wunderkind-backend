@@ -184,21 +184,30 @@ class LiveTelemetrySnapshot
         return $sign . '£' . number_format(abs($pounds), 0);
     }
 
-    /** e.g. "5% — Bert's Fencing" or "No dilution activity" if nothing qualified this window. */
-    public function getDilutionSummaryFormatted(): string
+    /**
+     * The 3rd stat box's big pixel-font value — kept short ("5%" / "—") so it never
+     * wraps under that font's size, unlike a full "5% — Bert's Fencing" sentence
+     * would. The counterparty name goes in the box's smaller sub-line instead, via
+     * getDilutionCounterpartyFormatted().
+     */
+    public function getDilutionPercentFormatted(): string
     {
-        if ($this->dilutionEquityPercent === null) {
-            return 'No dilution activity';
-        }
-
-        $counterparty = $this->dilutionCounterparty ?? 'an investor';
-
-        return "{$this->dilutionEquityPercent}% — {$counterparty}";
+        return $this->dilutionEquityPercent === null ? '—' : "{$this->dilutionEquityPercent}%";
     }
 
-    /** e.g. "4 covenants // 3 fallout" — the redesigned 4th stat box. */
-    public function getCovenantFalloutSummaryFormatted(): string
+    /** The 3rd stat box's sub-line — the counterparty name, or a fallback when nothing qualified this window. */
+    public function getDilutionCounterpartyFormatted(): string
     {
-        return "{$this->covenantActiveCount} covenants // {$this->dressingRoomFalloutCount} fallout";
+        return $this->dilutionCounterparty ?? 'No dilution activity';
+    }
+
+    /**
+     * The 4th stat box's big pixel-font value — "N / N" rather than a full
+     * "N covenants // N fallout" sentence, which wrapped and overflowed the box at
+     * that font's size. The "Covenants / Fallout" legend goes in the sub-line.
+     */
+    public function getCovenantFalloutCompactFormatted(): string
+    {
+        return "{$this->covenantActiveCount} / {$this->dressingRoomFalloutCount}";
     }
 }
