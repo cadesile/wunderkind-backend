@@ -113,7 +113,9 @@ migrations are the change log (see `migrations.md`).
 - **`SyncRecord`** — one client sync event. `clientWeekNumber`,
   `clientTimestamp/serverTimestamp`, `payload:array`, `debugLog:?array`,
   `isValid`, `invalidReason`, `isRollback`. `ManyToOne` → `Club` (not
-  nullable).
+  nullable). **`payload.ledger[].amount` is 100x true pence — see
+  `schema.md`'s "`sync_record.payload` field conventions" section before
+  reading or displaying it anywhere.**
 - **`SeasonRecord`** — end-of-season league result. `season/
   finalPosition/gamesPlayed/wins/draws/losses/goalsFor/goalsAgainst/
   points:int`, `promoted/relegated:bool`. `ManyToOne` → `Club`, `League`

@@ -32,13 +32,19 @@ use App\Entity\LiveTelemetrySnapshot;
  * buildLedgerEvents()/buildAttendanceEvents() already take toward
  * payload['ledger']/payload['attendance'].
  *
- * Known caveat, not fixed here: ledger[].amount values look ~100x inflated
- * relative to their own description text in real payloads (e.g. a "£4,000" fan
- * event's ledger amount implies £4,000,000). This service avoids building any
- * *new* monetary display on top of ledger[].amount — buildDilutionEvents() and
- * buildCovenantEvents() source exact figures from promises[].offer.amountPence
- * instead, which doesn't show the same discrepancy. Existing ledger-based figures
- * (capitalDeployedPence, buildLedgerEvents()'s own spend lines) are untouched.
+ * Ledger unit convention: `ledger[].amount` (the on-device game engine's own
+ * financial-activity log, archived verbatim into SyncRecord.payload — see the
+ * class docblock above) is sent by the client at **100x true pence**, i.e.
+ * `amount / 100` is real pence and `amount / 10_000` is real pounds. Confirmed
+ * by cross-referencing `excursions[].costPence` (an exact, non-suspect field)
+ * against its matching `fan_initiative` ledger line for the same booking: the
+ * ledger amount is always exactly 100x the costPence value. Every consumer of
+ * `ledger[].amount` in this class must go through `ledgerAmountToPence()`
+ * below rather than treating the raw value as pence directly — see that
+ * method's docblock. `promises[].offer.amountPence` is a separate, correctly-
+ * scaled field and needs no correction (buildDilutionEvents() and
+ * buildCovenantEvents() already source their exact figures from it instead of
+ * from `ledger[].amount`, for this reason).
  */
 class LiveTelemetryService
 {
@@ -89,6 +95,18 @@ class LiveTelemetryService
 
     private const COMMUNITY_SENTIMENT_EXTREME_HIGH = 85;
     private const COMMUNITY_SENTIMENT_EXTREME_LOW  = 25;
+
+    /**
+     * Converts a raw `ledger[].amount` value to real pence — see the class
+     * docblock's "Ledger unit convention" note. Integer division (not float)
+     * to avoid rounding drift when summing many entries (capitalDeployedPence).
+     * The single point every consumer of `ledger[].amount` must go through;
+     * never read `entry['amount']` directly elsewhere in this class.
+     */
+    private static function ledgerAmountToPence(mixed $rawAmount): int
+    {
+        return intdiv((int) $rawAmount, 100);
+    }
 
     public function __construct(
         private readonly SyncRecordRepository $syncRecordRepository,
@@ -176,6 +194,8 @@ class LiveTelemetryService
      * (always-negative spend) plus transfers[].grossFee for incoming "signing"/
      * "agent_assisted" transfers (money paid to acquire a player). Deliberately excludes
      * revenue categories (matchday_income, sponsor_payment) and "sale" transfers (money in).
+     * Ledger amounts are corrected via ledgerAmountToPence() (see class docblock);
+     * transfers[].grossFee needs no correction — it's a separate, correctly-scaled field.
      *
      * @param array<int, array<string, mixed>> $payloads
      * @return array{fixturesSimulated: int, capitalDeployedPence: int, wins: int, draws: int, losses: int}
@@ -199,7 +219,7 @@ class LiveTelemetryService
 
             foreach ($payload['ledger'] ?? [] as $entry) {
                 if (in_array($entry['category'] ?? null, self::SPEND_LEDGER_CATEGORIES, true)) {
-                    $capitalDeployedPence += abs((int) ($entry['amount'] ?? 0));
+                    $capitalDeployedPence += abs(self::ledgerAmountToPence($entry['amount'] ?? 0));
                 }
             }
 
@@ -256,6 +276,7 @@ class LiveTelemetryService
      * generated fiction) — see findValidPayloadsSince() for the row shape. Excludes
      * categories now surfaced under their own dedicated category (see
      * LEDGER_CATEGORY_EXCLUSIONS) to avoid the same line appearing twice.
+     * amountPence is corrected via ledgerAmountToPence() (see class docblock).
      *
      * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}> $syncRows
      * @return array<int, array<string, mixed>>
@@ -270,7 +291,7 @@ class LiveTelemetryService
                     continue;
                 }
 
-                $amountPence = (int) ($entry['amount'] ?? 0);
+                $amountPence = self::ledgerAmountToPence($entry['amount'] ?? 0);
                 $description = trim((string) ($entry['description'] ?? ''));
                 if ($amountPence >= 0 || $description === '') {
                     continue;

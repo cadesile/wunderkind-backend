@@ -46,7 +46,9 @@ class LiveTelemetryServiceTest extends TestCase
             ]],
         ]);
 
-        $this->assertSame(23625000 + 31940000, $result['capitalDeployedPence']);
+        // Raw ledger amounts are 100x true pence (see LiveTelemetryService's class
+        // docblock "Ledger unit convention") — capitalDeployedPence is real pence.
+        $this->assertSame((23625000 + 31940000) / 100, $result['capitalDeployedPence']);
     }
 
     public function testExcludesRevenueLedgerCategories(): void
@@ -105,7 +107,9 @@ class LiveTelemetryServiceTest extends TestCase
         $this->assertSame(3, $result['fixturesSimulated']);
         $this->assertSame(2, $result['wins']);
         $this->assertSame(1, $result['losses']);
-        $this->assertSame(5100, $result['capitalDeployedPence']);
+        // transfers[].grossFee is real pence (unaffected); the ledger amount -100
+        // is 100x true pence, so it contributes intdiv(100, 100) = 1, not 100.
+        $this->assertSame(5001, $result['capitalDeployedPence']);
     }
 
     public function testHandlesEmptyOrMissingKeysGracefully(): void
@@ -187,7 +191,8 @@ class LiveTelemetryServiceTest extends TestCase
 
         $events = LiveTelemetryService::buildLedgerEvents($syncRows, $now, 5);
 
-        $this->assertSame('Ferrington Athletic spent £1.2M: DOF assigned scouting mission — Louie Norris (MID)', $events[0]['text']);
+        // Raw amount -118690800 is 100x true pence -> real spend is £11.9K, not £1.2M.
+        $this->assertSame('Ferrington Athletic spent £11.9K: DOF assigned scouting mission — Louie Norris (MID)', $events[0]['text']);
         $this->assertCount(2, $events);
     }
 
@@ -258,7 +263,7 @@ class LiveTelemetryServiceTest extends TestCase
 
         $ledgerEvents = LiveTelemetryService::buildLedgerEvents([
             ['serverTimestamp' => $now->modify('-1 hour'), 'clubName' => 'Ledger Club', 'payload' => ['ledger' => [
-                ['category' => 'wages', 'amount' => -500, 'description' => 'Week 1 payroll'],
+                ['category' => 'wages', 'amount' => -50000, 'description' => 'Week 1 payroll'],
             ]]],
         ], $now, 5);
 
@@ -283,7 +288,7 @@ class LiveTelemetryServiceTest extends TestCase
 
         $ledgerEvents = LiveTelemetryService::buildLedgerEvents([
             ['serverTimestamp' => $now, 'clubName' => 'Ledger Club', 'payload' => ['ledger' => [
-                ['category' => 'wages', 'amount' => -500, 'description' => 'Week 1 payroll'],
+                ['category' => 'wages', 'amount' => -50000, 'description' => 'Week 1 payroll'],
             ]]],
         ], $now, 5);
 

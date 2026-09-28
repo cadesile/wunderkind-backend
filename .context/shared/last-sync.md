@@ -5,6 +5,33 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** 5cf9851 (development, merged into dev)
+- **Date:** 2026-09-28
+- **Stages touched this pass:** 03_data, 04_interfaces (targeted fix + doc
+  pass, not a full stage regen — `.context/` was ~28 commits stale going
+  into this session per the staleness check, including two admin
+  club-profile commits (`2cb67c4`, `aa07cb9`) and the landing-page
+  Boardroom Incident Feed (`0ebf4e4`) that `04_interfaces/output/
+  controllers.md` still doesn't document; flagged to the user as a
+  follow-up rather than regenerated unprompted). Fixed a real financial
+  display bug found via user-supplied evidence (in-game ledger screen vs.
+  admin club profile vs. raw sync payload for the same events, all three
+  compared side by side): `payload.ledger[].amount` is 100x true pence, not
+  real pence as every consumer assumed — confirmed by cross-referencing
+  `excursions[].costPence` against its matching `fan_initiative` ledger
+  line (always exactly 100x). Added `LiveTelemetryService::
+  ledgerAmountToPence()` (corrects `capitalDeployedPence` and
+  `buildLedgerEvents()`'s `amountPence`) and the `ledgerCurrency()` Twig
+  macro (corrects `templates/admin/club_profile.html.twig`'s Ledger table,
+  which previously ran raw `entry.amount` through the pence-only `currency()`
+  macro). `LiveTelemetryServiceTest` updated for the corrected values (44
+  tests green). Documented the convention in `03_data/output/schema.md`
+  (new "`sync_record.payload` field conventions" section) and linked it
+  from `entities.md`'s `SyncRecord` bullet and `04_interfaces/output/
+  services.md`'s `LiveTelemetryService` bullet.
+
+---
+
 - **Commit:** 160ac7a (development, merged into dev)
 - **Date:** 2026-09-28
 - **Stages touched this pass:** 02_architecture (World Pack Cache generation

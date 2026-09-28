@@ -4,7 +4,7 @@
 {% set sr = payload.seasonRecord ?? {} %}
 {% set form = payload.form ?? [] %}
 
-{% from 'admin/_macros.html.twig' import currency as fmt_currency %}
+{% from 'admin/_macros.html.twig' import currency as fmt_currency, ledgerCurrency as fmt_ledger_currency %}
 
 {% macro result_badge(r) %}
     <span class="fw-bold d-inline-flex align-items-center justify-content-center rounded-1"
@@ -651,7 +651,7 @@
                             </td>
                             <td class="small text-muted">{{ entry.description }}</td>
                             <td class="small text-end fw-semibold {{ entry.amount >= 0 ? 'text-success' : 'text-danger' }}">
-                                {{ entry.amount >= 0 ? '+' : '' }}{{ fmt_currency(entry.amount) }}
+                                {{ entry.amount >= 0 ? '+' : '' }}{{ fmt_ledger_currency(entry.amount) }}
                             </td>
                         </tr>
                         {% endfor %}
