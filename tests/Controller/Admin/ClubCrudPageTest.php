@@ -109,7 +109,16 @@ class ClubCrudPageTest extends WebTestCase
             ]],
             'relationships' => [
                 ['kind' => 'player_player', 'playerId' => 'p1', 'playerName' => 'Player A', 'otherId' => 'p2', 'otherName' => 'Player B', 'bondValue' => -9, 'lastInteractionWeek' => 11],
+                // Mirror of the pair above, from the other participant's perspective —
+                // real payloads send both; the admin page must collapse this to one row.
+                ['kind' => 'player_player', 'playerId' => 'p2', 'playerName' => 'Player B', 'otherId' => 'p1', 'otherName' => 'Player A', 'bondValue' => -9, 'lastInteractionWeek' => 11],
                 ['kind' => 'player_player', 'playerId' => 'p3', 'playerName' => 'Player C', 'otherId' => 'p4', 'otherName' => 'Player D', 'bondValue' => 15, 'lastInteractionWeek' => 5],
+                ['kind' => 'player_player', 'playerId' => 'p4', 'playerName' => 'Player D', 'otherId' => 'p3', 'otherName' => 'Player C', 'bondValue' => 15, 'lastInteractionWeek' => 5],
+                // This entry's own playerName is missing — only resolvable via playerStats[].
+                ['kind' => 'player_player', 'playerId' => 'p5', 'otherId' => 'p6', 'otherName' => 'Player F', 'bondValue' => 20, 'lastInteractionWeek' => 2],
+            ],
+            'playerStats' => [
+                ['playerId' => 'p5', 'playerName' => 'Player E', 'appearances' => 4, 'goals' => 1, 'assists' => 0, 'averageRating' => 6.8],
             ],
             'promises' => [[
                 'id' => 'promise-1', 'type' => 'investment_contract',
@@ -147,6 +156,21 @@ class ClubCrudPageTest extends WebTestCase
         // The positive bond must surface under its own "Strong Bonds" card, not toxic.
         $this->assertStringContainsString('Strong Bonds', $html);
         $this->assertStringContainsString('Player C', $html);
+        // Each bond is sent twice (once per participant's perspective) — the mirror
+        // must collapse to a single row, not double the "Toxic Pairings"/"Strong
+        // Bonds" badge counts.
+        $this->assertMatchesRegularExpression(
+            '/Toxic Pairings<\/span>\s*<span[^>]*>\s*1\s*</',
+            $html,
+        );
+        $this->assertMatchesRegularExpression(
+            '/Strong Bonds<\/span>\s*<span[^>]*>\s*2\s*</',
+            $html,
+        );
+        // p5 has no playerName of its own — must be resolved via playerStats[]
+        // rather than falling back to the raw id.
+        $this->assertStringContainsString('Player E', $html);
+        $this->assertStringNotContainsString('p5', $html);
         $this->assertStringContainsString('Excursions', $html);
         $this->assertStringContainsString('3 fallouts', $html);
     }

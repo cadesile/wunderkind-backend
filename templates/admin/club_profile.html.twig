@@ -539,12 +539,14 @@
     </div>
 
     {# ══════════════════════════════════════════════════════════════════ #}
-    {# SQUAD CULTURE — toxic relationships + excursion outcomes           #}
+    {# SQUAD CULTURE — bonds + excursion outcomes                         #}
     {# Same "real data only" lens as the landing page's Boardroom feed:   #}
-    {# only surfaces relationships/excursions the client actually sends. #}
+    {# only surfaces relationships/excursions the client actually sends.  #}
+    {# toxicBonds/strongBonds are pre-built by ClubCrudController::       #}
+    {# buildBondLists() — already deduped (each bond arrives twice, once  #}
+    {# per participant's perspective) and name-resolved (see              #}
+    {# buildPlayerNameMap()), so no filtering/sorting/fallback needed here. #}
     {# ══════════════════════════════════════════════════════════════════ #}
-    {% set toxicBonds = (payload.relationships ?? [])|filter(r => (r.bondValue ?? 0) < 0) %}
-    {% set strongBonds = (payload.relationships ?? [])|filter(r => (r.bondValue ?? 0) > 0) %}
     {% if toxicBonds|length > 0 or strongBonds|length > 0 or (payload.excursions ?? [])|length > 0 %}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
@@ -563,12 +565,12 @@
             <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
                 <table class="table table-sm table-hover mb-0">
                     <tbody>
-                        {% for bond in strongBonds|sort((a, b) => b.bondValue <=> a.bondValue) %}
+                        {% for bond in strongBonds %}
                         <tr>
                             <td class="small">
-                                {{ bond.playerName ?? bond.playerId }}
+                                {{ bond.playerName }}
                                 <span class="text-muted mx-1">vs</span>
-                                {{ bond.otherName ?? bond.otherId }}
+                                {{ bond.otherName }}
                                 {% if bond.kind == 'player_staff' %}
                                     <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">staff</span>
                                 {% endif %}
@@ -593,12 +595,12 @@
             <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
                 <table class="table table-sm table-hover mb-0">
                     <tbody>
-                        {% for bond in toxicBonds|sort((a, b) => a.bondValue <=> b.bondValue) %}
+                        {% for bond in toxicBonds %}
                         <tr>
                             <td class="small">
-                                {{ bond.playerName ?? bond.playerId }}
+                                {{ bond.playerName }}
                                 <span class="text-muted mx-1">vs</span>
-                                {{ bond.otherName ?? bond.otherId }}
+                                {{ bond.otherName }}
                                 {% if bond.kind == 'player_staff' %}
                                     <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">staff</span>
                                 {% endif %}

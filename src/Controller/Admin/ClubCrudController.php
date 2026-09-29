@@ -88,6 +88,10 @@ class ClubCrudController extends AbstractCrudController
             ->getQuery()
             ->getResult();
 
+        $payload     = $latestValidSync ? $latestValidSync->getPayload() : [];
+        $playerNames = self::buildPlayerNameMap($payload);
+        $bondLists   = self::buildBondLists($payload, $playerNames);
+
         return $this->render('admin/club_profile.html.twig', [
             'club'               => $club,
             'syncRecords'        => $syncRecords,
@@ -96,7 +100,114 @@ class ClubCrudController extends AbstractCrudController
             'recentTransfers'    => $recentTransfers,
             'seasonRecords'      => $seasonRecords,
             'debugLogs'          => $debugLogs,
+            'toxicBonds'         => $bondLists['toxic'],
+            'strongBonds'        => $bondLists['strong'],
         ]);
+    }
+
+    /**
+     * Deduplicates relationships[] into toxic (bondValue < 0) and strong (bondValue > 0)
+     * bond lists for the Squad Culture cards. Real payloads record each bond from both
+     * participants' perspective — an A-vs-B entry and its B-vs-A mirror, same bondValue —
+     * so treating them as individual rows roughly doubles the true pairing count (and
+     * the badge showing it). Deduped by an unordered {min(id), max(id)} pair key (plus
+     * `kind`, so a coincidentally-matching player/staff pair can't collide) so either
+     * direction collapses to a single row; names are resolved via $playerNames (see
+     * buildPlayerNameMap()) before dedup so it doesn't matter which direction "wins".
+     *
+     * @param array<string, mixed> $payload
+     * @param array<string, string> $playerNames
+     * @return array{toxic: array<int, array<string, mixed>>, strong: array<int, array<string, mixed>>}
+     */
+    private static function buildBondLists(array $payload, array $playerNames): array
+    {
+        $seen   = [];
+        $toxic  = [];
+        $strong = [];
+
+        foreach ($payload['relationships'] ?? [] as $rel) {
+            if (!is_array($rel)) {
+                continue;
+            }
+
+            $bondValue = (int) ($rel['bondValue'] ?? 0);
+            $playerId  = (string) ($rel['playerId'] ?? '');
+            $otherId   = (string) ($rel['otherId'] ?? '');
+            if ($bondValue === 0 || $playerId === '' || $otherId === '') {
+                continue;
+            }
+
+            $pairKey = ($playerId < $otherId ? $playerId . '|' . $otherId : $otherId . '|' . $playerId)
+                . '|' . ($rel['kind'] ?? '');
+            if (isset($seen[$pairKey])) {
+                continue;
+            }
+            $seen[$pairKey] = true;
+
+            $entry = [
+                'playerName' => $rel['playerName'] ?? $playerNames[$playerId] ?? $playerId,
+                'otherName'  => $rel['otherName'] ?? $playerNames[$otherId] ?? $otherId,
+                'bondValue'  => $bondValue,
+                'kind'       => $rel['kind'] ?? null,
+            ];
+
+            if ($bondValue < 0) {
+                $toxic[] = $entry;
+            } else {
+                $strong[] = $entry;
+            }
+        }
+
+        usort($toxic, static fn (array $a, array $b): int => $a['bondValue'] <=> $b['bondValue']);
+        usort($strong, static fn (array $a, array $b): int => $b['bondValue'] <=> $a['bondValue']);
+
+        return ['toxic' => $toxic, 'strong' => $strong];
+    }
+
+    /**
+     * Best-effort playerId => playerName lookup built from every array in the sync
+     * payload that pairs the two. relationships[]/playerStats[]/signings[] are loose,
+     * unvalidated client arrays (see SyncRequest's docblocks) and are inconsistent
+     * about which entry for a given player carries a name — e.g. a bond's "other side"
+     * mirror entry for the same player may omit the name a different entry supplied.
+     * Player is a pool entity with no persisted club roster once consumed (see this
+     * repo's CLAUDE.md "Pool Lifecycle" section — deleted from the DB on assign), so
+     * this payload is the only source of truth available; a name missing from every
+     * array here means the client itself never sent one for that id, not a lookup
+     * failure this method could fix by trying harder.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, string>
+     */
+    private static function buildPlayerNameMap(array $payload): array
+    {
+        $names = [];
+
+        foreach ($payload['relationships'] ?? [] as $rel) {
+            if (!is_array($rel)) {
+                continue;
+            }
+            if (!empty($rel['playerId']) && !empty($rel['playerName'])) {
+                $names[$rel['playerId']] = $rel['playerName'];
+            }
+            if (!empty($rel['otherId']) && !empty($rel['otherName'])) {
+                $names[$rel['otherId']] = $rel['otherName'];
+            }
+        }
+
+        foreach ($payload['playerStats'] ?? [] as $stat) {
+            if (is_array($stat) && !empty($stat['playerId']) && !empty($stat['playerName'])) {
+                $names[$stat['playerId']] = $stat['playerName'];
+            }
+        }
+
+        foreach ($payload['signings'] ?? [] as $signing) {
+            if (is_array($signing) && !empty($signing['playerId']) && !empty($signing['playerName'])) {
+                $names[$signing['playerId']] = $signing['playerName'];
+            }
+        }
+
+        return $names;
     }
 
     /**
