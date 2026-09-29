@@ -666,4 +666,116 @@ class LiveTelemetryServiceTest extends TestCase
         $this->assertSame(0, $summary['count']);
         $this->assertSame(0, $summary['valuePence']);
     }
+
+    public function testTopTransferEventsRankByGrossFeeRegardlessOfDirection(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['transfers' => [
+                ['type' => 'signing', 'playerName' => 'Small Fee Guy', 'playerPosition' => 'MID', 'destinationClub' => 'Toro SD', 'startingClub' => null, 'grossFee' => 500000],
+            ]]],
+            ['serverTimestamp' => $now, 'clubName' => 'Milano AC', 'payload' => ['transfers' => [
+                ['type' => 'sale', 'playerName' => 'Marquee Man', 'playerPosition' => 'FWD', 'destinationClub' => 'Rival FC', 'startingClub' => 'Milano AC', 'grossFee' => 950000000],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildTopTransferEvents($syncRows, $now, 5);
+
+        $this->assertCount(2, $events);
+        $this->assertSame('Rival FC sign Marquee Man from Milano AC for £9.5M.', $events[0]['text']);
+        $this->assertSame('TOP_TRANSFER', $events[0]['category']);
+        $this->assertSame('£9,500,000', $events[0]['amountExact']);
+    }
+
+    public function testTopTransferEventsExcludeZeroFeeAndNonFeeBearingTypes(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildTopTransferEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['transfers' => [
+                ['type' => 'free_release', 'playerName' => 'Released Guy', 'destinationClub' => '', 'grossFee' => 0],
+                ['type' => 'loan', 'playerName' => 'Loanee', 'destinationClub' => 'Toro SD', 'grossFee' => 0],
+                ['type' => 'signing', 'playerName' => '', 'destinationClub' => 'Toro SD', 'grossFee' => 100000],
+            ]]],
+        ], $now, 5);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testTopTransferEventsAreCappedToTheLimit(): void
+    {
+        $now = new \DateTimeImmutable();
+        $transfers = [];
+        for ($i = 0; $i < 8; $i++) {
+            $transfers[] = ['type' => 'signing', 'playerName' => "Player {$i}", 'destinationClub' => 'Toro SD', 'grossFee' => 100000 + $i];
+        }
+
+        $events = LiveTelemetryService::buildTopTransferEvents(
+            [['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['transfers' => $transfers]]],
+            $now,
+            3,
+        );
+
+        $this->assertCount(3, $events);
+        $this->assertSame('Player 7', $events[0]['meta']['playerName']);
+    }
+
+    public function testTopScorerEventsSurfaceHighestGoalscorerPerClub(): void
+    {
+        $now = new \DateTimeImmutable();
+        $syncRows = [
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['playerStats' => [
+                ['playerName' => 'Prolific Striker', 'appearances' => 5, 'goals' => 6, 'assists' => 2],
+                ['playerName' => 'Bit-Part Sub', 'appearances' => 2, 'goals' => 1, 'assists' => 0],
+            ]]],
+        ];
+
+        $events = LiveTelemetryService::buildTopScorerEvents($syncRows, $now);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('TOP_SCORER', $events[0]['category']);
+        $this->assertSame('Prolific Striker', $events[0]['meta']['playerName']);
+        $this->assertSame(6, $events[0]['meta']['goals']);
+    }
+
+    public function testTopScorerEventsExcludePlayersBelowGoalsThreshold(): void
+    {
+        $now = new \DateTimeImmutable();
+        $events = LiveTelemetryService::buildTopScorerEvents([
+            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['playerStats' => [
+                ['playerName' => 'Just The One', 'goals' => 2],
+            ]]],
+        ], $now);
+
+        $this->assertSame([], $events);
+    }
+
+    public function testSelectBalancedGivesEveryNonEmptySourceAtLeastOneSlotBeforeAnySourceGetsASecond(): void
+    {
+        $frequent = [['id' => 'f1'], ['id' => 'f2'], ['id' => 'f3'], ['id' => 'f4']];
+        $rare     = [['id' => 'r1']];
+
+        $selected = LiveTelemetryService::selectBalanced([$frequent, $rare], 3);
+
+        $this->assertCount(3, $selected);
+        $this->assertContains(['id' => 'r1'], $selected, 'the rare source must not be crowded out by the frequent one');
+    }
+
+    public function testSelectBalancedStopsAtLimitEvenWithSourcesRemaining(): void
+    {
+        $a = [['id' => 'a1'], ['id' => 'a2']];
+        $b = [['id' => 'b1'], ['id' => 'b2']];
+
+        $selected = LiveTelemetryService::selectBalanced([$a, $b], 2);
+
+        $this->assertCount(2, $selected);
+        $this->assertSame(['id' => 'a1'], $selected[0]);
+        $this->assertSame(['id' => 'b1'], $selected[1]);
+    }
+
+    public function testSelectBalancedHandlesEmptySourcesGracefully(): void
+    {
+        $selected = LiveTelemetryService::selectBalanced([[], [['id' => 'only']]], 5);
+
+        $this->assertSame([['id' => 'only']], $selected);
+    }
 }

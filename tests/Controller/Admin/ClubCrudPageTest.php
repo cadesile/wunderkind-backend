@@ -144,8 +144,9 @@ class ClubCrudPageTest extends WebTestCase
         $this->assertStringContainsString('Opponent FC', $html);
         $this->assertStringContainsString('Toxic Pairings', $html);
         $this->assertStringContainsString('Player A', $html);
-        // The positive bond must NOT be listed as toxic.
-        $this->assertStringNotContainsString('Player C', $html);
+        // The positive bond must surface under its own "Strong Bonds" card, not toxic.
+        $this->assertStringContainsString('Strong Bonds', $html);
+        $this->assertStringContainsString('Player C', $html);
         $this->assertStringContainsString('Excursions', $html);
         $this->assertStringContainsString('3 fallouts', $html);
     }

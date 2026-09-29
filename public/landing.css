@@ -29,6 +29,8 @@
             --red:        #C44747;
             --orange:     #e8852a;
             --blue:       #1a5c2a;
+            --cyan:       #4fb8c9;
+            --purple:     #9a6fd1;
             --plum:       #16402f;
             --text:       #e4ede4;
             --text-muted: #7dac9f;
@@ -373,6 +375,8 @@
         .terminal-feed-item.cat-community     .terminal-feed-category { color: var(--orange); }
         .terminal-feed-item.cat-outlay        .terminal-feed-category { color: var(--text-muted); }
         .terminal-feed-item.cat-attendance    .terminal-feed-category { color: var(--mint-dim); }
+        .terminal-feed-item.cat-top_transfer  .terminal-feed-category { color: var(--cyan); }
+        .terminal-feed-item.cat-top_scorer    .terminal-feed-category { color: var(--purple); }
         .terminal-feed-line { display: block; }
         .terminal-feed-badge {
             display: inline-flex;

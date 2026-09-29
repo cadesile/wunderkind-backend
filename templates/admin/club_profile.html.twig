@@ -544,13 +544,44 @@
     {# only surfaces relationships/excursions the client actually sends. #}
     {# ══════════════════════════════════════════════════════════════════ #}
     {% set toxicBonds = (payload.relationships ?? [])|filter(r => (r.bondValue ?? 0) < 0) %}
-    {% if toxicBonds|length > 0 or (payload.excursions ?? [])|length > 0 %}
+    {% set strongBonds = (payload.relationships ?? [])|filter(r => (r.bondValue ?? 0) > 0) %}
+    {% if toxicBonds|length > 0 or strongBonds|length > 0 or (payload.excursions ?? [])|length > 0 %}
     <div class="col-12 mt-1">
         <h6 class="text-muted text-uppercase fw-semibold mb-2"
             style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
             Squad Culture
         </h6>
     </div>
+
+    {% if strongBonds|length > 0 %}
+    <div class="col-lg-6">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header py-2 bg-transparent border-bottom d-flex align-items-center justify-content-between">
+                <span class="fw-semibold small"><i class="fa fa-heart me-1 text-success"></i> Strong Bonds</span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">{{ strongBonds|length }}</span>
+            </div>
+            <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <tbody>
+                        {% for bond in strongBonds|sort((a, b) => b.bondValue <=> a.bondValue) %}
+                        <tr>
+                            <td class="small">
+                                {{ bond.playerName ?? bond.playerId }}
+                                <span class="text-muted mx-1">vs</span>
+                                {{ bond.otherName ?? bond.otherId }}
+                                {% if bond.kind == 'player_staff' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">staff</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-end text-success fw-semibold">{{ bond.bondValue }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {% if toxicBonds|length > 0 %}
     <div class="col-lg-6">

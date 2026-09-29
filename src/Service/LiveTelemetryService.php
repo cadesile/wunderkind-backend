@@ -16,14 +16,20 @@ use App\Entity\LiveTelemetrySnapshot;
  * method for exactly how. The feed shows real events only: the template does not
  * pad it with illustrative filler — a prior product decision, still binding.
  *
- * Seven categories feed the merged, newest-first ticker: pyramid movement
+ * Nine categories feed the merged, newest-first ticker: pyramid movement
  * (buildEvents), boardroom outlay (buildLedgerEvents), attendance
  * (buildAttendanceEvents), dressing-room fallout (buildDressingRoomEvents),
  * boardroom equity dilution (buildDilutionEvents), commercial covenant risk
- * (buildCovenantEvents), and talisman/community highlights (buildTalismanEvents,
- * buildCommunityEvents). Every build* method is a pure static function over
- * already-fetched payload arrays (no DB inside), so each is independently
- * unit-testable — see LiveTelemetryServiceTest.
+ * (buildCovenantEvents), talisman/community highlights (buildTalismanEvents,
+ * buildCommunityEvents), transfer-market record fees (buildTopTransferEvents),
+ * and top goalscorers (buildTopScorerEvents). Every build* method is a pure
+ * static function over already-fetched payload arrays (no DB inside), so each
+ * is independently unit-testable — see LiveTelemetryServiceTest.
+ *
+ * Final assembly does NOT just concatenate all sources and keep the globally most
+ * recent TOTAL_FEED_LIMIT — see selectBalanced()'s docblock for why a flat recency
+ * cut let frequent categories (outlay recurs almost every sync) silently crowd out
+ * rarer-but-real ones (dilution, covenant, dressing-room fallout) entirely.
  *
  * `excursions[]`, `relationships[]`, `promises[]`, `fixtures[]` are loose
  * `array<string, mixed>` fields on SyncRequest — archived verbatim into
@@ -61,13 +67,17 @@ class LiveTelemetryService
     private const COVENANT_EVENTS_LIMIT      = 5;
     private const TALISMAN_EVENTS_LIMIT      = 5;
     private const COMMUNITY_EVENTS_LIMIT     = 5;
+    private const TOP_TRANSFER_EVENTS_LIMIT  = 5;
+    private const TOP_SCORER_EVENTS_LIMIT    = 5;
 
     /**
-     * Cap on the merged feed after all 7 sources are combined — without this, 4 new
-     * sources on top of 3 existing ones could push the ticker (rotating one item
-     * every 4.5s, see landing.js) well past two minutes to cycle once.
+     * Cap on the merged feed after all sources are combined — without this, adding
+     * more sources over time could push the ticker (rotating one item every 4.5s,
+     * see landing.js) well past two minutes to cycle once. Selection across sources
+     * is round-robin (see selectBalanced()), not a flat recency cut, so raising this
+     * mainly gives every category more room rather than being load-bearing for fairness.
      */
-    private const TOTAL_FEED_LIMIT = 18;
+    private const TOTAL_FEED_LIMIT = 20;
 
     /** Each sync represents ~4 weeks of on-device ticks — used only for the footer's "weeks played" figure. */
     private const WEEKS_PER_SYNC = 4;
@@ -77,6 +87,9 @@ class LiveTelemetryService
 
     /** Transfer types that represent money paid OUT to acquire a player. */
     private const SPEND_TRANSFER_TYPES = ['signing', 'agent_assisted'];
+
+    /** Transfer types that carry a real, newsworthy fee — loan/free_release/guardian_withdrawal don't. */
+    private const FEE_BEARING_TRANSFER_TYPES = ['signing', 'sale', 'agent_assisted'];
 
     /**
      * Ledger categories now surfaced under their own dedicated category (dilution,
@@ -92,6 +105,9 @@ class LiveTelemetryService
 
     private const TALISMAN_RATING_THRESHOLD      = 8.0;
     private const TALISMAN_PEAK_RATING_THRESHOLD = 9.0;
+
+    /** Minimum goals this window before a scorer is marquee-worthy, not just a one-off strike. */
+    private const TOP_SCORER_GOALS_THRESHOLD = 3;
 
     private const COMMUNITY_SENTIMENT_EXTREME_HIGH = 85;
     private const COMMUNITY_SENTIMENT_EXTREME_LOW  = 25;
@@ -133,8 +149,9 @@ class LiveTelemetryService
         $covenantEvents     = self::buildCovenantEvents($syncRows, $now);
         $talismanEvents     = self::buildTalismanEvents($syncRows, $now);
         $communityEvents    = self::buildCommunityEvents($syncRows, $now);
+        $topScorerEvents    = self::buildTopScorerEvents($syncRows, $now);
 
-        $events = array_slice(self::mergeEventsByRecency(
+        $events = self::mergeEventsByRecency(self::selectBalanced([
             self::buildEvents($pyramidRows, $now),
             self::buildLedgerEvents($syncRows, $now, self::LEDGER_EVENTS_LIMIT),
             self::buildAttendanceEvents($attendanceRows, $now),
@@ -143,7 +160,9 @@ class LiveTelemetryService
             array_slice($covenantEvents, 0, self::COVENANT_EVENTS_LIMIT),
             array_slice($talismanEvents, 0, self::TALISMAN_EVENTS_LIMIT),
             array_slice($communityEvents, 0, self::COMMUNITY_EVENTS_LIMIT),
-        ), 0, self::TOTAL_FEED_LIMIT);
+            self::buildTopTransferEvents($syncRows, $now, self::TOP_TRANSFER_EVENTS_LIMIT),
+            array_slice($topScorerEvents, 0, self::TOP_SCORER_EVENTS_LIMIT),
+        ], self::TOTAL_FEED_LIMIT));
 
         $activeClubs = $this->syncRecordRepository->countActiveClubsSince($since);
         $weeksPlayed = count($syncRows) * self::WEEKS_PER_SYNC;
@@ -675,6 +694,143 @@ class LiveTelemetryService
     }
 
     /**
+     * The highest-fee transfers[] entries across the batch, ranked by grossFee
+     * regardless of which club's payload reported them or of transfer direction —
+     * same "rank regardless of category, let the biggest number win" approach as
+     * buildLedgerEvents(). Restricted to FEE_BEARING_TRANSFER_TYPES: loan/
+     * free_release/guardian_withdrawal movements carry no real fee and would only
+     * pollute the top-N with £0 entries. grossFee needs no ledgerAmountToPence()
+     * correction — it's a separate, correctly-scaled field (see class docblock).
+     *
+     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}> $syncRows
+     * @return array<int, array<string, mixed>>
+     */
+    public static function buildTopTransferEvents(array $syncRows, \DateTimeImmutable $now, int $limit): array
+    {
+        $entries = [];
+
+        foreach ($syncRows as $row) {
+            foreach ($row['payload']['transfers'] ?? [] as $transfer) {
+                if (!is_array($transfer) || !in_array($transfer['type'] ?? null, self::FEE_BEARING_TRANSFER_TYPES, true)) {
+                    continue;
+                }
+
+                $grossFee   = (int) ($transfer['grossFee'] ?? 0);
+                $playerName = trim((string) ($transfer['playerName'] ?? ''));
+                if ($grossFee <= 0 || $playerName === '') {
+                    continue;
+                }
+
+                $destinationClub = trim((string) ($transfer['destinationClub'] ?? ''));
+                $startingClub    = $transfer['startingClub'] ?? null;
+                $startingClub    = is_string($startingClub) && trim($startingClub) !== '' ? trim($startingClub) : null;
+
+                $entries[] = [
+                    'grossFee'        => $grossFee,
+                    'playerName'      => $playerName,
+                    'playerPosition'  => trim((string) ($transfer['playerPosition'] ?? '')),
+                    'startingClub'    => $startingClub,
+                    'destinationClub' => $destinationClub,
+                    'serverTimestamp' => $row['serverTimestamp'],
+                    'clubBadge'       => self::clubBadge($row),
+                ];
+            }
+        }
+
+        usort($entries, static fn (array $a, array $b): int => $b['grossFee'] <=> $a['grossFee']);
+
+        return array_map(
+            static fn (array $entry): array => self::event(
+                $entry['serverTimestamp'],
+                $now,
+                'TOP_TRANSFER',
+                '[TRANSFER MARKET // RECORD FEE]',
+                $entry['destinationClub'] !== '' ? $entry['destinationClub'] : null,
+                sprintf(
+                    '%s sign %s%s for %s.',
+                    $entry['destinationClub'] !== '' ? $entry['destinationClub'] : 'A club',
+                    $entry['playerName'],
+                    $entry['startingClub'] !== null ? sprintf(' from %s', $entry['startingClub']) : '',
+                    LiveTelemetrySnapshot::formatPence($entry['grossFee']),
+                ),
+                amountExact: LiveTelemetrySnapshot::formatPenceExact($entry['grossFee']),
+                meta: [
+                    'playerName'      => $entry['playerName'],
+                    'playerPosition'  => $entry['playerPosition'],
+                    'startingClub'    => $entry['startingClub'],
+                    'destinationClub' => $entry['destinationClub'],
+                    'grossFeePence'   => $entry['grossFee'],
+                ],
+                clubBadge: $entry['clubBadge'],
+            ),
+            array_slice($entries, 0, $limit),
+        );
+    }
+
+    /**
+     * Each club's leading goalscorer this window from playerStats[] — one line per
+     * club (same "avoid flooding the feed" reasoning as buildTalismanEvents()'s
+     * per-club cap), ranked by goals rather than averageRating so a prolific-but-
+     * inconsistent striker surfaces here even when their rating average never clears
+     * the talisman threshold. Requires goals >= TOP_SCORER_GOALS_THRESHOLD to keep a
+     * single-goal appearance out of a "marquee" feed.
+     *
+     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}> $syncRows
+     * @return array<int, array<string, mixed>>
+     */
+    public static function buildTopScorerEvents(array $syncRows, \DateTimeImmutable $now): array
+    {
+        $events = [];
+
+        foreach ($syncRows as $row) {
+            $best = null;
+            foreach ($row['payload']['playerStats'] ?? [] as $stat) {
+                if (!is_array($stat)) {
+                    continue;
+                }
+
+                $goals = (int) ($stat['goals'] ?? 0);
+                if ($goals < self::TOP_SCORER_GOALS_THRESHOLD) {
+                    continue;
+                }
+
+                if ($best === null || $goals > (int) ($best['goals'] ?? 0)) {
+                    $best = $stat;
+                }
+            }
+
+            if ($best === null) {
+                continue;
+            }
+
+            $name        = (string) ($best['playerName'] ?? 'A player');
+            $goals       = (int) ($best['goals'] ?? 0);
+            $assists     = (int) ($best['assists'] ?? 0);
+            $appearances = (int) ($best['appearances'] ?? 0);
+
+            $events[] = self::event(
+                $row['serverTimestamp'],
+                $now,
+                'TOP_SCORER',
+                '[GOAL MACHINE // TOP SCORER]',
+                $row['clubName'],
+                sprintf('%s: %s has %d goals (%d assists) in %d apps this window.', $row['clubName'], $name, $goals, $assists, $appearances),
+                meta: [
+                    'playerName'  => $name,
+                    'goals'       => $goals,
+                    'assists'     => $assists,
+                    'appearances' => $appearances,
+                ],
+                clubBadge: self::clubBadge($row),
+            );
+        }
+
+        usort($events, static fn (array $a, array $b): int => ($b['meta']['goals'] ?? 0) <=> ($a['meta']['goals'] ?? 0));
+
+        return $events;
+    }
+
+    /**
      * Signed average fan-morale delta (latest reading minus earliest, per club) across
      * clubs with ≥2 readings in the window; null if no club qualifies. Separate from
      * buildCommunityEvents() so it's independently unit-testable.
@@ -808,6 +964,59 @@ class LiveTelemetryService
             ],
             $events,
         );
+    }
+
+    /**
+     * Picks up to $limit events from $sourceLists — one list per category, each
+     * already ranked internally by its own criteria (recency or magnitude) — in
+     * round-robin order across sources, rather than concatenating everything and
+     * keeping only the globally most recent/highest-ranked $limit.
+     *
+     * A flat recency cut lets categories that fire on nearly every sync (boardroom
+     * outlay, attendance) crowd out categories that are real but comparatively rare
+     * (equity dilution, commercial covenant risk, dressing-room fallout) out of the
+     * feed entirely once total events exceed TOTAL_FEED_LIMIT — the summary stat
+     * boxes would show real dilution/fallout figures while the ticker never once
+     * displayed a line for them. Round-robin guarantees every non-empty source keeps
+     * at least one slot before any source gets a second.
+     *
+     * The caller still re-sorts the selected subset by recency afterwards
+     * (mergeEventsByRecency), so display order stays newest-first — this only
+     * changes *which* events survive the cap, not their final ordering.
+     *
+     * Public (like mergeEventsByRecency()) so the fairness guarantee can be asserted
+     * directly rather than inferred from sampled refresh() output.
+     *
+     * @param array<int, array<int, array<string, mixed>>> $sourceLists
+     * @return array<int, array<string, mixed>>
+     */
+    public static function selectBalanced(array $sourceLists, int $limit): array
+    {
+        $selected = [];
+        $cursors  = array_fill(0, count($sourceLists), 0);
+
+        while (count($selected) < $limit) {
+            $tookAny = false;
+
+            foreach ($sourceLists as $i => $list) {
+                if (count($selected) >= $limit) {
+                    break;
+                }
+                if ($cursors[$i] >= count($list)) {
+                    continue;
+                }
+
+                $selected[] = $list[$cursors[$i]];
+                $cursors[$i]++;
+                $tookAny = true;
+            }
+
+            if (!$tookAny) {
+                break;
+            }
+        }
+
+        return $selected;
     }
 
     /** Builds one enriched feed item in the shared shape every category emits. */

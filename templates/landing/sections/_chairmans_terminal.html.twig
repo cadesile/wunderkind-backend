@@ -21,14 +21,20 @@
        big pixel-font value is kept short (a percentage, or "N / N") with the
        descriptive text in the smaller sub-line — a full sentence in the pixel font
        wraps and overflows the box.
-     - telemetry.recentEvents — up to 18 merged, newest-first items across 7 real
-       sources: pyramid promotion/relegation/title (SeasonRecord), boardroom outlay
-       (top ledger spend), turnstile attendance, dressing-room rift (resolved
-       excursions[] with friction), boardroom dilution (investor_income ledger +
-       matching promises[] contracts), commercial covenant risk (active promises[]
-       with a league-position/tier termination clause), and talisman/community
-       highlights (playerStats[]/fixtures[] outliers, fan_initiative spend, extreme
-       fan sentiment). Each item carries {time, text, category, categoryLabel, club,
+     - telemetry.recentEvents — up to 20 items across 9 real sources: pyramid
+       promotion/relegation/title (SeasonRecord), boardroom outlay (top ledger
+       spend), turnstile attendance, dressing-room rift (resolved excursions[] with
+       friction), boardroom dilution (investor_income ledger + matching promises[]
+       contracts), commercial covenant risk (active promises[] with a
+       league-position/tier termination clause), talisman/community highlights
+       (playerStats[]/fixtures[] outliers, fan_initiative spend, extreme fan
+       sentiment), transfer-market record fees (transfers[] ranked by grossFee), and
+       top goalscorers (playerStats[] ranked by goals). Selection across sources is
+       round-robin (LiveTelemetryService::selectBalanced()), not a flat recency cut,
+       so a category that fires less often (dilution, covenant, fallout) can't be
+       crowded out entirely by one that fires on nearly every sync (outlay,
+       attendance) — the merged, capped set is then re-sorted newest-first for
+       display. Each item carries {time, text, category, categoryLabel, club,
        detail, amountExact, timestampIso, meta} — the enriched fields feed the
        incident inspector modal (see _incident_modal.html.twig / landing.js).
 #}
