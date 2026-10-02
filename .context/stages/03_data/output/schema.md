@@ -6,7 +6,7 @@ constraints. Don't restate field lists here.
 
 ## Table index (by domain, matches `entities.md` grouping)
 
-- **Auth/user:** `user`, `admin`, `guardian`, `email_verification`, `refresh_tokens`, `beta_request`, `deletion_request`, `user_device` (FCM push tokens), `notification_log` (push-pipeline audit trail)
+- **Auth/user:** `user`, `admin`, `guardian`, `email_verification`, `refresh_tokens`, `beta_request`, `deletion_request`, `user_device` (FCM push tokens), `notification_log` (push-pipeline audit trail), `user_ledger` (centralized cross-club dividend-draw audit trail)
 - **Core game/club:** `club`, `club_facility`, `facility_template`, `league`, `league_sponsor_income`, `npc_club`, `transfer`, `sync_record`, `season_record`, `season_snapshot`, `season_ratings_snapshot`, `match_result`, `leaderboard_entry`, `tactical_advantage`
 - **Player/squad:** `player` (embeds `PersonalityProfile` — no separate table), `player_archetype`, `player_career_stat`, `player_career_stat_snapshot`, `agent`, `scout`, `staff`, `player_siblings` (self-referential join table)
 - **Sponsorship/finance:** `sponsor`, `investor`
@@ -31,6 +31,11 @@ constraints. Don't restate field lists here.
 - **`user_device`** — unique on `device_token` (not per-user — a token
   identifies an app installation; re-registering it under a different
   user reassigns rather than duplicates).
+- **`user_ledger`** — unique index `uq_user_ledger_source_entry` on
+  (`source_sync_record_id`, `source_ledger_index`) — the idempotency guard
+  for `app:backfill-user-ledger`/`UserLedgerService` (see `entities.md`).
+  `source_sync_record_id` is `ON DELETE SET NULL`, not `CASCADE` — a
+  rollback purging the source `sync_record` must not delete the audit row.
 
 ## `sync_record.payload` field conventions (financial correctness — read before touching any of this data)
 
@@ -76,6 +81,13 @@ one exception, and it is a real, confirmed bug, not a false lead:**
 - If you add a new consumer of `ledger[].amount` (a new admin view, report,
   or telemetry aggregation), apply the same /100 correction — or, better,
   route through one of the two canonical implementations above.
+- **`dividend_draw`** is a newer `ledger[].category` value, detected by
+  `UserLedgerService::recordDividendDraws()` (called from
+  `SyncService::process()`) to centralize a user's cross-club earnings onto
+  `UserLedger` — see `entities.md`. It carries the same /100 bug as every
+  other category and is corrected via `LiveTelemetryService::
+  ledgerAmountToPence()` (now `public static` so this second consumer can
+  reuse it), not a third ad hoc conversion.
 
 ## Repository query patterns worth knowing
 

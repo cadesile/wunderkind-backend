@@ -21,6 +21,23 @@ class SyncRecordRepository extends ServiceEntityRepository
     }
 
     /**
+     * The club's most recent valid sync — single indexed query (idx_sync_record_club_server_ts)
+     * rather than the fetch-N-and-loop-for-first-valid pattern used inline elsewhere
+     * (ClubCrudController::detail()); fine to reuse there too, just not done in this pass.
+     */
+    public function findLatestValid(Club $club): ?SyncRecord
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.club = :club')
+            ->andWhere('s.isValid = true')
+            ->setParameter('club', $club)
+            ->orderBy('s.serverTimestamp', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Deletes all sync records for a club where clientWeekNumber >= $fromWeek.
      * Called on rollback to discard future-state records that are now superseded.
      */

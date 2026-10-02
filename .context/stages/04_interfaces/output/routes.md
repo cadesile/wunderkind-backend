@@ -129,11 +129,12 @@ controller per entity, each mapping via `getEntityFqcn()`:
 `LeaderboardEntry`, `League`, `NotificationLog`, `NpcClub`,
 `PlayerArchetype`, `Player`, `RewardTemplate`, `Scout`, `SeasonRecord`,
 `SeasonSnapshot`, `SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
-`TacticalAdvantage`, `Transfer`, `User`. Each gives standard EasyAdmin
-CRUD screens (index/detail/edit/new/delete) plus whatever its own
+`TacticalAdvantage`, `Transfer`, `User`, `UserLedger`. Each gives standard
+EasyAdmin CRUD screens (index/detail/edit/new/delete) plus whatever its own
 `configureFields()`/`configureActions()` customizes.
-`NotificationLogCrudController` is read-only (disables new/edit/delete),
-styled directly on `DeletionRequestCrudController`.
+`NotificationLogCrudController`/`UserLedgerCrudController` are read-only
+(disable new/edit/delete), styled directly on
+`DeletionRequestCrudController`.
 
 ## API spec
 

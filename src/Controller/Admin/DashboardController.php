@@ -1324,6 +1324,7 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield'),
             MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text'),
             MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash'),
+            MenuItem::linkTo(UserLedgerCrudController::class, 'User Ledger', 'fa fa-scale-balanced'),
         ]);
         yield MenuItem::subMenu('Sync & Leaderboards', 'fa fa-rotate')->setSubItems([
             MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate'),

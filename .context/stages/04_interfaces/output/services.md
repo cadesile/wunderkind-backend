@@ -315,6 +315,18 @@ filename alone.
   `sodium_crypto_secretbox_keygen()`).
 - **`TransferLeaderboardService`** — computes top-sellers/most-valuable
   transfer leaderboards from `TransferRepository`.
+- **`UserLedgerService`** — single writer of `UserLedger` rows (currently just
+  dividend draws). `recordDividendDraws()` scans a sync payload's free-form
+  `ledger[]` array for `category === 'dividend_draw'` entries and persists one
+  `UserLedger` row per match, chaining the user's overall centralized
+  balance (`balanceBeforePence`/`balanceAfterPence` on each row) across
+  entries. Called from `SyncService::process()` on every live sync, and from
+  the one-time `app:backfill-user-ledger` command replaying every historical
+  `SyncRecord` — both share this one implementation so the before/after
+  chaining logic exists in exactly one place. Idempotent per
+  `(sourceSyncRecord, sourceLedgerIndex)` via
+  `UserLedgerRepository::existsForSource()` — see "Centralized User Ledger"
+  in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
   `buildLeaguesPack()`/`buildTierPack()` draw each NPC club's full staff —

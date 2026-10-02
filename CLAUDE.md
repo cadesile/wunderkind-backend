@@ -240,6 +240,45 @@ ClubController → ClubInitializationService::initializeClub()
 - `gender` is restricted to `male`/`female` (same `Assert\Choice` the old `ManagerProfileInput` used).
 - Admin (`UserCrudController`) has an "Owner Identity" fieldset with the same `AppearanceType`/`person_type: 'staff'` widget wiring as `AgentCrudController` — EDIT is now enabled (previously fully disabled); NEW/DELETE stay disabled (accounts are created via registration and removed via account deletion, not admin).
 
+### Centralized User Ledger (UserLedger, backend-owned)
+Now that a single owner avatar (see Owner Identity above) persists across every club a `User`
+owns, `UserLedger` (table `user_ledger`) centralizes a user's cross-club earnings instead of
+leaving a manager's dividend trapped inside whichever single club's `totalCareerEarnings` it
+happened to land on. Today it holds exactly one kind of entry — `UserLedgerEntryType::DIVIDEND_DRAW`
+— detected server-side from the sync payload's free-form `ledger[]` array
+(`SyncRequest::$ledger`, the same array `SyncService` already archives verbatim onto
+`SyncRecord::$payload`): any entry with `category === 'dividend_draw'` is a client-reported
+dividend draw against the syncing club.
+- **`UserLedgerService::recordDividendDraws()` is the single writer.** Both `SyncService::process()`
+  (every live sync) and the one-time `app:backfill-user-ledger` command (replays every historical
+  `SyncRecord` for payloads predating this feature) go through it, so the balance-chaining logic
+  below exists in exactly one place.
+- **Every row snapshots `balanceBeforePence`/`balanceAfterPence`** — the user's overall centralized
+  balance immediately before/after that entry (`balanceAfterPence = balanceBeforePence + amountPence`)
+  — so the running total is reconstructible from history alone, not trusted to only the latest row.
+  `UserLedgerRepository::getCurrentBalance()` reads the latest row's `balanceAfterPence`.
+- **`ledger[].amount` is 100x true pence, same bug as every other ledger category** (see
+  `sync_record.payload` field conventions in `.context/stages/03_data/output/schema.md`) —
+  `UserLedgerService` reuses `LiveTelemetryService::ledgerAmountToPence()` (widened from `private`
+  to `public static` for this) rather than adding a third ad hoc /100 conversion.
+- **Idempotent per `(sourceSyncRecord, sourceLedgerIndex)`** — the `uq_user_ledger_source_entry`
+  unique constraint, checked via `UserLedgerRepository::existsForSource()` before inserting. This is
+  what makes re-running the backfill command, or re-processing a resent sync, a safe no-op.
+- **`sourceSyncRecord` is nullable with `ON DELETE SET NULL`, not `CASCADE`** — a rollback purges
+  superseded `SyncRecord` rows (`SyncRecordRepository::deleteByClubFromWeek()`), but a dividend draw
+  already folded into a user's balance must survive that purge (same reasoning as
+  `PlayerCareerStatSnapshot::$syncRecord`). No other rollback special-casing: a dividend draw
+  recorded against a later-rolled-back timeline isn't retroactively reversed, same precedent as
+  `Transfer`/`PlayerCareerStatSnapshot`.
+- **`app:backfill-user-ledger`** pre-filters `sync_record` via a raw `payload::jsonb -> 'ledger' @>
+  '[{"category":"dividend_draw"}]'::jsonb` containment query (payload is stored as `json`, not
+  `jsonb`, so the cast is explicit) rather than hydrating every historical sync — then replays
+  candidates in `server_timestamp ASC` order (real-world chronological, not per-club, since the
+  running balance is per-*user* across every club they own), keeping an in-memory per-user running
+  balance for the whole pass rather than re-querying per row.
+- **`UserLedgerCrudController`** (admin) is read-only, same pattern as `NotificationLogCrudController`.
+- **The admin User edit page (`/admin/user/{id}/edit`) surfaces this.** `UserCrudController::configureCrud()` points `crud/edit` at `admin/user_edit.html.twig`, which extends `@EasyAdmin/crud/edit.html.twig` and overrides only `content_header_wrapper` (`{{ parent() }}` first) — the real form is untouched. `edit()` adds `clubsSummary`/`clubKitConfigs`/`overallBalancePence` onto EasyAdmin's own `KeyValueStore` rather than calling `$this->render()` directly (unlike `detail()`'s fully custom `user_profile.html.twig`), same technique as `PlayerCrudController::index()`'s `playerSummary` panel. Per club: composited home/away kit + badge previews (`kit-compositor.js`'s `composeKitSvg()`, 'small' size), last-sync week/league-position/form (via the shared `resultBadge` macro, extracted from `club_profile.html.twig` into `admin/_macros.html.twig` for this reuse), `totalCareerEarnings` vs. `UserLedgerRepository::getTotalDividendsByClub()`; plus the user's overall `getCurrentBalance()` at the top.
+
 ### Kit & Badge Identity (NpcClub, backend-owned)
 `NpcClub` carries a nullable `identity` json column: `{home: KitVariant, away: KitVariant, badgeShape, badgePattern, badgeCentre, initials, badgeFill, badgeTrim, badgeSymbol}`, where a `KitVariant` is `{kit, primary, secondary, shorts, socks}` — two full, independent kits (a club's home and away colors), plus one shared badge. Matches `assets/Components/KitBadge/kitSprite.ts`/`KitSprite.tsx` in `wunderkind-app` (that component takes one `KitConfig` at a time — render it once per variant, e.g. `<KitSprite config={identity.home} />` / `<KitSprite config={identity.away} />`). `kit`/`primary`/`secondary`/`shorts`/`socks` (both variants) reuse the **exact same enums** as the player appearance system (`KitStyle`, `KitColor`, `KitPart`) so a club's kit never drifts from a player's kit vocabulary; `BadgeShape`/`BadgePattern`/`BadgeCentre` are new, cohabiting in `src/Enum/Appearance/` for the same reason.
 - **The home kit is the single source of truth for `primaryColor`/`secondaryColor`.** Those two existing (still `NOT NULL`) string columns are no longer independently admin-editable (`NpcClubCrudController` hides them on the form, `->hideOnForm()`, but still shows them read-only on the detail page) — `NpcClub::setIdentity()` syncs them from `identity['home']['primary']`/`['secondary']` every time a non-null identity with a home kit is set, so this happens automatically on both admin save and generation. `NpcClubGenerationService`'s old separate 20-color color-pair generator (`pickColorPair()`) is gone, but its **WCAG-contrast-checked-pair rule lives on**: `randomKitVariant()`'s `primary`/`secondary` (called once each for home and away, independently) are picked via `pickContrastingKitColor()` — up to 20 random tries for a candidate scoring `contrastRatio() >= 3.0` against `primary`, falling back to whichever palette color scores highest — same algorithm as the old `contrastRatio()`/`relativeLuminance()`, just re-scoped to the smaller 12-color `KitColor` palette (every color in that palette clears 3.0 against at least white or black, so the fallback path is a safety net, not something normal generation actually hits).
@@ -371,10 +410,12 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `NarrativeImportExportService` | Export/import event templates, facility templates, player archetypes, and `TacticalAdvantage` rows |
 | `AdminMessageService` | Resolve pending announcements for a club, cap the payload, upsert acknowledgements, sanitize admin HTML |
 | `AudienceCriteriaEvaluator` | Evaluate a DYNAMIC `AudienceGroup`'s JSON criteria against a `Club`, live at poll time |
+| `UserLedgerService` | Detect `dividend_draw` entries in the sync ledger and centralize them onto `UserLedger`, chaining before/after balance across clubs — see Centralized User Ledger above |
 
 ## Key Entities (non-obvious fields)
 
-- **User** (game account, distinct from `Admin`) — `email`, `password`, `roles`, `clubs` (OneToMany); owner identity: `name`, `nationality`, `gender`, `dob`, `appearance` json — see Owner Identity above. `getUserIdentifier()` returns email; no uniqueness constraint on the `Club` FK (a user can own more than one club — `ClubRepository::findByUser()` resolves the most recent).
+- **User** (game account, distinct from `Admin`) — `email`, `password`, `roles`, `clubs` (OneToMany); owner identity: `name`, `nationality`, `gender`, `dob`, `appearance` json — see Owner Identity above. `getUserIdentifier()` returns email; no uniqueness constraint on the `Club` FK (a user can own more than one club — `ClubRepository::findByUser()` resolves the most recent; `ClubRepository::findAllByUser()` returns every club they own).
+- **UserLedger** — centralized, cross-club financial audit trail for one `User`; currently only `DIVIDEND_DRAW` entries (`UserLedgerEntryType`). `amountPence` (signed pence, corrected from the ledger's 100x-inflated raw value), `balanceBeforePence`/`balanceAfterPence` (running cross-club balance snapshot per row), `occurredAt` (in-game date) vs `recordedAt` (real-world date). `ManyToOne` → `user:User` (not nullable, `CASCADE`), `club:Club` (not nullable), `sourceSyncRecord:?SyncRecord` (nullable, `SET NULL`). See Centralized User Ledger above.
 - **Club** — `reputation`, `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`, manager traits (`temperament`/`discipline`/`ambition` 0–100 clamped setters), `paName`, `financialYearStart`, `balance`, `country`, `abbreviation`
 - **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; nullable `?Agent $agent` FK (many players → one agent; assigned in `MarketPoolService` and reassigned at world-pack generation; surfaced in every player snapshot — see Player↔Agent Association); `appearance` json (see Avatar Appearance). **No club FK** — pool entity, deleted on consume.
 - **Staff** — `role` (StaffRole), `coachingAbility`; `appearance` json; embeds `PersonalityProfile` (8 traits 1–20; `MANAGER`/`COACH` carry role floors). **No club FK** — pool entity, deleted on consume.

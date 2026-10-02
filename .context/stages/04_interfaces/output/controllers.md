@@ -121,7 +121,7 @@ actually *does* (which service/repo it calls), not restated route paths.
 
 ## `src/Controller/Admin/*CrudController.php`
 
-32 EasyAdmin CRUD controllers, one per entity (full list in
+33 EasyAdmin CRUD controllers, one per entity (full list in
 `routes.md`). Each provides standard index/detail/edit/new/delete screens
 via `configureFields()`/`configureActions()` — individual field
 configuration wasn't traced controller-by-controller (not architecturally
@@ -132,6 +132,37 @@ disabled), styled directly on `DeletionRequestCrudController`: a
 `ChoiceField` status badge + `ChoiceFilter`, `TextFilter` on
 `messageType`/`summary`/`errorMessage`, and a `CodeEditorField` JSON
 detail view (`detailJsonPretty`) shown only on the detail page.
+
+**`UserLedgerCrudController`** — read-only (new/edit/delete disabled), same
+`NotificationLogCrudController`/`DeletionRequestCrudController` pattern — an
+audit trail of `UserLedger` rows, filterable by `user`/`club`
+(`EntityFilter`), with `balanceBeforePence`/`balanceAfterPence` shown so a
+mismatch between adjacent rows for the same user is visibly a bug.
+
+**`UserCrudController`** overrides two standard actions, not just fields:
+- `detail()` renders a fully custom `admin/user_profile.html.twig` instead of
+  EasyAdmin's generated detail screen — header (verification/join/last-login),
+  a plain table of the user's clubs (name, country, last sync week/date,
+  created). Same "bypass EasyAdmin's own rendering, call `$this->render()`
+  directly" pattern as `ClubCrudController::detail()` → `club_profile.html.twig`.
+- `edit()` does **not** bypass EasyAdmin's rendering — it calls `parent::edit()`,
+  adds `clubsSummary`/`clubKitConfigs`/`overallBalancePence` onto the returned
+  `KeyValueStore`, and `configureCrud()` points `crud/edit` at
+  `admin/user_edit.html.twig`, which `{% extends '@EasyAdmin/crud/edit.html.twig' %}`
+  and overrides only `content_header_wrapper` (calling `{{ parent() }}` first) —
+  so the real edit form (`main` block) is completely untouched and still submits
+  normally. The injected panel: per-club identity (name, country), composited
+  home/away kit + badge previews (`public/assets/kit-compositor.js`'s
+  `composeKitSvg()`, 'small' size — same renderer `club_profile.html.twig` uses
+  at 'large'), last-sync badges (week, league position, W/D/L form strip via
+  the shared `resultBadge` macro in `admin/_macros.html.twig`), each club's
+  `totalCareerEarnings` vs. dividends drawn from it
+  (`UserLedgerRepository::getTotalDividendsByClub()`), and the user's overall
+  cross-club balance (`UserLedgerRepository::getCurrentBalance()`). Same
+  "override one block of a standard CRUD template to inject a computed panel"
+  technique as `PlayerCrudController::index()`'s `playerSummary` panel via
+  `overrideTemplate('crud/index', ...)` + `content_header_wrapper`, just
+  applied to `crud/edit` instead of `crud/index`.
 
 One exception worth noting: **`AdminMessageCrudController`** overrides
 `persistEntity()`/`updateEntity()` to dispatch

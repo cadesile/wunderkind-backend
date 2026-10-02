@@ -5,6 +5,48 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** b153556 (as of writing — this pass's own changes are
+  uncommitted on top of it, pending the user's usual explicit commit
+  request, same as the UserLedger pass below it this stacks on top of).
+  **Stage touched:** 04_interfaces (`controllers.md` — admin User edit page
+  now shows a per-club summary panel: kit/badge previews, last sync/league
+  position/form, earnings vs. dividends drawn, and the user's overall
+  cross-club balance. `UserCrudController::edit()` override +
+  `admin/user_edit.html.twig`; extracted `resultBadge` macro from
+  `club_profile.html.twig` into `admin/_macros.html.twig` for reuse; new
+  `SyncRecordRepository::findLatestValid()` /
+  `UserLedgerRepository::getTotalDividendsByClub()`. CLAUDE.md's Centralized
+  User Ledger section updated to match. Covered by
+  `tests/Controller/Admin/UserCrudControllerTest.php`.)
+
+---
+
+- **Commit:** b153556 (as of writing — this pass's own changes are
+  uncommitted on top of it, pending the user's usual explicit commit
+  request). Per the staleness check, `.context/` was 3 commits behind HEAD
+  going into this session (`b153556` dedupe squad bonds / resolve player
+  names, `2a1c108` positive bonds + telemetry feed categories, `ea2c2dd`
+  tiered excursion cost/effect progression) — the user chose to proceed
+  without reviewing those first, so they remain **unreflected** in
+  `.context/` and are a follow-up, same as the admin club-profile/landing-
+  page gap noted in the entry below from 2026-09-28.
+- **Date:** 2026-10-02
+- **Stages touched this pass:** 03_data, 04_interfaces (new `UserLedger`
+  entity/`user_ledger` table — a centralized, cross-club financial audit
+  trail for dividend draws; see `entities.md`'s `UserLedger` entry,
+  `schema.md`'s `user_ledger` constraint note + the `dividend_draw`
+  `ledger[].category` addendum, `migrations.md` entry 24, and
+  `services.md`'s `UserLedgerService` entry. New read-only
+  `UserLedgerCrudController`, documented in `controllers.md`/`routes.md`.
+  Also widened `LiveTelemetryService::ledgerAmountToPence()` from private
+  to `public static` so `UserLedgerService` could reuse the existing
+  100x-pence correction instead of adding a third implementation — see
+  `schema.md`'s "`sync_record.payload` field conventions" section.)
+  CLAUDE.md's Architecture section synced with a new "Centralized User
+  Ledger" subsection; Key Services/Key Entities tables updated to match.
+
+---
+
 - **Commit:** df082fe (development, merged into dev)
 - **Date:** 2026-09-28
 - **Stages touched this pass:** 01_overview (corrected the git branching

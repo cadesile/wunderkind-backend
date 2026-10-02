@@ -118,8 +118,14 @@ class LiveTelemetryService
      * to avoid rounding drift when summing many entries (capitalDeployedPence).
      * The single point every consumer of `ledger[].amount` must go through;
      * never read `entry['amount']` directly elsewhere in this class.
+     *
+     * Public (not just this class's own concern): UserLedgerService reuses this
+     * exact conversion for the 'dividend_draw' category — the 100x inflation
+     * bug is in the client's on-device ledger-writing engine itself, not
+     * specific to any category this class happens to read, so a new category
+     * elsewhere needs the identical correction, not a second implementation.
      */
-    private static function ledgerAmountToPence(mixed $rawAmount): int
+    public static function ledgerAmountToPence(mixed $rawAmount): int
     {
         return intdiv((int) $rawAmount, 100);
     }

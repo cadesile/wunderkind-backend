@@ -49,6 +49,7 @@ class SyncService
         private readonly PlayerCareerStatRepository     $playerCareerStatRepository,
         private readonly LoggerInterface                 $logger,
         private readonly FacilityImageResolver           $facilityImageResolver,
+        private readonly UserLedgerService               $userLedgerService,
     ) {}
 
     /**
@@ -116,6 +117,19 @@ class SyncService
             $this->checkDebugLogThresholds($request->log);
         }
         $this->em->persist($syncRecord);
+
+        // Centralize dividend draws reported in this payload's ledger onto the owning User —
+        // see UserLedgerService. Not skipped on rollback: same precedent as Transfer/
+        // PlayerCareerStatSnapshot, which also aren't retroactively undone by a rollback's
+        // SyncRecord purge (SyncRecordRepository::deleteByClubFromWeek()).
+        $this->userLedgerService->recordDividendDraws(
+            $user,
+            $club,
+            $syncRecord,
+            $request->ledger,
+            $clientTimestamp,
+            $syncRecord->getServerTimestamp(),
+        );
 
         // Captured before setLastSyncedWeek() below — the financial-year check needs the
         // span the client is reporting, not just its end week (syncs batch ~4 weeks).

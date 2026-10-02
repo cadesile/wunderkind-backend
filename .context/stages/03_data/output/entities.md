@@ -13,7 +13,36 @@ migrations are the change log (see `migrations.md`).
   `appearance:?array` (json, 15-key sprite shape — see
   `04_interfaces/output/services.md`'s Avatar Appearance /
   `OwnerAvatarController` entries). `OneToMany` → `clubs:Collection<Club>`
-  (cascade persist/remove); no uniqueness constraint on the FK.
+  (cascade persist/remove); no uniqueness constraint on the FK. A `User` has
+  no direct relation to `UserLedger` (see below) — it's queried, not
+  traversed, via `UserLedgerRepository`.
+- **`UserLedger`** (table `user_ledger`) — centralized, cross-club financial
+  audit trail for one `User`; currently only dividend draws the client
+  reports via the sync payload's free-form `ledger[]` array (category
+  `dividend_draw`) — see `04_interfaces/output/services.md`'s
+  `UserLedgerService` entry. `type:UserLedgerEntryType(enum, only
+  DIVIDEND_DRAW exists)`, `amountPence:int` (signed; positive credits the
+  user's overall balance), `balanceBeforePence/balanceAfterPence:int` — a
+  snapshot of the user's running cross-club balance immediately
+  before/after this row, so the total is reconstructible from history alone
+  (the latest row's `balanceAfterPence` is the current balance —
+  `UserLedgerRepository::getCurrentBalance()`). `occurredAt` (in-game date,
+  the originating sync's `clientTimestamp`) vs `recordedAt` (real-world
+  date, the originating sync's `serverTimestamp`) — same
+  client-time-vs-server-time split as `Transfer`'s `occurredAt`/`syncedAt`.
+  `ManyToOne` → `user:User` (not nullable, `CASCADE`), `club:Club` (not
+  nullable — the club whose sync reported the draw), `sourceSyncRecord:
+  ?SyncRecord` (nullable, `SET NULL` — **not** `CASCADE`: a rollback purges
+  superseded `SyncRecord` rows via
+  `SyncRecordRepository::deleteByClubFromWeek()`, but a draw already folded
+  into a user's balance must survive that purge, same reasoning as
+  `PlayerCareerStatSnapshot::$syncRecord`). `sourceLedgerIndex:?int` — the
+  entry's index within that `SyncRecord`'s `payload['ledger']` array;
+  `UNIQUE(sourceSyncRecord, sourceLedgerIndex)` is what makes re-running
+  `app:backfill-user-ledger` (or re-processing a resent sync) idempotent.
+  No rollback-purge special-casing beyond the FK's `SET NULL` — dividend
+  draws recorded against a rolled-back timeline are not retroactively
+  reversed, same precedent as `Transfer`/`PlayerCareerStatSnapshot`.
 - **`Admin`** — separate back-office auth identity (`UserInterface`).
   `email`, `password`, `name`, `department`, `accessLevel:int(1)`.
   `getRoles()` hardcodes `['ROLE_ADMIN']`. No entity relations.

@@ -106,11 +106,22 @@ Most recent migrations (chronological):
     `appearance JSON` to `"user"` (owner identity — see `entities.md`'s
     `User` entry and CLAUDE.md's "Owner Identity"), and drops the now-unused
     `manager_profile` column from both `"user"` and `club`.
-21. `Version20260927181328` (most recent) — drops the dead, never-read
+21. `Version20260927181328` — drops the dead, never-read
     `npc_squad_config JSON` column from `game_config` (see `entities.md`'s
     `GameConfig` entry — the real, live per-tier squad/staff config lives on
     `StarterConfig` and was untouched by this migration, since it only grew
     new keys inside its existing JSON payload).
+22. `Version20260928151627` — World Pack generation tracking schema
+    (`WorldPackGenerationRun`/`TierRun`/`ClubRun`) — see
+    `02_architecture/output/structure.md` for the Messenger-driven
+    orchestration this backs; not detailed here.
+23. `Version20260928200000` — adds nullable `home_kit_config`,
+    `away_kit_config`, `badge_config JSON` to `club` (the real, player-owned
+    club's own kit+badge identity — see `entities.md`'s `Club` entry and
+    `docs/api/club-kit-identity.md`).
+24. `Version20261002120000` (most recent) — creates `user_ledger`
+    (centralized, cross-club dividend-draw audit trail — see `entities.md`'s
+    `UserLedger` entry and CLAUDE.md's "Centralized User Ledger").
 
 ## Takeaway
 
