@@ -3,11 +3,15 @@
 namespace App\Controller\Api;
 
 use App\Dto\ClubInitRequest;
+use App\Entity\Club;
 use App\Entity\Investor;
+use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Enum\Country;
 use App\Exception\ClubNameTakenException;
+use App\Repository\ClubRepository;
 use App\Repository\NpcClubRepository;
+use App\Repository\SyncRecordRepository;
 use App\Service\ClubInitializationService;
 use App\Service\NpcClubGenerationService;
 use App\Service\ClubResolver;
@@ -125,6 +129,58 @@ class ClubController extends AbstractController
         }
 
         return $this->json(['exists' => true, 'clubId' => $club->getId()->toRfc4122()]);
+    }
+
+    /**
+     * Every club owned by the authenticated account (a user can own more than one — one per
+     * save slot, see ClubResolver's docblock), each with a brief identity + last-sync summary.
+     * Unlike every other method on this controller, this deliberately does NOT resolve to a
+     * single club via ClubResolver — it's the one place a caller is meant to see all of them
+     * at once, e.g. a save-slot picker. See docs/api/club-list.md.
+     */
+    #[Route('/all', name: 'api_clubs_all', methods: ['GET'])]
+    #[IsGranted('ROLE_CLUB')]
+    public function all(ClubRepository $clubRepository, SyncRecordRepository $syncRecordRepository): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        $clubs = array_map(
+            fn (Club $club) => $this->serializeClubSummary($club, $syncRecordRepository->findLatestValid($club)),
+            $clubRepository->findAllByUser($user),
+        );
+
+        return $this->json(['clubs' => $clubs]);
+    }
+
+    /** @return array<string, mixed> */
+    private function serializeClubSummary(Club $club, ?SyncRecord $latestValidSync): array
+    {
+        $payload = $latestValidSync?->getPayload() ?? [];
+
+        return [
+            'id'                  => $club->getId()->toRfc4122(),
+            'name'                => $club->getName(),
+            'country'             => $club->getCountry(),
+            'abbreviation'        => $club->getAbbreviation(),
+            'reputation'          => $club->getReputation(),
+            'balance'             => $club->getBalance(),
+            'hasDebt'             => $club->hasDebt(),
+            'totalCareerEarnings' => $club->getTotalCareerEarnings(),
+            'hallOfFamePoints'    => $club->getHallOfFamePoints(),
+            'homeKitConfig'       => $club->getHomeKitConfig(),
+            'awayKitConfig'       => $club->getAwayKitConfig(),
+            'badgeConfig'         => $club->getBadgeConfig(),
+            // Week/date are the club's own authoritative last-sync columns (updated on every
+            // accepted sync, rollback or not); leaguePosition/form come from the latest VALID
+            // sync's payload specifically — same split ClubCrudController's admin profile uses.
+            'lastSync'            => $club->getLastSyncedAt() === null ? null : [
+                'weekNumber'     => $club->getLastSyncedWeek(),
+                'syncedAt'       => $club->getLastSyncedAt()->format(\DateTimeInterface::ATOM),
+                'leaguePosition' => $payload['leaguePosition'] ?? null,
+                'form'           => $payload['form'] ?? [],
+            ],
+        ];
     }
 
     #[Route('/status', name: 'api_club_status', methods: ['GET'])]

@@ -46,7 +46,12 @@ actually *does* (which service/repo it calls), not restated route paths.
   `BetaRequestRepository`, `EmailVerificationService`.
 - **`ClubController`** — club lookup/initialization/status checks via
   `ClubResolver` (constructor-injected) plus method-injected repos as
-  needed.
+  needed. `GET /all` is the one action here that deliberately does **not**
+  go through `ClubResolver` — it returns every club the account owns
+  (`ClubRepository::findAllByUser()`) with a brief identity + last-sync
+  summary per club (`SyncRecordRepository::findLatestValid()` for
+  `leaguePosition`/`form`), for a save-slot picker. See
+  `docs/api/club-list.md`.
 - **`CommunityStatsController`** — four read-only leaderboard views via
   `CommunityStatsService`.
 - **`CompetitionController`** — competition discovery, registration, and
