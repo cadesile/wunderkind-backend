@@ -325,8 +325,11 @@ filename alone.
   `SyncRecord` — both share this one implementation so the before/after
   chaining logic exists in exactly one place. Idempotent per
   `(sourceSyncRecord, sourceLedgerIndex)` via
-  `UserLedgerRepository::existsForSource()` — see "Centralized User Ledger"
-  in CLAUDE.md.
+  `UserLedgerRepository::existsForSource()`. `dividend_draw`'s `amount` is
+  taken as real pence, unlike every other `ledger[].category` (which is
+  100x-inflated) — a deliberate choice for this brand-new category, not an
+  oversight; see `schema.md`'s `sync_record.payload` field conventions and
+  `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
   `buildLeaguesPack()`/`buildTierPack()` draw each NPC club's full staff —

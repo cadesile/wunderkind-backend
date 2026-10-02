@@ -119,13 +119,11 @@ class LiveTelemetryService
      * The single point every consumer of `ledger[].amount` must go through;
      * never read `entry['amount']` directly elsewhere in this class.
      *
-     * Public (not just this class's own concern): UserLedgerService reuses this
-     * exact conversion for the 'dividend_draw' category — the 100x inflation
-     * bug is in the client's on-device ledger-writing engine itself, not
-     * specific to any category this class happens to read, so a new category
-     * elsewhere needs the identical correction, not a second implementation.
+     * Deliberately NOT reused by UserLedgerService's 'dividend_draw' category — that one is
+     * sent as real pence, not the 100x-inflated value every other category carries. See
+     * UserLedgerService's class docblock.
      */
-    public static function ledgerAmountToPence(mixed $rawAmount): int
+    private static function ledgerAmountToPence(mixed $rawAmount): int
     {
         return intdiv((int) $rawAmount, 100);
     }

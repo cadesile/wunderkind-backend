@@ -21,11 +21,14 @@ use Doctrine\ORM\EntityManagerInterface;
  * balanceBefore/After identically, which is why that logic lives here once instead of being
  * duplicated per caller.
  *
- * `ledger[].amount` is reported at 100x true pence by every category this codebase has
- * confirmed (see `03_data/output/schema.md`'s "sync_record.payload field conventions" in
- * .context — the bug is in the client's on-device ledger-writing engine itself, not specific
- * to any one category), so this reuses LiveTelemetryService::ledgerAmountToPence() rather than
- * treating a 'dividend_draw' entry's amount as already-correct pence.
+ * `dividend_draw` is sent as **real pence, not the 100x-inflated value every pre-existing
+ * `ledger[].category` carries** (see `03_data/output/schema.md`'s "sync_record.payload field
+ * conventions" in .context) — deliberately: that inflation is a bug in the client's existing
+ * on-device ledger-writing engine, and this is a brand-new category with no shipped client
+ * code yet, so there's no reason to inherit it. Same convention as
+ * `promises[].offer.amountPence`, which is correctly-scaled for the identical reason. See
+ * `docs/api/user-ledger.md` for the frontend-facing contract. Do **not** route this amount
+ * through `LiveTelemetryService::ledgerAmountToPence()`.
  */
 class UserLedgerService
 {
@@ -57,15 +60,9 @@ class UserLedgerService
         foreach ($ledgerEntries as $index => $entry) {
             $category    = is_array($entry) ? ($entry['category'] ?? '') : $entry->category;
             $description = is_array($entry) ? ($entry['description'] ?? '') : $entry->description;
-            $rawAmount   = is_array($entry) ? ($entry['amount'] ?? 0) : $entry->amount;
+            $amount      = (int) (is_array($entry) ? ($entry['amount'] ?? 0) : $entry->amount);
 
-            if ($category !== UserLedgerEntryType::DIVIDEND_DRAW->value) {
-                continue;
-            }
-
-            // ledger[].amount is 100x true pence — see this class's docblock.
-            $amount = LiveTelemetryService::ledgerAmountToPence($rawAmount);
-            if ($amount === 0) {
+            if ($category !== UserLedgerEntryType::DIVIDEND_DRAW->value || $amount === 0) {
                 continue;
             }
 

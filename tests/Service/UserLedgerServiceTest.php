@@ -61,9 +61,9 @@ class UserLedgerServiceTest extends KernelTestCase
         $request->clientTimestamp = '2026-10-01T00:00:00+00:00';
         $request->ledger          = [
             $this->ledgerEntry('wages', -5000, 'weekly wages'),
-            // ledger[].amount is sent at 100x true pence (see UserLedgerService's docblock) —
-            // 2_500_000 here is a real-world £250.00 draw, i.e. 25000 true pence.
-            $this->ledgerEntry('dividend_draw', 2_500_000, 'manager dividend draw'),
+            // dividend_draw is real pence, not the 100x-inflated value other categories carry
+            // (see UserLedgerService's docblock) — 25000 here is a real-world £250.00 draw.
+            $this->ledgerEntry('dividend_draw', 25000, 'manager dividend draw'),
         ];
 
         self::getContainer()->get(SyncService::class)->process($user, $request);
@@ -96,14 +96,14 @@ class UserLedgerServiceTest extends KernelTestCase
         $first->clubId          = (string) $club->getId();
         $first->weekNumber      = 1;
         $first->clientTimestamp = '2026-10-01T00:00:00+00:00';
-        $first->ledger          = [$this->ledgerEntry('dividend_draw', 1_000_000, 'first draw')];
+        $first->ledger          = [$this->ledgerEntry('dividend_draw', 10000, 'first draw')];
         self::getContainer()->get(SyncService::class)->process($user, $first);
 
         $second                  = new SyncRequest();
         $second->clubId          = (string) $club->getId();
         $second->weekNumber      = 2;
         $second->clientTimestamp = '2026-10-08T00:00:00+00:00';
-        $second->ledger          = [$this->ledgerEntry('dividend_draw', 500_000, 'second draw')];
+        $second->ledger          = [$this->ledgerEntry('dividend_draw', 5000, 'second draw')];
         self::getContainer()->get(SyncService::class)->process($user, $second);
 
         $this->cleanup = array_merge($this->cleanup, $this->em->getRepository(SyncRecord::class)->findBy(['club' => $club]));
@@ -130,7 +130,7 @@ class UserLedgerServiceTest extends KernelTestCase
         [$user, $club] = $this->persistUserAndClub();
 
         $syncRecord      = new SyncRecord($club, 1, new \DateTimeImmutable('2026-10-01'), [
-            'ledger' => [['category' => 'dividend_draw', 'amount' => 700_000, 'description' => 'draw']],
+            'ledger' => [['category' => 'dividend_draw', 'amount' => 7000, 'description' => 'draw']],
         ]);
         $this->em->persist($syncRecord);
         $this->em->flush();

@@ -257,10 +257,15 @@ dividend draw against the syncing club.
   balance immediately before/after that entry (`balanceAfterPence = balanceBeforePence + amountPence`)
   — so the running total is reconstructible from history alone, not trusted to only the latest row.
   `UserLedgerRepository::getCurrentBalance()` reads the latest row's `balanceAfterPence`.
-- **`ledger[].amount` is 100x true pence, same bug as every other ledger category** (see
-  `sync_record.payload` field conventions in `.context/stages/03_data/output/schema.md`) —
-  `UserLedgerService` reuses `LiveTelemetryService::ledgerAmountToPence()` (widened from `private`
-  to `public static` for this) rather than adding a third ad hoc /100 conversion.
+- **`dividend_draw`'s `amount` is real pence — the one `ledger[].category` that is NOT
+  100x-inflated.** Every pre-existing category carries that inflation (a bug in the client's
+  existing on-device ledger-writing engine — see `sync_record.payload` field conventions in
+  `.context/stages/03_data/output/schema.md`), but `dividend_draw` is a brand-new category
+  with no shipped client code to inherit it from, so it was deliberately specified as
+  correctly-scaled from the start (explicit human decision, not inferred) — same reasoning as
+  `promises[].offer.amountPence`. **Never** route it through
+  `LiveTelemetryService::ledgerAmountToPence()`. See `docs/api/user-ledger.md` for the
+  frontend-facing contract.
 - **Idempotent per `(sourceSyncRecord, sourceLedgerIndex)`** — the `uq_user_ledger_source_entry`
   unique constraint, checked via `UserLedgerRepository::existsForSource()` before inserting. This is
   what makes re-running the backfill command, or re-processing a resent sync, a safe no-op.

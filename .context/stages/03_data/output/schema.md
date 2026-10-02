@@ -81,13 +81,16 @@ one exception, and it is a real, confirmed bug, not a false lead:**
 - If you add a new consumer of `ledger[].amount` (a new admin view, report,
   or telemetry aggregation), apply the same /100 correction — or, better,
   route through one of the two canonical implementations above.
-- **`dividend_draw`** is a newer `ledger[].category` value, detected by
-  `UserLedgerService::recordDividendDraws()` (called from
-  `SyncService::process()`) to centralize a user's cross-club earnings onto
-  `UserLedger` — see `entities.md`. It carries the same /100 bug as every
-  other category and is corrected via `LiveTelemetryService::
-  ledgerAmountToPence()` (now `public static` so this second consumer can
-  reuse it), not a third ad hoc conversion.
+- **`dividend_draw` is the one `ledger[].category` that is REAL pence, not
+  100x-inflated.** Detected by `UserLedgerService::recordDividendDraws()`
+  (called from `SyncService::process()`) to centralize a user's cross-club
+  earnings onto `UserLedger` — see `entities.md`. It's a brand-new category
+  with no pre-existing client code to inherit the device-side bug from, so
+  it was deliberately specified as correctly-scaled from day one (confirmed
+  explicitly with the human, not inferred) — same reasoning as
+  `promises[].offer.amountPence`. **Do not** route it through
+  `LiveTelemetryService::ledgerAmountToPence()`; see
+  `docs/api/user-ledger.md` for the frontend-facing contract.
 
 ## Repository query patterns worth knowing
 
