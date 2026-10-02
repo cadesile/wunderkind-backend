@@ -26,3 +26,15 @@
     {%- import _self as macros -%}
     {{- macros.currency(rawAmount / 100) -}}
 {% endmacro %}
+
+{#
+ # A single W/D/L form-strip square, most-recent-first — shared between the club profile
+ # page and the user profile's club summary cards so a result reads identically everywhere.
+ #}
+{% macro resultBadge(r) %}
+    <span class="fw-bold d-inline-flex align-items-center justify-content-center rounded-1"
+          style="width:26px;height:26px;font-size:.75rem;letter-spacing:0;
+                 background:{{ r == 'W' ? '#198754' : (r == 'D' ? '#6c757d' : '#dc3545') }};color:#fff;">
+        {{ r }}
+    </span>
+{% endmacro %}

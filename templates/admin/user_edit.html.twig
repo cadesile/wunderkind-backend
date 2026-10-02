@@ -1,0 +1,140 @@
+{% extends '@EasyAdmin/crud/edit.html.twig' %}
+
+{# Overriding content_header_wrapper (not main) means the actual edit form below is #}
+{# untouched and still submits normally — see UserCrudController::edit()'s docblock. #}
+
+{% from 'admin/_macros.html.twig' import currency as fmt_currency, resultBadge %}
+
+{% block content_header_wrapper %}
+    {{ parent() }}
+
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# OVERALL BALANCE — centralized across every club this user owns.    #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center justify-content-between py-3 px-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa fa-wallet text-muted" aria-hidden="true"></i>
+                        <span class="fw-semibold">Overall Balance</span>
+                        <span class="text-muted small">&middot; dividends drawn across every club below</span>
+                    </div>
+                    <span class="fs-4 fw-bold {{ overallBalancePence < 0 ? 'text-danger' : 'text-success' }}">
+                        {{ fmt_currency(overallBalancePence) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════ #}
+    {# CLUBS — brief per-club summary: identity, last sync, earnings.     #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    <div class="row g-3 mb-4">
+        <div class="col-12 d-flex align-items-center gap-2">
+            <i class="fa fa-school text-muted" aria-hidden="true"></i>
+            <span class="fw-semibold">Clubs</span>
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ clubsSummary|length }}</span>
+        </div>
+
+        {% if clubsSummary is empty %}
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center py-4">
+                        <p class="text-muted mb-0">No clubs associated with this account.</p>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {% for row in clubsSummary %}
+                {% set club = row.club %}
+                {% set sync = row.latestSync %}
+                {% set payload = sync ? sync.payload : {} %}
+                {% set form = payload.form ?? [] %}
+                <div class="col-md-6 col-xl-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-0">{{ club.name }}</h6>
+                                {% if club.country %}<span class="text-muted small">{{ club.country }}</span>{% endif %}
+                            </div>
+
+                            {% if club.homeKitConfig or club.awayKitConfig or club.badgeConfig %}
+                                <div class="d-flex gap-3 align-items-center justify-content-center py-2">
+                                    <div data-kit-preview="home-{{ club.id }}" style="min-height:40px;display:flex;align-items:center;justify-content:center;"></div>
+                                    <div data-kit-preview="away-{{ club.id }}" style="min-height:40px;display:flex;align-items:center;justify-content:center;"></div>
+                                    <div data-badge-preview="{{ club.id }}" style="min-height:40px;display:flex;align-items:center;justify-content:center;"></div>
+                                </div>
+                            {% endif %}
+
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                {% if sync %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                        <i class="fa fa-circle-check me-1" aria-hidden="true"></i>Week {{ club.lastSyncedWeek }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                        <i class="fa fa-circle-xmark me-1" aria-hidden="true"></i>Never synced
+                                    </span>
+                                {% endif %}
+                                {% if payload.leaguePosition is defined and payload.leaguePosition is not null %}
+                                    <span class="badge {{ payload.leaguePosition <= 3 ? 'bg-warning text-dark' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}">
+                                        <i class="fa fa-ranking-star me-1" aria-hidden="true"></i>P{{ payload.leaguePosition }}
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            {% if form|length > 0 %}
+                                <div class="d-flex gap-1 mb-2">
+                                    {% for r in form|slice(0, 5) %}{{ resultBadge(r) }}{% endfor %}
+                                </div>
+                            {% endif %}
+
+                            <div class="row text-center border-top pt-2 mt-2">
+                                <div class="col">
+                                    <div class="fw-bold">{{ fmt_currency(club.totalCareerEarnings) }}</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Career Earnings</div>
+                                </div>
+                                <div class="col border-start">
+                                    <div class="fw-bold">{{ fmt_currency(row.dividendsPence) }}</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Dividends Drawn</div>
+                                </div>
+                            </div>
+
+                            <div class="text-end mt-2">
+                                <a href="{{ ea_url().setController('App\\Controller\\Admin\\ClubCrudController').setAction('detail').setEntityId(club.id) }}"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="fa fa-eye me-1" aria-hidden="true"></i> View Club
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+
+            <script src="{{ asset('assets/kit-compositor.js') }}?v={{ 'now'|date('YmdHis') }}"></script>
+            <script>
+                (function () {
+                    if (typeof composeKitSvg !== 'function') return;
+                    var clubs = {{ clubKitConfigs|json_encode|raw }};
+                    var mergeConfig = function (kit, badge) {
+                        var merged = {};
+                        for (var k in (kit || {})) merged[k] = kit[k];
+                        for (var k2 in (badge || {})) merged[k2] = badge[k2];
+                        return merged;
+                    };
+                    clubs.forEach(function (c) {
+                        if (!c.home && !c.away && !c.badge) return;
+                        var homeSlot = document.querySelector('[data-kit-preview="home-' + c.id + '"]');
+                        var awaySlot = document.querySelector('[data-kit-preview="away-' + c.id + '"]');
+                        var badgeSlot = document.querySelector('[data-badge-preview="' + c.id + '"]');
+                        if (homeSlot && c.home) homeSlot.innerHTML = composeKitSvg(mergeConfig(c.home, c.badge), 'kit', 'small', 1.3);
+                        if (awaySlot && c.away) awaySlot.innerHTML = composeKitSvg(mergeConfig(c.away, c.badge), 'kit', 'small', 1.3);
+                        if (badgeSlot && c.badge) badgeSlot.innerHTML = composeKitSvg(mergeConfig(c.home, c.badge), 'badge', null, 1.3);
+                    });
+                }());
+            </script>
+        {% endif %}
+    </div>
+{% endblock %}

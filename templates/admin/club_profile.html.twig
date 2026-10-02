@@ -4,15 +4,7 @@
 {% set sr = payload.seasonRecord ?? {} %}
 {% set form = payload.form ?? [] %}
 
-{% from 'admin/_macros.html.twig' import currency as fmt_currency, ledgerCurrency as fmt_ledger_currency %}
-
-{% macro result_badge(r) %}
-    <span class="fw-bold d-inline-flex align-items-center justify-content-center rounded-1"
-          style="width:26px;height:26px;font-size:.75rem;letter-spacing:0;
-                 background:{{ r == 'W' ? '#198754' : (r == 'D' ? '#6c757d' : '#dc3545') }};color:#fff;">
-        {{ r }}
-    </span>
-{% endmacro %}
+{% from 'admin/_macros.html.twig' import currency as fmt_currency, ledgerCurrency as fmt_ledger_currency, resultBadge %}
 
 {% block content %}
 <div class="row g-3 mt-1">
@@ -251,7 +243,7 @@
                     </div>
                     <div class="d-flex gap-1">
                         {% for r in form %}
-                            {{ _self.result_badge(r) }}
+                            {{ resultBadge(r) }}
                         {% endfor %}
                     </div>
                 </div>
@@ -1179,7 +1171,7 @@
                                 <div class="d-flex gap-1 justify-content-center">
                                     {% if p.form is defined and p.form|length > 0 %}
                                         {% for r in p.form|slice(0, 3) %}
-                                            {{ _self.result_badge(r) }}
+                                            {{ resultBadge(r) }}
                                         {% endfor %}
                                     {% else %}
                                         <span class="text-muted">—</span>
