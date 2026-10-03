@@ -34,11 +34,20 @@ class TranslationCatalogueImportExportService
     }
 
     /**
-     * @return array{created: int, updated: int, errors: string[]}
+     * $clearFirst deletes every existing generic Translation value for $target before
+     * importing, so a key the uploaded file (and no other language) mentions any more is
+     * genuinely gone afterward rather than just left stale — see deleteGenericForLanguage()
+     * and findGenericOrphaned() for why this is scoped to one language, not a full wipe.
+     *
+     * @return array{created: int, updated: int, cleared: int, prunedKeys: int, errors: string[]}
      */
-    public function import(array $data, Language $target): array
+    public function import(array $data, Language $target, bool $clearFirst = false): array
     {
-        $result = ['created' => 0, 'updated' => 0, 'errors' => []];
+        $result = ['created' => 0, 'updated' => 0, 'cleared' => 0, 'prunedKeys' => 0, 'errors' => []];
+
+        if ($clearFirst) {
+            $result['cleared'] = $this->translationRepository->deleteGenericForLanguage($target);
+        }
 
         // A key newly created in the meta step below is only persist()ed, not yet flushed —
         // a later findOneByKey() query for the same key during the entries step would not
@@ -65,6 +74,14 @@ class TranslationCatalogueImportExportService
         }
 
         $this->em->flush();
+
+        if ($clearFirst) {
+            foreach ($this->translationKeyRepository->findGenericOrphaned() as $orphan) {
+                $this->em->remove($orphan);
+                $result['prunedKeys']++;
+            }
+            $this->em->flush();
+        }
 
         return $result;
     }

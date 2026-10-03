@@ -66,4 +66,21 @@ class TranslationKeyRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Generic keys with zero Translation rows left in ANY language — used after a "clear
+     * existing" bulk import to prune keys the uploaded file (and every other language)
+     * no longer mentions at all. A key still holding a value in some other language is
+     * never touched here, only ones that are now completely dead.
+     *
+     * @return TranslationKey[]
+     */
+    public function findGenericOrphaned(): array
+    {
+        return $this->createQueryBuilder('tk')
+            ->andWhere('tk.entityType IS NULL')
+            ->andWhere('tk.translations IS EMPTY')
+            ->getQuery()
+            ->getResult();
+    }
 }

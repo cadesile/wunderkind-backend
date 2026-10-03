@@ -896,12 +896,22 @@ class DashboardController extends AbstractDashboardController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
         }
 
-        $result = $service->import($data, $target);
+        $clearFirst = $request->request->has('clear_before_import');
+        $result     = $service->import($data, $target, $clearFirst);
 
         if (!empty($result['errors'])) {
             foreach ($result['errors'] as $error) {
                 $this->addFlash('warning', $error);
             }
+        }
+
+        if ($clearFirst) {
+            $this->addFlash('warning', sprintf(
+                'Cleared %d existing %s value(s) before importing; %d key(s) with no remaining translation in any language were removed entirely.',
+                $result['cleared'],
+                $target->getCode(),
+                $result['prunedKeys'],
+            ));
         }
 
         $this->addFlash('success', sprintf(

@@ -439,7 +439,14 @@ them:
   `TranslationCrudController`) plus a bulk import/export screen
   (`/admin/translations/content|export|import`, mirroring `ConfigImportExportService`'s own
   trio) whose export format *is* the public catalogue shape — the app's own locale file can
-  be uploaded there close to verbatim as the initial `en` seed.
+  be uploaded there close to verbatim as the initial `en` seed. That screen's optional
+  "clear existing" checkbox is scoped to **one language's generic values only** — never a
+  full wipe like the narrative import's own checkbox — because a bulk import always carries
+  just one language's file; clearing every language would destroy unrelated languages' work
+  as collateral damage. `TranslationRepository::deleteGenericForLanguage()` deletes that
+  language's rows first, then `TranslationKeyRepository::findGenericOrphaned()` prunes any
+  key left with zero translations in *any* language (a key still holding a value elsewhere
+  is never touched).
   `NarrativeImportExportService`'s export/import additionally carries a `translations`
   section (non-default-language values only, for the three narrative types) so a whole
   language's worth of narrative translations can move with a narrative-content backup —

@@ -75,6 +75,22 @@
                             <input class="form-control form-control-sm" type="file" id="translations_file"
                                    name="translations_file" accept=".json,application/json" required>
                         </div>
+                        <div class="mb-3 p-2 border border-danger rounded">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="clear_before_import" name="clear_before_import">
+                                <label class="form-check-label small fw-semibold text-danger" for="clear_before_import">
+                                    Clear existing values for this language before importing
+                                </label>
+                            </div>
+                            <p class="text-muted small mb-0 mt-1">
+                                Deletes every existing <strong>generic</strong> translation value for the
+                                target language above (never narrative content) before applying the file.
+                                A key this file — and no other language — has a value for any more is
+                                removed entirely, rather than left stale. Other languages' values are
+                                untouched. Cannot be undone.
+                            </p>
+                        </div>
                         <button type="submit" class="btn btn-warning btn-sm">
                             <i class="fa fa-upload me-1"></i> Import
                         </button>

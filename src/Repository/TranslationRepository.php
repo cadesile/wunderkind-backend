@@ -60,6 +60,40 @@ class TranslationRepository extends ServiceEntityRepository
     }
 
     /**
+     * Deletes every generic (non-narrative) Translation row for one language — used by the
+     * bulk-import screen's "clear existing" option. Scoped to a single language deliberately:
+     * a bulk import only ever carries one language's file, so clearing every language (the
+     * narrative import's "clear all" precedent) would destroy unrelated languages' work as
+     * collateral damage. Narrative-linked keys are untouched regardless.
+     *
+     * DQL DELETE can't join, so this resolves generic key ids first, then deletes by id —
+     * executes immediately as real SQL (not staged on the UnitOfWork), so a subsequent
+     * findOneForKeyAndLanguage() in the same request correctly sees the row gone.
+     */
+    public function deleteGenericForLanguage(Language $language): int
+    {
+        $genericKeyIds = $this->getEntityManager()->createQueryBuilder()
+            ->select('tk.id')
+            ->from(TranslationKey::class, 'tk')
+            ->andWhere('tk.entityType IS NULL')
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        if ($genericKeyIds === []) {
+            return 0;
+        }
+
+        return (int) $this->createQueryBuilder('t')
+            ->delete()
+            ->andWhere('t.language = :language')
+            ->andWhere('t.translationKey IN (:keyIds)')
+            ->setParameter('language', $language)
+            ->setParameter('keyIds', $genericKeyIds)
+            ->getQuery()
+            ->execute();
+    }
+
+    /**
      * One query covering every generic (non-narrative) key, with the requested language's
      * value left-joined alongside the default language's value so a missing requested value
      * falls back to default in a single pass — no per-key lookups.
