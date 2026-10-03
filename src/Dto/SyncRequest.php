@@ -202,11 +202,25 @@ class SyncRequest
     public array $seasonRecord = [];
 
     /**
-     * Season-to-date stats per AMP player with ≥1 appearance.
+     * Season-to-date stats per AMP player with ≥1 appearance. `appearanceConfig` (sync v2,
+     * optional — absent/null on older clients) is the player's personal-traits-only avatar
+     * config (no kit colors, which are club-derived and never sent here) — see
+     * PlayerCareerStat::$appearanceConfig.
      *
-     * @var array<array{playerId: string, appearances: int, goals: int, assists: int, averageRating: float}>
+     * @var array<array{playerId: string, appearances: int, goals: int, assists: int, averageRating: float, appearanceConfig?: array{hair: string, hairColor: string, headband: bool, skin: string, face: string, facial: string, lip: string}|null}>
      */
     public array $playerStats = [];
+
+    /**
+     * Sync v2: one entry per currently-hired staff member, purely to deliver each one's
+     * avatar config — no stats/performance concept for staff, unlike playerStats. Optional
+     * top-level field, absent/empty on older clients. `appearanceConfig` carries the staff
+     * sprite shape (persists outfit/trousers/glasses, unlike players) — see
+     * StaffCareerProfile::$appearanceConfig.
+     *
+     * @var array<array{staffId: string, staffName: string, staffRole: string, appearanceConfig?: array<string, mixed>|null}>
+     */
+    public array $staffStats = [];
 
     /**
      * Players signed into the squad this week (incoming transfers).

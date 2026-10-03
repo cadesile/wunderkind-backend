@@ -5,6 +5,22 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** feff081 (as of writing — this pass's own changes are uncommitted
+  on top of it). **Stage touched:** 03_data (sync v2: nullable
+  `player_career_stat.appearance_config` and new `staff_career_profile` table
+  — see `entities.md`'s `PlayerCareerStat`/`StaffCareerProfile` entries,
+  `schema.md`'s table index, `migrations.md` entry 25. New
+  `SyncRequest::$staffStats` field and `SyncService::processStaffCareerProfiles()`.
+  CLAUDE.md's new "Sync v2: In-Club Player/Staff Appearance" section explicitly
+  distinguishes this client-authoritative data from the backend-generated
+  Avatar Appearance system above it. Covered by
+  `tests/Service/SyncServicePlayerStaffStatsTest.php`. No new docs/api/*.md —
+  the contract is already documented frontend-side per the request
+  (`docs/api/sync-v2.md` in `wunderkind-app`), backend is just conforming to
+  an already-agreed spec here.)
+
+---
+
 - **Commit:** fa58cd2 (development/dev/master, pushed). **Stage touched:**
   01_overview (`environment.md` — documented `scripts/pull-prod-db.sh`,
   the reusable production-DB-pull-and-restore-locally workflow, plus a

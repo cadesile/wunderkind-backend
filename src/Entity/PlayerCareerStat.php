@@ -47,6 +47,18 @@ class PlayerCareerStat
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $assists = 0;
 
+    /**
+     * Sync v2, optional: the player's personal-traits-only avatar config (hair, hairColor,
+     * headband, skin, face, facial, lip — no kit colors, which are club-derived and never
+     * sent here). Stored verbatim, no validation — same trust model as every other
+     * client-authoritative sync field. Refreshed each sync like the stat columns above, but
+     * only when the incoming entry actually carries the key (see
+     * SyncService::processPlayerCareerStats()) — an older client omitting it must not wipe
+     * out a value a newer client already sent.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $appearanceConfig = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $updatedAt;
 
@@ -66,6 +78,8 @@ class PlayerCareerStat
     public function getAppearances(): int { return $this->appearances; }
     public function getGoals(): int { return $this->goals; }
     public function getAssists(): int { return $this->assists; }
+    public function getAppearanceConfig(): ?array { return $this->appearanceConfig; }
+    public function setAppearanceConfig(?array $appearanceConfig): void { $this->appearanceConfig = $appearanceConfig; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 
     /**

@@ -240,6 +240,35 @@ ClubController → ClubInitializationService::initializeClub()
 - `appearance` is emitted verbatim (a passthrough of `getAppearance()`) in every player/staff/scout/agent serializer — `buildPlayerSnapshot`/`buildStaffSnapshot`/`buildScoutSnapshot`, `MarketDataService::serialize{Coach,Scout,Agent}`, and `ScoutSearchController::serializePlayer`. All four are schema-agnostic passthroughs of the whole JSON blob — none of them needed to change for this rewrite, and none would need to change for a future one either.
 - The admin edit form (`AppearanceType`) renders identically for all 15 keys on every entity type, but takes a `person_type` (`'player'`|`'staff'`) form-type option — set per CrudController via `->setFormType(AppearanceType::class)->setFormTypeOptions(['person_type' => ...])` (this EasyAdmin version's `setFormType()` takes only the class name; options are a separate chained call) — that only decides which body shape the live preview draws and which of the kit/shorts/socks vs outfit/trousers/glasses sections the widget shows; it does not change what's stored. `public/assets/avatar-compositor.js` is a mechanical plain-JS port of `sprite.ts`'s `buildGrid()`/`toRuns()` (do not hand-reinterpret the pixel math — port it verbatim if the sprite's drawing logic ever changes) and also exposes `window.SKIN_SHADES` for the widget's skin swatches.
 
+### Sync v2: In-Club Player/Staff Appearance (client-authoritative)
+Distinct from Avatar Appearance above, which is backend-generated at pool stage: once a
+player/staff is signed into a club, their `Player`/`Staff` row is deleted (pool-consumption —
+see Pool Lifecycle above), so there is no backend row left to hold an evolving in-game
+appearance. `POST /api/sync`'s `playerStats[]`/`staffStats[]` (sync v2, both additive/optional
+— absent or `undefined` on older clients) report each currently-owned player's/staff
+member's **client-authoritative** `appearanceConfig` back to the backend for storage, the
+same trust model as `Club.homeKitConfig`/`badgeConfig` (client-supplied verbatim, no
+server-side validation) — this is not generation, and `AppearanceGeneratorService` is not
+involved.
+- **`PlayerCareerStat.appearanceConfig`** (from `playerStats[]`) is **personal-traits-only** —
+  `hair/hairColor/headband/skin/face/facial/lip`, no kit colors (`kit`/`shorts`/`socks`/
+  `primary`/`secondary`), since a player's kit is club-derived and never sent per-player.
+- **`StaffCareerProfile`** (from `staffStats[]`) is a **brand-new entity**, not an extension of
+  `PlayerCareerStat` — there is no goals/assists/rating concept for staff, so don't try to map
+  one onto the other. `appearanceConfig` here carries the full staff sprite shape (persists
+  `outfit`/`trousers`/`glasses` too, unlike players' subset above). Keyed by client-generated
+  `staffId` the same way `PlayerCareerStat` is keyed by `playerId` (Staff rows are pool-only
+  and deleted on consumption, same as Player) — `UNIQUE(club, staffId)`, upserted every sync.
+  `staffRole` is a **free string, not the `StaffRole` enum** — the client's role set is wider
+  (e.g. `scout`, `assistant_coach` aren't `StaffRole` cases; `Scout` is a separate entity
+  backend-side) — storing it typed would reject legitimate values.
+- **Both `appearanceConfig` fields use "omitted key preserves, explicit `null` clears"
+  semantics** (`array_key_exists`, not `??`, in `SyncService::processPlayerCareerStats()`/
+  `processStaffCareerProfiles()`) — an older client that doesn't send the key at all must not
+  wipe out a config a newer client already reported for that player/staff member. Neither
+  field is copied onto `PlayerCareerStatSnapshot` (identity/cosmetic data, not a stat worth
+  historizing across season resets).
+
 ### Owner Identity (User, backend-owned)
 `User` carries `name`, `nationality`, `gender`, `dob`, and `appearance` (the same 15-key sprite shape as Player/Staff/Scout/Agent) — the real account holder's own identity, single per account and read live by every club that account creates via `Club::getUser()` (no per-club copy). This **replaces** two removed, redundant blobs: the ad hoc `User::$managerProfile` (previously set unvalidated from the raw registration payload) and the structured but never-serialized `Club::$managerProfile` (previously set once at club creation from `ClubInitRequest::$manager`/`ManagerProfileInput`). `Club::$paName` (the fictional in-game "player agent" persona) is unrelated and untouched.
 - **`AppearanceRole::OWNER`** is the role passed to the generator for `User` — it falls into the existing non-player ("staff shape") branching with zero code changes needed inside `AppearanceGeneratorService` itself, same as COACH/SCOUT/AGENT.

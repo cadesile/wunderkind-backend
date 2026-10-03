@@ -25,6 +25,7 @@ use App\Repository\LeaderboardEntryRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\PlayerCareerStatRepository;
+use App\Repository\StaffCareerProfileRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\TacticalAdvantageRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -47,6 +48,7 @@ class SyncService
         private readonly SyncRecordRepository           $syncRecordRepository,
         private readonly ClubFacilityRepository         $clubFacilityRepository,
         private readonly PlayerCareerStatRepository     $playerCareerStatRepository,
+        private readonly StaffCareerProfileRepository   $staffCareerProfileRepository,
         private readonly LoggerInterface                 $logger,
         private readonly FacilityImageResolver           $facilityImageResolver,
         private readonly UserLedgerService               $userLedgerService,
@@ -88,6 +90,7 @@ class SyncService
                 'leaguePosition'      => $request->leaguePosition,
                 'seasonRecord'        => $request->seasonRecord,
                 'playerStats'         => $request->playerStats,
+                'staffStats'          => $request->staffStats,
                 'signings'            => $request->signings,
                 'transfers'           => array_map(fn($t) => [
                     'playerId'        => $t->playerId,
@@ -191,6 +194,11 @@ class SyncService
         // Player season stats — back the 'golden_boot'/'playmaker' leaderboards (computed by LeaderboardCalculationService, not here).
         if (!empty($request->playerStats)) {
             $this->processPlayerCareerStats($club, $request->playerStats, $syncRecord);
+        }
+
+        // Sync v2: currently-hired staff identity + avatar config — no stats concept, unlike playerStats above.
+        if (!empty($request->staffStats)) {
+            $this->processStaffCareerProfiles($club, $request->staffStats);
         }
 
         // ── Leaderboard upserts ───────────────────────────────────────────────
@@ -515,7 +523,12 @@ class SyncService
      * data point with the same value, which the reset-aware total handles as a
      * zero-delta step, not double-counted activity.
      *
-     * @param array<array{playerId: string, playerName?: string, appearances: int, goals: int, assists: int, averageRating: float}> $playerStats
+     * `appearanceConfig` (sync v2) is optional and handled separately from the always-present
+     * stat fields above: only written when the incoming entry actually carries the key (via
+     * `array_key_exists`, not `??`) — an older client that omits it entirely must not wipe
+     * out a config a newer client already sent for this player.
+     *
+     * @param array<array{playerId: string, playerName?: string, appearances: int, goals: int, assists: int, averageRating: float, appearanceConfig?: array<string, mixed>|null}> $playerStats
      */
     private function processPlayerCareerStats(Club $club, array $playerStats, SyncRecord $syncRecord): void
     {
@@ -532,6 +545,10 @@ class SyncService
             $stat = $this->playerCareerStatRepository->findOrCreate($club, (string) $data['playerId'], (string) $playerName);
             $stat->applySnapshot($appearances, $goals, $assists, (string) $playerName);
 
+            if (array_key_exists('appearanceConfig', $data)) {
+                $stat->setAppearanceConfig($data['appearanceConfig']);
+            }
+
             $this->em->persist(new PlayerCareerStatSnapshot(
                 $club,
                 (string) $data['playerId'],
@@ -542,6 +559,35 @@ class SyncService
                 $syncRecord->getServerTimestamp(),
                 $syncRecord,
             ));
+        }
+    }
+
+    /**
+     * Upserts StaffCareerProfile rows from sync v2's staffStats — one entry per
+     * currently-hired staff member, purely for identity + avatar config. No stats
+     * concept here (unlike playerStats above), so staffId/staffName/staffRole are
+     * overwritten unconditionally every sync; `appearanceConfig` follows the same
+     * omitted-key-preserves-existing-value rule as PlayerCareerStat's (see
+     * processPlayerCareerStats()).
+     *
+     * @param array<array{staffId: string, staffName: string, staffRole: string, appearanceConfig?: array<string, mixed>|null}> $staffStats
+     */
+    private function processStaffCareerProfiles(Club $club, array $staffStats): void
+    {
+        foreach ($staffStats as $data) {
+            if (empty($data['staffId'])) {
+                continue;
+            }
+
+            $staffName = (string) ($data['staffName'] ?? $data['staffId']);
+            $staffRole = (string) ($data['staffRole'] ?? '');
+
+            $profile = $this->staffCareerProfileRepository->findOrCreate($club, (string) $data['staffId'], $staffName, $staffRole);
+            $profile->refreshIdentity($staffName, $staffRole);
+
+            if (array_key_exists('appearanceConfig', $data)) {
+                $profile->setAppearanceConfig($data['appearanceConfig']);
+            }
         }
     }
 

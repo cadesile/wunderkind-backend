@@ -119,9 +119,13 @@ Most recent migrations (chronological):
     `away_kit_config`, `badge_config JSON` to `club` (the real, player-owned
     club's own kit+badge identity — see `entities.md`'s `Club` entry and
     `docs/api/club-kit-identity.md`).
-24. `Version20261002120000` (most recent) — creates `user_ledger`
+24. `Version20261002120000` — creates `user_ledger`
     (centralized, cross-club dividend-draw audit trail — see `entities.md`'s
     `UserLedger` entry and CLAUDE.md's "Centralized User Ledger").
+25. `Version20261003112841` (most recent) — sync v2: adds nullable
+    `player_career_stat.appearance_config JSON` and creates
+    `staff_career_profile` (identity + avatar config per currently-hired
+    staff member, no stats columns — see `entities.md`'s entries for both).
 
 ## Takeaway
 

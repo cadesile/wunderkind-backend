@@ -187,11 +187,32 @@ migrations are the change log (see `migrations.md`).
   `traitWeights:array`. No relations.
 - **`PlayerCareerStat`** — current cumulative career stat row.
   `playerId/playerName`, `appearances/goals/assists`. `ManyToOne` →
-  `Club` (not nullable, `CASCADE`).
+  `Club` (not nullable, `CASCADE`). `appearanceConfig:?array` (json, sync
+  v2) — the player's personal-traits-only avatar config (`hair/hairColor/
+  headband/skin/face/facial/lip`, no kit colors — those are club-derived
+  and never sent here); optional, stored verbatim with no validation, and
+  only overwritten when the incoming sync entry carries the key at all
+  (`array_key_exists`, not `??`) — an older client omitting it must not
+  wipe out a value a newer one already sent. **Not** copied onto
+  `PlayerCareerStatSnapshot` below (identity/cosmetic, not a stat worth
+  historizing).
 - **`PlayerCareerStatSnapshot`** — point-in-time copy of the above, tied
   to a sync. `playerId/playerName`, `appearances/goals/assists`,
   `recordedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`),
   `syncRecord:?SyncRecord` (nullable, `SET NULL`).
+- **`StaffCareerProfile`** (sync v2) — one row per currently-hired staff
+  member, identity + avatar config only — **no stats/performance
+  columns**, unlike `PlayerCareerStat` (there's no goals/assists/rating
+  concept for staff). `staffId/staffName/staffRole` (all plain strings;
+  `staffRole` is free text, **not** the `StaffRole` enum — the client's
+  role set is wider, e.g. `scout`/`assistant_coach` aren't `StaffRole`
+  cases and `Scout` is a separate entity backend-side), `appearanceConfig:
+  ?array` (json; staff persist `outfit`/`trousers`/`glasses` too, unlike
+  players' personal-traits-only subset above), `updatedAt`. `ManyToOne` →
+  `Club` (not nullable, `CASCADE`). `UNIQUE(club, staffId)` — same
+  pool-is-ephemeral reasoning as `PlayerCareerStat`'s `UNIQUE(club,
+  playerId)` (Staff rows are pool-only and deleted on consumption, so
+  there's no durable server-side Staff row to key off instead).
 - **`Agent`** — a player's agent. `name`, `reputation:int(50)`,
   `commissionRate('10.00')`, `dob`, `nationality`, `judgements:array`,
   `experience`, `rating:int(50)`, `appearance:?array`. `OneToMany` →
