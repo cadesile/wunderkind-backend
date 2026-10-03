@@ -253,6 +253,11 @@ involved.
 - **`PlayerCareerStat.appearanceConfig`** (from `playerStats[]`) is **personal-traits-only** —
   `hair/hairColor/headband/skin/face/facial/lip`, no kit colors (`kit`/`shorts`/`socks`/
   `primary`/`secondary`), since a player's kit is club-derived and never sent per-player.
+  **Kit color is determined from the parent club** (confirmed explicitly by the human,
+  not an inferred default) — `PlayerCareerStat::toFullAppearanceConfig()` merges this
+  personal-traits config with `$club->getHomeKitConfig()`'s kit colors into one complete,
+  renderable sprite config. Not wired into any endpoint yet — groundwork for whenever a
+  consumer (an admin view, say) needs to actually render this.
 - **`StaffCareerProfile`** (from `staffStats[]`) is a **brand-new entity**, not an extension of
   `PlayerCareerStat` — there is no goals/assists/rating concept for staff, so don't try to map
   one onto the other. `appearanceConfig` here carries the full staff sprite shape (persists

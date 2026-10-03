@@ -195,7 +195,14 @@ migrations are the change log (see `migrations.md`).
   (`array_key_exists`, not `??`) — an older client omitting it must not
   wipe out a value a newer one already sent. **Not** copied onto
   `PlayerCareerStatSnapshot` below (identity/cosmetic, not a stat worth
-  historizing).
+  historizing). `toFullAppearanceConfig()` merges this personal-traits
+  config with `$this->club->getHomeKitConfig()`'s kit colors into one
+  complete, renderable sprite config (returns `null` if no
+  `appearanceConfig` has been reported yet; returns the personal traits
+  alone, un-merged, if the club hasn't set its own kit identity either) —
+  kit color is determined from the parent club, confirmed explicitly by
+  the human, never stored on this row. Not wired into any endpoint yet —
+  groundwork for whenever a consumer needs to actually render this.
 - **`PlayerCareerStatSnapshot`** — point-in-time copy of the above, tied
   to a sync. `playerId/playerName`, `appearances/goals/assists`,
   `recordedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`),

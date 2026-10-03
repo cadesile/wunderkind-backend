@@ -83,6 +83,33 @@ class PlayerCareerStat
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
 
     /**
+     * Merges the stored personal-traits-only appearanceConfig with this player's own club's
+     * kit colors (kit, primary, secondary, shorts, socks — from Club::$homeKitConfig) into
+     * one complete, renderable sprite config. Kit color is determined from the parent club,
+     * never stored on this row — see the appearanceConfig docblock above.
+     *
+     * Groundwork for whenever a consumer (an admin view, say) needs to actually render this;
+     * not wired into any endpoint yet.
+     *
+     * Returns null if no appearanceConfig has been reported yet — there's nothing to merge
+     * kit colors into. If the club hasn't set its own kit identity either (homeKitConfig is
+     * still null — see docs/api/club-kit-identity.md, nothing there is ever auto-generated),
+     * the result is just the personal-traits-only config with no kit keys added, not an error.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function toFullAppearanceConfig(): ?array
+    {
+        if ($this->appearanceConfig === null) {
+            return null;
+        }
+
+        $kit = $this->club->getHomeKitConfig();
+
+        return $kit === null ? $this->appearanceConfig : array_merge($this->appearanceConfig, $kit);
+    }
+
+    /**
      * playerStats is sent as a season-to-date cumulative snapshot, not a per-tick
      * delta — overwrite rather than accumulate, so a replayed sync can't double-count.
      */
