@@ -5,6 +5,18 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** fa58cd2 (development/dev/master, pushed). **Stage touched:**
+  01_overview (`environment.md` — documented `scripts/pull-prod-db.sh`,
+  the reusable production-DB-pull-and-restore-locally workflow, plus a
+  `CONTEXT.md` routing-table row mapping the human's "pull prod DB" trigger
+  phrase directly to running it — explicit instruction, per the human, to
+  run it rather than just describe it when that phrase is used. Raw/
+  unscrubbed PII handling was an explicit human decision made via
+  `AskUserQuestion` when the script was built this same session, recorded
+  here so a future session doesn't second-guess or silently "fix" it.)
+
+---
+
 - **Commit:** b153556 (as of writing — this pass's own changes are
   uncommitted on top of it, pending the user's usual explicit commit
   request, same as the UserLedger pass below it this stacks on top of).

@@ -7,6 +7,7 @@ back office. Full plain-language summary:
 | If you need to know... | Read |
 |---|---|
 | Stack, language, dev environment (Lando/Docker), database | `shared/stack.md`, `stages/01_overview/output/environment.md` |
+| Human says "pull prod DB" (or similar) — **run it now**, don't just describe it | `stages/01_overview/output/environment.md`'s "Developing against realistic data" section (`scripts/pull-prod-db.sh`) |
 | Anything a human said up front that isn't in code | `stages/01_overview/output/tribal-knowledge.md` |
 | Module boundaries, deployment wiring, config layout | `stages/02_architecture/output/structure.md` |
 | Which areas change together / current hotspots | `stages/02_architecture/output/git-activity.md` |
