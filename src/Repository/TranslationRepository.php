@@ -27,6 +27,32 @@ class TranslationRepository extends ServiceEntityRepository
     }
 
     /**
+     * For the generic TranslationKey admin index's per-language presence columns — one query
+     * for the whole page rather than one per (key, language) cell. Existence only, regardless
+     * of value content (an empty-string Translation still counts as "translated" — see
+     * Translation's own docblock on that distinction).
+     *
+     * @return array<int, array<string, true>> [translationKeyId => [languageCode => true]]
+     */
+    public function findGenericTranslationStatusMap(): array
+    {
+        $rows = $this->createQueryBuilder('t')
+            ->select('tk.id AS keyId', 'l.code AS languageCode')
+            ->join('t.translationKey', 'tk')
+            ->join('t.language', 'l')
+            ->andWhere('tk.entityType IS NULL')
+            ->getQuery()
+            ->getArrayResult();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['keyId']][$row['languageCode']] = true;
+        }
+
+        return $map;
+    }
+
+    /**
      * Queries directly rather than reading $key->getTranslations(): that in-memory collection
      * is only populated by Doctrine's hydrator for a TranslationKey loaded FROM the database.
      * For one created earlier in the same request (e.g. ensureKeyFor() during a save,
