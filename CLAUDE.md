@@ -57,6 +57,13 @@ lando logs -s appserver              # tail app logs
 **Database**: PostgreSQL 16. Connection string:
 `postgresql://wunderkind:wunderkind@postgres:5432/wunderkind?serverVersion=16&charset=utf8`
 
+**Developing against real data volume**: `bash scripts/pull-prod-db.sh` pulls a fresh
+`pg_dump` from the production Hetzner box over SSH and restores it into the local Lando
+database, replacing whatever's there. **Raw, not scrubbed** — includes real user PII
+(emails, owner identity, GDPR `DeletionRequest` rows) by deliberate choice; see the
+script's own header banner before reusing it beyond solo local dev. Requires SSH access to
+prod and Lando running.
+
 ## Common Commands
 
 ```bash
