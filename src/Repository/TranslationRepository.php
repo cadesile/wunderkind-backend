@@ -27,6 +27,31 @@ class TranslationRepository extends ServiceEntityRepository
     }
 
     /**
+     * Every stored value for one TranslationKey, across all languages — for the admin edit
+     * page's per-language editing grid. A language absent from the result simply has no
+     * stored value yet (falls back to the default language on the public catalogue).
+     *
+     * @return array<string, string> [languageCode => value]
+     */
+    public function findValuesForKey(TranslationKey $key): array
+    {
+        $rows = $this->createQueryBuilder('t')
+            ->select('l.code AS languageCode', 't.value AS value')
+            ->join('t.language', 'l')
+            ->andWhere('t.translationKey = :key')
+            ->setParameter('key', $key)
+            ->getQuery()
+            ->getArrayResult();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['languageCode']] = $row['value'];
+        }
+
+        return $map;
+    }
+
+    /**
      * For the generic TranslationKey admin index's per-language presence columns — one query
      * for the whole page rather than one per (key, language) cell. Existence only, regardless
      * of value content (an empty-string Translation still counts as "translated" — see

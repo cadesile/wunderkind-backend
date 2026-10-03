@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Entity\TranslationKey;
+use App\Filter\IncompleteTranslationFilter;
 use App\Repository\LanguageRepository;
+use App\Repository\TranslationKeyRepository;
 use App\Repository\TranslationRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
+use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Option\TextAlign;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
@@ -20,6 +26,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Generic (UI-copy) translation keys only — narrative-linked keys (GameEventTemplate/
@@ -42,8 +52,9 @@ class TranslationKeyCrudController extends AbstractCrudController
     private array $translationStatusMap = [];
 
     public function __construct(
-        private readonly LanguageRepository    $languageRepository,
-        private readonly TranslationRepository $translationRepository,
+        private readonly LanguageRepository       $languageRepository,
+        private readonly TranslationRepository    $translationRepository,
+        private readonly TranslationKeyRepository $translationKeyRepository,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -57,7 +68,82 @@ class TranslationKeyCrudController extends AbstractCrudController
             ->setEntityLabelInSingular('Translation Key')
             ->setEntityLabelInPlural('Translation Keys')
             ->setDefaultSort(['key' => 'ASC'])
-            ->setHelp('index', 'Generic UI-copy keys only. Event/facility/excursion text is translated from that entity\'s own "Translations" action instead. Green = a value exists for that language; red = it falls back to the default language.');
+            ->setHelp('index', 'Generic UI-copy keys only. Event/facility/excursion text is translated from that entity\'s own "Translations" action instead. Green = a value exists for that language; red = it falls back to the default language.')
+            ->overrideTemplate('crud/edit', 'admin/translation_key_edit.html.twig');
+    }
+
+    /**
+     * Injects the per-language editing grid rendered below the normal form — see
+     * templates/admin/translation_key_edit.html.twig, which overrides `main` (calling
+     * {{ parent() }} first) so the real key/isPluralSensitive/bandedReferences form is
+     * untouched and still submits normally. Same "override one block of a standard CRUD
+     * template" pattern as UserCrudController::edit()'s clubs panel — there it's
+     * content_header_wrapper (above the form); here it's main (below it).
+     *
+     * The grid itself saves over AJAX via saveLanguage() below, not this form — each
+     * language's textarea gets its own Save button hitting that endpoint directly, never a
+     * whole-page submit.
+     */
+    public function edit(AdminContext $context): KeyValueStore|Response
+    {
+        $responseParameters = parent::edit($context);
+        if ($responseParameters instanceof KeyValueStore) {
+            /** @var TranslationKey $key */
+            $key = $context->getEntity()->getInstance();
+
+            $responseParameters->set('translationLanguages', $this->languageRepository->findEnabled());
+            $responseParameters->set('translationValues', $this->translationRepository->findValuesForKey($key));
+        }
+
+        return $responseParameters;
+    }
+
+    /**
+     * AJAX save target for one language's value on this key — always redirects/returns JSON,
+     * never renders an @EasyAdmin-extending template itself, so (per
+     * src/Controller/Admin/CLAUDE.md) it's exempt from the /admin?routeName=... wrapping and
+     * can be hit directly from JS. A blank submitted value clears any existing translation
+     * (reverting display to the default language) rather than storing an empty override —
+     * same convention as NarrativeTranslationService::saveTranslations().
+     */
+    #[Route('/admin/translation-key/{id}/save-language/{code}', name: 'admin_translation_key_save_language', methods: ['POST'])]
+    public function saveLanguage(int $id, string $code, Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid('translation_key_save_language', (string) $request->request->get('_token'))) {
+            return new JsonResponse(['error' => 'Invalid CSRF token.'], 403);
+        }
+
+        $key = $this->translationKeyRepository->find($id);
+        if ($key === null || !$key->isGeneric()) {
+            return new JsonResponse(['error' => 'Translation key not found.'], 404);
+        }
+
+        $language = $this->languageRepository->findByCode($code);
+        if ($language === null) {
+            return new JsonResponse(['error' => "Unknown language '{$code}'."], 404);
+        }
+
+        $value = trim((string) $request->request->get('value', ''));
+
+        if ($value === '') {
+            $existing = $this->translationRepository->findOneForKeyAndLanguage($key, $language);
+            if ($existing !== null) {
+                $em->remove($existing);
+                $em->flush();
+            }
+
+            return new JsonResponse(['status' => 'cleared']);
+        }
+
+        $this->translationRepository->upsert($key, $language, $value);
+        $em->flush();
+
+        return new JsonResponse(['status' => 'saved', 'value' => $value]);
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters->add(IncompleteTranslationFilter::new());
     }
 
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder

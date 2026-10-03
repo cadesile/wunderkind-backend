@@ -1,0 +1,89 @@
+{% extends '@EasyAdmin/crud/edit.html.twig' %}
+
+{# Overriding main (not content_header_wrapper) means this renders BELOW the real edit form, #}
+{# which stays untouched and still submits normally — see                                    #}
+{# TranslationKeyCrudController::edit()'s docblock.                                           #}
+
+{% block main %}
+    {{ parent() }}
+
+    <div class="row g-3 mt-2">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-language text-muted" aria-hidden="true"></i>
+                    <span class="fw-semibold">Translations</span>
+                    <span class="text-muted small">— each language saves independently, no need to submit the form above</span>
+                </div>
+                <div class="card-body">
+                    {% if translationLanguages is empty %}
+                        <p class="text-muted mb-0">No languages are configured yet — add one under Translations &rarr; Languages.</p>
+                    {% else %}
+                        {% for language in translationLanguages %}
+                            <div class="mb-3" data-translation-row>
+                                <label class="form-label small fw-semibold mb-1">{{ language.name }} ({{ language.code }})</label>
+                                <div class="d-flex gap-2 align-items-start">
+                                    <textarea class="form-control form-control-sm" rows="2"
+                                              data-translation-value>{{ translationValues[language.code] ?? '' }}</textarea>
+                                    <button type="button" class="btn btn-sm btn-primary flex-shrink-0"
+                                            data-translation-save
+                                            data-save-url="{{ path('admin_translation_key_save_language', {id: entity.instance.id, code: language.code}) }}">
+                                        Save
+                                    </button>
+                                </div>
+                                <span class="small ms-1" data-translation-status></span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var token = {{ csrf_token('translation_key_save_language')|json_encode|raw }};
+
+            document.querySelectorAll('[data-translation-row]').forEach(function (row) {
+                var textarea = row.querySelector('[data-translation-value]');
+                var button = row.querySelector('[data-translation-save]');
+                var status = row.querySelector('[data-translation-status]');
+
+                button.addEventListener('click', function () {
+                    status.textContent = 'Saving…';
+                    status.className = 'small ms-1 text-muted';
+                    button.disabled = true;
+
+                    var body = new URLSearchParams();
+                    body.set('_token', token);
+                    body.set('value', textarea.value);
+
+                    fetch(button.dataset.saveUrl, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: body.toString(),
+                    })
+                        .then(function (response) {
+                            return response.json().then(function (data) {
+                                if (!response.ok) {
+                                    throw new Error(data.error || 'Request failed');
+                                }
+                                return data;
+                            });
+                        })
+                        .then(function (data) {
+                            status.textContent = data.status === 'cleared' ? 'Cleared — falls back to default language' : 'Saved';
+                            status.className = 'small ms-1 text-success';
+                        })
+                        .catch(function (error) {
+                            status.textContent = error.message || 'Error saving';
+                            status.className = 'small ms-1 text-danger';
+                        })
+                        .finally(function () {
+                            button.disabled = false;
+                        });
+                });
+            });
+        }());
+    </script>
+{% endblock %}

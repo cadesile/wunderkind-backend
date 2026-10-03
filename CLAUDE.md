@@ -445,7 +445,16 @@ them:
   `TranslationCrudController`). `TranslationKeyCrudController`'s index is grouped by key with
   one green/red presence icon column per enabled language (computed virtual columns, not real
   ones — see the EasyAdmin gotcha below), rather than EasyAdmin's default one-row-per-entity
-  grid. Plus a bulk import/export screen
+  grid, plus an `IncompleteTranslationFilter` (`src/Filter/`) toggle narrowing to keys missing
+  at least one *enabled* language — a correlated-subquery count comparison
+  (`COUNT(DISTINCT translated-and-enabled languages) < COUNT(enabled languages)`), not a real
+  column, so it stays correct as languages get enabled/disabled. Its own edit page
+  (`admin/translation_key_edit.html.twig`, overriding `main` — same "override one block"
+  technique as `UserCrudController`'s edit page, just below the form instead of above it) adds
+  a per-language textarea + Save button grid, each saving independently over AJAX
+  (`TranslationKeyCrudController::saveLanguage()`) rather than through the page's own form —
+  a blank save clears that language's value (same convention as
+  `NarrativeTranslationService::saveTranslations()`). Plus a bulk import/export screen
   (`/admin/translations/content|export|import`, mirroring `ConfigImportExportService`'s own
   trio) whose export format *is* the public catalogue shape — the app's own locale file can
   be uploaded there close to verbatim as the initial `en` seed. That screen's optional
