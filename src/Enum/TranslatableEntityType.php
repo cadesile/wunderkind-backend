@@ -14,4 +14,5 @@ enum TranslatableEntityType: string
     case GAME_EVENT_TEMPLATE = 'game_event_template';
     case FACILITY_TEMPLATE   = 'facility_template';
     case EXCURSION           = 'excursion';
+    case PLAYER_ARCHETYPE    = 'player_archetype';
 }

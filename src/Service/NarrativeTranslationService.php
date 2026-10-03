@@ -8,22 +8,24 @@ use App\Entity\Excursion;
 use App\Entity\FacilityTemplate;
 use App\Entity\GameEventTemplate;
 use App\Entity\Language;
+use App\Entity\PlayerArchetype;
 use App\Entity\TranslationKey;
 use App\Enum\TranslatableEntityType;
 use App\Repository\ExcursionRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameEventTemplateRepository;
 use App\Repository\LanguageRepository;
+use App\Repository\PlayerArchetypeRepository;
 use App\Repository\TranslationKeyRepository;
 use App\Repository\TranslationRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Central find-or-create / lookup point for narrative-content translations (GameEventTemplate,
- * FacilityTemplate, Excursion). Used by: the admin "Translations" quick-edit screen, the
- * localize-in-place API endpoints (?lang= on /api/events/templates, /api/excursions,
- * /api/game-config), the backfill command, and NarrativeImportExportService's translations
- * section.
+ * FacilityTemplate, Excursion, PlayerArchetype). Used by: the admin "Translations" quick-edit
+ * screen, the localize-in-place API endpoints (?lang= on /api/events/templates,
+ * /api/excursions, /api/game-config, /api/archetypes), the backfill command, and
+ * NarrativeImportExportService's translations section.
  *
  * Deliberately NOT the source of the default-language (EN) value — that is always read live
  * off the owning entity's own getter. A stored EN mirror would go stale the instant an admin
@@ -53,12 +55,17 @@ class NarrativeTranslationService
             'title' => ['getTitle', 'setTitle'],
             'body'  => ['getBody', 'setBody'],
         ],
+        'player_archetype' => [
+            'name'        => ['getName', 'setName'],
+            'description' => ['getDescription', 'setDescription'],
+        ],
     ];
 
     public function __construct(
         private readonly GameEventTemplateRepository $eventTemplateRepository,
         private readonly FacilityTemplateRepository   $facilityTemplateRepository,
         private readonly ExcursionRepository           $excursionRepository,
+        private readonly PlayerArchetypeRepository     $archetypeRepository,
         private readonly TranslationKeyRepository      $translationKeyRepository,
         private readonly TranslationRepository         $translationRepository,
         private readonly LanguageRepository            $languageRepository,
@@ -76,29 +83,31 @@ class NarrativeTranslationService
         return isset(self::TRANSLATABLE_FIELDS[$type->value][$field]);
     }
 
-    public function resolveEntityBySlug(TranslatableEntityType $type, string $slug): GameEventTemplate|FacilityTemplate|Excursion|null
+    public function resolveEntityBySlug(TranslatableEntityType $type, string $slug): GameEventTemplate|FacilityTemplate|Excursion|PlayerArchetype|null
     {
         return match ($type) {
             TranslatableEntityType::GAME_EVENT_TEMPLATE => $this->eventTemplateRepository->findOneBy(['slug' => $slug]),
             TranslatableEntityType::FACILITY_TEMPLATE   => $this->facilityTemplateRepository->findOneBy(['slug' => $slug]),
             TranslatableEntityType::EXCURSION           => $this->excursionRepository->findOneBy(['slug' => $slug]),
+            TranslatableEntityType::PLAYER_ARCHETYPE    => $this->archetypeRepository->findOneBy(['slug' => $slug]),
         };
     }
 
     /**
-     * GameEventTemplate/FacilityTemplate use UUID ids; Excursion uses a plain autoincrement
-     * int id — branch here rather than assuming one id shape.
+     * GameEventTemplate/FacilityTemplate use UUID ids; Excursion/PlayerArchetype use a plain
+     * autoincrement int id — branch here rather than assuming one id shape.
      */
-    public function resolveEntityById(TranslatableEntityType $type, string $id): GameEventTemplate|FacilityTemplate|Excursion|null
+    public function resolveEntityById(TranslatableEntityType $type, string $id): GameEventTemplate|FacilityTemplate|Excursion|PlayerArchetype|null
     {
         return match ($type) {
             TranslatableEntityType::GAME_EVENT_TEMPLATE => $this->eventTemplateRepository->find($id),
             TranslatableEntityType::FACILITY_TEMPLATE   => $this->facilityTemplateRepository->find($id),
             TranslatableEntityType::EXCURSION           => $this->excursionRepository->find((int) $id),
+            TranslatableEntityType::PLAYER_ARCHETYPE    => $this->archetypeRepository->find((int) $id),
         };
     }
 
-    public function getFieldValue(GameEventTemplate|FacilityTemplate|Excursion $entity, string $field): string
+    public function getFieldValue(GameEventTemplate|FacilityTemplate|Excursion|PlayerArchetype $entity, string $field): string
     {
         $pair = self::TRANSLATABLE_FIELDS[$this->typeOf($entity)->value][$field] ?? null;
         if ($pair === null) {
@@ -110,12 +119,13 @@ class NarrativeTranslationService
         return (string) $entity->{$getter}();
     }
 
-    public function typeOf(GameEventTemplate|FacilityTemplate|Excursion $entity): TranslatableEntityType
+    public function typeOf(GameEventTemplate|FacilityTemplate|Excursion|PlayerArchetype $entity): TranslatableEntityType
     {
         return match (true) {
             $entity instanceof GameEventTemplate => TranslatableEntityType::GAME_EVENT_TEMPLATE,
             $entity instanceof FacilityTemplate   => TranslatableEntityType::FACILITY_TEMPLATE,
             $entity instanceof Excursion          => TranslatableEntityType::EXCURSION,
+            $entity instanceof PlayerArchetype    => TranslatableEntityType::PLAYER_ARCHETYPE,
         };
     }
 

@@ -8,12 +8,14 @@ use App\Entity\Excursion;
 use App\Entity\FacilityTemplate;
 use App\Entity\GameEventTemplate;
 use App\Entity\Language;
+use App\Entity\PlayerArchetype;
 use App\Enum\EventCategory;
 use App\Enum\TranslatableEntityType;
 use App\Repository\ExcursionRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameEventTemplateRepository;
 use App\Repository\LanguageRepository;
+use App\Repository\PlayerArchetypeRepository;
 use App\Repository\TranslationKeyRepository;
 use App\Service\NarrativeImportExportService;
 use App\Service\NarrativeTranslationService;
@@ -24,15 +26,16 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Unlike NarrativeFacilityTemplateRoundTripTest's full reflective ORM-column sweep, this
  * guards a narrower contract: every field named in
  * NarrativeTranslationService::TRANSLATABLE_FIELDS has a working getter/setter on its
- * entity. Most columns on GameEventTemplate/FacilityTemplate/Excursion are deliberately NOT
- * translatable (slug, category, cost, …), so a full column sweep would be the wrong pattern
- * here — don't "fix" this test into one.
+ * entity. Most columns on GameEventTemplate/FacilityTemplate/Excursion/PlayerArchetype are
+ * deliberately NOT translatable (slug, category, cost, polarity, …), so a full column sweep
+ * would be the wrong pattern here — don't "fix" this test into one.
  */
 class NarrativeTranslationRoundTripTest extends KernelTestCase
 {
     private const DEFAULT_CODE = 'xx';
     private const OTHER_CODE   = 'yy';
     private const SLUG         = 'round-trip-probe-translation';
+    private const ARCHETYPE_NAME = 'Round Trip Probe Archetype';
 
     private NarrativeImportExportService $importExportService;
     private NarrativeTranslationService  $translationService;
@@ -41,6 +44,7 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
     private GameEventTemplateRepository  $eventTemplateRepository;
     private FacilityTemplateRepository   $facilityTemplateRepository;
     private ExcursionRepository          $excursionRepository;
+    private PlayerArchetypeRepository    $archetypeRepository;
     private EntityManagerInterface       $em;
 
     protected function setUp(): void
@@ -55,6 +59,7 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
         $this->eventTemplateRepository    = $container->get(GameEventTemplateRepository::class);
         $this->facilityTemplateRepository = $container->get(FacilityTemplateRepository::class);
         $this->excursionRepository        = $container->get(ExcursionRepository::class);
+        $this->archetypeRepository        = $container->get(PlayerArchetypeRepository::class);
         $this->em                         = $container->get(EntityManagerInterface::class);
 
         $this->removeFixtures();
@@ -72,6 +77,7 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
             TranslatableEntityType::GAME_EVENT_TEMPLATE->value => new GameEventTemplate(),
             TranslatableEntityType::FACILITY_TEMPLATE->value   => new FacilityTemplate(),
             TranslatableEntityType::EXCURSION->value           => new Excursion(),
+            TranslatableEntityType::PLAYER_ARCHETYPE->value    => new PlayerArchetype(),
         ];
 
         foreach (TranslatableEntityType::cases() as $type) {
@@ -115,6 +121,9 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
         $excursion = new Excursion(self::SLUG, 'EN title', 'EN body');
         $this->em->persist($excursion);
 
+        $archetype = new PlayerArchetype(self::SLUG, self::ARCHETYPE_NAME, 'EN description');
+        $this->em->persist($archetype);
+
         $this->em->flush();
 
         $this->translationService->saveTranslations(TranslatableEntityType::GAME_EVENT_TEMPLATE, self::SLUG, [
@@ -125,6 +134,9 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
         ]);
         $this->translationService->saveTranslations(TranslatableEntityType::EXCURSION, self::SLUG, [
             self::OTHER_CODE => ['title' => 'Other title', 'body' => 'Other body'],
+        ]);
+        $this->translationService->saveTranslations(TranslatableEntityType::PLAYER_ARCHETYPE, self::SLUG, [
+            self::OTHER_CODE => ['name' => 'Other name', 'description' => 'Other archetype description'],
         ]);
 
         $exported = $this->importExportService->export();
@@ -150,6 +162,8 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
         $this->assertStoredValue(TranslatableEntityType::FACILITY_TEMPLATE, 'description', 'Other description');
         $this->assertStoredValue(TranslatableEntityType::EXCURSION, 'title', 'Other title');
         $this->assertStoredValue(TranslatableEntityType::EXCURSION, 'body', 'Other body');
+        $this->assertStoredValue(TranslatableEntityType::PLAYER_ARCHETYPE, 'name', 'Other name');
+        $this->assertStoredValue(TranslatableEntityType::PLAYER_ARCHETYPE, 'description', 'Other archetype description');
     }
 
     private function assertStoredValue(TranslatableEntityType $type, string $field, string $expected): void
@@ -172,6 +186,9 @@ class NarrativeTranslationRoundTripTest extends KernelTestCase
         }
         foreach ($this->excursionRepository->findBy(['slug' => self::SLUG]) as $x) {
             $this->em->remove($x);
+        }
+        foreach ($this->archetypeRepository->findBy(['slug' => self::SLUG]) as $a) {
+            $this->em->remove($a);
         }
         foreach (TranslatableEntityType::cases() as $type) {
             foreach ($this->translationKeyRepository->findForEntity($type, self::SLUG) as $key) {

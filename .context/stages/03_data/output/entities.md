@@ -184,7 +184,9 @@ migrations are the change log (see `migrations.md`).
   scale (per docblock). Embedded into `Player`, `Scout`, `Staff`.
 - **`PlayerArchetype`** — catalog of personality archetypes. `slug/name/
   description`, `polarity:ArchetypePolarity(enum)`,
-  `traitWeights:array`. No relations.
+  `traitWeights:array`. No relations. `name`/`description` are
+  translatable (`TranslatableEntityType::PLAYER_ARCHETYPE` — see
+  Translations below); `GET /api/archetypes?lang=` localizes them.
 - **`PlayerCareerStat`** — current cumulative career stat row.
   `playerId/playerName`, `appearances/goals/assists`. `ManyToOne` →
   `Club` (not nullable, `CASCADE`). `appearanceConfig:?array` (json, sync
@@ -457,8 +459,8 @@ Each is effectively a single global-config row.
   a derived label only, never parsed). `entityType`/`entitySlug`/
   `fieldName` (all `?string`, nullable) — `null`/`null`/`null` = generic
   UI-copy key; all three set = linked to one field of a `GameEventTemplate`/
-  `FacilityTemplate`/`Excursion` row (explicit typed link, not a naming
-  convention). `isPluralSensitive:bool`, `bandedReferences:?array (json)` —
+  `FacilityTemplate`/`Excursion`/`PlayerArchetype` row (explicit typed
+  link, not a naming convention). `isPluralSensitive:bool`, `bandedReferences:?array (json)` —
   structural metadata about the key itself (which client-side interpolation
   handling it needs), identical across every language, so it lives here
   rather than per-language. `UNIQUE(key)` and a plain `UNIQUE(entityType,

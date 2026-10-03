@@ -138,4 +138,27 @@ class Excursion
 
     #[ORM\PreUpdate]
     public function touch(): void { $this->updatedAt = new \DateTimeImmutable(); }
+
+    /**
+     * Used by NarrativeImportExportService's bulk export — every field here must round-trip
+     * through its own upsertExcursion(), same convention as FacilityTemplate::toArray().
+     * imagePath is exported with its public path prefix (matching FacilityTemplate's own
+     * imagePath handling) — the import side re-derives just the basename defensively.
+     */
+    public function toArray(): array
+    {
+        return [
+            'slug'               => $this->slug,
+            'title'              => $this->title,
+            'body'               => $this->body,
+            'imagePath'          => $this->imagePath !== null ? '/uploads/excursions/' . $this->imagePath : null,
+            'costPerPersonPence' => $this->costPerPersonPence,
+            'effectValue'        => $this->effectValue,
+            'negativeFrequency'  => $this->negativeFrequency,
+            'targetAudience'     => $this->targetAudience,
+            'postSeasonOnly'     => $this->postSeasonOnly,
+            'cooldownWeeks'      => $this->cooldownWeeks,
+            'active'             => $this->active,
+        ];
+    }
 }

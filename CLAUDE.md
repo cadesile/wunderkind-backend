@@ -408,13 +408,19 @@ them:
   `bandedReferences` are structural metadata about which *keys* need special client-side
   handling — identical across every language, not translated values — so they live on
   `TranslationKey`, never duplicated per language.
-- **Narrative content** (`GameEventTemplate`/`FacilityTemplate`/`Excursion` text —
-  `entityType` set) — **localized in place** on those entities' own existing endpoints
-  (`/api/events/templates`, `/api/excursions`, `/api/game-config`) via a `?lang=` param,
-  **not** exposed through the catalogue above. This was a deliberate choice over routing
-  narrative text through synthetic catalogue keys: it means none of the client's existing
-  rendering code for these screens needs new lookup logic, only to pass the current language
-  through. Full client contract: `docs/api/translations.md`.
+- **Narrative content** (`GameEventTemplate`/`FacilityTemplate`/`Excursion`/`PlayerArchetype`
+  text — `entityType` set) — **localized in place** on those entities' own existing
+  endpoints (`/api/events/templates`, `/api/excursions`, `/api/game-config`,
+  `/api/archetypes`) via a `?lang=` param, **not** exposed through the catalogue above. This
+  was a deliberate choice over routing narrative text through synthetic catalogue keys: it
+  means none of the client's existing rendering code for these screens needs new lookup
+  logic, only to pass the current language through. Full client contract:
+  `docs/api/translations.md`. `PlayerArchetype.name` is the one translatable field that also
+  feeds a cache-busting version hash (`PlayerArchetypeRepository::findAllWithVersionHash()`,
+  same pattern `ExcursionRepository::findActiveWithVersionHash()` uses) — it was previously
+  missing from that hash entirely (only `description` was, after an earlier fix), which
+  `?lang=` support would have made a real bug: two languages differing only in `name` would
+  have hashed identically.
 - **The default (EN) value for a narrative field is never duplicated into a stored
   `Translation` row — it is always read live off the owning entity**
   (`GameEventTemplate::getTitle()` etc.) via `NarrativeTranslationService::getFieldValue()`.
@@ -432,9 +438,9 @@ them:
   which fields on each entity type are translatable (most columns — `slug`, `category`,
   `cost` — are deliberately not).
 - **Admin editing**: each of `GameEventTemplateCrudController`/`FacilityTemplateCrudController`/
-  `ExcursionCrudController` gets a row-level "Translations" action
-  (`NarrativeTranslationController`) — a grid of translatable fields × enabled languages,
-  EN shown read-only (edit it on the entity's own form instead). Generic UI-copy keys get
+  `ExcursionCrudController`/`PlayerArchetypeCrudController` gets a row-level "Translations"
+  action (`NarrativeTranslationController`) — a grid of translatable fields × enabled
+  languages, EN shown read-only (edit it on the entity's own form instead). Generic UI-copy keys get
   their own CRUD screens (`LanguageCrudController`, `TranslationKeyCrudController`,
   `TranslationCrudController`) plus a bulk import/export screen
   (`/admin/translations/content|export|import`, mirroring `ConfigImportExportService`'s own
@@ -448,9 +454,29 @@ them:
   key left with zero translations in *any* language (a key still holding a value elsewhere
   is never touched).
   `NarrativeImportExportService`'s export/import additionally carries a `translations`
-  section (non-default-language values only, for the three narrative types) so a whole
+  section (non-default-language values only, for the four narrative types) so a whole
   language's worth of narrative translations can move with a narrative-content backup —
-  bumped `EXPORT_VERSION` to `3` for this.
+  bumped `EXPORT_VERSION` to `3` for this, then to `4` when `Excursion` joined the service's
+  own base-content export/import below.
+- **`Excursion`'s own base content (title, body, cost, etc. — not just its translations) is
+  also now part of `NarrativeImportExportService`'s bulk export/import**, via
+  `Excursion::toArray()` (same self-verifying convention `FacilityTemplate::toArray()`
+  already used) + `exportExcursions()`/`upsertExcursion()`. Previously Excursion was the one
+  "narrative content" entity with no bulk JSON path at all — only `app:seed-excursions`
+  (hand-maintained PHP array, still independent and unaffected) and direct admin edits
+  touched it. Joining this service means `clearAll()` now wipes `Excursion` rows and purges
+  its `TranslationKey`s too — a deliberate reversal of that method's previous explicit
+  exclusion of Excursion (its old reasoning — "clearAll() never touches Excursion rows, so
+  purging would orphan live translations" — no longer applies once Excursion is fully
+  round-trippable like the other three).
+- **`GameEventTemplate`/`PlayerArchetype`/`TacticalAdvantage` still export via hand-written
+  field lists** (not a `toArray()` method) inside `NarrativeImportExportService` — verified
+  complete for every currently-persisted column, but with no reflective test guarding
+  against the next field silently going the way `FacilityTemplate`'s
+  `baseConstructionWeeks` once did. `NarrativeFieldCoverageTest` closes that gap for
+  `GameEventTemplate`/`PlayerArchetype` (reflects each entity's ORM columns against one
+  exported row); `TacticalAdvantage` is skipped deliberately — 3 trivial fields, and no
+  unique business key a test fixture could clean up without risking a real catalogue row.
 - **Don't cache a `TranslationKey`'s children via `$key->getTranslations()`.** That inverse
   `OneToMany` collection is only populated by Doctrine's hydrator for a `TranslationKey`
   loaded *from* the database — one created earlier in the same request (e.g. by
@@ -470,8 +496,11 @@ them:
   afterward. Deliberately *not* an upsert-by-code like `app:seed-excursions`: an
   upsert-on-every-deploy model would permanently stomp an admin's later choice of a
   different default language. Paired with `app:backfill-narrative-translations`
-  (idempotent, ensures every existing narrative row's `TranslationKey`s exist — cheap, both
-  run on every deploy).
+  (idempotent, ensures every existing event/facility/excursion/archetype row's
+  `TranslationKey`s exist — cheap, both run on every deploy). Archetype translations
+  survive `app:seed-archetypes`' own truncate-and-reseed-by-slug behavior unscathed: the
+  link is by slug *string*, not a DB foreign key to the (truncated, re-autoincremented)
+  `PlayerArchetype` row, so a reseed never orphans them.
 
 ### Two Firewalls
 - **`api`** — stateless JWT, covers `/api/*`; role `ROLE_CLUB` for game clients
@@ -548,7 +577,7 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **Player** — `position` (PlayerPosition), `status` (PlayerStatus), `recruitmentSource`, `currentAbility`, `potential` (hard-capped, `currentAbility ≤ potential`); embeds `PersonalityProfile` (8 traits 0–100); ManyToMany self-ref siblings; nullable `?Agent $agent` FK (many players → one agent; assigned in `MarketPoolService` and reassigned at world-pack generation; surfaced in every player snapshot — see Player↔Agent Association); `appearance` json (see Avatar Appearance). **No club FK** — pool entity, deleted on consume.
 - **Staff** — `role` (StaffRole), `coachingAbility`; `appearance` json; embeds `PersonalityProfile` (8 traits 1–20; `MANAGER`/`COACH` carry role floors). **No club FK** — pool entity, deleted on consume.
 - **Scout / Agent** — pool entities (`Scout` no club FK, not deleted on assign); both carry `appearance` json. `Scout` also embeds `PersonalityProfile` (floored on adaptability/consistency); `Agent` does **not**. Note `Scout`/`Agent` use a single `name` field, not `firstName`/`lastName`.
-- **PlayerArchetype** — curated catalogue of 20 personality archetypes, `polarity` (`ArchetypePolarity`: positive/negative, 10 each) + unique `slug` + `traitWeights` (json). Classification is **client-side**: the backend is a definitions catalogue only — there is no archetype FK on `Player`, and the client resolves one positive and one negative per player. `traitWeights.formula` keys must be exactly the eight `PersonalityProfile` fields and weights are **signed** (positive = "High trait", negative = "Low trait", absolute values sum to 1.0); traits are stored 1–20 and the client normalises to 0–100 before comparing to `threshold`. Seeded via `app:seed-archetypes` (truncates first), which now runs on both deploys. `ArchetypeResolverService` is an **admin-only** read-only mirror of that client-side scoring — it powers the resolved-archetype panel on the Player/Staff edit pages and changes nothing about gameplay; if the formula ever changes client-side, change it there too.
+- **PlayerArchetype** — curated catalogue of 20 personality archetypes, `polarity` (`ArchetypePolarity`: positive/negative, 10 each) + unique `slug` + `traitWeights` (json). Classification is **client-side**: the backend is a definitions catalogue only — there is no archetype FK on `Player`, and the client resolves one positive and one negative per player. `traitWeights.formula` keys must be exactly the eight `PersonalityProfile` fields and weights are **signed** (positive = "High trait", negative = "Low trait", absolute values sum to 1.0); traits are stored 1–20 and the client normalises to 0–100 before comparing to `threshold`. Seeded via `app:seed-archetypes` (truncates first), which now runs on both deploys. `ArchetypeResolverService` is an **admin-only** read-only mirror of that client-side scoring — it powers the resolved-archetype panel on the Player/Staff edit pages and changes nothing about gameplay; if the formula ever changes client-side, change it there too. `name`/`description` are translatable (see Languages & Translations) — `GET /api/archetypes?lang=` localizes them in place, same convention as events/facilities/excursions.
 - **League** — `country`, `tier` (1–8), `promotionSpots`, `tvDeal`, `prizeMoney`, `leaguePositionPot`, `sponsorCount`; has `LeagueSponsor` collection
 - **NpcClub** — `country`, `tier`, `reputation`, `balance`, `stadiumName`, `primaryColor`/`secondaryColor` (synced from `identity.home`, not independently admin-editable — see below), `playingStyle`, `financialApproach`; grouped into leagues for the world pack. `identity` json (nullable, see Kit & Badge Identity below) — home kit + away kit + club badge
 - **FacilityTemplate** — canonical slug shared with frontend; `category` (TRAINING/MEDICAL/SCOUTING), `baseCost`, `weeklyUpkeepBase`, `matchdayIncome`, `matchdayIncomeMultiplier`; seeded via admin

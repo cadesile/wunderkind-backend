@@ -8,6 +8,7 @@ use App\Enum\TranslatableEntityType;
 use App\Repository\ExcursionRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameEventTemplateRepository;
+use App\Repository\PlayerArchetypeRepository;
 use App\Service\NarrativeTranslationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -18,7 +19,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * Find-or-creates a TranslationKey for every translatable field of every existing
- * GameEventTemplate/FacilityTemplate/Excursion row.
+ * GameEventTemplate/FacilityTemplate/Excursion/PlayerArchetype row.
  *
  * This only guarantees key EXISTENCE — there is no default-language (EN) Translation row to
  * backfill, since EN is always read live off the entity (see NarrativeTranslationService).
@@ -32,7 +33,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 #[AsCommand(
     name: 'app:backfill-narrative-translations',
-    description: 'Ensures a TranslationKey exists for every translatable field of every existing event/facility/excursion row. Safe to re-run.',
+    description: 'Ensures a TranslationKey exists for every translatable field of every existing event/facility/excursion/archetype row. Safe to re-run.',
 )]
 class BackfillNarrativeTranslationsCommand extends Command
 {
@@ -40,6 +41,7 @@ class BackfillNarrativeTranslationsCommand extends Command
         private readonly GameEventTemplateRepository $eventTemplateRepository,
         private readonly FacilityTemplateRepository   $facilityTemplateRepository,
         private readonly ExcursionRepository           $excursionRepository,
+        private readonly PlayerArchetypeRepository     $archetypeRepository,
         private readonly NarrativeTranslationService   $translationService,
         private readonly EntityManagerInterface         $em,
     ) {
@@ -61,6 +63,10 @@ class BackfillNarrativeTranslationsCommand extends Command
         }
         foreach ($this->excursionRepository->findAll() as $t) {
             $this->translationService->ensureKeysForEntity(TranslatableEntityType::EXCURSION, $t->getSlug());
+            $count++;
+        }
+        foreach ($this->archetypeRepository->findAll() as $t) {
+            $this->translationService->ensureKeysForEntity(TranslatableEntityType::PLAYER_ARCHETYPE, $t->getSlug());
             $count++;
         }
 

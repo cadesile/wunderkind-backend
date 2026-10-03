@@ -16,10 +16,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * The "Translations" quick-edit screen linked from GameEventTemplateCrudController/
- * FacilityTemplateCrudController/ExcursionCrudController's row actions. The default (EN)
- * column is read-only here — editing EN happens on the entity's own normal edit form, since
- * EN is read live off the entity, never stored as a Translation row (see
- * NarrativeTranslationService).
+ * FacilityTemplateCrudController/ExcursionCrudController/PlayerArchetypeCrudController's row
+ * actions. The default (EN) column is read-only here — editing EN happens on the entity's own
+ * normal edit form, since EN is read live off the entity, never stored as a Translation row
+ * (see NarrativeTranslationService).
  */
 #[IsGranted('ROLE_ADMIN')]
 class NarrativeTranslationController extends AbstractController
@@ -29,6 +29,7 @@ class NarrativeTranslationController extends AbstractController
         'game_event_template' => GameEventTemplateCrudController::class,
         'facility_template'   => FacilityTemplateCrudController::class,
         'excursion'            => ExcursionCrudController::class,
+        'player_archetype'     => PlayerArchetypeCrudController::class,
     ];
 
     public function __construct(

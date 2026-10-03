@@ -22,13 +22,22 @@ class PlayerArchetypeRepository extends ServiceEntityRepository
     /**
      * Returns all archetypes grouped by polarity, alongside an MD5 version hash.
      *
-     * The hash covers every field the client consumes — slug, polarity, description and
+     * The hash covers every field the client consumes — slug, polarity, name, description and
      * traitWeights — so any catalogue edit invalidates the client cache. (Description was
-     * previously omitted, which meant copy fixes shipped but never reached cached clients.)
+     * previously omitted, which meant copy fixes shipped but never reached cached clients;
+     * name was missing too until ?lang= localization made it possible for name to vary
+     * per-language while every other field stays the same.)
      *
+     * $localizedNames/$localizedDescriptions (keyed by slug, from
+     * NarrativeTranslationService::buildLocalizationMap()) let the hash reflect the actually
+     * served text for the requested language — otherwise a client switching languages would
+     * get a false cache hit against English-computed content.
+     *
+     * @param array<string, string> $localizedNames
+     * @param array<string, string> $localizedDescriptions
      * @return array{archetypes: PlayerArchetype[], versionHash: string}
      */
-    public function findAllWithVersionHash(): array
+    public function findAllWithVersionHash(array $localizedNames = [], array $localizedDescriptions = []): array
     {
         $archetypes = $this->createQueryBuilder('a')
             ->orderBy('a.polarity', 'ASC')
@@ -40,7 +49,8 @@ class PlayerArchetypeRepository extends ServiceEntityRepository
             fn (PlayerArchetype $a) => implode(':', [
                 $a->getSlug(),
                 $a->getPolarity()->value,
-                $a->getDescription(),
+                $localizedNames[$a->getSlug()] ?? $a->getName(),
+                $localizedDescriptions[$a->getSlug()] ?? $a->getDescription(),
                 json_encode($a->getTraitWeights()),
             ]),
             $archetypes,

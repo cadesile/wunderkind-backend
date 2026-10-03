@@ -89,7 +89,7 @@ class NarrativeArchetypeRoundTripTest extends KernelTestCase
     public function testMissingSlugAndBadPolarityAreReportedAsErrors(): void
     {
         $result = $this->service->import([
-            'version'          => 3,
+            'version'          => 4,
             'playerArchetypes' => [
                 ['name' => 'No Slug', 'polarity' => 'positive'],
                 ['slug' => 'bad_polarity', 'name' => 'Bad', 'polarity' => 'neutral'],

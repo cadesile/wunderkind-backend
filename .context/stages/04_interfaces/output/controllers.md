@@ -40,8 +40,8 @@ actually *does* (which service/repo it calls), not restated route paths.
   read-through controllers over `GameConfigRepository`/
   `StarterConfigRepository`/`FacilityTemplateRepository`/
   `FacilityImageResolver`/`YouTubeFeedService`.
-- **`ArchetypeController`** — single read action over
-  `PlayerArchetypeRepository`.
+- **`ArchetypeController`** — single read action over `PlayerArchetypeRepository`;
+  `?lang=` localization via `LanguageRepository` + `NarrativeTranslationService`.
 - **`LanguageController`** — single read action over `LanguageRepository`.
 - **`TranslationController`** — generic UI-copy catalogue + version-hash
   endpoints, via `LanguageRepository` + `TranslationCatalogueService`.

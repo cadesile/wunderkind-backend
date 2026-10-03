@@ -219,23 +219,30 @@ filename alone.
   caller into `CompetitionResult`.
 - **`NameGeneratorService`** — generates names (players/staff/clubs).
 - **`NarrativeImportExportService`** — imports/exports narrative content
-  (events, playing styles, facility/tactical/archetype templates), plus a
-  `translations` section (non-default-language values only, for
-  GameEventTemplate/FacilityTemplate/Excursion text fields) — see
-  `NarrativeTranslationService` below and CLAUDE.md's "Languages &
-  Translations". `EXPORT_VERSION` bumped to `3` when that section was
-  added.
+  (events, playing styles, facility/tactical/archetype templates,
+  excursions), plus a `translations` section (non-default-language values
+  only, for GameEventTemplate/FacilityTemplate/Excursion/PlayerArchetype
+  text fields) — see `NarrativeTranslationService` below and CLAUDE.md's
+  "Languages & Translations". `EXPORT_VERSION` bumped to `3` when
+  `translations` was added, then `4` when `excursions` (base content, not
+  just its translations) joined. `GameEventTemplate`/`PlayerArchetype`
+  still export via hand-written field lists (verified complete, but
+  guarded against future drift only by `NarrativeFieldCoverageTest`, not
+  a `toArray()` method); `Excursion` now exports via `toArray()`, same
+  self-verifying convention as `FacilityTemplate`.
 - **`NarrativeTranslationService`** — find-or-create for `TranslationKey`s
   linked to one narrative entity field (`ensureKeyFor()`); builds the
   per-(type, language) localization map the `?lang=`-aware endpoints
-  (`EventController`, `ExcursionController`, `GameConfigController`) read
-  (`buildLocalizationMap()`); saves the admin "Translations" quick-edit
-  screen's submission (`saveTranslations()`). The default (EN) value for a
-  narrative field is never stored — always read live off the entity via
-  `getFieldValue()`. Deliberately has no instance-level cache in
-  `ensureKeyFor()` (see its docblock) — `saveTranslations()` dedupes
-  locally instead, since it's the one caller that can legitimately ask for
-  the same not-yet-existing key twice (two languages, one call).
+  (`EventController`, `ExcursionController`, `GameConfigController`,
+  `ArchetypeController`) read (`buildLocalizationMap()`); saves the admin
+  "Translations" quick-edit screen's submission (`saveTranslations()`).
+  The default (EN) value for a narrative field is never stored — always
+  read live off the entity via `getFieldValue()`. Deliberately has no
+  instance-level cache in `ensureKeyFor()` (see its docblock) —
+  `saveTranslations()` dedupes locally instead, since it's the one caller
+  that can legitimately ask for the same not-yet-existing key twice (two
+  languages, one call). Covers `GameEventTemplate`/`FacilityTemplate`/
+  `Excursion`/`PlayerArchetype`.
 - **`TranslationCatalogueService`** — builds the generic UI-copy
   `{_meta, entries}` catalogue (`GET /api/translations/{code}` and the
   admin bulk-export), reading `TranslationRepository::

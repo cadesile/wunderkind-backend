@@ -102,6 +102,7 @@ Add `?lang={code}` to any of these **existing, unchanged** endpoints:
 GET /api/events/templates?lang=fr       (ROLE_CLUB auth, unchanged)
 GET /api/excursions?lang=fr             (no auth, unchanged)
 GET /api/game-config?lang=fr            (no auth, unchanged)
+GET /api/archetypes?lang=fr             (no auth, unchanged)
 ```
 
 - `events/templates`: `title`/`bodyTemplate` per template are localized.
@@ -111,6 +112,10 @@ GET /api/game-config?lang=fr            (no auth, unchanged)
   against English-computed content.
 - `game-config`: each entry in `facilityTemplates[]` gets `label`/
   `description` localized.
+- `archetypes`: each entry's `name`/`description` are localized; same
+  localized-value `versionHash` treatment as `excursions` above (it also
+  doubles as this endpoint's `ETag`, so a conditional `GET` correctly
+  304s per-language too).
 
 In every case: an untranslated field falls back to English, and an
 **unknown or disabled `lang` code silently falls back to the default
@@ -146,5 +151,5 @@ GET /api/excursions?lang=fr
   language (cache by `versionHash`), look up by flat key — same pattern as
   your existing bundled locale files.
 - Anything you already read from `/api/events/templates`, `/api/excursions`,
-  `/api/game-config`: just add `?lang={code}` to the request you already
-  make. No new parsing logic.
+  `/api/game-config`, `/api/archetypes`: just add `?lang={code}` to the
+  request you already make. No new parsing logic.

@@ -39,7 +39,7 @@ the end) — this file is the sole source of truth for the route surface.
 | `AdminController` | `/api/admin` | `GET /stats` — **stub**, returns a static "not implemented" JSON, no service call |
 | `AdminMessageController` | `/api/messages` | `GET /pending`, `POST /{id}/ack` |
 | `AppLinksController` | `/api` | `GET /app-links` |
-| `ArchetypeController` | `/api/archetypes` | `GET` (single action) |
+| `ArchetypeController` | `/api/archetypes` | `GET` (single action; optional `?lang=` localizes `name`/`description` in place, falling back to the default language on an unknown/disabled code — see `docs/api/translations.md`) |
 | `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
 | `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /all`, `GET /status` |
 | `ClubKitIdentityController` | `/api/club/kit-identity` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the real club's own kit+badge identity (`homeKitConfig`/`awayKitConfig`/`badgeConfig`); see `docs/api/club-kit-identity.md` |

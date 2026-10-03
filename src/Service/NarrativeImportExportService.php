@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Entity\Excursion;
 use App\Entity\FacilityTemplate;
 use App\Entity\GameEventTemplate;
 use App\Entity\PlayerArchetype;
@@ -12,6 +13,7 @@ use App\Enum\ArchetypePolarity;
 use App\Enum\EventCategory;
 use App\Enum\PlayingStyle;
 use App\Enum\TranslatableEntityType;
+use App\Repository\ExcursionRepository;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameEventTemplateRepository;
 use App\Repository\LanguageRepository;
@@ -23,15 +25,17 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class NarrativeImportExportService
 {
-    // Bumped from 2 to 3 when the `translations` section was added. Unrelated to the generic
-    // UI-copy catalogue, which has its own independent TranslationCatalogueImportExportService.
-    private const EXPORT_VERSION = 3;
+    // Bumped from 2 to 3 when the `translations` section was added, and from 3 to 4 when
+    // `excursions` was added. Unrelated to the generic UI-copy catalogue, which has its own
+    // independent TranslationCatalogueImportExportService.
+    private const EXPORT_VERSION = 4;
 
     public function __construct(
         private readonly GameEventTemplateRepository $eventTemplateRepository,
         private readonly FacilityTemplateRepository  $facilityTemplateRepository,
         private readonly PlayerArchetypeRepository   $archetypeRepository,
         private readonly TacticalAdvantageRepository $tacticalAdvantageRepository,
+        private readonly ExcursionRepository         $excursionRepository,
         private readonly TranslationKeyRepository    $translationKeyRepository,
         private readonly TranslationRepository       $translationRepository,
         private readonly LanguageRepository          $languageRepository,
@@ -50,6 +54,7 @@ class NarrativeImportExportService
             'facilityTemplates'  => $this->exportFacilityTemplates(),
             'playerArchetypes'   => $this->exportPlayerArchetypes(),
             'tacticalAdvantages' => $this->exportTacticalAdvantages(),
+            'excursions'         => $this->exportExcursions(),
             'translations'       => $this->exportTranslations(),
         ];
     }
@@ -96,6 +101,12 @@ class NarrativeImportExportService
         ], $this->tacticalAdvantageRepository->findBy([], ['style' => 'ASC', 'opponentStyle' => 'ASC']));
     }
 
+    private function exportExcursions(): array
+    {
+        return array_map(fn (Excursion $e) => $e->toArray(),
+            $this->excursionRepository->findBy([], ['slug' => 'ASC']));
+    }
+
     /**
      * Non-default-language values only, for GameEventTemplate/FacilityTemplate/Excursion
      * text fields. The default (EN) value is never exported here — it's already carried by
@@ -137,13 +148,14 @@ class NarrativeImportExportService
 
     /**
      * Also purges narrative-linked TranslationKey rows (cascading to their Translation
-     * children via orphanRemoval) for GameEventTemplate/FacilityTemplate only — matching
-     * exactly what this method already wipes above.
-     *
-     * Excursion is deliberately excluded: clearAll() never touches Excursion rows
-     * themselves, so purging Excursion-linked keys here would orphan translations for
-     * excursions that still exist. Do not "fix" this into clearing all three — that would
-     * destroy live data this method has no business touching.
+     * children via orphanRemoval) for every type whose base rows this method wipes above —
+     * GameEventTemplate, FacilityTemplate, PlayerArchetype, and (as of Excursion joining the
+     * bulk export/import below) Excursion too. Previously Excursion rows themselves were
+     * deliberately NOT wiped here, so purging its translation keys would have orphaned
+     * translations for excursions that still existed — now that Excursion is a fully
+     * round-trippable member of this export/import set like the other three, that asymmetry
+     * no longer applies: "clear existing data before importing" means the same thing for all
+     * of them.
      */
     public function clearAll(): void
     {
@@ -159,10 +171,19 @@ class NarrativeImportExportService
         foreach ($this->tacticalAdvantageRepository->findAll() as $t) {
             $this->em->remove($t);
         }
+        foreach ($this->excursionRepository->findAll() as $x) {
+            $this->em->remove($x);
+        }
         foreach ($this->translationKeyRepository->findAllForEntityType(TranslatableEntityType::GAME_EVENT_TEMPLATE) as $k) {
             $this->em->remove($k);
         }
         foreach ($this->translationKeyRepository->findAllForEntityType(TranslatableEntityType::FACILITY_TEMPLATE) as $k) {
+            $this->em->remove($k);
+        }
+        foreach ($this->translationKeyRepository->findAllForEntityType(TranslatableEntityType::PLAYER_ARCHETYPE) as $k) {
+            $this->em->remove($k);
+        }
+        foreach ($this->translationKeyRepository->findAllForEntityType(TranslatableEntityType::EXCURSION) as $k) {
             $this->em->remove($k);
         }
         $this->em->flush();
@@ -217,6 +238,16 @@ class NarrativeImportExportService
                     : $result['updated']++;
             } catch (\Throwable $e) {
                 $result['errors'][] = 'tacticalAdvantage[' . ($row['style'] ?? '?') . ' vs ' . ($row['opponentStyle'] ?? '?') . ']: ' . $e->getMessage();
+            }
+        }
+
+        foreach ($data['excursions'] ?? [] as $row) {
+            try {
+                $this->upsertExcursion($row)
+                    ? $result['created']++
+                    : $result['updated']++;
+            } catch (\Throwable $e) {
+                $result['errors'][] = 'excursion[' . ($row['slug'] ?? '?') . ']: ' . $e->getMessage();
             }
         }
 
@@ -370,6 +401,40 @@ class NarrativeImportExportService
 
         if ($created) {
             $this->em->persist($advantage);
+        }
+
+        return $created;
+    }
+
+    /** @return bool true = created, false = updated */
+    private function upsertExcursion(array $row): bool
+    {
+        $slug = trim($row['slug'] ?? '');
+        if ($slug === '') throw new \InvalidArgumentException('Missing slug.');
+
+        $excursion = $this->excursionRepository->findOneBy(['slug' => $slug]);
+        $created   = $excursion === null;
+
+        if ($created) {
+            $excursion = new Excursion($slug);
+        }
+
+        $excursion->setSlug($slug);
+        $excursion->setTitle($row['title'] ?? $slug);
+        $excursion->setBody($row['body'] ?? '');
+        if (array_key_exists('imagePath', $row)) {
+            $excursion->setImagePath($row['imagePath'] !== null ? basename((string) $row['imagePath']) : null);
+        }
+        $excursion->setCostPerPersonPence((int) ($row['costPerPersonPence'] ?? 0));
+        $excursion->setEffectValue((int) ($row['effectValue'] ?? 50));
+        $excursion->setNegativeFrequency((int) ($row['negativeFrequency'] ?? 5));
+        $excursion->setTargetAudience($row['targetAudience'] ?? Excursion::AUDIENCE_BOTH);
+        $excursion->setPostSeasonOnly((bool) ($row['postSeasonOnly'] ?? false));
+        $excursion->setCooldownWeeks((int) ($row['cooldownWeeks'] ?? 4));
+        $excursion->setActive((bool) ($row['active'] ?? true));
+
+        if ($created) {
+            $this->em->persist($excursion);
         }
 
         return $created;

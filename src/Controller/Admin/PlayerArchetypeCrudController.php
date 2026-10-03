@@ -25,7 +25,16 @@ class PlayerArchetypeCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::DELETE);
+        $translations = Action::new('translations', 'Translations', 'fa fa-language')
+            ->linkToUrl(fn (PlayerArchetype $a) => $this->generateUrl('admin', [
+                'routeName'   => 'admin_narrative_translation_edit',
+                'routeParams' => ['entityType' => 'player_archetype', 'id' => (string) $a->getId()],
+            ]));
+
+        return $actions
+            ->disable(Action::DELETE)
+            ->add(Crud::PAGE_INDEX, $translations)
+            ->add(Crud::PAGE_DETAIL, $translations);
     }
 
     public function configureCrud(Crud $crud): Crud
