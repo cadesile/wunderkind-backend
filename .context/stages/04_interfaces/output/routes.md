@@ -46,11 +46,12 @@ the end) — this file is the sole source of truth for the route surface.
 | `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-development`, `/most-seasons`, `/most-trophies` |
 | `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` — register/resubmit also trigger push notifications (`PushNotificationService`) to other entrants |
 | `DeviceTokenController` | `/api/device-tokens` | `POST ''` (`IsGranted('ROLE_CLUB')`, upserts by `deviceToken`), `DELETE /{deviceToken}` — FCM push registration, see `services.md`'s `PushNotificationService` |
-| `EventController` | `/api/events` | `GET /templates` (optional `?category=` narrows to one `EventCategory`, e.g. `MATCH_NARRATIVE`) |
-| `ExcursionController` | `/api/excursions` | `GET` |
+| `EventController` | `/api/events` | `GET /templates` (optional `?category=` narrows to one `EventCategory`, e.g. `MATCH_NARRATIVE`; optional `?lang=` localizes `title`/`bodyTemplate` in place, falling back to the default language on an unknown/disabled code — see `docs/api/translations.md`) |
+| `ExcursionController` | `/api/excursions` | `GET` (optional `?lang=`, same localize-in-place behavior as `EventController` above, for `title`/`body`; `versionHash` is computed over the localized values) |
 | `FinanceController` | `/api/finance` | `GET /overview`, `GET /investors`, `GET /sponsors`, `POST /sponsors/{id}/terminate` |
-| `GameConfigController` | `/api` | `GET /game-config` |
+| `GameConfigController` | `/api` | `GET /game-config` (optional `?lang=` localizes each `facilityTemplates[]` entry's `label`/`description` in place) |
 | `InboxController` | `/api/inbox` | `GET ''`, `GET /{id}`, `POST /{id}/accept`, `POST /{id}/reject`, `POST /{id}/read` |
+| `LanguageController` | `/api/languages` | `GET` — enabled languages, public, no auth |
 | `LeaderboardController` | `/api` | `GET /leaderboard/{category}` |
 | `LeagueController` | `/api/league` | `POST /conclude-season`, `GET /season-history`, `GET /season-history/{season}` |
 | `MarketController` | `/api/market` | `GET /data`, `POST /assign`, `POST /consume`, `GET /legacy` |
@@ -59,6 +60,7 @@ the end) — this file is the sole source of truth for the route surface.
 | `ScoutSearchController` | `/api/scout` | `GET /foreign-clubs`, `GET /search` |
 | `StarterConfigController` | `/api` | `GET /starter-config` |
 | `TransferLeaderboardController` | `/api/leaderboard/transfers` | `GET /top-sellers`, `GET /most-valuable` |
+| `TranslationController` | `/api/translations` | `GET /{code}`, `GET /{code}/version` — generic UI-copy catalogue, public, no auth; unknown/disabled code is a hard 404 (contrast the fallback-to-default behavior of the `?lang=` params above). See `docs/api/translations.md`. |
 | `VideoController` | `/api` | `GET /videos/latest` |
 | `WorldOverviewController` | `/api` | `GET /world/overview` |
 
@@ -71,6 +73,7 @@ the end) — this file is the sole source of truth for the route surface.
   `/admin/game-config[/save]`, `/admin/starter-config[/save]`,
   `/admin/narrative/content|export|import`,
   `/admin/config/content|export|import`,
+  `/admin/translations/content|export|import`,
   `/admin/npc-clubs/content|save-facility-config|save-size-weights|generate`,
   `/admin/leagues/overview|generate`, `/admin/facilities/overview`,
   `/admin/world/content|export|import`, `/admin/worldpack-cache`,
@@ -117,6 +120,18 @@ the end) — this file is the sole source of truth for the route surface.
   `Club $club` a Doctrine-typed route parameter) — dispatches a
   clearly-marked `[TEST]`-prefixed synthetic push to one club, for
   testing raw FCM delivery without a real competition/message behind it.
+- **`NarrativeTranslationController`** — the "Translations" quick-edit
+  screen linked from `GameEventTemplateCrudController`/
+  `FacilityTemplateCrudController`/`ExcursionCrudController`'s row actions:
+  `GET /admin/narrative-translations/{entityType}/{id}` (reached via
+  `/admin?routeName=admin_narrative_translation_edit&routeParams[...]`,
+  since it renders an `@EasyAdmin`-extending template directly),
+  `POST /admin/narrative-translations/{entityType}/{id}/save` (plain
+  route — always redirects, never renders, so exempt from that rule).
+  `DashboardController` additionally gains the
+  `/admin/translations/content|export|import` trio (generic UI-copy bulk
+  import/export, mirroring `/admin/config/content|export|import`) and a
+  "Translations" submenu in `configureMenuItems()`.
 
 ## `src/Controller/Admin/*CrudController.php` — EasyAdmin CRUD
 
@@ -126,15 +141,23 @@ controller per entity, each mapping via `getEntityFqcn()`:
 `BetaRequest`, `Club`, `CompetitionEntrant`, `CompetitionRound`,
 `CompetitionTemplate`, `DeletionRequest`, `Excursion`,
 `FacilityTemplate`, `GameEventTemplate`, `Guardian`, `Investor`,
-`LeaderboardEntry`, `League`, `NotificationLog`, `NpcClub`,
+`Language`, `LeaderboardEntry`, `League`, `NotificationLog`, `NpcClub`,
 `PlayerArchetype`, `Player`, `RewardTemplate`, `Scout`, `SeasonRecord`,
 `SeasonSnapshot`, `SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
-`TacticalAdvantage`, `Transfer`, `User`, `UserLedger`. Each gives standard
-EasyAdmin CRUD screens (index/detail/edit/new/delete) plus whatever its own
+`TacticalAdvantage`, `Transfer`, `Translation`, `TranslationKey`, `User`,
+`UserLedger`. Each gives standard EasyAdmin CRUD screens (index/detail/
+edit/new/delete) plus whatever its own
 `configureFields()`/`configureActions()` customizes.
 `NotificationLogCrudController`/`UserLedgerCrudController` are read-only
 (disable new/edit/delete), styled directly on
 `DeletionRequestCrudController`.
+
+`GameEventTemplateCrudController`/`FacilityTemplateCrudController`/
+`ExcursionCrudController` each add a row action ("Translations", linking to
+`admin_narrative_translation_edit` above). `TranslationKeyCrudController`/
+`TranslationCrudController` are generic-UI-copy-only — their
+`createIndexQueryBuilder()` filters out narrative-linked rows, which are
+managed only via the row action above.
 
 ## API spec
 

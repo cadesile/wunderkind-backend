@@ -2,12 +2,16 @@
 
 namespace App\Controller\Api;
 
+use App\Enum\TranslatableEntityType;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
+use App\Repository\LanguageRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\FacilityImageResolver;
+use App\Service\NarrativeTranslationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api')]
@@ -18,12 +22,21 @@ class GameConfigController extends AbstractController
         private readonly FacilityTemplateRepository $facilityTemplateRepository,
         private readonly FacilityImageResolver       $facilityImageResolver,
         private readonly StarterConfigRepository     $starterConfigRepository,
+        private readonly LanguageRepository          $languageRepository,
+        private readonly NarrativeTranslationService $translationService,
     ) {}
 
+    /**
+     * Optional `?lang=` localizes each facility template's label/description in place,
+     * falling back to English for anything untranslated. An unknown/disabled code silently
+     * falls back to the default language rather than erroring — this is core gameplay data.
+     */
     #[Route('/game-config', name: 'api_game_config', methods: ['GET'])]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $config = $this->gameConfigRepository->getConfig(flush: true);
+        $config   = $this->gameConfigRepository->getConfig(flush: true);
+        $language = $this->languageRepository->findByCode((string) $request->query->get('lang', ''));
+        $map      = $this->translationService->buildLocalizationMap(TranslatableEntityType::FACILITY_TEMPLATE, $language);
 
         return $this->json([
             'cliqueRelationshipThreshold'      => $config->getCliqueRelationshipThreshold(),
@@ -268,7 +281,12 @@ class GameConfigController extends AbstractController
             // Facility templates — defines per-level gameplay effects for each facility type.
             // Client applies these during the weekly tick on top of the GameConfig baselines above.
             'facilityTemplates' => array_map(
-                fn($ft) => [...$ft->toArray(), 'images' => $this->facilityImageResolver->resolve($ft->getSlug())],
+                fn($ft) => [
+                    ...$ft->toArray(),
+                    'label'       => $this->translationService->localize($ft->getSlug(), 'label', $ft->getLabel(), $map),
+                    'description' => $this->translationService->localize($ft->getSlug(), 'description', $ft->getDescription(), $map),
+                    'images'      => $this->facilityImageResolver->resolve($ft->getSlug()),
+                ],
                 $this->facilityTemplateRepository->getActiveTemplates()
             ),
         ]);

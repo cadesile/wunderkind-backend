@@ -11,21 +11,31 @@ use App\Entity\TacticalAdvantage;
 use App\Enum\ArchetypePolarity;
 use App\Enum\EventCategory;
 use App\Enum\PlayingStyle;
+use App\Enum\TranslatableEntityType;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameEventTemplateRepository;
+use App\Repository\LanguageRepository;
 use App\Repository\PlayerArchetypeRepository;
 use App\Repository\TacticalAdvantageRepository;
+use App\Repository\TranslationKeyRepository;
+use App\Repository\TranslationRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class NarrativeImportExportService
 {
-    private const EXPORT_VERSION = 2;
+    // Bumped from 2 to 3 when the `translations` section was added. Unrelated to the generic
+    // UI-copy catalogue, which has its own independent TranslationCatalogueImportExportService.
+    private const EXPORT_VERSION = 3;
 
     public function __construct(
         private readonly GameEventTemplateRepository $eventTemplateRepository,
         private readonly FacilityTemplateRepository  $facilityTemplateRepository,
         private readonly PlayerArchetypeRepository   $archetypeRepository,
         private readonly TacticalAdvantageRepository $tacticalAdvantageRepository,
+        private readonly TranslationKeyRepository    $translationKeyRepository,
+        private readonly TranslationRepository       $translationRepository,
+        private readonly LanguageRepository          $languageRepository,
+        private readonly NarrativeTranslationService $translationService,
         private readonly EntityManagerInterface      $em,
     ) {}
 
@@ -40,6 +50,7 @@ class NarrativeImportExportService
             'facilityTemplates'  => $this->exportFacilityTemplates(),
             'playerArchetypes'   => $this->exportPlayerArchetypes(),
             'tacticalAdvantages' => $this->exportTacticalAdvantages(),
+            'translations'       => $this->exportTranslations(),
         ];
     }
 
@@ -85,8 +96,55 @@ class NarrativeImportExportService
         ], $this->tacticalAdvantageRepository->findBy([], ['style' => 'ASC', 'opponentStyle' => 'ASC']));
     }
 
+    /**
+     * Non-default-language values only, for GameEventTemplate/FacilityTemplate/Excursion
+     * text fields. The default (EN) value is never exported here — it's already carried by
+     * the existing sections' own title/bodyTemplate/label/description fields above.
+     */
+    private function exportTranslations(): array
+    {
+        $default = $this->languageRepository->findDefault();
+        $rows    = [];
+
+        foreach (TranslatableEntityType::cases() as $type) {
+            foreach ($this->translationKeyRepository->findAllForEntityType($type) as $key) {
+                $values = [];
+                foreach ($this->translationRepository->findAllForKey($key) as $translation) {
+                    $language = $translation->getLanguage();
+                    if ($default !== null && $language->getId() === $default->getId()) {
+                        continue;
+                    }
+                    $values[$language->getCode()] = $translation->getValue();
+                }
+
+                if ($values === []) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'entityType' => $key->getEntityType(),
+                    'slug'       => $key->getEntitySlug(),
+                    'field'      => $key->getFieldName(),
+                    'values'     => $values,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
     // ── Import ────────────────────────────────────────────────────────────────
 
+    /**
+     * Also purges narrative-linked TranslationKey rows (cascading to their Translation
+     * children via orphanRemoval) for GameEventTemplate/FacilityTemplate only — matching
+     * exactly what this method already wipes above.
+     *
+     * Excursion is deliberately excluded: clearAll() never touches Excursion rows
+     * themselves, so purging Excursion-linked keys here would orphan translations for
+     * excursions that still exist. Do not "fix" this into clearing all three — that would
+     * destroy live data this method has no business touching.
+     */
     public function clearAll(): void
     {
         foreach ($this->eventTemplateRepository->findAll() as $e) {
@@ -100,6 +158,12 @@ class NarrativeImportExportService
         }
         foreach ($this->tacticalAdvantageRepository->findAll() as $t) {
             $this->em->remove($t);
+        }
+        foreach ($this->translationKeyRepository->findAllForEntityType(TranslatableEntityType::GAME_EVENT_TEMPLATE) as $k) {
+            $this->em->remove($k);
+        }
+        foreach ($this->translationKeyRepository->findAllForEntityType(TranslatableEntityType::FACILITY_TEMPLATE) as $k) {
+            $this->em->remove($k);
         }
         $this->em->flush();
     }
@@ -154,6 +218,13 @@ class NarrativeImportExportService
             } catch (\Throwable $e) {
                 $result['errors'][] = 'tacticalAdvantage[' . ($row['style'] ?? '?') . ' vs ' . ($row['opponentStyle'] ?? '?') . ']: ' . $e->getMessage();
             }
+        }
+
+        foreach ($data['translations'] ?? [] as $row) {
+            $rowResult = $this->upsertTranslationRow($row);
+            $result['created'] += $rowResult['created'];
+            $result['updated'] += $rowResult['updated'];
+            $result['errors']   = [...$result['errors'], ...$rowResult['errors']];
         }
 
         $this->em->flush();
@@ -302,5 +373,49 @@ class NarrativeImportExportService
         }
 
         return $created;
+    }
+
+    /**
+     * One row covers every language value for one narrative field, so success/failure is
+     * tracked per language rather than per row — one bad language code shouldn't discard the
+     * others.
+     *
+     * @return array{created: int, updated: int, errors: string[]}
+     */
+    private function upsertTranslationRow(array $row): array
+    {
+        $result = ['created' => 0, 'updated' => 0, 'errors' => []];
+
+        $type = TranslatableEntityType::tryFrom($row['entityType'] ?? '');
+        $slug = trim($row['slug'] ?? '');
+        $field = trim($row['field'] ?? '');
+        $label = ($row['entityType'] ?? '?') . '[' . ($slug ?: '?') . '].' . ($field ?: '?');
+
+        if ($type === null || $slug === '' || !$this->translationService->isTranslatableField($type, $field)) {
+            $result['errors'][] = "translation[{$label}]: unknown entityType/field.";
+            return $result;
+        }
+
+        if ($this->translationService->resolveEntityBySlug($type, $slug) === null) {
+            $result['errors'][] = "translation[{$label}]: no {$type->value} with slug '{$slug}' exists on this system.";
+            return $result;
+        }
+
+        $key = $this->translationService->ensureKeyFor($type, $slug, $field);
+
+        foreach ((array) ($row['values'] ?? []) as $code => $value) {
+            $language = $this->languageRepository->findByCode((string) $code);
+            if ($language === null) {
+                $result['errors'][] = "translation[{$label}]: unknown language code '{$code}'.";
+                continue;
+            }
+
+            $wasTranslated = $this->translationRepository->findOneForKeyAndLanguage($key, $language) !== null;
+            $this->translationRepository->upsert($key, $language, (string) $value);
+
+            $wasTranslated ? $result['updated']++ : $result['created']++;
+        }
+
+        return $result;
     }
 }

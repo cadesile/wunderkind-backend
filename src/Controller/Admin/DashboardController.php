@@ -12,13 +12,18 @@ use App\Repository\PoolConfigRepository;
 use App\Repository\SocialAccountConnectionRepository;
 use App\Repository\SocialPostTemplateRepository;
 use App\Repository\StarterConfigRepository;
+use App\Repository\LanguageRepository;
 use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
 use App\Service\NarrativeImportExportService;
+use App\Service\TranslationCatalogueImportExportService;
 use App\Controller\Admin\BetaRequestCrudController;
 use App\Controller\Admin\DeletionRequestCrudController;
 use App\Controller\Admin\LeagueCrudController;
 use App\Controller\Admin\SocialPostTemplateCrudController;
+use App\Controller\Admin\LanguageCrudController;
+use App\Controller\Admin\TranslationCrudController;
+use App\Controller\Admin\TranslationKeyCrudController;
 use App\Enum\Country;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
@@ -820,6 +825,94 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_config_content']));
     }
 
+    // ── Translations Import / Export ─────────────────────────────────────
+
+    #[Route('/admin/translations/content', name: 'admin_translations_content')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function translationsContent(LanguageRepository $languageRepository): Response
+    {
+        return $this->render('admin/translations_content.html.twig', [
+            'languages' => $languageRepository->findEnabled(),
+        ]);
+    }
+
+    #[Route('/admin/translations/export', name: 'admin_translations_export', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function translationsExport(Request $request, LanguageRepository $languageRepository, TranslationCatalogueImportExportService $service): Response
+    {
+        $language = $languageRepository->findByCode((string) $request->query->get('language', ''));
+        $default  = $languageRepository->findDefault();
+
+        if ($language === null || $default === null) {
+            $this->addFlash('danger', 'Choose a valid language to export.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+        }
+
+        $data     = $service->export($language, $default);
+        $filename = 'wunderkind-translations-' . $language->getCode() . '-' . date('Y-m-d') . '.json';
+        $json     = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $response = new StreamedResponse(function () use ($json) {
+            echo $json;
+        });
+
+        $disposition = HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename);
+        $response->headers->set('Content-Type', 'application/json');
+        $response->headers->set('Content-Disposition', $disposition);
+
+        return $response;
+    }
+
+    #[Route('/admin/translations/import', name: 'admin_translations_import', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function translationsImport(Request $request, LanguageRepository $languageRepository, TranslationCatalogueImportExportService $service): Response
+    {
+        if (!$this->isCsrfTokenValid('translations_import', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+        }
+
+        $target = $languageRepository->findByCode((string) $request->request->get('language', ''));
+        if ($target === null) {
+            $this->addFlash('danger', 'Choose a valid target language for this import.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+        }
+
+        $file = $request->files->get('translations_file');
+        if ($file === null || !$file->isValid()) {
+            $this->addFlash('danger', 'No valid file uploaded.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+        }
+
+        $raw = file_get_contents($file->getPathname());
+        if ($raw === false) {
+            $this->addFlash('danger', 'Could not read uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+        }
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $this->addFlash('danger', 'Invalid JSON — could not parse the uploaded file.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+        }
+
+        $result = $service->import($data, $target);
+
+        if (!empty($result['errors'])) {
+            foreach ($result['errors'] as $error) {
+                $this->addFlash('warning', $error);
+            }
+        }
+
+        $this->addFlash('success', sprintf(
+            'Import complete — %d created, %d updated.',
+            $result['created'],
+            $result['updated'],
+        ));
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_translations_content']));
+    }
+
     // ── NPC Clubs ─────────────────────────────────────────────────────────
 
     #[Route('/admin/npc-clubs/content', name: 'admin_npc_clubs_content')]
@@ -1360,6 +1453,12 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater'),
             MenuItem::linkTo(ExcursionCrudController::class, 'Excursions', 'fa fa-bus'),
             MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content'),
+        ]);
+        yield MenuItem::subMenu('Translations', 'fa fa-language')->setSubItems([
+            MenuItem::linkTo(LanguageCrudController::class, 'Languages', 'fa fa-flag'),
+            MenuItem::linkTo(TranslationKeyCrudController::class, 'Translation Keys', 'fa fa-key'),
+            MenuItem::linkTo(TranslationCrudController::class, 'Translations', 'fa fa-language'),
+            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_translations_content'),
         ]);
         yield MenuItem::subMenu('Configuration', 'fa fa-sliders')->setSubItems([
             MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config'),

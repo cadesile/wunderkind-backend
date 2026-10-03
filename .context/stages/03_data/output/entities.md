@@ -446,6 +446,41 @@ Each is effectively a single global-config row.
   `Version20260915213526` → `Version20260928190000` — see `migrations.md`.
   No relations.
 
+## Translations
+
+- **`Language`** (table `language`) — admin-configured language. `code`
+  (2-letter, unique, treated immutable once shipped), `name`, `isEnabled`,
+  `isDefault` (exactly one at a time — enforced in `LanguageCrudController`,
+  not a DB constraint), `sortOrder`. No relations.
+- **`TranslationKey`** (table `translation_key`) — one translatable
+  string. `key` (unique, human-readable; for narrative-linked rows this is
+  a derived label only, never parsed). `entityType`/`entitySlug`/
+  `fieldName` (all `?string`, nullable) — `null`/`null`/`null` = generic
+  UI-copy key; all three set = linked to one field of a `GameEventTemplate`/
+  `FacilityTemplate`/`Excursion` row (explicit typed link, not a naming
+  convention). `isPluralSensitive:bool`, `bandedReferences:?array (json)` —
+  structural metadata about the key itself (which client-side interpolation
+  handling it needs), identical across every language, so it lives here
+  rather than per-language. `UNIQUE(key)` and a plain `UNIQUE(entityType,
+  entitySlug, fieldName)` — the latter works because Postgres treats
+  `NULL`s as distinct under a plain unique index, so generic rows (all
+  three `NULL`) never collide with each other. `OneToMany` → `translations`
+  (cascade persist/remove, `orphanRemoval: true`) — see
+  `services.md`/CLAUDE.md's "Languages & Translations" for why this
+  collection must be queried directly (`TranslationRepository::
+  findAllForKey()`) rather than read off an in-memory `TranslationKey`
+  instance, which can silently appear empty for a row created earlier in
+  the same request.
+- **`Translation`** (table `translation`) — one language's value for one
+  `TranslationKey`. `value:text` (empty string is a deliberate value;
+  "untranslated" is the absence of a row). `ManyToOne` → `translationKey`,
+  `language` (both not nullable, `CASCADE`). `UNIQUE(translationKey,
+  language)`.
+- **No default-language (EN) `Translation` row exists for narrative
+  content** — `GameEventTemplate`/`FacilityTemplate`/`Excursion`'s own
+  `title`/`bodyTemplate`/`label`/`description`/`body` fields are the EN
+  value, read live. Only non-default-language overrides are ever stored.
+
 ## Not an entity
 
 `src/Entity/Concern/EditableJsonColumnTrait.php` — a plain PHP trait

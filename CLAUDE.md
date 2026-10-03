@@ -394,6 +394,78 @@ fiction. Full client contract: `docs/api/server-driven-messaging.md`.
   the Text configurator rejects an array value with "can't be converted into a string". See
   `AudienceGroupCrudController::configureFields()`.
 
+### Languages & Translations (backend-owned)
+
+A `Language`/`TranslationKey`/`Translation` system covering two independent domains that
+share one storage model but are served to the client in different ways — don't conflate
+them:
+
+- **Generic UI copy** (`TranslationKey.entityType === null`) — brand-new strings with no
+  existing source of truth. Served as a flat `{_meta, entries}` catalogue,
+  `GET /api/translations/{code}` (and `/version` for cheap polling), matching
+  `wunderkind-app/locales/<code>/translations.json`'s own shape so the app's existing
+  locale-file format and this backend's output are interchangeable. `_meta.pluralSensitiveKeys`/
+  `bandedReferences` are structural metadata about which *keys* need special client-side
+  handling — identical across every language, not translated values — so they live on
+  `TranslationKey`, never duplicated per language.
+- **Narrative content** (`GameEventTemplate`/`FacilityTemplate`/`Excursion` text —
+  `entityType` set) — **localized in place** on those entities' own existing endpoints
+  (`/api/events/templates`, `/api/excursions`, `/api/game-config`) via a `?lang=` param,
+  **not** exposed through the catalogue above. This was a deliberate choice over routing
+  narrative text through synthetic catalogue keys: it means none of the client's existing
+  rendering code for these screens needs new lookup logic, only to pass the current language
+  through. Full client contract: `docs/api/translations.md`.
+- **The default (EN) value for a narrative field is never duplicated into a stored
+  `Translation` row — it is always read live off the owning entity**
+  (`GameEventTemplate::getTitle()` etc.) via `NarrativeTranslationService::getFieldValue()`.
+  A stored EN mirror would go stale the instant an admin edits the entity through its normal
+  CRUD form — the same class of bug `NarrativeFacilityTemplateRoundTripTest`'s docblock
+  documents for `FacilityTemplate`'s own export/import split (`baseConstructionWeeks`
+  exported and never read back). Generic UI-copy keys have no live source, so their EN
+  values *are* ordinary stored rows, like any other language.
+- **Explicit typed link columns, not key-string parsing.** `TranslationKey.entityType`/
+  `entitySlug`/`fieldName` are the real link to a narrative field; `key` itself (e.g.
+  `narrative.excursion.team_bonding.title`) is a derived, human-readable label only, never
+  parsed to find the association — same precedent as `player_1.morale` vs bare
+  `player.morale` elsewhere in this file: explicit slots over string convention.
+  `NarrativeTranslationService::TRANSLATABLE_FIELDS` is the hand-maintained registry of
+  which fields on each entity type are translatable (most columns — `slug`, `category`,
+  `cost` — are deliberately not).
+- **Admin editing**: each of `GameEventTemplateCrudController`/`FacilityTemplateCrudController`/
+  `ExcursionCrudController` gets a row-level "Translations" action
+  (`NarrativeTranslationController`) — a grid of translatable fields × enabled languages,
+  EN shown read-only (edit it on the entity's own form instead). Generic UI-copy keys get
+  their own CRUD screens (`LanguageCrudController`, `TranslationKeyCrudController`,
+  `TranslationCrudController`) plus a bulk import/export screen
+  (`/admin/translations/content|export|import`, mirroring `ConfigImportExportService`'s own
+  trio) whose export format *is* the public catalogue shape — the app's own locale file can
+  be uploaded there close to verbatim as the initial `en` seed.
+  `NarrativeImportExportService`'s export/import additionally carries a `translations`
+  section (non-default-language values only, for the three narrative types) so a whole
+  language's worth of narrative translations can move with a narrative-content backup —
+  bumped `EXPORT_VERSION` to `3` for this.
+- **Don't cache a `TranslationKey`'s children via `$key->getTranslations()`.** That inverse
+  `OneToMany` collection is only populated by Doctrine's hydrator for a `TranslationKey`
+  loaded *from* the database — one created earlier in the same request (e.g. by
+  `ensureKeyFor()` during a save) has its `Translation` children persisted via the owning
+  side only, and the inverse collection is never retroactively updated. Query via
+  `TranslationRepository::findAllForKey()` instead; this bit `NarrativeImportExportService`'s
+  own `exportTranslations()` during manual testing — silently returning zero rows for data
+  that definitely existed. Relatedly: don't give `NarrativeTranslationService::ensureKeyFor()`
+  an instance-level result cache either — it goes stale the moment something else deletes the
+  row it points to, then feeds Doctrine a detached-entity reference on the next call
+  (`ORMInvalidArgumentException`, confusingly far from the real cause). The one caller that
+  needs duplicate-protection (`saveTranslations()`, saving the same not-yet-existing field for
+  two languages in one call) dedupes with a local, call-scoped map instead — see its own
+  docblock.
+- **`app:seed-default-language` only acts when the `language` table is completely empty** —
+  it creates the single bootstrap `en`/enabled/default row and is a permanent no-op
+  afterward. Deliberately *not* an upsert-by-code like `app:seed-excursions`: an
+  upsert-on-every-deploy model would permanently stomp an admin's later choice of a
+  different default language. Paired with `app:backfill-narrative-translations`
+  (idempotent, ensures every existing narrative row's `TranslationKey`s exist — cheap, both
+  run on every deploy).
+
 ### Two Firewalls
 - **`api`** — stateless JWT, covers `/api/*`; role `ROLE_CLUB` for game clients
 - **`admin`** — session form_login, covers `/admin`; role `ROLE_ADMIN`
@@ -419,7 +491,7 @@ directory): custom admin routes must always redirect through EasyAdmin's entry p
   ```bash
   lando psql -c "UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'you@example.com';"
   ```
-- **Adding a persisted field is not done until it round-trips through Import/Export.** Three admin screens back up and restore domain data, and a field the service doesn't carry is silently lost on restore — the import reports no error, the value just comes back at its entity default. `ConfigImportExportService` (`GameConfig`, `StarterConfig`, `PoolConfig`) is **reflection-driven**: it walks every `#[ORM\Column]` property, so a new config field is covered automatically and the only decision is whether it belongs on `ConfigImportExportService::DENIED_PROPERTIES` (secrets and runtime state — the export file is documented to admins as safe to commit). `NarrativeImportExportService` and `LeagueImportExportService` are still hand-maintained lists that must be edited on **both** sides. All three are guarded by coverage tests (`tests/Service/ConfigImportExportCoverageTest.php`, `NarrativeFacilityTemplateRoundTripTest.php`, `LeagueImportExportRoundTripTest.php`) that fail when an entity gains a column the service doesn't handle — so a red build here means the export needs updating, not the test.
+- **Adding a persisted field is not done until it round-trips through Import/Export.** Three admin screens back up and restore domain data, and a field the service doesn't carry is silently lost on restore — the import reports no error, the value just comes back at its entity default. `ConfigImportExportService` (`GameConfig`, `StarterConfig`, `PoolConfig`) is **reflection-driven**: it walks every `#[ORM\Column]` property, so a new config field is covered automatically and the only decision is whether it belongs on `ConfigImportExportService::DENIED_PROPERTIES` (secrets and runtime state — the export file is documented to admins as safe to commit). `NarrativeImportExportService` and `LeagueImportExportService` are still hand-maintained lists that must be edited on **both** sides. All three are guarded by coverage tests (`tests/Service/ConfigImportExportCoverageTest.php`, `NarrativeFacilityTemplateRoundTripTest.php`, `LeagueImportExportRoundTripTest.php`) that fail when an entity gains a column the service doesn't handle — so a red build here means the export needs updating, not the test. `NarrativeTranslationRoundTripTest.php` guards the newer `translations` section the same way, but narrower — it only asserts every field named in `NarrativeTranslationService::TRANSLATABLE_FIELDS` has a working getter/setter, not a full column sweep (most columns on those three entities are deliberately not translatable).
 - **`GameEventTemplate` JSON is client-interpreted, and the client is fussy.** The backend stores and serves `impacts`, `firingConditions`, `chainedEvents` and `severity` verbatim — nothing validates them, so a wrong key is not an error, it is an event that quietly does nothing. Three traps: `impacts` has **two shapes**, and the `player_reputation`/`player_milestone`/`player_morale`/`player_form` categories read **only** `{"stat_changes": [...]}` (a flat `[{target, delta}]` array on those fires the message and applies nothing); a legacy target **must carry its slot number** (`player_1.morale`, never `player.morale` — the client's entity map has no bare `player` key); and setting `firingConditions` at all **removes the template from the weekly random roll**, so a shape no evaluator claims makes the event permanently dead. Only eight personality traits exist (`determination, professionalism, ambition, loyalty, adaptability, pressure, temperament, consistency`, 1–20) — any other name is silently dropped. Full reference: `docs/event-guide.md`, mirrored in the admin help on `GameEventTemplateCrudController`. `app:events:repair` fixes existing rows; the seeders skip existing slugs unless you pass `--update`.
 - **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
 
@@ -453,10 +525,13 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `EmailVerificationService` | Send and validate email verification / password reset tokens |
 | `ConfigImportExportService` | Export/import `GameConfig`, `StarterConfig`, and `PoolConfig` rows as JSON |
 | `LeagueImportExportService` | Export/import `League` + `NpcClub` world data (used for admin-driven world pack management) |
-| `NarrativeImportExportService` | Export/import event templates, facility templates, player archetypes, and `TacticalAdvantage` rows |
+| `NarrativeImportExportService` | Export/import event templates, facility templates, player archetypes, `TacticalAdvantage` rows, and (non-default-language only) narrative `translations` |
 | `AdminMessageService` | Resolve pending announcements for a club, cap the payload, upsert acknowledgements, sanitize admin HTML |
 | `AudienceCriteriaEvaluator` | Evaluate a DYNAMIC `AudienceGroup`'s JSON criteria against a `Club`, live at poll time |
 | `UserLedgerService` | Detect `dividend_draw` entries in the sync ledger and centralize them onto `UserLedger`, chaining before/after balance across clubs — see Centralized User Ledger above |
+| `NarrativeTranslationService` | Find-or-create `TranslationKey`s for narrative fields; builds the per-language localization map the `?lang=` endpoints read; EN is always read live off the entity, never stored — see Languages & Translations above |
+| `TranslationCatalogueService` | Builds the generic UI-copy `{_meta, entries}` catalogue (`/api/translations/{code}`), shared by the public endpoint and the admin bulk-export |
+| `TranslationCatalogueImportExportService` | Bulk import/export of the generic UI-copy catalogue, one language at a time — a separate domain from `NarrativeImportExportService`'s own `translations` section |
 
 ## Key Entities (non-obvious fields)
 
@@ -483,3 +558,6 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **PoolConfig** — per-country/tier configuration for how many entities to pre-warm in the pool; covered by `ConfigImportExportService` reflection
 - **AdminMessage / AudienceGroup / AudienceGroupMember / MessageDelivery** — server-driven messaging; `MessageDelivery` is keyed `(user, message)` while targeting reads `Club` (see Server-Driven Messaging)
 - **SeasonRecord / SeasonSnapshot / SeasonRatingsSnapshot** — historical season data persisted at `conclude-season`
+- **Language** — admin-configured language row; `code` (2-letter, treated immutable once shipped), `isEnabled`, `isDefault` (exactly one at a time, enforced in `LanguageCrudController`, not a DB constraint), `sortOrder`
+- **TranslationKey** — a translatable string. `entityType`/`entitySlug`/`fieldName` (all null = generic UI-copy key; all set = linked to one narrative field — explicit columns, never parsed from `key`); `isPluralSensitive`/`bandedReferences` (structural, per-key, language-independent). `UNIQUE(key)` and `UNIQUE(entityType, entitySlug, fieldName)` — the latter relies on Postgres treating `NULL`s as distinct so multiple generic rows never collide. `OneToMany` → `translations` (cascade remove, `orphanRemoval: true`) — see Languages & Translations above for why that collection must never be read directly off an in-memory instance.
+- **Translation** — one language's value for one `TranslationKey`. `UNIQUE(translationKey, language)`; an empty string is a deliberate value, "untranslated" is the absence of a row.

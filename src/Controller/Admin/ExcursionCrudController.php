@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Entity\Excursion;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
@@ -31,6 +33,19 @@ class ExcursionCrudController extends AbstractCrudController
             ->setEntityLabelInPlural('Excursions')
             ->setDefaultSort(['costPerPersonPence' => 'ASC'])
             ->setHelp('index', 'Team trips the manager books to lift morale. Cost is PER ATTENDEE and is multiplied by headcount in-app, so keep per-head figures small — a squad of 20 turns £20/head into £400.');
+    }
+
+    public function configureActions(Actions $actions): Actions
+    {
+        $translations = Action::new('translations', 'Translations', 'fa fa-language')
+            ->linkToUrl(fn (Excursion $e) => $this->generateUrl('admin', [
+                'routeName'   => 'admin_narrative_translation_edit',
+                'routeParams' => ['entityType' => 'excursion', 'id' => (string) $e->getId()],
+            ]));
+
+        return $actions
+            ->add(Crud::PAGE_INDEX, $translations)
+            ->add(Crud::PAGE_DETAIL, $translations);
     }
 
     public function configureFields(string $pageName): iterable

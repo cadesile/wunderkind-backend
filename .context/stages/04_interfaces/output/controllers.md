@@ -42,6 +42,9 @@ actually *does* (which service/repo it calls), not restated route paths.
   `FacilityImageResolver`/`YouTubeFeedService`.
 - **`ArchetypeController`** — single read action over
   `PlayerArchetypeRepository`.
+- **`LanguageController`** — single read action over `LanguageRepository`.
+- **`TranslationController`** — generic UI-copy catalogue + version-hash
+  endpoints, via `LanguageRepository` + `TranslationCatalogueService`.
 - **`BetaRequestController`** — beta signup + verification, via
   `BetaRequestRepository`, `EmailVerificationService`.
 - **`ClubController`** — club lookup/initialization/status checks via
@@ -61,8 +64,10 @@ actually *does* (which service/repo it calls), not restated route paths.
   `EligibilityEvaluator`, `SnapshotValidator`,
   `CompetitionRegistrationService`.
 - **`EventController`** — templates listing via
-  `GameEventTemplateRepository`.
-- **`ExcursionController`** — listing via `ExcursionRepository`.
+  `GameEventTemplateRepository`; `?lang=` localization via
+  `LanguageRepository` + `NarrativeTranslationService`.
+- **`ExcursionController`** — listing via `ExcursionRepository`; `?lang=`
+  localization via `LanguageRepository` + `NarrativeTranslationService`.
 - **`FinanceController`** — club finance overview/investors/sponsors,
   including sponsor termination. Deps: `ClubResolver`,
   `InvestorRepository`, `SponsorRepository`, and (per-method) other
@@ -123,10 +128,13 @@ actually *does* (which service/repo it calls), not restated route paths.
   two-tier check — both added after a real incident where a missing
   `FIREBASE_SERVICE_ACCOUNT_JSON` secret silently discarded every push
   send with zero trace.
+- **`NarrativeTranslationController`** — the admin "Translations"
+  quick-edit screen for one GameEventTemplate/FacilityTemplate/Excursion
+  row, via `NarrativeTranslationService` + `LanguageRepository`.
 
 ## `src/Controller/Admin/*CrudController.php`
 
-33 EasyAdmin CRUD controllers, one per entity (full list in
+36 EasyAdmin CRUD controllers, one per entity (full list in
 `routes.md`). Each provides standard index/detail/edit/new/delete screens
 via `configureFields()`/`configureActions()` — individual field
 configuration wasn't traced controller-by-controller (not architecturally

@@ -25,9 +25,16 @@ class ExcursionRepository extends ServiceEntityRepository
      * The hash covers every field the client actually consumes — a price or
      * risk tweak in admin must invalidate the cache, not just adding a row.
      *
+     * $localizedTitles/$localizedBodies (keyed by slug, from
+     * NarrativeTranslationService::buildLocalizationMap()) let the hash reflect the actually
+     * served text for the requested language, not the raw English — otherwise a client
+     * switching languages would get a false cache hit against an EN-computed hash.
+     *
+     * @param array<string, string> $localizedTitles
+     * @param array<string, string> $localizedBodies
      * @return array{excursions: Excursion[], versionHash: string}
      */
-    public function findActiveWithVersionHash(): array
+    public function findActiveWithVersionHash(array $localizedTitles = [], array $localizedBodies = []): array
     {
         /** @var Excursion[] $excursions */
         $excursions = $this->createQueryBuilder('e')
@@ -40,8 +47,8 @@ class ExcursionRepository extends ServiceEntityRepository
         $hashInput = implode('|', array_map(
             fn (Excursion $e) => implode(':', [
                 $e->getSlug(),
-                $e->getTitle(),
-                $e->getBody(),
+                $localizedTitles[$e->getSlug()] ?? $e->getTitle(),
+                $localizedBodies[$e->getSlug()] ?? $e->getBody(),
                 (string) $e->getImagePath(),
                 (string) $e->getCostPerPersonPence(),
                 (string) $e->getEffectValue(),

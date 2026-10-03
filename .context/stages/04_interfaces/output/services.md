@@ -219,7 +219,33 @@ filename alone.
   caller into `CompetitionResult`.
 - **`NameGeneratorService`** — generates names (players/staff/clubs).
 - **`NarrativeImportExportService`** — imports/exports narrative content
-  (events, playing styles, facility/tactical/archetype templates).
+  (events, playing styles, facility/tactical/archetype templates), plus a
+  `translations` section (non-default-language values only, for
+  GameEventTemplate/FacilityTemplate/Excursion text fields) — see
+  `NarrativeTranslationService` below and CLAUDE.md's "Languages &
+  Translations". `EXPORT_VERSION` bumped to `3` when that section was
+  added.
+- **`NarrativeTranslationService`** — find-or-create for `TranslationKey`s
+  linked to one narrative entity field (`ensureKeyFor()`); builds the
+  per-(type, language) localization map the `?lang=`-aware endpoints
+  (`EventController`, `ExcursionController`, `GameConfigController`) read
+  (`buildLocalizationMap()`); saves the admin "Translations" quick-edit
+  screen's submission (`saveTranslations()`). The default (EN) value for a
+  narrative field is never stored — always read live off the entity via
+  `getFieldValue()`. Deliberately has no instance-level cache in
+  `ensureKeyFor()` (see its docblock) — `saveTranslations()` dedupes
+  locally instead, since it's the one caller that can legitimately ask for
+  the same not-yet-existing key twice (two languages, one call).
+- **`TranslationCatalogueService`** — builds the generic UI-copy
+  `{_meta, entries}` catalogue (`GET /api/translations/{code}` and the
+  admin bulk-export), reading `TranslationRepository::
+  getGenericCatalogueForLanguage()` in one query rather than per-key.
+- **`TranslationCatalogueImportExportService`** — bulk import/export of
+  the generic UI-copy catalogue, one language at a time
+  (`/admin/translations/content|export|import`). A separate domain from
+  `NarrativeImportExportService`'s own `translations` section. Rejects an
+  `entries` key that belongs to a narrative-linked `TranslationKey` rather
+  than silently overwriting it.
 - **`Notification/PushNotificationService`** — the only thing a call site
   should touch to send a push notification:
   `notifyUsers(userIds, title, body, data)` dispatches

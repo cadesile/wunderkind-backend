@@ -3,6 +3,8 @@
 namespace App\Controller\Admin;
 
 use App\Entity\FacilityTemplate;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
@@ -28,6 +30,19 @@ class FacilityTemplateCrudController extends AbstractCrudController
     public function configureCrud(Crud $crud): Crud
     {
         return $crud->setDefaultSort(['sortOrder' => 'ASC', 'slug' => 'ASC']);
+    }
+
+    public function configureActions(Actions $actions): Actions
+    {
+        $translations = Action::new('translations', 'Translations', 'fa fa-language')
+            ->linkToUrl(fn (FacilityTemplate $f) => $this->generateUrl('admin', [
+                'routeName'   => 'admin_narrative_translation_edit',
+                'routeParams' => ['entityType' => 'facility_template', 'id' => (string) $f->getId()],
+            ]));
+
+        return $actions
+            ->add(Crud::PAGE_INDEX, $translations)
+            ->add(Crud::PAGE_DETAIL, $translations);
     }
 
     public function configureFields(string $pageName): iterable

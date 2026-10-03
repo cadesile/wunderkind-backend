@@ -80,6 +80,11 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console doctrine:migrations:migrate --no-interaction
+            # One-time bootstrap only — acts solely when the language table is empty, so it
+            # never overwrites an admin's later choice of default language. Permanently a
+            # no-op after the first successful run.
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:seed-default-language
             # Unlike app:backfill-appearances below, this is a single set-based SQL
             # INSERT...SELECT executed entirely in Postgres — no findBy()/entity
             # hydration, so it carries none of that command's OOM risk regardless of
@@ -112,6 +117,11 @@ jobs:
             # skip-existing-slug behavior as app:seed-game-events above.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-match-narrative
+            # Find-or-creates a TranslationKey for every translatable field of every
+            # existing event/facility/excursion row. Cheap (narrative row counts are tiny)
+            # and idempotent — safe to re-run every deploy.
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:backfill-narrative-translations
             # NOTE: app:backfill-appearances is deliberately NOT run here. It
             # hydrates every matching row in one findBy(), which exhausted the
             # 128MB container limit on prod's 36,569 appearance-less Staff rows

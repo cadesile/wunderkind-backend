@@ -1,0 +1,67 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12 d-flex justify-content-between align-items-start">
+        <div>
+            <h5 class="fw-semibold mb-0">Translations — {{ slug }}</h5>
+            <p class="text-muted small mb-0">
+                The English column is read-only — it's always the live value from this entity's own edit
+                form, never a stored translation. Leave another language's field blank to fall back to
+                English instead of storing an override.
+            </p>
+        </div>
+        <a href="{{ backUrl }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-arrow-left me-1"></i> Back
+        </a>
+    </div>
+
+    <div class="col-12">
+        <form method="POST" action="{{ saveUrl }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('narrative_translation_save') }}">
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 10%">Field</th>
+                            <th style="width: 30%">English (default)</th>
+                            {% for language in languages %}
+                                {% if not language.default %}
+                                    <th>{{ language.name }} ({{ language.code }})</th>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for field in fields %}
+                            <tr>
+                                <td class="fw-semibold">{{ field }}</td>
+                                <td>
+                                    <textarea class="form-control form-control-sm" rows="3" disabled>{{ defaultValues[field] }}</textarea>
+                                </td>
+                                {% for language in languages %}
+                                    {% if not language.default %}
+                                        <td>
+                                            <textarea class="form-control form-control-sm" rows="3"
+                                                      name="values[{{ language.code }}][{{ field }}]">{{ storedValues[language.code][field] ?? '' }}</textarea>
+                                        </td>
+                                    {% endif %}
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if languages|filter(l => not l.default)|length == 0 %}
+                <p class="text-muted small">No non-default languages are configured yet — add one under Translations → Languages.</p>
+            {% else %}
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fa fa-save me-1"></i> Save Translations
+                </button>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}

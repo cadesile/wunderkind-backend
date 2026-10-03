@@ -1,0 +1,87 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Generic Translations — Import / Export</h5>
+        <p class="text-muted small mb-0">
+            Export or bulk-import the generic UI-copy catalogue for one language — the same
+            <code>{_meta, entries}</code> shape the app's own locale files use, and the same shape
+            <code>GET /api/translations/{code}</code> serves. Event/facility/excursion text has its own
+            Translations action on that entity instead and is not covered by this screen.
+        </p>
+    </div>
+
+    {% if languages|length == 0 %}
+        <div class="col-12">
+            <div class="alert alert-warning">No languages are configured yet — add one under Translations → Languages first.</div>
+        </div>
+    {% else %}
+        {# ── Export ──────────────────────────────────────────────────────── #}
+        <div class="col-12 col-lg-6">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-file-arrow-down text-primary"></i>
+                    <span class="fw-semibold small">Export</span>
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                    <p class="text-muted small mb-0">
+                        Downloads a <code>.json</code> snapshot of one language's full generic catalogue.
+                    </p>
+                    <form method="GET" action="{{ path('admin_translations_export') }}" class="mt-auto">
+                        <div class="mb-3">
+                            <label for="export_language" class="form-label small fw-semibold">Language</label>
+                            <select class="form-select form-select-sm" id="export_language" name="language" required>
+                                {% for language in languages %}
+                                    <option value="{{ language.code }}">{{ language.name }} ({{ language.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-download me-1"></i> Download JSON
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {# ── Import ──────────────────────────────────────────────────────── #}
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 border-warning">
+                <div class="card-header py-2 d-flex align-items-center gap-2 bg-warning-subtle">
+                    <i class="fa fa-file-arrow-up text-warning"></i>
+                    <span class="fw-semibold small">Import</span>
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                    <p class="text-muted small mb-0">
+                        Upload a previously exported (or the app's own) <code>.json</code> locale file.
+                        Each <code>entries</code> key is upserted for the chosen target language. A key
+                        that belongs to narrative content is rejected with an error rather than silently
+                        overwritten — edit those via that entity's own Translations action instead.
+                    </p>
+                    <form method="POST" action="{{ path('admin_translations_import') }}" enctype="multipart/form-data" class="mt-auto">
+                        <input type="hidden" name="_token" value="{{ csrf_token('translations_import') }}">
+                        <div class="mb-3">
+                            <label for="import_language" class="form-label small fw-semibold">Target language</label>
+                            <select class="form-select form-select-sm" id="import_language" name="language" required>
+                                {% for language in languages %}
+                                    <option value="{{ language.code }}">{{ language.name }} ({{ language.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="translations_file" class="form-label small fw-semibold">JSON file</label>
+                            <input class="form-control form-control-sm" type="file" id="translations_file"
+                                   name="translations_file" accept=".json,application/json" required>
+                        </div>
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="fa fa-upload me-1"></i> Import
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

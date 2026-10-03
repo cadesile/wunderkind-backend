@@ -92,7 +92,7 @@ class NarrativeFacilityTemplateRoundTripTest extends KernelTestCase
         $this->em->clear();
 
         $result = $this->service->import([
-            'version'           => 2,
+            'version'           => 3,
             'facilityTemplates' => [$exported],
         ]);
         $this->em->clear();
@@ -109,7 +109,7 @@ class NarrativeFacilityTemplateRoundTripTest extends KernelTestCase
     public function testBaseConstructionWeeksIsImported(): void
     {
         $result = $this->service->import([
-            'version'           => 2,
+            'version'           => 3,
             'facilityTemplates' => [$this->fixture()->toArray()],
         ]);
         $this->em->clear();
@@ -125,7 +125,7 @@ class NarrativeFacilityTemplateRoundTripTest extends KernelTestCase
     public function testRejectedRowIsNotPersisted(): void
     {
         $result = $this->service->import([
-            'version'        => 2,
+            'version'        => 3,
             'eventTemplates' => [[
                 'slug'     => self::SLUG,
                 'category' => 'not_a_real_category',

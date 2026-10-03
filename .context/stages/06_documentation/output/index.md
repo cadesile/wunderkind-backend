@@ -59,3 +59,8 @@ claiming canonical status)
   snapshot fields for match-engine parity, plus a `MATCH`/`MATCH_NARRATIVE`
   client-integration section (retiring bundled `narrativeContent.json`,
   display scoping, impacts-still-apply note)
+- `docs/api/translations.md` (2026-10-03) — `GET /api/languages` +
+  `GET /api/translations/{code}[/version]` (generic UI-copy catalogue, same
+  shape as the bundled locale files), plus the `?lang=` localize-in-place
+  param on `/api/events/templates`, `/api/excursions`, `/api/game-config`
+  for narrative content — see "Languages & Translations" in CLAUDE.md
