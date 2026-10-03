@@ -81,4 +81,6 @@ class Language
 
     #[ORM\PreUpdate]
     public function touch(): void { $this->updatedAt = new \DateTimeImmutable(); }
+
+    public function __toString(): string { return "{$this->name} ({$this->code})"; }
 }

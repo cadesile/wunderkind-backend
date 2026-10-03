@@ -39,19 +39,32 @@ class Translation
     #[ORM\Column]
     private \DateTimeImmutable $updatedAt;
 
-    public function __construct(TranslationKey $translationKey, Language $language, string $value = '')
+    /**
+     * $translationKey/$language default to null (rather than being required) so EasyAdmin's
+     * "New" action — which instantiates a blank entity with no constructor args before
+     * binding the submitted form onto it — can construct one at all. Left unassigned (not
+     * forced to a dummy value) when omitted; the admin form's own required-association
+     * validation, not this constructor, is what actually enforces they get set before save.
+     */
+    public function __construct(?TranslationKey $translationKey = null, ?Language $language = null, string $value = '')
     {
-        $this->translationKey = $translationKey;
-        $this->language       = $language;
-        $this->value          = $value;
-        $this->updatedAt      = new \DateTimeImmutable();
+        if ($translationKey !== null) {
+            $this->translationKey = $translationKey;
+        }
+        if ($language !== null) {
+            $this->language = $language;
+        }
+        $this->value     = $value;
+        $this->updatedAt = new \DateTimeImmutable();
     }
 
     public function getId(): ?int { return $this->id; }
 
     public function getTranslationKey(): TranslationKey { return $this->translationKey; }
+    public function setTranslationKey(TranslationKey $translationKey): void { $this->translationKey = $translationKey; }
 
     public function getLanguage(): Language { return $this->language; }
+    public function setLanguage(Language $language): void { $this->language = $language; }
 
     public function getValue(): string { return $this->value; }
     public function setValue(string $value): void { $this->value = $value; }
