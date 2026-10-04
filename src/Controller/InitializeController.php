@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Exception\InsufficientStarterPoolException;
 use App\Repository\LeagueRepository;
 use App\Repository\PlayerRepository;
 use App\Service\ClubInitializationService;
@@ -92,7 +93,13 @@ class InitializeController extends AbstractController
             );
         }
 
-        $ampStarter = $this->starterPackService->initialize($club);
+        try {
+            $ampStarter = $this->starterPackService->initialize($club);
+        } catch (InsufficientStarterPoolException $e) {
+            // Club::$starterInitializedAt was deliberately left untouched on this path, so the
+            // client can safely retry once the pool has been warmed for this country.
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_PRECONDITION_FAILED);
+        }
 
         return $this->json(['ampStarter' => $ampStarter]);
     }

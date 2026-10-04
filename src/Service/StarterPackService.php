@@ -10,6 +10,7 @@ use App\Entity\Scout;
 use App\Entity\Staff;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
+use App\Exception\InsufficientStarterPoolException;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
@@ -73,6 +74,13 @@ class StarterPackService
             $seen[$id] = true;
             return true;
         }));
+
+        if ($ampPlayers === []) {
+            // Bail before touching staff/scouts or the pool at all — nothing consumed, nothing
+            // flushed, Club::$starterInitializedAt untouched, so this is safely retriable. See
+            // InsufficientStarterPoolException's own docblock for why this matters.
+            throw new InsufficientStarterPoolException($ampNationality);
+        }
 
         $ampStaff = array_merge(
             $this->fillStaffRole(StaffRole::MANAGER,              $starterConfig->getStarterManagerCount(),            $ampNationality),

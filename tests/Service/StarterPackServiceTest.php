@@ -10,6 +10,7 @@ use App\Entity\Scout;
 use App\Entity\Staff;
 use App\Entity\StarterConfig;
 use App\Enum\PlayerPosition;
+use App\Exception\InsufficientStarterPoolException;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
@@ -105,5 +106,60 @@ class StarterPackServiceTest extends TestCase
         $this->assertArrayHasKey('players', $result);
         $this->assertArrayHasKey('staff', $result);
         $this->assertArrayHasKey('scouts', $result);
+    }
+
+    /**
+     * Regression test: a club whose nationality (and the foreign fallback) has zero players
+     * in the pool used to still get Club::$starterInitializedAt set and the pool entities it
+     * did find consumed, permanently stranding the club with an empty squad and no way to
+     * retry once the pool was warmed. Must now throw before touching the pool or the club at
+     * all.
+     */
+    public function testInitializeThrowsAndTouchesNothingWhenPlayerPoolIsEmpty(): void
+    {
+        $config = $this->createStub(StarterConfig::class);
+        $config->method('getStarterPlayerCount')->willReturn(2);
+        $config->method('getLeagueAbilityRanges')->willReturn([]);
+
+        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
+        $starterConfigRepo->method('getConfig')->willReturn($config);
+
+        $club = $this->createStub(Club::class);
+        $club->method('getCountry')->willReturn('US');
+        $club->method('getCurrentLeague')->willReturn(null);
+
+        $playerRepo = $this->createStub(PlayerRepository::class);
+        $playerRepo->method('findForWorldInitByPositionAndNationality')->willReturn([]);
+        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
+
+        $staffRepo = $this->createMock(StaffRepository::class);
+        $staffRepo->expects($this->never())->method('findInPoolByRoleRandom');
+
+        $scoutRepo = $this->createMock(ScoutRepository::class);
+        $scoutRepo->expects($this->never())->method('findInPool');
+
+        $poolConfig = $this->createStub(\App\Entity\PoolConfig::class);
+        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
+        $poolConfigRepo->method('getConfig')->willReturn($poolConfig);
+
+        $snapshotBuilder = $this->createStub(WorldPackSnapshotBuilder::class);
+        $snapshotBuilder->method('distributeByPosition')->willReturn(['GK' => 1, 'DEF' => 1]);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('remove');
+        $em->expects($this->never())->method('flush');
+
+        $service = new StarterPackService(
+            $playerRepo,
+            $staffRepo,
+            $scoutRepo,
+            $starterConfigRepo,
+            $poolConfigRepo,
+            $snapshotBuilder,
+            $em,
+        );
+
+        $this->expectException(InsufficientStarterPoolException::class);
+        $service->initialize($club);
     }
 }
