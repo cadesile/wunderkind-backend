@@ -169,12 +169,20 @@ class LeagueAdminController extends AbstractController
 
         return [
             'promotionSpots'    => ($row['promotionSpots'] ?? '') !== '' ? (int) $row['promotionSpots'] : null,
-            'tvDeal'            => ($row['tvDeal'] ?? '') !== '' ? ((int) $row['tvDeal']) * 100 : null,
-            'prizeMoney'        => ($row['prizeMoney'] ?? '') !== '' ? ((int) $row['prizeMoney']) * 100 : null,
-            'leaguePositionPot' => ($row['leaguePositionPot'] ?? '') !== '' ? ((int) $row['leaguePositionPot']) * 100 : null,
+            'tvDeal'            => $this->parseMoneyToPence($row['tvDeal'] ?? ''),
+            'prizeMoney'        => $this->parseMoneyToPence($row['prizeMoney'] ?? ''),
+            'leaguePositionPot' => $this->parseMoneyToPence($row['leaguePositionPot'] ?? ''),
             'sponsorCount'      => ($row['sponsorCount'] ?? '') !== '' ? max(0, min(20, (int) $row['sponsorCount'])) : 0,
             'trophyImage'       => ($trophyImage !== null && $trophyImage !== '' && in_array($trophyImage, $validImages, true)) ? $trophyImage : null,
             'trophyColour'      => ($trophyColour !== null && $trophyColour !== '' && TrophyColour::tryFrom($trophyColour) !== null) ? $trophyColour : null,
         ];
+    }
+
+    /** Pounds (comma-formatted, from the tier-defaults table's money inputs) -> pence, or null if blank. */
+    private function parseMoneyToPence(string $raw): ?int
+    {
+        $digits = str_replace(',', '', trim($raw));
+
+        return $digits !== '' ? ((int) $digits) * 100 : null;
     }
 }

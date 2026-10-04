@@ -307,9 +307,9 @@
                                     <span class="tier-badge" style="background: {{ TIER_COLORS[tier] ?? '#6c757d' }}22; color: {{ TIER_COLORS[tier] ?? '#6c757d' }}; border: 1px solid {{ TIER_COLORS[tier] ?? '#6c757d' }}55;">T{{ tier }}</span>
                                 </td>
                                 <td><input type="number" class="form-control form-control-sm" style="width:90px" name="tiers[{{ tier }}][promotionSpots]" value="{{ row.promotionSpots ?? '' }}" min="0" placeholder="none"></td>
-                                <td><input type="number" class="form-control form-control-sm" style="width:120px" name="tiers[{{ tier }}][tvDeal]" value="{{ (row.tvDeal is defined and row.tvDeal is not null) ? (row.tvDeal / 100)|round : '' }}" min="0" placeholder="none"></td>
-                                <td><input type="number" class="form-control form-control-sm" style="width:120px" name="tiers[{{ tier }}][prizeMoney]" value="{{ (row.prizeMoney is defined and row.prizeMoney is not null) ? (row.prizeMoney / 100)|round : '' }}" min="0" placeholder="none"></td>
-                                <td><input type="number" class="form-control form-control-sm" style="width:120px" name="tiers[{{ tier }}][leaguePositionPot]" value="{{ (row.leaguePositionPot is defined and row.leaguePositionPot is not null) ? (row.leaguePositionPot / 100)|round : '' }}" min="0" placeholder="none"></td>
+                                <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][tvDeal]" value="{{ (row.tvDeal is defined and row.tvDeal is not null) ? (row.tvDeal / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
+                                <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][prizeMoney]" value="{{ (row.prizeMoney is defined and row.prizeMoney is not null) ? (row.prizeMoney / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
+                                <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][leaguePositionPot]" value="{{ (row.leaguePositionPot is defined and row.leaguePositionPot is not null) ? (row.leaguePositionPot / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
                                 <td><input type="number" class="form-control form-control-sm" style="width:70px" name="tiers[{{ tier }}][sponsorCount]" value="{{ row.sponsorCount ?? 0 }}" min="0" max="20"></td>
                                 <td>
                                     <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyImage]" style="width:130px">
@@ -651,6 +651,28 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     target.addEventListener('show.bs.collapse',  function () { chevron.style.transform = 'rotate(0deg)';    });
     target.addEventListener('hide.bs.collapse',  function () { chevron.style.transform = 'rotate(-90deg)'; });
 });
+
+// Tier Defaults money inputs: live thousands-separator formatting.
+// Values here are whole pounds (already converted from the pence stored on
+// GameConfig/League) — comma-format for readability, but keep the cursor
+// sane while typing by tracking its offset from the end of the string.
+(function () {
+    function digitsOnly(str) { return (str || '').replace(/[^\d]/g, ''); }
+    function formatWithCommas(digits) { return digits === '' ? '' : Number(digits).toLocaleString('en-GB'); }
+
+    document.querySelectorAll('.tier-money-input').forEach(function (input) {
+        input.addEventListener('input', function () {
+            var offsetFromEnd = input.value.length - input.selectionStart;
+            var formatted = formatWithCommas(digitsOnly(input.value));
+            input.value = formatted;
+            var pos = Math.max(0, formatted.length - offsetFromEnd);
+            input.setSelectionRange(pos, pos);
+        });
+        input.addEventListener('blur', function () {
+            input.value = formatWithCommas(digitsOnly(input.value));
+        });
+    });
+})();
 
 // Tier Defaults picker: "select all" toggles every league checkbox
 (function () {
