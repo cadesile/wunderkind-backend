@@ -9,11 +9,13 @@ Root `CLAUDE.md` and `AGENTS.md` are excluded — they're the generated
 - `docs/api/account-delete.md` — API spec: irreversible account-deletion endpoint
 - `docs/api/admin-messages-client-integration.md` — how the game client consumes server-driven `AdminMessage` announcements (companion to `server-driven-messaging.md`)
 - `docs/api/community-stats.md` — four public, live-computed leaderboard endpoints ranking clubs by activity
+- `docs/api/countries.md` — spec for `GET /api/countries` (nationality/country/code mapping) and the new `countryCode` field on generated player/staff/scout objects (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)
 - `docs/api/leaderboard.md` — twelve public, cached leaderboard categories (`GET /api/leaderboard/{category}`)
 - `docs/api/npc-club-city-size.md` — spec for `region`/`citySize`/`populationSize`/`isCapital` fields on NPC club objects
 - `docs/api/npc-club-staff-scouts.md` — spec for NPC club `staff[]` gaining `director_of_football`/`facility_manager` roles and a new `scouts[]` array, sized per tier via `StarterConfig::$npcSquadConfig` (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)
 - `docs/api/server-driven-messaging.md` — operator-authored announcements composed in admin, polled by client, shown once per club
 - `docs/deploy/hetzner.md` — deployment runbook for the single Hetzner box hosting this app
+- `docs/world-generation/adding-a-country.md` — repeatable runbook for adding a new playable country (enum case, `CountryContentRegistry` content, `app:country:bootstrap`/`app:country:check`) (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)
 - `docs/event-guide.md` — how `GameEventTemplate` rows are shaped and which fields the client acts on
 - `docs/frontend-integration.md` — guide for the separate React Native app on integrating with this API (MMKV storage, typed client layer)
 - `docs/frontend-spec-player-physical-personality.md` — spec for server-generated `height`/`weight`/`personality` fields on player objects

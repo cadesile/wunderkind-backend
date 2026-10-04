@@ -10,6 +10,7 @@ use App\Entity\Player;
 use App\Entity\PoolConfig;
 use App\Entity\Scout;
 use App\Entity\Staff;
+use App\Enum\Country;
 use App\Enum\PlayerPosition;
 use App\Enum\Tier;
 
@@ -123,6 +124,7 @@ class WorldPackSnapshotBuilder
             'lastName'          => $player->getLastName(),
             'position'          => $player->getPosition()->value,
             'nationality'       => $player->getNationality(),
+            'countryCode'       => Country::fromNationality($player->getNationality())?->value,
             'dateOfBirth'       => $player->getDateOfBirth()->format('Y-m-d'),
             'contractValue'     => $player->getContractValue(),
             'potential'         => $player->getPotential(),
@@ -155,6 +157,7 @@ class WorldPackSnapshotBuilder
             'lastName'        => $staff->getLastName(),
             'dateOfBirth'     => $staff->getDob()?->format('Y-m-d'),
             'nationality'     => $staff->getNationality() ?? '',
+            'countryCode'     => $staff->getNationality() !== null ? Country::fromNationality($staff->getNationality())?->value : null,
             'role'            => $staff->getRole()->value,
             'tier'            => Tier::fromScore($staff->getCoachingAbility())->value,
             'coachingAbility' => $staff->getCoachingAbility(),
@@ -174,6 +177,7 @@ class WorldPackSnapshotBuilder
             'name'        => $scout->getName(),
             'dateOfBirth' => $scout->getDob()?->format('Y-m-d'),
             'nationality' => $scout->getNationality() ?? '',
+            'countryCode' => $scout->getNationality() !== null ? Country::fromNationality($scout->getNationality())?->value : null,
             'experience'  => $scout->getExperience(),
             'tier'        => Tier::fromScore($scout->getExperience())->value,
             'judgements'  => $scout->getJudgements(),

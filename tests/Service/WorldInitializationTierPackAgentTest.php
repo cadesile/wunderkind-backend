@@ -221,7 +221,7 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
             $this->assertArrayHasKey('scouts', $clubSnap);
             $this->assertCount(2, $clubSnap['scouts']);
             $this->assertSame(
-                ['id', 'name', 'dateOfBirth', 'nationality', 'experience', 'tier', 'judgements', 'appearance', 'personality'],
+                ['id', 'name', 'dateOfBirth', 'nationality', 'countryCode', 'experience', 'tier', 'judgements', 'appearance', 'personality'],
                 array_keys($clubSnap['scouts'][0]),
             );
         } finally {

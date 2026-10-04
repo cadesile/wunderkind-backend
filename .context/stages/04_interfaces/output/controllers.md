@@ -40,6 +40,9 @@ actually *does* (which service/repo it calls), not restated route paths.
   read-through controllers over `GameConfigRepository`/
   `StarterConfigRepository`/`FacilityTemplateRepository`/
   `FacilityImageResolver`/`YouTubeFeedService`.
+- **`CountryController`** — single invokable action, no repository —
+  maps `App\Enum\Country::cases()` directly to `{name, country, code}`
+  rows. Public, cacheable. See `docs/api/countries.md`.
 - **`ArchetypeController`** — single read action over `PlayerArchetypeRepository`;
   `?lang=` localization via `LanguageRepository` + `NarrativeTranslationService`.
 - **`LanguageController`** — single read action over `LanguageRepository`.

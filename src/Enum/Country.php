@@ -72,7 +72,7 @@ enum Country: string
             self::CI => 'Ivory Coast',
             self::SN => 'Senegal',
             self::CN => 'China',
-            self::US => 'United States',
+            self::US => 'USA',
             self::CA => 'Canada',
         };
     }

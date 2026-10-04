@@ -74,6 +74,7 @@ security:
         - { path: ^/api/app-links,             roles: PUBLIC_ACCESS }
         - { path: ^/api/game-config,           roles: PUBLIC_ACCESS }
         - { path: ^/api/starter-config,        roles: PUBLIC_ACCESS }
+        - { path: ^/api/countries,             roles: PUBLIC_ACCESS }
         - { path: ^/api/archetypes,            roles: PUBLIC_ACCESS }
         - { path: ^/api/excursions,            roles: PUBLIC_ACCESS }
         - { path: ^/api/languages,             roles: PUBLIC_ACCESS }
