@@ -88,7 +88,10 @@ the end) — this file is the sole source of truth for the route surface.
   `POST /admin/clubs/{id}/delete`, `GET /admin/users/{id}/delete-info`,
   `POST /admin/users/{id}/delete`.
 - **`FacilityAdminController`** — `POST /admin/facilities/{id}/quick-edit`.
-- **`LeagueAdminController`** — `POST /admin/leagues/{id}/quick-edit`.
+- **`LeagueAdminController`** — `POST /admin/leagues/{id}/quick-edit`,
+  `POST /admin/leagues/tier-defaults/bulk-edit` (`admin_league_tier_defaults_bulk_edit`
+  — saves the per-tier League Tier Defaults table onto `GameConfig`, and
+  optionally cascades it onto checked existing `League` rows).
 - **`BetaRequestInviteController`** —
   `GET /admin/beta-requests/{id}/send-invite`.
 - **`SocialAuthController`** `#[Route('/admin/social')]` — OAuth flows:
@@ -157,7 +160,17 @@ edit/new/delete) plus whatever its own
 `admin_narrative_translation_edit` above). `TranslationKeyCrudController`/
 `TranslationCrudController` are generic-UI-copy-only — their
 `createIndexQueryBuilder()` filters out narrative-linked rows, which are
-managed only via the row action above.
+managed only via the row action above. `TranslationKeyCrudController`'s
+index is additionally grouped by key with a per-enabled-language
+presence-icon column and an "Incomplete translations" filter
+(`App\Filter\IncompleteTranslationFilter`); its edit page
+(`crud/edit` → `admin/translation_key_edit.html.twig`) adds a
+per-language AJAX-save grid hitting its own custom route:
+`POST /admin/translation-key/{id}/save-language/{code}` (name
+`admin_translation_key_save_language`) — always returns JSON, never
+renders an `@EasyAdmin`-extending template itself, so (per this
+directory's own `CLAUDE.md`) it's exempt from the `/admin?routeName=...`
+wrapping rule. See `controllers.md` for the full behavior.
 
 ## API spec
 

@@ -51,7 +51,7 @@ class StarterConfigLeagueFieldsTest extends TestCase
         ];
         $countries = [
             'EN', 'ES', 'IT', 'DE', 'FR', 'PT', 'NL', 'BR', 'AR',
-            'NG', 'GH', 'CI', 'SN', 'JP', 'KR', 'SE', 'DK', 'IE', 'CN',
+            'NG', 'GH', 'CI', 'SN', 'JP', 'KR', 'SE', 'DK', 'US', 'CA', 'IE', 'CN',
         ];
         $defaults = array_fill_keys($countries, $tierRanges);
 

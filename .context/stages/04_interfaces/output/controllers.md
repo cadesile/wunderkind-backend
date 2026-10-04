@@ -103,7 +103,9 @@ actually *does* (which service/repo it calls), not restated route paths.
   using `EntityManagerInterface` + `CsrfTokenManagerInterface` directly
   (no dedicated service layer).
 - **`FacilityAdminController`** / **`LeagueAdminController`** —
-  quick-edit actions, `EntityManagerInterface` only.
+  quick-edit actions. `LeagueAdminController` also has
+  `bulkEditTierDefaults()` (League Tier Defaults screen), using
+  `GameConfigRepository`/`LeagueRepository` alongside `EntityManagerInterface`.
 - **`BetaRequestInviteController`** — sends beta invites via
   `EmailVerificationService` + `EntityManagerInterface`.
 - **`SocialAuthController`** — Facebook/Twitter OAuth connect/callback/
@@ -176,6 +178,33 @@ mismatch between adjacent rows for the same user is visibly a bug.
   technique as `PlayerCrudController::index()`'s `playerSummary` panel via
   `overrideTemplate('crud/index', ...)` + `content_header_wrapper`, just
   applied to `crud/edit` instead of `crud/index`.
+
+**`TranslationKeyCrudController`** (generic UI-copy keys only —
+narrative-linked keys are excluded via `createIndexQueryBuilder()`'s
+`entityType IS NULL` filter and managed only via `NarrativeTranslationController`):
+- Index is grouped by key with one green/red presence-icon column per
+  *enabled* `Language`, instead of EasyAdmin's default one-row-per-entity
+  grid — since this entity already is "one row per key," a virtual field
+  per language (`translated_<code>`, computed in `formatValue()` from one
+  bulk-queried `TranslationRepository::findGenericTranslationStatusMap()`
+  call, not a real column) gets the grouped view "for free." Uses
+  `TextField`, not `BooleanField` — see the EasyAdmin gotcha in CLAUDE.md
+  ("virtual/computed index columns ... `BooleanField`'s own template
+  reads `field.value` directly").
+- `configureFilters()` adds `App\Filter\IncompleteTranslationFilter` (see
+  `structure.md`'s `Filter/` entry) — a toggle narrowing the index to keys
+  missing at least one enabled language's translation.
+- `edit()` overrides `configureCrud()`'s `crud/edit` template
+  (`admin/translation_key_edit.html.twig`, extending `@EasyAdmin/crud/edit.html.twig`
+  and overriding `main` below the real form, same "override one block"
+  technique `UserCrudController::edit()` uses on `content_header_wrapper`
+  above it) to inject a per-enabled-language textarea + Save button grid.
+  Each language saves independently over AJAX against `saveLanguage()`
+  (`POST /admin/translation-key/{id}/save-language/{code}`) rather than
+  through the page's own form; a blank submitted value clears that
+  language's `Translation` row (falls back to the default language)
+  rather than storing an empty override, same convention as
+  `NarrativeTranslationService::saveTranslations()`.
 
 One exception worth noting: **`AdminMessageCrudController`** overrides
 `persistEntity()`/`updateEntity()` to dispatch

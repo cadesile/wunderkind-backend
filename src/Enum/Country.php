@@ -46,6 +46,8 @@ enum Country: string
     case CI = 'CI';
     case SN = 'SN';
     case CN = 'CN';
+    case US = 'US';
+    case CA = 'CA';
 
     /** Display name, e.g. for the landing page and admin dropdowns. */
     public function label(): string
@@ -70,6 +72,8 @@ enum Country: string
             self::CI => 'Ivory Coast',
             self::SN => 'Senegal',
             self::CN => 'China',
+            self::US => 'United States',
+            self::CA => 'Canada',
         };
     }
 
@@ -102,6 +106,8 @@ enum Country: string
             self::CI => 'Ivorian',
             self::SN => 'Senegalese',
             self::CN => 'Chinese',
+            self::US => 'American',
+            self::CA => 'Canadian',
         };
     }
 
@@ -129,6 +135,8 @@ enum Country: string
             self::DK => 'da_DK',
             self::CI, self::SN => 'fr_FR',
             self::CN => 'zh_CN',
+            self::US => 'en_US',
+            self::CA => 'en_CA',
         };
     }
 
@@ -142,7 +150,8 @@ enum Country: string
     {
         return match ($this) {
             self::ES, self::EN, self::DE, self::IT, self::FR,
-            self::BR, self::AR, self::NL, self::PT => true,
+            self::BR, self::AR, self::NL, self::PT,
+            self::US, self::CA, self::JP, self::NG => true,
             default => false,
         };
     }
@@ -173,5 +182,33 @@ enum Country: string
         }
 
         return $out;
+    }
+
+    /** @return array<string, string> code => label, for the whole set (admin display lookups). */
+    public static function labelMap(): array
+    {
+        $out = [];
+        foreach (self::cases() as $country) {
+            $out[$country->value] = $country->label();
+        }
+
+        return $out;
+    }
+
+    /**
+     * Reverse of {@see nationality()}, case/whitespace-insensitive to tolerate
+     * admin-entered data. Used by NameGeneratorService/WorldRegion so they key
+     * off this enum instead of hand-duplicating the demonym list themselves.
+     */
+    public static function fromNationality(string $nationality): ?self
+    {
+        $needle = strtolower(trim($nationality));
+        foreach (self::cases() as $country) {
+            if (strtolower($country->nationality()) === $needle) {
+                return $country;
+            }
+        }
+
+        return null;
     }
 }

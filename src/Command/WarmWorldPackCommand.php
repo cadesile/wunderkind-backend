@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Entity\Club;
 use App\Entity\User;
+use App\Enum\Country;
 use App\Repository\CountryWorldPackCacheRepository;
 use App\Repository\LeagueRepository;
 use App\Service\ClubInitializationService;
@@ -59,7 +60,8 @@ class WarmWorldPackCommand extends Command
         }
 
         if (ClubInitializationService::countryToNationality($country) === null) {
-            $io->error("Unknown country code '{$country}'. Supported: EN IT DE ES BR AR NL FR PT NG GH JP KR SE DK IE CI SN CN");
+            $supported = implode(' ', array_map(static fn (Country $c) => $c->value, Country::cases()));
+            $io->error("Unknown country code '{$country}'. Supported: {$supported}");
             return Command::FAILURE;
         }
 

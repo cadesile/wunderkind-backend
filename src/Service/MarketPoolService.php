@@ -13,11 +13,13 @@ use App\Entity\Scout;
 use App\Entity\Sponsor;
 use App\Entity\Staff;
 use App\Enum\CompanySize;
+use App\Enum\Country;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
 use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use App\Entity\PoolConfig;
+use App\Service\CountryContent\CountryContentRegistry;
 use App\Repository\AgentRepository;
 use App\Repository\InvestorRepository;
 use App\Repository\PlayerRepository;
@@ -30,28 +32,12 @@ use Doctrine\ORM\EntityManagerInterface;
 class MarketPoolService
 {
     // ── Nationality → regional cluster ──────────────────────────────────────
-    // Used to add regional flavour to SMALL and MEDIUM business names.
-    private const NATIONALITY_MAP = [
-        'English'      => 'british_isles',
-        'Irish'        => 'british_isles',
-        'German'       => 'central_europe',
-        'Dutch'        => 'central_europe',
-        'Polish'       => 'eastern_europe',
-        'French'       => 'western_europe',
-        'Italian'      => 'southern_europe',
-        'Spanish'      => 'southern_europe',
-        'Portuguese'   => 'southern_europe',
-        'Brazilian'    => 'south_america',
-        'Argentine'    => 'south_america',
-        'Swedish'      => 'scandinavia',
-        'Danish'       => 'scandinavia',
-        'Senegalese'   => 'west_africa',
-        'Nigerian'     => 'west_africa',
-        'Ghanaian'     => 'west_africa',
-        'Ivorian'      => 'west_africa',
-        'Japanese'     => 'east_asia',
-        'South Korean' => 'east_asia',
-        'Chinese'      => 'east_asia',
+    // Used to add regional flavour to SMALL and MEDIUM business names. The mapping itself
+    // lives in CountryContentRegistry::businessCluster(), keyed by Country — 'Polish' is the
+    // one demonym with no Country case (see Country::fromNationality()'s docblock), so it
+    // keeps this tiny standalone fallback instead.
+    private const LEGACY_NATIONALITY_MAP = [
+        'Polish' => 'eastern_europe',
     ];
 
     // ── Business cluster location words (MEDIUM business names) ─────────────
@@ -65,6 +51,7 @@ class MarketPoolService
         'scandinavia'    => ['Nordic', 'Viking', 'Baltic', 'Fjord', 'Boreal', 'Midnight', 'Lapland', 'Archipelago'],
         'west_africa'    => ['Sahel', 'Coastal', 'Savanna', 'Harmattan', 'Gulf', 'Tropical', 'Atlantic', 'Lagoon'],
         'east_asia'      => ['Pacific', 'Sunrise', 'Tokai', 'Hokkai', 'Yangtze', 'Pearl River', 'Mekong', 'Eastern'],
+        'north_america'  => ['Heartland', 'Pioneer', 'Liberty', 'Maple', 'Rockies', 'Great Lakes', 'Frontier', 'Interstate'],
         '_fallback'      => ['Global', 'International', 'Central', 'Northern', 'Eastern', 'Western', 'Continental', 'Universal'],
     ];
 
@@ -582,7 +569,10 @@ class MarketPoolService
      */
     private function generateMediumCompanyName(string $nationality): string
     {
-        $cluster   = self::NATIONALITY_MAP[$nationality] ?? '_fallback';
+        $country   = Country::fromNationality($nationality);
+        $cluster   = ($country !== null ? CountryContentRegistry::businessCluster($country) : null)
+            ?? self::LEGACY_NATIONALITY_MAP[$nationality]
+            ?? '_fallback';
         $locations = self::BUSINESS_CLUSTERS[$cluster] ?? self::BUSINESS_CLUSTERS['_fallback'];
         $location  = $this->pick($locations);
         $industry  = $this->pick(self::MEDIUM_INDUSTRIES);

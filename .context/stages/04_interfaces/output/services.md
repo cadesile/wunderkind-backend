@@ -178,7 +178,19 @@ filename alone.
   kit+badge `identity`).
 - **`LeagueService`** — league lifecycle logic (season conclusion,
   leaderboard categories), using `LeagueRepository`,
-  `GameConfigRepository`.
+  `GameConfigRepository`. `generateLeaguesForCountry()` reads its per-tier
+  financial/trophy/sponsor defaults from `GameConfig::getLeagueTierDefaultsForTier()`
+  (DB-backed, shared across every country) rather than a hardcoded const —
+  editable via the admin "League Tier Defaults" bulk-edit screen
+  (`admin_leagues_overview` → `LeagueAdminController::bulkEditTierDefaults()`,
+  route `admin_league_tier_defaults_bulk_edit`), which can also cascade the
+  submitted values onto selected already-existing `League` rows.
+- **`App\Service\CountryContent\CountryContentRegistry`** — single canonical
+  per-country content store (place/population/region/capital data, club-name
+  suffixes, stadium formats, `WorldRegion`, `MarketPoolService` business
+  cluster), keyed by `App\Enum\Country`. Replaced four previously-scattered,
+  independently-drifting consts. See
+  `docs/world-generation/adding-a-country.md`.
 - **`LiveTelemetryService`** — feeds the landing page's live activity
   feed; some entries (sackings, contract disputes, youth intake) are
   illustrative and have no backing data — don't treat as real metrics.
@@ -252,7 +264,15 @@ filename alone.
   (`/admin/translations/content|export|import`). A separate domain from
   `NarrativeImportExportService`'s own `translations` section. Rejects an
   `entries` key that belongs to a narrative-linked `TranslationKey` rather
-  than silently overwriting it.
+  than silently overwriting it. `import()`'s optional `$clearFirst` flag
+  is scoped to **one language's generic values only** (never a full wipe,
+  unlike the narrative import's own "clear existing" checkbox) — a bulk
+  import always carries just one language's file, so clearing every
+  language would destroy unrelated languages' work as collateral damage.
+  `TranslationRepository::deleteGenericForLanguage()` deletes that
+  language's rows first; `TranslationKeyRepository::findGenericOrphaned()`
+  then prunes any key left with zero translations in *any* language (a
+  key still holding a value elsewhere is never touched).
 - **`Notification/PushNotificationService`** — the only thing a call site
   should touch to send a push notification:
   `notifyUsers(userIds, title, body, data)` dispatches
@@ -324,7 +344,10 @@ filename alone.
   config (`randomKitVariant()` run twice). The home kit's colors become the
   club's `primaryColor`/`secondaryColor` via `NpcClub::setIdentity()`'s
   auto-sync — there's no separate color-pair generator any more (see
-  CLAUDE.md's "Kit & Badge Identity").
+  CLAUDE.md's "Kit & Badge Identity"). Its place-name/suffix/stadium-format
+  content now comes from `CountryContentRegistry` (keyed by `Country`), not
+  its own consts — see that service above and
+  `docs/world-generation/adding-a-country.md`.
 - **`PeriodResolver`** — resolves stats time-period filters
   (`StatsPeriod`) into query constraints against `SeasonRecord`.
 - **`Personality/PersonalityContext`** — builds role-specific

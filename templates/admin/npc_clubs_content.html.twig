@@ -77,15 +77,9 @@
                         <div class="col-md-4">
                             <label for="country" class="form-label fw-semibold small">Country (ISO)</label>
                             <select id="country" name="country" class="form-select form-select-sm">
-                                <option value="ES">Spain (ES)</option>
-                                <option value="EN">England (EN)</option>
-                                <option value="DE">Germany (DE)</option>
-                                <option value="IT">Italy (IT)</option>
-                                <option value="FR">France (FR)</option>
-                                <option value="BR">Brazil (BR)</option>
-                                <option value="AR">Argentina (AR)</option>
-                                <option value="NL">Netherlands (NL)</option>
-                                <option value="PT">Portugal (PT)</option>
+                                {% for code, label in generationCapableCountries %}
+                                    <option value="{{ code }}">{{ label }} ({{ code }})</option>
+                                {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -134,15 +128,9 @@
                         <div class="mb-3">
                             <label for="league_country" class="form-label fw-semibold small">Country (ISO)</label>
                             <select id="league_country" name="country" class="form-select form-select-sm">
-                                <option value="ES">Spain (ES)</option>
-                                <option value="EN">England (EN)</option>
-                                <option value="DE">Germany (DE)</option>
-                                <option value="IT">Italy (IT)</option>
-                                <option value="FR">France (FR)</option>
-                                <option value="BR">Brazil (BR)</option>
-                                <option value="AR">Argentina (AR)</option>
-                                <option value="NL">Netherlands (NL)</option>
-                                <option value="PT">Portugal (PT)</option>
+                                {% for code, label in generationCapableCountries %}
+                                    <option value="{{ code }}">{{ label }} ({{ code }})</option>
+                                {% endfor %}
                             </select>
                         </div>
                         <button type="submit" class="btn btn-warning btn-sm">

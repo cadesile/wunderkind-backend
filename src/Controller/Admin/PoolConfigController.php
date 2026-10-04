@@ -6,6 +6,7 @@ use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use App\Repository\PoolConfigRepository;
 use App\Service\MarketPoolService;
+use App\Service\NameGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,8 +30,9 @@ class PoolConfigController extends AbstractController
     public function playerPoolConfig(): Response
     {
         return $this->render('admin/pool_player_config.html.twig', [
-            'config'     => $this->poolConfigRepository->getConfig(),
-            'poolCounts' => $this->playerCounts(),
+            'config'        => $this->poolConfigRepository->getConfig(),
+            'poolCounts'    => $this->playerCounts(),
+            'nationalities' => NameGeneratorService::nationalities(),
         ]);
     }
 
@@ -160,8 +162,9 @@ class PoolConfigController extends AbstractController
     public function staffPoolConfig(): Response
     {
         return $this->render('admin/pool_staff_config.html.twig', [
-            'config'     => $this->poolConfigRepository->getConfig(),
-            'poolCounts' => $this->staffCounts(),
+            'config'        => $this->poolConfigRepository->getConfig(),
+            'poolCounts'    => $this->staffCounts(),
+            'nationalities' => NameGeneratorService::nationalities(),
         ]);
     }
 

@@ -123,6 +123,8 @@ class StarterConfig
         'KR' => self::DEFAULT_TIER_RANGES,
         'SE' => self::DEFAULT_TIER_RANGES,
         'DK' => self::DEFAULT_TIER_RANGES,
+        'US' => self::DEFAULT_TIER_RANGES,
+        'CA' => self::DEFAULT_TIER_RANGES,
         'IE' => self::DEFAULT_TIER_RANGES,
         'CN' => self::DEFAULT_TIER_RANGES,
     ];
@@ -260,6 +262,9 @@ class StarterConfig
 
     public function getLeagueAbilityRanges(): array { return $this->leagueAbilityRanges; }
     public function setLeagueAbilityRanges(array $v): static { $this->leagueAbilityRanges = $v; return $this; }
+
+    /** The tier-ability-range shape seeded for every country by default — see app:country:bootstrap. */
+    public static function defaultTierRanges(): array { return self::DEFAULT_TIER_RANGES; }
 
     /** @return array<string, array{min: int, max: int}> */
     public function getFanBaseRanges(): array { return $this->fanBaseRanges; }

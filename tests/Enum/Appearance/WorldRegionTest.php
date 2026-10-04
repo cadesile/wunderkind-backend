@@ -11,10 +11,9 @@ class WorldRegionTest extends TestCase
     /** Every nationality the generator can produce must map to a region. */
     public function testEveryGeneratedNationalityMaps(): void
     {
-        $ref  = new \ReflectionClass(NameGeneratorService::class);
-        $nats = $ref->getConstant('NATIONALITIES');
+        $nats = NameGeneratorService::nationalities();
 
-        $this->assertNotEmpty($nats, 'NameGeneratorService::NATIONALITIES should not be empty');
+        $this->assertNotEmpty($nats, 'NameGeneratorService::nationalities() should not be empty');
 
         foreach ($nats as $nat) {
             $this->assertInstanceOf(

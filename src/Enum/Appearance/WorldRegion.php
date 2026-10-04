@@ -1,6 +1,9 @@
 <?php
 namespace App\Enum\Appearance;
 
+use App\Enum\Country;
+use App\Service\CountryContent\CountryContentRegistry;
+
 /**
  * Groups the nationalities produced by NameGeneratorService into broad world
  * regions, and carries the skin-tone distribution for each.
@@ -10,6 +13,11 @@ namespace App\Enum\Appearance;
  * a naive "European = pale" table would erase. Each region's weights are
  * percentages over SkinId::cases() in enum order (lightest → darkest) and sum
  * to 100 — WorldRegionTest enforces both.
+ *
+ * The demonym → region mapping itself lives in CountryContentRegistry, keyed by
+ * Country, not here — this avoids a third hand-duplicated copy of the nationality
+ * list (see CountryContentRegistry's own docblock). 'Polish' is the one exception:
+ * it has no Country case, so it keeps a tiny standalone fallback below.
  */
 enum WorldRegion
 {
@@ -22,32 +30,11 @@ enum WorldRegion
     case BRAZIL;
     case SOUTHERN_CONE;
     case EAST_ASIA;
+    case NORTH_AMERICA;
 
-    /**
-     * Demonym → region. Keys are lower-cased; lookup normalises the input, so
-     * casing and stray whitespace from admin-entered data still resolve.
-     */
-    private const NATIONALITY_REGIONS = [
-        'english'      => self::BRITAIN_IRELAND,
-        'irish'        => self::BRITAIN_IRELAND,
-        'french'       => self::WESTERN_EUROPE,
-        'german'       => self::WESTERN_EUROPE,
-        'dutch'        => self::WESTERN_EUROPE,
-        'swedish'      => self::NORTHERN_EUROPE,
-        'danish'       => self::NORTHERN_EUROPE,
-        'spanish'      => self::SOUTHERN_EUROPE,
-        'portuguese'   => self::SOUTHERN_EUROPE,
-        'italian'      => self::SOUTHERN_EUROPE,
-        'polish'       => self::EASTERN_EUROPE,
-        'nigerian'     => self::WEST_AFRICA,
-        'ghanaian'     => self::WEST_AFRICA,
-        'ivorian'      => self::WEST_AFRICA,
-        'senegalese'   => self::WEST_AFRICA,
-        'brazilian'    => self::BRAZIL,
-        'argentine'    => self::SOUTHERN_CONE,
-        'japanese'     => self::EAST_ASIA,
-        'south korean' => self::EAST_ASIA,
-        'chinese'      => self::EAST_ASIA,
+    /** The one demonym with no Country case (see class docblock). */
+    private const LEGACY_NATIONALITY_REGIONS = [
+        'polish' => self::EASTERN_EUROPE,
     ];
 
     /** Returns null for null, empty, or unrecognised nationalities. */
@@ -56,9 +43,14 @@ enum WorldRegion
         if ($nationality === null) {
             return null;
         }
-        $key = strtolower(trim($nationality));
+        $trimmed = trim($nationality);
 
-        return self::NATIONALITY_REGIONS[$key] ?? null;
+        $country = Country::fromNationality($trimmed);
+        if ($country !== null) {
+            return CountryContentRegistry::worldRegion($country);
+        }
+
+        return self::LEGACY_NATIONALITY_REGIONS[strtolower($trimmed)] ?? null;
     }
 
     /**
@@ -79,6 +71,7 @@ enum WorldRegion
             self::BRAZIL          => [12, 20, 24, 18, 15, 11],
             self::SOUTHERN_CONE   => [40, 34, 18,  5,  2,  1],
             self::EAST_ASIA       => [26, 46, 24,  4,  0,  0],
+            self::NORTH_AMERICA   => [20, 28, 18, 10, 14, 10],
         };
 
         return array_combine(

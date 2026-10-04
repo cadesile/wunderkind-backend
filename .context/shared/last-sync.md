@@ -5,6 +5,69 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Commit:** 570d2d7 (as of writing — this pass's own changes are
+  uncommitted on top of it, pending the user's usual explicit commit
+  request). **Stages touched:** 03_data, 04_interfaces (two linked changes
+  in one session — adding America/Canada/Japan/Nigeria as generation-capable
+  countries, and a repeatable "add a country" process, per explicit user
+  request):
+  1. `App\Enum\Country` gained `US`/`CA` cases (`isGenerationCapable()` now
+     covers 13 countries: the original 9 plus US/CA/JP/NG) and two new
+     helpers, `fromNationality()`/`labelMap()`. New
+     `App\Service\CountryContent\CountryContentRegistry` consolidates what
+     used to be 4 independently-drifting per-country consts
+     (`NpcClubGenerationService`'s place/suffix/stadium data,
+     `WorldRegion::NATIONALITY_REGIONS`, `MarketPoolService::NATIONALITY_MAP`)
+     into one file keyed by `Country` — `NameGeneratorService`'s actual name
+     pools stay where they are (too large to move safely) but are now keyed
+     off `Country::nationalityMap()` via `NameGeneratorService::nationalities()`
+     instead of a 4th hand-duplicated list; only `'Polish'` (no `Country`
+     case) remains a standalone addendum in both. New `WorldRegion::
+     NORTH_AMERICA` case. Authored real content (places/suffixes/stadium
+     formats, American/Canadian name pools, business cluster) for all 4 new
+     countries via web research. Two new commands,
+     `app:country:bootstrap`/`app:country:check`, replace what used to be
+     1 admin click + 8 admin clicks + 2 separate CLI commands with one
+     command plus a read-only audit. Fixed the 7 previously-hardcoded
+     admin-template country/nationality lists (2 generate-screen dropdowns,
+     the enabledCountries checkboxes, 2 display-only country-label maps, 2
+     nationality chip lists) to read from `Country`/`NameGeneratorService`
+     dynamically, closing the exact drift class documented in
+     `Country`'s own docblock and
+     `docs/superpowers/specs/2026-07-06-club-name-options-canonical-source-design.md`.
+     New runbook: `docs/world-generation/adding-a-country.md`.
+  2. Separately-requested: a new admin "League Tier Defaults" bulk-edit
+     screen on `admin_leagues_overview` (one row per tier, shared across
+     every country — promotion spots, TV deal, prize money, position pot,
+     sponsor count, trophy design/colour) that writes to new
+     `GameConfig::$leagueTierDefaults` (json, keyed `"1"`-`"8"`) — the new
+     single source of truth `LeagueService::generateLeaguesForCountry()`
+     reads, replacing the old hardcoded `LEAGUE_TIER_DEFAULTS` const. A
+     league-picker (checkbox-per-league + "select all") lets the same submit
+     cascade the new values onto selected **existing** `League` rows too
+     (`LeagueAdminController::bulkEditTierDefaults()`, new route
+     `admin_league_tier_defaults_bulk_edit`). "Relegation spots" was
+     explicitly dropped from scope per the user — the backend has no stored
+     relegation count at all, only `promotionSpots` (relegation is decided
+     by client-reported flags). Per-country league cards on that same page
+     now default-collapsed (new Expand/Collapse-all controls) so the new
+     form isn't buried.
+  Migration `Version20261004085641` (the auto-generated `doctrine:migrations:diff`
+  also surfaced a large amount of pre-existing, unrelated schema drift —
+  DROP DEFAULT clauses, index renames, and critically DROP INDEX on raw-SQL
+  partial unique indexes not representable in ORM metadata, see CLAUDE.md's
+  Testing section — none of that was included; the migration was hand-trimmed
+  to just the one `game_config.league_tier_defaults` column). `wunderkind_test`
+  needed the same manual column add documented in CLAUDE.md's Testing
+  section (schema:update's own diff would have dropped those same unrelated
+  partial indexes, so it wasn't used — the column was added directly via
+  `lando psql -d wunderkind_test`). Full suite green (1108 tests) after.
+  CLAUDE.md's Architecture section gained a new "World Generation:
+  Countries & League Tier Defaults" subsection; Key Services/Key Entities
+  tables updated to match.
+
+---
+
 - **Commit:** feff081 (as of writing — this pass's own changes are uncommitted
   on top of it). **Stage touched:** 03_data (sync v2: nullable
   `player_career_stat.appearance_config` and new `staff_career_profile` table

@@ -578,6 +578,7 @@ class DashboardController extends AbstractDashboardController
         return $this->render('admin/starter_config.html.twig', [
             'config' => $this->starterConfigRepository->getConfig(),
             'dynamicLeagueTiers' => $dynamicLeagueTiers,
+            'generationCapableCountries' => Country::generationCapableLabels(),
         ]);
     }
 
@@ -939,6 +940,7 @@ class DashboardController extends AbstractDashboardController
             'facilities'           => $facilities,
             'clubCount'            => $this->npcClubRepository->count([]),
             'clubsByCountry'       => $this->npcClubRepository->getCountsByCountryAndTier(),
+            'generationCapableCountries' => Country::generationCapableLabels(),
         ]);
     }
 
@@ -1012,9 +1014,15 @@ class DashboardController extends AbstractDashboardController
         }
         ksort($leaguesByCountry);
 
+        // Flat list for the "League Tier Defaults" bulk-apply picker, grouped the same way.
+        usort($leagues, fn ($a, $b) => [$a->getCountry(), $a->getTier()] <=> [$b->getCountry(), $b->getTier()]);
+
         return $this->render('admin/leagues_content.html.twig', [
             'leaguesByCountry' => $leaguesByCountry,
             'clubsByLeague'    => $this->npcClubRepository->getAllGroupedByLeague(),
+            'countryLabels'    => Country::labelMap(),
+            'allLeagues'       => $leagues,
+            'tierDefaults'     => $this->gameConfigRepository->getConfig()->getLeagueTierDefaults(),
         ]);
     }
 
@@ -1215,6 +1223,7 @@ class DashboardController extends AbstractDashboardController
             'byCountry'        => $byCountry,
             'totalEntries'     => count($entries),
             'enabledCountries' => $enabledCountries,
+            'countryLabels'    => Country::labelMap(),
         ]);
     }
 

@@ -118,7 +118,11 @@ migrations are the change log (see `migrations.md`).
   `prizeMoney`, `leaguePositionPot`, `sponsorCount`, `trophyImage`,
   `trophyColour:?TrophyColour(enum)`. `OneToMany` → `leagueSponsors`
   (cascade persist/remove, orphanRemoval); `ManyToMany` → `sponsors`
-  (explicit `JoinTable`, `onDelete:CASCADE`).
+  (explicit `JoinTable`, `onDelete:CASCADE`). At creation,
+  `LeagueService::generateLeaguesForCountry()` populates these financial/
+  trophy/sponsor fields from `GameConfig::leagueTierDefaults` (tier-only,
+  shared across every country, admin-editable) — see that entity below and
+  CLAUDE.md's "World Generation" section.
 - **`LeagueSponsor`** — league↔sponsor income join (table
   `league_sponsor_income`). `rolledValue:int`. `ManyToOne` → `League`,
   `Sponsor` (both `CASCADE`).
@@ -403,7 +407,13 @@ Each is effectively a single global-config row.
   `squadRoleAppearanceExpectations/MoraleDecayPerWeek/
   MoraleBoostPerWeek/AutoAssignThresholds`, `leaguePlayerAbilityRanges`,
   `wageMultiplierTiers`, `leagueWinPoints`, `pyramidNewsConfig`,
-  `statPostRotation/Schedule/LastRunAt`. Fetched/created via
+  `statPostRotation/Schedule/LastRunAt`, `leagueTierDefaults` (new — json,
+  keyed `"1"`-`"8"`, each `{promotionSpots, tvDeal, prizeMoney,
+  leaguePositionPot, sponsorCount, trophyImage, trophyColour}`; replaces the
+  old hardcoded `LeagueService::LEAGUE_TIER_DEFAULTS` const as the source
+  `generateLeaguesForCountry()` reads, and is what the admin "League Tier
+  Defaults" bulk-edit screen on `admin_leagues_overview` writes to — see
+  CLAUDE.md's "World Generation" section). Fetched/created via
   `GameConfigRepository::getConfig()`. No relations. Its own dead,
   differently-shaped `npcSquadConfig` field (never read by generation code,
   formerly exposed verbatim at `GET /api/game-config`) was removed —
@@ -479,9 +489,10 @@ Each is effectively a single global-config row.
   `language` (both not nullable, `CASCADE`). `UNIQUE(translationKey,
   language)`.
 - **No default-language (EN) `Translation` row exists for narrative
-  content** — `GameEventTemplate`/`FacilityTemplate`/`Excursion`'s own
-  `title`/`bodyTemplate`/`label`/`description`/`body` fields are the EN
-  value, read live. Only non-default-language overrides are ever stored.
+  content** — `GameEventTemplate`/`FacilityTemplate`/`Excursion`/
+  `PlayerArchetype`'s own `title`/`bodyTemplate`/`label`/`description`/
+  `body`/`name` fields are the EN value, read live. Only
+  non-default-language overrides are ever stored.
 
 ## Not an entity
 

@@ -63,6 +63,13 @@ restated here.
   make EasyAdmin work with JSON columns; `JsonTextareaType.php`'s own
   comment explains EasyAdmin auto-configures a custom form type bound to a
   Doctrine `json` column and injects options that would otherwise throw.
+- **`Filter/`** — custom EasyAdmin `FilterInterface` implementations, for
+  filter logic too complex for EasyAdmin's built-in property filters.
+  Currently one: `IncompleteTranslationFilter` (used by
+  `TranslationKeyCrudController`) — a correlated-subquery count comparison
+  (translated-and-enabled-language count vs. enabled-language count) with
+  no real backing property, not a real column, so it stays correct as
+  languages get enabled/disabled.
 - **`Command/`** — console commands (`app:*`), mostly seeding/backfill/
   generation jobs invoked by cron scripts under `docker/` or manually
   (`GenerateLeaderboardsCommand.php`, `CompetitionProcessRoundsCommand.php`,

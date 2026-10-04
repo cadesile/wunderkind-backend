@@ -4,30 +4,28 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Enum\Country;
+
 class NameGeneratorService
 {
-    private const NATIONALITIES = [
-        'English',
-        'Spanish',
-        'French',
-        'German',
-        'Brazilian',
-        'Portuguese',
-        'Nigerian',
-        'Ghanaian',
-        'Japanese',
-        'South Korean',
-        'Argentine',
-        'Dutch',
-        'Italian',
-        'Swedish',
-        'Danish',
-        'Irish',
-        'Ivorian',
-        'Senegalese',
-        'Chinese',
-        'Polish',
-    ];
+    /**
+     * 'Polish' is the one entry with no Country case (see Country::fromNationality()'s
+     * docblock) so it's kept as a standalone addendum rather than hand-duplicating the
+     * other 20 demonyms here — those are derived from Country::nationalityMap() instead.
+     */
+    private const LEGACY_NATIONALITIES = ['Polish'];
+
+    /** @return string[] */
+    public static function nationalities(): array
+    {
+        return [...array_values(Country::nationalityMap()), ...self::LEGACY_NATIONALITIES];
+    }
+
+    /** Whether a real first/last name pool exists for this nationality (vs. the 'English' fallback). */
+    public static function hasNamePool(string $nationality): bool
+    {
+        return array_key_exists($nationality, self::getNamePools());
+    }
 
     /**
      * Generate a simple full-name string (used for scouts, agents, coaches).
@@ -139,7 +137,9 @@ class NameGeneratorService
 
     public function getRandomNationality(): string
     {
-        return self::NATIONALITIES[array_rand(self::NATIONALITIES)];
+        $nationalities = self::nationalities();
+
+        return $nationalities[array_rand($nationalities)];
     }
 
     private static function getNamePools(): array
@@ -2409,6 +2409,40 @@ class NameGeneratorService
                     'Duda',
                     'Kubiak',
                     'Marciniak',
+                ],
+            ],
+
+            'American' => [
+                'firstNames' => [
+                    'James', 'Michael', 'Robert', 'David', 'William',
+                    'Joseph', 'Daniel', 'Matthew', 'Christopher', 'Anthony',
+                    'Mark', 'Donald', 'Steven', 'Andrew', 'Joshua',
+                    'Kevin', 'Brian', 'Jason', 'Ryan', 'Tyler',
+                    'Brandon', 'Justin', 'Jacob', 'Ethan', 'Noah',
+                ],
+                'lastNames' => [
+                    'Smith', 'Johnson', 'Williams', 'Brown', 'Jones',
+                    'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
+                    'Hernandez', 'Lopez', 'Wilson', 'Anderson', 'Thomas',
+                    'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee',
+                    'Perez', 'Thompson', 'White', 'Harris', 'Clark',
+                ],
+            ],
+
+            'Canadian' => [
+                'firstNames' => [
+                    'Liam', 'Noah', 'William', 'James', 'Benjamin',
+                    'Lucas', 'Alexander', 'Ethan', 'Jacob', 'Logan',
+                    'Mathieu', 'Olivier', 'Samuel', 'Gabriel', 'Nathan',
+                    'Thomas', 'Félix', 'Antoine', 'Jean', 'Marc',
+                    'Connor', 'Tyler', 'Cole', 'Owen', 'Carter',
+                ],
+                'lastNames' => [
+                    'Smith', 'Brown', 'Tremblay', 'Martin', 'Roy',
+                    'Gagnon', 'Bouchard', 'Lavoie', 'Bélanger', 'Pelletier',
+                    'Wilson', 'Thompson', 'MacDonald', 'Campbell', 'Stewart',
+                    'Robinson', 'Clarke', 'Walker', 'Richard', 'Côté',
+                    'Morin', 'Fortin', 'Ouellet', 'Gauthier', 'Leblanc',
                 ],
             ],
 

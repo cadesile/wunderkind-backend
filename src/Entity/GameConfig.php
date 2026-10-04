@@ -1345,6 +1345,49 @@ class GameConfig
         return $this->npcClubBalanceRanges[$idx] ?? ['min' => 31_250_000, 'max' => 46_875_000];
     }
 
+    // ── League Tier Defaults ───────────────────────────────────────────────
+
+    /**
+     * Per-tier League defaults (pence), keyed by tier "1".."8". Single source of truth for
+     * both LeagueService::generateLeaguesForCountry() (applied to brand-new League rows) and
+     * the admin "League Tier Defaults" bulk-edit screen (admin_leagues_overview — can also
+     * cascade these values onto already-existing League rows on demand). Replaces what used
+     * to be LeagueService::LEAGUE_TIER_DEFAULTS, a hardcoded const that only ever fed
+     * newly-generated leagues and couldn't be edited without a code change.
+     *
+     * @var array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $leagueTierDefaults = [
+        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+    ];
+
+    /** @return array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}> */
+    public function getLeagueTierDefaults(): array { return $this->leagueTierDefaults; }
+
+    /** @param array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}> $v */
+    public function setLeagueTierDefaults(array $v): static { $this->leagueTierDefaults = $v; return $this; }
+
+    /**
+     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}
+     */
+    public function getLeagueTierDefaultsForTier(int $tier): array
+    {
+        $tier = max(1, min(8, $tier));
+
+        return $this->leagueTierDefaults[(string) $tier] ?? [
+            'promotionSpots' => 2, 'tvDeal' => null, 'prizeMoney' => null,
+            'leaguePositionPot' => null, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null,
+        ];
+    }
+
     // ── NPC Facility Level Ranges ─────────────────────────────────────────
 
     /**
