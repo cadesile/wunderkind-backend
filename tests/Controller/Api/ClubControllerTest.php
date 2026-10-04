@@ -50,6 +50,69 @@ class ClubControllerTest extends WebTestCase
         $this->assertArrayHasKey('id', $data);
     }
 
+    /**
+     * Regression test: a mis-cased country code used to get persisted onto Club::$country
+     * verbatim, which silently broke StarterPackService's nationality resolution later
+     * (Country::tryFrom() is case-sensitive) — the club would end up with an empty starter
+     * squad with no way to recover. Must now be normalized to the canonical uppercase code.
+     */
+    public function testInitializeNormalizesALowercaseCountryCode(): void
+    {
+        $client = static::createClient();
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+
+        $user = new User('lowercase-country-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $user->setRoles([User::ROLE_CLUB]);
+        $em->persist($user);
+        $em->flush();
+
+        $client->loginUser($user, 'api');
+        $client->request(
+            'POST',
+            '/api/club/initialize',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: json_encode([
+                'clubName' => 'Lowercase FC ' . uniqid('', true),
+                'country'  => 'en',
+            ]),
+        );
+
+        $this->assertResponseStatusCodeSame(201);
+        $data = json_decode($client->getResponse()->getContent(), true);
+
+        $em->clear();
+        $club = $em->getRepository(\App\Entity\Club::class)->find($data['id']);
+        $this->assertSame('EN', $club->getCountry(), 'Country must be normalized to uppercase.');
+    }
+
+    public function testInitializeRejectsAnUnknownCountryCode(): void
+    {
+        $client = static::createClient();
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+
+        $user = new User('bad-country-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $user->setRoles([User::ROLE_CLUB]);
+        $em->persist($user);
+        $em->flush();
+
+        $client->loginUser($user, 'api');
+        $client->request(
+            'POST',
+            '/api/club/initialize',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: json_encode([
+                'clubName' => 'Bad Country FC ' . uniqid('', true),
+                'country'  => 'XX',
+            ]),
+        );
+
+        $this->assertResponseStatusCodeSame(422);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertSame('invalid_country_code', $data['error']);
+    }
+
     public function testNameOptionsIsPubliclyAccessible(): void
     {
         $client = static::createClient();

@@ -100,6 +100,7 @@ class StarterPackServiceTest extends TestCase
             $poolConfigRepo,
             $snapshotBuilder,
             $em,
+            $this->createStub(\Psr\Log\LoggerInterface::class),
         );
 
         $result = $service->initialize($club);
@@ -157,6 +158,7 @@ class StarterPackServiceTest extends TestCase
             $poolConfigRepo,
             $snapshotBuilder,
             $em,
+            $this->createStub(\Psr\Log\LoggerInterface::class),
         );
 
         $this->expectException(InsufficientStarterPoolException::class);

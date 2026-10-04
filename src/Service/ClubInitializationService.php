@@ -8,6 +8,7 @@ use App\Enum\Country;
 use App\Entity\Club;
 use App\Entity\User;
 use App\Exception\ClubNameTakenException;
+use App\Exception\InvalidCountryCodeException;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -46,6 +47,22 @@ class ClubInitializationService
      */
     public function initializeClub(User $user, string $clubName, ?string $country = null): Club
     {
+        // Normalize + validate before anything else: Club::$country must always be a real,
+        // canonically-cased Country code from this point on. A mis-cased or garbled code (the
+        // client's own country-picker, the X-Club-Id debug flows, anything) used to get
+        // persisted verbatim, which silently broke both the duplicate-name check below (a
+        // raw-cased country never matched NpcClub rows, which are always canonical) and
+        // StarterPackService's nationality resolution later — see
+        // InvalidCountryCodeException's own docblock.
+        if ($country !== null && trim($country) !== '') {
+            $country = strtoupper(trim($country));
+            if (Country::tryFrom($country) === null) {
+                throw new InvalidCountryCodeException($country);
+            }
+        } else {
+            $country = null;
+        }
+
         // The user picks their name from the same place/suffix pools the NPC
         // generator uses, so without this the pyramid can contain two clubs
         // with an identical name.

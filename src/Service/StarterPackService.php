@@ -18,6 +18,7 @@ use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 class StarterPackService
 {
@@ -29,6 +30,7 @@ class StarterPackService
         private readonly PoolConfigRepository       $poolConfigRepository,
         private readonly WorldPackSnapshotBuilder   $snapshotBuilder,
         private readonly EntityManagerInterface     $em,
+        private readonly LoggerInterface            $logger,
     ) {}
 
     public function initialize(Club $club): array
@@ -43,6 +45,18 @@ class StarterPackService
         $ampRange       = ['min' => (int) $ampRangeRaw['min'], 'max' => (int) $ampRangeRaw['max']];
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
+        $this->logger->info('starter_pack.initialize.start', [
+            'clubId'           => (string) $club->getId(),
+            'country'          => $country,
+            'ampLeagueTier'    => $ampLeagueTier,
+            'ampRangeSource'   => isset($leagueRanges[$country][(string) $ampLeagueTier]) ? 'starterConfig.leagueAbilityRanges' : (isset(WorldInitializationService::ABILITY_RANGES[$ampLeagueTier]) ? 'WorldInitializationService::ABILITY_RANGES' : 'hardcoded_fallback_5_35'),
+            'ampRangeMin'      => $ampRange['min'],
+            'ampRangeMax'      => $ampRange['max'],
+            'ampNationality'   => $ampNationality,
+            'countryResolvedToNationality' => ClubInitializationService::countryToNationality($country) !== null,
+            'starterPlayerCount' => $starterConfig->getStarterPlayerCount(),
+        ]);
+
         $poolConfig = $this->poolConfigRepository->getConfig();
         $posCounts  = $this->snapshotBuilder->distributeByPosition(
             $starterConfig->getStarterPlayerCount(),
@@ -51,17 +65,28 @@ class StarterPackService
         $ampPlayers = [];
 
         foreach ($posCounts as $posValue => $count) {
-            $position   = PlayerPosition::from($posValue);
-            $posPlayers = $this->playerRepository->findForWorldInitByPositionAndNationality(
+            $position    = PlayerPosition::from($posValue);
+            $posPlayers  = $this->playerRepository->findForWorldInitByPositionAndNationality(
                 $ampRange['min'], $ampRange['max'], $position, $ampNationality, $count
             );
+            $nativeFound = count($posPlayers);
+            $foreignFound = 0;
             if (count($posPlayers) < $count) {
                 $deficit    = $count - count($posPlayers);
                 $extra      = $this->playerRepository->findForeignForWorldInitByPosition(
                     $ampRange['min'], $ampRange['max'], '__none__', $position, $deficit
                 );
+                $foreignFound = count($extra);
                 $posPlayers = array_merge($posPlayers, $extra);
             }
+            $this->logger->info('starter_pack.initialize.position_draw', [
+                'clubId'       => (string) $club->getId(),
+                'position'     => $posValue,
+                'requested'    => $count,
+                'nativeFound'  => $nativeFound,
+                'foreignFound' => $foreignFound,
+                'totalFound'   => count($posPlayers),
+            ]);
             $ampPlayers = array_merge($ampPlayers, $posPlayers);
         }
 
@@ -76,6 +101,13 @@ class StarterPackService
         }));
 
         if ($ampPlayers === []) {
+            $this->logger->warning('starter_pack.initialize.empty_player_draw', [
+                'clubId'         => (string) $club->getId(),
+                'country'        => $country,
+                'ampNationality' => $ampNationality,
+                'ampRangeMin'    => $ampRange['min'],
+                'ampRangeMax'    => $ampRange['max'],
+            ]);
             // Bail before touching staff/scouts or the pool at all — nothing consumed, nothing
             // flushed, Club::$starterInitializedAt untouched, so this is safely retriable. See
             // InsufficientStarterPoolException's own docblock for why this matters.
@@ -126,6 +158,13 @@ class StarterPackService
 
         $club->setStarterInitializedAt(new \DateTimeImmutable());
         $this->em->flush();
+
+        $this->logger->info('starter_pack.initialize.success', [
+            'clubId'      => (string) $club->getId(),
+            'playerCount' => count($ampPlayers),
+            'staffCount'  => count($ampStaff),
+            'scoutCount'  => count($ampScouts),
+        ]);
 
         return [
             'players' => $playerSnapshots,

@@ -9,6 +9,7 @@ use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Enum\Country;
 use App\Exception\ClubNameTakenException;
+use App\Exception\InvalidCountryCodeException;
 use App\Repository\ClubRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\SyncRecordRepository;
@@ -103,6 +104,11 @@ class ClubController extends AbstractController
             // Distinct from the 409 below, which means "this user already has a club".
             return $this->json(
                 ['error' => 'club_name_taken', 'message' => $e->getMessage()],
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        } catch (InvalidCountryCodeException $e) {
+            return $this->json(
+                ['error' => 'invalid_country_code', 'message' => $e->getMessage()],
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         } catch (\RuntimeException $e) {
