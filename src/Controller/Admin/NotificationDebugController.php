@@ -14,6 +14,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
@@ -115,13 +116,21 @@ class NotificationDebugController extends AbstractController
             [$php, 'bin/console', 'messenger:consume', 'async', '--time-limit=20', '--limit=200', '--no-interaction'],
             $kernel->getProjectDir(),
         );
-        // A little over the command's own --time-limit, so a hung process is still killed
-        // rather than blocking this request indefinitely.
-        $process->setTimeout(30);
-        $process->run();
-
-        $this->addFlash($process->isSuccessful() ? 'success' : 'danger', 'Queue processed.');
-        $this->addFlash('info', nl2br(htmlspecialchars(trim($process->getOutput() . $process->getErrorOutput()))));
+        // Well over the command's own --time-limit: that 20s is only when the subprocess
+        // itself decides to stop, not how long PHP bootstrap/container compilation plus
+        // process teardown can add on top under load — a 10s margin (the previous 30s)
+        // was tight enough to intermittently throw ProcessTimedOutException inside the
+        // full test suite. A hung process is still killed, just with more headroom first.
+        $process->setTimeout(60);
+        try {
+            $process->run();
+            $this->addFlash($process->isSuccessful() ? 'success' : 'danger', 'Queue processed.');
+            $this->addFlash('info', nl2br(htmlspecialchars(trim($process->getOutput() . $process->getErrorOutput()))));
+        } catch (ProcessTimedOutException $e) {
+            // Don't let a genuinely hung subprocess turn this action into an uncaught 500 —
+            // always redirect back, same as every other branch here.
+            $this->addFlash('danger', 'Queue processing timed out after ' . $e->getExceededTimeout() . 's.');
+        }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_notification_debug']));
     }

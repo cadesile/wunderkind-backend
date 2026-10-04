@@ -1,8 +1,8 @@
 # Country/Nationality Mapping API (client integration)
 
-Branch: `development` (pending commit). Backend-driven single source of truth for
-nationality demonym ↔ country display label ↔ country code — replacing any local
-copy of this mapping the client maintains.
+Branch: `development`/`dev`/`master` (merged). Backend-driven single source of
+truth for nationality demonym ↔ country display label ↔ country code —
+replacing any local copy of this mapping the client maintains.
 
 ## Why this exists
 
