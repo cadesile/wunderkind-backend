@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Enum\Country;
 use App\Repository\StarterConfigRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -24,6 +25,18 @@ class StarterConfigController extends AbstractController
     {
         $config = $this->starterConfigRepository->getConfig();
 
+        // Resolve each enabled code to its display label via the Country enum
+        // (the single source of truth for codes/labels — see its class docblock)
+        // so the client's country picker never needs its own hardcoded copy of
+        // this list to stay in sync with what admins enable.
+        $enabledCountryOptions = [];
+        foreach ($config->getEnabledCountries() as $code) {
+            $country = Country::tryFrom($code);
+            if ($country !== null) {
+                $enabledCountryOptions[] = ['code' => $country->value, 'label' => $country->label()];
+            }
+        }
+
         return $this->json([
             'startingBalance'    => $config->getStartingBalance(),
             'starterPlayerCount' => $config->getStarterPlayerCount(),
@@ -36,6 +49,7 @@ class StarterConfigController extends AbstractController
             'starterSponsorTier' => $config->getStarterSponsorTier(),
             'starterClubTier'    => $config->getStarterClubTier(),
             'enabledCountries'   => $config->getEnabledCountries(),
+            'enabledCountryOptions' => $enabledCountryOptions,
             'leagueAbilityRanges' => $config->getLeagueAbilityRanges(),
             'defaultFacilities'   => $config->getDefaultFacilities(),
             'fanBaseRanges'              => $config->getFanBaseRanges(),
