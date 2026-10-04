@@ -2,11 +2,12 @@
 
 namespace App\Controller\Api;
 
-use App\Entity\Player;
+use App\Enum\Country;
 use App\Enum\PlayerPosition;
 use App\Enum\Tier;
 use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
+use App\Service\PlayerBrowseSerializer;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -44,7 +45,7 @@ class ScoutSearchController extends AbstractController
 
     #[Route('/search', name: 'api_scout_search', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]
-    public function search(Request $request, PlayerRepository $playerRepo): JsonResponse
+    public function search(Request $request, PlayerRepository $playerRepo, PlayerBrowseSerializer $serializer): JsonResponse
     {
         // ── rep ──────────────────────────────────────────────────────────────
         $repParam = strtolower((string) $request->query->get('rep', 'local'));
@@ -71,6 +72,20 @@ class ScoutSearchController extends AbstractController
 
         // ── nationality (optional) ────────────────────────────────────────────
         $nationality = $request->query->get('nationality') ?: null;
+
+        // ── ignore_country (optional) — excludes this country's nationality ───
+        $excludeNationality = null;
+        $ignoreCountryParam = $request->query->get('ignore_country');
+        if ($ignoreCountryParam !== null && trim($ignoreCountryParam) !== '') {
+            $ignoreCountry = Country::tryFrom(strtoupper(trim($ignoreCountryParam)));
+            if ($ignoreCountry === null) {
+                return $this->json(
+                    ['error' => "Unknown country code '{$ignoreCountryParam}'."],
+                    Response::HTTP_UNPROCESSABLE_ENTITY
+                );
+            }
+            $excludeNationality = $ignoreCountry->nationality();
+        }
 
         // ── age_range (optional, format "17-25") ─────────────────────────────
         $ageMin = null;
@@ -117,7 +132,7 @@ class ScoutSearchController extends AbstractController
         // ── Fetch base-tier players ───────────────────────────────────────────
         [$baseMin, $baseMax] = $tier->scoreRange();
         $basePlayers = $playerRepo->findForScoutSearch(
-            $baseMin, $baseMax, $position, $nationality, $ageMin, $ageMax, $baseCount
+            $baseMin, $baseMax, $position, $nationality, $ageMin, $ageMax, $baseCount, $excludeNationality
         );
 
         // ── Fetch above-tier players ──────────────────────────────────────────
@@ -125,7 +140,7 @@ class ScoutSearchController extends AbstractController
         if ($aboveCount > 0 && $aboveTier !== null) {
             [$aboveMin, $aboveMax] = $aboveTier->scoreRange();
             $abovePlayers = $playerRepo->findForScoutSearch(
-                $aboveMin, $aboveMax, $position, $nationality, $ageMin, $ageMax, $aboveCount
+                $aboveMin, $aboveMax, $position, $nationality, $ageMin, $ageMax, $aboveCount, $excludeNationality
             );
         }
 
@@ -134,60 +149,11 @@ class ScoutSearchController extends AbstractController
         shuffle($all);
 
         return $this->json([
-            'rep'      => $tier->value,
-            'amount'   => count($all),
-            'ability'  => $abilityPct,
-            'players'  => array_map($this->serializePlayer(...), $all),
+            'rep'           => $tier->value,
+            'amount'        => count($all),
+            'ability'       => $abilityPct,
+            'ignoreCountry' => $excludeNationality !== null ? strtoupper(trim($ignoreCountryParam)) : null,
+            'players'       => array_map($serializer->serialize(...), $all),
         ]);
-    }
-
-    private function serializePlayer(Player $p): array
-    {
-        return [
-            'id'                => $p->getId()->toRfc4122(),
-            'firstName'         => $p->getFirstName(),
-            'lastName'          => $p->getLastName(),
-            'dateOfBirth'       => $p->getDateOfBirth()->format('Y-m-d'),
-            'nationality'       => $p->getNationality(),
-            'position'          => $p->getPosition()->value,
-            'potential'         => $p->getPotential(),
-            'currentAbility'    => $p->getCurrentAbility(),
-            'contractValue'     => $p->getContractValue(),
-            'tier'              => Tier::fromScore($p->getCurrentAbility())->value,
-            'recruitmentSource' => $p->getRecruitmentSource()->value,
-            'pace'              => $p->getPace(),
-            'technical'         => $p->getTechnical(),
-            'vision'            => $p->getVision(),
-            'power'             => $p->getPower(),
-            'stamina'           => $p->getStamina(),
-            'heart'             => $p->getHeart(),
-            'overall'           => $p->getOverall(),
-            'physical'          => [
-                'height' => $p->getHeight(),
-                'weight' => $p->getWeight(),
-            ],
-            'appearance'        => $p->getAppearance(),
-            'agent'             => $p->getAgent()?->toSnapshotArray(),
-            'personality'       => [
-                'determination'   => $p->getPersonality()->getDetermination(),
-                'professionalism' => $p->getPersonality()->getProfessionalism(),
-                'ambition'        => $p->getPersonality()->getAmbition(),
-                'loyalty'         => $p->getPersonality()->getLoyalty(),
-                'adaptability'    => $p->getPersonality()->getAdaptability(),
-                'pressure'        => $p->getPersonality()->getPressure(),
-                'temperament'     => $p->getPersonality()->getTemperament(),
-                'consistency'     => $p->getPersonality()->getConsistency(),
-            ],
-            'guardians'         => array_map(fn($g) => [
-                'id'            => $g->getId()->toRfc4122(),
-                'firstName'     => $g->getFirstName(),
-                'lastName'      => $g->getLastName(),
-                'dateOfBirth'   => $g->getDateOfBirth()?->format('Y-m-d'),
-                'gender'        => $g->getGender(),
-                'demandLevel'   => $g->getDemandLevel(),
-                'loyaltyToClub' => $g->getLoyaltyToClub(),
-                'contactEmail'  => $g->getContactEmail(),
-            ], $p->getGuardians()->toArray()),
-        ];
     }
 }

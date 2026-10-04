@@ -57,8 +57,9 @@ the end) — this file is the sole source of truth for the route surface.
 | `LeagueController` | `/api/league` | `POST /conclude-season`, `GET /season-history`, `GET /season-history/{season}` |
 | `MarketController` | `/api/market` | `GET /data`, `POST /assign`, `POST /consume`, `GET /legacy` |
 | `OwnerAvatarController` | `/api/owner-avatar` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the account holder's owner identity (name/nationality/gender/dob) + avatar; see "Owner Identity" in CLAUDE.md |
+| `PlayerController` | `/api/players` | `GET /foreign` (`IsGranted('ROLE_CLUB')`) — random pool draw of players NOT matching `?country=` code, `?amount=` (default 20, max 200). Read-only, non-consuming. See `docs/api/players-foreign.md`. |
 | `PoolController` | `/api/pool` | `POST /ensure` (`IsGranted('IS_AUTHENTICATED_FULLY')`) |
-| `ScoutSearchController` | `/api/scout` | `GET /foreign-clubs`, `GET /search` |
+| `ScoutSearchController` | `/api/scout` | `GET /foreign-clubs`, `GET /search` (now also takes `?ignore_country=` — excludes that country's nationality, same validation as `PlayerController::foreign()`) |
 | `StarterConfigController` | `/api` | `GET /starter-config` |
 | `TransferLeaderboardController` | `/api/leaderboard/transfers` | `GET /top-sellers`, `GET /most-valuable` |
 | `TranslationController` | `/api/translations` | `GET /{code}`, `GET /{code}/version` — generic UI-copy catalogue, public, no auth; unknown/disabled code is a hard 404 (contrast the fallback-to-default behavior of the `?lang=` params above). See `docs/api/translations.md`. |

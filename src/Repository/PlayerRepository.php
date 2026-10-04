@@ -188,6 +188,26 @@ class PlayerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Random pool draw of players NOT of the given nationality — no ability/position
+     * filtering, for GET /api/players/foreign.
+     *
+     * @return Player[]
+     */
+    public function findForeign(string $excludeNationality, int $limit): array
+    {
+        if ($limit <= 0) return [];
+
+        return $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->where('p.nationality != :nationality')
+            ->setParameter('nationality', $excludeNationality)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Random pool draw for the scout search endpoint.
      * All parameters except ability range are optional filters.
      * Age is derived from dateOfBirth server-side so no PostgreSQL-specific SQL is needed.
@@ -202,6 +222,7 @@ class PlayerRepository extends ServiceEntityRepository
         ?int $ageMin,
         ?int $ageMax,
         int $limit,
+        ?string $excludeNationality = null,
     ): array {
         if ($limit <= 0) return [];
 
@@ -221,6 +242,11 @@ class PlayerRepository extends ServiceEntityRepository
         if ($nationality !== null) {
             $qb->andWhere('p.nationality = :nationality')
                ->setParameter('nationality', $nationality);
+        }
+
+        if ($excludeNationality !== null) {
+            $qb->andWhere('p.nationality != :excludeNationality')
+               ->setParameter('excludeNationality', $excludeNationality);
         }
 
         // Convert age bounds to dateOfBirth bounds (in PHP to avoid DQL date_sub limitations)

@@ -86,10 +86,16 @@ actually *does* (which service/repo it calls), not restated route paths.
   `MarketPoolService`, plus `AgentRepository`, `InvestorRepository`,
   `PlayerRepository`, `ScoutRepository`, `SponsorRepository`,
   `StaffRepository`.
+- **`PlayerController`** — `GET /api/players/foreign`, random pool draw
+  excluding one nationality (`PlayerRepository::findForeign()`). Shares
+  `PlayerBrowseSerializer` with `ScoutSearchController::search()` so both
+  endpoints emit byte-identical player objects.
 - **`PoolController`** — idempotently tops up the unassigned-player pool
   for a nationality via `MarketPoolService` + `PlayerRepository`.
 - **`ScoutSearchController`** — foreign-club listing (`NpcClubRepository`)
-  and player search (`PlayerRepository`).
+  and player search (`PlayerRepository`). Player serialization moved to
+  `App\Service\PlayerBrowseSerializer` (was a private method here) when
+  `PlayerController` needed the same shape.
 - **`TransferLeaderboardController`** — `TransferLeaderboardService`.
 - **`WorldOverviewController`** — `WorldOverviewService` (same service
   `LandingController` calls directly server-side).

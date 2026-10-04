@@ -13,6 +13,7 @@ Root `CLAUDE.md` and `AGENTS.md` are excluded — they're the generated
 - `docs/api/leaderboard.md` — twelve public, cached leaderboard categories (`GET /api/leaderboard/{category}`)
 - `docs/api/npc-club-city-size.md` — spec for `region`/`citySize`/`populationSize`/`isCapital` fields on NPC club objects
 - `docs/api/npc-club-staff-scouts.md` — spec for NPC club `staff[]` gaining `director_of_football`/`facility_manager` roles and a new `scouts[]` array, sized per tier via `StarterConfig::$npcSquadConfig` (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)
+- `docs/api/players-foreign.md` — spec for `GET /api/players/foreign` (random pool draw excluding one nationality), the new `?ignore_country=` param on `GET /api/scout/search`, and the `PlayerBrowseSerializer` shape they share (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)
 - `docs/api/server-driven-messaging.md` — operator-authored announcements composed in admin, polled by client, shown once per club
 - `docs/deploy/hetzner.md` — deployment runbook for the single Hetzner box hosting this app
 - `docs/world-generation/adding-a-country.md` — repeatable runbook for adding a new playable country (enum case, `CountryContentRegistry` content, `app:country:bootstrap`/`app:country:check`) (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)

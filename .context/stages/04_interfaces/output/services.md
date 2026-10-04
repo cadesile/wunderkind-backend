@@ -357,6 +357,12 @@ filename alone.
 - **`PlayerGenerationService`** — generates a `Player` blueprint
   (position, recruitment source, personality matrix feeding into
   attribute derivation).
+- **`PlayerBrowseSerializer`** — the full-detail player shape shared by
+  `GET /api/scout/search` and `GET /api/players/foreign` (nested
+  agent/personality/guardians, `countryCode`). Distinct from
+  `WorldPackSnapshotBuilder::buildPlayerSnapshot()`, a differently-shaped
+  snapshot used for world-pack/starter-pack generation — don't conflate
+  the two.
 - **`SocialPostRenderer`** — renders `SocialPostTemplate` content with
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
