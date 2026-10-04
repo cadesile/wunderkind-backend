@@ -101,7 +101,7 @@ class StarterPackService
         }));
 
         if ($ampPlayers === []) {
-            $this->logger->warning('starter_pack.initialize.empty_player_draw', [
+            $this->logger->error('starter_pack.initialize.empty_player_draw', [
                 'clubId'         => (string) $club->getId(),
                 'country'        => $country,
                 'ampNationality' => $ampNationality,

@@ -62,7 +62,7 @@ class InitializeController extends AbstractController
         ]);
 
         if ($club === null) {
-            $this->logger->warning('initialize.starter.club_not_found', ['userId' => (string) $user->getId()]);
+            $this->logger->error('initialize.starter.club_not_found', ['userId' => (string) $user->getId()]);
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -71,7 +71,7 @@ class InitializeController extends AbstractController
         if ($countryParam !== null) {
             $countryParam = strtoupper(trim($countryParam));
             if (ClubInitializationService::countryToNationality($countryParam) === null) {
-                $this->logger->warning('initialize.starter.unknown_country_param', [
+                $this->logger->error('initialize.starter.unknown_country_param', [
                     'clubId' => (string) $club->getId(),
                     'countryParamRaw' => $countryParamRaw,
                     'countryParamNormalized' => $countryParam,
@@ -91,7 +91,7 @@ class InitializeController extends AbstractController
         }
 
         if ($club->getCountry() === null) {
-            $this->logger->warning('initialize.starter.no_country_set', ['clubId' => (string) $club->getId()]);
+            $this->logger->error('initialize.starter.no_country_set', ['clubId' => (string) $club->getId()]);
             return $this->json(
                 ['error' => 'Club must have a country set before initialization. Pass ?country=<code>.'],
                 Response::HTTP_UNPROCESSABLE_ENTITY
@@ -100,7 +100,7 @@ class InitializeController extends AbstractController
 
         $poolCount = $this->playerRepository->countInPool();
         if ($poolCount < self::MIN_POOL_SIZE) {
-            $this->logger->warning('initialize.starter.global_pool_too_small', [
+            $this->logger->error('initialize.starter.global_pool_too_small', [
                 'clubId' => (string) $club->getId(),
                 'poolCount' => $poolCount,
                 'minPoolSize' => self::MIN_POOL_SIZE,
@@ -112,7 +112,7 @@ class InitializeController extends AbstractController
         }
 
         if ($club->isStarterInitialized()) {
-            $this->logger->warning('initialize.starter.already_initialized', [
+            $this->logger->error('initialize.starter.already_initialized', [
                 'clubId' => (string) $club->getId(),
                 'country' => $club->getCountry(),
                 'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
@@ -128,7 +128,7 @@ class InitializeController extends AbstractController
         } catch (InsufficientStarterPoolException $e) {
             // Club::$starterInitializedAt was deliberately left untouched on this path, so the
             // client can safely retry once the pool has been warmed for this country.
-            $this->logger->warning('initialize.starter.insufficient_pool', [
+            $this->logger->error('initialize.starter.insufficient_pool', [
                 'clubId' => (string) $club->getId(),
                 'country' => $club->getCountry(),
                 'message' => $e->getMessage(),
