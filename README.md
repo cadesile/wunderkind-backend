@@ -2,6 +2,7 @@
 
 The Wunderkind Factory is a mobile-first strategy game focused on the high-stakes business of youth football academy management. Players take on the role of an Academy Director, tasked with discovering, developing, and trading the world's next superstars in a charming, 16-bit retro-inspired world.
 
+
 ---
 
 ## Project Overview
