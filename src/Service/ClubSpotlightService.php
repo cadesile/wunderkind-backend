@@ -6,9 +6,16 @@ namespace App\Service;
 
 use App\Entity\Club;
 use App\Entity\ClubSpotlight;
+use App\Entity\MatchResult;
+use App\Entity\Transfer;
+use App\Enum\TransferType;
 use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubSpotlightRepository;
+use App\Repository\MatchResultRepository;
+use App\Repository\PlayerCareerStatRepository;
 use App\Repository\SyncRecordRepository;
+use App\Repository\TransferRepository;
+use App\Repository\UserLedgerRepository;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -31,10 +38,17 @@ class ClubSpotlightService
         'club_shop', 'museum', 'car_park',
     ];
 
+    private const RECENT_FIXTURES_LIMIT  = 5;
+    private const RECENT_TRANSFERS_LIMIT = 5;
+
     public function __construct(
         private readonly SyncRecordRepository $syncRecordRepository,
         private readonly ClubFacilityRepository $clubFacilityRepository,
         private readonly ClubSpotlightRepository $clubSpotlightRepository,
+        private readonly MatchResultRepository $matchResultRepository,
+        private readonly TransferRepository $transferRepository,
+        private readonly PlayerCareerStatRepository $playerCareerStatRepository,
+        private readonly UserLedgerRepository $userLedgerRepository,
         private readonly InboxService $inboxService,
         private readonly PushNotificationService $pushNotificationService,
         private readonly EntityManagerInterface $em,
@@ -65,11 +79,12 @@ class ClubSpotlightService
 
         $spotlight = $this->clubSpotlightRepository->getCurrent();
         $owner     = $club->getUser();
+        $topPerformer = $this->playerCareerStatRepository->findTopPerformerForClub($club);
 
         $spotlight->update(
             clubName: $club->getName(),
             clubReputation: $club->getReputation(),
-            clubTotalCareerEarnings: $club->getTotalCareerEarnings(),
+            dividendDrawsPence: $this->userLedgerRepository->getTotalDividendsByClub($club),
             homeKitConfig: $club->getHomeKitConfig(),
             awayKitConfig: $club->getAwayKitConfig(),
             badgeConfig: $club->getBadgeConfig(),
@@ -77,6 +92,12 @@ class ClubSpotlightService
             ownerNationality: $owner->getNationality(),
             ownerAppearance: $owner->getAppearance(),
             stadiumConfig: $this->buildStadiumConfig($club),
+            recentFixtures: $this->buildRecentFixtures($club),
+            recentTransfers: $this->buildRecentTransfers($club),
+            topPerformerName: $topPerformer?->getPlayerName(),
+            topPerformerGoals: $topPerformer?->getGoals() ?? 0,
+            topPerformerAssists: $topPerformer?->getAssists() ?? 0,
+            topPerformerAppearanceConfig: $topPerformer?->toFullAppearanceConfig(),
             windowStartsAt: $windowStartsAt,
             windowEndsAt: $windowEndsAt,
         );
@@ -117,6 +138,51 @@ class ClubSpotlightService
             'museumLevel'   => max(0, $levelBySlug['museum'] ?? 0),
             'carparkLevel'  => max(0, $levelBySlug['car_park'] ?? 0),
         ];
+    }
+
+    /**
+     * @return array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}>
+     */
+    private function buildRecentFixtures(Club $club): array
+    {
+        $results = $this->matchResultRepository->findRecentByClub($club, self::RECENT_FIXTURES_LIMIT);
+
+        return array_map(static function (MatchResult $m): array {
+            $result = match (true) {
+                $m->getGoalsFor() > $m->getGoalsAgainst() => 'W',
+                $m->getGoalsFor() < $m->getGoalsAgainst() => 'L',
+                default => 'D',
+            };
+
+            return [
+                'opponent'     => $m->getOpponentClubName() ?? 'Unknown',
+                'scoreFor'     => $m->getGoalsFor(),
+                'scoreAgainst' => $m->getGoalsAgainst(),
+                'week'         => $m->getWeek(),
+                'result'       => $result,
+            ];
+        }, $results);
+    }
+
+    /**
+     * @return array<int, array{playerName: string, feePence: int, direction: string, counterpartyClub: string}>
+     */
+    private function buildRecentTransfers(Club $club): array
+    {
+        $transfers = $this->transferRepository->findByClub($club, self::RECENT_TRANSFERS_LIMIT);
+
+        return array_map(static function (Transfer $t): array {
+            $incoming = $t->getType() === TransferType::SIGNING;
+
+            return [
+                'playerName'       => $t->getPlayerName() ?? 'Unknown Player',
+                'feePence'         => $t->getFee(),
+                'direction'        => $incoming ? 'in' : 'out',
+                'counterpartyClub' => $incoming
+                    ? ($t->getClubLeaving() ?? 'Free Agent')
+                    : $t->getDestinationClubName(),
+            ];
+        }, $transfers);
     }
 
     private function notifyOwner(Club $club): void

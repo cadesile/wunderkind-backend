@@ -64,6 +64,24 @@ class PlayerCareerStatRepository extends ServiceEntityRepository
     }
 
     /**
+     * One club's own standout performer this season — goals+assists ranked,
+     * tiebroken on appearances. There's no persisted per-player match rating
+     * anywhere server-side, so this is the closest real "best player" signal
+     * available (used by the landing page's Club Spotlight feature).
+     */
+    public function findTopPerformerForClub(Club $club): ?PlayerCareerStat
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.club = :club')
+            ->setParameter('club', $club)
+            ->orderBy('s.goals + s.assists', 'DESC')
+            ->addOrderBy('s.appearances', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Squad-wide total per club for the given stat column — the club_goals /
      * club_assists score. Shaped like ClubFacilityRepository::sumLevelsByClub().
      *
