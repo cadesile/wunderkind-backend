@@ -2,8 +2,8 @@
    Club Spotlight — every 12h, one of the 5 most active clubs is featured here.
    Entirely client-rendered from data attributes (same technique as the
    Chairman's Terminal ticker's club badges): kit/badge via the existing
-   composeKitSvg()/clubBadgeIconsHtml(), owner avatar via
-   composePlayerSpriteSvg() (avatar-compositor.js), stadium via the newly
+   composeKitSvg()/clubBadgeIconsHtml(), owner avatar and top performer avatar
+   via composePlayerSpriteSvg() (avatar-compositor.js), stadium via the newly
    ported composeStadiumSvg() (stadium-compositor.js). All three scripts must
    load before landing.js — see base.html.twig.
 
@@ -11,6 +11,17 @@
    refreshed by app:spotlight:generate — never computed live here. Before the
    first cron run, every field is null/empty and the section renders nothing
    (empty clubName).
+
+   Career earnings shows dividendDrawsPence (real UserLedger DIVIDEND_DRAW
+   entries against this club), not Club::$totalCareerEarnings — the latter is
+   every income source the club has ever had, not money the owner has
+   actually drawn out. See ClubSpotlightService::selectNew().
+
+   topPerformer* is a goals+assists-ranked proxy, not a literal "rating" —
+   there's no persisted per-player match rating anywhere server-side (see
+   PlayerCareerStatRepository::findTopPerformerForClub()). Its avatar only
+   renders if the player has ever reported a sync v2 appearanceConfig —
+   most haven't yet, since no client consumes this field today.
 #}
 {% if spotlight.clubName is not empty %}
 <section class="spotlight-section" id="spotlight">
@@ -19,6 +30,7 @@
         <div class="spotlight-card"
              data-owner-appearance="{{ spotlight.ownerAppearance|json_encode|e('html_attr') }}"
              data-stadium-config="{{ spotlight.stadiumConfig|json_encode|e('html_attr') }}"
+             data-performer-appearance="{{ spotlight.topPerformerAppearanceConfig|json_encode|e('html_attr') }}"
              data-club-badge="{{ {home: spotlight.homeKitConfig, away: spotlight.awayKitConfig, badge: spotlight.badgeConfig}|json_encode|e('html_attr') }}">
             <div class="spotlight-header">
                 <span class="pixel">FEATURED THIS CYCLE</span>
@@ -31,17 +43,57 @@
             <div class="spotlight-pitch">
                 <figure class="spotlight-owner" style="margin:0;">
                     <span class="spotlight-owner-slot" aria-hidden="true"></span>
+                    <figcaption class="spotlight-pitch-label">Chairman</figcaption>
                 </figure>
                 <figure class="spotlight-stadium" style="margin:0;">
                     <span class="spotlight-stadium-slot" aria-hidden="true"></span>
                 </figure>
+                {% if spotlight.topPerformerName is not empty %}
+                    <figure class="spotlight-owner" style="margin:0;">
+                        <span class="spotlight-performer-slot" aria-hidden="true"></span>
+                        <figcaption class="spotlight-pitch-label">{{ spotlight.topPerformerName }}</figcaption>
+                    </figure>
+                {% endif %}
             </div>
 
             <div class="spotlight-footer vt">
                 <span>Chairman: <strong>{{ spotlight.ownerName ?? 'Anonymous' }}</strong></span>
                 <span>Reputation: <strong>{{ spotlight.clubReputation|number_format }}</strong></span>
-                <span>Career Earnings: <strong>£{{ (spotlight.clubTotalCareerEarnings / 100)|number_format }}</strong></span>
+                <span>Dividends Drawn: <strong>£{{ (spotlight.dividendDrawsPence / 100)|number_format }}</strong></span>
             </div>
+
+            {% if spotlight.recentFixtures is not empty or spotlight.recentTransfers is not empty %}
+                <div class="spotlight-detail-grid">
+                    {% if spotlight.recentFixtures is not empty %}
+                        <div class="spotlight-detail-col">
+                            <div class="spotlight-detail-title">Recent Fixtures</div>
+                            <ul class="spotlight-detail-list">
+                                {% for fixture in spotlight.recentFixtures %}
+                                    <li>
+                                        <span class="spotlight-result-badge is-{{ fixture.result|lower }}">{{ fixture.result }}</span>
+                                        vs {{ fixture.opponent }}
+                                        <span class="spotlight-detail-sub">{{ fixture.scoreFor }}–{{ fixture.scoreAgainst }} · Wk {{ fixture.week }}</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                    {% if spotlight.recentTransfers is not empty %}
+                        <div class="spotlight-detail-col">
+                            <div class="spotlight-detail-title">Recent Transfers</div>
+                            <ul class="spotlight-detail-list">
+                                {% for transfer in spotlight.recentTransfers %}
+                                    <li>
+                                        <span class="spotlight-result-badge is-{{ transfer.direction == 'in' ? 'w' : 'l' }}">{{ transfer.direction == 'in' ? 'IN' : 'OUT' }}</span>
+                                        {{ transfer.playerName }}
+                                        <span class="spotlight-detail-sub">£{{ (transfer.feePence / 100)|number_format }} {{ transfer.direction == 'in' ? 'from' : 'to' }} {{ transfer.counterpartyClub }}</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
         </div>
         <p class="spotlight-note">Picked at random from the 5 most active clubs every 12 hours — build something worth featuring.</p>
     </div>

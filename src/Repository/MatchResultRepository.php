@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Club;
 use App\Entity\MatchResult;
 use App\Enum\StatsPeriod;
 use App\Service\PeriodResolver;
@@ -19,6 +20,23 @@ class MatchResultRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, MatchResult::class);
+    }
+
+    /**
+     * The club's last $limit results, newest first — filtered on `createdAt`
+     * (always-set, server-side), same reasoning as the stat queries below.
+     *
+     * @return MatchResult[]
+     */
+    public function findRecentByClub(Club $club, int $limit): array
+    {
+        return $this->createQueryBuilder('m')
+            ->where('m.club = :club')
+            ->setParameter('club', $club)
+            ->orderBy('m.createdAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 
     /**

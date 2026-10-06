@@ -462,9 +462,64 @@
             text-align: center;
             padding: 10px 16px 16px;
         }
+        .spotlight-pitch-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        .spotlight-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            border-top: 1px solid var(--border);
+        }
+        .spotlight-detail-col {
+            padding: 14px 16px;
+        }
+        .spotlight-detail-col + .spotlight-detail-col { border-left: 1px solid var(--border); }
+        .spotlight-detail-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: var(--gold);
+            margin-bottom: 10px;
+            letter-spacing: 0.03em;
+        }
+        .spotlight-detail-list { list-style: none; }
+        .spotlight-detail-list li {
+            font-size: 12.5px;
+            color: var(--text);
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .spotlight-detail-list li:last-child { border-bottom: 0; }
+        .spotlight-detail-sub {
+            display: block;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .spotlight-result-badge {
+            display: inline-block;
+            min-width: 18px;
+            text-align: center;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 2px 4px;
+            margin-right: 6px;
+            color: var(--dark);
+        }
+        .spotlight-result-badge.is-w { background: var(--mint); }
+        .spotlight-result-badge.is-d { background: var(--text-muted); }
+        .spotlight-result-badge.is-l { background: var(--red); }
 
         @media (max-width: 600px) {
             .spotlight-pitch { flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding-bottom: 12px; }
+            .spotlight-detail-grid { grid-template-columns: 1fr; }
+            .spotlight-detail-col + .spotlight-detail-col { border-left: 0; border-top: 1px solid var(--border); }
         }
 
         /* ════════════════════════════════

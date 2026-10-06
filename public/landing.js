@@ -60,6 +60,18 @@ function clubBadgeIconsHtml(clubBadge) {
         try { parsedStadium = rawStadium ? JSON.parse(rawStadium) : null; } catch (e) { parsedStadium = null; }
         stadiumSlot.innerHTML = composeStadiumSvg(parsedStadium || {}, { rotation: 0, time: 'day' }, 2);
     }
+
+    // Only present when the top performer has ever reported a sync v2
+    // appearanceConfig — most haven't yet (see _spotlight.html.twig).
+    var performerSlot = card.querySelector('.spotlight-performer-slot');
+    if (performerSlot && typeof composePlayerSpriteSvg === 'function') {
+        var rawPerformer = card.getAttribute('data-performer-appearance');
+        var parsedPerformer = null;
+        try { parsedPerformer = rawPerformer ? JSON.parse(rawPerformer) : null; } catch (e) { parsedPerformer = null; }
+        if (parsedPerformer) {
+            performerSlot.innerHTML = composePlayerSpriteSvg(parsedPerformer, 'player', 'large', 3);
+        }
+    }
 })();
 
 // ── Boardroom Incident & Consequence Feed (ticker + incident inspector modal) ──
