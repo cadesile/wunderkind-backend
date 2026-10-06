@@ -172,4 +172,34 @@ class SyncRecordRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * The $limit clubs with the most valid syncs since $since, most active first —
+     * the "activity" signal behind the landing page's Club Spotlight feature (see
+     * ClubSpotlightService). Grouped over the same (club_id, server_timestamp) shape
+     * countActiveClubsSince() uses.
+     *
+     * Club has no inverse mapping to SyncRecord, so this can't be an ->innerJoin()
+     * off a `s` root (Doctrine refuses to SELECT a non-root entity alongside a HIDDEN
+     * aggregate in that shape) — a second root alias plus an implicit WHERE join is
+     * the DQL equivalent of a cross join with a condition.
+     *
+     * @return list<Club>
+     */
+    public function findMostActiveClubs(\DateTimeImmutable $since, int $limit): array
+    {
+        return $this->getEntityManager()->createQueryBuilder()
+            ->select('c', 'COUNT(s.id) AS HIDDEN syncCount')
+            ->from(Club::class, 'c')
+            ->from(SyncRecord::class, 's')
+            ->where('s.club = c')
+            ->andWhere('s.isValid = true')
+            ->andWhere('s.serverTimestamp >= :since')
+            ->setParameter('since', $since)
+            ->groupBy('c.id')
+            ->orderBy('syncCount', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
 }

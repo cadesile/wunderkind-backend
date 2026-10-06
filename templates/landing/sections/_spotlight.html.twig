@@ -1,0 +1,51 @@
+{#
+   Club Spotlight — every 12h, one of the 5 most active clubs is featured here.
+   Entirely client-rendered from data attributes (same technique as the
+   Chairman's Terminal ticker's club badges): kit/badge via the existing
+   composeKitSvg()/clubBadgeIconsHtml(), owner avatar via
+   composePlayerSpriteSvg() (avatar-compositor.js), stadium via the newly
+   ported composeStadiumSvg() (stadium-compositor.js). All three scripts must
+   load before landing.js — see base.html.twig.
+
+   spotlight is the cached ClubSpotlight singleton (App\Entity\ClubSpotlight),
+   refreshed by app:spotlight:generate — never computed live here. Before the
+   first cron run, every field is null/empty and the section renders nothing
+   (empty clubName).
+#}
+{% if spotlight.clubName is not empty %}
+<section class="spotlight-section" id="spotlight">
+    <div class="wrap">
+        <div class="section-label">Club Spotlight</div>
+        <div class="spotlight-card"
+             data-owner-appearance="{{ spotlight.ownerAppearance|json_encode|e('html_attr') }}"
+             data-stadium-config="{{ spotlight.stadiumConfig|json_encode|e('html_attr') }}"
+             data-club-badge="{{ {home: spotlight.homeKitConfig, away: spotlight.awayKitConfig, badge: spotlight.badgeConfig}|json_encode|e('html_attr') }}">
+            <div class="spotlight-header">
+                <span class="pixel">FEATURED THIS CYCLE</span>
+                <div class="spotlight-badge-kit">
+                    <span class="spotlight-badge-slot" aria-hidden="true"></span>
+                    <span class="spotlight-club-name">{{ spotlight.clubName }}</span>
+                </div>
+            </div>
+
+            <div class="spotlight-pitch">
+                <figure class="spotlight-owner" style="margin:0;">
+                    <span class="spotlight-owner-slot" aria-hidden="true"></span>
+                </figure>
+                <figure class="spotlight-stadium" style="margin:0;">
+                    <span class="spotlight-stadium-slot" aria-hidden="true"></span>
+                </figure>
+            </div>
+
+            <div class="spotlight-footer vt">
+                <span>Chairman: <strong>{{ spotlight.ownerName ?? 'Anonymous' }}</strong></span>
+                <span>Reputation: <strong>{{ spotlight.clubReputation|number_format }}</strong></span>
+                <span>Career Earnings: <strong>£{{ (spotlight.clubTotalCareerEarnings / 100)|number_format }}</strong></span>
+            </div>
+        </div>
+        <p class="spotlight-note">Picked at random from the 5 most active clubs every 12 hours — build something worth featuring.</p>
+    </div>
+</section>
+
+<hr class="divider">
+{% endif %}

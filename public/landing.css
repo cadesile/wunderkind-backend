@@ -407,6 +407,67 @@
         .terminal-cta:hover { color: var(--text); }
 
         /* ════════════════════════════════
+           CLUB SPOTLIGHT
+        ════════════════════════════════ */
+        .spotlight-section { padding: 40px 0 0; }
+        .spotlight-card {
+            background: var(--bg-mid);
+            border: 1px solid var(--border);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 24px rgba(245,200,66,.15);
+        }
+        .spotlight-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .spotlight-header .pixel { font-size: 9px; letter-spacing: 0.08em; color: var(--gold); }
+        .spotlight-club-name { font-size: 18px; color: var(--text); }
+        .spotlight-badge-kit { display: flex; align-items: center; gap: 6px; }
+        .spotlight-badge-kit svg { width: 32px; height: 32px; }
+
+        .spotlight-pitch {
+            background-image: repeating-linear-gradient(90deg, #6a8e3d 0 44px, #638735 44px 88px);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 24px;
+            padding: 20px 16px 0;
+            min-height: 180px;
+            overflow: hidden;
+        }
+        .spotlight-pitch svg { display: block; image-rendering: pixelated; }
+        .spotlight-owner svg { width: auto; height: 120px; }
+        .spotlight-stadium svg { width: auto; height: 160px; }
+
+        .spotlight-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .spotlight-footer strong { color: var(--mint); }
+        .spotlight-note {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 10px 16px 16px;
+        }
+
+        @media (max-width: 600px) {
+            .spotlight-pitch { flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding-bottom: 12px; }
+        }
+
+        /* ════════════════════════════════
            TICKER
         ════════════════════════════════ */
         .ticker-wrap {
@@ -1326,7 +1387,7 @@
         }
         .facilities-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 24px;
             margin-top: 40px;
         }
@@ -1352,7 +1413,10 @@
             color: var(--text-muted);
             line-height: 1.6;
         }
-        @media (max-width: 800px) {
+        @media (max-width: 900px) {
+            .facilities-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 520px) {
             .facilities-grid { grid-template-columns: 1fr; }
         }
 

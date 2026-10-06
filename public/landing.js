@@ -28,6 +28,40 @@ function clubBadgeIconsHtml(clubBadge) {
     return composeKitSvg(cfg, 'badge', null, 1.4) + composeKitSvg(cfg, 'kit', 'small', 1.4);
 }
 
+// ── Club Spotlight (kit/badge via composeKitSvg, owner avatar via
+//    composePlayerSpriteSvg, stadium via composeStadiumSvg) ──
+(function () {
+    var card = document.querySelector('.spotlight-card');
+    if (!card) return;
+
+    var badgeSlot = card.querySelector('.spotlight-badge-slot');
+    if (badgeSlot) {
+        var rawBadge = card.getAttribute('data-club-badge');
+        var parsedBadge = null;
+        try { parsedBadge = rawBadge ? JSON.parse(rawBadge) : null; } catch (e) { parsedBadge = null; }
+        badgeSlot.innerHTML = clubBadgeIconsHtml(parsedBadge);
+    }
+
+    var ownerSlot = card.querySelector('.spotlight-owner-slot');
+    if (ownerSlot && typeof composePlayerSpriteSvg === 'function') {
+        var rawAppearance = card.getAttribute('data-owner-appearance');
+        var parsedAppearance = null;
+        try { parsedAppearance = rawAppearance ? JSON.parse(rawAppearance) : null; } catch (e) { parsedAppearance = null; }
+        // Owner avatars always use the 'staff' body shape — see CLAUDE.md's
+        // Owner Identity section (AppearanceRole::OWNER falls into the
+        // existing non-player branching server-side).
+        ownerSlot.innerHTML = composePlayerSpriteSvg(parsedAppearance || {}, 'staff', 'large', 3);
+    }
+
+    var stadiumSlot = card.querySelector('.spotlight-stadium-slot');
+    if (stadiumSlot && typeof composeStadiumSvg === 'function') {
+        var rawStadium = card.getAttribute('data-stadium-config');
+        var parsedStadium = null;
+        try { parsedStadium = rawStadium ? JSON.parse(rawStadium) : null; } catch (e) { parsedStadium = null; }
+        stadiumSlot.innerHTML = composeStadiumSvg(parsedStadium || {}, { rotation: 0, time: 'day' }, 2);
+    }
+})();
+
 // ── Boardroom Incident & Consequence Feed (ticker + incident inspector modal) ──
 (function () {
     var items = document.querySelectorAll('.terminal-feed-item');
