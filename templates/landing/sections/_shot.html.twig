@@ -13,8 +13,8 @@
 
    `eager` is for the first hero slide only — everything else is below the fold.
 #}
-{% macro img(name, alt, eager = false, display_width = 420) %}
-    {%- set base = '/screenshots/2026-08/' ~ name -%}
+{% macro img(name, alt, eager = false, display_width = 420, folder = '2026-08') %}
+    {%- set base = '/screenshots/' ~ folder ~ '/' ~ name -%}
     {%- set src = display_width > 460 ? base ~ '-900.webp' : base ~ '-420.webp' -%}
     <img src="{{ src }}"
          srcset="{{ base }}-420.webp 420w, {{ base }}-900.webp 900w"

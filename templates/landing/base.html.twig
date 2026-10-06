@@ -4,7 +4,7 @@
    Assets are versioned with `landing_v` so a deploy cannot leave a browser
    serving a stale stylesheet — there is no build step to fingerprint them.
 #}
-{% set landing_v = '20260915' %}
+{% set landing_v = '20261006' %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,6 +43,15 @@
      for the "port it verbatim if it ever changes" rule. Must load before landing.js,
      which calls composeKitSvg() for leaderboard rows and telemetry ticker items. -->
 <script src="{{ asset('assets/kit-compositor.js') }}?v={{ landing_v }}"></script>
+<!-- Read-only avatar sprite rendering (composePlayerSpriteSvg) — shared verbatim with
+     the admin appearance widget (templates/admin/field/appearance.html.twig). Used
+     here only by the Club Spotlight section to render the featured club's owner. -->
+<script src="{{ asset('assets/avatar-compositor.js') }}?v={{ landing_v }}"></script>
+<!-- Read-only stadium sprite rendering (composeStadiumSvg) — mechanical port of
+     assets/Components/facilities/{isoEngine,stadiumSprite}.ts, see
+     public/assets/stadium-compositor.js's own docblock. Used only by the Club
+     Spotlight section. -->
+<script src="{{ asset('assets/stadium-compositor.js') }}?v={{ landing_v }}"></script>
 <script src="{{ asset('landing.js') }}?v={{ landing_v }}"></script>
 {% block javascripts %}{% endblock %}
 </body>

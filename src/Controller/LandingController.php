@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Repository\ExcursionRepository;
 use App\Repository\GameConfigRepository;
 use App\Service\ArchetypeShowcaseService;
+use App\Service\ClubSpotlightService;
 use App\Service\LiveTelemetryService;
 use App\Service\WorldOverviewService;
 use App\Service\YouTubeFeedService;
@@ -36,6 +37,7 @@ class LandingController extends AbstractController
         private readonly ExcursionRepository $excursionRepository,
         private readonly ArchetypeShowcaseService $archetypeShowcase,
         private readonly LiveTelemetryService $liveTelemetryService,
+        private readonly ClubSpotlightService $clubSpotlightService,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -56,6 +58,8 @@ class LandingController extends AbstractController
             'archetypes' => $this->archetypeShowcase->sample(),
             // Cached aggregate, refreshed by app:telemetry:generate — never computed live here.
             'telemetry'  => $this->liveTelemetryService->getSnapshot(),
+            // Cached aggregate, refreshed by app:spotlight:generate — never computed live here.
+            'spotlight'  => $this->clubSpotlightService->getCurrent(),
         ]);
     }
 

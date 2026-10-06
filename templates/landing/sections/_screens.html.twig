@@ -2,10 +2,12 @@
 
 <!-- ═══════════════════════════════ SCREENSHOTS ═══════════════════════════════ -->
 {#
-   Gallery rebuilt from the August 2026 captures. The previous set was from June
-   and no longer matched the shipped UI, so it was replaced wholesale rather than
-   topped up — a gallery that mixes two generations of the interface reads as
-   inconsistency, not history.
+   Gallery rebuilt from the October 2026 captures (public/screenshots/2026-10/).
+   The previous August set no longer matched the shipped UI, so it was replaced
+   wholesale rather than topped up — a gallery that mixes two generations of the
+   interface reads as inconsistency, not history. Every one of the 21 October
+   captures appears somewhere on the page; the full set is shown here since this
+   section's entire point is "no mockups, no renders."
 #}
 <section class="screenshots-section" id="screenshots">
     <div class="wrap">
@@ -17,15 +19,15 @@
     {# Featured three #}
     <div class="bento-phones" aria-label="Featured screenshots">
         {% set featured = [
-            { name: 'dressing-room-network', label: 'Dressing Room',  alt: 'Dressing room relationship network mapping bonds and friction across the squad' },
-            { name: 'excursion-report',      label: 'Excursions',     alt: 'Excursion report showing which players bonded and which fell out after a team night' },
-            { name: 'weekly-cashflow',       label: 'The Money',      alt: 'Weekly cashflow projection — sponsor and matchday income against player wages, staff wages and facility upkeep' }
+            { name: 'story-event-chemistry', label: 'Story Events',  alt: 'Story event "Instant Chemistry" — a scored goal triggers a bonding moment between two players, each gaining morale' },
+            { name: 'tactics-first-xi',      label: 'Tactics',       alt: 'First XI in a 4-3-3 direct formation with star ratings and form arrows per player' },
+            { name: 'match-result-ratings',  label: 'Match Day',     alt: 'Match result screen — player stats tab showing individual ratings for every outfield position' }
         ] %}
         {% for item in featured %}
             <div class="bento-phone-frame">
                 <div class="bento-phone-outer">
                     <div class="bento-phone-screen">
-                        {{ shot.img(item.name, item.alt, false, 304) }}
+                        {{ shot.img(item.name, item.alt, false, 304, '2026-10') }}
                     </div>
                 </div>
                 <span class="bento-phone-label">{{ item.label }}</span>
@@ -39,28 +41,28 @@
     <div class="screenshot-scroll" role="region" aria-label="Game screenshots">
         <div class="screenshot-track">
             {% set gallery = [
-                { name: 'transfer-offer',           label: 'Transfer Offer',   alt: 'Incoming transfer bid of £1.2m with the manager advising against the sale' },
-                { name: 'staff-opinions',           label: 'Staff Verdicts',   alt: 'Manager, director of football and scout giving conflicting opinions on a signing' },
-                { name: 'contract-talks',           label: 'Contract Talks',   alt: 'A player requesting a new deal at fourteen times his current wage' },
-                { name: 'contract-talks-rejected',  label: 'Wage Pressure',    alt: 'Director of football rejecting a wage demand the income cannot support' },
-                { name: 'player-profile-agent',     label: 'Player Profile',   alt: 'Free agent profile with limited scouting information and his agent commission' },
-                { name: 'scouting-config',          label: 'Scouting Brief',   alt: 'Director of football scouting configuration by position, age band and squad role' },
-                { name: 'scout-inbox-report',       label: 'Scout Reports',    alt: 'Inbox message announcing a completed scout report on a target' },
-                { name: 'tactics-first-xi',         label: 'Tactics',          alt: 'First XI in a 4-5-1 counter formation with form indicators per player' },
-                { name: 'manager-archetype',        label: 'Your Manager',     alt: 'Manager archetype THE AUTOCRAT with a squad fit rating and flagged weaknesses' },
-                { name: 'league-table',             label: 'League',           alt: 'Tier 6 league table at the start of season three' },
-                { name: 'ranking-reputation',       label: 'Reputation',       alt: 'Global reputation leaderboard with the player club ranked fourth' },
-                { name: 'ranking-career-earnings',  label: 'Career Earnings',  alt: 'Career earnings leaderboard across all clubs' },
-                { name: 'development-report',       label: 'Development',      alt: 'Weekly development report showing attribute growth across the squad' },
-                { name: 'fans-happiness',           label: 'The Fans',         alt: 'Fan happiness at THRILLED with active attendance and morale effects' },
-                { name: 'club-value-budget',        label: 'Budget',           alt: 'Club value, balance and budget allocation between transfers and facilities' },
-                { name: 'facility-training-pitch',  label: 'Facilities',       alt: 'Isometric level four training pitch with condition and upgrade costs' },
-                { name: 'weekly-tick',              label: 'Weekly Tick',      alt: 'Week processing overlay advancing the season and checking in every pyramid club' },
-                { name: 'nav-drawer',               label: 'Navigation',       alt: 'Main navigation drawer with office, squad, transfers, finances, facilities and pyramid' }
+                { name: 'owner-identity',            label: 'Your Identity',    alt: 'Club identity screen — owner avatar, nationality, club and stadium name, club value and reputation progress' },
+                { name: 'chairman-duties',           label: 'Chairman',         alt: 'Chairman staff screen — season mandate, facility discount sign-off, investor offers, auto-decide toggle' },
+                { name: 'manager-duties',             label: 'Manager',          alt: 'Manager staff screen — matchday selection, training pace, win rate, auto-manage player events toggle' },
+                { name: 'dof-scouting-priorities',    label: 'DoF Priorities',   alt: 'Director of Football scouting priorities — positions, age brackets, emergency band-aid flag, scouting reach' },
+                { name: 'agent-tiers',                label: 'Agent Tiers',      alt: 'Agent directory — Elite, Reputable, Notable, Recognised tabs with tier, rating and client list columns' },
+                { name: 'dressing-room-pulse',        label: 'Dressing Room',    alt: 'Dressing room overview — bonded, unformed and friction percentages, average morale, relationship network' },
+                { name: 'club-leadership',            label: 'Club Leadership',  alt: 'Rival club profile — Manager, Director of Football, Facility Manager and Chairman leadership grid' },
+                { name: 'facility-training',          label: 'Training',         alt: 'Training sector screen — isometric Training Pitch at level two' },
+                { name: 'facility-medical',           label: 'Medical',          alt: 'Medical sector screen — isometric Physio Clinic reducing injury probability' },
+                { name: 'facility-scouting',          label: 'Scouting',         alt: 'Scouting sector screen — isometric Scouting Centre complex' },
+                { name: 'facility-stadium',           label: 'Stadium',          alt: 'Stadium sector screen — capacity, record attendance, isometric stadium render' },
+                { name: 'club-facilities-overview',   label: 'Campus',           alt: 'A rival club facilities tab — facilities built out of the full catalogue, total levels across the campus' },
+                { name: 'league-table',               label: 'League Table',     alt: 'League standings — season one table with points, goal difference and form' },
+                { name: 'browse-leagues',              label: 'Pyramid',          alt: 'Browse Leagues screen — all eight tiers listed with clubs per division and your current league highlighted' },
+                { name: 'weekly-tick-processing',      label: 'Weekly Tick',      alt: 'Week advancing — checklist covering squad morale, Director of Football activity, and reports to head office' },
+                { name: 'weekly-advance-checklist',    label: 'Advancing',        alt: 'Week advancing — checking squad fitness, preparing fixtures, briefing staff and agents' },
+                { name: 'matchday-preview',            label: 'Match Day',        alt: 'Pre-match screen — home and away crests and kits, preparing match or skip to result' },
+                { name: 'matchday-ticker-live',        label: 'Live Matchday',    alt: 'Live matchday ticker — 2D pitch with running scoreline, minute counter and commentary at 1x, 2x or 4x speed' }
             ] %}
             {% for item in gallery %}
                 <div class="ss-frame">
-                    {{ shot.img(item.name, item.alt, false, 190) }}
+                    {{ shot.img(item.name, item.alt, false, 190, '2026-10') }}
                     <p class="ss-caption">{{ item.label }}</p>
                 </div>
             {% endfor %}

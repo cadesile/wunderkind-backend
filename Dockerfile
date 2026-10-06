@@ -32,6 +32,7 @@ COPY docker/leaderboards-generate.sh /usr/local/bin/leaderboards-generate.sh
 COPY docker/post-community-stat.sh /usr/local/bin/post-community-stat.sh
 COPY docker/post-community-stat-tick.sh /usr/local/bin/post-community-stat-tick.sh
 COPY docker/telemetry-generate.sh /usr/local/bin/telemetry-generate.sh
+COPY docker/spotlight-generate.sh /usr/local/bin/spotlight-generate.sh
 COPY docker/competition-provision-instances.sh /usr/local/bin/competition-provision-instances.sh
 COPY docker/competition-draw-rounds.sh /usr/local/bin/competition-draw-rounds.sh
 COPY docker/competition-resolve-rounds.sh /usr/local/bin/competition-resolve-rounds.sh
@@ -50,6 +51,9 @@ COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
 #   every 15 min — telemetry-generate: recompute the landing page's 24h pyramid
 #     activity aggregate (fixtures simulated, capital deployed) from recent
 #     SyncRecord payloads, into LiveTelemetrySnapshot.
+#   every 12h — spotlight-generate: pick a new landing page "Club Spotlight"
+#     from the 5 most active clubs in the trailing 12h window and notify its
+#     owner (in-game inbox + push), into ClubSpotlight.
 #   every 10 min — competition-provision-instances: ensures every active
 #     CompetitionTemplate has an open (REGISTERING) instance. Not time-precision
 #     sensitive — capacity-fill itself locks an instance synchronously, this just
@@ -86,6 +90,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
     '*/15 * * * * /usr/local/bin/post-community-stat-tick.sh >> /var/log/post-stat-cron.log 2>&1' \
     '*/15 * * * * /usr/local/bin/telemetry-generate.sh     >> /var/log/telemetry-cron.log     2>&1' \
+    '0 */12 * * * /usr/local/bin/spotlight-generate.sh     >> /var/log/spotlight-cron.log     2>&1' \
     '*/10 * * * * /usr/local/bin/competition-provision-instances.sh >> /var/log/competition-provision-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/competition-draw-rounds.sh         >> /var/log/competition-draw-cron.log      2>&1' \
     '* * * * *    /usr/local/bin/competition-resolve-rounds.sh      >> /var/log/competition-resolve-cron.log   2>&1' \
@@ -96,7 +101,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

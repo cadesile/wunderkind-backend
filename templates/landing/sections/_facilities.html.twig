@@ -1,31 +1,51 @@
+{% import 'landing/sections/_shot.html.twig' as shot %}
+
 <!-- ═══════════════════════════════ FACILITIES ═══════════════════════════════ -->
 <section class="facilities-section" id="facilities">
     <div class="wrap">
         <div class="section-label">Infrastructure</div>
         <h2 class="section-title">Brick by brick: isometric club development</h2>
-        <p class="section-sub">Transform a local pitch into a world-class sporting complex. Construct Hydro Pools to slash recovery times, build out your Tactical Room to sharpen matchday preparation, or expand your Youth Academy to develop the next generation. Every construction project carries time, budget, and delay risks.</p>
+        <p class="section-sub">Build an enduring footballing empire across four sectors and 22 upgradable facilities. Construct Hydro Pools to slash recovery times, build out your Tactical Room to sharpen matchday preparation, or expand your Youth Academy to develop the next generation. Every facility governs recovery, development pace, scouting yield, or matchday revenue — and every construction project carries time, budget, and delay risks.</p>
 
         <div class="facilities-grid">
             <div class="facility-card">
-                <img src="images/facilities/hydro_pool/level_3.webp" alt="Hydro Pool facility — isometric pixel-art recovery and rehabilitation complex" width="660" height="377" loading="lazy" decoding="async">
+                {{ shot.img('facility-training', 'Training sector screen — isometric Training Pitch at level 2, with ground and pitch-pattern site settings', false, 260, '2026-10') }}
                 <div class="facility-card-body">
-                    <div class="facility-card-name">Hydro Pool</div>
-                    <p class="facility-card-desc">Cuts recovery times after matches and hard training blocks, keeping your squad fresher for longer.</p>
+                    <div class="facility-card-name">Training</div>
+                    <p class="facility-card-desc">Training Pitch, Strength Suite, Technical Zone, Tactical Room — accelerates player growth, supports tactical mastery, reduces developmental stalls.</p>
                 </div>
             </div>
             <div class="facility-card">
-                <img src="images/facilities/tactical_room/level_3.webp" alt="Tactical Room facility — isometric pixel-art coaching and preparation building" width="660" height="377" loading="lazy" decoding="async">
+                {{ shot.img('facility-medical', 'Medical sector screen — isometric Physio Clinic at level 2, -16% injury probability, expands squad capacity', false, 260, '2026-10') }}
                 <div class="facility-card-body">
-                    <div class="facility-card-name">Tactical Room</div>
-                    <p class="facility-card-desc">Sharpens matchday preparation and helps your Manager get more out of your Style Multiplier matchups.</p>
+                    <div class="facility-card-name">Medical</div>
+                    <p class="facility-card-desc">Physio Clinic, Hydro Pool, Biometric Hub, Imaging Suite, Nutrition Centre, Player Wellbeing — speeds up rehabilitation, boosts stamina, limits long-term wear.</p>
                 </div>
             </div>
             <div class="facility-card">
-                <img src="images/facilities/youth_academy/level_3.webp" alt="Youth Academy facility — isometric pixel-art development complex for young players" width="660" height="377" loading="lazy" decoding="async">
+                {{ shot.img('facility-scouting', 'Scouting sector screen — isometric Scouting Centre complex, with a link through to Scouting Directives', false, 260, '2026-10') }}
                 <div class="facility-card-body">
-                    <div class="facility-card-name">Youth Academy</div>
-                    <p class="facility-card-desc">Enrol young prospects and develop the next generation of your squad from the ground up.</p>
+                    <div class="facility-card-name">Scouting</div>
+                    <p class="facility-card-desc">Youth Academy, Scouting Centre, Advanced Scouting Network, Trial Pitch, Scout Fleet — enlarges youth intake, broadens scouting range, surfaces higher-potential prospects.</p>
                 </div>
+            </div>
+            <div class="facility-card">
+                {{ shot.img('facility-stadium', 'Stadium sector screen — estimated capacity 6,000, record attendance 2,665, isometric stadium render below', false, 260, '2026-10') }}
+                <div class="facility-card-body">
+                    <div class="facility-card-name">Stadium</div>
+                    <p class="facility-card-desc">Club Shop, Club Museum, Car Park, North, East, South &amp; West Stand — expands capacity, scales commercial revenue, elevates reputation.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="point-list" style="margin-top:32px;">
+            <div class="point">
+                <span class="point-title">Youth Academy intake</span>
+                <p>A new intake of prospects arrives at the start of every season. They develop inside the Academy until they turn 16 and become eligible for a first-team contract — the size and quality of each intake scales with your Academy's level.</p>
+            </div>
+            <div class="point">
+                <span class="point-title is-red">Upkeep isn't optional</span>
+                <p>Facilities decay over time. Neglect one and players start complaining, your Facility Manager's morale slides toward resignation, and the club's reputation takes the hit — proactive maintenance costs more per week, but it's cheaper than the alternative.</p>
             </div>
         </div>
     </div>
