@@ -1,3 +1,4 @@
+(function () {
 /* ══════════════════════════════════════════════════════════════════════
    Stadium sprite compositor — mechanical plain-JS port of
    assets/Components/facilities/isoEngine.ts (the shared isometric voxel
@@ -422,3 +423,4 @@ function composeStadiumSvg(config, opts, scale) {
 
 window.composeStadiumSvg = composeStadiumSvg;
 window.DEFAULT_STADIUM_CONFIG = DEFAULT_STADIUM_CONFIG;
+})();

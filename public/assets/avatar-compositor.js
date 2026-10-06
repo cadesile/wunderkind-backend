@@ -1,3 +1,4 @@
+(function () {
 // Admin avatar compositor — plain-JS mirror of the new player/staff sprite's
 // pure pixel-drawing logic. Mechanical type-stripping only, per the sprite's
 // own instruction not to change the pixel-drawing logic — this must stay a
@@ -211,3 +212,4 @@ window.composePlayerSpriteSvg = composePlayerSpriteSvg;
 // Shade lookup for the admin widget's skin swatches (base + darker shade),
 // since `skin` is stored as an id, not a hex, unlike the other color fields.
 window.SKIN_SHADES = Object.fromEntries(SKINS.map((s) => [s.id, { c: s.c, d: s.d }]));
+})();
