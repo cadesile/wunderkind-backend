@@ -44,7 +44,7 @@ class ClubSpotlightService
      * enough to be worth featuring. Applied as a HAVING floor in
      * SyncRecordRepository::findMostActiveClubs().
      */
-    private const MIN_SYNC_COUNT = 4;
+    private const MIN_SYNC_COUNT = 10;
 
     /** ClubFacility slugs that drive the stadium render's stand/building levels. */
     private const STADIUM_FACILITY_SLUGS = [
