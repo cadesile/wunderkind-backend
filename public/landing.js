@@ -181,7 +181,7 @@ function clubBadgeIconsHtml(clubBadge) {
         try { clubBadge = rawClubBadge ? JSON.parse(rawClubBadge) : null; } catch (e) { clubBadge = null; }
         if (crestEl) crestEl.innerHTML = clubBadgeIconsHtml(clubBadge);
 
-        categoryEl.textContent = item.getAttribute('data-category-label') || "CHAIRMAN'S DISPATCH";
+        categoryEl.textContent = item.getAttribute('data-category-label') || "OWNER'S DISPATCH";
         clubEl.textContent = item.getAttribute('data-club') || '—';
         timestampEl.textContent = formatTimestamp(item.getAttribute('data-timestamp'));
 

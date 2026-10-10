@@ -14,7 +14,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * The public shape of the game world: which countries are playable, what the
- * league pyramid looks like, and what a new chairman starts with.
+ * league pyramid looks like, and what a new owner starts with.
  *
  * This exists so the marketing site stops hard-coding figures. The landing page
  * previously claimed "22 clubs per division", "176 NPC clubs", "9 countries" and

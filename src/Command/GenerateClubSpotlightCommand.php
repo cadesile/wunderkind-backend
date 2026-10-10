@@ -30,7 +30,7 @@ class GenerateClubSpotlightCommand extends Command
         $club = $this->clubSpotlightService->selectNew();
 
         if ($club === null) {
-            $io->warning('No active clubs in the trailing window — spotlight left unchanged.');
+            $io->warning('No club met the minimum sync threshold in the trailing window — spotlight left unchanged.');
             return Command::SUCCESS;
         }
 

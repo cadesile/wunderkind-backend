@@ -21,7 +21,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  * it catches template errors; see this repo's CLAUDE.md note on the `ea` Twig context
  * only being populated on the real EasyAdmin route).
  *
- * Specifically exercises the sections added for chairman kit/badge identity, concluded
+ * Specifically exercises the sections added for owner kit/badge identity, concluded
  * season history, and the richer sync-payload sections (ledger, promises, fixtures,
  * toxic relationships, excursions) pulled from real payload shapes — none of these were
  * previously rendered anywhere on this page, so a shape mismatch (e.g. a payload key

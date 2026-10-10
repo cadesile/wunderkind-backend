@@ -119,7 +119,7 @@ class SeedArchetypesCommand extends Command
             [
                 'slug'         => 'natural_leader',
                 'name'         => 'Natural Leader',
-                'description'  => 'Bridges dressing-room cliques and buffers the squad against fallout from broken chairman promises.',
+                'description'  => 'Bridges dressing-room cliques and buffers the squad against fallout from broken owner promises.',
                 'polarity'     => $pos,
                 'traitWeights' => self::drivers('pressure', 0.5, 'loyalty', 0.5),
             ],

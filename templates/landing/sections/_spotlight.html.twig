@@ -1,5 +1,6 @@
 {#
-   Club Spotlight — every 12h, one of the 5 most active clubs is featured here.
+   Club Spotlight — every 12h, one of the 5 most active clubs (minimum
+   ClubSpotlightService::MIN_SYNC_COUNT valid syncs in the window) is featured here.
    Entirely client-rendered from data attributes (same technique as the
    Chairman's Terminal ticker's club badges): kit/badge via the existing
    composeKitSvg()/clubBadgeIconsHtml(), owner avatar and top performer avatar
@@ -43,7 +44,7 @@
             <div class="spotlight-pitch">
                 <figure class="spotlight-owner" style="margin:0;">
                     <span class="spotlight-owner-slot" aria-hidden="true"></span>
-                    <figcaption class="spotlight-pitch-label">Chairman</figcaption>
+                    <figcaption class="spotlight-pitch-label">Owner</figcaption>
                 </figure>
                 <figure class="spotlight-stadium" style="margin:0;">
                     <span class="spotlight-stadium-slot" aria-hidden="true"></span>
@@ -57,7 +58,7 @@
             </div>
 
             <div class="spotlight-footer vt">
-                <span>Chairman: <strong>{{ spotlight.ownerName ?? 'Anonymous' }}</strong></span>
+                <span>Owner: <strong>{{ spotlight.ownerName ?? 'Anonymous' }}</strong></span>
                 <span>Reputation: <strong>{{ spotlight.clubReputation|number_format }}</strong></span>
                 <span>Dividends Drawn: <strong>£{{ (spotlight.dividendDrawsPence / 100)|number_format }}</strong></span>
             </div>
@@ -95,7 +96,7 @@
                 </div>
             {% endif %}
         </div>
-        <p class="spotlight-note">Picked at random from the 5 most active clubs every 12 hours — build something worth featuring.</p>
+        <p class="spotlight-note">Picked at random every 12 hours from the most active clubs — keep syncing and build something worth featuring.</p>
     </div>
 </section>
 

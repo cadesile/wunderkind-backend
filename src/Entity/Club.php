@@ -77,7 +77,7 @@ class Club
      * Identity section) and the player/staff appearance system's KitStyle/KitColor/
      * KitPart. Client-supplied and stored verbatim — the app's own kit builder is
      * the source of truth, no server-side per-field validation, same trust model as
-     * User::$appearance. Null until the chairman customizes it; renders as
+     * User::$appearance. Null until the owner customizes it; renders as
      * kit-compositor.js's DEFAULT_KIT_CONFIG until then.
      */
     #[ORM\Column(type: 'json', nullable: true)]

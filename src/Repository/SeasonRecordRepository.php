@@ -109,7 +109,7 @@ class SeasonRecordRepository extends ServiceEntityRepository
      * "Chairman's Terminal" real-events feed (see LiveTelemetryService). (Previously
      * anonymised to tier + outcome only — reversed by product decision.)
      *
-     * homeKitConfig/awayKitConfig/badgeConfig are the club's own chairman-customized
+     * homeKitConfig/awayKitConfig/badgeConfig are the club's own owner-customized
      * kit+badge identity — see Club entity / docs/api/club-kit-identity.md.
      *
      * @return array<array{tier: int, promoted: bool, relegated: bool, finalPosition: int, createdAt: \DateTimeImmutable, clubName: string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>

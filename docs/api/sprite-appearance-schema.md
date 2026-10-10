@@ -111,7 +111,7 @@ directly; write `identity.home` instead.
 ## 2a. `homeKitConfig` / `awayKitConfig` / `badgeConfig` — the real Club's own identity
 
 The **real, player-owned `Club`** (not `NpcClub`) has its own kit + badge
-identity, chairman-customized on-device and synced up via
+identity, owner-customized on-device and synced up via
 `POST /api/club/kit-identity` — same shapes as `identity.home`/`identity.away`/
 the flat badge keys above, but as **three separate nullable properties**
 instead of one nested object (`NpcClub.identity` predates this and wasn't
@@ -128,7 +128,7 @@ restructured to match — don't conflate the two). Full endpoint contract:
 
 Same `KitStyle`/`KitColor`/`KitPart`/`BadgeShape`/`BadgePattern`/`BadgeCentre`
 enums as §2 — see §3 below for exact values. All three are `null` until the
-chairman customizes them (no auto-generation, unlike `NpcClub.identity`) and
+owner customizes them (no auto-generation, unlike `NpcClub.identity`) and
 are stored **verbatim, with no server-side per-field validation** — same trust
 model as `avatar` in `docs/api/owner-avatar.md`.
 

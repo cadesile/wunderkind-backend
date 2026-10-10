@@ -965,7 +965,7 @@ class SeedGameEventsCommand extends AbstractSeedEventTemplatesCommand
                         ],
                         [
                             'emoji'         => '👔',
-                            'label'         => 'Intervene directly as chairman',
+                            'label'         => 'Intervene directly as owner',
                             'stat_changes'  => [
                                 ['target' => 'player_1',   'field' => 'morale', 'operator' => 'subtract', 'value' => 5],
                                 ['target' => 'squad_wide', 'field' => 'morale', 'operator' => 'add',      'value' => 3],

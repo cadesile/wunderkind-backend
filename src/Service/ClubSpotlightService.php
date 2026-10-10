@@ -20,17 +20,31 @@ use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Picks the landing page's "Club Spotlight" every 12h: the 5 clubs with the
- * most valid syncs in the trailing 12h window, one chosen at random, snapshot
- * denormalized onto ClubSpotlight so the landing page never queries Club at
- * render time (same reasoning as LiveTelemetryService/LiveTelemetrySnapshot).
- * Notifies the selected club's owner via in-game inbox + push.
+ * Picks the landing page's "Club Spotlight" every 12h: of the clubs with at
+ * least MIN_SYNC_COUNT valid syncs in the trailing 12h window, the 5 most
+ * active, one chosen at random, snapshot denormalized onto ClubSpotlight so
+ * the landing page never queries Club at render time (same reasoning as
+ * LiveTelemetryService/LiveTelemetrySnapshot). Notifies the selected club's
+ * owner via in-game inbox + push.
+ *
+ * The eligibility floor means the candidate pool is routinely smaller than
+ * CANDIDATE_POOL_SIZE and is often empty on a quiet or fresh environment —
+ * that is the normal case, not an error. selectNew() returns null and leaves
+ * whatever spotlight is already up in place rather than blanking it.
  */
 class ClubSpotlightService
 {
     private const ACTIVITY_WINDOW_HOURS = 12;
     private const CANDIDATE_POOL_SIZE   = 5;
     private const SPOTLIGHT_DURATION_HOURS = 12;
+
+    /**
+     * Minimum valid syncs inside ACTIVITY_WINDOW_HOURS for a club to be eligible
+     * for the spotlight at all — a club that has barely synced isn't "active"
+     * enough to be worth featuring. Applied as a HAVING floor in
+     * SyncRecordRepository::findMostActiveClubs().
+     */
+    private const MIN_SYNC_COUNT = 4;
 
     /** ClubFacility slugs that drive the stadium render's stand/building levels. */
     private const STADIUM_FACILITY_SLUGS = [
@@ -60,13 +74,21 @@ class ClubSpotlightService
     }
 
     /**
-     * Selects a new spotlight and notifies its owner. Returns null if there are
-     * no active clubs to choose from (e.g. an empty/fresh environment).
+     * Selects a new spotlight and notifies its owner. Returns null if no club
+     * clears MIN_SYNC_COUNT in the trailing window (an empty/fresh/quiet
+     * environment) — the caller should treat that as "leave the current
+     * spotlight alone", not as a failure. A pool smaller than
+     * CANDIDATE_POOL_SIZE is equally fine; the random pick just draws from
+     * however many qualified.
      */
     public function selectNew(): ?Club
     {
         $since = new \DateTimeImmutable(sprintf('-%d hours', self::ACTIVITY_WINDOW_HOURS));
-        $candidates = $this->syncRecordRepository->findMostActiveClubs($since, self::CANDIDATE_POOL_SIZE);
+        $candidates = $this->syncRecordRepository->findMostActiveClubs(
+            $since,
+            self::CANDIDATE_POOL_SIZE,
+            self::MIN_SYNC_COUNT,
+        );
 
         if ($candidates === []) {
             return null;
@@ -189,7 +211,7 @@ class ClubSpotlightService
     {
         $title = "You're in the Spotlight!";
         $body  = sprintf(
-            '%s has been featured on the Build My Club homepage for the next %d hours — the chairman community is watching.',
+            '%s has been featured on the Build My Club homepage for the next %d hours — the owner community is watching.',
             $club->getName(),
             self::SPOTLIGHT_DURATION_HOURS,
         );

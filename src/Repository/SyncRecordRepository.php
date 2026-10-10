@@ -74,7 +74,7 @@ class SyncRecordRepository extends ServiceEntityRepository
      * no moderation risk). Joins to club (previously payload+serverTimestamp only) —
      * still cheap over idx_sync_record_server_timestamp since it's a single indexed FK.
      *
-     * homeKitConfig/awayKitConfig/badgeConfig are the club's own chairman-customized
+     * homeKitConfig/awayKitConfig/badgeConfig are the club's own owner-customized
      * kit+badge identity (see Club entity, set via POST /api/club/kit-identity) —
      * attached so the telemetry feed can render a club's real kit/badge, not just
      * its name. See docs/api/club-kit-identity.md.
@@ -179,6 +179,13 @@ class SyncRecordRepository extends ServiceEntityRepository
      * ClubSpotlightService). Grouped over the same (club_id, server_timestamp) shape
      * countActiveClubsSince() uses.
      *
+     * $minSyncCount is an eligibility floor, not a sort tweak: a club must have at
+     * least that many valid syncs inside the window to be a spotlight candidate at
+     * all, so a club that synced once never gets featured. It is applied as HAVING
+     * (post-aggregate) rather than WHERE, and deliberately returns fewer than $limit
+     * rows — up to and including zero — when not enough clubs clear it; callers must
+     * handle a short or empty list (ClubSpotlightService::selectNew() does).
+     *
      * Club has no inverse mapping to SyncRecord, so this can't be an ->innerJoin()
      * off a `s` root (Doctrine refuses to SELECT a non-root entity alongside a HIDDEN
      * aggregate in that shape) — a second root alias plus an implicit WHERE join is
@@ -186,7 +193,7 @@ class SyncRecordRepository extends ServiceEntityRepository
      *
      * @return list<Club>
      */
-    public function findMostActiveClubs(\DateTimeImmutable $since, int $limit): array
+    public function findMostActiveClubs(\DateTimeImmutable $since, int $limit, int $minSyncCount = 1): array
     {
         return $this->getEntityManager()->createQueryBuilder()
             ->select('c', 'COUNT(s.id) AS HIDDEN syncCount')
@@ -197,6 +204,8 @@ class SyncRecordRepository extends ServiceEntityRepository
             ->andWhere('s.serverTimestamp >= :since')
             ->setParameter('since', $since)
             ->groupBy('c.id')
+            ->having('COUNT(s.id) >= :minSyncCount')
+            ->setParameter('minSyncCount', max(1, $minSyncCount))
             ->orderBy('syncCount', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()
