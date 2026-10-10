@@ -91,7 +91,7 @@ class SeedSocialPostTemplatesCommand extends Command
                 "🧱 The tightest backline in the pyramid.\n\n{{clubName}} are choking out games {{period}}, conceding a microscopic {{statValue}} goals per match.\n\nSolid centre-back pairings, a keeper commanding his box, and zero cheap turnovers. If you can't score against them, you can't beat them.\n\nHow many clean sheets has your back five kept lately?\n\n#BuildMyClub #FootballManager #RetroGaming #PixelArt"],
 
             [StatCategory::TRANSFER_SPLURGE, SocialPlatform::TWITTER, StatsPeriod::WEEK,
-                "💰 Opening the war chest.\n\n{{clubName}} splashed £{{statValue}} on new signings {{period}}.\n\nThe chairman is backing the gaffer with serious cash—now the results need to match the investment.\n\n#BuildMyClub #FootballManager"],
+                "💰 Opening the war chest.\n\n{{clubName}} splashed £{{statValue}} on new signings {{period}}.\n\nThe owner is backing the gaffer with serious cash—now the results need to match the investment.\n\n#BuildMyClub #FootballManager"],
             [StatCategory::TRANSFER_SPLURGE, SocialPlatform::FACEBOOK, StatsPeriod::WEEK,
                 "💰 Opening the boardroom war chest.\n\n{{clubName}} haven't held back in the market, dropping £{{statValue}} on incoming transfers {{period}}.\n\nAmbition or reckless gambling? Spending big brings elite talent, but it also spikes the weekly wage bill and elevates board expectations immediately. There's nowhere to hide if the silverware doesn't follow.\n\nAre you stockpiling cash in the reserves or buying promotion?\n\n#BuildMyClub #FootballManager #IndieGame #PixelArt"],
         ];

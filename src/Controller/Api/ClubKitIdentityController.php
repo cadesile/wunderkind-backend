@@ -17,7 +17,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Reads/sets the authenticated club's own kit+badge identity — the on-device
- * "chairman" customizes these, they're synced up here, and served back out on
+ * "owner" customizes these, they're synced up here, and served back out on
  * the public leaderboard (LeaderboardItemDto) and the landing page's live
  * telemetry feed (LiveTelemetryService) so a real club's branding shows up
  * wherever the club is displayed publicly. Same partial-update convention as

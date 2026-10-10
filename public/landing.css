@@ -1335,7 +1335,7 @@
         /* ════════════════════════════════
            INCIDENT INSPECTOR MODAL
            Same overlay/modal structure and tokens as the beta modal above —
-           the "raw chairman dispatch report" for a clicked ticker item.
+           the "raw owner dispatch report" for a clicked ticker item.
         ════════════════════════════════ */
         .incident-overlay {
             display: none;

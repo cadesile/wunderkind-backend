@@ -1,7 +1,7 @@
 # Club Kit Identity API (client integration)
 
 Sets/updates the real, player-owned club's own kit + badge identity —
-`homeKitConfig`, `awayKitConfig`, `badgeConfig` — the "chairman" customizes
+`homeKitConfig`, `awayKitConfig`, `badgeConfig` — the "owner" customizes
 these on-device, and they're synced up here so the club's real branding can
 be shown wherever it appears publicly (the public leaderboard, and the
 marketing site's live activity feed).
