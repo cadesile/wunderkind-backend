@@ -541,6 +541,15 @@ final class CountryContentRegistry
             'Griendtsveen', 'Lottum', 'Grubbenvorst', 'Broekhuizen', 'Broekhuizenvorst',
             'Meerlo', 'Tienray', 'Swolgen', 'Wanssum', 'Blitterswijck'
         ],
+        'PL' => [
+            'Warszawa', 'Kraków', 'Wrocław', 'Łódź', 'Poznań',
+            'Gdańsk', 'Szczecin', 'Bydgoszcz', 'Lublin', 'Białystok',
+            'Katowice', 'Gdynia', 'Częstochowa', 'Radom', 'Rzeszów',
+            'Toruń', 'Sosnowiec', 'Kielce', 'Gliwice', 'Olsztyn',
+            'Zabrze', 'Bielsko-Biała', 'Bytom', 'Zielona Góra', 'Rybnik',
+            'Ruda Śląska', 'Opole', 'Tychy', 'Gorzów Wielkopolski', 'Dąbrowa Górnicza',
+            'Elbląg', 'Płock', 'Wałbrzych', 'Włocławek',
+        ],
         'PT' => [
             'Lisboa', 'Porto', 'Vila Nova de Gaia', 'Amadora', 'Braga',
             'Setúbal', 'Coimbra', 'Queluz', 'Funchal', 'Cacém',
@@ -1165,6 +1174,42 @@ final class CountryContentRegistry
             ['name' => 'Schiedam', 'population_size' => 79000, 'region' => 'South Holland'],
             ['name' => 'Roosendaal', 'population_size' => 77000, 'region' => 'North Brabant'],
         ],
+        'PL' => [
+            ['name' => 'Warszawa', 'population_size' => 1860000, 'region' => 'Masovia', 'is_capital' => true],
+            ['name' => 'Kraków', 'population_size' => 804000, 'region' => 'Lesser Poland'],
+            ['name' => 'Wrocław', 'population_size' => 674000, 'region' => 'Lower Silesia'],
+            ['name' => 'Łódź', 'population_size' => 658000, 'region' => 'Łódź'],
+            ['name' => 'Poznań', 'population_size' => 541000, 'region' => 'Greater Poland'],
+            ['name' => 'Gdańsk', 'population_size' => 486000, 'region' => 'Pomerania'],
+            ['name' => 'Szczecin', 'population_size' => 395000, 'region' => 'West Pomerania'],
+            ['name' => 'Bydgoszcz', 'population_size' => 337000, 'region' => 'Kuyavia-Pomerania'],
+            ['name' => 'Lublin', 'population_size' => 336000, 'region' => 'Lublin'],
+            ['name' => 'Białystok', 'population_size' => 294000, 'region' => 'Podlaskie'],
+            ['name' => 'Katowice', 'population_size' => 283000, 'region' => 'Silesia'],
+            ['name' => 'Gdynia', 'population_size' => 244000, 'region' => 'Pomerania'],
+            ['name' => 'Częstochowa', 'population_size' => 210000, 'region' => 'Silesia'],
+            ['name' => 'Radom', 'population_size' => 201000, 'region' => 'Masovia'],
+            ['name' => 'Rzeszów', 'population_size' => 198000, 'region' => 'Subcarpathia'],
+            ['name' => 'Toruń', 'population_size' => 196000, 'region' => 'Kuyavia-Pomerania'],
+            ['name' => 'Sosnowiec', 'population_size' => 189000, 'region' => 'Silesia'],
+            ['name' => 'Kielce', 'population_size' => 187000, 'region' => 'Holy Cross'],
+            ['name' => 'Gliwice', 'population_size' => 174000, 'region' => 'Silesia'],
+            ['name' => 'Olsztyn', 'population_size' => 169000, 'region' => 'Warmia-Masuria'],
+            ['name' => 'Zabrze', 'population_size' => 168000, 'region' => 'Silesia'],
+            ['name' => 'Bielsko-Biała', 'population_size' => 168000, 'region' => 'Silesia'],
+            ['name' => 'Bytom', 'population_size' => 157000, 'region' => 'Silesia'],
+            ['name' => 'Zielona Góra', 'population_size' => 141000, 'region' => 'Lubusz'],
+            ['name' => 'Rybnik', 'population_size' => 134000, 'region' => 'Silesia'],
+            ['name' => 'Ruda Śląska', 'population_size' => 132000, 'region' => 'Silesia'],
+            ['name' => 'Opole', 'population_size' => 128000, 'region' => 'Opole'],
+            ['name' => 'Tychy', 'population_size' => 125000, 'region' => 'Silesia'],
+            ['name' => 'Gorzów Wielkopolski', 'population_size' => 121000, 'region' => 'Lubusz'],
+            ['name' => 'Dąbrowa Górnicza', 'population_size' => 115000, 'region' => 'Silesia'],
+            ['name' => 'Elbląg', 'population_size' => 115000, 'region' => 'Warmia-Masuria'],
+            ['name' => 'Płock', 'population_size' => 115000, 'region' => 'Masovia'],
+            ['name' => 'Wałbrzych', 'population_size' => 110000, 'region' => 'Lower Silesia'],
+            ['name' => 'Włocławek', 'population_size' => 106000, 'region' => 'Kuyavia-Pomerania'],
+        ],
         'PT' => [
             ['name' => 'Lisboa', 'population_size' => 545000, 'region' => 'Lisbon District', 'is_capital' => true],
             ['name' => 'Vila Nova de Gaia', 'population_size' => 302000, 'region' => 'Porto District'],
@@ -1353,6 +1398,7 @@ final class CountryContentRegistry
         'BR' => ['Grêmio', 'Atlético', 'Botafogo', 'Real', 'América', 'Nacional', 'Independente', 'Remo', 'Paysandu', 'Esporte Clube'],
         'AR' => ['Racing', 'Independiente', 'Estudiantes', 'Talleres', 'Belgrano', 'Huracán', 'Central', 'Gimnasia', 'Banfield', 'Club Atlético'],
         'NL' => ['AZ', 'Vitesse', 'Twente', 'Willem', 'Heracles', 'Fortuna', 'Sparta', 'Roda', 'Excelsior', 'Go Ahead'],
+        'PL' => ['Legia', 'Wisła', 'Lech', 'Górnik', 'Pogoń', 'Polonia', 'Zagłębie', 'Gwardia', 'Korona', 'Lechia'],
         'PT' => ['FC', 'SC', 'Sporting Clube', 'Vitória', 'Boavista', 'Nacional', 'Académica', 'Marítimo', 'Gil Vicente', 'Os Belenenses'],
         'US' => ['United', 'City', 'Athletic', 'Fire', 'Dynamo', 'Galaxy', 'Rapids', 'Union', 'Crew', 'Republic'],
         'CA' => ['FC', 'United', 'Impact', 'Wanderers', 'Whitecaps', 'Athletic', 'City', 'Rapids', 'Rangers', 'Forge'],
@@ -1393,6 +1439,10 @@ final class CountryContentRegistry
             'FC', 'SV', 'SC', 'VV', 'Jong', 'Heerenveen', 'Graafschap', 'Cambuur', 'Telstar', 'Volendam',
             'Unitas', 'Quick', 'Harkemase', 'IJsselmeervogels', 'Spakenburg', 'Katwijk', 'Noordwijk', 'Koninklijke', 'Blauw Wit', 'Zeeburgia',
         ],
+        'PL' => [
+            'Stal', 'Odra', 'Warta', 'Motor', 'Piast', 'Ruch', 'Arka', 'Unia', 'Start', 'Sparta',
+            'Olimpia', 'Czarni', 'Błękitni', 'Orzeł', 'Victoria', 'Sokół', 'Hutnik', 'Znicz', 'Włókniarz', 'Granit',
+        ],
         'PT' => [
             'CD', 'GD', 'Clube', 'União', 'Paços de Ferreira', 'Moreirense', 'Arouca', 'Tondela', 'Farense', 'Olhanense',
             'Leixões', 'Varzim', 'Mafra', 'Covilhã', 'Feirense', 'Penafiel', 'Desportivo', 'Lusitano', 'Campomaiorense', 'Beira-Mar',
@@ -1424,6 +1474,10 @@ final class CountryContentRegistry
         'BR' => ['Estádio %s', 'Arena %s', 'Estádio Municipal de %s'],
         'AR' => ['Estadio %s', 'Estadio Municipal %s', 'Cancha %s'],
         'NL' => ['%s Stadion', 'Stadion %s', '%s Arena'],
+        // No Polish locative inflection in any of these — 'Stadion Miejski w %s'
+        // would need 'w Krakowie', not 'w Kraków', and the registry only ever
+        // substitutes the nominative place name.
+        'PL' => ['Stadion %s', 'Stadion Miejski %s', 'Arena %s', 'Stadion Ludowy %s', 'Miejski Stadion Sportowy %s'],
         'PT' => ['Estádio %s', 'Estádio Municipal de %s', 'Estádio do %s'],
         'US' => ['%s Stadium', '%s Field', '%s Park', '%s Soccer Complex', 'The %s Dome'],
         'CA' => ['%s Stadium', '%s Field', 'Stade %s', '%s Park', 'The %s Dome'],
@@ -1467,6 +1521,20 @@ final class CountryContentRegistry
      * stay on MarketPoolService::BUSINESS_CLUSTERS since they're keyed by cluster name, not
      * country, and there's nothing country-specific left to move for them.
      */
+    /**
+     * Countries whose club names read "{suffix} {place}" instead of the usual
+     * "{place} {suffix}".
+     *
+     * Polish football is uniformly name-first — Legia Warszawa, Górnik Zabrze,
+     * Wisła Kraków — so the default composition would yield "Warszawa Legia",
+     * which no Polish speaker would recognise as a club. Listed as an explicit
+     * opt-in rather than inferred from anything, and absent means the normal
+     * trailing order (NpcClubGenerationService::generateName()).
+     */
+    private const SUFFIX_LEADS_NAME = [
+        'PL' => true,
+    ];
+
     private const BUSINESS_CLUSTERS = [
         'EN' => 'british_isles',
         'IE' => 'british_isles',
@@ -1475,6 +1543,7 @@ final class CountryContentRegistry
         'FR' => 'western_europe',
         'IT' => 'southern_europe',
         'ES' => 'southern_europe',
+        'PL' => 'central_europe',
         'PT' => 'southern_europe',
         'BR' => 'south_america',
         'AR' => 'south_america',
@@ -1524,6 +1593,12 @@ final class CountryContentRegistry
     public static function worldRegion(Country $country): ?WorldRegion
     {
         return self::WORLD_REGIONS[$country->value] ?? null;
+    }
+
+    /** Whether this country's club names put the club name before the place. */
+    public static function suffixLeadsName(Country $country): bool
+    {
+        return self::SUFFIX_LEADS_NAME[$country->value] ?? false;
     }
 
     public static function businessCluster(Country $country): ?string

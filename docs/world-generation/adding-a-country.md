@@ -51,6 +51,11 @@ that used to be scattered across `NpcClubGenerationService`, `WorldRegion`, and
   (skin-tone distribution for appearance generation). Add a new `WorldRegion` case (with a
   `skinWeights()` entry summing to exactly 100 — `WorldRegionTest` enforces this) only if no
   existing region fits.
+- **`SUFFIX_LEADS_NAME`** — *only* if the country's clubs put the club's own name before the
+  place. Club names are composed `"{place} {suffix}"` by default (Madrid CF, Lisboa SC), which
+  is wrong for countries like Poland, where every club reads `Legia Warszawa` / `Górnik Zabrze`.
+  Adding `'<CODE>' => true` flips the order for that country only. Leave it alone otherwise —
+  it is opt-in, and `PolandContentTest` asserts every other country keeps trailing order.
 - **`BUSINESS_CLUSTERS`** — map the code to an existing cluster key in
   `MarketPoolService::BUSINESS_CLUSTERS`, or add a new cluster (plus ~8 evocative location
   words) there if none fit. This only affects sponsor/investor flavor company names.
