@@ -84,6 +84,26 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Bumped to invalidate every access token already issued to this account.
+     *
+     * The api firewall is stateless JWT, so there is no session to end — a
+     * token stays valid until it expires no matter what the server does. Every
+     * token carries this number as a `tv` claim (JwtTokenVersionSubscriber);
+     * on each request the claim is compared against this column and a mismatch
+     * rejects the token. Bumping it therefore logs the account out everywhere,
+     * immediately, without a denylist of individual tokens.
+     *
+     * Starts at 0 and tokens minted before the claim existed have no `tv`,
+     * which is read as 0 — so deploying this does not sign anyone out, while a
+     * killed account's pre-existing tokens still stop working.
+     *
+     * Revoking the refresh tokens is the other half of the job and is NOT done
+     * here; see SessionRevocationService, which owns both steps.
+     */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $tokenVersion = 0;
+
     public function __construct(string $email)
     {
         $this->id        = new UuidV7();
@@ -93,6 +113,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
     public function getId(): UuidV7 { return $this->id; }
+
+    public function getTokenVersion(): int { return $this->tokenVersion; }
+
+    /** Invalidates every access token already issued. See $tokenVersion. */
+    public function bumpTokenVersion(): void { $this->tokenVersion++; }
 
     public function getEmail(): string { return $this->email; }
     public function setEmail(string $email): void { $this->email = $email; }

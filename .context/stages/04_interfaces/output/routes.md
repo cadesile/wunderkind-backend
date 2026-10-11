@@ -89,6 +89,12 @@ the end) — this file is the sole source of truth for the route surface.
 - **`DeleteAdminController`** — `GET /admin/clubs/{id}/delete-info`,
   `POST /admin/clubs/{id}/delete`, `GET /admin/users/{id}/delete-info`,
   `POST /admin/users/{id}/delete`.
+- **`UserSessionController`** — `POST /admin/users/{id}/kill-session`
+  (`admin_user_kill_session`) — signs a game account out of every device via
+  `SessionRevocationService`. CSRF-guarded, redirects back to the user's detail
+  page through `AdminUrlGenerator`. Surfaced as a "Kill Session" button on both
+  `/admin/user/{id}` and its edit page (`templates/admin/_kill_session_button.html.twig`),
+  alongside a count of unexpired refresh tokens.
 - **`FacilityAdminController`** — `POST /admin/facilities/{id}/quick-edit`.
 - **`LeagueAdminController`** — `POST /admin/leagues/{id}/quick-edit`,
   `POST /admin/leagues/tier-defaults/bulk-edit` (`admin_league_tier_defaults_bulk_edit`
