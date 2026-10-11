@@ -58,11 +58,11 @@
                 { name: 'weekly-tick-processing',      label: 'Weekly Tick',      alt: 'Week advancing — checklist covering squad morale, Director of Football activity, and reports to head office' },
                 { name: 'weekly-advance-checklist',    label: 'Advancing',        alt: 'Week advancing — checking squad fitness, preparing fixtures, briefing staff and agents' },
                 { name: 'matchday-preview',            label: 'Match Day',        alt: 'Pre-match screen — home and away crests and kits, preparing match or skip to result' },
-                { name: 'matchday-ticker-live',        label: 'Live Matchday',    alt: 'Live matchday ticker — 2D pitch with running scoreline, minute counter and commentary at 1x, 2x or 4x speed' }
+                { name: 'matchday-ticker-live',        label: 'Live Matchday',    height: 174, alt: 'Live matchday ticker — 2D pitch with running scoreline, minute counter and commentary at 1x, 2x or 4x speed' }
             ] %}
             {% for item in gallery %}
                 <div class="ss-frame">
-                    {{ shot.img(item.name, item.alt, false, 190, '2026-10') }}
+                    {{ shot.img(item.name, item.alt, false, 190, '2026-10', item.height|default(900)) }}
                     <p class="ss-caption">{{ item.label }}</p>
                 </div>
             {% endfor %}

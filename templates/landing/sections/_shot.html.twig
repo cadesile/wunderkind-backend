@@ -1,11 +1,18 @@
 {#
    One screenshot, two widths.
 
-   Captures are 1080×2400, so the emitted intrinsic sizes are 420×934 and
-   900×2000. Both are stated on the tag so the browser can reserve space before
+   The exports are 420×900 and 900×1928, so that is what `intrinsic_height`
+   defaults to. It is stated on the tag so the browser can reserve space before
    the image arrives (CLS). Note landing.css carries `img[width][height] {
    height: auto }` — without it those attributes fight the `width: 100%` rules
    and squash the image to a literal pixel height.
+
+   `intrinsic_height` is a parameter because not every shot is a phone capture:
+   matchday-ticker-live is a 420×174 banner. The attributes only set the
+   pre-load aspect box (height:auto takes over once the real image lands), so a
+   wrong value is invisible after load and a ~340px jump before it — which is
+   exactly the layout shift these attributes exist to prevent. Pass the real
+   height for anything that isn't a 420×900 phone capture.
 
    `sizes` must describe the CSS width the image will actually occupy, or the
    browser picks from srcset against the wrong number: the gallery frames are
@@ -13,13 +20,13 @@
 
    `eager` is for the first hero slide only — everything else is below the fold.
 #}
-{% macro img(name, alt, eager = false, display_width = 420, folder = '2026-08') %}
+{% macro img(name, alt, eager = false, display_width = 420, folder = '2026-08', intrinsic_height = 900) %}
     {%- set base = '/screenshots/' ~ folder ~ '/' ~ name -%}
     {%- set src = display_width > 460 ? base ~ '-900.webp' : base ~ '-420.webp' -%}
     <img src="{{ src }}"
          srcset="{{ base }}-420.webp 420w, {{ base }}-900.webp 900w"
          sizes="(max-width: 480px) 90vw, {{ display_width }}px"
-         width="420" height="934"
+         width="420" height="{{ intrinsic_height }}"
          alt="{{ alt }}"
          {% if eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}>
 {% endmacro %}

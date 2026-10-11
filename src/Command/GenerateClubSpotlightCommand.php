@@ -30,7 +30,9 @@ class GenerateClubSpotlightCommand extends Command
         $club = $this->clubSpotlightService->selectNew();
 
         if ($club === null) {
-            $io->warning('No club met the minimum sync threshold in the trailing window — spotlight left unchanged.');
+            // Covers both "nobody qualified" and "only the incumbent qualified,
+            // window re-upped" — neither is an error, and neither notifies.
+            $io->warning('No new club met the minimum sync threshold in the trailing window — spotlight left unchanged.');
             return Command::SUCCESS;
         }
 

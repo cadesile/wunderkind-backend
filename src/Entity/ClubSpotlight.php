@@ -141,6 +141,28 @@ class ClubSpotlight
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
 
     /**
+     * Push the current feature's window out without touching anything else.
+     *
+     * Used when nobody new is eligible: the landing page only renders a
+     * spotlight whose window is still open (so an abandoned row disappears
+     * instead of claiming to be "featured this cycle" forever), but a quiet
+     * 12h window shouldn't blank the section when the incumbent is still the
+     * most active club there is. Re-upping the window keeps the section honest
+     * and live while deliberately NOT re-running update()/notifyOwner(), so
+     * the same owner isn't pushed "You're in the Spotlight!" every cycle.
+     */
+    public function extendWindow(\DateTimeImmutable $windowEndsAt): void
+    {
+        $this->windowEndsAt = $windowEndsAt;
+    }
+
+    /** True while this feature is still inside its advertised window. */
+    public function isLive(?\DateTimeImmutable $now = null): bool
+    {
+        return $this->clubName !== '' && $this->windowEndsAt > ($now ?? new \DateTimeImmutable());
+    }
+
+    /**
      * @param array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}> $recentFixtures
      * @param array<int, array{playerName: string, feePence: int, direction: string, counterpartyClub: string}> $recentTransfers
      */

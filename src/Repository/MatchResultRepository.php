@@ -26,6 +26,17 @@ class MatchResultRepository extends ServiceEntityRepository
      * The club's last $limit results, newest first — filtered on `createdAt`
      * (always-set, server-side), same reasoning as the stat queries below.
      *
+     * (season, week) are the real tiebreakers and are NOT decoration:
+     * SyncService::processMatchResults() builds every result from one payload
+     * in a single loop, each with its own new \DateTimeImmutable(), and
+     * `datetime_immutable` persists at second precision — so a whole batch
+     * routinely shares one createdAt (the production data has batches of 400+
+     * rows on a single second). Ordering on createdAt alone therefore returns
+     * an arbitrary slice of that batch, and ->setMaxResults() can cut out the
+     * genuinely-latest matches. createdAt stays the primary key of the sort so
+     * cross-batch recency still wins; (season, week) only breaks ties inside a
+     * batch.
+     *
      * @return MatchResult[]
      */
     public function findRecentByClub(Club $club, int $limit): array
@@ -34,6 +45,8 @@ class MatchResultRepository extends ServiceEntityRepository
             ->where('m.club = :club')
             ->setParameter('club', $club)
             ->orderBy('m.createdAt', 'DESC')
+            ->addOrderBy('m.season', 'DESC')
+            ->addOrderBy('m.week', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
