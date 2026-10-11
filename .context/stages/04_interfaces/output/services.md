@@ -191,6 +191,14 @@ filename alone.
   cluster), keyed by `App\Enum\Country`. Replaced four previously-scattered,
   independently-drifting consts. See
   `docs/world-generation/adding-a-country.md`.
+  Its `WORLD_REGIONS` table is the **only** demonym→skin-tone route: every
+  nationality resolves `Country::fromNationality()` → `worldRegion()` →
+  `WorldRegion::skinWeights()`, and anything unresolved falls back to a
+  *uniform* roll across all six `SkinId`s rather than a default region. A
+  `Country` with no entry here therefore silently loses its skin weighting, and
+  a `WorldRegion` with no country pointing at it can never be selected at all —
+  `EASTERN_EUROPE` sat orphaned in exactly that state until `PL` was added.
+  `WorldRegionTest` now asserts both directions.
 - **`LiveTelemetryService`** — feeds the landing page's live activity
   feed; some entries (sackings, contract disputes, youth intake) are
   illustrative and have no backing data — don't treat as real metrics.

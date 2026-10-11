@@ -3,6 +3,8 @@ namespace App\Tests\Enum\Appearance;
 
 use App\Enum\Appearance\SkinId;
 use App\Enum\Appearance\WorldRegion;
+use App\Enum\Country;
+use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\NameGeneratorService;
 use PHPUnit\Framework\TestCase;
 
@@ -22,6 +24,62 @@ class WorldRegionTest extends TestCase
                 sprintf('Nationality "%s" has no WorldRegion mapping', $nat),
             );
         }
+    }
+
+    /**
+     * The inverse of the test above, and the one that actually bites: a region
+     * can carry a full weight table and still be unreachable because no country
+     * maps to it. EASTERN_EUROPE sat in exactly that state until PL was added —
+     * its weights existed, were covered by the sum-to-100 test, and could never
+     * be selected for a generated entity.
+     */
+    public function testEveryRegionIsReachableFromSomeCountry(): void
+    {
+        $reached = [];
+        foreach (Country::cases() as $country) {
+            $region = CountryContentRegistry::worldRegion($country);
+            if ($region !== null) {
+                $reached[$region->name][] = $country->value;
+            }
+        }
+
+        foreach (WorldRegion::cases() as $region) {
+            $this->assertArrayHasKey(
+                $region->name,
+                $reached,
+                sprintf(
+                    '%s has skin weights but no Country maps to it, so no generated entity can ever use them. '
+                    . 'Either map a country to it in CountryContentRegistry::WORLD_REGIONS or remove the region.',
+                    $region->name,
+                ),
+            );
+        }
+    }
+
+    /** Every country must resolve to a region, or its entities fall back to a uniform skin roll. */
+    public function testEveryCountryHasARegion(): void
+    {
+        foreach (Country::cases() as $country) {
+            $this->assertInstanceOf(
+                WorldRegion::class,
+                CountryContentRegistry::worldRegion($country),
+                sprintf('Country %s has no WorldRegion, so its entities get a uniform skin distribution', $country->value),
+            );
+        }
+    }
+
+    /**
+     * Poland resolves through the ordinary Country chain. It used to be a
+     * hardcoded 'polish' fallback inside this enum precisely because it had a
+     * name pool but no Country case; both halves of that workaround are gone,
+     * and this is what must keep working without them.
+     */
+    public function testPolishResolvesThroughTheCountryChain(): void
+    {
+        $this->assertSame(Country::PL, Country::fromNationality('Polish'));
+        $this->assertSame(WorldRegion::EASTERN_EUROPE, WorldRegion::fromNationality('Polish'));
+        $this->assertSame(WorldRegion::EASTERN_EUROPE, WorldRegion::fromNationality('  polish  '));
+        $this->assertSame(WorldRegion::EASTERN_EUROPE, CountryContentRegistry::worldRegion(Country::PL));
     }
 
     public function testUnknownAndNullNationalityYieldNull(): void

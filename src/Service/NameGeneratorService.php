@@ -9,16 +9,16 @@ use App\Enum\Country;
 class NameGeneratorService
 {
     /**
-     * 'Polish' is the one entry with no Country case (see Country::fromNationality()'s
-     * docblock) so it's kept as a standalone addendum rather than hand-duplicating the
-     * other 20 demonyms here — those are derived from Country::nationalityMap() instead.
+     * Every demonym is derived from Country::nationalityMap() — there is no
+     * standalone addendum any more. 'Polish' used to be one, because it had a
+     * name pool below but no Country case; PL is now a real case, so keeping it
+     * here as well would emit it twice.
+     *
+     * @return string[]
      */
-    private const LEGACY_NATIONALITIES = ['Polish'];
-
-    /** @return string[] */
     public static function nationalities(): array
     {
-        return [...array_values(Country::nationalityMap()), ...self::LEGACY_NATIONALITIES];
+        return array_values(Country::nationalityMap());
     }
 
     /** Whether a real first/last name pool exists for this nationality (vs. the 'English' fallback). */
