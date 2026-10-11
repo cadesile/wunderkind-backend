@@ -76,7 +76,30 @@ jobs:
             EOF
             sed -i 's/^[[:space:]]*//' .env
 
-            docker compose -f docker-compose.dev.yml pull
+            # Reclaim the containerd image store before pulling. Docker 29 uses the
+            # containerd image store on this box, and a store left to accumulate
+            # untagged layers has twice corrupted mid-pull — "failed commit on ref"
+            # and "failed to extract layer ... UtimesNanoAt ... no such file or
+            # directory" — which fails the deploy while leaving production running
+            # the previous image. Disk was never the issue (27% used at the time);
+            # the stale layers were.
+            #
+            # `prune -f` without -a or --volumes: it only removes stopped containers,
+            # UNTAGGED images, unused networks and build cache. An image backing a
+            # running container is never touched, so this cannot strand prod, and the
+            # database is a bind mount (/mnt/volume-wkf/.../pgdata) rather than a
+            # volume, so no flag here can reach it. Caddy's certs live in named
+            # volumes, which is the other reason --volumes must never appear.
+            docker system prune -f || true
+
+            # Self-heal rather than page a human: if the pull still fails, the store
+            # is corrupt beyond what the light prune clears, so drop every unused
+            # image (running containers keep theirs) and try once more.
+            if ! docker compose -f docker-compose.dev.yml pull; then
+              echo "::warning::Image pull failed — clearing unused images and retrying once"
+              docker image prune -af || true
+              docker compose -f docker-compose.dev.yml pull
+            fi
             docker compose -f docker-compose.dev.yml up -d
             docker compose -f docker-compose.dev.yml exec -T app \
               php bin/console doctrine:migrations:migrate --no-interaction
