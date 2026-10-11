@@ -369,6 +369,15 @@ filename alone.
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
 - **`StarterPackService`** — assembles/grants a new club's starter pack
   (players/staff/scouts) via `ClubInitializationService`.
+- **`SessionRevocationService`** — signs a `User` out everywhere. Owns **both**
+  halves, because either alone leaves them partially logged in: it bumps
+  `User::$tokenVersion` (retiring every already-issued stateless access token —
+  see `03_data/output/entities.md`) *and* deletes the account's rows from
+  `refresh_tokens`, which are real stored credentials (30d TTL,
+  `single_use: false`) that would otherwise mint a fresh access token seconds
+  later. Rows are matched on `username`, i.e. `getUserIdentifier()`/email, not
+  the id. Also exposes `countActiveSessions()` (unexpired refresh tokens only —
+  access tokens are stateless and uncountable, so it is a floor, not a total).
 - **`SyncService`** — processes client sync payloads
   (`SyncService::process()`); applies an **absolute** `Club::setBalance()`
   call, not an accumulate — a client resync overwrites, doesn't add.

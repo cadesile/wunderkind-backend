@@ -1,0 +1,31 @@
+{#
+   "Kill Session" — signs a user out of every device.
+
+   POST + CSRF because it has a real side effect. It targets the plain route
+   rather than /admin?routeName=..., which is allowed here because
+   admin_user_kill_session only ever redirects and never renders an
+   @EasyAdmin-extending template itself — same exemption as
+   admin_narrative_translation_save (see src/Controller/Admin/CLAUDE.md).
+
+   activeSessions is the count of unexpired refresh_tokens rows. It is shown so
+   the button is verifiable: without it "killed" and "there was nothing to kill"
+   look identical, which is exactly the ambiguity you don't want when debugging.
+#}
+<div class="d-flex align-items-center gap-2">
+    {% if activeSessions is defined %}
+        <span class="badge {{ activeSessions > 0 ? 'bg-info-subtle text-info border border-info-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }} px-3 py-2"
+              title="Unexpired refresh tokens. Access tokens are stateless and not counted here.">
+            <i class="fa fa-mobile-screen me-1" aria-hidden="true"></i>
+            {{ activeSessions }} active session{{ activeSessions != 1 ? 's' : '' }}
+        </span>
+    {% endif %}
+    <form method="post"
+          action="{{ path('admin_user_kill_session', {id: user.id}) }}"
+          class="d-inline"
+          onsubmit="return confirm('Sign {{ user.email|e('js') }} out of every device?\n\nTheir refresh tokens are deleted and all existing access tokens stop working immediately. They will have to log in again.');">
+        <input type="hidden" name="_token" value="{{ csrf_token('kill_session_' ~ user.id) }}">
+        <button type="submit" class="btn btn-sm btn-outline-danger">
+            <i class="fa fa-right-from-bracket me-1" aria-hidden="true"></i> Kill Session
+        </button>
+    </form>
+</div>

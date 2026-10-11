@@ -16,6 +16,16 @@ migrations are the change log (see `migrations.md`).
   (cascade persist/remove); no uniqueness constraint on the FK. A `User` has
   no direct relation to `UserLedger` (see below) — it's queried, not
   traversed, via `UserLedgerRepository`.
+  `tokenVersion:int` (default 0) is the **access-token kill switch**: the `api`
+  firewall is stateless JWT with no denylist, so a token cannot be withdrawn
+  once issued. Every token carries this number as a `tv` claim
+  (`JwtTokenVersionSubscriber`, on `JWT_CREATED`), and the same subscriber
+  rejects any token on `JWT_DECODED` whose claim no longer matches the column.
+  Bumping it therefore signs the account out everywhere immediately. An
+  **absent** `tv` claim reads as 0 — the same value the migration's DEFAULT
+  gives every existing row — so shipping it signed nobody out, while a killed
+  account's pre-existing tokens still stop working. Written only via
+  `SessionRevocationService`, never directly.
 - **`UserLedger`** (table `user_ledger`) — centralized, cross-club financial
   audit trail for one `User`; currently only dividend draws the client
   reports via the sync payload's free-form `ledger[]` array (category

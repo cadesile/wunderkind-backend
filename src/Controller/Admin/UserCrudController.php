@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Form\Type\AppearanceType;
 use App\Repository\SyncRecordRepository;
 use App\Repository\UserLedgerRepository;
+use App\Service\SessionRevocationService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -28,6 +29,7 @@ class UserCrudController extends AbstractCrudController
     public function __construct(
         private readonly SyncRecordRepository $syncRecordRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
+        private readonly SessionRevocationService $sessionRevocation,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -77,6 +79,11 @@ class UserCrudController extends AbstractCrudController
             $responseParameters->set('clubsSummary', $this->buildClubsSummary($user));
             $responseParameters->set('clubKitConfigs', $this->buildClubKitConfigs($user));
             $responseParameters->set('overallBalancePence', $this->userLedgerRepository->getCurrentBalance($user));
+            // The edit page's header panel carries the same Kill Session control
+            // as the detail page; both need `user` and `activeSessions` in scope
+            // for admin/_kill_session_button.html.twig.
+            $responseParameters->set('user', $user);
+            $responseParameters->set('activeSessions', $this->sessionRevocation->countActiveSessions($user));
         }
 
         return $responseParameters;
@@ -160,8 +167,9 @@ class UserCrudController extends AbstractCrudController
         $user = $context->getEntity()->getInstance();
 
         return $this->render('admin/user_profile.html.twig', [
-            'user'  => $user,
-            'clubs' => $user->getClubs()->toArray(),
+            'user'           => $user,
+            'clubs'          => $user->getClubs()->toArray(),
+            'activeSessions' => $this->sessionRevocation->countActiveSessions($user),
         ]);
     }
 }
