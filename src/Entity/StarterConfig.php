@@ -31,7 +31,7 @@ class StarterConfig
      * World-pack agent distribution: target NPC players per agent. The world pack
      * bounds the distinct agents it uses to ceil(estimatedPlayers / this). Default: 12.
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 12])]
     private int $worldPackPlayersPerAgent = 12;
 
     /** Number of coaches assigned to a starter club. Default: 1 */

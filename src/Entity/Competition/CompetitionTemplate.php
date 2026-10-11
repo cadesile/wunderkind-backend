@@ -95,7 +95,7 @@ class CompetitionTemplate
     #[ORM\Column(options: ['default' => false])]
     private bool $autoFillSpoofEntrants = false;
 
-    #[ORM\Column(type: 'smallint', options: ['default' => 15])]
+    #[ORM\Column(type: 'smallint', options: ['default' => 20])]
     private int $autoFillDelayMinutes = 20;
 
     /**

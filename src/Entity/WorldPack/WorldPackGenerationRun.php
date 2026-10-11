@@ -22,6 +22,12 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: WorldPackGenerationRunRepository::class)]
 #[ORM\Table(name: 'world_pack_generation_run')]
 #[ORM\Index(columns: ['country', 'status'], name: 'idx_world_pack_generation_run_country_status')]
+// Partial unique index: one in-flight run per country.
+#[ORM\UniqueConstraint(
+    name: 'uq_world_pack_generation_run_one_active_per_country',
+    columns: ['country'],
+    options: ['where' => "((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('in_progress'::character varying)::text]))"],
+)]
 class WorldPackGenerationRun
 {
     #[ORM\Id]

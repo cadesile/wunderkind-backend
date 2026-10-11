@@ -10,6 +10,10 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: PlayerArchetypeRepository::class)]
+// `slug`'s unique index is named in the database; declare it so Doctrine doesn't keep
+// proposing a rename to its hashed form. `name`'s index already uses Doctrine's own
+// convention (uniq_41d989da5e237e06) and so stays a plain `unique: true` on the column.
+#[ORM\UniqueConstraint(name: 'uniq_archetype_slug', columns: ['slug'])]
 #[ORM\HasLifecycleCallbacks]
 class PlayerArchetype
 {
@@ -19,7 +23,7 @@ class PlayerArchetype
     private ?int $id = null;
 
     /** Stable machine identity, shared with the client. Match on this, never on name. */
-    #[ORM\Column(length: 100, unique: true)]
+    #[ORM\Column(length: 100)]
     private string $slug;
 
     #[ORM\Column(length: 100, unique: true)]
