@@ -109,17 +109,20 @@ class ClubSpotlightService
         // pool is routinely 1-2 clubs, which makes that the likely case rather
         // than a rare one.
         //
-        // Matched on name because ClubSpotlight is a denormalized snapshot with
-        // no club FK (deliberately — the row has to outlive the club). Club
-        // names are NOT unique (production has six "London FC"), so this errs
-        // toward over-exclusion: a different club sharing the incumbent's name
-        // waits a cycle. That is the safe direction — the failure it prevents is
-        // re-notifying a real owner, and the failure it causes is a club being
-        // featured 12h later. Add a denormalized clubId column if that ever
-        // needs to be exact.
+        // Matched on the denormalized clubId, not the name: club names are not
+        // unique (production has six "London FC"), so a name match would treat
+        // a different club as the incumbent and make it wait a cycle. Rows
+        // written before clubId existed have none, so those fall back to the
+        // name — a one-off that self-heals the first time this writes a row.
+        $incumbentId = $spotlight->getClubId();
+
+        $isIncumbent = $incumbentId !== null
+            ? static fn (Club $c): bool => (string) $c->getId() === $incumbentId
+            : static fn (Club $c): bool => $c->getName() === $spotlight->getClubName();
+
         $withoutIncumbent = array_values(array_filter(
             $candidates,
-            static fn (Club $c): bool => $c->getName() !== $spotlight->getClubName(),
+            static fn (Club $c): bool => !$isIncumbent($c),
         ));
 
         // The incumbent is the only club that qualified. Keep them featured —
@@ -140,6 +143,7 @@ class ClubSpotlightService
 
         $spotlight->update(
             clubName: $club->getName(),
+            clubId: (string) $club->getId(),
             clubReputation: $club->getReputation(),
             dividendDrawsPence: $this->userLedgerRepository->getTotalDividendsByClub($club),
             homeKitConfig: $club->getHomeKitConfig(),
