@@ -155,7 +155,7 @@ enum Country: string
         return match ($this) {
             self::ES, self::EN, self::DE, self::IT, self::FR,
             self::BR, self::AR, self::NL, self::PT,
-            self::US, self::CA, self::JP, self::NG => true,
+            self::US, self::CA, self::JP, self::NG, self::PL => true,
             default => false,
         };
     }

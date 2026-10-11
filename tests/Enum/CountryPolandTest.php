@@ -26,16 +26,11 @@ class CountryPolandTest extends TestCase
     }
 
     /**
-     * Deliberately false: the runbook (docs/world-generation/adding-a-country.md)
-     * says a new case stays non-capable until its CountryContentRegistry content
-     * — places, club-name suffixes, stadium formats — is authored. Poland has
-     * none of that yet, so it is a real nationality but not a playable country.
+     * Generation capability is asserted in PolandContentTest alongside the
+     * registry content that earns it. This test file deliberately stays about
+     * the enum wiring only — it briefly asserted the opposite, back when PL was
+     * a nationality with no content behind it.
      */
-    public function testPolandIsNotYetGenerationCapable(): void
-    {
-        $this->assertFalse(Country::PL->isGenerationCapable());
-        $this->assertArrayNotHasKey('PL', Country::generationCapableLabels());
-    }
 
     public function testPolandAppearsInTheWholeSetMaps(): void
     {

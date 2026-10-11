@@ -149,6 +149,7 @@ class NpcClubGenerationService
         $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
         $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier($tier);
+        $suffixLeads      = $countryEnum !== null && CountryContentRegistry::suffixLeadsName($countryEnum);
         $usedNames        = [];
         $clubs            = [];
 
@@ -157,7 +158,7 @@ class NpcClubGenerationService
         }
 
         for ($i = 0; $i < $count; $i++) {
-            [$name, $place] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights);
+            [$name, $place] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights, $suffixLeads);
             $usedNames[]    = $name;
             $citySize       = $place['city_size'];
             $reputation     = $this->reputationForTier($tier, $citySize);
@@ -282,13 +283,18 @@ class NpcClubGenerationService
      * @param array{big:float,medium:float,small:float} $weights
      * @return array{0:string,1:array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}}
      */
-    private function generateName(array $classifiedPlaces, array $usedNames, array $prestigeSuffixes, array $genericSuffixes, array $weights): array
+    private function generateName(array $classifiedPlaces, array $usedNames, array $prestigeSuffixes, array $genericSuffixes, array $weights, bool $suffixLeads = false): array
     {
         $attempts = 0;
         do {
             $place  = $this->pickWeightedPlace($classifiedPlaces, $weights);
             $suffix = $this->pickSuffixForCitySize($place['city_size'], $prestigeSuffixes, $genericSuffixes);
-            $name   = "{$place['name']} {$suffix}";
+            // Most countries read "{place} {suffix}" (Madrid CF, Lisboa SC). A few
+            // put the club's own name first and the place second — Polish is
+            // uniformly like this (Legia Warszawa, Górnik Zabrze), and composing
+            // it the other way round produces names no Polish speaker would
+            // recognise. See CountryContentRegistry::suffixLeadsName().
+            $name   = $suffixLeads ? "{$suffix} {$place['name']}" : "{$place['name']} {$suffix}";
             $attempts++;
         } while (in_array($name, $usedNames, true) && $attempts < 50);
 
@@ -320,7 +326,9 @@ class NpcClubGenerationService
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
         $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier(max(1, min(8, $tier)));
 
-        [$name] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights);
+        $suffixLeads = $countryEnum !== null && CountryContentRegistry::suffixLeadsName($countryEnum);
+
+        [$name] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights, $suffixLeads);
 
         return $name;
     }
