@@ -18,6 +18,15 @@ constraints. Don't restate field lists here.
 
 ## Notable constraints (beyond ordinary FKs — see `entities.md` for those)
 
+> **Partial unique indexes are declared in the ORM mapping**, as
+> `#[ORM\UniqueConstraint(..., options: ['where' => '<predicate>'])]` on the
+> owning entity — DBAL 4 round-trips the `where` option via
+> `pg_get_expr(indpred, indrelid)`. This matters in both directions:
+> `doctrine:schema:create` builds them (so a fresh `wunderkind_test` is
+> correct), and `doctrine:migrations:diff` no longer proposes dropping them as
+> unknown objects. Add new ones the same way — not in raw migration SQL alone —
+> and copy the predicate exactly as PostgreSQL reports it, or the diff churns.
+
 - **`active_competition`** — partial unique index
   `uq_active_competition_one_open_per_template` (`WHERE status =
   'registering'`), added in `Version20260916112510` — enforces at most

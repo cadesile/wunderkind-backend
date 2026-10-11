@@ -23,19 +23,19 @@ class PoolConfig
     // ── Player Generation ──────────────────────────────────────────────────
 
     /** Minimum age for newly generated players. Default: 12 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 12])]
     private int $playerAgeMin = 12;
 
     /** Maximum age for newly generated players. Default: 13 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 13])]
     private int $playerAgeMax = 13;
 
     /** Lower bound of the bell-curve potential range. Default: 40 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $playerPotentialMin = 40;
 
     /** Upper bound of the bell-curve potential range. Default: 80 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 80])]
     private int $playerPotentialMax = 80;
 
     /**
@@ -43,51 +43,51 @@ class PoolConfig
      * Actual value is (bellCurveRaw + mean) / 2, biasing toward this centre.
      * Default: 60
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 60])]
     private int $playerPotentialMean = 60;
 
     /** Minimum starting current ability. Default: 3 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 3])]
     private int $playerAbilityMin = 3;
 
     /** Maximum starting current ability. Default: 10 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
     private int $playerAbilityMax = 10;
 
     /** Minimum total attribute budget distributed across the 6 stats. Default: 6 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 6])]
     private int $playerAttributeBudgetMin = 6;
 
     /** Maximum total attribute budget distributed across the 6 stats. Default: 20 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
     private int $playerAttributeBudgetMax = 20;
 
     /** Percentage chance (0–100) that a generated player has an agent. Default: 40 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $playerAgentChancePercent = 40;
 
     /** Minimum height in cm. Default: 145 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 145])]
     private int $playerHeightMin = 145;
 
     /** Maximum height in cm. Default: 160 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 160])]
     private int $playerHeightMax = 160;
 
     /** Minimum weight in kg. Default: 38 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 38])]
     private int $playerWeightMin = 38;
 
     /** Maximum weight in kg. Default: 55 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 55])]
     private int $playerWeightMax = 55;
 
     /** Min value applied to all 8 personality traits on generation. Default: 30 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
     private int $personalityTraitMin = 30;
 
     /** Max value applied to all 8 personality traits on generation. Default: 70 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 70])]
     private int $personalityTraitMax = 70;
 
     // ── Position Weighting ─────────────────────────────────────────────────
@@ -97,81 +97,81 @@ class PoolConfig
      * Position is rolled against the sum of all four weights.
      * Default: 8 (8% of 100-total default)
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
     private int $positionWeightGk = 8;
 
     /** Relative weight for Defender position. Default: 30 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
     private int $positionWeightDef = 30;
 
     /** Relative weight for Midfielder position. Default: 38 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 38])]
     private int $positionWeightMid = 38;
 
     /** Relative weight for Attacker position. Default: 24 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 24])]
     private int $positionWeightAtt = 24;
 
     // ── Coach Generation ───────────────────────────────────────────────────
 
     /** Minimum age for generated coaches. Default: 28 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 28])]
     private int $coachAgeMin = 28;
 
     /** Maximum age for generated coaches. Default: 60 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 60])]
     private int $coachAgeMax = 60;
 
     /** Minimum coaching ability on generation. Default: 40 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $coachAbilityMin = 40;
 
     /** Maximum coaching ability on generation. Default: 75 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 75])]
     private int $coachAbilityMax = 75;
 
     // ── Scout Generation ───────────────────────────────────────────────────
 
     /** Minimum age for generated scouts. Default: 28 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 28])]
     private int $scoutAgeMin = 28;
 
     /** Maximum age for generated scouts. Default: 40 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $scoutAgeMax = 40;
 
     /** Minimum experience score (0–100) for generated scouts. Default: 10 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
     private int $scoutExperienceMin = 10;
 
     /** Maximum experience score (0–100) for generated scouts. Default: 80 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 80])]
     private int $scoutExperienceMax = 80;
 
     /** Min value for all 5 scout judgement categories. Default: 40 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $scoutJudgementMin = 40;
 
     /** Max value for all 5 scout judgement categories. Default: 80 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 80])]
     private int $scoutJudgementMax = 80;
 
     // ── Agent Generation ───────────────────────────────────────────────────
 
     /** Minimum reputation for generated agents. Default: 30 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
     private int $agentReputationMin = 30;
 
     /** Maximum reputation for generated agents. Default: 70 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 70])]
     private int $agentReputationMax = 70;
 
     /** Minimum age for generated agents. Default: 30 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
     private int $agentAgeMin = 30;
 
     /** Maximum age for generated agents. Default: 60 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 60])]
     private int $agentAgeMax = 60;
 
     // ── Pool Replenishment Targets ─────────────────────────────────────────
@@ -180,11 +180,11 @@ class PoolConfig
      * Minimum unassigned players before auto-replenishment triggers.
      * Also used as the batch size when generating players manually. Default: 50
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 50])]
     private int $playerPoolTarget = 50;
 
     /** Minimum unassigned coaches before auto-replenishment. Batch size for manual generate. Default: 10 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
     private int $coachPoolTarget = 10;
 
     /** Minimum unassigned managers before auto-replenishment. Default: 5 */
@@ -204,15 +204,15 @@ class PoolConfig
     private int $chairmanPoolTarget = 2;
 
     /** Minimum scouts before auto-replenishment. Batch size for manual generate. Default: 5 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
     private int $scoutPoolTarget = 5;
 
     /** Minimum unassigned sponsors before auto-replenishment. Default: 10 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
     private int $sponsorPoolTarget = 10;
 
     /** Minimum unassigned investors before auto-replenishment. Default: 5 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
     private int $investorPoolTarget = 5;
 
     /** Minimum agents before auto-replenishment. Batch size for manual generate. Default: 100 */

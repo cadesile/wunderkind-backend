@@ -126,22 +126,23 @@ lando php bin/console debug:firewall
   lando php bin/console doctrine:migrations:up-to-date --env=test
   lando psql -d wunderkind_test -c "<sql>"   # inspect the test DB directly
   ```
-  **This doesn't catch everything.** `doctrine:schema:update`/`schema:create` only
-  reconcile what's declared in Doctrine ORM mapping attributes. Two kinds of
-  drift are invisible to it and need a manual, one-time fix per test DB:
-  - **Raw-SQL partial unique indexes** (Postgres `CREATE UNIQUE INDEX ... WHERE
-    (...)`, e.g. `uq_active_competition_one_open_per_template`,
-    `uq_entrant_reward_claim_with_template`/`_without_template` from
-    `Version20260916112510`) aren't representable as ORM metadata, so
-    `schema:create` never builds them. Code that does `INSERT ... ON CONFLICT
-    DO NOTHING`/`ON CONFLICT (col) WHERE (...) DO NOTHING` against one of these
-    (e.g. `CompetitionProvisionInstancesCommand`, `RewardApplierService`) will
-    silently insert duplicate rows in tests instead of no-op'ing — symptom:
-    "actual size N matches expected size 1"-style count assertions failing, or
-    a `PDOException: ... no unique or exclusion constraint matching the ON
-    CONFLICT specification`. Fix: re-run the `CREATE UNIQUE INDEX ...` statement
-    from the relevant migration directly against `wunderkind_test` via `lando
-    psql -d wunderkind_test`.
+  **Partial unique indexes are now mapped — this used to be a trap and no longer is.**
+  Postgres partial indexes (`CREATE UNIQUE INDEX ... WHERE (...)`:
+  `uq_active_competition_one_open_per_template`,
+  `uq_entrant_reward_claim_with_template`/`_without_template`,
+  `uq_world_pack_generation_run_one_active_per_country`) are declared on their
+  entities as `#[ORM\UniqueConstraint(..., options: ['where' => '...'])]`, which
+  DBAL 4 round-trips. `schema:create` therefore builds them, so a fresh
+  `wunderkind_test` gets them automatically and `migrations:diff` no longer
+  proposes dropping them. **If you add another partial index, declare it that way
+  rather than only in raw migration SQL** — the predicate string must match what
+  `pg_get_expr(indpred, indrelid)` reports, or the diff will churn. The old
+  symptom, for reference: code doing `INSERT ... ON CONFLICT DO NOTHING` against
+  an absent index (`CompetitionProvisionInstancesCommand`, `RewardApplierService`)
+  silently inserted duplicates, or raised `PDOException: ... no unique or
+  exclusion constraint matching the ON CONFLICT specification`.
+
+  **This still doesn't catch everything:**
   - **Seed commands aren't run against `wunderkind_test` by anything.** If a
     functional test's behavior depends on seeded rows (e.g.
     `MatchNarrativeGeneratorService` reading `MATCH_NARRATIVE`-category

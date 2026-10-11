@@ -42,97 +42,97 @@ class GameConfig
     // ── Bond System ───────────────────────────────────────────────────────
 
     /** Lower bound every bond write is clamped to. Default: -100 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => -100])]
     private int $bondMin = -100;
 
     /** Upper bound every bond write is clamped to. Default: 100 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 100])]
     private int $bondMax = 100;
 
     /**
      * Points a NEGATIVE bond recovers toward 0 each week — grudges fade.
      * Positive bonds are untouched by this. Default: 1
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
     private int $bondNegativeDriftPerWeek = 1;
 
     /**
      * Points a neglected POSITIVE bond loses each week, down to bondDecayFloor.
      * Set to 0 to disable neglect decay entirely. Default: 1
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
     private int $bondPositiveDecayPerWeek = 1;
 
     /**
      * Bonds at or below this value never decay — the earned baseline is
      * permanent, and only the surplus above it is at risk. Default: 50
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 50])]
     private int $bondDecayFloor = 50;
 
     /**
      * Weeks without an interaction before a bond above the floor starts
      * decaying. Default: 8
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
     private int $bondNeglectWeeks = 8;
 
     /**
      * A bond below this counts as a negative relationship and arms weekly
      * morale decay for that player/coach/scout. Default: -20
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => -20])]
     private int $bondNegativeRelationsThreshold = -20;
 
     /** Weekly chance (0–1) an entity with negative relations loses morale. Default: 0.10 */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.10])]
     private float $bondMoraleDecayChance = 0.10;
 
     /** Morale lost when that roll passes. Default: 5 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
     private int $bondMoraleDecayPenalty = 5;
 
     /**
      * Base weekly chance (0–1) a player↔assigned-coach bond grows organically,
      * before the loyalty and coaching-ability boosts. Default: 0.05
      */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.05])]
     private float $bondOrganicGrowthBaseChance = 0.05;
 
     /** Divisor applied to player loyalty (1–20) for the growth boost. Default: 20 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
     private int $bondOrganicGrowthLoyaltyDivisor = 20;
 
     /** Divisor applied to coachingAbility (0–100) for the growth boost. Default: 100 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 100])]
     private int $bondOrganicGrowthAbilityDivisor = 100;
 
     /** Bond points added when the organic growth roll passes. Default: 5 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
     private int $bondOrganicGrowthDelta = 5;
 
     /** Bond shift from an AMP SUPPORT (+) or CRITICISE (−) action. Default: 5 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
     private int $bondManagerAmpDelta = 5;
 
     /** Player↔player bond change from a negative training incident. Default: -10 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => -10])]
     private int $bondIncidentNegativeDelta = -10;
 
     /** Player↔player bond change from a positive training incident. Default: 8 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
     private int $bondIncidentPositiveDelta = 8;
 
     /** Coach↔manager relationship below this arms coach trust decay. Default: -20 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => -20])]
     private int $coachManagerTrustThreshold = -20;
 
     /** Weekly chance (0–1) a distrusting coach loses morale. Default: 0.15 */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.15])]
     private float $coachManagerTrustDecayChance = 0.15;
 
     /** Morale a distrusting coach loses when that roll passes. Default: 5 */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
     private int $coachManagerTrustMoralePenalty = 5;
 
     // ── Engine Constants ──────────────────────────────────────────────────
@@ -257,49 +257,49 @@ class GameConfig
      * Facility Manager morale gained on completing a level-1 upgrade.
      * Default: 6
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 6])]
     private int $facilityMoraleFmBase = 6;
 
     /**
      * Added to the Facility Manager's gain for each level above 1, so bigger
      * facilities feel bigger. Default: 2
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
     private int $facilityMoraleFmPerLevel = 2;
 
     /**
      * Extra gain when the facility goes from level 0 to 1 — a new build rather
      * than an incremental upgrade. Default: 4
      */
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 4])]
     private int $facilityMoraleNewBuildBonus = 4;
 
     /**
      * Fraction of the Facility Manager's gain given to every other staff member
      * (all other coaches plus all scouts). Default: 0.34
      */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.34])]
     private float $facilityMoraleStaffShare = 0.34;
 
     /**
      * Fraction of the completion value paid when construction starts, so
      * approving the work is rewarded as well as delivering it. Default: 0.4
      */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.4])]
     private float $facilityMoraleStartMultiplier = 0.4;
 
     /**
      * Diminishing-returns multiplier for non-match staff morale gains while the
      * member's morale sits in the mid band. Default: 0.6
      */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.6])]
     private float $staffMoraleBandFactorMid = 0.6;
 
     /**
      * Diminishing-returns multiplier for non-match staff morale gains while the
      * member's morale is in the high band. Default: 0.25
      */
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'float', options: ['default' => 0.25])]
     private float $staffMoraleBandFactorHigh = 0.25;
 
     // ── Physical Degradation & Form ──────────────────────────────────────────

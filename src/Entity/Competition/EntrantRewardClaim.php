@@ -21,6 +21,19 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: EntrantRewardClaimRepository::class)]
 #[ORM\Table(name: 'entrant_reward_claim')]
 #[ORM\Index(columns: ['entrant_id', 'reward_template_id', 'trigger_context'], name: 'idx_entrant_reward_claim_lookup')]
+// Two partial uniques rather than one plain one, because NULL reward_template_id would
+// otherwise never collide in PostgreSQL. RewardApplierService's ON CONFLICT clauses target
+// these by name, so they are load-bearing, not an optimisation.
+#[ORM\UniqueConstraint(
+    name: 'uq_entrant_reward_claim_with_template',
+    columns: ['entrant_id', 'reward_template_id', 'trigger_context'],
+    options: ['where' => '(reward_template_id IS NOT NULL)'],
+)]
+#[ORM\UniqueConstraint(
+    name: 'uq_entrant_reward_claim_without_template',
+    columns: ['entrant_id', 'trigger_context'],
+    options: ['where' => '(reward_template_id IS NULL)'],
+)]
 class EntrantRewardClaim
 {
     #[ORM\Id]

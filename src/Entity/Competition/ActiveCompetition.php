@@ -22,6 +22,15 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: ActiveCompetitionRepository::class)]
 #[ORM\Table(name: 'active_competition')]
 #[ORM\Index(columns: ['template_id', 'status'], name: 'idx_active_competition_template_status')]
+// Partial unique index: at most one open instance per template. Declared here, with the
+// predicate exactly as PostgreSQL reports it via pg_get_expr(indpred), so schema:create
+// builds it and migrations:diff stops proposing to DROP it — DBAL 4 does round-trip the
+// `where` option, and an undeclared partial index reads to Doctrine as one it should remove.
+#[ORM\UniqueConstraint(
+    name: 'uq_active_competition_one_open_per_template',
+    columns: ['template_id'],
+    options: ['where' => "((status)::text = 'registering'::text)"],
+)]
 class ActiveCompetition
 {
     #[ORM\Id]

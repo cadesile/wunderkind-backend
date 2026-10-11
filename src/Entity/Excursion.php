@@ -19,6 +19,12 @@ use Doctrine\ORM\Mapping as ORM;
  * store simply keeps its fallback and the catalogue never appears to update.
  */
 #[ORM\Entity(repositoryClass: ExcursionRepository::class)]
+// Both declared with the names the database actually uses. A bare `unique: true` on the
+// column makes Doctrine generate a hashed name (UNIQ_9B08E72F989D9B62) and then propose a
+// pointless rename on every migrations:diff; the composite index exists for
+// ExcursionRepository's active+cost lookups and was simply never mapped.
+#[ORM\UniqueConstraint(name: 'uniq_excursion_slug', columns: ['slug'])]
+#[ORM\Index(name: 'idx_excursion_active_cost', columns: ['active', 'cost_per_person_pence'])]
 #[ORM\HasLifecycleCallbacks]
 class Excursion
 {
@@ -38,7 +44,7 @@ class Excursion
     private ?int $id = null;
 
     /** Stable identifier used by the client; never change it once shipped. */
-    #[ORM\Column(length: 100, unique: true)]
+    #[ORM\Column(length: 100)]
     private string $slug;
 
     #[ORM\Column(length: 150)]
@@ -53,11 +59,11 @@ class Excursion
     private ?string $imagePath = null;
 
     /** Pence, PER ATTENDEE — the client multiplies by headcount at booking. */
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 0])]
     private int $costPerPersonPence = 0;
 
     /** 1–100. Size of the morale payoff when the trip goes well. */
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 50])]
     private int $effectValue = 50;
 
     /**
@@ -65,22 +71,22 @@ class Excursion
      * negativeFrequency/10 per attendee. Friction erodes the payoff rather than
      * inflicting a separate penalty — a bad trip is a wasted one.
      */
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 5])]
     private int $negativeFrequency = 5;
 
-    #[ORM\Column(length: 20)]
+    #[ORM\Column(length: 20, options: ['default' => self::AUDIENCE_BOTH])]
     private string $targetAudience = self::AUDIENCE_BOTH;
 
     /** Bookable at any time, but only resolves during the close season. */
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => false])]
     private bool $postSeasonOnly = false;
 
     /** Minimum weeks before the same excursion can be booked again. */
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 4])]
     private int $cooldownWeeks = 4;
 
     /** Inactive excursions are filtered out of the API response. */
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => true])]
     private bool $active = true;
 
     #[ORM\Column]

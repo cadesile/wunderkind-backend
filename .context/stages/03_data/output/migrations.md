@@ -4,6 +4,32 @@ Entities under `src/Entity/` are the authoritative current schema —
 migrations are the change log, not the source of truth (see
 `schema.md`/`entities.md`).
 
+
+## Schema drift: cleared, and how to keep it that way
+
+For a long stretch, `doctrine:migrations:diff` on this project emitted ~90
+statements that had nothing to do with the change being made — and, worse,
+proposed `DROP`ping four raw-SQL partial unique indexes it could not see. Every
+migration had to be hand-trimmed, which is how
+`Version20261011114336`/`Version20261011131620` came to carry warnings about it.
+
+That drift is gone. It was three separate things:
+
+- **73 column defaults** present in the database but never declared in the
+  mapping (`pool_config`, `game_config`, `excursion`, `starter_config`). Fixed in
+  the entities with `options: ['default' => ...]` — no DDL.
+- **4 partial unique indexes + 1 plain index + 2 custom index names** that the
+  mapping never mentioned. Now declared (see `schema.md`) — no DDL.
+- **9 genuine database-side differences** — six json columns carrying a DEFAULT
+  the mapping didn't want, two `pool_config.scout_experience_*` defaults that
+  actually disagreed with the entity (DB 0/10 vs entity 10/80), and a leftover
+  `(DC2Type:uuid)` column comment. Fixed by `Version20261011134810`.
+
+`doctrine:schema:update --dump-sql` now reports "Nothing to update" and
+`migrations:diff` reports "No changes detected". **If a diff ever comes back
+noisy again, that is a signal, not background noise** — something was added to
+the database without being described in the mapping.
+
 ## Archive
 
 `migrations/archive/` holds 29 old MySQL-era migrations plus a
