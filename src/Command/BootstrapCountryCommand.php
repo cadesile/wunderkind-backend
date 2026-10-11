@@ -49,7 +49,8 @@ class BootstrapCountryCommand extends Command
             ->addOption('delete-existing', null, InputOption::VALUE_NONE, 'Delete existing NPC clubs per tier before regenerating')
             ->addOption('skip-pool', null, InputOption::VALUE_NONE, 'Skip running app:pool:warm for this country')
             ->addOption('skip-worldpack', null, InputOption::VALUE_NONE, 'Skip running app:worldpack:warm for this country')
-            ->addOption('enable', null, InputOption::VALUE_NONE, 'Also add this country to StarterConfig::enabledCountries (player-visible at club creation) — off by default since generation-capable and player-visible are deliberately separate concepts');
+            ->addOption('enable', null, InputOption::VALUE_NONE, 'Also add this country to StarterConfig::enabledCountries (player-visible at club creation) — off by default since generation-capable and player-visible are deliberately separate concepts')
+            ->addOption('enable-only', null, InputOption::VALUE_NONE, 'Skip every generation step and ONLY flip player-visibility. Use this on a country that is already bootstrapped — a plain --enable re-runs club generation and would add a second full set of clubs');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -63,6 +64,18 @@ class BootstrapCountryCommand extends Command
         if ($country === null) {
             $io->error("Unknown country code '{$countryCode}'. Add it to App\\Enum\\Country first.");
             return Command::FAILURE;
+        }
+
+        // --enable-only exists because club generation below is additive, not
+        // idempotent: it creates `clubs-per-tier` clubs every run unless
+        // --delete-existing is passed. So re-running `--enable` against an
+        // already-bootstrapped country to flip visibility silently doubles its
+        // club count. Visibility is the one step with no generation side effect,
+        // so it gets a way to run on its own.
+        if ($input->getOption('enable-only')) {
+            $this->enableForPlayers($io, $countryCode);
+
+            return Command::SUCCESS;
         }
 
         $missing = CountryContentRegistry::missingCategories($country);
@@ -121,16 +134,29 @@ class BootstrapCountryCommand extends Command
 
         // ── 6. Player-visibility toggle (opt-in) ─────────────────────────────
         if ($input->getOption('enable')) {
-            $enabled = $config->getEnabledCountries();
-            if (!in_array($countryCode, $enabled, true)) {
-                $enabled[] = $countryCode;
-                $config->setEnabledCountries($enabled);
-                $this->em->flush();
-                $io->text("Added {$countryCode} to StarterConfig::enabledCountries.");
-            }
+            $this->enableForPlayers($io, $countryCode);
         }
 
         $io->success("Bootstrap complete for {$countryCode}. Run `app:country:check {$countryCode}` to verify.");
         return Command::SUCCESS;
+    }
+
+    /** Idempotent: adding a country already in the list is a no-op. */
+    private function enableForPlayers(SymfonyStyle $io, string $countryCode): void
+    {
+        $config  = $this->starterConfigRepository->getConfig();
+        $enabled = $config->getEnabledCountries();
+
+        if (in_array($countryCode, $enabled, true)) {
+            $io->text("{$countryCode} is already in StarterConfig::enabledCountries — nothing to do.");
+
+            return;
+        }
+
+        $enabled[] = $countryCode;
+        $config->setEnabledCountries($enabled);
+        $this->em->flush();
+
+        $io->success("{$countryCode} is now player-visible (StarterConfig::enabledCountries).");
     }
 }

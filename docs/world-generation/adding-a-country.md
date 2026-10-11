@@ -95,7 +95,11 @@ generateClubs()` (once per tier) → seeds `StarterConfig::leagueAbilityRanges[<
 - `--force` — proceed even with missing registry content (generic placeholders)
 - `--delete-existing` — wipe and regenerate NPC clubs per tier
 - `--skip-pool` / `--skip-worldpack` — if you want to run those steps separately
-- `--enable` — also add the country to `StarterConfig::enabledCountries` (see step 6)
+- `--enable` — also add the country to `StarterConfig::enabledCountries` (see step 6). Only
+  meaningful on a *first* bootstrap: club generation below is additive, so passing `--enable`
+  to a country that is already bootstrapped gives it a second full set of clubs.
+- `--enable-only` — flip player-visibility and do nothing else. This is the one to use on an
+  already-bootstrapped country.
 
 ## 5. Verify
 
@@ -111,9 +115,18 @@ tier, and whether `StarterConfig` has an ability-range entry and the player-visi
 
 `StarterConfig::enabledCountries` is a *separate*, deliberately decoupled concept from
 generation-capability (see `Country`'s own class docblock) — a country can be fully generated
-and still hidden from the landing page / club-creation flow until an admin flips it on via the
-Starter Config screen (`/admin?routeName=admin_starter_config`), or by re-running the bootstrap
-command with `--enable`.
+and still hidden from the landing page / club-creation flow until it is switched on, either via
+the Starter Config screen (`/admin?routeName=admin_starter_config`) or:
+
+```bash
+lando php bin/console app:country:bootstrap <CODE> --enable-only
+```
+
+**Use `--enable-only`, not `--enable`, on a country you have already bootstrapped.** Step 2's
+club generation is additive — it creates `clubs-per-tier` clubs on every run unless
+`--delete-existing` is passed — so a second `--enable` run to flip visibility would quietly
+double the country's club count. `--enable-only` skips every generation step, and is a no-op
+if the country is already enabled.
 
 ## League Tier Defaults (financials, trophies, sponsors) — country-independent
 
