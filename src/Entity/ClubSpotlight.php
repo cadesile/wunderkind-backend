@@ -24,6 +24,22 @@ class ClubSpotlight
     #[ORM\Column(length: 100)]
     private string $clubName = '';
 
+    /**
+     * The featured Club's id, denormalized as a plain string — deliberately NOT
+     * a FK/relation. This row has to outlive the club it describes (same reason
+     * every other field here is a copy, not a join), so a real association
+     * would either block the club's deletion or null this out.
+     *
+     * Exists so ClubSpotlightService::selectNew() can recognise the incumbent
+     * exactly. Club names are not unique — production has six "London FC" — so
+     * matching on clubName alone made a different club with the same name look
+     * like the one already featured. Nullable only because rows written before
+     * the column existed have no id to backfill from; selectNew() falls back to
+     * the name for those, which self-heals on the first refresh.
+     */
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $clubId = null;
+
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $clubReputation = 0;
 
@@ -119,6 +135,7 @@ class ClubSpotlight
     public function getId(): ?int { return $this->id; }
 
     public function getClubName(): string { return $this->clubName; }
+    public function getClubId(): ?string { return $this->clubId; }
     public function getClubReputation(): int { return $this->clubReputation; }
     public function getDividendDrawsPence(): int { return $this->dividendDrawsPence; }
     public function getHomeKitConfig(): ?array { return $this->homeKitConfig; }
@@ -168,6 +185,7 @@ class ClubSpotlight
      */
     public function update(
         string $clubName,
+        ?string $clubId,
         int $clubReputation,
         int $dividendDrawsPence,
         ?array $homeKitConfig,
@@ -187,6 +205,7 @@ class ClubSpotlight
         \DateTimeImmutable $windowEndsAt,
     ): void {
         $this->clubName                     = $clubName;
+        $this->clubId                       = $clubId;
         $this->clubReputation               = $clubReputation;
         $this->dividendDrawsPence           = $dividendDrawsPence;
         $this->homeKitConfig                = $homeKitConfig;

@@ -9,11 +9,12 @@ use PHPUnit\Framework\TestCase;
 
 class ClubSpotlightWindowTest extends TestCase
 {
-    private function spotlight(string $clubName, string $endsAt): ClubSpotlight
+    private function spotlight(string $clubName, string $endsAt, ?string $clubId = 'club-1'): ClubSpotlight
     {
         $s = new ClubSpotlight();
         $s->update(
             clubName: $clubName,
+            clubId: $clubId,
             clubReputation: 0,
             dividendDrawsPence: 0,
             homeKitConfig: null,
@@ -56,6 +57,18 @@ class ClubSpotlightWindowTest extends TestCase
     public function testAnEmptyClubNameIsNotLiveEvenInsideTheWindow(): void
     {
         $this->assertFalse($this->spotlight('', '+11 hours')->isLive());
+    }
+
+    public function testUpdateStoresTheClubIdForIncumbentMatching(): void
+    {
+        $this->assertSame('club-7', $this->spotlight('Named FC', '+11 hours', 'club-7')->getClubId());
+    }
+
+    public function testANeverGeneratedSpotlightHasNoClubId(): void
+    {
+        // Pre-migration rows land here too; ClubSpotlightService falls back to
+        // the club name for those until the next refresh writes an id.
+        $this->assertNull((new ClubSpotlight())->getClubId());
     }
 
     public function testExtendWindowRevivesAnExpiredRowWithoutTouchingItsContent(): void
