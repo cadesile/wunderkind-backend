@@ -48,6 +48,7 @@ enum Country: string
     case CN = 'CN';
     case US = 'US';
     case CA = 'CA';
+    case PL = 'PL';
 
     /** Display name, e.g. for the landing page and admin dropdowns. */
     public function label(): string
@@ -72,6 +73,7 @@ enum Country: string
             self::CI => 'Ivory Coast',
             self::SN => 'Senegal',
             self::CN => 'China',
+            self::PL => 'Poland',
             self::US => 'USA',
             self::CA => 'Canada',
         };
@@ -106,6 +108,7 @@ enum Country: string
             self::CI => 'Ivorian',
             self::SN => 'Senegalese',
             self::CN => 'Chinese',
+            self::PL => 'Polish',
             self::US => 'American',
             self::CA => 'Canadian',
         };
@@ -135,6 +138,7 @@ enum Country: string
             self::DK => 'da_DK',
             self::CI, self::SN => 'fr_FR',
             self::CN => 'zh_CN',
+            self::PL => 'pl_PL',
             self::US => 'en_US',
             self::CA => 'en_CA',
         };

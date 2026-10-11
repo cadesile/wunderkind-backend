@@ -69,10 +69,23 @@ class PlayerBrowseSerializerTest extends TestCase
     public function testSerializeCountryCodeIsNullForAnUnrecognisedNationality(): void
     {
         $player = new Player('A', 'B');
-        $player->setNationality('Polish'); // no Country case — see Country::fromNationality()
+        // Deliberately not a real demonym. This used to say 'Polish', which was
+        // only unrecognised because it had no Country case — adding PL turned
+        // the fixture into a false negative. Use something that cannot ever
+        // become a Country, or this test silently stops testing anything.
+        $player->setNationality('Martian');
 
         $result = (new PlayerBrowseSerializer())->serialize($player);
 
         $this->assertNull($result['countryCode']);
+    }
+
+    /** Poland is now a real case; it must serialize like any other country. */
+    public function testSerializeCountryCodeResolvesPolish(): void
+    {
+        $player = new Player('A', 'B');
+        $player->setNationality('Polish');
+
+        $this->assertSame('PL', (new PlayerBrowseSerializer())->serialize($player)['countryCode']);
     }
 }

@@ -16,8 +16,9 @@ use App\Service\CountryContent\CountryContentRegistry;
  *
  * The demonym → region mapping itself lives in CountryContentRegistry, keyed by
  * Country, not here — this avoids a third hand-duplicated copy of the nationality
- * list (see CountryContentRegistry's own docblock). 'Polish' is the one exception:
- * it has no Country case, so it keeps a tiny standalone fallback below.
+ * list (see CountryContentRegistry's own docblock). There are no exceptions to
+ * that any more: 'Polish' used to need a standalone fallback because it had no
+ * Country case, and PL now has one.
  */
 enum WorldRegion
 {
@@ -32,11 +33,6 @@ enum WorldRegion
     case EAST_ASIA;
     case NORTH_AMERICA;
 
-    /** The one demonym with no Country case (see class docblock). */
-    private const LEGACY_NATIONALITY_REGIONS = [
-        'polish' => self::EASTERN_EUROPE,
-    ];
-
     /** Returns null for null, empty, or unrecognised nationalities. */
     public static function fromNationality(?string $nationality): ?self
     {
@@ -46,11 +42,8 @@ enum WorldRegion
         $trimmed = trim($nationality);
 
         $country = Country::fromNationality($trimmed);
-        if ($country !== null) {
-            return CountryContentRegistry::worldRegion($country);
-        }
 
-        return self::LEGACY_NATIONALITY_REGIONS[strtolower($trimmed)] ?? null;
+        return $country === null ? null : CountryContentRegistry::worldRegion($country);
     }
 
     /**

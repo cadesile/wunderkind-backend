@@ -1438,6 +1438,7 @@ final class CountryContentRegistry
      */
     private const WORLD_REGIONS = [
         'EN' => WorldRegion::BRITAIN_IRELAND,
+        'PL' => WorldRegion::EASTERN_EUROPE,
         'IE' => WorldRegion::BRITAIN_IRELAND,
         'FR' => WorldRegion::WESTERN_EUROPE,
         'DE' => WorldRegion::WESTERN_EUROPE,
