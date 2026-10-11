@@ -192,6 +192,49 @@ rollback path.
 The reverted image restores the TLS nginx config and the certbot sidecar, and the certs are
 still on disk.
 
+## Troubleshooting: deploy fails while pulling the image
+
+Symptom — the GitHub Actions deploy fails inside the SSH step with one of:
+
+```
+failed commit on ref "config-sha256:…": commit failed: rename
+  /var/lib/containerd/…/ingest/…/data → …/blobs/sha256/…: no such file or directory
+
+failed to extract layer (…) to overlayfs as "extract-…":
+  failed call to UtimesNanoAt for /var/lib/containerd/…/snapshots/<n>/fs/root/.composer:
+  no such file or directory
+```
+
+This is the **containerd image store on the box, not your code** — the same commit
+deploys fine to dev. Docker 29 uses the containerd image store here
+(`docker info` → `driver=overlayfs`, `io.containerd.snapshotter.v1`), and letting
+untagged layers accumulate has corrupted it twice.
+
+**It is not a disk problem.** Check anyway (`df -h /`, `df -i /`), but both times the
+box was at 27% used with 7% inodes.
+
+Nothing is lost when this happens: the pull fails before anything is replaced, so
+production keeps serving the previous image. Confirm with
+`docker inspect wunderkind-prod --format '{{.State.StartedAt}}'`.
+
+Fix:
+
+```bash
+ssh deploy@204.168.207.171
+docker system prune -f        # reclaimed 3.23 GB the last time
+gh run rerun <failed-run-id>  # or push again
+```
+
+**Never add `--volumes`.** The Postgres data is a bind mount
+(`/mnt/volume-wkf/wunderkind/prod/pgdata`) so it is out of reach either way, but
+Caddy's TLS certificates live in the `proxy_caddy_data` named volume, and deleting
+those forces re-issuance against Let's Encrypt rate limits.
+
+Both deploy workflows now run `docker system prune -f` before pulling and retry once
+with `docker image prune -af` if the pull still fails, so this should self-heal. If
+it recurs anyway, the snapshot store is damaged more deeply than a prune clears —
+stop Docker and clear `/var/lib/containerd/io.containerd.content.v1.content/ingest/`.
+
 ## Verifying a deploy
 
 ```bash
