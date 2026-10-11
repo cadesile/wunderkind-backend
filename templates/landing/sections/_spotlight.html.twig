@@ -13,6 +13,14 @@
    first cron run, every field is null/empty and the section renders nothing
    (empty clubName).
 
+   Gated on spotlight.isLive(), i.e. windowEndsAt still in the future — not on
+   clubName alone. The card says "FEATURED THIS CYCLE" and the note promises a
+   12-hourly pick, so a row left behind by a stopped cron (or by a long run of
+   cycles where nobody cleared MIN_SYNC_COUNT) must drop out rather than keep
+   advertising a cycle that ended days ago. A quiet cycle where the incumbent
+   is still the most active club does NOT hide the section —
+   ClubSpotlightService::selectNew() re-ups the window for exactly that case.
+
    Career earnings shows dividendDrawsPence (real UserLedger DIVIDEND_DRAW
    entries against this club), not Club::$totalCareerEarnings — the latter is
    every income source the club has ever had, not money the owner has
@@ -24,7 +32,7 @@
    renders if the player has ever reported a sync v2 appearanceConfig —
    most haven't yet, since no client consumes this field today.
 #}
-{% if spotlight.clubName is not empty %}
+{% if spotlight.isLive %}
 <section class="spotlight-section" id="spotlight">
     <div class="wrap">
         <div class="section-label">Club Spotlight</div>

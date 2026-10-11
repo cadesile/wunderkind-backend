@@ -65,6 +65,31 @@ class MatchResultRepositoryTest extends KernelTestCase
         return self::getContainer()->get(MatchResultRepository::class);
     }
 
+    /**
+     * findRecentByClub() orders on createdAt, but SyncService writes a whole
+     * payload's match results in one loop and `datetime_immutable` is
+     * second-precision — so a batch shares one createdAt (production has
+     * batches of 400+ rows on a single second). Without the (season, week)
+     * tiebreakers the "recent" five are an arbitrary five.
+     */
+    public function testFindRecentByClubTiebreaksOnSeasonAndWeekWithinOneCreatedAtSecond(): void
+    {
+        $club = $this->club('Batch Sync FC');
+
+        // Deliberately persisted out of order, all inside the same second.
+        foreach ([[3, 1], [1, 7], [2, 4], [1, 2], [3, 5], [2, 9], [1, 11]] as [$season, $week]) {
+            $this->persist(new MatchResult($club, 1, 0, $week, $season));
+        }
+        $this->em->flush();
+
+        $ordered = array_map(
+            static fn (MatchResult $m): string => $m->getSeason() . ':' . $m->getWeek(),
+            $this->repo()->findRecentByClub($club, 5),
+        );
+
+        $this->assertSame(['3:5', '3:1', '2:9', '2:4', '1:11'], $ordered);
+    }
+
     public function testGetMostWinsByClubTiebreaksOnGoalDifference(): void
     {
         $narrow = $this->club('Narrow Wins FC');

@@ -74,12 +74,16 @@ class ClubSpotlightService
     }
 
     /**
-     * Selects a new spotlight and notifies its owner. Returns null if no club
-     * clears MIN_SYNC_COUNT in the trailing window (an empty/fresh/quiet
-     * environment) — the caller should treat that as "leave the current
-     * spotlight alone", not as a failure. A pool smaller than
-     * CANDIDATE_POOL_SIZE is equally fine; the random pick just draws from
-     * however many qualified.
+     * Selects a new spotlight and notifies its owner. Three outcomes, and only
+     * the first is a change:
+     *
+     *  - a new club is featured    -> returns that Club, owner notified
+     *  - only the incumbent qualified -> returns null, window re-upped, nobody notified
+     *  - nothing qualified         -> returns null, row untouched; it falls out
+     *                                 of its window and the section stops rendering
+     *
+     * None of those is a failure. A pool smaller than CANDIDATE_POOL_SIZE is
+     * normal too — the random pick just draws from however many qualified.
      */
     public function selectNew(): ?Club
     {
@@ -94,13 +98,44 @@ class ClubSpotlightService
             return null;
         }
 
-        $club = $candidates[array_rand($candidates)];
-
+        $spotlight      = $this->clubSpotlightRepository->getCurrent();
         $windowStartsAt = new \DateTimeImmutable();
         $windowEndsAt   = $windowStartsAt->modify(sprintf('+%d hours', self::SPOTLIGHT_DURATION_HOURS));
 
-        $spotlight = $this->clubSpotlightRepository->getCurrent();
-        $owner     = $club->getUser();
+        // Don't re-feature whoever is already up: notifyOwner() fires an inbox
+        // message and a push on every selection, so re-picking the incumbent
+        // spams one owner "You're in the Spotlight!" every cycle for a feature
+        // that never visibly changed. With MIN_SYNC_COUNT set high the eligible
+        // pool is routinely 1-2 clubs, which makes that the likely case rather
+        // than a rare one.
+        //
+        // Matched on name because ClubSpotlight is a denormalized snapshot with
+        // no club FK (deliberately — the row has to outlive the club). Club
+        // names are NOT unique (production has six "London FC"), so this errs
+        // toward over-exclusion: a different club sharing the incumbent's name
+        // waits a cycle. That is the safe direction — the failure it prevents is
+        // re-notifying a real owner, and the failure it causes is a club being
+        // featured 12h later. Add a denormalized clubId column if that ever
+        // needs to be exact.
+        $withoutIncumbent = array_values(array_filter(
+            $candidates,
+            static fn (Club $c): bool => $c->getName() !== $spotlight->getClubName(),
+        ));
+
+        // The incumbent is the only club that qualified. Keep them featured —
+        // they are genuinely still the most active club — but only re-up the
+        // window, so the section stays live without a duplicate notification.
+        if ($withoutIncumbent === []) {
+            $spotlight->extendWindow($windowEndsAt);
+            $this->em->flush();
+
+            return null;
+        }
+
+        $club = $withoutIncumbent[array_rand($withoutIncumbent)];
+
+        $owner        = $club->getUser();
+        $recentResults = $this->matchResultRepository->findRecentByClub($club, self::RECENT_FIXTURES_LIMIT);
         $topPerformer = $this->playerCareerStatRepository->findTopPerformerForClub($club);
 
         $spotlight->update(
@@ -113,8 +148,8 @@ class ClubSpotlightService
             ownerName: $owner->getName(),
             ownerNationality: $owner->getNationality(),
             ownerAppearance: $owner->getAppearance(),
-            stadiumConfig: $this->buildStadiumConfig($club),
-            recentFixtures: $this->buildRecentFixtures($club),
+            stadiumConfig: $this->buildStadiumConfig($club, $recentResults),
+            recentFixtures: $this->buildRecentFixtures($recentResults),
             recentTransfers: $this->buildRecentTransfers($club),
             topPerformerName: $topPerformer?->getPlayerName(),
             topPerformerGoals: $topPerformer?->getGoals() ?? 0,
@@ -132,9 +167,29 @@ class ClubSpotlightService
     }
 
     /**
-     * @return array<string, int>
+     * The stadium sprite's config, as composeStadiumSvg() expects it.
+     *
+     * Everything omitted here falls back to stadium-compositor.js's
+     * DEFAULT_STADIUM_CONFIG, which is a *demo* config, not a neutral one — so
+     * omission is never "unset", it is "show the demo value". Three groups have
+     * to be sent explicitly for that reason:
+     *
+     *  - shop/museum/carpark are booleans the renderer gates on, separate from
+     *    the *Level ints. The defaults are shop:true, carpark:true, museum:false,
+     *    so sending levels alone meant a club with no car park still drew a
+     *    full two-row one, a club with no shop drew a shop whose height came out
+     *    `undefined` (h = [4,4,5,6,7][-1]), and a maxed-out museum never drew at all.
+     *  - seat/roof default to a red-and-white that has nothing to do with the
+     *    featured club, on a section whose entire point is the club's identity.
+     *    Taken from the club's own home kit when it has one.
+     *  - scoreboard defaults to true with home:2, away:1 — a fabricated result.
+     *    Only ever shown for a real home fixture, otherwise switched off.
+     *
+     * @param MatchResult[] $recentResults newest-first, as findRecentByClub() returns
+     *
+     * @return array<string, int|bool|string>
      */
-    private function buildStadiumConfig(Club $club): array
+    private function buildStadiumConfig(Club $club, array $recentResults): array
     {
         $facilities = $this->clubFacilityRepository->findBy([
             'club'         => $club,
@@ -151,24 +206,65 @@ class ClubSpotlightService
         // of 1 so an unbuilt stand still renders rather than vanishing.
         $standLevel = static fn (string $slug): int => max(1, ($levelBySlug[$slug] ?? 0) * 2);
 
-        return [
+        $shopLevel    = max(0, $levelBySlug['club_shop'] ?? 0);
+        $museumLevel  = max(0, $levelBySlug['museum'] ?? 0);
+        $carparkLevel = max(0, $levelBySlug['car_park'] ?? 0);
+
+        $config = [
             'north' => $standLevel('north_stand'),
             'east'  => $standLevel('east_stand'),
             'south' => $standLevel('south_stand'),
             'west'  => $standLevel('west_stand'),
-            'shopLevel'     => max(0, $levelBySlug['club_shop'] ?? 0),
-            'museumLevel'   => max(0, $levelBySlug['museum'] ?? 0),
-            'carparkLevel'  => max(0, $levelBySlug['car_park'] ?? 0),
+            'shopLevel'     => $shopLevel,
+            'museumLevel'   => $museumLevel,
+            'carparkLevel'  => $carparkLevel,
+            'shop'          => $shopLevel > 0,
+            'museum'        => $museumLevel > 0,
+            'carpark'       => $carparkLevel > 0,
         ];
+
+        $kit = $club->getHomeKitConfig() ?? [];
+        // shade() indexes a 7-char #rrggbb directly, so a 3-digit shorthand or a
+        // named colour would render as garbage — leave the default in that case.
+        // (homeKitConfig is client-supplied verbatim and never validated server-side.)
+        if (self::isHexColor($kit['primary'] ?? null)) {
+            $config['seat'] = $kit['primary'];
+        }
+        if (self::isHexColor($kit['secondary'] ?? null)) {
+            $config['roof'] = $kit['secondary'];
+        }
+
+        $homeResult = null;
+        foreach ($recentResults as $result) {
+            if ($result->getIsHome() === true) {
+                $homeResult = $result;
+                break;
+            }
+        }
+
+        if ($homeResult !== null) {
+            $config['scoreboard'] = true;
+            $config['home']       = $homeResult->getGoalsFor();
+            $config['away']       = $homeResult->getGoalsAgainst();
+        } else {
+            $config['scoreboard'] = false;
+        }
+
+        return $config;
+    }
+
+    private static function isHexColor(mixed $value): bool
+    {
+        return is_string($value) && preg_match('/^#[0-9a-fA-F]{6}$/', $value) === 1;
     }
 
     /**
+     * @param MatchResult[] $results newest-first, as findRecentByClub() returns
+     *
      * @return array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}>
      */
-    private function buildRecentFixtures(Club $club): array
+    private function buildRecentFixtures(array $results): array
     {
-        $results = $this->matchResultRepository->findRecentByClub($club, self::RECENT_FIXTURES_LIMIT);
-
         return array_map(static function (MatchResult $m): array {
             $result = match (true) {
                 $m->getGoalsFor() > $m->getGoalsAgainst() => 'W',
