@@ -95,13 +95,17 @@
                             {% endif %}
 
                             <div class="row text-center border-top pt-2 mt-2">
+                                {# Dividends Drawn (UserLedger) first: it is what the
+                                   career_earnings board and the landing page's Rich List
+                                   now rank on. The accumulator is kept alongside, marked
+                                   legacy, only for comparison during the phase-out. #}
                                 <div class="col">
-                                    <div class="fw-bold">{{ fmt_currency(club.totalCareerEarnings) }}</div>
-                                    <div class="text-muted" style="font-size:.7rem;">Career Earnings</div>
-                                </div>
-                                <div class="col border-start">
                                     <div class="fw-bold">{{ fmt_currency(row.dividendsPence) }}</div>
                                     <div class="text-muted" style="font-size:.7rem;">Dividends Drawn</div>
+                                </div>
+                                <div class="col border-start">
+                                    <div class="fw-bold text-muted">{{ fmt_currency(club.totalCareerEarnings) }}</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Career Earnings (legacy)</div>
                                 </div>
                             </div>
 

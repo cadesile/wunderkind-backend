@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Entity\Club;
 use App\Enum\Country;
 use App\Repository\ClubRepository;
+use App\Repository\UserLedgerRepository;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -21,8 +22,17 @@ use Symfony\Contracts\Cache\ItemInterface;
  * cache WorldOverviewService uses — no entity, no migration, no cron entry to
  * forget to install, and the board is never stale by up to half a cycle.
  *
- * Owners are ranked on summed club balance rather than the centralized
- * UserLedger — see ClubRepository::findRichestOwners() for why.
+ * Owners are ranked on their centralized UserLedger balance — money actually
+ * drawn out — not on the summed balance of the clubs they own, and not on
+ * Club::$totalCareerEarnings, which is being phased out (see that property's
+ * own deprecation note). Only owners who hold ledger entries appear at all;
+ * an owner who has never drawn a dividend is absent, not listed at zero.
+ *
+ * Consequence worth knowing: the ledger records CLIENT-REPORTED `dividend_draw`
+ * entries only. The server-side year-end dividend EconomicService computes is
+ * deliberately not a ledger entry (explicit product decision), so this board
+ * reflects draws the client has actually reported and nothing else — it stays
+ * sparse until clients emit them at volume.
  */
 class OwnerSpotlightService
 {
@@ -47,13 +57,14 @@ class OwnerSpotlightService
 
     public function __construct(
         private readonly ClubRepository $clubRepository,
+        private readonly UserLedgerRepository $userLedgerRepository,
         private readonly CacheInterface $cache,
     ) {}
 
     /**
      * @return array<array{
      *     rank: int, ownerName: string, ownerNationality: ?string, ownerCountryCode: ?string,
-     *     ownerAppearance: ?array, balancePence: int, clubCount: int,
+     *     ownerAppearance: ?array, drawnPence: int, clubCount: int,
      *     clubs: array<array{name: string, division: string, tier: ?int, countryCode: ?string,
      *         countryLabel: ?string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>
      * }>
@@ -75,7 +86,7 @@ class OwnerSpotlightService
     /** @return array<array<string, mixed>> */
     private function build(): array
     {
-        $owners = $this->clubRepository->findRichestOwners(self::OWNER_LIMIT);
+        $owners = $this->userLedgerRepository->findTopOwnersByBalance(self::OWNER_LIMIT);
 
         if ($owners === []) {
             return [];
@@ -91,7 +102,9 @@ class OwnerSpotlightService
 
         $result = [];
         foreach ($owners as $i => $owner) {
-            $clubs = array_slice($clubsByOwner[$owner['userId']] ?? [], 0, self::CLUBS_PER_OWNER);
+            // Every non-spoof club the owner holds; the list is truncated for display
+            // but clubCount is the real total, so "33 clubs · showing 5" stays honest.
+            $allClubs = $clubsByOwner[$owner['userId']] ?? [];
 
             $result[] = [
                 'rank'             => $i + 1,
@@ -102,9 +115,9 @@ class OwnerSpotlightService
                 'ownerNationality' => $owner['ownerNationality'],
                 'ownerCountryCode' => self::countryCodeForNationality($owner['ownerNationality']),
                 'ownerAppearance'  => $owner['ownerAppearance'],
-                'balancePence'     => $owner['balance'],
-                'clubCount'        => $owner['clubCount'],
-                'clubs'            => array_map(self::serializeClub(...), $clubs),
+                'drawnPence'       => $owner['balancePence'],
+                'clubCount'        => count($allClubs),
+                'clubs'            => array_map(self::serializeClub(...), array_slice($allClubs, 0, self::CLUBS_PER_OWNER)),
             ];
         }
 

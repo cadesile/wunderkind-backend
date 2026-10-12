@@ -12,6 +12,7 @@ use App\Entity\SeasonSnapshot;
 use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
+use App\Repository\UserLedgerRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -27,7 +28,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ClubCrudController extends AbstractCrudController
 {
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(
+        private EntityManagerInterface $em,
+        private UserLedgerRepository $userLedgerRepository,
+    ) {}
 
     public static function getEntityFqcn(): string
     {
@@ -102,6 +106,11 @@ class ClubCrudController extends AbstractCrudController
             'debugLogs'          => $debugLogs,
             'toxicBonds'         => $bondLists['toxic'],
             'strongBonds'        => $bondLists['strong'],
+            // Money the owner actually drew out of this club. The headline figure is this,
+            // not Club::$totalCareerEarnings — that accumulator is being phased out and no
+            // longer backs any board (see its own deprecation note); it is kept on the page
+            // alongside, labelled legacy, so an admin can still compare the two.
+            'dividendsPence'     => $this->userLedgerRepository->getTotalDividendsByClub($club),
         ]);
     }
 

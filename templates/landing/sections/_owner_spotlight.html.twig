@@ -12,8 +12,13 @@
 
    ownerSpotlight is computed live behind a 10-minute cache (OwnerSpotlightService),
    unlike the cron-refreshed Club Spotlight — it is two indexed queries, not an
-   aggregate over sync payloads. Empty on a fresh environment with no clubs, and
-   the whole section renders nothing in that case.
+   aggregate over sync payloads.
+
+   Ranked on UserLedger dividends actually drawn, NOT on combined club balance and
+   NOT on Club::$totalCareerEarnings (which is being phased out). Only owners
+   holding ledger entries appear, so the panel lists however many qualify — fewer
+   than five is normal, and the whole section renders nothing when none do. Expect
+   it to stay sparse until clients report `dividend_draw` at volume.
 
    Avatars render client-side from data-owner-appearance via composePlayerSpriteSvg()
    (avatar-compositor.js), the same technique the Club Spotlight uses. Owner identity
@@ -32,7 +37,7 @@
         <div class="ospot-card">
             <div class="ospot-header">
                 <span class="pixel" id="owner-spotlight-title">THE RICH LIST</span>
-                <span class="ospot-header-sub">Top {{ ownerSpotlight|length }} by combined club balance</span>
+                <span class="ospot-header-sub">Top {{ ownerSpotlight|length }} by dividends drawn</span>
             </div>
 
             <ol class="ospot-list">
@@ -57,8 +62,8 @@
                         </span>
 
                         <span class="ospot-balance">
-                            <span class="ospot-balance-val">£{{ (owner.balancePence / 100)|round(0, 'floor')|number_format }}</span>
-                            <span class="ospot-balance-lbl">balance</span>
+                            <span class="ospot-balance-val">£{{ (owner.drawnPence / 100)|round(0, 'floor')|number_format }}</span>
+                            <span class="ospot-balance-lbl">drawn</span>
                         </span>
 
                         {% if owner.clubs is not empty %}
@@ -83,7 +88,7 @@
                 {% endfor %}
             </ol>
         </div>
-        <p class="ospot-note">Combined balance across every club an owner holds, refreshed every few minutes from Integrity Sync.</p>
+        <p class="ospot-note">Dividends drawn across every club an owner holds, refreshed every few minutes from Integrity Sync.</p>
     </div>
 </section>
 {% endif %}

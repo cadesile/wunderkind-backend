@@ -6,10 +6,13 @@ use App\Entity\Club;
 use App\Entity\LeaderboardEntry;
 use App\Entity\PlayerCareerStat;
 use App\Entity\PlayerCareerStatSnapshot;
+use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use App\Entity\User;
+use App\Entity\UserLedger;
 use App\Enum\LeaderboardCategory;
 use App\Enum\TransferType;
+use App\Enum\UserLedgerEntryType;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\PlayerCareerStatRepository;
 use App\Repository\PlayerCareerStatSnapshotRepository;
@@ -19,8 +22,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * End-to-end cover for the five sync-derived leaderboards: PlayerCareerStat rows →
- * club_goals / club_assists / iron_man, and Transfer rows → transfer_record / transfer_spend.
+ * End-to-end cover for the sync-derived leaderboards: PlayerCareerStat rows →
+ * club_goals / club_assists / iron_man, Transfer rows → transfer_record / transfer_spend,
+ * and UserLedger rows → career_earnings.
  *
  * Every board is computed into a per-run unique period so pre-existing rows in
  * wunderkind_test can't contaminate the assertions, and so tearDown can sweep the
@@ -192,6 +196,63 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $this->assertSame('New Name', $entry->getDisplayLabel(), 'display label uses the most recent snapshot\'s name, not a stale one');
     }
 
+    /**
+     * career_earnings moved off Club::$totalCareerEarnings (a client-supplied accumulator,
+     * now deprecated) onto summed UserLedger dividend draws.
+     */
+    public function testCareerEarningsSumsDividendDrawsNotTheAccumulator(): void
+    {
+        $drawer    = $this->persistClub('Agg Dividend FC');
+        $hoarder   = $this->persistClub('Agg Hoarder FC');
+
+        // The drawer has taken two real dividends out...
+        $this->persistDividend($drawer, 750_000);
+        $this->persistDividend($drawer, 250_000);
+
+        // ...while the hoarder has a huge accumulator and has never drawn a penny. Under
+        // the old source it would have topped this board.
+        $hoarder->setTotalCareerEarnings(99_000_000);
+
+        $this->em->flush();
+
+        $board = $this->recalculateAndIndex(LeaderboardCategory::CAREER_EARNINGS);
+
+        $this->assertSame(1_000_000, $board[(string) $drawer->getId()]->getScore(), 'draws are summed');
+        $this->assertArrayNotHasKey(
+            (string) $hoarder->getId(),
+            $board,
+            'a club with a large accumulator but no draws must not appear',
+        );
+    }
+
+    /**
+     * Regression guard for the phase-out itself. Every pre-existing career_earnings row
+     * holds a totalCareerEarnings figure, and almost no club has a ledger entry yet — so
+     * without explicit zeroing those stale scores would outrank real draws indefinitely.
+     * Mirrors the same protection hall_of_fame has.
+     */
+    public function testStaleAccumulatorScoresAreZeroedRatherThanLeftStanding(): void
+    {
+        $club = $this->persistClub('Agg Stale Earnings FC');
+        $this->em->flush();
+
+        // Simulate a row left behind by the old client-supplied path.
+        $stale = $this->persist(new LeaderboardEntry($club, LeaderboardCategory::CAREER_EARNINGS, $this->period));
+        $stale->setScore(42_000_000);
+        $this->em->flush();
+
+        $board = $this->recalculateAndIndex(LeaderboardCategory::CAREER_EARNINGS);
+
+        $this->assertSame(0, $board[(string) $club->getId()]->getScore());
+    }
+
+    public function testCareerEarningsIsAnAggregateSoSyncNoLongerUpsertsIt(): void
+    {
+        // The classification is what moves scoring out of SyncService's per-sync "cheap
+        // category" loop and into app:leaderboards:generate.
+        $this->assertTrue(LeaderboardCategory::CAREER_EARNINGS->isAggregate());
+    }
+
     public function testCareerTotalsRepositoryRejectsAnUnknownColumn(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -302,6 +363,29 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $this->assertNotNull($entry, 'expected an all-time entry to have been written for this club');
 
         return $entry;
+    }
+
+    /**
+     * A recorded dividend draw against $club. UserLedger requires a source SyncRecord
+     * (the row it was detected in), so one is persisted alongside; balanceBefore is left
+     * at 0 since these assertions read summed amountPence, not the running balance.
+     */
+    private function persistDividend(Club $club, int $amountPence): UserLedger
+    {
+        $now        = new \DateTimeImmutable();
+        $syncRecord = $this->persist(new SyncRecord($club, 1, $now, []));
+
+        return $this->persist(new UserLedger(
+            $club->getUser(),
+            $club,
+            UserLedgerEntryType::DIVIDEND_DRAW,
+            $amountPence,
+            0,
+            $now,
+            $now,
+            $syncRecord,
+            count($this->cleanup),
+        ));
     }
 
     private function persistTransfer(Club $club, TransferType $type, string $playerName, int $fee, int $netProceeds = 0): Transfer

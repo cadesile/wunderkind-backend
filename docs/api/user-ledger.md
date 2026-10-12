@@ -6,6 +6,41 @@ instead of leaving each one trapped inside whichever club's own `totalCareerEarn
 happened to land on. This is **new, additive** surface — no existing sync field changes
 shape, nothing is removed.
 
+## What reads the ledger
+
+The ledger is now the source of truth for owner earnings. Three surfaces read it:
+
+| Surface | Reads | Notes |
+|---|---|---|
+| `GET /api/leaderboard/career_earnings` | `UserLedgerRepository::sumDividendsByClub()` | Total drawn per club. Now an **aggregate** category, so a draw reaches the board on the next `app:leaderboards:generate` run (every 5 min), not instantly at sync time. |
+| Landing page "Rich List" | `UserLedgerRepository::findTopOwnersByBalance()` | Each owner's latest `balanceAfterPence`, i.e. exactly what `getCurrentBalance()` returns. Owners with no entries are absent, not listed at zero. |
+| Admin club profile / user edit | `getTotalDividendsByClub()` | Headline figure; the legacy accumulator is shown alongside for comparison. |
+
+### `Club.totalCareerEarnings` is deprecated
+
+That column is a client-supplied running total of *every* income a club has ever had —
+a much looser thing than money the owner actually drew out. Nothing server-side ranks or
+reports on it any more.
+
+It is **still written on every sync and still emitted** by `GET /api/club/status` and the
+sync response, because the shipped client reads it. Removing the field is a separate,
+later step that needs a coordinated wunderkind-app release. Don't add new readers.
+
+One stream deliberately stays outside the ledger: the server-side manager dividend
+`EconomicService::processFinancialYearEnd()` computes at each financial year end still
+goes only to `totalCareerEarnings` and writes no `UserLedger` row (explicit product
+decision). The ledger therefore reflects client-reported `dividend_draw` entries and
+nothing else.
+
+### Expect it to be sparse at first
+
+`dividend_draw` is a new category, so there is very little history: at the time of the
+switch a representative production copy held **one** ledger entry across 162 owners. Both
+the Rich List and the `career_earnings` board are correspondingly near-empty and fill in
+as clients report draws. Pre-existing `career_earnings` rows carrying old accumulator
+figures are explicitly zeroed by `LeaderboardCalculationService` rather than left
+standing, so they cannot outrank real draws.
+
 ## Reporting a draw — via the existing sync ledger
 
 There is no new endpoint for this. A dividend draw is reported exactly like any other

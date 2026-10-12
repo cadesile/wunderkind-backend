@@ -24,7 +24,23 @@ class Club
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $reputation = 0;
 
-    /** Lifetime earnings in pence/cents (integer avoids float precision issues) */
+    /**
+     * Lifetime earnings in pence/cents (integer avoids float precision issues).
+     *
+     * @deprecated Being phased out in favour of `UserLedger` — see `docs/api/user-ledger.md`.
+     * This is a client-supplied running total of every income the club has ever had, which
+     * is a different and much looser thing than money the owner actually drew out. Nothing
+     * server-side ranks or reports on it any more: the `career_earnings` leaderboard and the
+     * landing page's Rich List both read summed `UserLedger` dividend draws instead.
+     *
+     * Still written on every sync and still emitted by `GET /api/club/status` and the sync
+     * response, because the shipped client reads it — removing the field is a later step
+     * that needs a coordinated wunderkind-app release. Do not add new readers.
+     *
+     * Note `EconomicService::processFinancialYearEnd()` still adds its server-computed
+     * manager dividend here and deliberately does NOT write a UserLedger entry (explicit
+     * product decision), so this column is the only record of that particular payout.
+     */
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $totalCareerEarnings = 0;
 
