@@ -31,6 +31,11 @@
         </div>
     </div>
 
+    {# Owner Spotlight sits inside Chapter 01 ("create your owner") rather than as a
+       top-level section in index.html.twig: it is the payoff for the chapter above it
+       — here are the owners who did exactly this, and what they built. #}
+    {% include 'landing/sections/_owner_spotlight.html.twig' %}
+
     <!-- Chapter 2 -->
     <div class="story-step story-step--flip">
         <div class="story-inner">

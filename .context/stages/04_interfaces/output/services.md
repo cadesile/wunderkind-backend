@@ -56,8 +56,17 @@ filename alone.
   `docs/api/` as of 2026-09-24; this entry is the source of truth for the
   header name/contract until a proper API doc exists.
 - **`CommunityStatsService`** — computes community-wide stats (most
-  transfers/development/seasons/trophies) from match/transfer/season
-  repositories.
+  transfers/wins/development/seasons/trophies) from match/transfer/season
+  repositories. Every ranked row is decorated with the club's
+  `country`/`homeKitConfig`/`awayKitConfig`/`badgeConfig` via one
+  `ClubRepository::findByIdsKeyed()` lookup over the already-ranked ids — the
+  same identity block `LeaderboardItemDto` emits, so one client-side renderer
+  serves both boards.
+  `getMostDevelopment()` ranks `Transfer::$developmentPoints`, **a field nothing
+  writes** (`TransferSyncDto` has no such member; the only writer is
+  `app:seed-community-stats-fixtures`), so it returns an all-zero column in
+  production. Kept as a published endpoint; the landing page shows
+  `getMostWins()` in its place.
 - **`Competition/BracketLabeler`** — generates stable round labels used
   as keys into `CompetitionTemplate::roundEngineConfig` and stored on
   `CompetitionRound::label`.
@@ -199,6 +208,22 @@ filename alone.
   a `WorldRegion` with no country pointing at it can never be selected at all —
   `EASTERN_EUROPE` sat orphaned in exactly that state until `PL` was added.
   `WorldRegionTest` now asserts both directions.
+- **`OwnerSpotlightService`** — the landing page's "Owner Spotlight" (richest
+  owners + their clubs and divisions, under Chapter 01 of the Journey section).
+  Deliberately **not** modelled like `ClubSpotlight`/`LiveTelemetrySnapshot`: it
+  is two indexed queries over club/user, so it is computed live behind the same
+  short-lived cache `WorldOverviewService` uses — no entity, migration or cron
+  entry. Ranks on **summed club balance**, not `UserLedgerRepository::getCurrentBalance()`:
+  the centralized ledger only holds client-reported `DIVIDEND_DRAW` entries, of
+  which production has a single-digit number, so ranking on it would show one
+  owner with a figure and four zeroes.
+- **`ReputationDecayService`** — pure arithmetic for dormancy-based reputation
+  decay (5 points per whole day a club doesn't sync); `app:reputation:decay`
+  owns iteration and persistence. Decay is **transient by design** — reputation
+  is client-authoritative and the next sync restores it. Full rationale,
+  including why there is no separate backfill command and why the command
+  writes through to the non-aggregate `club_reputation` leaderboard entries
+  itself, is in `docs/reputation-decay.md`.
 - **`LiveTelemetryService`** — feeds the landing page's live activity
   feed; some entries (sackings, contract disputes, youth intake) are
   illustrative and have no backing data — don't treat as real metrics.
@@ -208,6 +233,15 @@ filename alone.
   convention — see `03_data/output/schema.md`'s "`sync_record.payload` field
   conventions" section. `promises[].offer.amountPence` needs no such
   correction.
+  Each selected feed item also carries a `clubId` and a per-club `dossier`
+  (latest `MatchResult`s + best-rated player from `playerStats[]`), attached by
+  `attachClubDossiers()` after selection — the only non-static step in the feed
+  pipeline, since it needs MatchResult rows no payload carries. Keyed on clubId,
+  never clubName (names are not unique). The dossier feeds the boardroom overlay
+  (`_incident_modal.html.twig`). `findBestRatedPlayer()` recovers `position` from
+  `fixtures[].{home,away}PlayerRatings[]` (playerStats carries none) and merges the
+  club's home kit into the client-reported personal-traits `appearanceConfig`; when
+  no appearanceConfig was reported it returns null rather than inventing a likeness.
 - **`MarketDataService`** — assembles market listing data (agents/
   investors/scouts/sponsors/staff) into `MarketDataResponse`.
 - **`MarketPoolService`** — manages the shared unassigned-entity pool

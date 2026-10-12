@@ -2,7 +2,10 @@
      Owner's dispatch report for a clicked ticker item / the terminal CTA. Filled
      client-side from the clicked .terminal-feed-item's data-* attributes (see
      landing.js) — no server round-trip, since the underlying data is a periodically
-     cached snapshot, not something worth a live endpoint. -->
+     cached snapshot, not something worth a live endpoint.
+
+     Carries two per-club blocks beyond the incident itself — the club's best-rated
+     player and its latest results — both from the same data-dossier attribute. -->
 <div class="incident-overlay" id="incident-overlay" role="dialog" aria-modal="true" aria-labelledby="incident-title">
     <div class="incident-modal">
         <div class="incident-header">
@@ -28,6 +31,36 @@
             <p class="incident-detail" id="incident-detail"></p>
 
             <div class="incident-meta" id="incident-meta-extra"></div>
+
+            {#
+               Dossier blocks — the club behind the incident, not the incident itself.
+               Both are populated from the clicked item's data-dossier and hidden
+               outright when that club has no data for them (a club with no persisted
+               results, or whose client has never reported an appearanceConfig).
+
+               The star player's sprite is only drawn when the client actually sent
+               `playerStats[].appearanceConfig`; there is deliberately no generated
+               stand-in. See LiveTelemetryService::mergePlayerAppearance().
+            #}
+            <div class="incident-player" id="incident-player" hidden>
+                <div class="incident-block-title">Best Rated Player</div>
+                <div class="incident-player-row">
+                    <span class="incident-player-avatar" id="incident-player-avatar" aria-hidden="true"></span>
+                    <span class="incident-player-identity">
+                        <span class="incident-player-name" id="incident-player-name"></span>
+                        <span class="incident-player-sub" id="incident-player-sub"></span>
+                    </span>
+                    <span class="incident-player-rating">
+                        <span class="incident-player-rating-val" id="incident-player-rating"></span>
+                        <span class="incident-player-rating-lbl">avg rating</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="incident-fixtures" id="incident-fixtures" hidden>
+                <div class="incident-block-title">Latest Fixtures</div>
+                <ul class="incident-fixture-list" id="incident-fixture-list"></ul>
+            </div>
         </div>
     </div>
 </div>

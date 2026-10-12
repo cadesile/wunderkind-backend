@@ -84,7 +84,7 @@ class SyncRecordRepository extends ServiceEntityRepository
     public function findValidPayloadsSince(\DateTimeImmutable $since): array
     {
         $rows = $this->createQueryBuilder('s')
-            ->select('s.payload', 's.serverTimestamp', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
+            ->select('s.payload', 's.serverTimestamp', 'c.id AS clubId', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
             ->innerJoin('s.club', 'c')
             ->where('s.isValid = true')
             ->andWhere('s.serverTimestamp >= :since')
@@ -96,6 +96,7 @@ class SyncRecordRepository extends ServiceEntityRepository
             static fn (array $row): array => [
                 'payload'         => $row['payload'],
                 'serverTimestamp' => $row['serverTimestamp'],
+                'clubId'          => (string) $row['clubId'],
                 'clubName'        => (string) $row['clubName'],
                 'homeKitConfig'   => $row['homeKitConfig'],
                 'awayKitConfig'   => $row['awayKitConfig'],
@@ -121,7 +122,8 @@ class SyncRecordRepository extends ServiceEntityRepository
     public function findTopAttendanceSince(\DateTimeImmutable $since, int $limit): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
-            "SELECT c.name AS club_name,
+            "SELECT c.id AS club_id,
+                    c.name AS club_name,
                     c.home_kit_config AS home_kit_config,
                     c.away_kit_config AS away_kit_config,
                     c.badge_config AS badge_config,
@@ -140,6 +142,7 @@ class SyncRecordRepository extends ServiceEntityRepository
 
         return array_map(
             static fn (array $row): array => [
+                'clubId'           => (string) $row['club_id'],
                 'clubName'         => (string) $row['club_name'],
                 'homeKitConfig'    => self::decodeJsonColumn($row['home_kit_config']),
                 'awayKitConfig'    => self::decodeJsonColumn($row['away_kit_config']),

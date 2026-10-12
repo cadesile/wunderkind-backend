@@ -96,7 +96,10 @@ migrations are the change log (see `migrations.md`).
 
 - **`Club`** — the player's club, central aggregate. `name`, `reputation`,
   `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`,
-  `lastSyncedAt`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
+  `lastSyncedAt`, `reputationDecayedAt:?datetime` (added by
+  `Version20261012215721`) — how far dormancy-based reputation decay has been
+  charged; exists purely to make `app:reputation:decay` idempotent and
+  catch-up-safe, see `docs/reputation-decay.md`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
   `country`, `abbreviation`, `worldInitializedAt/starterInitializedAt/
   tutorialCompletedAt`, `paName`, `managerTemperament/managerDiscipline/
   managerAmbition:int(50)`, `balance:int` (the old `managerProfile:?array`

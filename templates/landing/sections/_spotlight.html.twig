@@ -21,6 +21,12 @@
    is still the most active club does NOT hide the section —
    ClubSpotlightService::selectNew() re-ups the window for exactly that case.
 
+   trophies is the club's honours board — SeasonRecord finalPosition=1 counts
+   grouped by league tier, with the trophy artwork read live off the League row
+   for (club country, tier) at generation time. establishedAt is Club::$createdAt;
+   there is no separate founding date server-side. Both are null/empty on rows
+   written before those columns existed, and both degrade to simply not rendering.
+
    Career earnings shows dividendDrawsPence (real UserLedger DIVIDEND_DRAW
    entries against this club), not Club::$totalCareerEarnings — the latter is
    every income source the club has ever had, not money the owner has
@@ -67,9 +73,56 @@
 
             <div class="spotlight-footer vt">
                 <span>Owner: <strong>{{ spotlight.ownerName ?? 'Anonymous' }}</strong></span>
+                {% if spotlight.establishedAt %}
+                    <span>Established: <strong>{{ spotlight.establishedAt|date('M Y') }}</strong></span>
+                {% endif %}
                 <span>Reputation: <strong>{{ spotlight.clubReputation|number_format }}</strong></span>
                 <span>Dividends Drawn: <strong>£{{ (spotlight.dividendDrawsPence / 100)|number_format }}</strong></span>
             </div>
+
+            {#
+               Honours board. The trophy silhouettes are black SVGs recoloured with a
+               CSS filter chain — the exact chains are lifted verbatim from the admin
+               leagues screen (templates/admin/leagues_content.html.twig), the one
+               other place these assets are rendered; keep the two in step.
+               brightness(0) normalises to black, invert(1) flips to white, then
+               sepia+saturate+hue-rotate applies the target colour.
+
+               trophyImage is nullable on League (an admin may simply not have set one),
+               so a tier can carry real titles and no artwork — those still appear, as
+               a count-only chip. Dropping them would under-report real silverware.
+            #}
+            {% if spotlight.trophies is not empty %}
+                {% set TROPHY_FILTERS = {
+                    'silver':      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
+                    'gold':        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
+                    'gold_silver': 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)'
+                } %}
+                <div class="spotlight-trophies">
+                    <div class="spotlight-detail-title">
+                        Trophies Won
+                        <span class="spotlight-trophy-total">{{ spotlight.totalTrophies }}</span>
+                    </div>
+                    <ul class="spotlight-trophy-list">
+                        {% for trophy in spotlight.trophies %}
+                            <li class="spotlight-trophy"
+                                title="{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }} — {{ trophy.titles }} {{ trophy.titles == 1 ? 'title' : 'titles' }}">
+                                {% if trophy.trophyImage %}
+                                    <img class="spotlight-trophy-img"
+                                         src="/images/trophies/{{ trophy.trophyImage }}.svg"
+                                         alt=""
+                                         loading="lazy"
+                                         style="filter: {{ TROPHY_FILTERS[trophy.trophyColour] ?? 'none' }};">
+                                {% endif %}
+                                <span class="spotlight-trophy-meta">
+                                    <span class="spotlight-trophy-count">&times;{{ trophy.titles }}</span>
+                                    <span class="spotlight-trophy-tier">{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }}</span>
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
 
             {% if spotlight.recentFixtures is not empty or spotlight.recentTransfers is not empty %}
                 <div class="spotlight-detail-grid">

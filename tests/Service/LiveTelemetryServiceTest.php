@@ -294,8 +294,11 @@ class LiveTelemetryServiceTest extends TestCase
 
         $merged = LiveTelemetryService::mergeEventsByRecency($ledgerEvents);
 
+        // 'clubId' joined this shape with the boardroom overlay's per-club dossier:
+        // attachClubDossiers() keys off it, so it has to survive the merge's own
+        // key-by-key rebuild. See LiveTelemetryDossierTest for that regression.
         $this->assertSame([
-            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge',
+            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge', 'clubId',
         ], array_keys($merged[0]));
         $this->assertSame('[BOARDROOM // OUTLAY]', $merged[0]['categoryLabel']);
         $this->assertSame('Ledger Club', $merged[0]['club']);

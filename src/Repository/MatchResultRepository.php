@@ -53,6 +53,49 @@ class MatchResultRepository extends ServiceEntityRepository
     }
 
     /**
+     * The most recent results for several clubs at once, bucketed by club id and
+     * capped at $perClub each — the batch form of findRecentByClub(), for the
+     * boardroom overlay's per-club dossier (LiveTelemetryService::buildClubDossiers()).
+     *
+     * Over-fetches ($perClub * club count) and trims in PHP rather than issuing one
+     * query per club or a window-function CTE: the telemetry refresh runs against at
+     * most TOTAL_FEED_LIMIT distinct clubs, so the over-fetch is bounded and small.
+     *
+     * Keyed and ordered exactly like findRecentByClub() so both can feed the same
+     * ClubSpotlightService::buildRecentFixtures()-shaped serializer.
+     *
+     * @param  string[] $clubIds
+     * @return array<string, MatchResult[]> club id => newest-first results
+     */
+    public function findRecentByClubIds(array $clubIds, int $perClub): array
+    {
+        if ($clubIds === []) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('m')
+            ->where('m.club IN (:clubIds)')
+            ->setParameter('clubIds', $clubIds)
+            ->orderBy('m.createdAt', 'DESC')
+            ->addOrderBy('m.season', 'DESC')
+            ->addOrderBy('m.week', 'DESC')
+            ->setMaxResults($perClub * count($clubIds))
+            ->getQuery()
+            ->getResult();
+
+        $byClub = [];
+        foreach ($rows as $row) {
+            $key = (string) $row->getClub()->getId();
+            if (count($byClub[$key] ?? []) >= $perClub) {
+                continue;
+            }
+            $byClub[$key][] = $row;
+        }
+
+        return $byClub;
+    }
+
+    /**
      * Most match wins per club within the period, tiebroken on goal difference.
      * Filtered on `createdAt` (always-set, server-side) — not `playedAt`, which is
      * nullable/client-supplied and unindexed.

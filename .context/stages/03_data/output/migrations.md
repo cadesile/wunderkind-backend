@@ -175,7 +175,14 @@ additive columns — `player.secondary_position` and `npc_club.identity`
 — for the new pixel-art sprite/kit system's admin-editable config, and
 (i) consolidating the previously-duplicated, never-serialized "manager
 profile" concept (separate ad hoc blobs on both `user` and `club`) into
-one structured owner identity on `"user"` alone. See
+one structured owner identity on `"user"` alone, and (j) three additive
+columns for the landing-page work — `club.reputation_decayed_at` (the
+per-club anchor that makes `app:reputation:decay` idempotent and
+catch-up-safe, see `docs/reputation-decay.md`) plus
+`club_spotlight.trophies`/`established_at` (the featured club's honours
+board and founding date). Note `trophies` is added with a `DEFAULT '[]'`
+that is then dropped: `club_spotlight` is a singleton that already holds a
+row, so a bare `NOT NULL` add would fail. See
 `04_interfaces/output/services.md` and `services.md`'s
 `PushNotificationService`/`NotificationLoggingSubscriber` entries.
 Consistent with

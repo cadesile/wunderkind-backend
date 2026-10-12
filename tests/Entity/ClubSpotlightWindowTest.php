@@ -30,6 +30,8 @@ class ClubSpotlightWindowTest extends TestCase
             topPerformerGoals: 0,
             topPerformerAssists: 0,
             topPerformerAppearanceConfig: null,
+            trophies: [],
+            establishedAt: null,
             windowStartsAt: new \DateTimeImmutable('-1 hour'),
             windowEndsAt: new \DateTimeImmutable($endsAt),
         );

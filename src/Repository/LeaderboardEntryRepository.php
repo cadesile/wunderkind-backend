@@ -105,6 +105,32 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
         ];
     }
 
+    /**
+     * Every existing entry for one club in one category, across all periods.
+     *
+     * Used by app:reputation:decay to write a decayed reputation through to the board.
+     * club_reputation is a non-aggregate category — its score is only ever upserted by
+     * SyncService at sync time, and app:leaderboards:generate merely re-ranks it — so a
+     * club that stops syncing would otherwise sit on its last-synced score forever,
+     * which is exactly the dormant-club case decay exists to correct.
+     *
+     * Deliberately does NOT create missing periods: a club that has not synced this
+     * ISO week has no entry for it, and inventing one would put a dormant club onto a
+     * weekly board it never appeared on.
+     *
+     * @return LeaderboardEntry[]
+     */
+    public function findAllForClubAndCategory(Club $club, LeaderboardCategory $category): array
+    {
+        return $this->createQueryBuilder('e')
+            ->where('e.club = :club')
+            ->andWhere('e.category = :category')
+            ->setParameter('club', $club)
+            ->setParameter('category', $category)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findOrCreate(Club $club, LeaderboardCategory $category, string $period): LeaderboardEntry
     {
         $entry = $this->findOneBy([

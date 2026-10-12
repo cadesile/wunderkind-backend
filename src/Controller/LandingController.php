@@ -9,6 +9,7 @@ use App\Repository\GameConfigRepository;
 use App\Service\ArchetypeShowcaseService;
 use App\Service\ClubSpotlightService;
 use App\Service\LiveTelemetryService;
+use App\Service\OwnerSpotlightService;
 use App\Service\WorldOverviewService;
 use App\Service\YouTubeFeedService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -38,6 +39,7 @@ class LandingController extends AbstractController
         private readonly ArchetypeShowcaseService $archetypeShowcase,
         private readonly LiveTelemetryService $liveTelemetryService,
         private readonly ClubSpotlightService $clubSpotlightService,
+        private readonly OwnerSpotlightService $ownerSpotlightService,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -60,6 +62,9 @@ class LandingController extends AbstractController
             'telemetry'  => $this->liveTelemetryService->getSnapshot(),
             // Cached aggregate, refreshed by app:spotlight:generate — never computed live here.
             'spotlight'  => $this->clubSpotlightService->getCurrent(),
+            // Live query behind a short cache, unlike the two cron-fed aggregates
+            // above — see OwnerSpotlightService for why it isn't a snapshot row.
+            'ownerSpotlight' => $this->ownerSpotlightService->getTopOwners(),
         ]);
     }
 

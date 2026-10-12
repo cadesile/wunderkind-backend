@@ -30,6 +30,16 @@ class CommunityStatsController extends AbstractController
         return $this->respond($request, fn (StatsPeriod $p, int $l) => $this->statsService->getMostDevelopment($p, $l));
     }
 
+    /**
+     * Matches won. Replaced most-development on the landing page — that field has no
+     * writer, see CommunityStatsService::getMostDevelopment().
+     */
+    #[Route('/most-wins', name: 'api_stats_most_wins', methods: ['GET'])]
+    public function mostWins(Request $request): JsonResponse
+    {
+        return $this->respond($request, fn (StatsPeriod $p, int $l) => $this->statsService->getMostWins($p, $l));
+    }
+
     #[Route('/most-seasons', name: 'api_stats_most_seasons', methods: ['GET'])]
     public function mostSeasons(Request $request): JsonResponse
     {

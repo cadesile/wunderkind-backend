@@ -3,6 +3,7 @@
 namespace App\Tests\Service;
 
 use App\Enum\StatsPeriod;
+use App\Repository\ClubRepository;
 use App\Repository\MatchResultRepository;
 use App\Repository\PlayerCareerStatSnapshotRepository;
 use App\Repository\SeasonRecordRepository;
@@ -18,6 +19,7 @@ class CommunityStatsServiceTest extends TestCase
         ?SeasonRecordRepository $seasonRepo = null,
         ?MatchResultRepository $matchResultRepo = null,
         ?PlayerCareerStatSnapshotRepository $careerSnapshotRepo = null,
+        ?ClubRepository $clubRepo = null,
     ): CommunityStatsService {
         return new CommunityStatsService(
             $transferRepo ?? $this->createStub(TransferRepository::class),
@@ -25,6 +27,10 @@ class CommunityStatsServiceTest extends TestCase
             $matchResultRepo ?? $this->createStub(MatchResultRepository::class),
             $careerSnapshotRepo ?? $this->createStub(PlayerCareerStatSnapshotRepository::class),
             $this->createStub(PeriodResolver::class),
+            // Identity decoration is a presentational concern layered on top of the
+            // ranking; a stub returns no clubs, so every identity key comes back null
+            // and these tests keep asserting the ranking itself.
+            $clubRepo ?? $this->createStub(ClubRepository::class),
         );
     }
 
@@ -41,9 +47,9 @@ class CommunityStatsServiceTest extends TestCase
         $result = $service->getMostTransfers(StatsPeriod::ALL, 10);
 
         $this->assertSame([
-            ['clubId' => 'a', 'clubName' => 'Alpha', 'value' => 30, 'rank' => 1, 'playerName' => null, 'rawValue' => 30, 'secondaryValue' => null],
-            ['clubId' => 'b', 'clubName' => 'Beta', 'value' => 20, 'rank' => 2, 'playerName' => null, 'rawValue' => 20, 'secondaryValue' => null],
-            ['clubId' => 'c', 'clubName' => 'Gamma', 'value' => 10, 'rank' => 3, 'playerName' => null, 'rawValue' => 10, 'secondaryValue' => null],
+            ['clubId' => 'a', 'clubName' => 'Alpha', 'value' => 30, 'rank' => 1, 'playerName' => null, 'rawValue' => 30, 'secondaryValue' => null, 'country' => null, 'homeKitConfig' => null, 'awayKitConfig' => null, 'badgeConfig' => null],
+            ['clubId' => 'b', 'clubName' => 'Beta', 'value' => 20, 'rank' => 2, 'playerName' => null, 'rawValue' => 20, 'secondaryValue' => null, 'country' => null, 'homeKitConfig' => null, 'awayKitConfig' => null, 'badgeConfig' => null],
+            ['clubId' => 'c', 'clubName' => 'Gamma', 'value' => 10, 'rank' => 3, 'playerName' => null, 'rawValue' => 10, 'secondaryValue' => null, 'country' => null, 'homeKitConfig' => null, 'awayKitConfig' => null, 'badgeConfig' => null],
         ], $result);
     }
 
@@ -118,7 +124,7 @@ class CommunityStatsServiceTest extends TestCase
     {
         $matchResultRepo = $this->createStub(MatchResultRepository::class);
         $matchResultRepo->method('getMostWinsByClub')->willReturn([
-            ['clubId' => 'a', 'clubName' => 'Alpha', 'value' => 5, 'secondaryValue' => 8],
+            ['clubId' => 'a', 'clubName' => 'Alpha', 'value' => 5, 'secondaryValue' => 8, 'country' => null, 'homeKitConfig' => null, 'awayKitConfig' => null, 'badgeConfig' => null],
         ]);
 
         $service = $this->makeService(matchResultRepo: $matchResultRepo);

@@ -470,6 +470,56 @@
             margin-top: 4px;
         }
 
+        /* ── Honours board ──
+           Sits between the footer band and the fixtures/transfers grid. Trophies
+           wrap into as many rows as the club has tiers; the count chip carries the
+           number so the artwork is decorative (alt="") rather than load-bearing. */
+        .spotlight-trophies {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+        }
+        .spotlight-trophy-total {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 5px;
+            background: var(--gold-dim);
+            color: var(--dark);
+            font-size: 8px;
+        }
+        .spotlight-trophy-list {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .spotlight-trophy {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+        }
+        .spotlight-trophy-img {
+            width: 22px;
+            height: 30px;
+            object-fit: contain;
+            flex: 0 0 auto;
+        }
+        .spotlight-trophy-meta { display: flex; flex-direction: column; }
+        .spotlight-trophy-count {
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            line-height: 1;
+            color: var(--gold);
+        }
+        .spotlight-trophy-tier {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
         .spotlight-detail-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -515,6 +565,189 @@
         .spotlight-result-badge.is-w { background: var(--mint); }
         .spotlight-result-badge.is-d { background: var(--text-muted); }
         .spotlight-result-badge.is-l { background: var(--red); }
+
+        /* ════════════════════════════════
+           OWNER SPOTLIGHT
+
+           A second card in the Club Spotlight family (same gold ring, same
+           header/footer bands, same Press Start 2P micro-labels) with its own
+           .ospot-* namespace so restyling one never silently restyles the other.
+
+           Each row is a 4-column grid on desktop — rank / avatar / identity /
+           balance — with the owner's club list spanning the full width on a
+           second grid line. Under 720px the balance drops onto its own line and
+           the club list loses its division column.
+        ════════════════════════════════ */
+        .ospot-section { padding: 0 0 40px; }
+        .ospot-card {
+            background: var(--bg-mid);
+            border: 1px solid var(--border);
+            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 24px rgba(245,200,66,.15);
+        }
+        .ospot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .ospot-header .pixel { font-size: 9px; letter-spacing: 0.08em; color: var(--gold); }
+        .ospot-header-sub { font-size: 11px; color: var(--text-muted); }
+
+        .ospot-list { list-style: none; }
+        .ospot-row {
+            display: grid;
+            grid-template-columns: auto auto 1fr auto;
+            align-items: center;
+            gap: 4px 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .ospot-row:last-child { border-bottom: 0; }
+        .ospot-rank {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            color: var(--gold-dim);
+            min-width: 24px;
+        }
+        /* Reserved even when the owner has no saved appearance, so a row with an
+           avatar and one without stay the same height — no content jumping as the
+           sprites paint in after landing.js runs. */
+        .ospot-avatar-slot {
+            display: block;
+            width: 34px;
+            height: 48px;
+            overflow: hidden;
+        }
+        .ospot-avatar-slot svg {
+            display: block;
+            width: auto;
+            height: 48px;
+            image-rendering: pixelated;
+        }
+        .ospot-identity { min-width: 0; }
+        .ospot-owner-name {
+            display: block;
+            font-size: 14px;
+            color: var(--text);
+            overflow-wrap: anywhere;
+        }
+        .ospot-owner-meta {
+            display: block;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .ospot-balance { text-align: right; white-space: nowrap; }
+        .ospot-balance-val {
+            display: block;
+            font-family: 'VT323', monospace;
+            font-size: 22px;
+            line-height: 1.1;
+            color: var(--mint);
+        }
+        .ospot-balance-lbl {
+            display: block;
+            font-size: 9px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* Country code chip. Deliberately a code, not an emoji flag: the palette
+           uses "EN"/"SC" style codes that have no regional-indicator equivalent,
+           and emoji render inconsistently across platforms at this size. */
+        .ospot-flag {
+            display: inline-block;
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            padding: 1px 4px;
+            margin-left: 6px;
+            color: var(--cyan);
+            border: 1px solid rgba(79,184,201,0.45);
+            vertical-align: middle;
+        }
+
+        .ospot-clubs {
+            grid-column: 1 / -1;
+            list-style: none;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .ospot-club {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 12.5px;
+            color: var(--text);
+            border-bottom: 1px solid rgba(5,21,18,0.5);
+        }
+        .ospot-club:last-child { border-bottom: 0; }
+        .ospot-club-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            flex: 0 0 auto;
+            min-width: 22px;
+        }
+        .ospot-club-badge svg {
+            width: 22px;
+            height: 22px;
+            image-rendering: pixelated;
+        }
+        .ospot-club-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .ospot-club-division {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .ospot-tier {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            padding: 3px 4px;
+            color: var(--dark);
+            background: var(--gold-dim);
+        }
+        .ospot-note {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 10px 16px 0;
+        }
+
+        @media (max-width: 720px) {
+            .ospot-row { grid-template-columns: auto auto 1fr; }
+            .ospot-balance { grid-column: 3 / -1; text-align: left; margin-top: 6px; }
+            .ospot-balance-lbl { display: inline; margin-left: 6px; }
+            .ospot-balance-val { display: inline; }
+            /* The kit rides along with the badge in clubBadgeIconsHtml()'s output;
+               below this width the row only has room for the badge itself. */
+            .ospot-club-badge svg:nth-child(2) { display: none; }
+        }
+        @media (max-width: 520px) {
+            .ospot-club { flex-wrap: wrap; }
+            .ospot-club-division { margin-left: 30px; width: 100%; }
+        }
+
+        @media (max-width: 560px) {
+            /* clubBadgeIconsHtml() emits badge + kit; only the badge survives a
+               narrow row, which is the "always at least the badge" floor. */
+            .lb-badge svg:nth-child(2),
+            .lbg-row-badge svg:nth-child(2) { display: none; }
+        }
 
         @media (max-width: 600px) {
             .spotlight-pitch { flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding-bottom: 12px; }
@@ -870,6 +1103,32 @@
             font-family: 'VT323', monospace;
             font-size: 19px;
             color: var(--text-muted);
+        }
+
+        .stat-period {
+            display: block;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--mint-dim);
+            margin-top: 6px;
+        }
+
+        /* ── Shared club nationality chip (community stats + global leaderboards) ──
+           A country code, never an emoji flag — see clubCountryChipHtml() in
+           landing.js. Mint-on-transparent so it reads as metadata next to the
+           club name rather than competing with the gold rank or value. */
+        .club-flag {
+            display: inline-block;
+            flex: 0 0 auto;
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            padding: 1px 4px;
+            margin-left: 8px;
+            color: var(--cyan);
+            border: 1px solid rgba(79,184,201,0.45);
         }
 
         /* ════════════════════════════════
@@ -1430,6 +1689,107 @@
             line-height: 1.4;
         }
 
+        /* ── Boardroom overlay: per-club dossier blocks ──
+           Best-rated player + latest results for the club behind the incident.
+           Both reuse .incident-meta-title's pixel micro-heading vocabulary via
+           .incident-block-title, and sit below the incident's own meta. */
+        .incident-block-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--gold-dim);
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .incident-player,
+        .incident-fixtures {
+            margin-top: 20px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .incident-player-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        /* No fixed width: the sprite is only drawn when the client reported an
+           appearanceConfig, and an empty slot should take no space rather than
+           leaving a gap where a player used to be. */
+        .incident-player-avatar { flex: 0 0 auto; }
+        .incident-player-avatar svg {
+            display: block;
+            height: 56px;
+            width: auto;
+            image-rendering: pixelated;
+        }
+        .incident-player-identity { min-width: 0; flex: 1 1 auto; }
+        .incident-player-name {
+            display: block;
+            font-size: 14px;
+            color: var(--text);
+            overflow-wrap: anywhere;
+        }
+        .incident-player-sub {
+            display: block;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+        .incident-player-rating { text-align: right; flex: 0 0 auto; }
+        .incident-player-rating-val {
+            display: block;
+            font-family: 'VT323', monospace;
+            font-size: 28px;
+            line-height: 1;
+            color: var(--gold);
+        }
+        .incident-player-rating-lbl {
+            display: block;
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .incident-fixture-list { list-style: none; }
+        .incident-fixture-list li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 12.5px;
+            color: var(--text);
+            border-bottom: 1px solid var(--border);
+        }
+        .incident-fixture-list li:last-child { border-bottom: 0; }
+        .incident-fixture-opponent {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .incident-fixture-score {
+            margin-left: auto;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        /* Same result vocabulary as the Club Spotlight's fixture list — the letter
+           is real text, so the result never depends on colour alone. */
+        .incident-result-badge {
+            display: inline-block;
+            min-width: 18px;
+            text-align: center;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 2px 4px;
+            color: var(--dark);
+            flex: 0 0 auto;
+        }
+        .incident-result-badge.is-w { background: var(--mint); }
+        .incident-result-badge.is-d { background: var(--text-muted); }
+        .incident-result-badge.is-l { background: var(--red); }
+
         /* ════════════════════════════════
            FACILITIES SECTION
         ════════════════════════════════ */
@@ -1738,6 +2098,17 @@
             font-size: 13px;
             color: var(--mint);
         }
+        /* Badge (+ kit) on every community-stats row. Fixed width so names start on
+           the same x even for a club whose identity hasn't loaded. */
+        .lb-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            flex: 0 0 auto;
+            min-width: 22px;
+        }
+        .lb-badge svg { display: block; width: 22px; height: 22px; image-rendering: pixelated; }
+
         .lb-empty, .lb-loading, .lb-error {
             font-family: 'VT323', monospace;
             font-size: 17px;
@@ -1848,6 +2219,11 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+        .lbg-row-title {
+            display: flex;
+            align-items: center;
+            min-width: 0;
         }
         .lbg-row-tag {
             font-family: 'Space Mono', monospace;

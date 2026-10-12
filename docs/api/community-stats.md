@@ -1,10 +1,10 @@
 # Community Stats API
 
-Four read-only, live-computed leaderboard endpoints ranking clubs by activity. No authentication required (public endpoints). No caching — every request is computed fresh against the current database state.
+Five read-only, live-computed leaderboard endpoints ranking clubs by activity. No authentication required (public endpoints). No caching — every request is computed fresh against the current database state.
 
 ## Common parameters
 
-All four endpoints accept the same two query parameters:
+All five endpoints accept the same two query parameters:
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
@@ -65,9 +65,65 @@ GET /api/stats/most-transfers?period=week&limit=10
 
 `value` is a transfer count (integer).
 
+### Club identity on every row
+
+Every result row across all five endpoints also carries the club's visual identity, so a
+consumer can render a badge/kit/nationality next to the name without a second lookup:
+
+| Field | Type | Notes |
+|---|---|---|
+| `country` | string\|null | 2-letter club country code (`App\Enum\Country`), e.g. `"EN"`. Not an ISO-3166 code in every case — `EN` is England, which has no ISO country code of its own. |
+| `homeKitConfig` | object\|null | Owner-customized home kit — see `docs/api/club-kit-identity.md` |
+| `awayKitConfig` | object\|null | Owner-customized away kit |
+| `badgeConfig` | object\|null | Owner-customized club badge |
+
+All four are `null` for a club that has since been deleted (the ranking rows are
+aggregates and outlive the club) or that has never customized its identity. A null kit
+or badge config is not an error: the pixel renderer (`kit-compositor.js`'s
+`composeKitSvg()`) falls back to its own defaults, so every club still draws something.
+
+This is the same identity block `GET /api/leaderboard/{category}` emits, deliberately —
+one client-side renderer serves both boards.
+
+---
+
+## `GET /api/stats/most-wins`
+
+Ranks clubs by matches won within the period window (`MatchResult` rows where
+`goalsFor > goalsAgainst`), tiebroken on goal difference. Filtered on
+`MatchResult.createdAt` — always server-set — not the nullable, client-supplied
+`playedAt`.
+
+**Example request**
+```
+GET /api/stats/most-wins?period=week&limit=10
+```
+
+**Example response (200)**
+```json
+{
+  "period": "week",
+  "results": [
+    { "clubId": "019f3239-ad18-7ba6-87f7-5fb50e9f8a1f", "clubName": "Example FC", "value": 14, "rank": 1, "secondaryValue": 22, "country": "EN", "homeKitConfig": null, "awayKitConfig": null, "badgeConfig": null }
+  ]
+}
+```
+
+`value` is a win count (integer); `secondaryValue` is goal difference over the same window.
+
 ---
 
 ## `GET /api/stats/most-development`
+
+> **No data source.** `Transfer.developmentPoints` has no writer: `TransferSyncDto` carries
+> no such field, so no sync can populate it, and the only code that sets it is the
+> `app:seed-community-stats-fixtures` test-fixture command. Every production row is `0`, so
+> this endpoint ranks an all-zero column and returns ties in arbitrary order.
+>
+> It is kept because it is a published endpoint and will start returning real figures the
+> moment a client begins reporting CA gained per transfer. **The landing page shows
+> `most-wins` in its place** — don't put this card back on the page until the field is
+> actually fed.
 
 Ranks clubs by total player development points gained via transfers (sum of `Transfer.developmentPoints`), filtered by `Transfer.occurredAt` within the period window.
 
