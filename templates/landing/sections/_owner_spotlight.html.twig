@@ -1,0 +1,89 @@
+{#
+   Owner Spotlight — the five richest owners in the game, each with up to five of
+   their clubs and the division each sits in. Sits directly under Chapter 01 of
+   the Journey section (the "create your owner" chapter), which is why it is
+   included from _story.html.twig rather than from index.html.twig.
+
+   Visual language is deliberately borrowed from the Club Spotlight card
+   (.spotlight-card): same gold-ringed panel, same header/footer bands, same
+   Press Start 2P micro-labels. It is a *second* card in that family, not a
+   variant of the first — hence its own .ospot-* class namespace, so changing
+   one never silently restyles the other.
+
+   ownerSpotlight is computed live behind a 10-minute cache (OwnerSpotlightService),
+   unlike the cron-refreshed Club Spotlight — it is two indexed queries, not an
+   aggregate over sync payloads. Empty on a fresh environment with no clubs, and
+   the whole section renders nothing in that case.
+
+   Avatars render client-side from data-owner-appearance via composePlayerSpriteSvg()
+   (avatar-compositor.js), the same technique the Club Spotlight uses. Owner identity
+   is newer than most accounts, so a null appearance is common — the slot simply
+   stays empty rather than drawing a placeholder body.
+
+   Club badges render via clubBadgeIconsHtml() in landing.js, the shared helper the
+   ticker and both leaderboards use. Every club row carries at least a badge; the kit
+   rides along in the same helper output and is hidden by CSS under 520px, where the
+   row no longer has width for both.
+#}
+{% if ownerSpotlight is not empty %}
+<section class="ospot-section" id="owner-spotlight" aria-labelledby="owner-spotlight-title">
+    <div class="wrap">
+        <div class="section-label">Owner Spotlight</div>
+        <div class="ospot-card">
+            <div class="ospot-header">
+                <span class="pixel" id="owner-spotlight-title">THE RICH LIST</span>
+                <span class="ospot-header-sub">Top {{ ownerSpotlight|length }} by combined club balance</span>
+            </div>
+
+            <ol class="ospot-list">
+                {% for owner in ownerSpotlight %}
+                    <li class="ospot-row"
+                        data-owner-appearance="{{ owner.ownerAppearance|json_encode|e('html_attr') }}">
+                        <span class="ospot-rank" aria-hidden="true">{{ '%02d'|format(owner.rank) }}</span>
+
+                        <span class="ospot-avatar-slot" aria-hidden="true"></span>
+
+                        <span class="ospot-identity">
+                            <span class="ospot-owner-name">
+                                {{ owner.ownerName }}
+                                {% if owner.ownerCountryCode %}
+                                    <span class="ospot-flag" title="{{ owner.ownerNationality }}">{{ owner.ownerCountryCode }}</span>
+                                {% endif %}
+                            </span>
+                            <span class="ospot-owner-meta">
+                                {{ owner.clubCount }} {{ owner.clubCount == 1 ? 'club' : 'clubs' }}
+                                {%- if owner.clubCount > owner.clubs|length %} · showing {{ owner.clubs|length }}{% endif %}
+                            </span>
+                        </span>
+
+                        <span class="ospot-balance">
+                            <span class="ospot-balance-val">£{{ (owner.balancePence / 100)|round(0, 'floor')|number_format }}</span>
+                            <span class="ospot-balance-lbl">balance</span>
+                        </span>
+
+                        {% if owner.clubs is not empty %}
+                            <ul class="ospot-clubs">
+                                {% for club in owner.clubs %}
+                                    <li class="ospot-club"
+                                        data-club-badge="{{ {home: club.homeKitConfig, away: club.awayKitConfig, badge: club.badgeConfig}|json_encode|e('html_attr') }}">
+                                        <span class="ospot-club-badge" aria-hidden="true"></span>
+                                        <span class="ospot-club-name">{{ club.name }}</span>
+                                        {% if club.countryCode %}
+                                            <span class="ospot-flag" title="{{ club.countryLabel ?? club.countryCode }}">{{ club.countryCode }}</span>
+                                        {% endif %}
+                                        <span class="ospot-club-division">
+                                            {% if club.tier %}<span class="ospot-tier">T{{ club.tier }}</span>{% endif %}
+                                            {{ club.division }}
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ol>
+        </div>
+        <p class="ospot-note">Combined balance across every club an owner holds, refreshed every few minutes from Integrity Sync.</p>
+    </div>
+</section>
+{% endif %}

@@ -117,7 +117,7 @@ class SeasonRecordRepository extends ServiceEntityRepository
     public function findRecentPyramidEvents(\DateTimeImmutable $since, int $limit): array
     {
         return $this->createQueryBuilder('sr')
-            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
+            ->select('l.tier AS tier', 'sr.promoted AS promoted', 'sr.relegated AS relegated', 'sr.finalPosition AS finalPosition', 'sr.createdAt AS createdAt', 'c.id AS clubId', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
             ->innerJoin('sr.league', 'l')
             ->innerJoin('sr.club', 'c')
             ->where('sr.createdAt >= :since')

@@ -15,6 +15,8 @@ final class LeaderboardItemDto
         public readonly ?array $homeKitConfig = null,
         public readonly ?array $awayKitConfig = null,
         public readonly ?array $badgeConfig = null,
+        /** ISO-ish 2-letter club country code (App\Enum\Country), for the nationality chip. */
+        public readonly ?string $country = null,
     ) {}
 
     public static function fromEntry(LeaderboardEntry $entry, int $rank): self
@@ -30,12 +32,14 @@ final class LeaderboardItemDto
             homeKitConfig: $club->getHomeKitConfig(),
             awayKitConfig: $club->getAwayKitConfig(),
             badgeConfig: $club->getBadgeConfig(),
+            country: $club->getCountry(),
         );
     }
 
     /**
      * @return array{rank: int, clubId: string, clubName: string, score: int,
-     *     displayLabel: ?string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}
+     *     displayLabel: ?string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array,
+     *     country: ?string}
      */
     public function toArray(): array
     {
@@ -48,6 +52,7 @@ final class LeaderboardItemDto
             'homeKitConfig' => $this->homeKitConfig,
             'awayKitConfig' => $this->awayKitConfig,
             'badgeConfig'   => $this->badgeConfig,
+            'country'       => $this->country,
         ];
     }
 }

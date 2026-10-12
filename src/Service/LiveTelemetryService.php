@@ -2,7 +2,9 @@
 
 namespace App\Service;
 
+use App\Entity\MatchResult;
 use App\Repository\LiveTelemetrySnapshotRepository;
+use App\Repository\MatchResultRepository;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SyncRecordRepository;
 use App\Entity\LiveTelemetrySnapshot;
@@ -79,6 +81,9 @@ class LiveTelemetryService
      */
     private const TOTAL_FEED_LIMIT = 20;
 
+    /** How many of a club's latest results the boardroom overlay's dossier carries. */
+    private const DOSSIER_FIXTURES_LIMIT = 5;
+
     /** Each sync represents ~4 weeks of on-device ticks — used only for the footer's "weeks played" figure. */
     private const WEEKS_PER_SYNC = 4;
 
@@ -132,6 +137,7 @@ class LiveTelemetryService
         private readonly SyncRecordRepository $syncRecordRepository,
         private readonly SeasonRecordRepository $seasonRecordRepository,
         private readonly LiveTelemetrySnapshotRepository $snapshotRepository,
+        private readonly MatchResultRepository $matchResultRepository,
     ) {}
 
     public function refresh(): void
@@ -168,6 +174,11 @@ class LiveTelemetryService
             array_slice($topScorerEvents, 0, self::TOP_SCORER_EVENTS_LIMIT),
         ], self::TOTAL_FEED_LIMIT));
 
+        // The boardroom overlay opens from any feed item, so the dossier is attached
+        // after selection rather than inside each build* method: only the ~20 clubs
+        // that actually made the cut are worth a results lookup.
+        $events = $this->attachClubDossiers($events, $syncRows);
+
         $activeClubs = $this->syncRecordRepository->countActiveClubsSince($since);
         $weeksPlayed = count($syncRows) * self::WEEKS_PER_SYNC;
 
@@ -194,6 +205,61 @@ class LiveTelemetryService
             $covenantSummary['valuePence'],
         );
         $this->snapshotRepository->getEntityManager()->flush();
+    }
+
+    /**
+     * Decorates already-selected feed items with their club's dossier (latest
+     * results + best-rated player) for the boardroom overlay.
+     *
+     * The only non-static step in the feed pipeline — it needs MatchResult rows,
+     * which no payload carries. Results come from the persisted MatchResult table
+     * rather than the payload's own `fixtures[]`, because that array holds the whole
+     * division's round, not the syncing club's own matches, and would have to be
+     * disambiguated by club name (which is not unique).
+     *
+     * @param array<int, array<string, mixed>> $events
+     * @param array<int, array<string, mixed>> $syncRows
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachClubDossiers(array $events, array $syncRows): array
+    {
+        $clubIds = array_values(array_unique(array_filter(array_column($events, 'clubId'))));
+        if ($clubIds === []) {
+            return $events;
+        }
+
+        $resultsByClub = $this->matchResultRepository->findRecentByClubIds($clubIds, self::DOSSIER_FIXTURES_LIMIT);
+
+        $fixturesByClubId = [];
+        foreach ($resultsByClub as $clubId => $results) {
+            $fixturesByClubId[$clubId] = array_map(static function (MatchResult $m): array {
+                return [
+                    'opponent'     => $m->getOpponentClubName() ?? 'Unknown',
+                    'scoreFor'     => $m->getGoalsFor(),
+                    'scoreAgainst' => $m->getGoalsAgainst(),
+                    'week'         => $m->getWeek(),
+                    'result'       => match (true) {
+                        $m->getGoalsFor() > $m->getGoalsAgainst() => 'W',
+                        $m->getGoalsFor() < $m->getGoalsAgainst() => 'L',
+                        default => 'D',
+                    },
+                ];
+            }, $results);
+        }
+
+        // Narrowed to the clubs on the feed so an inactive club's payload is never
+        // parsed for a dossier nobody can open.
+        $relevantRows = array_values(array_filter(
+            $syncRows,
+            static fn (array $row): bool => in_array($row['clubId'] ?? null, $clubIds, true),
+        ));
+
+        $dossiers = self::buildClubDossiers($relevantRows, $fixturesByClubId);
+
+        return array_map(
+            static fn (array $event): array => $event + ['dossier' => $dossiers[$event['clubId'] ?? ''] ?? null],
+            $events,
+        );
     }
 
     public function getSnapshot(): LiveTelemetrySnapshot
@@ -282,7 +348,7 @@ class LiveTelemetryService
                 continue;
             }
 
-            $events[] = self::event($row['createdAt'], $now, 'PYRAMID', '[PYRAMID // MOVEMENT]', $clubName, $text, clubBadge: self::clubBadge($row));
+            $events[] = self::event($row['createdAt'], $now, 'PYRAMID', '[PYRAMID // MOVEMENT]', $clubName, $text, clubBadge: self::clubBadge($row), clubId: $row['clubId'] ?? null);
         }
 
         return $events;
@@ -324,6 +390,7 @@ class LiveTelemetryService
                     'amountPence'     => $amountPence,
                     'description'     => $description,
                     'clubName'        => $row['clubName'],
+                    'clubId'          => $row['clubId'] ?? null,
                     'serverTimestamp' => $row['serverTimestamp'],
                     'clubBadge'       => self::clubBadge($row),
                 ];
@@ -342,6 +409,7 @@ class LiveTelemetryService
                 sprintf('%s spent %s: %s', $entry['clubName'], LiveTelemetrySnapshot::formatPence(abs($entry['amountPence'])), $entry['description']),
                 amountExact: LiveTelemetrySnapshot::formatPenceExact(abs($entry['amountPence'])),
                 clubBadge: $entry['clubBadge'],
+                clubId: $entry['clubId'],
             ),
             array_slice($entries, 0, $limit),
         );
@@ -367,6 +435,7 @@ class LiveTelemetryService
                 $row['clubName'],
                 sprintf('%s recorded attendance of %s!', $row['clubName'], number_format($row['weeklyAttendance'])),
                 clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
             ),
             $rows,
         );
@@ -419,6 +488,7 @@ class LiveTelemetryService
                         'bonds'         => self::sanitizePairs($outcome['bonds'] ?? []),
                     ],
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
         }
@@ -478,6 +548,7 @@ class LiveTelemetryService
                         'counterparty'  => $counterparty,
                     ],
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
         }
@@ -535,6 +606,7 @@ class LiveTelemetryService
                         'partyAName'      => $partyAName,
                     ],
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
         }
@@ -600,6 +672,7 @@ class LiveTelemetryService
                         'appearances'  => $appearances,
                     ],
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
 
@@ -621,6 +694,7 @@ class LiveTelemetryService
                         'goalsAgainst' => $goalsAgainst,
                     ],
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
         }
@@ -666,6 +740,7 @@ class LiveTelemetryService
                     $row['clubName'],
                     sprintf('%s invested in fan initiative: %s', $row['clubName'], $description),
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
 
@@ -688,6 +763,7 @@ class LiveTelemetryService
                     sprintf('%s boardroom mood: fan morale %d/100, sentiment %d/100.', $row['clubName'], (int) $morale, (int) $sentiment),
                     meta: ['fanMorale' => $morale, 'fanSentiment' => $sentiment],
                     clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
                 );
             }
         }
@@ -826,6 +902,7 @@ class LiveTelemetryService
                     'appearances' => $appearances,
                 ],
                 clubBadge: self::clubBadge($row),
+                clubId: $row['clubId'] ?? null,
             );
         }
 
@@ -965,6 +1042,11 @@ class LiveTelemetryService
                 'timestampIso'  => $event['timestampIso'],
                 'meta'          => $event['meta'],
                 'clubBadge'     => $event['clubBadge'],
+                // Must stay in this whitelist: it is rebuilt key-by-key (to drop the
+                // internal 'at' sort key), so anything omitted here is silently
+                // dropped before attachClubDossiers() can key the boardroom overlay's
+                // dossier off it — which reads as "no dossier anywhere", with no error.
+                'clubId'        => $event['clubId'] ?? null,
             ],
             $events,
         );
@@ -1023,6 +1105,179 @@ class LiveTelemetryService
         return $selected;
     }
 
+    /**
+     * Per-club "dossier" for the boardroom overlay: the club's latest results and
+     * its best-rated player. Attached to every feed item whose clubId resolves, so
+     * clicking any line opens a report about that club rather than only about the
+     * one incident.
+     *
+     * Keyed on clubId, never clubName — see event()'s `clubId` note.
+     *
+     * Only the club's NEWEST sync row in the window is read. playerStats[] is a
+     * cumulative season-to-date tally (not a per-sync delta), so merging several
+     * syncs would mean picking a winner between stale and fresh copies of the same
+     * player; the latest row already contains everything the earlier ones did.
+     *
+     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubId?: string, clubName: string, homeKitConfig?: ?array}> $syncRows
+     * @param array<string, array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}>> $fixturesByClubId
+     * @return array<string, array{topPlayer: ?array<string, mixed>, fixtures: array<int, array<string, mixed>>}>
+     */
+    public static function buildClubDossiers(array $syncRows, array $fixturesByClubId): array
+    {
+        $newestByClub = [];
+        foreach ($syncRows as $row) {
+            $clubId = $row['clubId'] ?? null;
+            if ($clubId === null) {
+                continue;
+            }
+
+            $incumbent = $newestByClub[$clubId] ?? null;
+            if ($incumbent === null || $row['serverTimestamp'] > $incumbent['serverTimestamp']) {
+                $newestByClub[$clubId] = $row;
+            }
+        }
+
+        $dossiers = [];
+        foreach ($newestByClub as $clubId => $row) {
+            $dossiers[$clubId] = [
+                'topPlayer' => self::findBestRatedPlayer($row),
+                'fixtures'  => $fixturesByClubId[$clubId] ?? [],
+            ];
+        }
+
+        // A club with no sync in the window can still appear in the feed via a
+        // SeasonRecord pyramid event. It has no playerStats to rank, but its
+        // persisted results are still real and worth showing.
+        foreach ($fixturesByClubId as $clubId => $fixtures) {
+            if (!isset($dossiers[$clubId])) {
+                $dossiers[$clubId] = ['topPlayer' => null, 'fixtures' => $fixtures];
+            }
+        }
+
+        return $dossiers;
+    }
+
+    /**
+     * The highest-averageRating entry in a sync row's playerStats[], enriched with
+     * the position and sprite config needed to render them.
+     *
+     * Unlike buildTalismanEvents(), this applies NO rating threshold: the overlay
+     * always wants a club's best player, even a mediocre one. The talisman ticker
+     * line is a *newsworthiness* judgement; this is a roster fact.
+     *
+     * Two fields are recovered rather than read straight off the stat entry:
+     *  - `position` is not in playerStats[] at all. It IS in each fixture's
+     *    home/awayPlayerRatings[], keyed by the same playerId, so it is looked up
+     *    there. Null when the player didn't feature in any fixture on this payload.
+     *  - `appearanceConfig` is the personal-traits-only subset (hair/skin/face/...,
+     *    no kit colours — see CLAUDE.md's Sync v2 section). The club's own
+     *    homeKitConfig supplies kit/shorts/socks/primary/secondary, exactly as
+     *    PlayerCareerStat::toFullAppearanceConfig() merges them. Null when the
+     *    client did not report one, which is still the common case — the overlay
+     *    renders the player without a sprite rather than inventing a likeness.
+     *
+     * averageRating is rounded to one decimal here, not at render time: it arrives
+     * as a raw mean (8.044444444444443) and every consumer wants the same rounding.
+     *
+     * @param array{payload: array<string, mixed>, homeKitConfig?: ?array} $row
+     * @return array{playerId: ?string, playerName: string, position: ?string, age: ?int,
+     *     averageRating: float, goals: int, assists: int, appearances: int,
+     *     appearanceConfig: ?array<string, mixed>}|null
+     */
+    public static function findBestRatedPlayer(array $row): ?array
+    {
+        $best = null;
+        foreach ($row['payload']['playerStats'] ?? [] as $stat) {
+            if (!is_array($stat)) {
+                continue;
+            }
+            if ($best === null || (float) ($stat['averageRating'] ?? 0) > (float) ($best['averageRating'] ?? 0)) {
+                $best = $stat;
+            }
+        }
+
+        if ($best === null) {
+            return null;
+        }
+
+        $playerId = isset($best['playerId']) ? (string) $best['playerId'] : null;
+
+        return [
+            'playerId'      => $playerId,
+            'playerName'    => (string) ($best['playerName'] ?? 'A player'),
+            'position'      => $playerId !== null
+                ? self::findPlayerPosition($row['payload']['fixtures'] ?? [], $playerId)
+                : null,
+            'age'           => isset($best['playerAge']) ? (int) $best['playerAge'] : null,
+            'averageRating' => round((float) ($best['averageRating'] ?? 0), 1),
+            'goals'         => (int) ($best['goals'] ?? 0),
+            'assists'       => (int) ($best['assists'] ?? 0),
+            'appearances'   => (int) ($best['appearances'] ?? 0),
+            'appearanceConfig' => self::mergePlayerAppearance(
+                is_array($best['appearanceConfig'] ?? null) ? $best['appearanceConfig'] : null,
+                $row['homeKitConfig'] ?? null,
+            ),
+        ];
+    }
+
+    /**
+     * A player's position from any fixture's home/away player-rating rows. The same
+     * player appears once per fixture they played, always with the same position, so
+     * the first hit wins.
+     *
+     * @param array<int, mixed> $fixtures
+     */
+    private static function findPlayerPosition(array $fixtures, string $playerId): ?string
+    {
+        foreach ($fixtures as $fixture) {
+            if (!is_array($fixture)) {
+                continue;
+            }
+            foreach (['homePlayerRatings', 'awayPlayerRatings'] as $key) {
+                foreach ($fixture[$key] ?? [] as $ratingRow) {
+                    if (!is_array($ratingRow) || (string) ($ratingRow['playerId'] ?? '') !== $playerId) {
+                        continue;
+                    }
+                    $position = $ratingRow['position'] ?? null;
+                    if (is_string($position) && $position !== '') {
+                        return $position;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Merges a client-reported personal-traits appearance with the club's kit colours
+     * into one complete sprite config composePlayerSpriteSvg() can draw.
+     *
+     * Mirrors PlayerCareerStat::toFullAppearanceConfig() — a player's kit is always
+     * club-derived and never reported per-player. Returns null when no personal traits
+     * were reported: a kit with no body is not a renderable player, and a generated
+     * stand-in would be a likeness nobody in the game has ever seen.
+     *
+     * @param  array<string, mixed>|null $personal
+     * @param  array<string, mixed>|null $homeKitConfig
+     * @return array<string, mixed>|null
+     */
+    private static function mergePlayerAppearance(?array $personal, ?array $homeKitConfig): ?array
+    {
+        if ($personal === null || $personal === []) {
+            return null;
+        }
+
+        $kit = [];
+        foreach (['kit', 'shorts', 'socks', 'primary', 'secondary'] as $key) {
+            if (isset($homeKitConfig[$key])) {
+                $kit[$key] = $homeKitConfig[$key];
+            }
+        }
+
+        return $personal + $kit;
+    }
+
     /** Builds one enriched feed item in the shared shape every category emits. */
     private static function event(
         \DateTimeImmutable $at,
@@ -1035,6 +1290,7 @@ class LiveTelemetryService
         ?string $amountExact = null,
         array $meta = [],
         ?array $clubBadge = null,
+        ?string $clubId = null,
     ): array {
         return [
             'time'          => self::relativeTime($at, $now),
@@ -1047,6 +1303,12 @@ class LiveTelemetryService
             'timestampIso'  => $at->format(\DateTimeInterface::ATOM),
             'meta'          => $meta,
             'clubBadge'     => $clubBadge,
+            // The real Club row behind this item, when there is one. Club names are
+            // not unique (production has six "London FC"), so the boardroom overlay's
+            // per-club dossier is keyed on this, never on `club`. Null for items whose
+            // club is a name only — a transfer's destination club may be an NPC side
+            // with no Club row at all.
+            'clubId'        => $clubId,
             'at'            => $at,
         ];
     }

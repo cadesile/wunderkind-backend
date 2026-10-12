@@ -43,7 +43,7 @@ the end) — this file is the sole source of truth for the route surface.
 | `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
 | `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /all`, `GET /status` |
 | `ClubKitIdentityController` | `/api/club/kit-identity` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the real club's own kit+badge identity (`homeKitConfig`/`awayKitConfig`/`badgeConfig`); see `docs/api/club-kit-identity.md` |
-| `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-development`, `/most-seasons`, `/most-trophies` |
+| `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-wins`, `/most-development`, `/most-seasons`, `/most-trophies` |
 | `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` — register/resubmit also trigger push notifications (`PushNotificationService`) to other entrants |
 | `CountryController` | `/api/countries` | `GET` — public, no auth, cacheable (1h). One row per `Country` case: `{name: nationality demonym, country: display label, code}` — the canonical mapping clients should read instead of keeping their own copy. See `docs/api/countries.md`. |
 | `DeviceTokenController` | `/api/device-tokens` | `POST ''` (`IsGranted('ROLE_CLUB')`, upserts by `deviceToken`), `DELETE /{deviceToken}` — FCM push registration, see `services.md`'s `PushNotificationService` |

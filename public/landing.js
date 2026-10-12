@@ -28,6 +28,19 @@ function clubBadgeIconsHtml(clubBadge) {
     return composeKitSvg(cfg, 'badge', null, 1.4) + composeKitSvg(cfg, 'kit', 'small', 1.4);
 }
 
+// ── Club nationality chip ──
+//
+// A 2-letter country code, not an emoji flag: Club.country uses App\Enum\Country
+// codes ("EN" for England), several of which have no regional-indicator flag at
+// all, and emoji flags render inconsistently across platforms at chip size.
+// Returns '' for a club with no country so callers can concatenate unconditionally.
+function clubCountryChipHtml(country) {
+    if (!country) return '';
+    var code = String(country).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    if (!code) return '';
+    return '<span class="club-flag">' + code + '</span>';
+}
+
 // ── Club Spotlight (kit/badge via composeKitSvg, owner avatar via
 //    composePlayerSpriteSvg, stadium via composeStadiumSvg) ──
 (function () {
@@ -73,6 +86,45 @@ function clubBadgeIconsHtml(clubBadge) {
         }
     }
 })();
+
+// ── Owner Spotlight (owner avatars + per-club badges) ──
+//
+// Same renderers as the Club Spotlight above, just over a list. Every club row
+// gets at least a badge (clubBadgeIconsHtml falls back to composeKitSvg's own
+// defaults for a club that has never customized its identity), while the owner
+// avatar is only drawn when that owner has actually saved one — owner identity is
+// newer than most accounts, so a null appearance is the common case, and an empty
+// slot is better than a default face attributed to a named person.
+(function () {
+    var rows = document.querySelectorAll('.ospot-row');
+    if (!rows.length) return;
+
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+
+        var avatarSlot = row.querySelector('.ospot-avatar-slot');
+        if (avatarSlot && typeof composePlayerSpriteSvg === 'function') {
+            var rawOwner = row.getAttribute('data-owner-appearance');
+            var owner = null;
+            try { owner = rawOwner ? JSON.parse(rawOwner) : null; } catch (e) { owner = null; }
+            if (owner) {
+                // 'staff' body shape — AppearanceRole::OWNER falls into the
+                // non-player branching server-side (see CLAUDE.md, Owner Identity).
+                avatarSlot.innerHTML = composePlayerSpriteSvg(owner, 'staff', 'large', 2);
+            }
+        }
+
+        var clubEls = row.querySelectorAll('.ospot-club');
+        for (var j = 0; j < clubEls.length; j++) {
+            var badgeSlot = clubEls[j].querySelector('.ospot-club-badge');
+            if (!badgeSlot) continue;
+            var rawClubBadge = clubEls[j].getAttribute('data-club-badge');
+            var clubBadge = null;
+            try { clubBadge = rawClubBadge ? JSON.parse(rawClubBadge) : null; } catch (e) { clubBadge = null; }
+            badgeSlot.innerHTML = clubBadgeIconsHtml(clubBadge);
+        }
+    }
+}());
 
 // ── Boardroom Incident & Consequence Feed (ticker + incident inspector modal) ──
 (function () {
@@ -123,6 +175,13 @@ function clubBadgeIconsHtml(clubBadge) {
     var amountEl      = document.getElementById('incident-amount');
     var detailEl      = document.getElementById('incident-detail');
     var metaExtraEl   = document.getElementById('incident-meta-extra');
+    var playerEl      = document.getElementById('incident-player');
+    var playerAvatar  = document.getElementById('incident-player-avatar');
+    var playerNameEl  = document.getElementById('incident-player-name');
+    var playerSubEl   = document.getElementById('incident-player-sub');
+    var playerRateEl  = document.getElementById('incident-player-rating');
+    var fixturesEl    = document.getElementById('incident-fixtures');
+    var fixtureListEl = document.getElementById('incident-fixture-list');
     var ctaLink       = document.getElementById('terminal-cta');
 
     if (!overlay || !closeBtn) return;
@@ -168,6 +227,76 @@ function clubBadgeIconsHtml(clubBadge) {
         }
     }
 
+    // ── Dossier blocks: the club behind the incident ──
+    //
+    // Both render from the clicked item's data-dossier
+    // (LiveTelemetryService::attachClubDossiers()) and hide entirely when that
+    // club has nothing to show, rather than printing an empty heading.
+
+    function renderTopPlayer(player) {
+        if (!playerEl) return;
+
+        if (!player || !player.playerName) {
+            playerEl.hidden = true;
+            return;
+        }
+
+        playerNameEl.textContent = player.playerName;
+
+        // Position is recovered from the payload's fixture ratings and age from the
+        // stat row — either can legitimately be missing, so the sub-line is built
+        // from whichever parts exist rather than printing "null" placeholders.
+        var sub = [];
+        if (player.position) sub.push(player.position);
+        if (player.age) sub.push(player.age + 'y');
+        sub.push(player.goals + 'G / ' + player.assists + 'A');
+        if (player.appearances) sub.push(player.appearances + ' apps');
+        playerSubEl.textContent = sub.join(' · ');
+
+        // Already rounded to 1dp server-side; toFixed keeps a whole number showing
+        // as "8.0" rather than "8" so the column doesn't jitter between rows.
+        playerRateEl.textContent = Number(player.averageRating || 0).toFixed(1);
+
+        // Only drawn when the client actually reported an appearanceConfig — no
+        // generated stand-in. Most clients don't send it yet, so the empty slot is
+        // the common case and the row is laid out to not reserve space for it.
+        if (playerAvatar) {
+            var hasSprite = player.appearanceConfig && typeof composePlayerSpriteSvg === 'function';
+            playerAvatar.innerHTML = hasSprite
+                ? composePlayerSpriteSvg(player.appearanceConfig, 'player', 'large', 2)
+                : '';
+        }
+
+        playerEl.hidden = false;
+    }
+
+    function renderFixtures(fixtures) {
+        if (!fixturesEl) return;
+
+        if (!fixtures || !fixtures.length) {
+            fixturesEl.hidden = true;
+            return;
+        }
+
+        fixtureListEl.innerHTML = '';
+        fixtures.forEach(function (fixture) {
+            var li = document.createElement('li');
+            li.innerHTML =
+                '<span class="incident-result-badge is-' + String(fixture.result).toLowerCase() + '"></span>' +
+                '<span class="incident-fixture-opponent"></span>' +
+                '<span class="incident-fixture-score"></span>';
+            // The badge letter doubles as the non-colour cue for the result, so it is
+            // text content rather than a colour-only indicator.
+            li.querySelector('.incident-result-badge').textContent = fixture.result;
+            li.querySelector('.incident-fixture-opponent').textContent = 'vs ' + fixture.opponent;
+            li.querySelector('.incident-fixture-score').textContent =
+                fixture.scoreFor + '\u2013' + fixture.scoreAgainst + ' \u00b7 Wk ' + fixture.week;
+            fixtureListEl.appendChild(li);
+        });
+
+        fixturesEl.hidden = false;
+    }
+
     function openIncident(item) {
         var meta = {};
         try {
@@ -195,6 +324,11 @@ function clubBadgeIconsHtml(clubBadge) {
 
         detailEl.textContent = item.getAttribute('data-detail') || '';
         renderMetaExtra(meta);
+
+        var dossier = null;
+        try { dossier = JSON.parse(item.getAttribute('data-dossier') || 'null'); } catch (e) { dossier = null; }
+        renderTopPlayer(dossier && dossier.topPlayer);
+        renderFixtures(dossier && dossier.fixtures);
 
         overlay.classList.add('open');
         document.body.style.overflow = 'hidden';
@@ -508,14 +642,26 @@ function openBetaModal() {
 
 (function () {
     var ENDPOINTS = {
-        transfers:   '/api/stats/most-transfers',
-        development: '/api/stats/most-development',
-        seasons:     '/api/stats/most-seasons',
-        trophies:    '/api/stats/most-trophies',
+        transfers: '/api/stats/most-transfers',
+        // Was most-development; that field has no writer and always ranked zeroes.
+        // See CommunityStatsService::getMostDevelopment().
+        wins:      '/api/stats/most-wins',
+        seasons:   '/api/stats/most-seasons',
+        trophies:  '/api/stats/most-trophies',
+    };
+
+    // The stat band sits ABOVE the period tabs, so each figure names its own period.
+    var PERIOD_LABELS = {
+        week:   'this week',
+        month:  'this month',
+        season: 'this season',
+        all:    'all time',
     };
 
     var tabs = document.querySelectorAll('#cs-period-tabs .period-tab');
     if (!tabs.length) return;
+
+    var periodLabels = document.querySelectorAll('[data-cs-period]');
 
     function renderList(listEl, results) {
         listEl.innerHTML = '';
@@ -529,8 +675,15 @@ function openBetaModal() {
             var rank = String(row.rank).padStart(2, '0');
             li.innerHTML =
                 '<span class="lb-rank">' + rank + '</span>' +
+                '<span class="lb-badge" aria-hidden="true"></span>' +
                 '<span class="lb-name"></span>' +
+                clubCountryChipHtml(row.country) +
                 '<span class="lb-value"></span>';
+            // Every club listed on the page carries at least its badge; the kit rides
+            // along in the same helper and is hidden by CSS where the row is too narrow.
+            li.querySelector('.lb-badge').innerHTML = clubBadgeIconsHtml({
+                home: row.homeKitConfig, away: row.awayKitConfig, badge: row.badgeConfig,
+            });
             li.querySelector('.lb-name').textContent = row.clubName;
             li.querySelector('.lb-value').textContent = row.value;
             listEl.appendChild(li);
@@ -542,6 +695,10 @@ function openBetaModal() {
     }
 
     function loadPeriod(period) {
+        for (var i = 0; i < periodLabels.length; i++) {
+            periodLabels[i].textContent = PERIOD_LABELS[period] || period;
+        }
+
         Object.keys(ENDPOINTS).forEach(function (key) {
             var listEl = document.getElementById('cs-list-' + key);
             var statEl = document.getElementById('cs-stat-' + key);
@@ -638,7 +795,12 @@ function openBetaModal() {
                 '<span class="lbg-row-rank">' + String(entry.rank).padStart(2, '0') + '</span>' +
                 '<span class="lbg-row-badge" aria-hidden="true"></span>' +
                 '<span class="lbg-row-main">' +
-                    '<span class="lbg-row-name"></span>' +
+                    // .lbg-row-main stacks vertically (name above tag), so the name and
+                    // its country chip need their own inline row inside it.
+                    '<span class="lbg-row-title">' +
+                        '<span class="lbg-row-name"></span>' +
+                        clubCountryChipHtml(entry.country) +
+                    '</span>' +
                     (entry.displayLabel ? '<span class="lbg-row-tag"></span>' : '') +
                 '</span>' +
                 '<span class="lbg-row-value"></span>';

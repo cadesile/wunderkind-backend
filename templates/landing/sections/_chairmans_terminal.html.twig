@@ -35,8 +35,12 @@
        crowded out entirely by one that fires on nearly every sync (outlay,
        attendance) — the merged, capped set is then re-sorted newest-first for
        display. Each item carries {time, text, category, categoryLabel, club,
-       detail, amountExact, timestampIso, meta} — the enriched fields feed the
-       incident inspector modal (see _incident_modal.html.twig / landing.js).
+       clubId, detail, amountExact, timestampIso, meta, dossier} — the enriched
+       fields feed the boardroom overlay (see _incident_modal.html.twig /
+       landing.js). `dossier` is that club's latest results plus its best-rated
+       player, attached per clubId after selection
+       (LiveTelemetryService::attachClubDossiers()); null for an item whose club
+       is a name only, e.g. a transfer into an NPC side.
 #}
 <div class="terminal">
     <div class="terminal-header">
@@ -80,7 +84,8 @@
                  data-amount="{{ event.amountExact }}"
                  data-timestamp="{{ event.timestampIso }}"
                  data-meta="{{ event.meta|json_encode|e('html_attr') }}"
-                 data-club-badge="{{ event.clubBadge|json_encode|e('html_attr') }}">
+                 data-club-badge="{{ event.clubBadge|json_encode|e('html_attr') }}"
+                 data-dossier="{{ event.dossier|default(null)|json_encode|e('html_attr') }}">
                 <span class="terminal-feed-category pixel">{{ event.categoryLabel }}</span>
                 <span class="terminal-feed-line">
                     <span class="terminal-feed-badge" aria-hidden="true"></span>

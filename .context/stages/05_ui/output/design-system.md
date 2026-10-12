@@ -100,7 +100,54 @@ and the various `templates/admin/*_content.html.twig` files are ordinary
 content templates that consume the theme above but don't define new
 tokens. `public/bundles/easyadmin` and `public/bundles/apiplatform` are
 vendor/asset-mapper output. `templates/landing/*` is a separate marketing
-landing page with its own sections, unrelated to this admin theme.
+landing page with its own sections, unrelated to this admin theme — see
+the section below for its own token source.
+
+## Second design system: the marketing landing page
+
+Entirely separate from the admin theme above; the two share no tokens.
+
+**Canonical token source: the `:root` block at the top of
+`public/landing.css`**, whose own header comment declares itself the style
+guide: *"retro pixel-art, dark green, zero border-radius, Press Start 2P /
+VT323 / Space Mono. New sections build from these classes."* Key tokens:
+`--bg #0d2e28`, `--bg-mid #123a33`, `--panel #17493f`, `--border #051512`,
+`--gold #f5c842`, `--gold-dim #c9a134`, `--mint #3FAA7E`, `--cyan #4fb8c9`,
+`--red #C44747`, `--text #e4ede4`, `--text-muted #7dac9f`.
+
+Same hard constraints as the admin theme: `border-radius: 0 !important`
+globally, and `image-rendering: pixelated` on every sprite. A CRT scanline
+overlay is painted via `body::before`.
+
+Shared conventions worth knowing before adding a section:
+
+- **Pixel sprites are composed client-side from `data-*` attributes**, never
+  server-rendered as markup. `public/assets/kit-compositor.js`
+  (`composeKitSvg()` — club kits/badges), `avatar-compositor.js`
+  (`composePlayerSpriteSvg()` — people), and `stadium-compositor.js`
+  (`composeStadiumSvg()`) all load before `landing.js` (see
+  `templates/landing/base.html.twig`). All three are mechanical ports of the
+  client's own sprite code — port verbatim if it changes, never
+  hand-reinterpret the pixel maths.
+- **`clubBadgeIconsHtml()` in `landing.js` is the one club-identity renderer**,
+  shared by the ticker, the Owner Spotlight, the community-stats lists and the
+  global leaderboards. It emits badge + kit from a
+  `{home, away, badge}` object and falls back to `composeKitSvg()`'s own
+  defaults, so every club draws something even before it is customized. Rule:
+  **any club listed anywhere on the page shows at least its badge**; the kit is
+  hidden by CSS below 560px, where the row has no room for both.
+- **`clubCountryChipHtml()`** renders a club's nationality as a 2-letter code
+  chip (`.club-flag`), never an emoji flag: `App\Enum\Country` codes include
+  `EN`, which has no regional-indicator equivalent, and emoji flags render
+  inconsistently across platforms at chip size.
+- **Card families share a visual language but not a class namespace.** The Owner
+  Spotlight (`.ospot-*`) deliberately borrows the Club Spotlight's
+  (`.spotlight-*`) gold-ringed panel, header/footer bands and Press Start 2P
+  micro-labels while keeping its own prefix, so restyling one never silently
+  restyles the other.
+- **Trophy SVGs are black silhouettes recoloured by a CSS filter chain.** The
+  chains live in two places — `templates/admin/leagues_content.html.twig` and
+  `templates/landing/sections/_spotlight.html.twig` — and must stay in step.
 
 ## Known issue — not a design-system finding, flagged for visibility
 

@@ -1,9 +1,22 @@
+{#
+   Community stats. Every figure here is period-scoped by the tab strip below the
+   stat band, and every band figure is the SUM OF THE TOP TEN clubs for that period
+   — not a whole-pyramid total. Both facts used to be invisible: the band sat above
+   the tabs with no period on it and read as an all-time, all-clubs count. The
+   per-stat "this week" line (kept in step by landing.js) is what makes it honest.
+
+   The second card was "MOST DEVELOPMENT" (sum of Transfer::$developmentPoints).
+   Nothing writes that field — TransferSyncDto has no such member, so every row is
+   0 and the card rendered a column of zeroes. Replaced with matches won, which is
+   backed by real MatchResult rows. The /api/stats/most-development endpoint still
+   exists for future use; see CommunityStatsService::getMostDevelopment().
+#}
 <!-- ═══════════════════════════════ COMMUNITY STATS ═══════════════════════════════ -->
 <section id="community-stats">
     <div class="wrap" style="padding-bottom:0;">
         <div class="section-label">Community</div>
         <h2 class="section-title">The community, right now.</h2>
-        <p class="section-sub">Live activity across every club in the pyramid — pulled straight from the server.</p>
+        <p class="section-sub">Live activity from the top clubs in the pyramid — pulled straight from the server. Totals and tables both follow the period you pick below.</p>
     </div>
 </section>
 
@@ -12,18 +25,22 @@
         <div class="stat-block">
             <span class="stat-num" id="cs-stat-transfers">--</span>
             <span class="stat-lbl">Transfers (top 10 clubs)</span>
+            <span class="stat-period" data-cs-period>this week</span>
         </div>
         <div class="stat-block">
-            <span class="stat-num" id="cs-stat-development">--</span>
-            <span class="stat-lbl">Development points (top 10 clubs)</span>
+            <span class="stat-num" id="cs-stat-wins">--</span>
+            <span class="stat-lbl">Matches won (top 10 clubs)</span>
+            <span class="stat-period" data-cs-period>this week</span>
         </div>
         <div class="stat-block">
             <span class="stat-num" id="cs-stat-seasons">--</span>
             <span class="stat-lbl">Seasons completed (top 10 clubs)</span>
+            <span class="stat-period" data-cs-period>this week</span>
         </div>
         <div class="stat-block">
             <span class="stat-num" id="cs-stat-trophies">--</span>
             <span class="stat-lbl">Titles won (top 10 clubs)</span>
+            <span class="stat-period" data-cs-period>this week</span>
         </div>
     </div>
 </div>
@@ -44,9 +61,9 @@
                 <ul class="lb-list" id="cs-list-transfers"><li class="lb-loading">Loading…</li></ul>
             </div>
             <div class="lb-card">
-                <div class="lb-card-title">MOST DEVELOPMENT</div>
-                <div class="lb-card-sub">CA points gained</div>
-                <ul class="lb-list" id="cs-list-development"><li class="lb-loading">Loading…</li></ul>
+                <div class="lb-card-title">MOST WINS</div>
+                <div class="lb-card-sub">matches won</div>
+                <ul class="lb-list" id="cs-list-wins"><li class="lb-loading">Loading…</li></ul>
             </div>
             <div class="lb-card">
                 <div class="lb-card-title">MOST SEASONS</div>

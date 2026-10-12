@@ -11,8 +11,10 @@ use App\Entity\Transfer;
 use App\Enum\TransferType;
 use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubSpotlightRepository;
+use App\Repository\LeagueRepository;
 use App\Repository\MatchResultRepository;
 use App\Repository\PlayerCareerStatRepository;
+use App\Repository\SeasonRecordRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\TransferRepository;
 use App\Repository\UserLedgerRepository;
@@ -63,6 +65,8 @@ class ClubSpotlightService
         private readonly TransferRepository $transferRepository,
         private readonly PlayerCareerStatRepository $playerCareerStatRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
+        private readonly SeasonRecordRepository $seasonRecordRepository,
+        private readonly LeagueRepository $leagueRepository,
         private readonly InboxService $inboxService,
         private readonly PushNotificationService $pushNotificationService,
         private readonly EntityManagerInterface $em,
@@ -159,6 +163,8 @@ class ClubSpotlightService
             topPerformerGoals: $topPerformer?->getGoals() ?? 0,
             topPerformerAssists: $topPerformer?->getAssists() ?? 0,
             topPerformerAppearanceConfig: $topPerformer?->toFullAppearanceConfig(),
+            trophies: $this->buildTrophies($club),
+            establishedAt: $club->getCreatedAt(),
             windowStartsAt: $windowStartsAt,
             windowEndsAt: $windowEndsAt,
         );
@@ -168,6 +174,51 @@ class ClubSpotlightService
         $this->notifyOwner($club);
 
         return $club;
+    }
+
+    /**
+     * The club's silverware, one entry per tier won, top division first.
+     *
+     * A "title" is a SeasonRecord with finalPosition = 1 — the same definition the
+     * hall_of_fame leaderboard uses, via the same repository method, so the two can
+     * never disagree about what counts as a trophy.
+     *
+     * The trophy artwork is looked up per tier against the club's OWN country, not
+     * stored on the title: League::$trophyImage/$trophyColour are admin-editable
+     * per (country, tier), so a club's honours board always reflects the trophy
+     * that division awards today. A club with no country set, or a tier with no
+     * League row for that country, still lists the title — with null artwork, which
+     * the template renders as a generic trophy. Dropping it would under-report real
+     * silverware because of a missing admin setting.
+     *
+     * @return array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}>
+     */
+    private function buildTrophies(Club $club): array
+    {
+        $rows    = $this->seasonRecordRepository->countTitlesByClubAndTier($club);
+        $country = $club->getCountry();
+
+        $trophies = [];
+        foreach ($rows as $row) {
+            $league = $country !== null
+                ? $this->leagueRepository->findByCountryAndTier($country, $row['tier'])
+                : null;
+
+            $trophies[] = [
+                'tier'         => $row['tier'],
+                'titles'       => $row['titles'],
+                'trophyImage'  => $league?->getTrophyImage(),
+                'trophyColour' => $league?->getTrophyColour()?->value,
+                'leagueName'   => $league?->getName(),
+            ];
+        }
+
+        // Tier 1 is the TOP division and 8 is the bottom (see CLAUDE.md's
+        // Server-Driven Messaging note on inverted tiers), so ascending tier
+        // number is descending prestige — the order an honours board wants.
+        usort($trophies, static fn (array $a, array $b): int => $a['tier'] <=> $b['tier']);
+
+        return $trophies;
     }
 
     /**

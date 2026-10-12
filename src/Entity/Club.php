@@ -39,6 +39,21 @@ class Club
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastSyncedAt = null;
 
+    /**
+     * How far dormancy-based reputation decay has already been applied for this club.
+     *
+     * Exists purely to make app:reputation:decay idempotent and catch-up-safe: the
+     * command charges whole days since max(lastSyncedAt, this, createdAt), so running
+     * it twice in a day costs nothing and a week of missed cron runs is settled in one
+     * pass. Null until the club's first decay — before that, dormancy is measured from
+     * lastSyncedAt (or createdAt for a club that has never synced).
+     *
+     * Deliberately NOT reset on sync: setLastSyncedAt() moves the anchor forward past
+     * it anyway, so a syncing club is never charged for days it was active.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $reputationDecayedAt = null;
+
     /** Target market-pool size for dynamic replenishment (future use) */
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 20])]
     private int $marketPoolSize = 20;
@@ -204,6 +219,9 @@ class Club
     public function setLastSyncedWeek(int $week): void { $this->lastSyncedWeek = $week; }
 
     public function getLastSyncedAt(): ?\DateTimeImmutable { return $this->lastSyncedAt; }
+
+    public function getReputationDecayedAt(): ?\DateTimeImmutable { return $this->reputationDecayedAt; }
+    public function setReputationDecayedAt(?\DateTimeImmutable $at): void { $this->reputationDecayedAt = $at; }
     public function setLastSyncedAt(?\DateTimeImmutable $at): void { $this->lastSyncedAt = $at; }
 
     public function getMarketPoolSize(): int { return $this->marketPoolSize; }

@@ -10,7 +10,9 @@ use App\Entity\User;
 use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubSpotlightRepository;
 use App\Repository\MatchResultRepository;
+use App\Repository\LeagueRepository;
 use App\Repository\PlayerCareerStatRepository;
+use App\Repository\SeasonRecordRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\TransferRepository;
 use App\Repository\UserLedgerRepository;
@@ -58,6 +60,8 @@ class ClubSpotlightIncumbentTest extends TestCase
             $this->createStub(TransferRepository::class),
             $this->createStub(PlayerCareerStatRepository::class),
             $this->createStub(UserLedgerRepository::class),
+            $this->createStub(SeasonRecordRepository::class),
+            $this->createStub(LeagueRepository::class),
             $this->inbox,
             $this->push,
             $this->createStub(EntityManagerInterface::class),
@@ -85,6 +89,8 @@ class ClubSpotlightIncumbentTest extends TestCase
             topPerformerGoals: 0,
             topPerformerAssists: 0,
             topPerformerAppearanceConfig: null,
+            trophies: [],
+            establishedAt: null,
             windowStartsAt: new \DateTimeImmutable('-1 hour'),
             windowEndsAt: new \DateTimeImmutable('-1 minute'),
         );

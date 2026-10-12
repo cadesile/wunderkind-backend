@@ -116,6 +116,33 @@ class ClubSpotlight
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $topPerformerAppearanceConfig = null;
 
+    /**
+     * Titles this club has won, one entry per league tier, richest tier first:
+     * {tier, titles, trophyImage, trophyColour, leagueName}.
+     *
+     * The trophy artwork is NOT a property of the title — it is read off the
+     * League row for (the club's country, that tier), so a club's silverware
+     * always renders with whatever trophy an admin has configured for that
+     * division today. trophyImage/trophyColour are both nullable on League, so an
+     * entry can legitimately carry a title count and no artwork; the template
+     * falls back to a generic trophy rather than dropping the title.
+     *
+     * @var array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $trophies = [];
+
+    /**
+     * When the club was founded — Club::$createdAt, denormalized like every other
+     * field here. There is no separate "established" column on Club; the row's
+     * creation IS the founding, since a Club row only exists once an owner has
+     * gone through POST /api/club/initialize.
+     *
+     * Nullable only so rows written before this column existed render without it.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $establishedAt = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $windowStartsAt;
 
@@ -153,6 +180,11 @@ class ClubSpotlight
     public function getTopPerformerGoals(): int { return $this->topPerformerGoals; }
     public function getTopPerformerAssists(): int { return $this->topPerformerAssists; }
     public function getTopPerformerAppearanceConfig(): ?array { return $this->topPerformerAppearanceConfig; }
+    /** @return array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}> */
+    public function getTrophies(): array { return $this->trophies; }
+    public function getEstablishedAt(): ?\DateTimeImmutable { return $this->establishedAt; }
+    /** Total titles across every tier — the headline figure, so the template doesn't sum in Twig. */
+    public function getTotalTrophies(): int { return array_sum(array_column($this->trophies, 'titles')); }
     public function getWindowStartsAt(): \DateTimeImmutable { return $this->windowStartsAt; }
     public function getWindowEndsAt(): \DateTimeImmutable { return $this->windowEndsAt; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
@@ -182,6 +214,7 @@ class ClubSpotlight
     /**
      * @param array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}> $recentFixtures
      * @param array<int, array{playerName: string, feePence: int, direction: string, counterpartyClub: string}> $recentTransfers
+     * @param array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}> $trophies
      */
     public function update(
         string $clubName,
@@ -201,6 +234,8 @@ class ClubSpotlight
         int $topPerformerGoals,
         int $topPerformerAssists,
         ?array $topPerformerAppearanceConfig,
+        array $trophies,
+        ?\DateTimeImmutable $establishedAt,
         \DateTimeImmutable $windowStartsAt,
         \DateTimeImmutable $windowEndsAt,
     ): void {
@@ -221,6 +256,8 @@ class ClubSpotlight
         $this->topPerformerGoals            = $topPerformerGoals;
         $this->topPerformerAssists          = $topPerformerAssists;
         $this->topPerformerAppearanceConfig = $topPerformerAppearanceConfig;
+        $this->trophies                     = $trophies;
+        $this->establishedAt                = $establishedAt;
         $this->windowStartsAt               = $windowStartsAt;
         $this->windowEndsAt                 = $windowEndsAt;
         $this->generatedAt                  = new \DateTimeImmutable();
