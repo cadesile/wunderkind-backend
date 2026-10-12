@@ -95,7 +95,13 @@ migrations are the change log (see `migrations.md`).
 ## Core game / club
 
 - **`Club`** — the player's club, central aggregate. `name`, `reputation`,
-  `totalCareerEarnings`, `hallOfFamePoints`, `lastSyncedWeek`,
+  `totalCareerEarnings` (**deprecated** — a client-supplied accumulator of every
+  income the club ever had; no longer backs any board or admin panel, superseded
+  by `UserLedger` dividend draws. Still written on sync and still emitted by
+  `GET /api/club/status`, because the shipped client reads it — removal needs a
+  coordinated wunderkind-app release. `EconomicService::processFinancialYearEnd()`'s
+  server-computed manager dividend still lands here and deliberately writes no
+  ledger row, so this column is its only record), `hallOfFamePoints`, `lastSyncedWeek`,
   `lastSyncedAt`, `reputationDecayedAt:?datetime` (added by
   `Version20261012215721`) — how far dormancy-based reputation decay has been
   charged; exists purely to make `app:reputation:decay` idempotent and

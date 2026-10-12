@@ -165,12 +165,20 @@
     <div class="col-sm-6 col-xl-3">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body py-3 text-center">
+                {# Dividends actually drawn (UserLedger), not Club::$totalCareerEarnings —
+                   that accumulator is deprecated and no longer backs any leaderboard. It
+                   stays visible underneath, labelled legacy, so an admin can compare the
+                   two during the phase-out. #}
                 <div class="text-success mb-2"><i class="fa fa-chart-line fa-lg" aria-hidden="true"></i></div>
                 <div class="fs-3 fw-bold"
-                     title="£{{ (club.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
-                    {{ fmt_currency(club.totalCareerEarnings) }}
+                     title="£{{ (dividendsPence / 100)|number_format(0, '.', ',') }}">
+                    {{ fmt_currency(dividendsPence) }}
                 </div>
-                <div class="text-muted small mt-1">Career Earnings</div>
+                <div class="text-muted small mt-1">Dividends Drawn</div>
+                <div class="text-muted mt-1" style="font-size:.7rem;"
+                     title="£{{ (club.totalCareerEarnings / 100)|number_format(0, '.', ',') }}">
+                    legacy accumulator: {{ fmt_currency(club.totalCareerEarnings) }}
+                </div>
             </div>
         </div>
     </div>

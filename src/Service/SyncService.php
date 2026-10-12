@@ -207,17 +207,19 @@ class SyncService
         // and are computed only by LeaderboardCalculationService (CLI command / cache-miss path).
         $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
 
+        // career_earnings used to be here, scored from Club::$totalCareerEarnings. It is
+        // now an aggregate over UserLedger dividend draws (see LeaderboardCategory::
+        // isAggregate()) and is computed by app:leaderboards:generate instead, so a draw
+        // reaches the board within one cron tick rather than instantly.
         $cheapCategories = [
-            LeaderboardCategory::CAREER_EARNINGS,
             LeaderboardCategory::CLUB_REPUTATION,
             LeaderboardCategory::FANATICS,
         ];
 
         foreach ($cheapCategories as $category) {
             $score = match ($category) {
-                LeaderboardCategory::CAREER_EARNINGS    => $club->getTotalCareerEarnings(),
                 LeaderboardCategory::CLUB_REPUTATION => $club->getReputation(),
-                LeaderboardCategory::FANATICS            => $club->getTotalSeasonAttendance(),
+                LeaderboardCategory::FANATICS        => $club->getTotalSeasonAttendance(),
             };
 
             foreach (['all-time', $isoWeek] as $period) {

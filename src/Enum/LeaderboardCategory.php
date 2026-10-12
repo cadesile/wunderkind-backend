@@ -19,12 +19,20 @@ enum LeaderboardCategory: string
 
     /**
      * True for categories whose score requires a cross-table aggregate
-     * (ClubFacility / PlayerCareerStat / SeasonRecord / Transfer) rather than a plain Club scalar.
-     * These are computed only by LeaderboardCalculationService, not on every sync.
+     * (ClubFacility / PlayerCareerStat / SeasonRecord / Transfer / UserLedger) rather
+     * than a plain Club scalar. These are computed only by
+     * LeaderboardCalculationService, not on every sync.
+     *
+     * CAREER_EARNINGS moved into this set when its source changed from
+     * Club::$totalCareerEarnings (a scalar the client supplies, now being phased out)
+     * to summed UserLedger dividend draws. It is consequently no longer upserted by
+     * SyncService — a draw reported on a sync reaches the board on the next
+     * app:leaderboards:generate run (every 5 minutes), not instantly.
      */
     public function isAggregate(): bool
     {
         return match ($this) {
+            self::CAREER_EARNINGS,
             self::EMPIRE_INDEX, self::GOLDEN_BOOT, self::PLAYMAKER, self::HALL_OF_FAME,
             self::CLUB_GOALS, self::CLUB_ASSISTS, self::IRON_MAN,
             self::TRANSFER_RECORD, self::TRANSFER_SPEND => true,

@@ -12,6 +12,7 @@ use App\Repository\LeaderboardEntryRepository;
 use App\Repository\PlayerCareerStatRepository;
 use App\Repository\PlayerCareerStatSnapshotRepository;
 use App\Repository\TransferRepository;
+use App\Repository\UserLedgerRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
@@ -26,6 +27,7 @@ class LeaderboardCalculationService
         private readonly PlayerCareerStatSnapshotRepository $playerCareerStatSnapshotRepository,
         private readonly TransferRepository $transferRepository,
         private readonly ClubRepository $clubRepository,
+        private readonly UserLedgerRepository $userLedgerRepository,
         private readonly HallOfFameScoreService $hallOfFameScoreService,
         private readonly TagAwareCacheInterface $leaderboardCache,
         private readonly int $leaderboardCacheTtl,
@@ -107,6 +109,10 @@ class LeaderboardCalculationService
         $isAllTime = $period === 'all-time';
 
         $rows = match ($category) {
+            // Summed UserLedger dividend draws — money the owner actually took out of
+            // the club. Replaced Club::$totalCareerEarnings, a client-supplied running
+            // total of every income the club ever had, which is being phased out.
+            LeaderboardCategory::CAREER_EARNINGS => $this->userLedgerRepository->sumDividendsByClub(),
             LeaderboardCategory::EMPIRE_INDEX => array_map(
                 static fn (array $r): array => $r + ['displayLabel' => null],
                 $this->clubFacilityRepository->sumLevelsByClub(),
@@ -145,11 +151,19 @@ class LeaderboardCalculationService
 
         $this->em->flush();
 
-        // hall_of_fame is fully derived: a club with no titles scores 0, and the loop above
-        // only writes rows for clubs that *did* score. Any other row is stale — most
-        // importantly a leftover value from the old client-supplied hallOfFamePoints path,
-        // which would otherwise outrank every legitimate title winner forever.
-        if ($category === LeaderboardCategory::HALL_OF_FAME) {
+        // hall_of_fame and career_earnings are fully derived: a club with no titles (or no
+        // dividend draws) scores 0, and the loop above only writes rows for clubs that
+        // *did* score. Any other row is stale — most importantly a leftover value from an
+        // old client-supplied path (hallOfFamePoints, totalCareerEarnings), which would
+        // otherwise outrank every legitimate scorer forever. That is not hypothetical for
+        // career_earnings: every pre-existing row holds a totalCareerEarnings figure, and
+        // almost no club has a ledger entry yet, so without this the board would keep
+        // showing the accumulator indefinitely after the source was switched.
+        //
+        // The other aggregate categories are not zeroed here: their row sets cover every
+        // club that has ever scored, so a club absent from $rows genuinely has no history
+        // to go stale.
+        if (in_array($category, [LeaderboardCategory::HALL_OF_FAME, LeaderboardCategory::CAREER_EARNINGS], true)) {
             $scored = [];
             foreach ($rows as $row) {
                 $scored[(string) $row['clubId']] = true;

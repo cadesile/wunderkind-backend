@@ -213,10 +213,13 @@ filename alone.
   Deliberately **not** modelled like `ClubSpotlight`/`LiveTelemetrySnapshot`: it
   is two indexed queries over club/user, so it is computed live behind the same
   short-lived cache `WorldOverviewService` uses — no entity, migration or cron
-  entry. Ranks on **summed club balance**, not `UserLedgerRepository::getCurrentBalance()`:
-  the centralized ledger only holds client-reported `DIVIDEND_DRAW` entries, of
-  which production has a single-digit number, so ranking on it would show one
-  owner with a figure and four zeroes.
+  entry. Ranks on **`UserLedgerRepository::findTopOwnersByBalance()`** — each owner's
+  latest `balanceAfterPence`, i.e. money actually drawn — not on summed club
+  balance and not on the deprecated `Club::$totalCareerEarnings`. Owners with no
+  ledger entries are absent rather than listed at zero, so the panel is sparse
+  (production held **one** ledger entry across 162 owners at the time of the
+  switch) and fills in as clients report `dividend_draw`. See
+  `docs/api/user-ledger.md`.
 - **`ReputationDecayService`** — pure arithmetic for dormancy-based reputation
   decay (5 points per whole day a club doesn't sync); `app:reputation:decay`
   owns iteration and persistence. Decay is **transient by design** — reputation

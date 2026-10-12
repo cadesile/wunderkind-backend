@@ -29,7 +29,13 @@ class SyncRequest
     /** Client-authoritative balance after this week's tick. */
     public int $balance = 0;
 
-    /** Client-authoritative lifetime career earnings. */
+    /**
+     * Client-authoritative lifetime career earnings.
+     *
+     * @deprecated Still accepted and stored, but no longer the source for any board or
+     * panel — see `Club::$totalCareerEarnings`. Owner earnings come from `UserLedger`
+     * `dividend_draw` entries in `$ledger` instead.
+     */
     public int $totalCareerEarnings = 0;
 
     /** Delta applied to reputation this week. */
