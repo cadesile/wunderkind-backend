@@ -3,7 +3,7 @@
 // Regenerate:  bash scripts/build-kit-compositor.sh
 //
 // Source:      assets/Components/KitBadgeV2/kit16.ts
-// Source sha:  c732bc6fc5822890
+// Source sha:  15e38c8f16ea9593
 //
 // No build timestamp on purpose: the output is then byte-identical when
 // the source has not changed, so a rebuild produces an empty diff and
@@ -209,7 +209,7 @@
     };
     return { g, pt, set, r };
   }
-  function addOutline(g, W, H) {
+  function addOutline(g, W, H, outline) {
     const PW = W + 2, PH = H + 2;
     const pad = Array.from({ length: PH }, () => Array(PW).fill(null));
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) pad[y + 1][x + 1] = g[y][x];
@@ -217,7 +217,7 @@
     const add = [];
     for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++)
       if (!pad[y][x] && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) add.push([x, y]);
-    add.forEach(([x, y]) => {
+    if (outline) add.forEach(([x, y]) => {
       pad[y][x] = OUTLINE;
     });
     return pad;
@@ -245,7 +245,7 @@
         return P;
     }
   }
-  function buildKitGrid(input) {
+  function buildKitGrid(input, outline = false) {
     const c = __spreadValues(__spreadValues({}, DEFAULT_KIT_CONFIG), input);
     const L = KL, cx = L.cx, tt = L.torsoTop, W = 32, H = 38, { g, pt, set, r } = makeGrid(W, H);
     const P = c.primary, Q = c.secondary;
@@ -287,9 +287,6 @@
       fold(cx - 5 + k, s0 + 1 + k);
       fold(cx + 4 - k, s0 + 2 + k);
     }
-    ["GGG", "GXG", ".G."].forEach((row, j) => [...row].forEach((chr, i) => {
-      if (chr !== ".") set(cx + 3 + i, tt + 4 + j, chr === "G" ? "#d8a93a" : Q);
-    }));
     const grp = (p) => p === "sleeveL" || p === "sleeveR" || p === "collar" ? "body" : p;
     const same = (x, y, p) => x >= 0 && y >= 0 && x < W && y < H && grp(pt[y][x]) === grp(p);
     const out = g.map((row) => row.slice());
@@ -305,7 +302,7 @@
       if (f === 1 && (y === 0 || !g[y - 1][x])) o = mix(v, "#ffffff", 0.22);
       out[y][x] = o;
     }
-    return addOutline(out, W, H);
+    return addOutline(out, W, H, outline);
   }
   function inShape(shape, x, y) {
     const X = x + 0.5, Y = y + 0.5, dx = Math.abs(X - 15), dy = Math.abs(Y - 15);
@@ -329,7 +326,7 @@
     const t = (Y - 19) / 13;
     return t <= 1 && dx <= 13 * (1 - Math.pow(t, 1.7));
   }
-  function buildBadgeGrid(input) {
+  function buildBadgeGrid(input, outline = false) {
     const b = __spreadValues(__spreadValues({}, DEFAULT_KIT_CONFIG), input);
     const W = 30, H = 32, { g, pt, set } = makeGrid(W, H);
     const F = b.badgeFill, T = b.badgeTrim, S = b.badgeSymbol;
@@ -410,7 +407,7 @@
       }
       out[y][x] = o;
     }
-    return addOutline(out, W, H);
+    return addOutline(out, W, H, outline);
   }
   var SEAM = 0.04;
   function toImage(grid, rect) {
@@ -439,18 +436,18 @@
     }
     return { width: w, height: h, paths: Array.from(byColor, ([color, parts]) => ({ color, d: parts.join("") })) };
   }
-  function renderKit(config, type = "kit", crop = "full") {
-    if (type === "badge") return toImage(buildBadgeGrid(config));
-    return toImage(buildKitGrid(config), crop === "shirt" ? SHIRT_CROP : void 0);
+  function renderKit(config, type = "kit", crop = "full", outline = false) {
+    if (type === "badge") return toImage(buildBadgeGrid(config, outline));
+    return toImage(buildKitGrid(config, outline), crop === "shirt" ? SHIRT_CROP : void 0);
   }
 
   // scripts/kit-compositor/entry.ts
   var CROP_ALIASES = { large: "full", small: "shirt" };
   var SCALE_RATIO = 0.5;
-  function composeKitSvg(config, type, size, scale) {
-    var _a;
+  function composeKitSvg(config, type, size, scale, opts = {}) {
+    var _a, _b;
     const resolvedCrop = size == null ? "full" : (_a = CROP_ALIASES[size]) != null ? _a : size;
-    const image = renderKit(config != null ? config : {}, type != null ? type : "kit", resolvedCrop);
+    const image = renderKit(config != null ? config : {}, type != null ? type : "kit", resolvedCrop, (_b = opts.outline) != null ? _b : false);
     const px = scale * SCALE_RATIO;
     const paths = image.paths.map((p) => `<path d="${p.d}" fill="${p.color}"></path>`).join("");
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${image.width} ${image.height}" width="${image.width * px}" height="${image.height * px}">${paths}</svg>`;

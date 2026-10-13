@@ -52,7 +52,8 @@ const SCALE_RATIO = 0.5;
  * previews and the landing page's club chips.
  *
  * Signature unchanged from the 8-bit compositor on purpose, including the
- * 'large'/'small' crop names, so no caller needs editing. `KitConfig` itself is
+ * 'large'/'small' crop names, so no caller needs editing. The trailing `opts`
+ * is additive and optional. `KitConfig` itself is
  * unchanged between the two sprite generations — same keys, values and defaults
  * — so stored club identities need no migration.
  */
@@ -61,13 +62,20 @@ function composeKitSvg(
   type: KitSpriteType | undefined,
   size: LegacyCrop | KitCrop | null | undefined,
   scale: number,
+  opts: { outline?: boolean } = {},
 ): string {
   const resolvedCrop: KitCrop = size == null
     ? 'full'
     : (CROP_ALIASES as Record<string, KitCrop>)[size] ?? (size as KitCrop);
 
   // renderKit ignores the crop for badges, as the 8-bit version did.
-  const image = renderKit(config ?? {}, type ?? 'kit', resolvedCrop);
+  //
+  // The sprite draws NO outline by default (changed 2026-10-13 — the image is
+  // the same size either way, the 1px padding is simply left empty). The old
+  // 8-bit compositor had no outline concept at all, so defaulting to the
+  // sprite's own default is what keeps existing callers looking unchanged; the
+  // flag is here so one can opt in without a signature change.
+  const image = renderKit(config ?? {}, type ?? 'kit', resolvedCrop, opts.outline ?? false);
 
   const px = scale * SCALE_RATIO;
   const paths = image.paths

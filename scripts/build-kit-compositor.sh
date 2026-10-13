@@ -75,7 +75,10 @@ let fail = 0, total = 0;
 for (const [section, build] of [['kit', buildKitGrid], ['badge', buildBadgeGrid]]) {
   for (const [name, c] of Object.entries(fx[section])) {
     total++;
-    const got = hash(build({ ...DEFAULT_KIT_CONFIG, ...c.config }));
+    // Each entry carries its own outline flag — the fixture covers both states
+    // (keys ending _outline are the on cases). Dropping it silently halves the
+    // coverage and lets an outline regression through.
+    const got = hash(build({ ...DEFAULT_KIT_CONFIG, ...c.config }, !!c.outline));
     if (got.fnv !== c.fnv || got.filled !== c.filled || got.w !== c.width || got.h !== c.height) {
       fail++;
       console.error(`  FAIL ${section}/${name}: want ${c.fnv}/${c.filled}/${c.width}x${c.height}, got ${got.fnv}/${got.filled}/${got.w}x${got.h}`);
