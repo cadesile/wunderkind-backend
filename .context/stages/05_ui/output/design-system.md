@@ -87,6 +87,14 @@ scrollbars, and Select2 — a full theming pass, not a one-off tweak.
   `public/assets/kit-identity-widget.js`; reuses `admin-appearance-widget.css`
   as-is (its `.ap-*` classes, including the newer `.ap-chip*` ones, aren't
   appearance-specific).
+- **`public/assets/kit-compositor.js` is generated too**, by
+  `bash scripts/build-kit-compositor.sh` from `assets/Components/KitBadgeV2/kit16.ts`
+  (the 16-bit kit+badge sprite, 2026-10-13), gated on an 18-case pixel-hash
+  fixture. Identical mechanism to the avatar compositor below, kept as a
+  separate script because the sources and fixture layouts differ.
+  `composeKitSvg(config, type, crop, scale)` is unchanged, with `'large'`/
+  `'small'` now aliasing `'full'`/`'shirt'`, and `KitConfig` itself did not
+  change — no stored club identity needs migrating.
 - **`public/assets/avatar-compositor.js` is generated, not hand-written**
   (changed 2026-10-13, when the app replaced its 8-bit `sprite.ts` with the
   16-bit `avatar-sprite/avatar16.ts`). `bash scripts/build-avatar-compositor.sh`
