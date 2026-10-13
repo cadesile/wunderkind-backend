@@ -59,10 +59,34 @@ interface ComposeOptions {
   ball?: boolean;
   shadow?: boolean;
   outline?: boolean;
-  /** Real measurement in cm. Mapped to a build tier; wins over config.height. */
+  /**
+   * Build tier, as the sprite itself expects it ('small' | 'medium' | 'large').
+   * A raw cm measurement is accepted too and mapped through the bands above —
+   * callers holding a real `Player.height` need not derive the tier themselves.
+   * Either form wins over a tier stored in the config.
+   */
+  height?: BodySize | number | null;
+  /** Build tier, or a raw kg measurement. Same rules as `height`. */
+  weight?: BodySize | number | null;
+  /** @deprecated Alias for `height` — kept so older call sites keep working. */
   heightCm?: number | null;
-  /** Real measurement in kg. Mapped to a build tier; wins over config.weight. */
+  /** @deprecated Alias for `weight` — kept so older call sites keep working. */
   weightKg?: number | null;
+}
+
+/**
+ * Normalises whatever a caller passed for height/weight into the sprite's own
+ * `'small' | 'medium' | 'large'` vocabulary: a tier passes straight through, a
+ * number goes through the measurement bands, anything else is ignored so the
+ * stored config (or the sprite's own default) still decides.
+ */
+function resolveBodySize(
+  value: BodySize | number | null | undefined,
+  toBodySize: (n: unknown) => BodySize,
+): BodySize | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'number') return toBodySize(value);
+  return value === 'small' || value === 'medium' || value === 'large' ? value : undefined;
 }
 
 /**
@@ -71,7 +95,7 @@ interface ComposeOptions {
  *
  * Signature is unchanged from the 8-bit compositor on purpose — `type` and the
  * 'small'/'large' crop names are kept so the existing callers keep working
- * untouched. The two measurement options are additive.
+ * untouched. The build-tier and outline options are additive.
  */
 function composePlayerSpriteSvg(
   config: Partial<AvatarConfig> | null | undefined,
@@ -85,11 +109,14 @@ function composePlayerSpriteSvg(
     : (CROP_ALIASES as Record<string, Crop>)[crop] ?? (crop as Crop);
 
   // A stored config may already carry a tier (the avatar builder writes one).
-  // A real measurement passed by the caller is better evidence, so it wins.
+  // A tier or measurement passed by the caller is better evidence, so it wins.
   const merged: Partial<AvatarConfig> = { ...config };
   if (type) merged.role = type;
-  if (opts.heightCm != null) merged.height = heightToBodySize(opts.heightCm);
-  if (opts.weightKg != null) merged.weight = weightToBodySize(opts.weightKg);
+
+  const height = resolveBodySize(opts.height ?? opts.heightCm, heightToBodySize);
+  const weight = resolveBodySize(opts.weight ?? opts.weightKg, weightToBodySize);
+  if (height) merged.height = height;
+  if (weight) merged.weight = weight;
 
   const image = renderAvatar(merged, {
     crop: resolvedCrop,
@@ -97,7 +124,11 @@ function composePlayerSpriteSvg(
     // the caller and the crop.
     ball: !!opts.ball && resolvedCrop === 'full',
     shadow: !!opts.shadow && resolvedCrop === 'full',
-    outline: opts.outline ?? true,
+    // No outline by default, matching composeKitSvg (kit-compositor/entry.ts).
+    // avatar16.ts's own renderAvatar defaults this to true, but the admin
+    // previews and the landing page both want the unoutlined look; the flag is
+    // here so a caller can opt back in without a signature change.
+    outline: opts.outline ?? false,
   });
 
   const px = scale * SCALE_RATIO;

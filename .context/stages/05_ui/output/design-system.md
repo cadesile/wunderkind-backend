@@ -108,7 +108,14 @@ scrollbars, and Select2 — a full theming pass, not a one-off tweak.
   (`height`/`weight` as small/medium/large) are **derived at render time** from
   `Player`'s real cm/kg columns via `AppearanceType`'s `height_cm`/`weight_kg`
   options — never written into the stored `appearance` JSON, which would
-  duplicate data the Player entity already owns.
+  duplicate data the Player entity already owns. They reach the renderer as
+  `opts.height`/`opts.weight` **props on the compose call**, which take either a
+  tier directly or a raw cm/kg number (bands: 145-169 / 170-184 / 185-200 cm,
+  58-69 / 70-84 / 85-100 kg; `heightCm`/`weightKg` survive as aliases).
+  `opts.outline` **defaults to `false`** (changed 2026-10-13) even though
+  `avatar16.ts`'s own `renderAvatar` defaults it to `true` — admin previews and
+  the landing page both want the unoutlined look, matching `composeKitSvg`'s
+  own no-outline default; pass `{outline: true}` to opt back in.
 - Both custom widgets append a `?v={{ 'now'|date('YmdHis') }}` cache-buster
   to their CSS/JS `asset()` URLs — this repo has no asset-versioning strategy
   configured, so a browser that fetched one of these files before an edit
