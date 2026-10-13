@@ -118,18 +118,19 @@ jobs:
               php bin/console app:backfill-player-career-stat-snapshots
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-player-events
-            # Rebuilds the curated 20-archetype catalogue. Unlike app:seed-excursions this
-            # TRUNCATES first, so admin edits to archetypes do not survive a deploy — the
-            # catalogue is code-owned. Without this the table is empty and /api/archetypes
+            # Rebuilds the curated 20-archetype catalogue. This TRUNCATES first, so
+            # admin edits to archetypes do not survive a deploy — the catalogue is
+            # code-owned. Without this the table is empty and /api/archetypes
             # silently serves [], which is why scout reports showed null archetypes.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-archetypes
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:seed-social-post-templates
-            # Upserts the excursion catalogue by slug — safe to re-run, and
-            # preserves artwork uploaded through the admin.
-            docker compose -f docker-compose.prod.yml exec -T app \
-              php bin/console app:seed-excursions
+            # NOTE: app:seed-excursions is deliberately NOT run here. It upserts the
+            # excursion catalogue by slug from a hardcoded PHP array, which overwrites
+            # prices (and every other field) edited through the admin on every deploy.
+            # The excursion catalogue is admin-owned, not code-owned — run the seeder
+            # by hand only when bootstrapping a fresh database.
             # Idempotent — skips existing slugs, so re-running only inserts new
             # templates (e.g. the dressing-room cohesion events).
             docker compose -f docker-compose.prod.yml exec -T app \
