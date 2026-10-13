@@ -97,6 +97,24 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
             ->setAllowedValues('person_type', ['player', 'staff'])
             ->setDefault('person_type', 'staff');
 
+        // Real measurements for the previewed subject, when it has any. The 16-bit
+        // sprite draws three build tiers; these are mapped to one by the compositor
+        // (window.AVATAR_BODY_SIZE), NOT stored — a Player already owns its height
+        // and weight, and copying a derived tier into `appearance` would be a second
+        // source of truth that silently goes stale the moment the Player changes.
+        //
+        // Null for Staff/Scout/Agent/User, which have no such attributes; the
+        // preview then draws the neutral medium build, exactly as before.
+        $resolver
+            ->setDefined('height_cm')
+            ->setAllowedTypes('height_cm', ['int', 'null'])
+            ->setDefault('height_cm', null);
+
+        $resolver
+            ->setDefined('weight_kg')
+            ->setAllowedTypes('weight_kg', ['int', 'null'])
+            ->setDefault('weight_kg', null);
+
         // The `appearance` entity property is a Doctrine `json` (array) column, so
         // EasyAdmin auto-configures the field as an array/collection field and
         // injects CollectionType options (allow_add, allow_delete, delete_empty,
@@ -110,6 +128,8 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
     public function buildView(FormView $view, FormInterface $form, array $options): void
     {
         $view->vars['person_type'] = $options['person_type'];
+        $view->vars['height_cm']   = $options['height_cm'];
+        $view->vars['weight_kg']   = $options['weight_kg'];
     }
 
     /**
