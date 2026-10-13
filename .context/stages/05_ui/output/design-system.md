@@ -87,6 +87,20 @@ scrollbars, and Select2 — a full theming pass, not a one-off tweak.
   `public/assets/kit-identity-widget.js`; reuses `admin-appearance-widget.css`
   as-is (its `.ap-*` classes, including the newer `.ap-chip*` ones, aren't
   appearance-specific).
+- **`public/assets/avatar-compositor.js` is generated, not hand-written**
+  (changed 2026-10-13, when the app replaced its 8-bit `sprite.ts` with the
+  16-bit `avatar-sprite/avatar16.ts`). `bash scripts/build-avatar-compositor.sh`
+  runs the app's sprite source through esbuild — type-stripping only — and gates
+  on its pixel-hash parity fixture, so the repo's long-standing "port it
+  verbatim" rule is now mechanised instead of hand-transcribed. The one
+  hand-written piece is `scripts/avatar-compositor/entry.ts`, which adapts the
+  renderer to the pre-existing `window.composePlayerSpriteSvg(config, type,
+  crop, scale, opts)` contract (old `'small'`/`'large'` crop names still
+  accepted; `scale` halved internally for the 2x grid). The sprite's build tiers
+  (`height`/`weight` as small/medium/large) are **derived at render time** from
+  `Player`'s real cm/kg columns via `AppearanceType`'s `height_cm`/`weight_kg`
+  options — never written into the stored `appearance` JSON, which would
+  duplicate data the Player entity already owns.
 - Both custom widgets append a `?v={{ 'now'|date('YmdHis') }}` cache-buster
   to their CSS/JS `asset()` URLs — this repo has no asset-versioning strategy
   configured, so a browser that fetched one of these files before an edit

@@ -19,7 +19,13 @@
    vs outfit/trousers/glasses fields are shown — every entity still stores all
    15 keys regardless (see AppearanceType's class docblock). #}
 {% set personType = form.vars.person_type %}
-<div class="appearance-editor appearance-editor-v2" data-appearance-editor data-person-type="{{ personType }}">
+{# Real measurements for the previewed subject, when it has any — see
+   AppearanceType::configureOptions(). Mapped to a build tier client-side and
+   never stored; a Player already owns its height/weight. Absent for
+   staff/scout/agent/user, which draw the neutral medium build. #}
+<div class="appearance-editor appearance-editor-v2" data-appearance-editor data-person-type="{{ personType }}"
+     {% if form.vars.height_cm is not null %}data-height-cm="{{ form.vars.height_cm }}"{% endif %}
+     {% if form.vars.weight_kg is not null %}data-weight-kg="{{ form.vars.weight_kg }}"{% endif %}>
     {% for child in form.children %}
         {{ form_label(child, null, {'label_attr': {'class': 'visually-hidden'}}) }}
         {{ form_widget(child, {'attr': {'class': 'visually-hidden'}}) }}
@@ -126,6 +132,15 @@
     if (!root) return;
     var preview = root.querySelector('[data-appearance-preview]');
     var personType = root.getAttribute('data-person-type') || 'staff';
+    // Absent attribute -> null -> the compositor leaves the build at medium.
+    function measurement(attr) {
+        var raw = root.getAttribute(attr);
+        if (raw === null || raw === '') return null;
+        var n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+    }
+    var heightCm = measurement('data-height-cm');
+    var weightKg = measurement('data-weight-kg');
 
     function val(name) {
         var el = root.querySelector('[id$="_' + name + '"]');
@@ -141,7 +156,9 @@
             kit: val('kit'), shorts: val('shorts'), socks: val('socks'),
             outfit: val('outfit'), trousers: val('trousers'), glasses: !!val('glasses')
         };
-        preview.innerHTML = window.composePlayerSpriteSvg(appearance, personType, 'large', 12);
+        preview.innerHTML = window.composePlayerSpriteSvg(
+            appearance, personType, 'large', 12, { heightCm: heightCm, weightKg: weightKg },
+        );
     }
     root.addEventListener('change', render);
     root.addEventListener('input', render);

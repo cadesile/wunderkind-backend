@@ -183,9 +183,23 @@ class PlayerCrudController extends AbstractCrudController
         // ── Panel: Appearance ─────────────────────────────────────────────────
         yield FormField::addFieldset('Appearance', 'fa fa-user-circle')->hideOnIndex();
 
+        // The previewed player's real measurements drive the sprite's build tier
+        // (145-169 / 170-184 / 185-200 cm, 58-69 / 70-84 / 85-100 kg). Passed to
+        // the widget rather than stored on `appearance`: Player already owns these
+        // columns, so a copied-in tier would be a second source of truth that goes
+        // stale the moment the player's height or weight changes. 0 is this
+        // entity's "unset" for both (non-nullable int columns defaulting to 0), so
+        // it maps to null and the preview falls back to the neutral medium build.
+        $subject = $this->getContext()?->getEntity()?->getInstance();
+        $player  = $subject instanceof Player ? $subject : null;
+
         yield Field::new('appearance')
             ->setFormType(AppearanceType::class)
-            ->setFormTypeOptions(['person_type' => 'player'])
+            ->setFormTypeOptions([
+                'person_type' => 'player',
+                'height_cm'   => ($player?->getHeight() ?: null),
+                'weight_kg'   => ($player?->getWeight() ?: null),
+            ])
             ->onlyOnForms();
 
 // ── Panel: Ability ────────────────────────────────────────────────────
