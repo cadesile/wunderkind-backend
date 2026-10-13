@@ -133,6 +133,9 @@
     var preview = root.querySelector('[data-appearance-preview]');
     var personType = root.getAttribute('data-person-type') || 'staff';
     // Absent attribute -> null -> the compositor leaves the build at medium.
+    // Real cm/kg are passed straight through as the avatar's height/weight
+    // props; the compositor maps them onto the sprite's small/medium/large
+    // tiers (145-169 / 170-184 / 185-200 cm, 58-69 / 70-84 / 85-100 kg).
     function measurement(attr) {
         var raw = root.getAttribute(attr);
         if (raw === null || raw === '') return null;
@@ -157,7 +160,7 @@
             outfit: val('outfit'), trousers: val('trousers'), glasses: !!val('glasses')
         };
         preview.innerHTML = window.composePlayerSpriteSvg(
-            appearance, personType, 'large', 12, { heightCm: heightCm, weightKg: weightKg },
+            appearance, personType, 'large', 12, { height: heightCm, weight: weightKg },
         );
     }
     root.addEventListener('change', render);

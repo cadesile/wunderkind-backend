@@ -654,20 +654,31 @@
     if (kg < 85) return "medium";
     return "large";
   }
+  function resolveBodySize(value, toBodySize) {
+    if (value == null) return void 0;
+    if (typeof value === "number") return toBodySize(value);
+    return value === "small" || value === "medium" || value === "large" ? value : void 0;
+  }
   function composePlayerSpriteSvg(config, type, crop, scale, opts = {}) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const resolvedCrop = crop == null ? "full" : (_a = CROP_ALIASES[crop]) != null ? _a : crop;
     const merged = __spreadValues({}, config);
     if (type) merged.role = type;
-    if (opts.heightCm != null) merged.height = heightToBodySize(opts.heightCm);
-    if (opts.weightKg != null) merged.weight = weightToBodySize(opts.weightKg);
+    const height = resolveBodySize((_b = opts.height) != null ? _b : opts.heightCm, heightToBodySize);
+    const weight = resolveBodySize((_c = opts.weight) != null ? _c : opts.weightKg, weightToBodySize);
+    if (height) merged.height = height;
+    if (weight) merged.weight = weight;
     const image = renderAvatar(merged, {
       crop: resolvedCrop,
       // renderAvatar already refuses a ball for staff, so this only has to honour
       // the caller and the crop.
       ball: !!opts.ball && resolvedCrop === "full",
       shadow: !!opts.shadow && resolvedCrop === "full",
-      outline: (_b = opts.outline) != null ? _b : true
+      // No outline by default, matching composeKitSvg (kit-compositor/entry.ts).
+      // avatar16.ts's own renderAvatar defaults this to true, but the admin
+      // previews and the landing page both want the unoutlined look; the flag is
+      // here so a caller can opt back in without a signature change.
+      outline: (_d = opts.outline) != null ? _d : false
     });
     const px = scale * SCALE_RATIO;
     const paths = image.paths.map((p) => `<path d="${p.d}" fill="${p.color}"></path>`).join("");
