@@ -243,9 +243,14 @@ class EmailVerificationService
         return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Rendered at 80x80 in the email body, so this points at the 192px derivative, not
+     * the 1.5MB archival master — a transactional email should not carry a megabyte of
+     * logo per send, and plenty of clients fetch it on every open.
+     */
     private function logoUrl(): string
     {
-        return $this->appUrl . '/images/logo.png';
+        return $this->appUrl . '/logo-192.png';
     }
 
     private function greetingNameFromEmail(string $email): string

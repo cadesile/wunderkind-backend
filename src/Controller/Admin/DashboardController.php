@@ -1421,8 +1421,11 @@ class DashboardController extends AbstractDashboardController
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('<img src="/images/logo.png" alt="Build My Club" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;"> Build My Club')
-            ->setFaviconPath('images/logo.png')
+            // logo-192 rather than the full-size /images/logo.png (1.5MB): both of these
+            // render at 48px or smaller, and the master is only there as an archival
+            // original. 192px still covers a 4x retina navbar icon.
+            ->setTitle('<img src="/logo-192.png" alt="Build My Club" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;"> Build My Club')
+            ->setFaviconPath('logo-32.png')
             ->renderContentMaximized();
     }
 
