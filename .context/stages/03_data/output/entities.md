@@ -481,14 +481,27 @@ Each is effectively a single global-config row.
   `capitalDeployedPence`, `resultsWins/Draws/Losses`, `activeClubs`,
   `weeksPlayed`, `recentEvents:array` (enriched per-item shape: `time, text,
   category, categoryLabel, club, detail, amountExact, timestampIso, meta` —
-  see `LiveTelemetryService`), `dressingRoomFalloutCount`,
-  `communityMoraleDelta:?int`, `dilutionEquityPercent:?int`,
-  `dilutionClubName/dilutionCounterparty:?string`, `covenantActiveCount`,
-  `covenantSeasonalValuePence:bigint`, `generatedAt`. `formatPenceExact()` is
+  see `LiveTelemetryService`), `communityMoraleDelta:?int`, `totalGoals`,
+  `totalMatches`, `tableTurnover`, `generatedAt`. `formatPenceExact()` is
   a non-compact `£31,000`-style currency formatter alongside the older
   compact `formatPence()` (£K/£M). Built up incrementally across migrations
-  `Version20260915213526` → `Version20260928190000` — see `migrations.md`.
+  `Version20260915213526` → `Version20261014223020` — see `migrations.md`.
   No relations.
+  **The HUD's 3rd/4th stat boxes are collective pyramid-wide totals, not
+  single-club highlights.** `totalGoals`/`totalMatches` back "Goals Logged"
+  and its `getGoalsPerMatchFormatted()` sub-line (always 2dp, `0.00` when no
+  matches, so the fixed-width column never changes width); `tableTurnover`
+  backs "Table Turnover". They replaced `dilutionEquityPercent`/
+  `dilutionClubName`/`dilutionCounterparty`/`covenantActiveCount`/
+  `covenantSeasonalValuePence`/`dressingRoomFalloutCount`, dropped in
+  `Version20261014223020` — safe because this table is a 15-minute cache, not
+  source data. Those two NARRATIVES still exist as feed categories
+  (`buildDilutionEvents()`/`buildCovenantEvents()` and their `.cat-dilution`/
+  `.cat-covenant` styles are all still live) — only the scalar stat boxes and
+  their `buildDilutionSummary()`/`buildCovenantSummary()` helpers went.
+  **`tableTurnover` reads the feed's 7-day window, not the 24h stats window**:
+  a promotion/relegation only exists once a season concludes, far rarer than a
+  sync, so a 24h count would read 0 almost permanently.
 
 ## Translations
 

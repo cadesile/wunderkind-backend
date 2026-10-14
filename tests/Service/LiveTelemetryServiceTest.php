@@ -623,52 +623,80 @@ class LiveTelemetryServiceTest extends TestCase
         $this->assertNull(LiveTelemetryService::computeCommunityMoraleDelta($rows));
     }
 
+    public function testAggregateSumsGoalsAndMatchesFromFixtures(): void
+    {
+        $result = LiveTelemetryService::aggregate([
+            ['fixtures' => [
+                ['fixtureId' => 'f1', 'homeGoals' => 2, 'awayGoals' => 1],
+                ['fixtureId' => 'f2', 'homeGoals' => 0, 'awayGoals' => 0],
+            ]],
+            ['fixtures' => [
+                ['fixtureId' => 'f3', 'homeGoals' => 3, 'awayGoals' => 2],
+            ]],
+        ]);
+
+        $this->assertSame(8, $result['totalGoals']);
+        $this->assertSame(3, $result['totalMatches']);
+    }
+
+    /**
+     * fixtures[] carries the syncing club's WHOLE division's round, so every player-owned
+     * club in a division reports the same fixtures — and a club syncing twice in the window
+     * resends them again. Without dedup by fixtureId the headline goal count inflates with
+     * the number of synced clubs rather than the number of matches played.
+     */
+    public function testAggregateDeduplicatesFixturesByFixtureIdAcrossPayloads(): void
+    {
+        $fixture = ['fixtureId' => 'shared-1', 'homeGoals' => 4, 'awayGoals' => 1];
+
+        $result = LiveTelemetryService::aggregate([
+            ['fixtures' => [$fixture]],
+            ['fixtures' => [$fixture]],   // same club syncing again
+            ['fixtures' => [$fixture]],   // the opponent reporting the same round
+        ]);
+
+        $this->assertSame(5, $result['totalGoals'], 'one fixture must contribute its goals once');
+        $this->assertSame(1, $result['totalMatches']);
+    }
+
+    /** A fixture with no usable id is counted per occurrence — dropping it would understate real matches. */
+    public function testAggregateCountsFixturesWithoutAnIdRatherThanDiscardingThem(): void
+    {
+        $result = LiveTelemetryService::aggregate([
+            ['fixtures' => [
+                ['homeGoals' => 1, 'awayGoals' => 1],
+                ['fixtureId' => '', 'homeGoals' => 2, 'awayGoals' => 0],
+            ]],
+        ]);
+
+        $this->assertSame(4, $result['totalGoals']);
+        $this->assertSame(2, $result['totalMatches']);
+    }
+
+    /** The documented edge case: no matches must yield 0 and "0.00 G/Match", never a division by zero. */
+    public function testAggregateReturnsZeroGoalsAndMatchesForPayloadsWithoutFixtures(): void
+    {
+        $result = LiveTelemetryService::aggregate([['form' => ['W', 'L']], []]);
+
+        $this->assertSame(0, $result['totalGoals']);
+        $this->assertSame(0, $result['totalMatches']);
+    }
+
+    public function testAggregateIgnoresMalformedFixtureEntries(): void
+    {
+        $result = LiveTelemetryService::aggregate([
+            ['fixtures' => ['not-an-array', ['fixtureId' => 'f1', 'homeGoals' => 1, 'awayGoals' => 2]]],
+        ]);
+
+        $this->assertSame(3, $result['totalGoals']);
+        $this->assertSame(1, $result['totalMatches']);
+    }
+
     public function testComputeCommunityMoraleDeltaReturnsNullForEmptyInput(): void
     {
         $this->assertNull(LiveTelemetryService::computeCommunityMoraleDelta([]));
     }
 
-    public function testBuildDilutionSummaryPicksHighestPercentEntry(): void
-    {
-        $events = [
-            ['club' => 'Club A', 'meta' => ['equityPercent' => 5, 'counterparty' => 'Bert']],
-            ['club' => 'Club B', 'meta' => ['equityPercent' => 10, 'counterparty' => 'Walt']],
-        ];
-
-        $summary = LiveTelemetryService::buildDilutionSummary($events);
-
-        $this->assertSame(10, $summary['percent']);
-        $this->assertSame('Walt', $summary['counterparty']);
-    }
-
-    public function testBuildDilutionSummaryReturnsNullForEmptyInput(): void
-    {
-        $this->assertNull(LiveTelemetryService::buildDilutionSummary([]));
-    }
-
-    public function testBuildCovenantSummaryCountsAndSumsDistinctActiveCovenantsWithoutDoubleCounting(): void
-    {
-        $now = new \DateTimeImmutable();
-        $promise = ['id' => 'p1', 'status' => 'active', 'condition' => ['type' => 'league_position', 'target' => 5], 'offer' => ['type' => 'seasonal_payment', 'amountPence' => 1000000, 'repeatSeasons' => 2]];
-        $syncRows = [
-            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [$promise]]],
-            // Same promise synced again this window — must not be double counted.
-            ['serverTimestamp' => $now, 'clubName' => 'Toro SD', 'payload' => ['promises' => [$promise]]],
-        ];
-
-        $summary = LiveTelemetryService::buildCovenantSummary($syncRows);
-
-        $this->assertSame(1, $summary['count']);
-        $this->assertSame(2000000, $summary['valuePence']);
-    }
-
-    public function testBuildCovenantSummaryReturnsZerosForEmptyInput(): void
-    {
-        $summary = LiveTelemetryService::buildCovenantSummary([]);
-
-        $this->assertSame(0, $summary['count']);
-        $this->assertSame(0, $summary['valuePence']);
-    }
 
     public function testTopTransferEventsRankByGrossFeeRegardlessOfDirection(): void
     {

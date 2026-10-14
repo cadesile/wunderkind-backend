@@ -1177,19 +1177,40 @@
         }
 
         /* ── Shared club nationality chip (community stats + global leaderboards) ──
-           A country code, never an emoji flag — see clubCountryChipHtml() in
-           landing.js. Mint-on-transparent so it reads as metadata next to the
-           club name rather than competing with the gold rank or value. */
+           A flag SVG from /assets/flags/, never an emoji flag — see
+           clubCountryChipHtml() in landing.js for why, and for the text fallback
+           below. Sized and bordered to match the owner spotlight's .ospot-flag so
+           the same club reads identically in both places.
+
+           The hairline border is load-bearing, not decoration: Poland, Indonesia
+           and Monaco are white along one edge and would appear to lose half of
+           themselves against the card. The width/height attributes are also on the
+           <img> itself, so a row keeps its height while the SVGs decode. */
         .club-flag {
             display: inline-block;
             flex: 0 0 auto;
+            width: 18px;
+            height: 13px;
+            margin-left: 8px;
+            vertical-align: middle;
+            object-fit: cover;
+            border: 1px solid rgba(5,21,18,0.75);
+            border-radius: 3px;
+        }
+
+        /* Text fallback for a country with no flag asset — the pre-flag chip style,
+           kept so an unknown code still renders as readable metadata rather than a
+           broken image. Overrides the image box above. */
+        .club-flag-code {
+            width: auto;
+            height: auto;
             font-family: 'Space Mono', monospace;
             font-size: 9px;
             letter-spacing: 0.06em;
             padding: 1px 4px;
-            margin-left: 8px;
             color: var(--cyan);
             border: 1px solid rgba(79,184,201,0.45);
+            border-radius: 0;
         }
 
         /* ════════════════════════════════

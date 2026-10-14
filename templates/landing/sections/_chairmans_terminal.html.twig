@@ -14,12 +14,17 @@
        activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads.
        weeksPlayed is sync count * 4 (each sync ~= 4 on-device weekly ticks) — an
        approximation, not a true weeks-elapsed count.
-     - telemetry.getDilutionPercentFormatted()/getDilutionCounterpartyFormatted() and
-       getCovenantFalloutCompactFormatted() — the redesigned 3rd/4th stat boxes: the
-       most notable investor_income equity event this window, and active
-       commercial-covenant count paired with dressing-room fallout count. Each box's
-       big pixel-font value is kept short (a percentage, or "N / N") with the
-       descriptive text in the smaller sub-line — a full sentence in the pixel font
+     - telemetry.totalGoals/getGoalsPerMatchFormatted() and telemetry.tableTurnover —
+       the 3rd/4th stat boxes, both pyramid-wide collective totals rather than the
+       single-club highlights they replaced (boardroom dilution / covenants & fallout,
+       removed along with their snapshot columns; those two narratives survive as FEED
+       categories, which is where a one-club story belongs). Goals are summed from
+       fixtures[] deduplicated by fixtureId — that array carries the syncing club's whole
+       division's round, so several clubs report the same fixtures. Table Turnover counts
+       SeasonRecord promotions/relegations over the FEED's 7-day window, not the stats
+       window: a season concludes far more rarely than a sync, so a 24h count would read 0
+       almost permanently. Each box's big pixel-font value stays short (a bare number) with
+       the descriptive text in the smaller sub-line — a full sentence in the pixel font
        wraps and overflows the box.
      - telemetry.recentEvents — up to 20 items across 9 real sources: pyramid
        promotion/relegation/title (SeasonRecord), boardroom outlay (top ledger
@@ -63,14 +68,14 @@
             <span class="terminal-stat-sub vt">Transfers &amp; Infra</span>
         </div>
         <div class="terminal-stat">
-            <span class="terminal-stat-label pixel">Boardroom Dilution</span>
-            <span class="terminal-stat-val" style="color:var(--gold);">{{ telemetry.getDilutionPercentFormatted() }}</span>
-            <span class="terminal-stat-sub vt">{{ telemetry.getDilutionCounterpartyFormatted() }}</span>
+            <span class="terminal-stat-label pixel">Goals Logged</span>
+            <span class="terminal-stat-val" style="color:var(--gold);">{{ telemetry.totalGoals|number_format }}</span>
+            <span class="terminal-stat-sub vt">{{ telemetry.getGoalsPerMatchFormatted() }}</span>
         </div>
         <div class="terminal-stat">
-            <span class="terminal-stat-label pixel">Covenants &amp; Fallout</span>
-            <span class="terminal-stat-val" style="color:var(--red);">{{ telemetry.getCovenantFalloutCompactFormatted() }}</span>
-            <span class="terminal-stat-sub vt">Covenants / Fallout</span>
+            <span class="terminal-stat-label pixel">Table Turnover</span>
+            <span class="terminal-stat-val" style="color:var(--red);">{{ telemetry.tableTurnover|number_format }}</span>
+            <span class="terminal-stat-sub vt">Promotions &amp; Drops</span>
         </div>
     </div>
 

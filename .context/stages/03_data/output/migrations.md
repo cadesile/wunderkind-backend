@@ -152,13 +152,19 @@ Most recent migrations (chronological):
     `player_career_stat.appearance_config JSON` and creates
     `staff_career_profile` (identity + avatar config per currently-hired
     staff member, no stats columns — see `entities.md`'s entries for both).
-26. `Version20261014194623` (most recent) — index only, no schema change:
+26. `Version20261014194623` — index only, no schema change:
     `idx_player_youth_draw` on `player` (`date_of_birth`, `potential`,
     `nationality`) for `GET /api/players/youth`. Before it, `player` carried
     only its primary key and an `agent_id` index, so every youth draw
     sequentially scanned the whole pool. Declared on the entity as
     `#[ORM\Index]`, not just in raw migration SQL, so `schema:create` builds
     it and `migrations:diff` doesn't propose dropping it.
+27. `Version20261014223020` (most recent) — telemetry HUD columns 3 & 4: adds
+    `live_telemetry_snapshot.total_goals`/`total_matches`/`table_turnover`,
+    drops the six dilution/covenant/fallout columns that fed the replaced stat
+    boxes. Dropping is safe here specifically because the table is a single-row
+    cache rebuilt in full by `app:telemetry:generate` every 15 minutes — no
+    source data lives in it.
 
 ## Takeaway
 

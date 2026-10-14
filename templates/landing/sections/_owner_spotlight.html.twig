@@ -36,8 +36,8 @@
    name as both alt and title, so the flag is never the only carrier of which
    country it is — a 18x13 flag is not reliably identifiable, and several are
    near-identical at that size. The <img> is explicitly sized so the row doesn't
-   reflow as flags decode. Other country chips on this page (ticker, leaderboards)
-   still render the 2-letter code via landing.js's clubCountryChipHtml().
+   reflow as flags decode. The leaderboards and community-stats cards render the
+   same flags client-side via landing.js's clubCountryChipHtml(), sized to match.
 
    Club badges render via clubBadgeIconsHtml() in landing.js, the shared helper the
    ticker and both leaderboards use. Every club row carries at least a badge; the kit
