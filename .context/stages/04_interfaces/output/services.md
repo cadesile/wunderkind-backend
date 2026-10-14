@@ -238,6 +238,15 @@ filename alone.
 - **`LiveTelemetryService`** — feeds the landing page's live activity
   feed; some entries (sackings, contract disputes, youth intake) are
   illustrative and have no backing data — don't treat as real metrics.
+  `aggregate()` also produces `totalGoals`/`totalMatches` for the HUD's
+  "Goals Logged" box, summed from `fixtures[]` and **deduplicated by
+  `fixtureId`** — that array carries the syncing club's WHOLE division's
+  round (see `attachClubDossiers()`), so every player-owned club in a
+  division reports the same fixtures and a club syncing twice resends them.
+  Measured on real data: 860 raw fixture rows reduce to 627 distinct ones,
+  so skipping dedup would have reported 2,586 goals instead of 1,868. The
+  `wins/draws/losses` tally above still knowingly double-counts because
+  `form[]` carries no fixture identity to dedupe on.
   Any figure derived from `payload.ledger[].amount` (`capitalDeployedPence`,
   `buildLedgerEvents()`'s spend lines) goes through the class's
   `ledgerAmountToPence()` helper to correct for that field's 100x-true-pence

@@ -182,9 +182,16 @@ class LiveTelemetryService
         $activeClubs = $this->syncRecordRepository->countActiveClubsSince($since);
         $weeksPlayed = count($syncRows) * self::WEEKS_PER_SYNC;
 
-        $dilutionSummary = self::buildDilutionSummary($dilutionEvents);
-        $covenantSummary = self::buildCovenantSummary($syncRows);
-        $moraleDelta     = self::computeCommunityMoraleDelta($syncRows);
+        $moraleDelta = self::computeCommunityMoraleDelta($syncRows);
+
+        // Table Turnover reads the FEED's 7-day window, not the 24h stats window: a
+        // promotion/relegation only lands when a season concludes, which is far rarer than
+        // a sync, so a 24h count would read 0 almost permanently. The HUD header says 24H
+        // PYRAMID FEED and this one box is wider than that — called out here because the
+        // discrepancy is deliberate, not an oversight.
+        $tableTurnover = $this->seasonRecordRepository->countPromotionsAndRelegationsSince(
+            $now->modify('-' . self::EVENTS_WINDOW_DAYS . ' days'),
+        );
 
         $snapshot = $this->snapshotRepository->getSnapshot();
         $snapshot->update(
@@ -196,13 +203,10 @@ class LiveTelemetryService
             $activeClubs,
             $weeksPlayed,
             $events,
-            $dilutionSummary['percent'] ?? null,
-            $dilutionSummary['club'] ?? null,
-            $dilutionSummary['counterparty'] ?? null,
-            count($dressingRoomEvents),
             $moraleDelta,
-            $covenantSummary['count'],
-            $covenantSummary['valuePence'],
+            $result['totalGoals'],
+            $result['totalMatches'],
+            $tableTurnover,
         );
         $this->snapshotRepository->getEntityManager()->flush();
     }
@@ -286,8 +290,26 @@ class LiveTelemetryService
      * Ledger amounts are corrected via ledgerAmountToPence() (see class docblock);
      * transfers[].grossFee needs no correction — it's a separate, correctly-scaled field.
      *
+     * WINDOWING, for all figures here: these are the payloads of syncs that ARRIVED in the
+     * window (server_timestamp, via findValidPayloadsSince()) — not events that OCCURRED in
+     * it. fixtures[] carries everything since that club's previous sync, so a payload landing
+     * today can report matches played days earlier; measured on real data, ~3.5% of fixtures
+     * were played more than 24h before the sync that reported them. This is deliberate and
+     * consistent across every stat box: arrival is server time and cannot be gamed, whereas
+     * fixtures[].playedAt is the device's own clock, client-supplied and unvalidated. Do not
+     * "fix" this by filtering on playedAt.
+     *
+     * totalGoals/totalMatches: summed from fixtures[], which carries real per-fixture
+     * homeGoals/awayGoals, and DEDUPLICATED BY fixtureId. Deduplication is load-bearing, not
+     * tidiness: fixtures[] carries the syncing club's WHOLE DIVISION's round (see
+     * attachClubDossiers()'s docblock), so every player-owned club in a division reports the
+     * same fixtures, and a club syncing twice in the window resends them again. Counting those
+     * would inflate the goal total and leave goals-per-match roughly right but the headline
+     * wrong. This is the same double-counting the wins/draws/losses tally above knowingly
+     * accepts — form[] carries no fixture identity to dedupe on, whereas fixtures[] does.
+     *
      * @param array<int, array<string, mixed>> $payloads
-     * @return array{fixturesSimulated: int, capitalDeployedPence: int, wins: int, draws: int, losses: int}
+     * @return array{fixturesSimulated: int, capitalDeployedPence: int, wins: int, draws: int, losses: int, totalGoals: int, totalMatches: int}
      */
     public static function aggregate(array $payloads): array
     {
@@ -295,6 +317,11 @@ class LiveTelemetryService
         $wins = 0;
         $draws = 0;
         $losses = 0;
+
+        /** @var array<string, int> fixtureId => goals in that fixture */
+        $goalsByFixture = [];
+        $unidentifiedFixtureGoals  = 0;
+        $unidentifiedFixtureCount  = 0;
 
         foreach ($payloads as $payload) {
             foreach ($payload['form'] ?? [] as $result) {
@@ -317,6 +344,26 @@ class LiveTelemetryService
                     $capitalDeployedPence += (int) ($transfer['grossFee'] ?? 0);
                 }
             }
+
+            foreach ($payload['fixtures'] ?? [] as $fixture) {
+                if (!is_array($fixture)) {
+                    continue;
+                }
+
+                $goals = (int) ($fixture['homeGoals'] ?? 0) + (int) ($fixture['awayGoals'] ?? 0);
+
+                // A fixture with no id can't be deduplicated, so it is counted once per
+                // occurrence rather than dropped — losing real matches would understate the
+                // figure worse than the rare double-count it risks.
+                $fixtureId = $fixture['fixtureId'] ?? null;
+                if (!is_string($fixtureId) || $fixtureId === '') {
+                    $unidentifiedFixtureGoals += $goals;
+                    $unidentifiedFixtureCount++;
+                    continue;
+                }
+
+                $goalsByFixture[$fixtureId] = $goals;
+            }
         }
 
         return [
@@ -325,6 +372,8 @@ class LiveTelemetryService
             'wins'                 => $wins,
             'draws'                => $draws,
             'losses'               => $losses,
+            'totalGoals'           => array_sum($goalsByFixture) + $unidentifiedFixtureGoals,
+            'totalMatches'         => count($goalsByFixture) + $unidentifiedFixtureCount,
         ];
     }
 
@@ -945,72 +994,6 @@ class LiveTelemetryService
         }
 
         return (int) round(array_sum($deltas) / count($deltas));
-    }
-
-    /**
-     * The most notable dilution event this window (highest equity%), for the
-     * redesigned stat box. Reads the already-built buildDilutionEvents() output
-     * rather than re-scanning the payloads.
-     *
-     * @param array<int, array<string, mixed>> $dilutionEvents
-     * @return array{percent: int, club: ?string, counterparty: ?string}|null
-     */
-    public static function buildDilutionSummary(array $dilutionEvents): ?array
-    {
-        $best = null;
-
-        foreach ($dilutionEvents as $event) {
-            $percent = $event['meta']['equityPercent'] ?? null;
-            if ($percent === null) {
-                continue;
-            }
-
-            if ($best === null || $percent > $best['percent']) {
-                $best = [
-                    'percent'      => $percent,
-                    'club'         => $event['club'],
-                    'counterparty' => $event['meta']['counterparty'] ?? null,
-                ];
-            }
-        }
-
-        return $best;
-    }
-
-    /**
-     * Count and total seasonal value-at-risk of distinct active covenants (deduped
-     * by promise id, since a club syncing more than once in the window would
-     * otherwise double-count the same promise).
-     *
-     * @param array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string}> $syncRows
-     * @return array{count: int, valuePence: int}
-     */
-    public static function buildCovenantSummary(array $syncRows): array
-    {
-        $seenIds = [];
-        $totalValuePence = 0;
-
-        foreach ($syncRows as $row) {
-            foreach ($row['payload']['promises'] ?? [] as $promise) {
-                if (!is_array($promise) || ($promise['status'] ?? null) !== 'active') {
-                    continue;
-                }
-
-                if (!in_array($promise['condition']['type'] ?? null, self::COVENANT_CONDITION_TYPES, true)) {
-                    continue;
-                }
-
-                $id = $promise['id'] ?? null;
-                if ($id === null || isset($seenIds[$id])) {
-                    continue;
-                }
-                $seenIds[$id] = true;
-
-                $totalValuePence += self::covenantValuePence($promise['offer'] ?? null);
-            }
-        }
-
-        return ['count' => count($seenIds), 'valuePence' => $totalValuePence];
     }
 
     /**

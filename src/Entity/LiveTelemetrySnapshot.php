@@ -53,31 +53,29 @@ class LiveTelemetrySnapshot
     #[ORM\Column(type: 'json')]
     private array $recentEvents = [];
 
-    /** Full count of resolved excursions with frictionCount > 0 in the window — not just what fits in the feed. */
-    #[ORM\Column(type: 'integer', options: ['default' => 0])]
-    private int $dressingRoomFalloutCount = 0;
-
     /** Signed average fan-morale delta across clubs with ≥2 readings in the window; null if none qualify. */
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $communityMoraleDelta = null;
 
-    /** Most notable investor_income ledger entry this window, parsed from its free-text description. */
-    #[ORM\Column(type: 'integer', nullable: true)]
-    private ?int $dilutionEquityPercent = null;
-
-    #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $dilutionClubName = null;
-
-    #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $dilutionCounterparty = null;
-
-    /** Count of active promises[] with a league_position/tier_reached termination condition. */
+    /**
+     * 3rd stat box. Goals across every fixture in the window, deduplicated by fixtureId
+     * (LiveTelemetryService::aggregate()), with the match count that produced them kept
+     * alongside so goals-per-match is derived from the same pass rather than recomputed
+     * from a stored average that could drift out of step with the total.
+     */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
-    private int $covenantActiveCount = 0;
+    private int $totalGoals = 0;
 
-    /** Total seasonal value-at-risk (pence) across those same active covenants. */
-    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
-    private int $covenantSeasonalValuePence = 0;
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $totalMatches = 0;
+
+    /**
+     * 4th stat box. Clubs promoted or relegated across the whole pyramid in the feed's
+     * own 7-day window — SeasonRecord rows, counted by
+     * SeasonRecordRepository::countPromotionsAndRelegationsSince().
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $tableTurnover = 0;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $generatedAt;
@@ -100,13 +98,10 @@ class LiveTelemetrySnapshot
     public function getRecentEvents(): array { return $this->recentEvents; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
 
-    public function getDressingRoomFalloutCount(): int { return $this->dressingRoomFalloutCount; }
     public function getCommunityMoraleDelta(): ?int { return $this->communityMoraleDelta; }
-    public function getDilutionEquityPercent(): ?int { return $this->dilutionEquityPercent; }
-    public function getDilutionClubName(): ?string { return $this->dilutionClubName; }
-    public function getDilutionCounterparty(): ?string { return $this->dilutionCounterparty; }
-    public function getCovenantActiveCount(): int { return $this->covenantActiveCount; }
-    public function getCovenantSeasonalValuePence(): int { return $this->covenantSeasonalValuePence; }
+    public function getTotalGoals(): int { return $this->totalGoals; }
+    public function getTotalMatches(): int { return $this->totalMatches; }
+    public function getTableTurnover(): int { return $this->tableTurnover; }
 
     /** @param array<int, array<string, mixed>> $recentEvents */
     public function update(
@@ -118,13 +113,10 @@ class LiveTelemetrySnapshot
         int $activeClubs,
         int $weeksPlayed,
         array $recentEvents,
-        ?int $dilutionEquityPercent = null,
-        ?string $dilutionClubName = null,
-        ?string $dilutionCounterparty = null,
-        int $dressingRoomFalloutCount = 0,
         ?int $communityMoraleDelta = null,
-        int $covenantActiveCount = 0,
-        int $covenantSeasonalValuePence = 0,
+        int $totalGoals = 0,
+        int $totalMatches = 0,
+        int $tableTurnover = 0,
     ): void {
         $this->fixturesSimulated         = $fixturesSimulated;
         $this->capitalDeployedPence      = $capitalDeployedPence;
@@ -134,13 +126,10 @@ class LiveTelemetrySnapshot
         $this->activeClubs               = $activeClubs;
         $this->weeksPlayed               = $weeksPlayed;
         $this->recentEvents              = $recentEvents;
-        $this->dilutionEquityPercent     = $dilutionEquityPercent;
-        $this->dilutionClubName          = $dilutionClubName;
-        $this->dilutionCounterparty      = $dilutionCounterparty;
-        $this->dressingRoomFalloutCount  = $dressingRoomFalloutCount;
         $this->communityMoraleDelta      = $communityMoraleDelta;
-        $this->covenantActiveCount       = $covenantActiveCount;
-        $this->covenantSeasonalValuePence = $covenantSeasonalValuePence;
+        $this->totalGoals                = $totalGoals;
+        $this->totalMatches              = $totalMatches;
+        $this->tableTurnover             = $tableTurnover;
         $this->generatedAt               = new \DateTimeImmutable();
     }
 
@@ -185,29 +174,16 @@ class LiveTelemetrySnapshot
     }
 
     /**
-     * The 3rd stat box's big pixel-font value — kept short ("5%" / "—") so it never
-     * wraps under that font's size, unlike a full "5% — Bert's Fencing" sentence
-     * would. The counterparty name goes in the box's smaller sub-line instead, via
-     * getDilutionCounterpartyFormatted().
+     * The 3rd stat box's sub-line, e.g. "2.85 G/Match".
+     *
+     * Two decimal places always, including the no-matches case ("0.00"), so the line keeps
+     * a constant width in the fixed-width terminal font — a value that changed length
+     * between refreshes would shift the column.
      */
-    public function getDilutionPercentFormatted(): string
+    public function getGoalsPerMatchFormatted(): string
     {
-        return $this->dilutionEquityPercent === null ? '—' : "{$this->dilutionEquityPercent}%";
-    }
+        $perMatch = $this->totalMatches > 0 ? $this->totalGoals / $this->totalMatches : 0.0;
 
-    /** The 3rd stat box's sub-line — the counterparty name, or a fallback when nothing qualified this window. */
-    public function getDilutionCounterpartyFormatted(): string
-    {
-        return $this->dilutionCounterparty ?? 'No dilution activity';
-    }
-
-    /**
-     * The 4th stat box's big pixel-font value — "N / N" rather than a full
-     * "N covenants // N fallout" sentence, which wrapped and overflowed the box at
-     * that font's size. The "Covenants / Fallout" legend goes in the sub-line.
-     */
-    public function getCovenantFalloutCompactFormatted(): string
-    {
-        return "{$this->covenantActiveCount} / {$this->dressingRoomFalloutCount}";
+        return number_format($perMatch, 2) . ' G/Match';
     }
 }

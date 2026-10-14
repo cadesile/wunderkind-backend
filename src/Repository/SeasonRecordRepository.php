@@ -128,4 +128,29 @@ class SeasonRecordRepository extends ServiceEntityRepository
             ->getQuery()
             ->getArrayResult();
     }
+
+    /**
+     * How many clubs went up or down across the whole pyramid since $since — the
+     * "Table Turnover" figure on the landing page's telemetry HUD.
+     *
+     * Counts SeasonRecord rows, not live standings: the backend holds no in-progress
+     * league table (the device simulates the season and only reports outcomes), so a
+     * club's promotion/relegation is only knowable here once its season concluded and
+     * LeagueService::concludeSeason() wrote the row. That makes this "promotions and
+     * drops that have happened", which is what the HUD's sub-line says.
+     *
+     * Deliberately excludes finalPosition = 1 — a title win is neither a promotion nor
+     * a drop, and findRecentPyramidEvents() includes it only because the FEED narrates
+     * titles too.
+     */
+    public function countPromotionsAndRelegationsSince(\DateTimeImmutable $since): int
+    {
+        return (int) $this->createQueryBuilder('sr')
+            ->select('COUNT(sr.id)')
+            ->where('sr.createdAt >= :since')
+            ->andWhere('sr.promoted = true OR sr.relegated = true')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

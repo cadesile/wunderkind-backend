@@ -37,4 +37,39 @@ class LiveTelemetrySnapshotTest extends TestCase
     {
         $this->assertSame('£1,320', LiveTelemetrySnapshot::formatPenceExact(132024));
     }
+
+    /**
+     * The 3rd stat box's sub-line. Always two decimals — including the zero-match case,
+     * where the spec calls for "0.00 G/Match" rather than an empty or dashed value — so the
+     * line keeps a constant width in the fixed-width terminal font.
+     */
+    public function testGoalsPerMatchFormatsToTwoDecimals(): void
+    {
+        $snapshot = new LiveTelemetrySnapshot();
+        $snapshot->update(0, 0, 0, 0, 0, 0, 0, [], null, 214, 75, 18);
+
+        $this->assertSame('2.85 G/Match', $snapshot->getGoalsPerMatchFormatted());
+        $this->assertSame(214, $snapshot->getTotalGoals());
+        $this->assertSame(18, $snapshot->getTableTurnover());
+    }
+
+    /** Zero matches must not divide by zero, and must still render two decimals. */
+    public function testGoalsPerMatchHandlesZeroMatches(): void
+    {
+        $snapshot = new LiveTelemetrySnapshot();
+        $snapshot->update(0, 0, 0, 0, 0, 0, 0, [], null, 0, 0, 0);
+
+        $this->assertSame('0.00 G/Match', $snapshot->getGoalsPerMatchFormatted());
+        $this->assertSame(0, $snapshot->getTotalGoals());
+    }
+
+    /** A fresh snapshot renders cleanly before the first generate run. */
+    public function testDefaultsRenderWithoutAnUpdate(): void
+    {
+        $snapshot = new LiveTelemetrySnapshot();
+
+        $this->assertSame(0, $snapshot->getTotalGoals());
+        $this->assertSame(0, $snapshot->getTableTurnover());
+        $this->assertSame('0.00 G/Match', $snapshot->getGoalsPerMatchFormatted());
+    }
 }
