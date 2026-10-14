@@ -12,6 +12,15 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: PlayerRepository::class)]
+/**
+ * Serves the youth pool draw (PlayerRepository::findYouthStratum): a date_of_birth RANGE
+ * plus a potential band, optionally narrowed by nationality. Leading on date_of_birth
+ * because the youth window is a small slice of a pool that otherwise spans every age, so
+ * it is by far the most selective of the three. Declared here rather than only in the
+ * migration so schema:create builds it and migrations:diff doesn't propose dropping it —
+ * the same round-trip rule the partial unique indexes follow (see CLAUDE.md).
+ */
+#[ORM\Index(columns: ['date_of_birth', 'potential', 'nationality'], name: 'idx_player_youth_draw')]
 #[ORM\HasLifecycleCallbacks]
 class Player
 {

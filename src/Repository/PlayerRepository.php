@@ -371,4 +371,89 @@ class PlayerRepository extends ServiceEntityRepository
         ];
     }
 
+    /**
+     * One stratum of the youth pool draw: players inside an age window AND a potential
+     * band, either matching or deliberately NOT matching a nationality, in random order.
+     *
+     * Age is expressed as a date_of_birth range rather than a computed age, because that is
+     * the only form an index can serve — and because it avoids standing up a second age
+     * formula next to PlayerGenerationService's. The caller derives the bounds (see
+     * YouthPoolService::dobWindow()); this method just applies them.
+     *
+     * $excludeIds lets the caller run several strata without the same player coming back
+     * twice. It is passed as an array of binary-safe id strings.
+     *
+     * Banding on potential, not currentAbility: a 12-14 year old's ability is derived as
+     * abilityTarget x potential with abilityTarget only 0.30-0.60 under 21, so ability
+     * banding collapses a youth pool into one tier. See PlayerSnapshotSerializer.
+     *
+     * $potentialMin/$potentialMax are both nullable so the caller can run an unbanded sweep
+     * (the backfill pass) without inventing bounds — `potential` is a smallint, so a
+     * stand-in like PHP_INT_MAX overflows the column rather than matching everything.
+     *
+     * @param  string[] $excludeIds
+     * @return Player[]
+     */
+    public function findYouthStratum(
+        \DateTimeImmutable $dobFrom,
+        \DateTimeImmutable $dobTo,
+        ?int $potentialMin,
+        ?int $potentialMax,
+        int $limit,
+        ?string $nationality = null,
+        bool $matchNationality = true,
+        array $excludeIds = [],
+    ): array {
+        if ($limit <= 0) {
+            return [];
+        }
+
+        $qb = $this->createQueryBuilder('p')
+            ->addSelect('RAND() AS HIDDEN rand_order')
+            ->andWhere('p.dateOfBirth >= :dobFrom')
+            ->andWhere('p.dateOfBirth <= :dobTo')
+            ->setParameter('dobFrom', $dobFrom)
+            ->setParameter('dobTo', $dobTo)
+            ->setMaxResults($limit)
+            ->orderBy('rand_order');
+
+        if ($potentialMin !== null) {
+            $qb->andWhere('p.potential >= :potMin')->setParameter('potMin', $potentialMin);
+        }
+
+        if ($potentialMax !== null) {
+            $qb->andWhere('p.potential <= :potMax')->setParameter('potMax', $potentialMax);
+        }
+
+        if ($nationality !== null) {
+            $qb->andWhere($matchNationality ? 'p.nationality = :nat' : 'p.nationality != :nat')
+               ->setParameter('nat', $nationality);
+        }
+
+        if ($excludeIds !== []) {
+            $qb->andWhere('p.id NOT IN (:excludeIds)')
+               ->setParameter('excludeIds', $excludeIds);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * How many pool players sit in the youth age window at all, ignoring tier and
+     * nationality. Powers the endpoint's "the pool cannot supply this" reporting, which is
+     * the signal an operator needs while seeding — a short response otherwise looks like a
+     * bug rather than an empty shelf.
+     */
+    public function countYouthInPool(\DateTimeImmutable $dobFrom, \DateTimeImmutable $dobTo): int
+    {
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->andWhere('p.dateOfBirth >= :dobFrom')
+            ->andWhere('p.dateOfBirth <= :dobTo')
+            ->setParameter('dobFrom', $dobFrom)
+            ->setParameter('dobTo', $dobTo)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
 }

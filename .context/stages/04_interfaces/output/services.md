@@ -410,12 +410,26 @@ filename alone.
 - **`PlayerGenerationService`** — generates a `Player` blueprint
   (position, recruitment source, personality matrix feeding into
   attribute derivation).
-- **`PlayerBrowseSerializer`** — the full-detail player shape shared by
-  `GET /api/scout/search` and `GET /api/players/foreign` (nested
-  agent/personality/guardians, `countryCode`). Distinct from
-  `WorldPackSnapshotBuilder::buildPlayerSnapshot()`, a differently-shaped
-  snapshot used for world-pack/starter-pack generation — don't conflate
-  the two.
+- **`PlayerSnapshotSerializer`** — **THE canonical player shape for every
+  device-facing response.** See "One player shape" below; start here before
+  adding any endpoint that returns a player.
+- **`PlayerBrowseSerializer`** — now a thin `withGuardians: true` preset over
+  `PlayerSnapshotSerializer`, kept as its own class because "browsing includes
+  guardians, world packs deliberately don't" is a real decision and both
+  controllers type-hint it. It no longer owns a shape of its own; the two
+  formerly-divergent shapes were consolidated.
+- **`YouthPoolService`** — the stratified youth draw behind
+  `GET /api/players/youth`. **Draws from the existing pool, never generates**,
+  so the tier/nationality spreads are properties of what has been seeded, not
+  knobs it can turn: it asks for a target per (tier × nationality) cell, backfills
+  the shortfall from the rest of the age window, and returns the *realised*
+  distribution so an under-seeded pool reads as an empty shelf rather than a bug.
+  Bands on `potential`, not `currentAbility` — a 12–14 year old's ability is
+  `abilityTarget × potential` with `abilityTarget` only 0.30–0.60 under 21, so
+  ability banding collapses a youth pool into one tier (measured: `currentAbility`
+  never exceeded 69 across a real 5,412-player pool, so nothing was ever `elite`).
+  Age is a `date_of_birth` window (`dobWindow()`), never a second age formula, and
+  is served by `idx_player_youth_draw`. Non-consuming by design.
 - **`SocialPostRenderer`** — renders `SocialPostTemplate` content with
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
@@ -485,5 +499,39 @@ since they run implicitly on every entity write:
   Personality Matrix on any `Staff`/`Scout` persisted without one, via
   `PersonalityGeneratorService`. `Player` is deliberately excluded —
   `PlayerGenerationService` rolls its own matrix.
+
+## One player shape
+
+**The world-pack player snapshot is the universally expected structure whenever
+the API returns a player object to the frontend device.** Any new endpoint that
+returns a player emits this shape — do not invent a per-endpoint variant, and do
+not reach for a different serializer.
+
+It is produced by `PlayerSnapshotSerializer`. `WorldPackSnapshotBuilder::
+buildPlayerSnapshot()` and `PlayerBrowseSerializer` both delegate to it, so the
+world pack, starter pack, `/api/scout/search`, `/api/players/foreign` and
+`/api/players/youth` all serve byte-identical keys and the client needs exactly
+one upsert path.
+
+There used to be two shapes that overlapped on ~20 keys and disagreed on five.
+Consolidation was a strict **superset** — no key either shape emitted was removed
+or redefined:
+
+- browse endpoints **gained** `morale`, `isActive`, `potentialTier`
+- the world-pack snapshot **gained** `tier`, `overall`, `potentialTier`
+
+Two deliberate exceptions to "one shape", both opt-in flags on the serializer:
+
+- **`guardians`** — on for browse and youth, **off for world packs**.
+  `Player::$guardians` is a lazy collection, so including it in a country-sized
+  pack would fire a query per player across thousands of players.
+- **`isYouth`** — set only by `/api/players/youth`, and *omitted* rather than
+  emitted as `false` elsewhere, so no pre-existing response gained a key.
+
+`tier` vs `potentialTier`: `tier` keeps its original `currentAbility` meaning so
+already-shipped clients are unaffected; `potentialTier` bands `potential` and is
+the one to classify youth on. `PlayerSnapshotShapeConsolidationTest` pins both
+legacy key sets literally — those arrays are a historical record of what shipped,
+not a description of current output, and must never be edited to match new output.
 
 No `src/EventListener/` directory exists.
