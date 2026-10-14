@@ -30,15 +30,31 @@ function clubBadgeIconsHtml(clubBadge) {
 
 // ── Club nationality chip ──
 //
-// A 2-letter country code, not an emoji flag: Club.country uses App\Enum\Country
-// codes ("EN" for England), several of which have no regional-indicator flag at
-// all, and emoji flags render inconsistently across platforms at chip size.
+// A vendored flag SVG from /assets/flags/ (MIT flag-icons — see that directory's
+// README), keyed by the lower-cased App\Enum\Country code. Not an emoji flag:
+// several of these codes have no regional-indicator equivalent at all, and
+// England in particular needs a subdivision tag sequence that Windows and most
+// Android builds don't draw. Shared by the community-stats cards and the global
+// leaderboard; the owner spotlight renders the same flags from Twig.
+//
+// The 2-letter code remains the alt/title text, so a screen reader gets exactly
+// what it got when the chip WAS the code, and so a flag is never the only carrier
+// of which country it is — several are near-identical at 18px.
+//
+// onerror falls back to the old text chip rather than leaving a broken image:
+// CountryFlagAssetTest guarantees an SVG for every Country case, but Club.country
+// is a free string column, so a value outside the enum can still reach here.
+//
 // Returns '' for a club with no country so callers can concatenate unconditionally.
 function clubCountryChipHtml(country) {
     if (!country) return '';
     var code = String(country).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     if (!code) return '';
-    return '<span class="club-flag">' + code + '</span>';
+
+    return '<img class="club-flag" src="/assets/flags/' + code.toLowerCase() + '.svg"' +
+        ' width="18" height="13" loading="lazy" decoding="async"' +
+        ' alt="' + code + '" title="' + code + '"' +
+        ' onerror="this.outerHTML=\'<span class=&quot;club-flag club-flag-code&quot;>' + code + '</span>\'">';
 }
 
 // ── Club Spotlight (kit/badge via composeKitSvg, owner avatar via
