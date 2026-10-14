@@ -148,10 +148,17 @@ Most recent migrations (chronological):
 24. `Version20261002120000` — creates `user_ledger`
     (centralized, cross-club dividend-draw audit trail — see `entities.md`'s
     `UserLedger` entry and CLAUDE.md's "Centralized User Ledger").
-25. `Version20261003112841` (most recent) — sync v2: adds nullable
+25. `Version20261003112841` — sync v2: adds nullable
     `player_career_stat.appearance_config JSON` and creates
     `staff_career_profile` (identity + avatar config per currently-hired
     staff member, no stats columns — see `entities.md`'s entries for both).
+26. `Version20261014194623` (most recent) — index only, no schema change:
+    `idx_player_youth_draw` on `player` (`date_of_birth`, `potential`,
+    `nationality`) for `GET /api/players/youth`. Before it, `player` carried
+    only its primary key and an `agent_id` index, so every youth draw
+    sequentially scanned the whole pool. Declared on the entity as
+    `#[ORM\Index]`, not just in raw migration SQL, so `schema:create` builds
+    it and `migrations:diff` doesn't propose dropping it.
 
 ## Takeaway
 

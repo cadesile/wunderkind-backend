@@ -40,6 +40,12 @@ constraints. Don't restate field lists here.
 - **`user_device`** — unique on `device_token` (not per-user — a token
   identifies an app installation; re-registering it under a different
   user reassigns rather than duplicates).
+- **`player`** — `idx_player_youth_draw` on (`date_of_birth`, `potential`,
+  `nationality`), serving `PlayerRepository::findYouthStratum()` behind
+  `GET /api/players/youth`. Leads on `date_of_birth` because the 12–14 youth
+  window is a small slice of a pool spanning every age, so it is by far the
+  most selective of the three. Non-unique; declared in the ORM mapping so it
+  round-trips through `schema:create`/`migrations:diff`.
 - **`user_ledger`** — unique index `uq_user_ledger_source_entry` on
   (`source_sync_record_id`, `source_ledger_index`) — the idempotency guard
   for `app:backfill-user-ledger`/`UserLedgerService` (see `entities.md`).

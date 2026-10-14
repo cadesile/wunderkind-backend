@@ -25,6 +25,10 @@ use App\Enum\Tier;
  */
 class WorldPackSnapshotBuilder
 {
+    public function __construct(
+        private readonly PlayerSnapshotSerializer $playerSnapshots = new PlayerSnapshotSerializer(),
+    ) {}
+
     /**
      * Distributes $total players across GK/DEF/MID/ATT using PoolConfig position weights.
      * Uses the largest-remainder method so the counts always sum exactly to $total.
@@ -113,39 +117,18 @@ class WorldPackSnapshotBuilder
         ];
     }
 
+    /**
+     * Delegates to PlayerSnapshotSerializer, which owns the single canonical player shape
+     * this method's own output became the model for — see that class. Guardians are
+     * deliberately left out here: Player::$guardians is lazy, so including them would fire
+     * a query per player across a whole country's pack.
+     *
+     * Emits three keys this method did not before — `tier`, `overall` and `potentialTier`;
+     * nothing it used to emit was removed or changed.
+     */
     public function buildPlayerSnapshot(Player $player): array
     {
-        // getPersonality() returns PersonalityProfile (embedded object)
-        // getPosition() returns PlayerPosition backed enum — use ->value
-        $p = $player->getPersonality();
-        return [
-            'id'                => (string) $player->getId(),
-            'firstName'         => $player->getFirstName(),
-            'lastName'          => $player->getLastName(),
-            'position'          => $player->getPosition()->value,
-            'nationality'       => $player->getNationality(),
-            'countryCode'       => Country::fromNationality($player->getNationality())?->value,
-            'dateOfBirth'       => $player->getDateOfBirth()->format('Y-m-d'),
-            'contractValue'     => $player->getContractValue(),
-            'potential'         => $player->getPotential(),
-            'currentAbility'    => $player->getCurrentAbility(),
-            'morale'            => $player->getMorale(),
-            'recruitmentSource' => $player->getRecruitmentSource()->value,
-            'isActive'          => $player->getStatus()->value === 'active',
-            'physical'    => [
-                'height' => $player->getHeight(),
-                'weight' => $player->getWeight(),
-            ],
-            'pace'        => $player->getPace(),
-            'technical'   => $player->getTechnical(),
-            'vision'      => $player->getVision(),
-            'power'       => $player->getPower(),
-            'stamina'     => $player->getStamina(),
-            'heart'       => $player->getHeart(),
-            'personality' => $p->toArray(),
-            'appearance' => $player->getAppearance(),
-            'agent'      => $player->getAgent()?->toSnapshotArray(),
-        ];
+        return $this->playerSnapshots->serialize($player);
     }
 
     public function buildStaffSnapshot(Staff $staff): array
