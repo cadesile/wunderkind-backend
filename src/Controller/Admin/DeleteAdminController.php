@@ -13,6 +13,7 @@ use App\Entity\SeasonSnapshot;
 use App\Entity\Sponsor;
 use App\Entity\Transfer;
 use App\Entity\User;
+use App\Entity\UserLedger;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -77,7 +78,12 @@ class DeleteAdminController extends AbstractController
 
             $this->addFlash('success', sprintf('User "%s" and all associated clubs deleted.', $email));
         } else {
-            // Delete only this club; keep the user account
+            // Delete only this club; keep the user account.
+            // Note: this also discards the club's UserLedger dividend rows (its club FK is NOT
+            // NULL, so they cannot be kept with the club nulled out the way a Transfer is). The
+            // user's surviving rows still carry the balances they were chained with, so the
+            // running total only changes if the deleted club owned the most recent entries —
+            // getCurrentBalance() then reads an earlier row and the balance steps back.
             $this->cleanClubForeignKeys($club);
             $this->em->remove($club); // cascade: removes players, staff, sync records, leaderboard entries, inbox messages
             $this->em->flush();
@@ -142,7 +148,12 @@ class DeleteAdminController extends AbstractController
      */
     private function cleanClubForeignKeys(Club $club): void
     {
-        foreach ([Transfer::class, MatchResult::class, SeasonRecord::class, SeasonSnapshot::class] as $class) {
+        // UserLedger blocks on user_ledger.club_id: NOT NULL with a plain NO-ACTION FK, so it can
+        // neither be cascaded through nor nulled out the way Investor/Sponsor are below. Its
+        // user_id IS ON DELETE CASCADE, but that only fires once the user row goes — too late,
+        // since the club is deleted first. Deleting a club therefore discards that club's dividend
+        // rows: harmless when the user goes too, but see the clubDelete() note when they don't.
+        foreach ([Transfer::class, MatchResult::class, SeasonRecord::class, SeasonSnapshot::class, UserLedger::class] as $class) {
             $this->em->createQueryBuilder()
                 ->delete($class, 'e')
                 ->where('e.club = :club')

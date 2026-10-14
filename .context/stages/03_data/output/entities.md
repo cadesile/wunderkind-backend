@@ -53,6 +53,19 @@ migrations are the change log (see `migrations.md`).
   No rollback-purge special-casing beyond the FK's `SET NULL` — dividend
   draws recorded against a rolled-back timeline are not retroactively
   reversed, same precedent as `Transfer`/`PlayerCareerStatSnapshot`.
+  **`club` is a club-delete blocker and both delete paths must purge it
+  explicitly.** It is `NOT NULL` with a plain NO-ACTION FK, so unlike
+  `transfer.club_id` it cannot be nulled and unlike `inbox_message` it is not
+  cascaded; `user_id`'s own `CASCADE` fires only when the *user* row goes,
+  which is after its clubs. Shipping the entity without adding it to
+  `AccountDeletionService::BLOCKING_CLUB_DEPENDENTS` and
+  `DeleteAdminController::cleanClubForeignKeys()` left both deletes raising
+  `ForeignKeyConstraintViolationException` on `fk_user_ledger_club` in
+  production. Deleting a club therefore discards that club's dividend rows —
+  unambiguous when the account goes too, but note that the admin's
+  delete-club-keep-user path drops rows out of a chained balance history, and
+  `getCurrentBalance()` reads the latest surviving row, so removing the most
+  recent entries rolls the user's balance back to an earlier figure.
 - **`Admin`** — separate back-office auth identity (`UserInterface`).
   `email`, `password`, `name`, `department`, `accessLevel:int(1)`.
   `getRoles()` hardcodes `['ROLE_ADMIN']`. No entity relations.

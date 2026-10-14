@@ -15,7 +15,9 @@ use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use App\Entity\User;
+use App\Entity\UserLedger;
 use App\Enum\LeaderboardCategory;
+use App\Enum\UserLedgerEntryType;
 use App\Enum\TransferType;
 use App\Service\AccountDeletionService;
 use App\Service\LeaderboardCalculationService;
@@ -96,8 +98,24 @@ class AccountDeletionServiceTest extends KernelTestCase
         $this->persist(new SeasonRecord($club, $league, 1, 4, 10, 5, 3, 2, 12, 8, 18, false, false));
         $this->persist(new SeasonSnapshot($club, 1, $uniqueCountry, ['x' => 1]));
         $this->persist(new SeasonRatingsSnapshot(1, 1, 8, (string) $club->getId(), 'Doomed FC', 50, 4));
-        $this->persist(new SyncRecord($club, 5, new \DateTimeImmutable(), ['w' => 5]));
+        $syncRecord = new SyncRecord($club, 5, new \DateTimeImmutable(), ['w' => 5]);
+        $this->persist($syncRecord);
         $this->persist(new LeaderboardEntry($club, LeaderboardCategory::CAREER_EARNINGS, 'all-time'));
+
+        // user_ledger.club_id is NOT NULL with a NO-ACTION FK, so a dividend row blocks the club
+        // delete outright. Nothing in this fixture carried one until a live admin user-delete hit
+        // exactly that FK violation in production, so the regression is pinned here.
+        $this->persist(new UserLedger(
+            $user,
+            $club,
+            UserLedgerEntryType::DIVIDEND_DRAW,
+            50_000,
+            0,
+            new \DateTimeImmutable(),
+            new \DateTimeImmutable(),
+            $syncRecord,
+            0,
+        ));
 
         $transfer = new Transfer(null, $club, 'Some Club', TransferType::SALE, new \DateTimeImmutable());
         $this->persist($transfer);
@@ -150,7 +168,7 @@ class AccountDeletionServiceTest extends KernelTestCase
         $this->assertNull($this->em->find(Club::class, $clubId), 'club should be deleted');
 
         // Every FK-blocking dependent gone (count rows still pointing at the club id).
-        foreach (['Investor', 'Sponsor', 'MatchResult', 'SeasonRecord', 'SeasonSnapshot', 'SyncRecord', 'LeaderboardEntry'] as $entity) {
+        foreach (['Investor', 'Sponsor', 'MatchResult', 'SeasonRecord', 'SeasonSnapshot', 'SyncRecord', 'LeaderboardEntry', 'UserLedger'] as $entity) {
             $count = (int) $this->em->createQuery(
                 "SELECT COUNT(e) FROM App\\Entity\\{$entity} e WHERE IDENTITY(e.club) = :cid"
             )->setParameter('cid', $clubId)->getSingleScalarResult();

@@ -6,7 +6,15 @@ filename alone.
 
 - **`AccountDeletionService`** — permanently deletes a user account and
   every club they own, including cascade-uncovered data, in one
-  transaction.
+  transaction. `BLOCKING_CLUB_DEPENDENTS` is the hand-maintained list of
+  club dependents whose FK is NO-ACTION at the DB level and so must be
+  deleted before their club; **a new entity with a non-nullable `club` FK
+  must be added here and to `DeleteAdminController::cleanClubForeignKeys()`
+  (the admin's own delete path), or both deletes raise
+  `ForeignKeyConstraintViolationException`** — as `UserLedger` did in
+  production. `AccountDeletionServiceTest` builds one row per dependent, so
+  the regression is only caught for entities actually present in that
+  fixture.
 - **`Admin/DashboardStatsService`** — computes admin dashboard growth/
   leaderboard/pool stats; Postgres-dialect-specific SQL confined here.
 - **`Admin/StatBuckets`** — bucketing helper backing dashboard facet

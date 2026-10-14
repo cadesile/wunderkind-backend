@@ -27,6 +27,13 @@ final class AccountDeletionService
      * InboxMessage is DB-level ON DELETE CASCADE; Transfer is DB-level SET NULL; email_verification
      * is DB-level CASCADE on user — all three are safe to leave to the DB and are handled by
      * remove($user)/remove($club) below without any explicit query.
+     *
+     * UserLedger is here despite user_ledger.user_id being ON DELETE CASCADE: that cascade only
+     * fires when the *user* row goes, and clubs are deleted first, so user_ledger.club_id (plain
+     * NO ACTION, and NOT NULL — it cannot be nulled out like transfer.club_id) blocks the club
+     * delete long before the user is reached. Deleting the whole account is the one case where
+     * discarding these rows is unambiguously right: the audit trail they protect belongs to a
+     * user who is being erased outright.
      */
     private const BLOCKING_CLUB_DEPENDENTS = [
         'SeasonSnapshot',
@@ -36,6 +43,7 @@ final class AccountDeletionService
         'Sponsor',
         'SyncRecord',
         'LeaderboardEntry',
+        'UserLedger',
     ];
 
     public function __construct(
