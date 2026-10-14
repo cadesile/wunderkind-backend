@@ -569,43 +569,67 @@
         /* ════════════════════════════════
            OWNER SPOTLIGHT
 
-           A second card in the Club Spotlight family (same gold ring, same
-           header/footer bands, same Press Start 2P micro-labels) with its own
-           .ospot-* namespace so restyling one never silently restyles the other.
+           A board of per-owner cards rather than one panel of stacked rows: each
+           owner is a self-contained card (gold ring, pixel rank, avatar, dividend
+           figure, then their clubs), laid out in balanced columns so a one-club
+           owner doesn't reserve the same vertical slab as a five-club one.
 
-           Each row is a 4-column grid on desktop — rank / avatar / identity /
-           balance — with the owner's club list spanning the full width on a
-           second grid line. Under 720px the balance drops onto its own line and
-           the club list loses its division column.
+           Masonry via CSS multi-column, not grid: card heights vary with club
+           count, and `columns` packs that ragged edge without the gaps
+           grid-auto-flow leaves behind. Column flow also preserves DOM order
+           reading down each column in turn, so rank order, tab order and visual
+           order stay the same sequence — which an <ol> promises and dense grid
+           packing would quietly break.
+
+           Still its own .ospot-* namespace, separate from the Club Spotlight's
+           .spotlight-* family, so restyling one never silently restyles the other.
         ════════════════════════════════ */
         .ospot-section { padding: 0 0 40px; }
-        .ospot-card {
-            background: var(--bg-mid);
-            border: 1px solid var(--border);
-            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 24px rgba(245,200,66,.15);
-        }
-        .ospot-header {
+
+        /* The board head sits above the cards, not inside a wrapping panel — the
+           cards themselves carry the gold ring now, and nesting rings inside rings
+           muddied which edge belonged to which owner. */
+        .ospot-board-head {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
             flex-wrap: wrap;
             gap: 8px;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
+            padding: 0 2px 12px;
         }
-        .ospot-header .pixel { font-size: 9px; letter-spacing: 0.08em; color: var(--gold); }
+        .ospot-board-head .pixel { font-size: 9px; letter-spacing: 0.08em; color: var(--gold); }
         .ospot-header-sub { font-size: 11px; color: var(--text-muted); }
 
-        .ospot-list { list-style: none; }
+        .ospot-board {
+            list-style: none;
+            columns: 2;
+            column-gap: 14px;
+        }
+
+        /* Card radius. The page's pixel language is otherwise hard-edged, so this
+           stays deliberately small — set it to 0 for pure sharp-edge, or raise it
+           to soften every card and club pill at once. */
+        .ospot-board { --ospot-radius: 3px; }
+
         .ospot-row {
+            break-inside: avoid;          /* keeps a card whole instead of splitting it across columns */
+            -webkit-column-break-inside: avoid;
+            page-break-inside: avoid;     /* legacy alias some engines still read */
+            display: block;
+            margin: 0 0 14px;
+            padding: 13px 14px 14px;
+            background: var(--bg-mid);
+            border: 1px solid var(--gold-dim);
+            border-radius: var(--ospot-radius);
+            box-shadow: 0 0 18px rgba(245,200,66,.08);
+        }
+
+        .ospot-head {
             display: grid;
             grid-template-columns: auto auto 1fr auto;
             align-items: center;
-            gap: 4px 12px;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
+            gap: 2px 10px;
         }
-        .ospot-row:last-child { border-bottom: 0; }
         .ospot-rank {
             font-family: 'Press Start 2P', monospace;
             font-size: 11px;
@@ -630,7 +654,8 @@
         .ospot-identity { min-width: 0; }
         .ospot-owner-name {
             display: block;
-            font-size: 14px;
+            font-size: 15px;
+            line-height: 1.25;
             color: var(--text);
             overflow-wrap: anywhere;
         }
@@ -638,7 +663,7 @@
             display: block;
             font-size: 10px;
             color: var(--text-muted);
-            margin-top: 2px;
+            margin-top: 3px;
         }
         .ospot-balance { text-align: right; white-space: nowrap; }
         .ospot-balance-val {
@@ -656,43 +681,74 @@
             color: var(--text-muted);
         }
 
-        /* Country code chip. Deliberately a code, not an emoji flag: the palette
-           uses "EN"/"SC" style codes that have no regional-indicator equivalent,
-           and emoji render inconsistently across platforms at this size. */
+        /* Country flag. A vendored SVG (public/assets/flags/, MIT flag-icons — see
+           that directory's README), not an emoji flag: several of these codes have
+           no regional-indicator equivalent at all, and the ones that do render
+           inconsistently across platforms at this size. England in particular needs
+           a subdivision tag sequence that Windows and most Android builds don't draw.
+
+           The hairline border is load-bearing, not decoration: Poland, Indonesia and
+           Monaco are white along one edge, so a flag sitting directly on the card
+           would appear to lose that half. The <img> carries its own width/height
+           attributes too, so a row keeps its height while the SVGs decode. */
         .ospot-flag {
             display: inline-block;
-            font-family: 'Space Mono', monospace;
-            font-size: 9px;
-            letter-spacing: 0.06em;
-            padding: 1px 4px;
+            width: 18px;
+            height: 13px;
             margin-left: 6px;
-            color: var(--cyan);
-            border: 1px solid rgba(79,184,201,0.45);
             vertical-align: middle;
+            object-fit: cover;
+            border: 1px solid rgba(5,21,18,0.75);
+            border-radius: var(--ospot-radius);
         }
 
-        .ospot-clubs {
-            grid-column: 1 / -1;
-            list-style: none;
-            margin-top: 10px;
-            border-top: 1px solid var(--border);
+        .ospot-clubs-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            margin-top: 12px;
+            padding-bottom: 6px;
         }
+        .ospot-clubs-label {
+            font-size: 9px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        /* A count, not a control: OwnerSpotlightService caps the payload at
+           CLUBS_PER_OWNER, so there is nothing further to disclose client-side.
+           Styled flat for that reason — anything button-shaped here would be an
+           affordance that cannot deliver. */
+        .ospot-more {
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            color: var(--gold-dim);
+            white-space: nowrap;
+        }
+
+        .ospot-clubs { list-style: none; display: grid; gap: 5px; }
         .ospot-club {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 0;
+            padding: 5px 8px;
             font-size: 12.5px;
             color: var(--text);
-            border-bottom: 1px solid rgba(5,21,18,0.5);
+            background: var(--dark);
+            border: 1px solid var(--border);
+            border-radius: var(--ospot-radius);
         }
-        .ospot-club:last-child { border-bottom: 0; }
+        /* Fixed box, not just a min-width: clubBadgeIconsHtml() injects these SVGs
+           after first paint, and an unsized slot let every club pill jump taller
+           the moment they landed. */
         .ospot-club-badge {
             display: inline-flex;
             align-items: center;
             gap: 2px;
             flex: 0 0 auto;
             min-width: 22px;
+            height: 22px;
         }
         .ospot-club-badge svg {
             width: 22px;
@@ -719,25 +775,30 @@
             padding: 3px 4px;
             color: var(--dark);
             background: var(--gold-dim);
+            border-radius: var(--ospot-radius);
         }
         .ospot-note {
             font-family: 'Space Mono', monospace;
             font-size: 11px;
             color: var(--text-muted);
             text-align: center;
-            padding: 10px 16px 0;
+            padding: 2px 16px 0;
         }
 
+        /* Drops to a single column before a card gets too narrow to hold a club
+           pill's badge + name + flag + division on one line. Two columns stay
+           readable well below this, so there is no intermediate step. */
         @media (max-width: 720px) {
-            .ospot-row { grid-template-columns: auto auto 1fr; }
-            .ospot-balance { grid-column: 3 / -1; text-align: left; margin-top: 6px; }
-            .ospot-balance-lbl { display: inline; margin-left: 6px; }
-            .ospot-balance-val { display: inline; }
+            .ospot-board { columns: 1; }
             /* The kit rides along with the badge in clubBadgeIconsHtml()'s output;
                below this width the row only has room for the badge itself. */
             .ospot-club-badge svg:nth-child(2) { display: none; }
         }
-        @media (max-width: 520px) {
+        @media (max-width: 420px) {
+            .ospot-head { grid-template-columns: auto auto 1fr; }
+            .ospot-balance { grid-column: 3 / -1; text-align: left; margin-top: 6px; }
+            .ospot-balance-lbl { display: inline; margin-left: 6px; }
+            .ospot-balance-val { display: inline; }
             .ospot-club { flex-wrap: wrap; }
             .ospot-club-division { margin-left: 30px; width: 100%; }
         }
