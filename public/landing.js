@@ -28,6 +28,30 @@ function clubBadgeIconsHtml(clubBadge) {
     return composeKitSvg(cfg, 'badge', null, 1.4) + composeKitSvg(cfg, 'kit', 'small', 1.4);
 }
 
+// ── Club identity at hero size (incident modal) ──
+//
+// Same two sprites as clubBadgeIconsHtml(), drawn large instead of at ticker size.
+// Separate function rather than a scale argument on that one, because the kit also
+// changes crop: 'small' is a shirt-only crop that reads fine at 20px beside a badge,
+// but blown up it is a cropped torso — the hero wants the full kit ('large').
+//
+// Rendered at a fixed scale and then sized down in CSS. The sprites are SVG with a
+// viewBox, so they scale cleanly to any box; emitting them big and constraining with
+// CSS keeps the responsive sizing in one place rather than splitting it between a JS
+// scale constant and a stylesheet.
+function clubHeroIconsHtml(clubBadge) {
+    if (typeof composeKitSvg !== 'function') return '';
+
+    var cfg = {};
+    var home = (clubBadge && clubBadge.home) || {};
+    var badge = (clubBadge && clubBadge.badge) || {};
+    var key;
+    for (key in home) if (Object.prototype.hasOwnProperty.call(home, key)) cfg[key] = home[key];
+    for (key in badge) if (Object.prototype.hasOwnProperty.call(badge, key)) cfg[key] = badge[key];
+
+    return composeKitSvg(cfg, 'badge', null, 7) + composeKitSvg(cfg, 'kit', 'large', 7);
+}
+
 // ── Club nationality chip ──
 //
 // A vendored flag SVG from /assets/flags/ (MIT flag-icons — see that directory's
@@ -324,7 +348,7 @@ function clubCountryChipHtml(country) {
         var rawClubBadge = item.getAttribute('data-club-badge');
         var clubBadge = null;
         try { clubBadge = rawClubBadge ? JSON.parse(rawClubBadge) : null; } catch (e) { clubBadge = null; }
-        if (crestEl) crestEl.innerHTML = clubBadgeIconsHtml(clubBadge);
+        if (crestEl) crestEl.innerHTML = clubHeroIconsHtml(clubBadge);
 
         categoryEl.textContent = item.getAttribute('data-category-label') || "OWNER'S DISPATCH";
         clubEl.textContent = item.getAttribute('data-club') || '—';
