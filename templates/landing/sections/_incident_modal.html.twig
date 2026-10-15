@@ -6,23 +6,35 @@
 
      Carries two per-club blocks beyond the incident itself — the club's best-rated
      player and its latest results — both from the same data-dossier attribute. -->
-<div class="incident-overlay" id="incident-overlay" role="dialog" aria-modal="true" aria-labelledby="incident-title">
+<div class="incident-overlay" id="incident-overlay" role="dialog" aria-modal="true" aria-labelledby="incident-title incident-club">
     <div class="incident-modal">
         <div class="incident-header">
             <h2 id="incident-title"><span id="incident-category">OWNER'S DISPATCH</span></h2>
             <button class="incident-close" id="incident-close" aria-label="Close">✕ CLOSE</button>
         </div>
         <div class="incident-body">
-            <div class="incident-crest" id="incident-crest" aria-hidden="true"></div>
+            {#
+               Hero: the club's own badge and kit at full size beside its name. These
+               sprites are the club's identity — rendering them at ticker size (22px)
+               next to a label-value row buried the one thing that says WHOSE boardroom
+               this is. The club name moves up here as the hero title, so it is no longer
+               repeated as a "Club" row below.
 
-            <div class="incident-row">
-                <span class="incident-row-label">Club</span>
-                <span class="incident-row-value" id="incident-club">—</span>
+               aria-hidden on the art, not on the name: the sprites restate what the
+               heading already says, so announcing them twice is noise, but the name is
+               part of the dialog's accessible label (see aria-labelledby above).
+            #}
+            <div class="incident-hero">
+                <div class="incident-crest" id="incident-crest" aria-hidden="true"></div>
+                <div class="incident-hero-meta">
+                    <span class="incident-club" id="incident-club">—</span>
+                    <span class="incident-logged">
+                        <span class="incident-logged-label">Logged</span>
+                        <span id="incident-timestamp">—</span>
+                    </span>
+                </div>
             </div>
-            <div class="incident-row">
-                <span class="incident-row-label">Logged</span>
-                <span class="incident-row-value" id="incident-timestamp">—</span>
-            </div>
+
             <div class="incident-row" id="incident-amount-row">
                 <span class="incident-row-label">Value</span>
                 <span class="incident-row-value" id="incident-amount">—</span>

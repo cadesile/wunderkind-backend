@@ -1727,16 +1727,72 @@
         }
         .incident-close:hover { border-color: var(--gold); color: var(--gold); }
         .incident-body { padding: 24px; overflow-y: auto; }
+        /* ── Incident hero: club identity, not a label-value row ──
+           The badge and kit ARE the club, so they lead the dispatch at full size with
+           the name beside them. They used to render at ticker size (22px) above a
+           "Club: name" row, which buried whose boardroom you were looking at.
+
+           Sizes are clamped rather than fixed: the sprites are emitted large by
+           clubHeroIconsHtml() and scaled down here, so one rule covers 375px phones
+           through desktop without a second JS scale constant to keep in step. */
+        .incident-hero {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding-bottom: 18px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
         .incident-crest {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
-            padding-bottom: 16px;
-            margin-bottom: 16px;
-            border-bottom: 1px solid var(--border);
+            gap: 10px;
+            flex: 0 0 auto;
         }
-        .incident-crest svg { display: block; image-rendering: pixelated; }
+        /* Height-driven, width auto: the badge (32x34) and kit (34x40) have different
+           aspect ratios, so matching their heights is what makes them sit as a pair. */
+        .incident-crest svg {
+            display: block;
+            image-rendering: pixelated;
+            height: clamp(64px, 17vw, 104px);
+            width: auto;
+        }
+        .incident-hero-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+        /* VT323 rather than Press Start 2P: at hero size the pixel face is far too wide
+           for a name like "Immenstadt Blau-Weiss", which would wrap to three lines in a
+           480px modal. overflow-wrap keeps a single long word inside the box. */
+        .incident-club {
+            font-family: 'VT323', monospace;
+            font-size: clamp(30px, 8vw, 42px);
+            line-height: 1.05;
+            color: var(--text);
+            overflow-wrap: anywhere;
+        }
+        .incident-logged {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .incident-logged-label {
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--gold-dim);
+        }
+
+        /* Below 420px the sprites and a 30px name no longer fit side by side, so the
+           hero stacks and the art centres over the name. */
+        @media (max-width: 420px) {
+            .incident-hero { flex-direction: column; align-items: flex-start; gap: 12px; }
+        }
         .incident-row {
             display: flex;
             justify-content: space-between;
