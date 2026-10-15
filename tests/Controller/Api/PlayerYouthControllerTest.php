@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Tests\Controller\Api;
 
 use App\Entity\Player;
+use App\Entity\PoolConfig;
 use App\Entity\User;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
+use App\Repository\PoolConfigRepository;
 use App\Service\YouthPoolService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -200,6 +202,55 @@ class PlayerYouthControllerTest extends WebTestCase
             ['local', 'regional', 'national', 'elite'],
             array_keys($body['distribution']['byPotentialTier']),
         );
+    }
+
+    /**
+     * The per-tier home-nationality mix lives on PoolConfig so it can be retuned from the
+     * admin. This pins that the config is actually read: forcing every tier to 100% home
+     * must eliminate foreign players from a draw that would otherwise be ~12.5% foreign
+     * with the defaults.
+     *
+     * Restores the original values afterwards — pool_config is a shared singleton row in a
+     * test DB that is never rolled back between methods, so leaving it edited would skew
+     * every later test that generates or draws players.
+     */
+    public function testHomeNationalityMixIsDrivenByPoolConfig(): void
+    {
+        $this->seedYouth(200, 'English', 100);
+
+        $config = self::getContainer()->get(PoolConfigRepository::class)->getConfig();
+        $original = [
+            $config->getYouthHomeNationalityPercentLocal(),
+            $config->getYouthHomeNationalityPercentRegional(),
+            $config->getYouthHomeNationalityPercentNational(),
+            $config->getYouthHomeNationalityPercentElite(),
+        ];
+
+        try {
+            $config->setYouthHomeNationalityPercentLocal(100)
+                   ->setYouthHomeNationalityPercentRegional(100)
+                   ->setYouthHomeNationalityPercentNational(100)
+                   ->setYouthHomeNationalityPercentElite(100);
+            $this->em->flush();
+
+            $body = $this->get('/api/players/youth?country=EN&limit=80');
+
+            $this->assertSame(
+                count($body['players']),
+                $body['distribution']['nationalityMatched'],
+                'with every tier at 100% home, the draw should contain no foreign players',
+            );
+        } finally {
+            self::ensureKernelShutdown();
+            static::createClient();
+            $em = self::getContainer()->get(EntityManagerInterface::class);
+            $cfg = self::getContainer()->get(PoolConfigRepository::class)->getConfig();
+            $cfg->setYouthHomeNationalityPercentLocal($original[0])
+                ->setYouthHomeNationalityPercentRegional($original[1])
+                ->setYouthHomeNationalityPercentNational($original[2])
+                ->setYouthHomeNationalityPercentElite($original[3]);
+            $em->flush();
+        }
     }
 
     public function testRejectsMissingAndUnknownCountry(): void

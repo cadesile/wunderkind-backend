@@ -471,6 +471,20 @@ Each is effectively a single global-config row.
   retroactively. Editable on the Player Pool admin screen
   (`templates/admin/pool_player_config.html.twig`), and covered automatically
   by `ConfigImportExportService`'s reflection-driven export.
+  **Youth-draw home-nationality mix** (`youthHomeNationalityPercentLocal/
+  Regional/National/Elite`, defaults 95/85/70/45, added by
+  `Version20261015093949`) is the per-tier share of `GET /api/players/youth`
+  that should carry the requested country, read via
+  `youthHomeNationalityPercents()`. Moved out of a `YouthPoolService` const so
+  the intake mix is tunable from the same admin screen. With the defaults a
+  200-player draw returns ~175 home / ~25 foreign (12.5%) — but those 25
+  concentrate at the top, the elite band alone being 55% foreign, which is why
+  a draw scanned best-first looks far more international than the headline.
+  Targets, not guarantees: the endpoint draws rather than generates, so a tier
+  short of home-nationality players falls back to whatever exists and
+  `distribution.nationalityMatched` reports what was achieved.
+  `YouthPoolService::TIER_WEIGHTS` deliberately stays a constant — it is the
+  shape of a pyramid, not a balance knob.
 - **`StarterConfig`** — singleton for new-club starter setup (starting
   balance, starter counts of players/coaches/scouts/managers,
   `starterSponsorTier`, `starterClubTier`, `defaultFacilities`,

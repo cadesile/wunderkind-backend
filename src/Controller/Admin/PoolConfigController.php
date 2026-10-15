@@ -54,6 +54,10 @@ class PoolConfigController extends AbstractController
         $config->setPlayerJuniorAbilityCeilingPercent((int) $request->request->get('playerJuniorAbilityCeilingPercent', 10));
         $config->setPlayerYouthAbilityCeilingAge((int) $request->request->get('playerYouthAbilityCeilingAge', 20));
         $config->setPlayerYouthAbilityCeilingPercent((int) $request->request->get('playerYouthAbilityCeilingPercent', 20));
+        $config->setYouthHomeNationalityPercentLocal((int) $request->request->get('youthHomeNationalityPercentLocal', 95));
+        $config->setYouthHomeNationalityPercentRegional((int) $request->request->get('youthHomeNationalityPercentRegional', 85));
+        $config->setYouthHomeNationalityPercentNational((int) $request->request->get('youthHomeNationalityPercentNational', 70));
+        $config->setYouthHomeNationalityPercentElite((int) $request->request->get('youthHomeNationalityPercentElite', 45));
         $config->setPlayerPotentialMin((int) $request->request->get('playerPotentialMin', 40));
         $config->setPlayerPotentialMax((int) $request->request->get('playerPotentialMax', 80));
         $config->setPlayerPotentialMean((int) $request->request->get('playerPotentialMean', 60));
