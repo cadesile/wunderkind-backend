@@ -47,6 +47,13 @@ class WorldPackClubGenerationService
         $foreignPct   = (int) $tierConf['foreignPercent'];
         $posCounts    = $this->snapshotBuilder->distributeByPosition($totalPlayers, $poolConfig);
 
+        // An NPC side is a FIRST TEAM, so it generates inside the first-team age band
+        // rather than PoolConfig's pool-wide range. That range has to span youth ages for
+        // the pool to supply GET /api/players/youth, and without this every NPC club in
+        // the pyramid was generated as children — the same bug as the starter pack, just
+        // on the generation path rather than the draw.
+        $ageRange = $poolConfig->firstTeamAgeRange();
+
         $players = [];
         foreach ($posCounts as $posValue => $posTotal) {
             $position      = PlayerPosition::from($posValue);
@@ -54,10 +61,10 @@ class WorldPackClubGenerationService
             $domesticCount = $posTotal - $foreignCount;
 
             for ($i = 0; $i < $domesticCount; $i++) {
-                $players[] = $this->buildPlayer($position, $nationality, $abilityRange);
+                $players[] = $this->buildPlayer($position, $nationality, $abilityRange, $ageRange);
             }
             for ($i = 0; $i < $foreignCount; $i++) {
-                $players[] = $this->buildPlayer($position, $this->foreignNationality($nationality), $abilityRange);
+                $players[] = $this->buildPlayer($position, $this->foreignNationality($nationality), $abilityRange, $ageRange);
             }
         }
 
@@ -127,9 +134,14 @@ class WorldPackClubGenerationService
      * pool-drawn NPC players always had (contractValue is part of buildPlayerSnapshot()).
      */
     /** @param array{min: int, max: int} $abilityRange */
-    private function buildPlayer(PlayerPosition $position, string $nationality, array $abilityRange): Player
+    /**
+     * @param array{min: int, max: int}      $abilityRange
+     * @param array{min: int, max: int}|null $ageRange First-team band; null keeps PoolConfig's
+     *                                       pool-wide range (callers that are not squads).
+     */
+    private function buildPlayer(PlayerPosition $position, string $nationality, array $abilityRange, ?array $ageRange = null): Player
     {
-        $player = $this->playerGen->generate($position, RecruitmentSource::YOUTH_INTAKE, $nationality, $abilityRange);
+        $player = $this->playerGen->generate($position, RecruitmentSource::YOUTH_INTAKE, $nationality, $abilityRange, $ageRange);
 
         $gc          = $this->gameConfigRepo->getConfig();
         $multiplier  = $this->playerWageMultiplier($player->getCurrentAbility());

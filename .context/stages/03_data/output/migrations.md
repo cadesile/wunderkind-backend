@@ -170,10 +170,15 @@ Most recent migrations (chronological):
     Additive with defaults, so the single existing config row picks them up
     with no data migration; nothing is backfilled, since they shape future
     generation only.
-29. `Version20261015093949` (most recent) — moves the youth-draw
+29. `Version20261015093949` — moves the youth-draw
     home-nationality mix from a `YouthPoolService` const onto `pool_config`
     (four per-tier percentage columns, defaults 95/85/70/45 matching the
     constant they replace, so behaviour is unchanged until edited).
+30. `Version20261015213517` (most recent) — adds
+    `pool_config.player_first_team_age_min` (default 19), the age floor for
+    starter packs and generated NPC squads. Fixes squads of 11-12 year olds:
+    one global age range governed both pool contents and squad eligibility,
+    and the starter draw had no age condition at all.
 
 ## Takeaway
 

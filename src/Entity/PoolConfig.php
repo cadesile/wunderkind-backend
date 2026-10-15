@@ -31,6 +31,24 @@ class PoolConfig
     private int $playerAgeMax = 13;
 
     /**
+     * Youngest a player may be to appear in a FIRST-TEAM squad — the starter pack a new
+     * club is given, and every generated NPC squad.
+     *
+     * Separate from playerAgeMin because one age range cannot serve the whole game: the
+     * pool has to hold 12-14 year olds for GET /api/players/youth while first teams need
+     * adults. playerAgeMin/Max say what the pool CONTAINS; this says who a senior squad is
+     * allowed to take out of it.
+     *
+     * Default 19, not 18, deliberately. The backend sends only dateOfBirth and the client
+     * derives the age against the IN-GAME clock, which starts slightly behind real time —
+     * so a player the backend considers exactly 18 can read as 17 on the device. One year
+     * of margin makes "no under-18s in a first team" true on screen, which is where it
+     * matters, at the cost of no genuine 18 year olds existing.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 19])]
+    private int $playerFirstTeamAgeMin = 19;
+
+    /**
      * Age-banded ceilings on how much of a generated player's potential is already
      * realised, as a percentage of potential — the "a 13-year-old should still have
      * everything in front of him" rule.
@@ -285,6 +303,28 @@ class PoolConfig
 
     public function getPlayerAgeMax(): int { return $this->playerAgeMax; }
     public function setPlayerAgeMax(int $v): static { $this->playerAgeMax = $v; return $this; }
+
+    public function getPlayerFirstTeamAgeMin(): int { return $this->playerFirstTeamAgeMin; }
+    public function setPlayerFirstTeamAgeMin(int $v): static { $this->playerFirstTeamAgeMin = max(0, min(60, $v)); return $this; }
+
+    /**
+     * Age range a first-team squad generates within: the first-team floor up to whatever
+     * the pool's own maximum is, so widening playerAgeMax widens senior squads too without
+     * a second setting to keep in step.
+     *
+     * Guards the inverted case — if the floor is configured above playerAgeMax, the range
+     * collapses to the floor rather than returning min > max, which random_int() would
+     * throw on.
+     *
+     * @return array{min: int, max: int}
+     */
+    public function firstTeamAgeRange(): array
+    {
+        return [
+            'min' => $this->playerFirstTeamAgeMin,
+            'max' => max($this->playerFirstTeamAgeMin, $this->playerAgeMax),
+        ];
+    }
 
     public function getPlayerJuniorAbilityCeilingAge(): int { return $this->playerJuniorAbilityCeilingAge; }
     public function setPlayerJuniorAbilityCeilingAge(int $v): static { $this->playerJuniorAbilityCeilingAge = max(0, $v); return $this; }

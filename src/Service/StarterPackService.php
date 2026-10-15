@@ -64,17 +64,28 @@ class StarterPackService
         );
         $ampPlayers = [];
 
+        // First-team age gate. The pool deliberately spans youth ages so it can also
+        // supply GET /api/players/youth, so without this a starter squad drew whatever
+        // the ability band matched — which, with a youth-aged pool, was 12 year olds.
+        //
+        // A date rather than an age because date_of_birth is what the column holds and
+        // what an index can serve. Note the floor defaults to 19, not 18: the client
+        // derives age against the in-game clock, which runs slightly behind real time,
+        // so a backend-exact 18 can display as 17. See PoolConfig::$playerFirstTeamAgeMin.
+        $firstTeamAgeMin = $poolConfig->getPlayerFirstTeamAgeMin();
+        $bornOnOrBefore  = (new \DateTimeImmutable('today'))->modify("-{$firstTeamAgeMin} years");
+
         foreach ($posCounts as $posValue => $count) {
             $position    = PlayerPosition::from($posValue);
             $posPlayers  = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                $ampRange['min'], $ampRange['max'], $position, $ampNationality, $count
+                $ampRange['min'], $ampRange['max'], $position, $ampNationality, $count, [], $bornOnOrBefore
             );
             $nativeFound = count($posPlayers);
             $foreignFound = 0;
             if (count($posPlayers) < $count) {
                 $deficit    = $count - count($posPlayers);
                 $extra      = $this->playerRepository->findForeignForWorldInitByPosition(
-                    $ampRange['min'], $ampRange['max'], '__none__', $position, $deficit
+                    $ampRange['min'], $ampRange['max'], '__none__', $position, $deficit, [], $bornOnOrBefore
                 );
                 $foreignFound = count($extra);
                 $posPlayers = array_merge($posPlayers, $extra);
@@ -86,7 +97,24 @@ class StarterPackService
                 'nativeFound'  => $nativeFound,
                 'foreignFound' => $foreignFound,
                 'totalFound'   => count($posPlayers),
+                'firstTeamAgeMin' => $firstTeamAgeMin,
             ]);
+
+            // A short draw now has a second possible cause beyond "pool too small": the
+            // pool may hold plenty of players in the ability band and none of them old
+            // enough. Warn explicitly, because the symptom (a thin squad) looks identical
+            // either way and the fix is different — widen PoolConfig's age range and
+            // re-warm the pool, rather than generate more of the same.
+            if (count($posPlayers) < $count) {
+                $this->logger->warning('starter_pack.initialize.position_underfilled', [
+                    'clubId'          => (string) $club->getId(),
+                    'position'        => $posValue,
+                    'requested'       => $count,
+                    'found'           => count($posPlayers),
+                    'firstTeamAgeMin' => $firstTeamAgeMin,
+                    'hint'            => 'pool may hold no players at or above the first-team age floor',
+                ]);
+            }
             $ampPlayers = array_merge($ampPlayers, $posPlayers);
         }
 

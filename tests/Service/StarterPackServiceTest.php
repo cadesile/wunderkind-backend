@@ -23,6 +23,122 @@ use PHPUnit\Framework\TestCase;
 
 class StarterPackServiceTest extends TestCase
 {
+    /**
+     * Regression: starter packs were handing new clubs 11 and 12 year olds.
+     *
+     * The pool deliberately spans youth ages so it can also supply GET /api/players/youth,
+     * and the squad draw filtered on ability, position and nationality with no age
+     * condition at all — so it took whatever the ability band matched. Both pool queries
+     * must now carry a date_of_birth cutoff derived from the configured first-team floor.
+     *
+     * Asserts the cutoff date itself, not merely that an argument was passed: an off-by-one
+     * here is invisible in the response and only shows up as a 17 year old in a squad.
+     */
+    public function testPlayerDrawIsGatedOnTheFirstTeamAgeFloor(): void
+    {
+        $captured = [];
+
+        // First position returns nothing so the foreign top-up also fires; the second
+        // returns a player so the run completes — StarterPackService throws
+        // InsufficientStarterPoolException when a draw yields no players at all, which is
+        // itself the right behaviour for an under-age pool, just not what this test is for.
+        $calls = 0;
+        $playerRepo = $this->createStub(PlayerRepository::class);
+        $playerRepo->method('findForWorldInitByPositionAndNationality')
+            ->willReturnCallback(function (...$args) use (&$captured, &$calls) {
+                $captured['native'][] = $args[6] ?? null;
+                return ++$calls === 1 ? [] : [$this->createStub(Player::class)];
+            });
+        $playerRepo->method('findForeignForWorldInitByPosition')
+            ->willReturnCallback(function (...$args) use (&$captured) {
+                $captured['foreign'][] = $args[6] ?? null;
+                return [];
+            });
+
+        $this->runInitialize($playerRepo, firstTeamAgeMin: 19);
+
+        $expected = (new \DateTimeImmutable('today'))->modify('-19 years');
+
+        $this->assertNotEmpty($captured['native'] ?? [], 'the native draw should have run');
+        $this->assertNotEmpty($captured['foreign'] ?? [], 'the foreign top-up should have run');
+
+        foreach (array_merge($captured['native'], $captured['foreign']) as $cutoff) {
+            $this->assertInstanceOf(\DateTimeImmutable::class, $cutoff, 'every draw must carry an age cutoff');
+            $this->assertSame(
+                $expected->format('Y-m-d'),
+                $cutoff->format('Y-m-d'),
+                'cutoff must be today minus the configured first-team floor',
+            );
+        }
+    }
+
+    /** The floor is config, not a constant — changing it must move the cutoff. */
+    public function testAgeFloorIsReadFromPoolConfig(): void
+    {
+        $captured = [];
+
+        $playerRepo = $this->createStub(PlayerRepository::class);
+        $playerRepo->method('findForWorldInitByPositionAndNationality')
+            ->willReturnCallback(function (...$args) use (&$captured) {
+                $captured[] = $args[6] ?? null;
+                return [$this->createStub(Player::class)];
+            });
+        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
+
+        $this->runInitialize($playerRepo, firstTeamAgeMin: 24);
+
+        $this->assertSame(
+            (new \DateTimeImmutable('today'))->modify('-24 years')->format('Y-m-d'),
+            $captured[0]->format('Y-m-d'),
+        );
+    }
+
+    /** Minimal wiring for a starter-pack run; the draws themselves return nothing. */
+    private function runInitialize(PlayerRepository $playerRepo, int $firstTeamAgeMin): void
+    {
+        $config = $this->createStub(StarterConfig::class);
+        $config->method('getStarterPlayerCount')->willReturn(2);
+        $config->method('getStarterCoachCount')->willReturn(0);
+        $config->method('getStarterManagerCount')->willReturn(0);
+        $config->method('getStarterChairmanCount')->willReturn(0);
+        $config->method('getStarterDirectorOfFootballCount')->willReturn(0);
+        $config->method('getStarterFacilityManagerCount')->willReturn(0);
+        $config->method('getStarterScoutCount')->willReturn(0);
+        $config->method('getLeagueAbilityRanges')->willReturn([]);
+
+        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
+        $starterConfigRepo->method('getConfig')->willReturn($config);
+
+        $club = $this->createStub(Club::class);
+        $club->method('getCountry')->willReturn('EN');
+        $club->method('getCurrentLeague')->willReturn(null);
+        $club->method('isStarterInitialized')->willReturn(false);
+
+        $poolConfig = $this->createStub(\App\Entity\PoolConfig::class);
+        $poolConfig->method('getPlayerFirstTeamAgeMin')->willReturn($firstTeamAgeMin);
+        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
+        $poolConfigRepo->method('getConfig')->willReturn($poolConfig);
+
+        $snapshotBuilder = $this->createStub(WorldPackSnapshotBuilder::class);
+        $snapshotBuilder->method('distributeByPosition')->willReturn(['GK' => 1, 'DEF' => 1]);
+
+        $staffRepo = $this->createStub(StaffRepository::class);
+        $staffRepo->method('findInPoolByRoleRandom')->willReturn([]);
+        $scoutRepo = $this->createStub(ScoutRepository::class);
+        $scoutRepo->method('findInPool')->willReturn([]);
+
+        (new StarterPackService(
+            $playerRepo,
+            $staffRepo,
+            $scoutRepo,
+            $starterConfigRepo,
+            $poolConfigRepo,
+            $snapshotBuilder,
+            $this->createStub(EntityManagerInterface::class),
+            $this->createStub(\Psr\Log\LoggerInterface::class),
+        ))->initialize($club);
+    }
+
     public function testInitializeDeletesConsumedPlayersAndStaff(): void
     {
         $config = $this->createStub(StarterConfig::class);

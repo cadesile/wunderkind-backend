@@ -418,7 +418,12 @@ filename alone.
   Staff/Scout personality matrix (Gaussian-based, `gaussianInt()`).
 - **`PlayerGenerationService`** — generates a `Player` blueprint
   (position, recruitment source, personality matrix feeding into
-  attribute derivation).
+  attribute derivation). `generate()` takes two optional overrides of
+  `PoolConfig`'s defaults, same shape: `$potentialRange` (world-pack tier
+  bands) and `$ageRange` (first-team squads, so an NPC side is never built
+  out of the pool's youth age band — see `PoolConfig::firstTeamAgeRange()`).
+  Both null by default, so existing callers are unaffected; an inverted range
+  clamps to its floor rather than reaching `random_int()` as min > max.
 - **`PlayerSnapshotSerializer`** — **THE canonical player shape for every
   device-facing response.** See "One player shape" below; start here before
   adding any endpoint that returns a player.
@@ -446,7 +451,14 @@ filename alone.
 - **`SocialPostingService`** — publishes to connected social platforms
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
 - **`StarterPackService`** — assembles/grants a new club's starter pack
-  (players/staff/scouts) via `ClubInitializationService`.
+  (players/staff/scouts) via `ClubInitializationService`. **Player draws are
+  gated on a `date_of_birth` cutoff** derived from
+  `PoolConfig::$playerFirstTeamAgeMin`: the pool deliberately spans youth ages
+  to supply `GET /api/players/youth`, so a draw filtered only on ability,
+  position and nationality handed new clubs 11-12 year olds. An under-age pool
+  now under-fills loudly (`starter_pack.initialize.position_underfilled`) and,
+  if nothing at all qualifies, raises `InsufficientStarterPoolException` —
+  a visible failure rather than a squad of children.
 - **`SessionRevocationService`** — signs a `User` out everywhere. Owns **both**
   halves, because either alone leaves them partially logged in: it bumps
   `User::$tokenVersion` (retiring every already-issued stateless access token —

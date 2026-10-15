@@ -453,6 +453,17 @@ Each is effectively a single global-config row.
 - **`PoolConfig`** — singleton tuning for recruitment-pool generation
   ranges (player/coach/scout/agent age/ability/height/weight ranges and
   pool targets per role). No relations.
+  **`playerFirstTeamAgeMin`** (default 19, `Version20261015213517`) is the youngest a
+  player may be in a STARTER PACK or a generated NPC squad, read via
+  `firstTeamAgeRange()`. It exists because `playerAgeMin/Max` alone could not serve the
+  whole game: the pool must span 12-14 for `GET /api/players/youth` to draw from, while
+  first teams need adults — `playerAgeMin/Max` say what the pool CONTAINS, this says who a
+  senior squad may take out of it. Before it, `StarterPackService` drew on
+  ability/position/nationality with **no age condition at all**, so a youth-aged pool
+  produced squads of 11-12 year olds, and NPC squads generated from the same global range
+  had the same problem. **19, not 18, is deliberate**: the backend sends only
+  `dateOfBirth` and the client derives age against the IN-GAME clock, which runs slightly
+  behind real time, so a backend-exact 18 can display as 17.
   **Youth ability ceilings** (`playerJuniorAbilityCeilingAge/Percent`,
   `playerYouthAbilityCeilingAge/Percent`, defaults under-16 → 10% and
   under-20 → 20%, added by `Version20261015072452`) cap how much of a

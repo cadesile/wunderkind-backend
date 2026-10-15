@@ -329,6 +329,68 @@ class PlayerGenerationServiceTest extends TestCase
         return new PlayerGenerationService($nameGen, $repo);
     }
 
+    /**
+     * The age override exists so a first-team squad is never generated out of the pool's
+     * youth age band — the NPC half of the starter-pack bug, where one global
+     * playerAgeMin/Max governed both what the pool contains and who a senior side is
+     * made of.
+     */
+    public function testAgeRangeOverrideBeatsThePoolDefault(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(12)->setPlayerAgeMax(13)
+        );
+
+        $today = new \DateTimeImmutable('today');
+        for ($i = 0; $i < 40; $i++) {
+            $player = $svc->generate(
+                PlayerPosition::MIDFIELDER,
+                RecruitmentSource::SCOUTING_NETWORK,
+                null,
+                null,
+                ['min' => 19, 'max' => 33],
+            );
+            $age = (int) $player->getDateOfBirth()->diff($today)->y;
+
+            $this->assertGreaterThanOrEqual(19, $age, "generated age {$age} is below the override floor");
+            $this->assertLessThanOrEqual(33, $age, "generated age {$age} is above the override ceiling");
+        }
+    }
+
+    /** Omitting the override must leave every existing caller on the pool range. */
+    public function testOmittingTheAgeOverrideKeepsThePoolRange(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(12)->setPlayerAgeMax(13)
+        );
+
+        $today = new \DateTimeImmutable('today');
+        for ($i = 0; $i < 20; $i++) {
+            $age = (int) $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::YOUTH_INTAKE)
+                ->getDateOfBirth()->diff($today)->y;
+
+            $this->assertGreaterThanOrEqual(12, $age);
+            $this->assertLessThanOrEqual(13, $age);
+        }
+    }
+
+    /** An inverted range must clamp rather than reach random_int() as min > max. */
+    public function testInvertedAgeOverrideDoesNotThrow(): void
+    {
+        $svc = $this->makeServiceWithConfig(new PoolConfig());
+
+        $player = $svc->generate(
+            PlayerPosition::MIDFIELDER,
+            RecruitmentSource::SCOUTING_NETWORK,
+            null,
+            null,
+            ['min' => 30, 'max' => 20],
+        );
+
+        $age = (int) $player->getDateOfBirth()->diff(new \DateTimeImmutable('today'))->y;
+        $this->assertSame(30, $age, 'an inverted range should collapse to its floor');
+    }
+
     public function testAllPersonalityTraitsAreWithin1To20(): void
     {
         $svc = $this->makeService();

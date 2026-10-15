@@ -113,7 +113,13 @@ class PlayerRepository extends ServiceEntityRepository
      * @param string[] $excludeIds UUID strings of players already assigned in this build pass.
      * @return Player[]
      */
-    public function findForWorldInitByPositionAndNationality(int $abilityMin, int $abilityMax, PlayerPosition $position, string $nationality, int $limit, array $excludeIds = []): array
+    /**
+     * $bornOnOrBefore is the first-team age gate: the pool deliberately spans youth ages
+     * (GET /api/players/youth draws 12-14 from it), so a squad draw that filtered only on
+     * ability and position handed new clubs 12 year olds. Expressed as a date_of_birth
+     * cutoff rather than a computed age because that is the only form an index can serve.
+     */
+    public function findForWorldInitByPositionAndNationality(int $abilityMin, int $abilityMax, PlayerPosition $position, string $nationality, int $limit, array $excludeIds = [], ?\DateTimeImmutable $bornOnOrBefore = null): array
     {
         if ($limit <= 0) return [];
 
@@ -128,6 +134,11 @@ class PlayerRepository extends ServiceEntityRepository
             ->setParameter('nationality', $nationality)
             ->setMaxResults($limit)
             ->orderBy('rand_order');
+
+        if ($bornOnOrBefore !== null) {
+            $qb->andWhere('p.dateOfBirth <= :bornOnOrBefore')
+               ->setParameter('bornOnOrBefore', $bornOnOrBefore);
+        }
 
         if (!empty($excludeIds)) {
             $qb->andWhere('p.id NOT IN (:excludeIds)')
@@ -144,7 +155,8 @@ class PlayerRepository extends ServiceEntityRepository
      * @param string[] $excludeIds UUID strings of players already assigned in this build pass.
      * @return Player[]
      */
-    public function findForeignForWorldInitByPosition(int $abilityMin, int $abilityMax, string $excludeNationality, PlayerPosition $position, int $limit, array $excludeIds = []): array
+    /** $bornOnOrBefore: same first-team age gate as findForWorldInitByPositionAndNationality(). */
+    public function findForeignForWorldInitByPosition(int $abilityMin, int $abilityMax, string $excludeNationality, PlayerPosition $position, int $limit, array $excludeIds = [], ?\DateTimeImmutable $bornOnOrBefore = null): array
     {
         if ($limit <= 0) return [];
 
@@ -159,6 +171,11 @@ class PlayerRepository extends ServiceEntityRepository
             ->setParameter('nationality', $excludeNationality)
             ->setMaxResults($limit)
             ->orderBy('rand_order');
+
+        if ($bornOnOrBefore !== null) {
+            $qb->andWhere('p.dateOfBirth <= :bornOnOrBefore')
+               ->setParameter('bornOnOrBefore', $bornOnOrBefore);
+        }
 
         if (!empty($excludeIds)) {
             $qb->andWhere('p.id NOT IN (:excludeIds)')

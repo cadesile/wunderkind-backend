@@ -32,10 +32,15 @@ class PlayerGenerationService
      *        higher tiers generate genuinely stronger players. Mean is the range's
      *        midpoint in that case rather than PoolConfig's own configured mean, since
      *        that mean may fall outside a narrower override range.
+     * @param array{min: int, max: int}|null $ageRange Overrides PoolConfig's playerAgeMin/Max
+     *        when given — NPC first-team squads pass PoolConfig::firstTeamAgeRange() so a
+     *        senior side is never generated out of the pool's youth age band. Same
+     *        optional-override shape as $potentialRange; null keeps the pool default, so
+     *        existing callers are unaffected.
      */
-    public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null, ?array $potentialRange = null): Player
+    public function generate(PlayerPosition $position, RecruitmentSource $source, ?string $nationality = null, ?array $potentialRange = null, ?array $ageRange = null): Player
     {
-        $blueprint = $this->buildAnchors($position, $source, $nationality, $potentialRange);
+        $blueprint = $this->buildAnchors($position, $source, $nationality, $potentialRange, $ageRange);
         $blueprint = $this->buildAbilityTarget($blueprint);
         $blueprint = $this->buildPersonality($blueprint);
         $blueprint = $this->buildAttributes($blueprint);
@@ -44,14 +49,19 @@ class PlayerGenerationService
 
     // ── Stub implementations (replaced in subsequent tasks) ──────────────────
 
-    /** @param array{min: int, max: int}|null $potentialRange */
-    private function buildAnchors(PlayerPosition $position, RecruitmentSource $source, ?string $nationality, ?array $potentialRange = null): PlayerBlueprint
+    /**
+     * @param array{min: int, max: int}|null $potentialRange
+     * @param array{min: int, max: int}|null $ageRange
+     */
+    private function buildAnchors(PlayerPosition $position, RecruitmentSource $source, ?string $nationality, ?array $potentialRange = null, ?array $ageRange = null): PlayerBlueprint
     {
         $nat = $nationality ?? $this->nameGenerator->getRandomNationality();
         ['firstName' => $firstName, 'lastName' => $lastName] = $this->nameGenerator->generatePlayerName($nat);
 
         $cfg           = $this->poolConfigRepo->getConfig();
-        $age           = random_int($cfg->getPlayerAgeMin(), $cfg->getPlayerAgeMax());
+        $ageMin        = $ageRange['min'] ?? $cfg->getPlayerAgeMin();
+        $ageMax        = max($ageMin, $ageRange['max'] ?? $cfg->getPlayerAgeMax());
+        $age           = random_int($ageMin, $ageMax);
         $potentialMin  = $potentialRange['min'] ?? $cfg->getPlayerPotentialMin();
         $potentialMax  = $potentialRange['max'] ?? $cfg->getPlayerPotentialMax();
         $potentialMean = $potentialRange !== null ? (int) round(($potentialMin + $potentialMax) / 2) : $cfg->getPlayerPotentialMean();
