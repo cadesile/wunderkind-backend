@@ -452,7 +452,17 @@
                                 <input type="number" name="playerAgeMax" value="{{ config.playerAgeMax }}"
                                        min="10" max="45" class="form-control" placeholder="Max">
                             </div>
-                            <div class="form-text">Default: 12–13</div>
+                            <div class="form-text">Default: 12–13 — what the POOL contains, youth included</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="playerFirstTeamAgeMin" class="form-label fw-semibold small">First-Team Age Floor</label>
+                            <input type="number" id="playerFirstTeamAgeMin" name="playerFirstTeamAgeMin"
+                                   value="{{ config.playerFirstTeamAgeMin }}" min="0" max="60" class="form-control">
+                            <div class="form-text">
+                                Youngest a player may be in a starter pack or NPC squad. Default: 19 — one year of
+                                margin over 18, because the device derives age against the in-game clock, which runs
+                                slightly behind real time, so a backend-exact 18 can display as 17.
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small">Potential Range (bell curve)</label>

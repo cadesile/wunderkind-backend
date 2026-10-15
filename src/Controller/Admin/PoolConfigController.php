@@ -50,6 +50,7 @@ class PoolConfigController extends AbstractController
         // Player generation
         $config->setPlayerAgeMin((int) $request->request->get('playerAgeMin', 12));
         $config->setPlayerAgeMax((int) $request->request->get('playerAgeMax', 13));
+        $config->setPlayerFirstTeamAgeMin((int) $request->request->get('playerFirstTeamAgeMin', 19));
         $config->setPlayerJuniorAbilityCeilingAge((int) $request->request->get('playerJuniorAbilityCeilingAge', 16));
         $config->setPlayerJuniorAbilityCeilingPercent((int) $request->request->get('playerJuniorAbilityCeilingPercent', 10));
         $config->setPlayerYouthAbilityCeilingAge((int) $request->request->get('playerYouthAbilityCeilingAge', 20));
