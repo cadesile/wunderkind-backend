@@ -30,6 +30,36 @@ class PoolConfig
     #[ORM\Column(type: 'integer', options: ['default' => 13])]
     private int $playerAgeMax = 13;
 
+    /**
+     * Age-banded ceilings on how much of a generated player's potential is already
+     * realised, as a percentage of potential — the "a 13-year-old should still have
+     * everything in front of him" rule.
+     *
+     * Two bands, each an "under this age" threshold plus the percentage ceiling that
+     * applies below it. The junior band is checked first, so with the defaults a 14
+     * year old is capped at 10% and an 18 year old at 20%, while a 20 year old is
+     * unaffected and keeps the ordinary age curve in
+     * PlayerGenerationService::buildAbilityTarget().
+     *
+     * A ceiling caps the ability TARGET, which in turn caps every attribute, and
+     * currentAbility is the mean of those attributes — so the realised ratio always
+     * lands at or below the ceiling, never above it.
+     *
+     * Editable from the Player Pool admin screen rather than hardcoded so the youth
+     * development curve can be retuned without a deploy.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 16])]
+    private int $playerJuniorAbilityCeilingAge = 16;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
+    private int $playerJuniorAbilityCeilingPercent = 10;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
+    private int $playerYouthAbilityCeilingAge = 20;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
+    private int $playerYouthAbilityCeilingPercent = 20;
+
     /** Lower bound of the bell-curve potential range. Default: 40 */
     #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $playerPotentialMin = 40;
@@ -228,6 +258,39 @@ class PoolConfig
 
     public function getPlayerAgeMax(): int { return $this->playerAgeMax; }
     public function setPlayerAgeMax(int $v): static { $this->playerAgeMax = $v; return $this; }
+
+    public function getPlayerJuniorAbilityCeilingAge(): int { return $this->playerJuniorAbilityCeilingAge; }
+    public function setPlayerJuniorAbilityCeilingAge(int $v): static { $this->playerJuniorAbilityCeilingAge = max(0, $v); return $this; }
+
+    public function getPlayerJuniorAbilityCeilingPercent(): int { return $this->playerJuniorAbilityCeilingPercent; }
+    public function setPlayerJuniorAbilityCeilingPercent(int $v): static { $this->playerJuniorAbilityCeilingPercent = max(1, min(100, $v)); return $this; }
+
+    public function getPlayerYouthAbilityCeilingAge(): int { return $this->playerYouthAbilityCeilingAge; }
+    public function setPlayerYouthAbilityCeilingAge(int $v): static { $this->playerYouthAbilityCeilingAge = max(0, $v); return $this; }
+
+    public function getPlayerYouthAbilityCeilingPercent(): int { return $this->playerYouthAbilityCeilingPercent; }
+    public function setPlayerYouthAbilityCeilingPercent(int $v): static { $this->playerYouthAbilityCeilingPercent = max(1, min(100, $v)); return $this; }
+
+    /**
+     * The ceiling that applies at $age as a 0..1 fraction, or null when the player is
+     * old enough that no youth ceiling applies.
+     *
+     * Junior is tested first so the bands can't invert into a gap: if someone sets the
+     * junior threshold above the youth one, juniors stay on the stricter junior ceiling
+     * rather than falling through to a looser band.
+     */
+    public function abilityCeilingFractionForAge(int $age): ?float
+    {
+        if ($age < $this->playerJuniorAbilityCeilingAge) {
+            return $this->playerJuniorAbilityCeilingPercent / 100;
+        }
+
+        if ($age < $this->playerYouthAbilityCeilingAge) {
+            return $this->playerYouthAbilityCeilingPercent / 100;
+        }
+
+        return null;
+    }
 
     public function getPlayerPotentialMin(): int { return $this->playerPotentialMin; }
     public function setPlayerPotentialMin(int $v): static { $this->playerPotentialMin = $v; return $this; }

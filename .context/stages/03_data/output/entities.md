@@ -453,6 +453,24 @@ Each is effectively a single global-config row.
 - **`PoolConfig`** — singleton tuning for recruitment-pool generation
   ranges (player/coach/scout/agent age/ability/height/weight ranges and
   pool targets per role). No relations.
+  **Youth ability ceilings** (`playerJuniorAbilityCeilingAge/Percent`,
+  `playerYouthAbilityCeilingAge/Percent`, defaults under-16 → 10% and
+  under-20 → 20%, added by `Version20261015072452`) cap how much of a
+  generated player's potential is already realised, read via
+  `abilityCeilingFractionForAge()` in
+  `PlayerGenerationService::buildAbilityTarget()`. The ceiling caps the
+  ability TARGET, which caps every attribute, and `currentAbility` is their
+  mean — so the realised ratio lands at or below the ceiling and can never
+  exceed it. Applied as a final `min()` over whichever age branch ran,
+  prodigy included, so a branch added later cannot bypass the rule; within a
+  band the draw spans half the ceiling to the ceiling so an intake is still a
+  spread of prospects. Measured at potential 90: a 13 year old now generates
+  at CA 3–8 (was ~35), a 17 year old at 7–16, a 22 year old unchanged at
+  35–62. **These shape future generation only** — existing pool rows keep the
+  ability they were built with; regenerate the pool to apply them
+  retroactively. Editable on the Player Pool admin screen
+  (`templates/admin/pool_player_config.html.twig`), and covered automatically
+  by `ConfigImportExportService`'s reflection-driven export.
 - **`StarterConfig`** — singleton for new-club starter setup (starting
   balance, starter counts of players/coaches/scouts/managers,
   `starterSponsorTier`, `starterClubTier`, `defaultFacilities`,

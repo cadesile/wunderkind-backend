@@ -90,6 +90,26 @@ class PlayerGenerationService
         );
     }
 
+    /**
+     * How much of a player's potential is already realised at generation time.
+     *
+     * abilityTarget x potential becomes the cap every attribute is drawn under
+     * (buildAttributes()), and currentAbility is the mean of those attributes — so this
+     * fraction is an upper bound on the realised ability/potential ratio, never a target
+     * the result can overshoot.
+     *
+     * Players below the configured youth ages are held to a ceiling from PoolConfig
+     * (abilityCeilingFractionForAge()), because an academy intake arriving at ~40% of
+     * potential has most of its development already spent: the point of signing a 13 year
+     * old is the decade of growth ahead of him, and that only exists if he starts low.
+     * Within a band the draw still spans half the ceiling to the ceiling, so an intake is
+     * a spread of prospects rather than a row of identical ones.
+     *
+     * The ceiling is applied as a final min() over whichever branch ran, prodigy included,
+     * so the configured rule cannot be bypassed by a branch added later. A prodigy young
+     * enough to be capped keeps the flag and simply lands at the top of his band — the
+     * standout of his age group rather than a first-team player in waiting.
+     */
     private function buildAbilityTarget(PlayerBlueprint $bp): PlayerBlueprint
     {
         $age       = $bp->age;
@@ -104,6 +124,11 @@ class PlayerGenerationService
             $abilityTarget = $this->randFloat(0.60, 0.85);
         } else {
             $abilityTarget = $this->randFloat(0.85, 1.00);
+        }
+
+        $ceiling = $this->poolConfigRepo->getConfig()->abilityCeilingFractionForAge($age);
+        if ($ceiling !== null) {
+            $abilityTarget = min($abilityTarget, $this->randFloat($ceiling / 2, $ceiling));
         }
 
         return new PlayerBlueprint(...array_replace((array) $bp, ['abilityTarget' => $abilityTarget, 'isProdigy' => $isProdigy]));

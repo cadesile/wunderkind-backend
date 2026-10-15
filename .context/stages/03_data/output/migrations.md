@@ -159,12 +159,17 @@ Most recent migrations (chronological):
     sequentially scanned the whole pool. Declared on the entity as
     `#[ORM\Index]`, not just in raw migration SQL, so `schema:create` builds
     it and `migrations:diff` doesn't propose dropping it.
-27. `Version20261014223020` (most recent) — telemetry HUD columns 3 & 4: adds
+27. `Version20261014223020` — telemetry HUD columns 3 & 4: adds
     `live_telemetry_snapshot.total_goals`/`total_matches`/`table_turnover`,
     drops the six dilution/covenant/fallout columns that fed the replaced stat
     boxes. Dropping is safe here specifically because the table is a single-row
     cache rebuilt in full by `app:telemetry:generate` every 15 minutes — no
     source data lives in it.
+28. `Version20261015072452` (most recent) — adds four youth ability-ceiling
+    columns to `pool_config` (under-16 → 10%, under-20 → 20% by default).
+    Additive with defaults, so the single existing config row picks them up
+    with no data migration; nothing is backfilled, since they shape future
+    generation only.
 
 ## Takeaway
 
