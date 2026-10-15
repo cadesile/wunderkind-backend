@@ -525,6 +525,52 @@
                             <div class="form-text">Default: under 20 → max 20%</div>
                         </div>
                     </div>
+
+                    <hr class="my-3">
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small mb-1">Youth Draw — Home Nationality Mix</label>
+                            <div class="form-text mb-2">
+                                Share of each tier in <code>GET /api/players/youth</code> that should carry the
+                                requested country's nationality. Lower tiers are overwhelmingly local lads; the elite
+                                band is where a club realistically looks abroad. These are <em>targets</em>: the
+                                endpoint draws from the pool, so a tier with too few home-nationality players falls
+                                back to whatever exists, and the response's
+                                <code>distribution.nationalityMatched</code> reports what was actually achieved.
+                                With the defaults a 200-player draw returns ~175 home / ~25 foreign (12.5%), but
+                                those concentrate at the top — the elite band alone is 55% foreign.
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Local (%)</label>
+                            <input type="number" name="youthHomeNationalityPercentLocal"
+                                   value="{{ config.youthHomeNationalityPercentLocal }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Default: 95</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Regional (%)</label>
+                            <input type="number" name="youthHomeNationalityPercentRegional"
+                                   value="{{ config.youthHomeNationalityPercentRegional }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Default: 85</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">National (%)</label>
+                            <input type="number" name="youthHomeNationalityPercentNational"
+                                   value="{{ config.youthHomeNationalityPercentNational }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Default: 70</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Elite (%)</label>
+                            <input type="number" name="youthHomeNationalityPercentElite"
+                                   value="{{ config.youthHomeNationalityPercentElite }}"
+                                   min="0" max="100" class="form-control">
+                            <div class="form-text">Default: 45</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

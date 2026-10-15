@@ -438,7 +438,9 @@ filename alone.
   ability banding collapses a youth pool into one tier (measured: `currentAbility`
   never exceeded 69 across a real 5,412-player pool, so nothing was ever `elite`).
   Age is a `date_of_birth` window (`dobWindow()`), never a second age formula, and
-  is served by `idx_player_youth_draw`. Non-consuming by design.
+  is served by `idx_player_youth_draw`. Non-consuming by design. The per-tier
+  home-nationality mix is read from `PoolConfig` rather than a const, so it is
+  admin-tunable; `TIER_WEIGHTS` stays a const deliberately.
 - **`SocialPostRenderer`** — renders `SocialPostTemplate` content with
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms

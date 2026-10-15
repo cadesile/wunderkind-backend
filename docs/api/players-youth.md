@@ -122,7 +122,12 @@ The draw is stratified — it asks for a target per (tier × nationality) cell, 
 from the rest of the age window when a cell is short, preferring the requested nationality.
 Targets are `local 55 / regional 28 / national 13 / elite 4` by weight, with the requested
 country making up `95 / 85 / 70 / 45 %` of each tier respectively — lower tiers are mostly
-local lads, the elite band is the most internationally mixed.
+local lads, the elite band is the most internationally mixed. Those four percentages are
+**admin-editable** (`PoolConfig`, Player Pool screen); the tier weights are not.
+
+With the defaults a 200-player draw is about **175 home / 25 foreign (12.5%)** — but the
+foreign players concentrate at the top (`local 5% / regional 15% / national 30% / elite
+55%`), so a draw read best-first looks far more international than the overall figure.
 
 **`returned` can be less than `requested`.** That means the pool does not hold enough youth
 matching the ask, not that the request failed — `poolSize` (how many 12–14 year olds exist

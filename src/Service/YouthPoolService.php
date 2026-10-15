@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Enum\Tier;
 use App\Repository\PlayerRepository;
+use App\Repository\PoolConfigRepository;
 
 /**
  * Draws a youth pool (ages 12–14) out of the existing Player pool for GET /api/players/youth.
@@ -53,19 +54,18 @@ class YouthPoolService
     ];
 
     /**
-     * Share of each tier that should carry the requested country's nationality. Lower tiers
-     * are overwhelmingly local lads; the elite band is where a club realistically looks
-     * abroad, so it is the most internationally mixed. Percentages, per tier.
+     * Share of each tier that should carry the requested country's nationality lives on
+     * PoolConfig (youthHomeNationalityPercents()), not here, so the intake mix can be
+     * retuned from the Player Pool admin screen without a deploy — same reasoning as the
+     * youth ability ceilings next to it.
+     *
+     * TIER_WEIGHTS above is still a constant: it is the shape of a football pyramid rather
+     * than a balance knob, and changing it changes what the four bands MEAN rather than how
+     * generous the draw is.
      */
-    private const HOME_NATIONALITY_PERCENT = [
-        'local'    => 95,
-        'regional' => 85,
-        'national' => 70,
-        'elite'    => 45,
-    ];
-
     public function __construct(
         private readonly PlayerRepository $players,
+        private readonly PoolConfigRepository $poolConfig,
     ) {}
 
     /**
@@ -85,6 +85,7 @@ class YouthPoolService
 
         $drawn      = [];
         $excludeIds = [];
+        $homePercent = $this->poolConfig->getConfig()->youthHomeNationalityPercents();
 
         foreach (self::TIER_WEIGHTS as $tierValue => $weight) {
             [$potMin, $potMax] = Tier::from($tierValue)->scoreRange();
@@ -94,7 +95,7 @@ class YouthPoolService
                 continue;
             }
 
-            $homeTarget = (int) round($tierTarget * self::HOME_NATIONALITY_PERCENT[$tierValue] / 100);
+            $homeTarget = (int) round($tierTarget * ($homePercent[$tierValue] ?? 100) / 100);
 
             foreach ([[$homeTarget, true], [$tierTarget - $homeTarget, false]] as [$cellTarget, $matchNationality]) {
                 if ($cellTarget <= 0) {

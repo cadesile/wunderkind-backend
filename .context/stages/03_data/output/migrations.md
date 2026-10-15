@@ -165,11 +165,15 @@ Most recent migrations (chronological):
     boxes. Dropping is safe here specifically because the table is a single-row
     cache rebuilt in full by `app:telemetry:generate` every 15 minutes — no
     source data lives in it.
-28. `Version20261015072452` (most recent) — adds four youth ability-ceiling
+28. `Version20261015072452` — adds four youth ability-ceiling
     columns to `pool_config` (under-16 → 10%, under-20 → 20% by default).
     Additive with defaults, so the single existing config row picks them up
     with no data migration; nothing is backfilled, since they shape future
     generation only.
+29. `Version20261015093949` (most recent) — moves the youth-draw
+    home-nationality mix from a `YouthPoolService` const onto `pool_config`
+    (four per-tier percentage columns, defaults 95/85/70/45 matching the
+    constant they replace, so behaviour is unchanged until edited).
 
 ## Takeaway
 

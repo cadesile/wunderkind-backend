@@ -60,6 +60,33 @@ class PoolConfig
     #[ORM\Column(type: 'integer', options: ['default' => 20])]
     private int $playerYouthAbilityCeilingPercent = 20;
 
+    /**
+     * Share of each youth-draw tier that should carry the requested country's
+     * nationality, as a percentage — the mix behind GET /api/players/youth.
+     *
+     * Lower tiers are overwhelmingly local lads; the elite band is where a club
+     * realistically looks abroad, so it is the most internationally mixed. With the
+     * defaults a 200-player draw returns ~175 home / ~25 foreign (12.5%), but those
+     * 25 concentrate at the top — the elite band alone is 55% foreign, which is why a
+     * draw scanned best-first looks far more international than the overall figure.
+     *
+     * These are TARGETS, not guarantees: the endpoint draws from the pool rather than
+     * generating, so a tier with too few home-nationality players in it falls back to
+     * whatever exists. The response's distribution.nationalityMatched reports what was
+     * actually achieved.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 95])]
+    private int $youthHomeNationalityPercentLocal = 95;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 85])]
+    private int $youthHomeNationalityPercentRegional = 85;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 70])]
+    private int $youthHomeNationalityPercentNational = 70;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 45])]
+    private int $youthHomeNationalityPercentElite = 45;
+
     /** Lower bound of the bell-curve potential range. Default: 40 */
     #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $playerPotentialMin = 40;
@@ -270,6 +297,36 @@ class PoolConfig
 
     public function getPlayerYouthAbilityCeilingPercent(): int { return $this->playerYouthAbilityCeilingPercent; }
     public function setPlayerYouthAbilityCeilingPercent(int $v): static { $this->playerYouthAbilityCeilingPercent = max(1, min(100, $v)); return $this; }
+
+    public function getYouthHomeNationalityPercentLocal(): int { return $this->youthHomeNationalityPercentLocal; }
+    public function setYouthHomeNationalityPercentLocal(int $v): static { $this->youthHomeNationalityPercentLocal = max(0, min(100, $v)); return $this; }
+
+    public function getYouthHomeNationalityPercentRegional(): int { return $this->youthHomeNationalityPercentRegional; }
+    public function setYouthHomeNationalityPercentRegional(int $v): static { $this->youthHomeNationalityPercentRegional = max(0, min(100, $v)); return $this; }
+
+    public function getYouthHomeNationalityPercentNational(): int { return $this->youthHomeNationalityPercentNational; }
+    public function setYouthHomeNationalityPercentNational(int $v): static { $this->youthHomeNationalityPercentNational = max(0, min(100, $v)); return $this; }
+
+    public function getYouthHomeNationalityPercentElite(): int { return $this->youthHomeNationalityPercentElite; }
+    public function setYouthHomeNationalityPercentElite(int $v): static { $this->youthHomeNationalityPercentElite = max(0, min(100, $v)); return $this; }
+
+    /**
+     * Home-nationality target per tier, keyed by Tier backed value, for YouthPoolService.
+     *
+     * Returned as a map rather than four getters so the service iterates tiers without
+     * a match() that would have to be extended every time a Tier case is added.
+     *
+     * @return array<string, int>
+     */
+    public function youthHomeNationalityPercents(): array
+    {
+        return [
+            'local'    => $this->youthHomeNationalityPercentLocal,
+            'regional' => $this->youthHomeNationalityPercentRegional,
+            'national' => $this->youthHomeNationalityPercentNational,
+            'elite'    => $this->youthHomeNationalityPercentElite,
+        ];
+    }
 
     /**
      * The ceiling that applies at $age as a 0..1 fraction, or null when the player is
