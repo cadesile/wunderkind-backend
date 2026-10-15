@@ -481,6 +481,50 @@
                             <div class="form-text">Probability a player has an agent on generation. Default: 40</div>
                         </div>
                     </div>
+
+                    <hr class="my-3">
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small mb-1">Youth Ability Ceilings</label>
+                            <div class="form-text mb-2">
+                                Caps how much of their potential young players have already realised when generated,
+                                so an academy intake still has its development ahead of it. A ceiling caps the ability
+                                target, which caps every attribute — the realised ratio lands at or below it, never above.
+                                The junior band is checked first. Players at or above the youth age are unaffected.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Junior band</label>
+                            <div class="input-group">
+                                <span class="input-group-text">under age</span>
+                                <input type="number" name="playerJuniorAbilityCeilingAge"
+                                       value="{{ config.playerJuniorAbilityCeilingAge }}"
+                                       min="0" max="45" class="form-control">
+                                <span class="input-group-text">max</span>
+                                <input type="number" name="playerJuniorAbilityCeilingPercent"
+                                       value="{{ config.playerJuniorAbilityCeilingPercent }}"
+                                       min="1" max="100" class="form-control">
+                                <span class="input-group-text">% of potential</span>
+                            </div>
+                            <div class="form-text">Default: under 16 → max 10%</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Youth band</label>
+                            <div class="input-group">
+                                <span class="input-group-text">under age</span>
+                                <input type="number" name="playerYouthAbilityCeilingAge"
+                                       value="{{ config.playerYouthAbilityCeilingAge }}"
+                                       min="0" max="45" class="form-control">
+                                <span class="input-group-text">max</span>
+                                <input type="number" name="playerYouthAbilityCeilingPercent"
+                                       value="{{ config.playerYouthAbilityCeilingPercent }}"
+                                       min="1" max="100" class="form-control">
+                                <span class="input-group-text">% of potential</span>
+                            </div>
+                            <div class="form-text">Default: under 20 → max 20%</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

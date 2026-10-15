@@ -218,6 +218,117 @@ class PlayerGenerationServiceTest extends TestCase
         }
     }
 
+    /**
+     * The point of the youth ceiling: a 13 year old arriving at ~40% of his potential has
+     * most of his development already spent. Capping the ability target caps every
+     * attribute, and currentAbility is their mean, so the realised ratio can only land at
+     * or below the configured ceiling.
+     */
+    public function testJuniorPlayersAreCappedAtTheConfiguredCeiling(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(12)->setPlayerAgeMax(15)
+                ->setPlayerPotentialMin(70)->setPlayerPotentialMax(95)->setPlayerPotentialMean(85)
+        );
+
+        for ($i = 0; $i < 60; $i++) {
+            $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::YOUTH_INTAKE);
+            $ratio  = $player->getCurrentAbility() / $player->getPotential();
+
+            $this->assertLessThanOrEqual(
+                0.10,
+                $ratio,
+                sprintf(
+                    'junior %d/%d = %.2f exceeds the 10%% ceiling',
+                    $player->getCurrentAbility(), $player->getPotential(), $ratio
+                )
+            );
+        }
+    }
+
+    public function testYouthPlayersAreCappedAtTheConfiguredCeiling(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(16)->setPlayerAgeMax(19)
+                ->setPlayerPotentialMin(70)->setPlayerPotentialMax(95)->setPlayerPotentialMean(85)
+        );
+
+        for ($i = 0; $i < 60; $i++) {
+            $player = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::YOUTH_INTAKE);
+            $ratio  = $player->getCurrentAbility() / $player->getPotential();
+
+            $this->assertLessThanOrEqual(0.20, $ratio, "youth ratio {$ratio} exceeds the 20% ceiling");
+        }
+    }
+
+    /**
+     * The ceiling must not flatten an intake into identical prospects — the draw still
+     * spans half the ceiling to the ceiling, so a scout has someone to prefer.
+     */
+    public function testCappedPlayersStillVaryInAbility(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(13)->setPlayerAgeMax(13)
+                ->setPlayerPotentialMin(90)->setPlayerPotentialMax(90)->setPlayerPotentialMean(90)
+        );
+
+        $abilities = [];
+        for ($i = 0; $i < 40; $i++) {
+            $abilities[$svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::YOUTH_INTAKE)->getCurrentAbility()] = true;
+        }
+
+        $this->assertGreaterThan(1, count($abilities), 'a capped intake should still produce a spread of abilities');
+    }
+
+    /** At and above the youth age the ordinary age curve applies — the cap must not leak upward. */
+    public function testPlayersAtTheYouthAgeThresholdAreNotCapped(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(26)->setPlayerAgeMax(30)
+                ->setPlayerPotentialMin(70)->setPlayerPotentialMax(90)->setPlayerPotentialMean(80)
+        );
+
+        $ratios = [];
+        for ($i = 0; $i < 40; $i++) {
+            $player   = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK);
+            $ratios[] = $player->getCurrentAbility() / $player->getPotential();
+        }
+
+        $this->assertGreaterThan(0.20, max($ratios), 'a senior player should be able to exceed the youth ceiling');
+    }
+
+    /** The bands are config, not constants — retuning them in the admin must change generation. */
+    public function testCeilingsAreDrivenByPoolConfig(): void
+    {
+        $svc = $this->makeServiceWithConfig(
+            (new PoolConfig())->setPlayerAgeMin(13)->setPlayerAgeMax(13)
+                ->setPlayerPotentialMin(90)->setPlayerPotentialMax(90)->setPlayerPotentialMean(90)
+                ->setPlayerJuniorAbilityCeilingAge(14)
+                ->setPlayerJuniorAbilityCeilingPercent(50)
+        );
+
+        $ratios = [];
+        for ($i = 0; $i < 40; $i++) {
+            $player   = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::YOUTH_INTAKE);
+            $ratios[] = $player->getCurrentAbility() / $player->getPotential();
+        }
+
+        $this->assertLessThanOrEqual(0.50, max($ratios));
+        $this->assertGreaterThan(0.10, max($ratios), 'a raised ceiling should allow more realised ability');
+    }
+
+    private function makeServiceWithConfig(PoolConfig $config): PlayerGenerationService
+    {
+        $nameGen = $this->createStub(NameGeneratorService::class);
+        $nameGen->method('getRandomNationality')->willReturn('English');
+        $nameGen->method('generatePlayerName')->willReturn(['firstName' => 'Test', 'lastName' => 'Player']);
+
+        $repo = $this->createStub(PoolConfigRepository::class);
+        $repo->method('getConfig')->willReturn($config);
+
+        return new PlayerGenerationService($nameGen, $repo);
+    }
+
     public function testAllPersonalityTraitsAreWithin1To20(): void
     {
         $svc = $this->makeService();
