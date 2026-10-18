@@ -13,7 +13,6 @@ use App\Entity\SeasonRecord;
 use App\Entity\SeasonSnapshot;
 use App\Enum\CompanySize;
 use App\Enum\LeaderboardCategory;
-use App\Enum\TrophyColour;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,8 +43,7 @@ class LeagueService
             $league->setPrizeMoney($defaults['prizeMoney']);
             $league->setLeaguePositionPot($defaults['leaguePositionPot']);
             $league->setSponsorCount($defaults['sponsorCount']);
-            $league->setTrophyImage($defaults['trophyImage']);
-            $league->setTrophyColour($defaults['trophyColour'] !== null ? TrophyColour::from($defaults['trophyColour']) : null);
+            $league->setTrophy($defaults['trophy']);
             $this->em->persist($league);
             $created[] = $league;
         }

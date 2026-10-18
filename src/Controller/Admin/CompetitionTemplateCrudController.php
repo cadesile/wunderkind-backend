@@ -4,7 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Competition\CompetitionTemplate;
 use App\Enum\Competition\CompetitionDuration;
-use App\Enum\TrophyColour;
+use App\Form\Type\TrophyConfigType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
@@ -12,6 +12,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
@@ -33,7 +34,11 @@ class CompetitionTemplateCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['createdAt' => 'DESC']);
+        return $crud
+            ->setDefaultSort(['createdAt' => 'DESC'])
+            // Custom widget for the compound `trophy` json field — see the
+            // EasyAdmin-form-theme note in CLAUDE.md's Key Gotchas.
+            ->addFormTheme('admin/form/trophy_config_theme.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
@@ -71,25 +76,14 @@ class CompetitionTemplateCrudController extends AbstractCrudController
         yield IntegerField::new('entryFeePerRound')->setHelp('Pence, e.g. 500 = £5.00. Defined for the schema — not charged in Phase 1.');
         yield IntegerField::new('victorPrize')->setHelp('Pence, e.g. 500000 = £5,000. Synthesized into a reward delivered to the winner — no separate Reward Template needed for this.');
 
-        yield ChoiceField::new('trophyImage', 'Trophy Design')
-            ->setChoices(array_combine(
-                array_map(fn ($n) => "Trophy $n", range(1, 15)),
-                array_map(fn ($n) => "trophy-$n", range(1, 15))
-            ))
+        yield Field::new('trophy', 'Trophy')
+            ->setFormType(TrophyConfigType::class)
             ->setRequired(false)
             ->hideOnIndex()
-            ->setHelp('Select the trophy silhouette. A live preview appears below once you choose.');
-
-        yield ChoiceField::new('trophyColour', 'Trophy Colour')
-            ->setFormType(EnumType::class)
-            ->setFormTypeOptions([
-                'class'       => TrophyColour::class,
-                'required'    => false,
-                'placeholder' => '-- Not set --',
-            ])
-            ->setRequired(false)
-            ->hideOnIndex()
-            ->setHelp('Gold, Silver, or Gold & Silver — applied by the frontend when rendering the trophy.');
+            ->setHelp(
+                'The trophy sprite\'s own config — design, finish and ribbons — stored verbatim and '
+                . 'drawn by the same component the app uses. Switch "Awards a trophy" off to award none.'
+            );
 
         yield CodeEditorField::new('roundEngineConfigJson', 'Round Engine Config')
             ->setLanguage('js')

@@ -17,6 +17,7 @@ use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
 use App\Service\NarrativeImportExportService;
 use App\Service\TranslationCatalogueImportExportService;
+use App\Service\TrophyConfigFactory;
 use App\Controller\Admin\BetaRequestCrudController;
 use App\Controller\Admin\DeletionRequestCrudController;
 use App\Controller\Admin\LeagueCrudController;
@@ -24,6 +25,8 @@ use App\Controller\Admin\SocialPostTemplateCrudController;
 use App\Controller\Admin\LanguageCrudController;
 use App\Controller\Admin\TranslationCrudController;
 use App\Controller\Admin\TranslationKeyCrudController;
+use App\Enum\Appearance\TrophyFinish;
+use App\Enum\Appearance\TrophyStyle;
 use App\Enum\Country;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
@@ -1023,6 +1026,21 @@ class DashboardController extends AbstractDashboardController
             'countryLabels'    => Country::labelMap(),
             'allLeagues'       => $leagues,
             'tierDefaults'     => $this->gameConfigRepository->getConfig()->getLeagueTierDefaults(),
+            // Trophy pickers (per-tier defaults table + per-league quick-edit modal)
+            // build their option lists from the enums, which mirror the trophy
+            // sprite's own TROPHY_STYLES/TROPHY_FINISHES/KIT_COLORS — never from a
+            // hand-written list in the template. Same rule as the country/nationality
+            // lists (see CLAUDE.md's World Generation note).
+            'trophyStyles'     => array_map(
+                static fn (TrophyStyle $s): array => ['value' => $s->value, 'label' => $s->label()],
+                TrophyStyle::cases(),
+            ),
+            'trophyFinishes'   => array_map(
+                static fn (TrophyFinish $f): array => ['value' => $f->value, 'label' => $f->label()],
+                TrophyFinish::cases(),
+            ),
+            'trophyRibbonColours' => TrophyConfigFactory::ribbonColours(),
+            'trophyDefaults'   => TrophyConfigFactory::defaults(),
         ]);
     }
 

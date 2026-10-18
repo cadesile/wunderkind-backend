@@ -4,7 +4,6 @@ namespace App\Entity\Competition;
 
 use App\Entity\Concern\EditableJsonColumnTrait;
 use App\Enum\Competition\CompetitionDuration;
-use App\Enum\TrophyColour;
 use App\Repository\Competition\CompetitionTemplateRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -64,12 +63,24 @@ class CompetitionTemplate
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $victorPrize = 0;
 
-    /** Slug of the trophy silhouette, e.g. "trophy-3". Serves /images/trophies/{slug}.svg */
-    #[ORM\Column(length: 20, nullable: true)]
-    private ?string $trophyImage = null;
-
-    #[ORM\Column(type: 'string', enumType: TrophyColour::class, nullable: true)]
-    private ?TrophyColour $trophyColour = null;
+    /**
+     * The trophy this competition awards, as the 16-bit trophy sprite's own
+     * `TrophyConfig`: {style, finish, ribbons, ribbonPrimary, ribbonSecondary}.
+     * Stored and served verbatim — a schema-agnostic passthrough, exactly like
+     * Player::$appearance and NpcClub::$identity — and rendered by
+     * composeTrophySvg() (public/assets/trophy-compositor.js) on the admin and
+     * landing side, by TrophySprite in the app.
+     *
+     * Replaces the retired `trophyImage` slug + `trophyColour` enum pair, which
+     * named one of 15 static black SVGs in public/images/trophies/ recoloured by
+     * a CSS filter chain. Nullable: a cup may simply have no trophy configured.
+     * Read live off the template by the API rather than copied onto
+     * ActiveCompetition, since the trophy is a property of the blueprint.
+     *
+     * @var array{style:string,finish:string,ribbons:bool,ribbonPrimary:string,ribbonSecondary:string}|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $trophy = null;
 
     /** @var array<string, string>|null Keyed by round label (QF/SF/FINAL/...) -> MatchEngineIdentifier value. */
     #[ORM\Column(type: 'json', nullable: true)]
@@ -182,11 +193,10 @@ class CompetitionTemplate
     public function getVictorPrize(): int { return $this->victorPrize; }
     public function setVictorPrize(int $victorPrize): static { $this->victorPrize = $victorPrize; return $this; }
 
-    public function getTrophyImage(): ?string { return $this->trophyImage; }
-    public function setTrophyImage(?string $v): static { $this->trophyImage = $v; return $this; }
-
-    public function getTrophyColour(): ?TrophyColour { return $this->trophyColour; }
-    public function setTrophyColour(?TrophyColour $v): static { $this->trophyColour = $v; return $this; }
+    /** @return array{style:string,finish:string,ribbons:bool,ribbonPrimary:string,ribbonSecondary:string}|null */
+    public function getTrophy(): ?array { return $this->trophy; }
+    /** @param array{style:string,finish:string,ribbons:bool,ribbonPrimary:string,ribbonSecondary:string}|null $v */
+    public function setTrophy(?array $v): static { $this->trophy = $v; return $this; }
 
     public function getRoundEngineConfig(): ?array { return $this->roundEngineConfig; }
     public function setRoundEngineConfig(?array $roundEngineConfig): static { $this->roundEngineConfig = $roundEngineConfig; return $this; }

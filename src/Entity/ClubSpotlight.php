@@ -118,16 +118,19 @@ class ClubSpotlight
 
     /**
      * Titles this club has won, one entry per league tier, richest tier first:
-     * {tier, titles, trophyImage, trophyColour, leagueName}.
+     * {tier, titles, trophy, leagueName}, where `trophy` is the trophy sprite's
+     * own config (see League::$trophy).
      *
-     * The trophy artwork is NOT a property of the title — it is read off the
-     * League row for (the club's country, that tier), so a club's silverware
-     * always renders with whatever trophy an admin has configured for that
-     * division today. trophyImage/trophyColour are both nullable on League, so an
-     * entry can legitimately carry a title count and no artwork; the template
-     * falls back to a generic trophy rather than dropping the title.
+     * The trophy is NOT a property of the title — it is read off the League row
+     * for (the club's country, that tier), so a club's silverware always renders
+     * with whatever trophy an admin has configured for that division today.
+     * League::$trophy is nullable, so an entry can legitimately carry a title
+     * count and no trophy; the template renders a count-only chip rather than
+     * dropping the title. Rows generated before the trophy component was replaced
+     * still carry the retired trophyImage/trophyColour keys instead — the template
+     * reads `trophy` defensively and such rows age out within a spotlight cycle.
      *
-     * @var array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}>
+     * @var array<int, array{tier: int, titles: int, trophy: ?array, leagueName: ?string}>
      */
     #[ORM\Column(type: 'json')]
     private array $trophies = [];
@@ -180,7 +183,7 @@ class ClubSpotlight
     public function getTopPerformerGoals(): int { return $this->topPerformerGoals; }
     public function getTopPerformerAssists(): int { return $this->topPerformerAssists; }
     public function getTopPerformerAppearanceConfig(): ?array { return $this->topPerformerAppearanceConfig; }
-    /** @return array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}> */
+    /** @return array<int, array{tier: int, titles: int, trophy: ?array, leagueName: ?string}> */
     public function getTrophies(): array { return $this->trophies; }
     public function getEstablishedAt(): ?\DateTimeImmutable { return $this->establishedAt; }
     /** Total titles across every tier — the headline figure, so the template doesn't sum in Twig. */
@@ -214,7 +217,7 @@ class ClubSpotlight
     /**
      * @param array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}> $recentFixtures
      * @param array<int, array{playerName: string, feePence: int, direction: string, counterpartyClub: string}> $recentTransfers
-     * @param array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}> $trophies
+     * @param array<int, array{tier: int, titles: int, trophy: ?array, leagueName: ?string}> $trophies
      */
     public function update(
         string $clubName,

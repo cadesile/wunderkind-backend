@@ -174,9 +174,24 @@ Shared conventions worth knowing before adding a section:
   (`.spotlight-*`) gold-ringed panel, header/footer bands and Press Start 2P
   micro-labels while keeping its own prefix, so restyling one never silently
   restyles the other.
-- **Trophy SVGs are black silhouettes recoloured by a CSS filter chain.** The
-  chains live in two places — `templates/admin/leagues_content.html.twig` and
-  `templates/landing/sections/_spotlight.html.twig` — and must stay in step.
+- **Trophies are drawn by a sprite compositor, not recoloured artwork.** They
+  used to be black silhouette SVGs (`/images/trophies/trophy-N.svg`) recoloured
+  by a CSS filter chain duplicated across
+  `templates/admin/leagues_content.html.twig` and
+  `templates/landing/sections/_spotlight.html.twig`, with a comment on each
+  telling readers to keep the two in step. Both are gone: every surface now
+  calls `composeTrophySvg()` from `public/assets/trophy-compositor.js` (a
+  GENERATED bundle — see the compositor note below), so there is one renderer
+  and nothing to keep in step. Three surfaces use it: the per-tier defaults
+  table and league cards on the admin leagues screen, the `TrophyConfigType`
+  field widget, and the landing page's honours board.
+- **Three generated sprite compositors, one build rule.**
+  `public/assets/{avatar,kit,trophy}-compositor.js` are each built from a
+  shared `assets/Components/*` TypeScript sprite by
+  `scripts/build-{avatar,kit,trophy}-compositor.sh` (esbuild type-stripping
+  only), gated on that sprite's own pixel-hash parity fixture. **Never hand-edit
+  one**; change the sprite and rebuild. `stadium-compositor.js` predates the
+  rule and is still a hand port.
 
 ## Known issue — not a design-system finding, flagged for visibility
 

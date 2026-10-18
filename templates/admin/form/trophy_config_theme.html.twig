@@ -1,0 +1,13 @@
+{# Form theme for App\Form\Type\TrophyConfigType.
+   TrophyConfigType's block prefix is "trophy_config" (StringUtil::fqcnToBlockPrefix
+   strips the "Type" suffix and snake_cases "TrophyConfig" -> "trophy_config"), so
+   Symfony/EasyAdmin look for a block named "trophy_config_widget" when rendering
+   this compound field's widget. Registered per-controller via:
+     $crud->addFormTheme('admin/form/trophy_config_theme.html.twig')
+   This block fully replaces the default compound-widget rendering (which would
+   just loop form_rows over the children) with the style-grid/swatch picker +
+   live SVG preview markup — see templates/admin/field/trophy_config.html.twig,
+   the sibling pattern to admin/form/kit_identity_theme.html.twig. #}
+{% block trophy_config_widget %}
+    {{ include('admin/field/trophy_config.html.twig') }}
+{% endblock trophy_config_widget %}

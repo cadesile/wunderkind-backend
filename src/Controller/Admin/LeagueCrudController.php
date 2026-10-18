@@ -5,7 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\League;
 use App\Enum\CompanySize;
 use App\Enum\ReputationTier;
-use App\Enum\TrophyColour;
+use App\Form\Type\TrophyConfigType;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
@@ -16,6 +16,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\MoneyType;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
@@ -32,7 +33,11 @@ class LeagueCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['country' => 'ASC', 'tier' => 'ASC']);
+        return $crud
+            ->setDefaultSort(['country' => 'ASC', 'tier' => 'ASC'])
+            // Custom widget for the compound `trophy` json field — see the
+            // EasyAdmin-form-theme note in CLAUDE.md's Key Gotchas.
+            ->addFormTheme('admin/form/trophy_config_theme.html.twig');
     }
 
     public function configureFilters(Filters $filters): Filters
@@ -115,25 +120,14 @@ class LeagueCrudController extends AbstractCrudController
             ->hideOnIndex()
             ->setHelp('Total pot distributed by finishing position. 1st gets most; each lower position gets leaguePositionDecreasePercent% less.');
 
-        yield ChoiceField::new('trophyImage', 'Trophy Design')
-            ->setChoices(array_combine(
-                array_map(fn ($n) => "Trophy $n", range(1, 15)),
-                array_map(fn ($n) => "trophy-$n", range(1, 15))
-            ))
+        yield Field::new('trophy', 'Trophy')
+            ->setFormType(TrophyConfigType::class)
             ->setRequired(false)
             ->hideOnIndex()
-            ->setHelp('Select the trophy silhouette. A live preview appears below once you choose.');
-
-        yield ChoiceField::new('trophyColour', 'Trophy Colour')
-            ->setFormType(EnumType::class)
-            ->setFormTypeOptions([
-                'class'       => TrophyColour::class,
-                'required'    => false,
-                'placeholder' => '-- Not set --',
-            ])
-            ->setRequired(false)
-            ->hideOnIndex()
-            ->setHelp('Gold, Silver, or Gold & Silver — applied by the frontend when rendering the trophy.');
+            ->setHelp(
+                'The trophy sprite\'s own config — design, finish and ribbons — stored verbatim and '
+                . 'drawn by the same component the app uses. Switch "Awards a trophy" off to award none.'
+            );
 
         yield IntegerField::new('sponsorCount', 'Sponsor Count')
             ->setHelp('Number of sponsors to source for this league during world cache generation. Sponsors are filtered by league reputation tier.')

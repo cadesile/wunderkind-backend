@@ -183,15 +183,15 @@ class ClubSpotlightService
      * hall_of_fame leaderboard uses, via the same repository method, so the two can
      * never disagree about what counts as a trophy.
      *
-     * The trophy artwork is looked up per tier against the club's OWN country, not
-     * stored on the title: League::$trophyImage/$trophyColour are admin-editable
-     * per (country, tier), so a club's honours board always reflects the trophy
-     * that division awards today. A club with no country set, or a tier with no
-     * League row for that country, still lists the title — with null artwork, which
-     * the template renders as a generic trophy. Dropping it would under-report real
-     * silverware because of a missing admin setting.
+     * The trophy is looked up per tier against the club's OWN country, not stored on
+     * the title: League::$trophy is admin-editable per (country, tier), so a club's
+     * honours board always reflects the trophy that division awards today. A club
+     * with no country set, or a tier with no League row for that country, still
+     * lists the title — with a null config, which the template renders as a
+     * count-only chip. Dropping it would under-report real silverware because of a
+     * missing admin setting.
      *
-     * @return array<int, array{tier: int, titles: int, trophyImage: ?string, trophyColour: ?string, leagueName: ?string}>
+     * @return array<int, array{tier: int, titles: int, trophy: ?array, leagueName: ?string}>
      */
     private function buildTrophies(Club $club): array
     {
@@ -207,8 +207,7 @@ class ClubSpotlightService
             $trophies[] = [
                 'tier'         => $row['tier'],
                 'titles'       => $row['titles'],
-                'trophyImage'  => $league?->getTrophyImage(),
-                'trophyColour' => $league?->getTrophyColour()?->value,
+                'trophy'       => $league?->getTrophy(),
                 'leagueName'   => $league?->getName(),
             ];
         }

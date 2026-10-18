@@ -5,6 +5,47 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-18), on top of commit 8eae79a** (this pass's own changes
+  are uncommitted on top of it). **Stages touched:** 03_data, 04_interfaces,
+  05_ui, 06_documentation. Replaced the trophy SVG system with a sprite
+  component matching the avatar and kit/badge ones, per explicit user request.
+  `League` and `CompetitionTemplate` each dropped `trophy_image` (a
+  `trophy-1`..`trophy-15` slug naming a static black silhouette in
+  `public/images/trophies/`) and `trophy_colour` (`App\Enum\TrophyColour`,
+  applied as a CSS filter chain duplicated across the admin leagues screen and
+  the landing honours board) for a single nullable `trophy` JSON column holding
+  the sprite's own `TrophyConfig` — migration `Version20261018202041`, which
+  **converts** rather than resets (finish maps 1:1 bar `gold_silver` →
+  `twotone`; the 15 slugs spread across the 10 new styles in order, there being
+  no artwork correspondence). New `TrophyStyle`/`TrophyFinish` enums in
+  `src/Enum/Appearance/` (ribbon colours reuse `KitColor`, the sprite's ribbon
+  palette being the shared kit palette), new all-static `TrophyConfigFactory`
+  (defaults/validate/legacy mapping — the single validator in front of admin
+  posts, the world import and the backfill), new `TrophyConfigType` admin
+  widget + form theme + `trophy-config-widget.js`, and a new GENERATED
+  `public/assets/trophy-compositor.js` built from the shared
+  `assets/Components/trophy16/trophy16.ts` by
+  `scripts/build-trophy-compositor.sh` — parity-gated on that sprite's own
+  pixel-hash fixture (24/24 cases matching), the third sibling of the avatar
+  and kit build scripts. `GameConfig::leagueTierDefaults` rows now normalise
+  through `normaliseTierRow()` on read and write so stored JSON and old config
+  export files keep their trophies. Updated
+  `03_data/output/{entities,migrations}.md`,
+  `04_interfaces/output/services.md`, `05_ui/output/design-system.md` (the
+  "keep two filter chains in step" rule is gone, replaced by a note on the
+  three generated compositors), `06_documentation/output/index.md`. New client
+  contract doc `docs/api/trophy-config.md`. Full suite green (1278 tests) bar
+  one pre-existing unrelated failure
+  (`AdminStatsControllerTest::testLeaderboardsCoverEveryCategoryCappedAtTen`,
+  drift from the two preceding leaderboard-kit/flag commits — confirmed failing
+  identically on a clean `8eae79a` checkout). New coverage:
+  `TrophyConfigFactoryTest` (32 tests, incl. 4 that read the generated bundle's
+  own exported vocabulary via node to catch PHP↔sprite drift, skipping where
+  node is absent as it is inside Lando) plus two world-pack trophy assertions
+  in `WorldInitializationTierPackAgentTest`.
+
+---
+
 - **Commit:** 570d2d7 (as of writing — this pass's own changes are
   uncommitted on top of it, pending the user's usual explicit commit
   request). **Stages touched:** 03_data, 04_interfaces (two linked changes

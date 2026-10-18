@@ -67,3 +67,9 @@ claiming canonical status)
   shape as the bundled locale files), plus the `?lang=` localize-in-place
   param on `/api/events/templates`, `/api/excursions`, `/api/game-config`
   for narrative content — see "Languages & Translations" in CLAUDE.md
+- `docs/api/trophy-config.md` (2026-10-18) — the `trophy` sprite config that
+  **replaced** `trophyImage`/`trophyColour` on league and competition payloads:
+  shape, the 12-colour ribbon palette, the legacy slug/colour mapping (so a
+  client reading cached payloads knows the correspondence), which endpoints
+  carry it, and why `null` must not be defaulted into a visible cup — see
+  "Trophy Identity" in CLAUDE.md

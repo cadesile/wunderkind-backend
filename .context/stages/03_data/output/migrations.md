@@ -174,11 +174,31 @@ Most recent migrations (chronological):
     home-nationality mix from a `YouthPoolService` const onto `pool_config`
     (four per-tier percentage columns, defaults 95/85/70/45 matching the
     constant they replace, so behaviour is unchanged until edited).
-30. `Version20261015213517` (most recent) — adds
+30. `Version20261015213517` — adds
     `pool_config.player_first_team_age_min` (default 19), the age floor for
     starter packs and generated NPC squads. Fixes squads of 11-12 year olds:
     one global age range governed both pool contents and squad eligibility,
     and the starter draw had no age condition at all.
+31. `Version20261018202041` (most recent) — replaces the trophy asset
+    slug + colour enum with the trophy sprite's config. On both `league` and
+    `competition_template`: adds `trophy JSON DEFAULT NULL`, backfills it from
+    the old columns, then drops `trophy_image` and `trophy_colour`. The only
+    migration so far to **convert** rather than add — worth reading its
+    docblock, which records the mapping: `gold`/`silver` carry over and
+    `gold_silver` becomes the sprite's `twotone` (so no admin loses a colour
+    option), while the 15 slugs spread across the 10 styles in order, there
+    being no artwork correspondence between hand-drawn silhouettes and
+    procedurally drawn shapes. Only `trophy-1`..`trophy-8` were ever in use
+    (one per league tier), so each tier landed on a distinct style. A null or
+    unparseable slug stays null — "no design set" meant "no trophy", a state
+    the honours board and the tier-defaults table both rely on. `down()`
+    reverses it as faithfully as the shapes allow (a style names only the
+    first slug that produced it; ribbon colours have no legacy counterpart).
+    `game_config.league_tier_defaults` holds the same pair inside its stored
+    JSON and is deliberately **not** touched: `GameConfig::normaliseTierRow()`
+    folds legacy rows on read and write, which also covers config export files
+    taken before the change. See `entities.md`, CLAUDE.md's "Trophy Identity"
+    section and `docs/api/trophy-config.md`.
 
 ## Takeaway
 
