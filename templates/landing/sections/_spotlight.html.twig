@@ -81,23 +81,17 @@
             </div>
 
             {#
-               Honours board. The trophy silhouettes are black SVGs recoloured with a
-               CSS filter chain — the exact chains are lifted verbatim from the admin
-               leagues screen (templates/admin/leagues_content.html.twig), the one
-               other place these assets are rendered; keep the two in step.
-               brightness(0) normalises to black, invert(1) flips to white, then
-               sepia+saturate+hue-rotate applies the target colour.
+               Honours board. Each trophy is drawn client-side by composeTrophySvg()
+               (trophy-compositor.js) from the chip's own data-trophy attribute — the
+               same renderer the admin leagues screen and the trophy field widget use,
+               so there is no longer a CSS filter chain to keep in step across two
+               templates. See landing.js's Club Spotlight block for the wiring.
 
-               trophyImage is nullable on League (an admin may simply not have set one),
-               so a tier can carry real titles and no artwork — those still appear, as
-               a count-only chip. Dropping them would under-report real silverware.
+               League::$trophy is nullable (an admin may simply not have set one), so a
+               tier can carry real titles and no trophy — those still appear, as a
+               count-only chip. Dropping them would under-report real silverware.
             #}
             {% if spotlight.trophies is not empty %}
-                {% set TROPHY_FILTERS = {
-                    'silver':      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
-                    'gold':        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
-                    'gold_silver': 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)'
-                } %}
                 <div class="spotlight-trophies">
                     <div class="spotlight-detail-title">
                         Trophies Won
@@ -107,12 +101,9 @@
                         {% for trophy in spotlight.trophies %}
                             <li class="spotlight-trophy"
                                 title="{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }} — {{ trophy.titles }} {{ trophy.titles == 1 ? 'title' : 'titles' }}">
-                                {% if trophy.trophyImage %}
-                                    <img class="spotlight-trophy-img"
-                                         src="/images/trophies/{{ trophy.trophyImage }}.svg"
-                                         alt=""
-                                         loading="lazy"
-                                         style="filter: {{ TROPHY_FILTERS[trophy.trophyColour] ?? 'none' }};">
+                                {% if trophy.trophy ?? null %}
+                                    <span class="spotlight-trophy-img"
+                                          data-spotlight-trophy="{{ trophy.trophy|json_encode|e('html_attr') }}"></span>
                                 {% endif %}
                                 <span class="spotlight-trophy-meta">
                                     <span class="spotlight-trophy-count">&times;{{ trophy.titles }}</span>

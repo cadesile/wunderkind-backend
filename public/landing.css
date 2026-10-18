@@ -500,12 +500,14 @@
             background: var(--panel);
             border: 1px solid var(--border);
         }
+        /* Holds the inline <svg> composeTrophySvg() injects (trophy-compositor.js),
+           which carries its own width/height from the scale it was drawn at —
+           so this only has to stop the flex row squeezing it. */
         .spotlight-trophy-img {
-            width: 22px;
-            height: 30px;
-            object-fit: contain;
             flex: 0 0 auto;
+            line-height: 0;
         }
+        .spotlight-trophy-img svg { display: block; }
         .spotlight-trophy-meta { display: flex; flex-direction: column; }
         .spotlight-trophy-count {
             font-family: 'VT323', monospace;

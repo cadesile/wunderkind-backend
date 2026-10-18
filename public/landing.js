@@ -114,6 +114,22 @@ function clubCountryChipHtml(country) {
         stadiumSlot.innerHTML = composeStadiumSvg(parsedStadium || {}, { rotation: 0, time: 'day' }, 2);
     }
 
+    // Honours board — one sprite per trophy chip, each from its own data-trophy.
+    // Chips whose tier has no trophy configured carry no attribute at all and
+    // stay count-only; a row written before the trophy component was replaced
+    // carries the retired trophyImage/trophyColour keys, which parse to no
+    // `style` and are skipped rather than drawn wrong (such rows age out within
+    // one spotlight cycle — see ClubSpotlight::$trophies).
+    if (typeof composeTrophySvg === 'function') {
+        card.querySelectorAll('[data-spotlight-trophy]').forEach(function (slot) {
+            var parsed = null;
+            try { parsed = JSON.parse(slot.getAttribute('data-spotlight-trophy')); } catch (e) { parsed = null; }
+            if (parsed && parsed.style) {
+                slot.innerHTML = composeTrophySvg(parsed, 1, { background: 'none' });
+            }
+        });
+    }
+
     // Only present when the top performer has ever reported a sync v2
     // appearanceConfig — most haven't yet (see _spotlight.html.twig).
     var performerSlot = card.querySelector('.spotlight-performer-slot');

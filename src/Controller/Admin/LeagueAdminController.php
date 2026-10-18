@@ -3,7 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\League;
-use App\Enum\TrophyColour;
+use App\Service\TrophyConfigFactory;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -63,18 +63,13 @@ class LeagueAdminController extends AbstractController
             ($leaguePositionPot !== null && $leaguePositionPot !== '') ? ((int) $leaguePositionPot) * 100 : null
         );
 
-        $trophyImage = $request->request->get('trophyImage');
-        $validImages = array_map(fn ($n) => "trophy-$n", range(1, 15));
-        $league->setTrophyImage(
-            ($trophyImage !== null && $trophyImage !== '' && in_array($trophyImage, $validImages, true))
-                ? $trophyImage
-                : null
-        );
-
-        $trophyColour = $request->request->get('trophyColour');
-        $league->setTrophyColour(
-            $trophyColour !== null && $trophyColour !== '' ? TrophyColour::tryFrom($trophyColour) : null
-        );
+        $league->setTrophy($this->trophyFromFields([
+            'style'           => $request->request->get('trophyStyle'),
+            'finish'          => $request->request->get('trophyFinish'),
+            'ribbons'         => $request->request->get('trophyRibbons'),
+            'ribbonPrimary'   => $request->request->get('trophyRibbonPrimary'),
+            'ribbonSecondary' => $request->request->get('trophyRibbonSecondary'),
+        ]));
 
         $sponsorCount = $request->request->get('sponsorCount');
         if ($sponsorCount !== null && $sponsorCount !== '') {
@@ -94,8 +89,7 @@ class LeagueAdminController extends AbstractController
                     'tvDeal'           => $league->getTvDeal(),
                     'prizeMoney'       => $league->getPrizeMoney(),
                     'leaguePositionPot'=> $league->getLeaguePositionPot(),
-                    'trophyImage'      => $league->getTrophyImage(),
-                    'trophyColour'     => $league->getTrophyColour()?->value,
+                    'trophy'           => $league->getTrophy(),
                     'sponsorCount'     => $league->getSponsorCount(),
                 ],
             ]);
@@ -147,8 +141,7 @@ class LeagueAdminController extends AbstractController
             $league->setPrizeMoney($defaults['prizeMoney']);
             $league->setLeaguePositionPot($defaults['leaguePositionPot']);
             $league->setSponsorCount($defaults['sponsorCount']);
-            $league->setTrophyImage($defaults['trophyImage']);
-            $league->setTrophyColour($defaults['trophyColour'] !== null ? TrophyColour::from($defaults['trophyColour']) : null);
+            $league->setTrophy($defaults['trophy']);
             $applied++;
         }
         $this->em->flush();
@@ -160,22 +153,49 @@ class LeagueAdminController extends AbstractController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_leagues_overview']));
     }
 
-    /** @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string} */
+    /** @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array} */
     private function normalizeTierRow(array $row): array
     {
-        $validImages = array_map(fn ($n) => "trophy-$n", range(1, 15));
-        $trophyImage = $row['trophyImage'] ?? null;
-        $trophyColour = $row['trophyColour'] ?? null;
-
         return [
             'promotionSpots'    => ($row['promotionSpots'] ?? '') !== '' ? (int) $row['promotionSpots'] : null,
             'tvDeal'            => $this->parseMoneyToPence($row['tvDeal'] ?? ''),
             'prizeMoney'        => $this->parseMoneyToPence($row['prizeMoney'] ?? ''),
             'leaguePositionPot' => $this->parseMoneyToPence($row['leaguePositionPot'] ?? ''),
             'sponsorCount'      => ($row['sponsorCount'] ?? '') !== '' ? max(0, min(20, (int) $row['sponsorCount'])) : 0,
-            'trophyImage'       => ($trophyImage !== null && $trophyImage !== '' && in_array($trophyImage, $validImages, true)) ? $trophyImage : null,
-            'trophyColour'      => ($trophyColour !== null && $trophyColour !== '' && TrophyColour::tryFrom($trophyColour) !== null) ? $trophyColour : null,
+            'trophy'            => $this->trophyFromFields([
+                'style'           => $row['trophyStyle'] ?? null,
+                'finish'          => $row['trophyFinish'] ?? null,
+                'ribbons'         => $row['trophyRibbons'] ?? null,
+                'ribbonPrimary'   => $row['trophyRibbonPrimary'] ?? null,
+                'ribbonSecondary' => $row['trophyRibbonSecondary'] ?? null,
+            ]),
         ];
+    }
+
+    /**
+     * The five flat trophy inputs both this screen's forms post, as a validated config.
+     *
+     * A blank `style` means "no trophy" and yields null — the quick-edit modal and the
+     * tier-defaults table both offer that as an explicit choice, and several call sites
+     * (the honours board, the tier-defaults table's own shipped defaults) rely on null
+     * staying null rather than being defaulted into a visible trophy. Everything else
+     * goes through TrophyConfigFactory, so a tampered or stale field falls back per key
+     * instead of storing something the sprite cannot draw.
+     *
+     * @param array<string, mixed> $fields
+     * @return array{style:string,finish:string,ribbons:bool,ribbonPrimary:string,ribbonSecondary:string}|null
+     */
+    private function trophyFromFields(array $fields): ?array
+    {
+        if (($fields['style'] ?? '') === '' || $fields['style'] === null) {
+            return null;
+        }
+
+        // An unchecked checkbox posts nothing at all, so an absent key is OFF here —
+        // the opposite of TrophyConfigFactory's "absent key keeps the default" rule.
+        $fields['ribbons'] = $fields['ribbons'] ?? false;
+
+        return TrophyConfigFactory::validate($fields);
     }
 
     /** Pounds (comma-formatted, from the tier-defaults table's money inputs) -> pence, or null if blank. */

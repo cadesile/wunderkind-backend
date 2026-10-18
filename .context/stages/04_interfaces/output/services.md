@@ -191,8 +191,11 @@ filename alone.
   `TagAwareCacheInterface`, `app.leaderboard_cache` pool) leaderboard
   entries from career stats/transfers.
 - **`LeagueImportExportService`** — imports/exports league/NPC-club
-  config (formations, reputation tiers, trophy colours, city sizes,
-  kit+badge `identity`).
+  config (formations, reputation tiers, the league `trophy` sprite config,
+  city sizes, kit+badge `identity`). On import, a row carrying the retired
+  `trophyImage`/`trophyColour` pair instead of `trophy` is converted through
+  `TrophyConfigFactory::fromLegacy()`, so a world backup committed before the
+  trophy component changed still restores its trophies.
 - **`LeagueService`** — league lifecycle logic (season conclusion,
   leaderboard categories), using `LeagueRepository`,
   `GameConfigRepository`. `generateLeaguesForCountry()` reads its per-tier
@@ -202,6 +205,20 @@ filename alone.
   (`admin_leagues_overview` → `LeagueAdminController::bulkEditTierDefaults()`,
   route `admin_league_tier_defaults_bulk_edit`), which can also cascade the
   submitted values onto selected already-existing `League` rows.
+- **`TrophyConfigFactory`** — the one place a trophy config is defaulted,
+  validated and migrated. All-static and dependency-free (following
+  `CountryContentRegistry`), because `GameConfig` normalises its own
+  league-tier-defaults rows through it and an entity cannot be handed an
+  injected service. `validate()`/`validateNullable()` keep known keys, check
+  the `TrophyStyle`/`TrophyFinish` enums, accept only `#rrggbb` colours, fall
+  back per key and never throw — they sit in front of admin form posts
+  (`TrophyConfigType`, `LeagueAdminController`), the world import, and the
+  schema migration's backfill. `fromLegacy()` holds the `trophy-N` →
+  style + `gold_silver` → `twotone` mapping. Deliberately has **no**
+  `random()`: league and competition trophies are admin-chosen or come from
+  the tier-defaults table, so nothing server-side rolls one — the admin
+  widget's Randomise is `window.randomTrophyConfig()` from the generated
+  compositor bundle. See CLAUDE.md's "Trophy Identity" section.
 - **`App\Service\CountryContent\CountryContentRegistry`** — single canonical
   per-country content store (place/population/region/capital data, club-name
   suffixes, stadium formats, `WorldRegion`, `MarketPoolService` business

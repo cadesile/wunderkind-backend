@@ -52,6 +52,11 @@
      public/assets/stadium-compositor.js's own docblock. Used only by the Club
      Spotlight section. -->
 <script src="{{ asset('assets/stadium-compositor.js') }}?v={{ landing_v }}"></script>
+<!-- Read-only trophy sprite rendering (composeTrophySvg) — generated from the shared
+     assets/Components/trophy16/trophy16.ts by scripts/build-trophy-compositor.sh,
+     see public/assets/trophy-compositor.js's own docblock. Used only by the Club
+     Spotlight's honours board. -->
+<script src="{{ asset('assets/trophy-compositor.js') }}?v={{ landing_v }}"></script>
 <script src="{{ asset('landing.js') }}?v={{ landing_v }}"></script>
 {% block javascripts %}{% endblock %}
 </body>

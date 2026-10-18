@@ -197,13 +197,13 @@
         border-bottom: 1px solid var(--bs-border-color);
         background: var(--bs-tertiary-bg);
     }
+    /* The sprite is an inline <svg> sized by composeTrophySvg's own scale
+       argument, so this only has to stop it being squeezed by the flex row. */
     .league-trophy-img {
-        width: 52px;
-        height: 52px;
-        object-fit: contain;
         flex-shrink: 0;
-        transition: filter .25s;
+        line-height: 0;
     }
+    .league-trophy-img svg { display: block; }
     .league-trophy-meta {
         display: flex;
         flex-direction: column;
@@ -222,6 +222,19 @@
         color: var(--bs-secondary-color);
     }
 
+    /* Fixed box so the 8 tier rows keep an even height whether or not a
+       trophy is set — the sprite is 34x46 at scale 1.5, plus a little slack. */
+    .tier-trophy-preview {
+        width: 54px;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        line-height: 0;
+    }
+    .tier-trophy-preview svg { display: block; }
+
     /* ── Trophy panel inside quick-edit modal ───────────────────────── */
     .qe-trophy-panel {
         display: flex;
@@ -234,12 +247,8 @@
         border: 1px solid var(--bs-border-color);
         min-height: 96px;
     }
-    .qe-trophy-panel img {
-        width: 64px;
-        height: 64px;
-        object-fit: contain;
-        transition: filter .2s, opacity .15s;
-    }
+    .qe-trophy-panel .qe-trophy-sprite { line-height: 0; }
+    .qe-trophy-panel .qe-trophy-sprite svg { display: block; }
     .qe-trophy-panel .qe-trophy-label {
         font-size: .65rem;
         color: var(--bs-secondary-color);
@@ -247,7 +256,6 @@
         letter-spacing: .05em;
         text-align: center;
     }
-    .qe-trophy-panel.empty img { opacity: 0.12; filter: none !important; }
     .qe-trophy-panel.empty .qe-trophy-label { font-style: italic; }
 </style>
 
@@ -295,8 +303,7 @@
                                 <th>Prize Money (£)</th>
                                 <th>Position Pot (£)</th>
                                 <th>Sponsors</th>
-                                <th>Trophy Design</th>
-                                <th>Trophy Colour</th>
+                                <th>Trophy</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -311,21 +318,57 @@
                                 <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][prizeMoney]" value="{{ (row.prizeMoney is defined and row.prizeMoney is not null) ? (row.prizeMoney / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
                                 <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][leaguePositionPot]" value="{{ (row.leaguePositionPot is defined and row.leaguePositionPot is not null) ? (row.leaguePositionPot / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
                                 <td><input type="number" class="form-control form-control-sm" style="width:70px" name="tiers[{{ tier }}][sponsorCount]" value="{{ row.sponsorCount ?? 0 }}" min="0" max="20"></td>
+                                {#
+                                   One cell for the whole trophy config, with a live
+                                   sprite beside the controls. Option lists come from
+                                   trophyStyles/trophyFinishes/trophyRibbonColours
+                                   (passed from DashboardController, derived from the
+                                   enums, which mirror the sprite's own lists) — never
+                                   hand-written here.
+
+                                   Ribbon colours are <select>s rather than the admin
+                                   widget's swatch grid: this is a dense 8-row table,
+                                   and 12 swatches x 2 x 8 rows would dwarf every other
+                                   column. The full picker lives on the League edit form.
+                                #}
+                                {% set trophy = row.trophy ?? null %}
                                 <td>
-                                    <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyImage]" style="width:130px">
-                                        <option value="">— None —</option>
-                                        {% for n in 1..15 %}
-                                        <option value="trophy-{{ n }}" {% if (row.trophyImage ?? null) == 'trophy-' ~ n %}selected{% endif %}>Trophy {{ n }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </td>
-                                <td>
-                                    <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyColour]" style="width:110px">
-                                        <option value="">— None —</option>
-                                        <option value="silver" {% if (row.trophyColour ?? null) == 'silver' %}selected{% endif %}>Silver</option>
-                                        <option value="gold" {% if (row.trophyColour ?? null) == 'gold' %}selected{% endif %}>Gold</option>
-                                        <option value="gold_silver" {% if (row.trophyColour ?? null) == 'gold_silver' %}selected{% endif %}>Gold &amp; Silver</option>
-                                    </select>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="tier-trophy-preview" data-tier-trophy-preview="{{ tier }}"></div>
+                                        <div class="d-flex flex-column gap-1" data-tier-trophy="{{ tier }}">
+                                            <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyStyle]" style="width:130px" data-tier-trophy-field="style">
+                                                <option value="">— None —</option>
+                                                {% for style in trophyStyles %}
+                                                <option value="{{ style.value }}" {% if (trophy.style ?? null) == style.value %}selected{% endif %}>{{ style.label }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyFinish]" style="width:130px" data-tier-trophy-field="finish">
+                                                {% for finish in trophyFinishes %}
+                                                <option value="{{ finish.value }}" {% if (trophy.finish ?? trophyDefaults.finish) == finish.value %}selected{% endif %}>{{ finish.label }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="checkbox" value="1"
+                                                       id="tier-{{ tier }}-ribbons"
+                                                       name="tiers[{{ tier }}][trophyRibbons]"
+                                                       data-tier-trophy-field="ribbons"
+                                                       {% if trophy is null ? trophyDefaults.ribbons : (trophy.ribbons ?? true) %}checked{% endif %}>
+                                                <label class="form-check-label small" for="tier-{{ tier }}-ribbons">Ribbons</label>
+                                            </div>
+                                            <div class="d-flex gap-1">
+                                                <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyRibbonPrimary]" style="width:63px" title="Ribbon primary" data-tier-trophy-field="ribbonPrimary">
+                                                    {% for colour in trophyRibbonColours %}
+                                                    <option value="{{ colour.value }}" {% if (trophy.ribbonPrimary ?? trophyDefaults.ribbonPrimary) == colour.value %}selected{% endif %}>{{ colour.label }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                                <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyRibbonSecondary]" style="width:63px" title="Ribbon secondary" data-tier-trophy-field="ribbonSecondary">
+                                                    {% for colour in trophyRibbonColours %}
+                                                    <option value="{{ colour.value }}" {% if (trophy.ribbonSecondary ?? trophyDefaults.ribbonSecondary) == colour.value %}selected{% endif %}>{{ colour.label }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -406,21 +449,12 @@
                     {% set clubs       = clubsByLeague[league.id|ea_as_string] ?? [] %}
                     {% set tierColor   = TIER_COLORS[tier] ?? '#6c757d' %}
                     {% set hasStats    = league.prizeMoney or league.tvDeal or league.leaguePositionPot or league.promotionSpots %}
-                    {% set hasTrophy   = league.trophyImage is not null %}
+                    {% set hasTrophy   = league.trophy is not null %}
                     {% set hasSponsors = league.sponsors|length > 0 %}
 
                     <div class="league-card">
 
                         {# Header: tier badge + name + quick-edit button #}
-                        {# Correct CSS filter chains for black SVG silhouettes:
-                           brightness(0) normalises to black, invert(1) flips to white,
-                           then sepia+saturate+hue-rotate applies the target colour. #}
-                        {% set TROPHY_FILTERS = {
-                            'silver':      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
-                            'gold':        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
-                            'gold_silver': 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)'
-                        } %}
-
                         <div class="league-card-header">
                             <span class="tier-badge"
                                   style="background: {{ tierColor }}22; color: {{ tierColor }}; border: 1px solid {{ tierColor }}55;">
@@ -445,8 +479,7 @@
                                     data-tv-deal="{{ league.tvDeal is not null ? (league.tvDeal / 100)|round : '' }}"
                                     data-prize-money="{{ league.prizeMoney is not null ? (league.prizeMoney / 100)|round : '' }}"
                                     data-league-position-pot="{{ league.leaguePositionPot is not null ? (league.leaguePositionPot / 100)|round : '' }}"
-                                    data-trophy-image="{{ league.trophyImage ?? '' }}"
-                                    data-trophy-colour="{{ league.trophyColour ? league.trophyColour.value : '' }}"
+                                    data-trophy="{{ league.trophy ? league.trophy|json_encode|e('html_attr') : '' }}"
                                     data-sponsor-count="{{ league.sponsorCount }}"
                                     data-csrf-token="{{ csrf_token('league_qe_' ~ league.id|ea_as_string) }}"
                                     data-full-edit-url="{{ ea_url().setController(LEAGUE_CTRL).setAction('edit').setEntityId(league.id|ea_as_string) }}">
@@ -454,19 +487,18 @@
                             </button>
                         </div>
 
-                        {# Trophy panel — only shown when a trophy is configured #}
+                        {# Trophy panel — only shown when a trophy is configured.
+                           The sprite is drawn client-side from data-trophy by
+                           composeTrophySvg(), the same renderer the field widget and
+                           the landing page use; the labels come from TROPHY_LABELS
+                           below so the admin never shows a raw enum value. #}
                         {% if hasTrophy %}
-                        {% set trophyFilter = TROPHY_FILTERS[league.trophyColour ? league.trophyColour.value : ''] ?? 'none' %}
-                        <div class="league-trophy-row">
-                            <img class="league-trophy-img"
-                                 src="/images/trophies/{{ league.trophyImage }}.svg"
-                                 alt="Trophy"
-                                 style="filter: {{ trophyFilter }};">
+                        <div class="league-trophy-row"
+                             data-trophy="{{ league.trophy|json_encode|e('html_attr') }}">
+                            <div class="league-trophy-img" data-trophy-sprite></div>
                             <div class="league-trophy-meta">
-                                <span class="league-trophy-name">{{ league.trophyImage|replace({'trophy-': 'Trophy '}) }}</span>
-                                {% if league.trophyColour %}
-                                    <span class="league-trophy-colour">{{ league.trophyColour.label() }}</span>
-                                {% endif %}
+                                <span class="league-trophy-name" data-trophy-style-label></span>
+                                <span class="league-trophy-colour" data-trophy-finish-label></span>
                             </div>
                         </div>
                         {% endif %}
@@ -595,33 +627,56 @@
                                 <input type="number" class="form-control" id="qe-leaguePositionPot" name="leaguePositionPot" min="0" step="1" placeholder="none">
                             </div>
                         </div>
-                        {# ── Trophy row: selects left · live preview right ── #}
+                        {# ── Trophy row: controls left · live sprite right ──
+                           Posts the same five flat fields the tier-defaults table does,
+                           read back by LeagueAdminController::trophyFromFields(). An
+                           empty Design is the real "no trophy" state. Option lists are
+                           passed from the controller (derived from the enums, which
+                           mirror the sprite's own lists) — never written out here. #}
                         <div class="col-12">
                             <div class="d-flex gap-2 align-items-stretch">
                                 <div class="flex-grow-1 d-flex flex-column gap-2">
                                     <div>
-                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyImage">Trophy Design</label>
-                                        <select class="form-select form-select-sm" id="qe-trophyImage" name="trophyImage">
+                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyStyle">Trophy Design</label>
+                                        <select class="form-select form-select-sm" id="qe-trophyStyle" name="trophyStyle">
                                             <option value="">— None —</option>
-                                            {% for n in 1..15 %}
-                                                <option value="trophy-{{ n }}">Trophy {{ n }}</option>
+                                            {% for style in trophyStyles %}
+                                                <option value="{{ style.value }}">{{ style.label }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyColour">Colour</label>
-                                        <select class="form-select form-select-sm" id="qe-trophyColour" name="trophyColour">
-                                            <option value="">— None —</option>
-                                            <option value="silver">Silver</option>
-                                            <option value="gold">Gold</option>
-                                            <option value="gold_silver">Gold &amp; Silver</option>
+                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyFinish">Finish</label>
+                                        <select class="form-select form-select-sm" id="qe-trophyFinish" name="trophyFinish">
+                                            {% for finish in trophyFinishes %}
+                                                <option value="{{ finish.value }}">{{ finish.label }}</option>
+                                            {% endfor %}
                                         </select>
+                                    </div>
+                                    <div class="d-flex gap-2 align-items-end">
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input" type="checkbox" value="1" id="qe-trophyRibbons" name="trophyRibbons">
+                                            <label class="form-check-label small" for="qe-trophyRibbons">Ribbons</label>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <label class="form-label small fw-semibold mb-1" for="qe-trophyRibbonPrimary">Ribbon colours</label>
+                                            <div class="d-flex gap-1">
+                                                <select class="form-select form-select-sm" id="qe-trophyRibbonPrimary" name="trophyRibbonPrimary" title="Ribbon primary">
+                                                    {% for colour in trophyRibbonColours %}
+                                                        <option value="{{ colour.value }}">{{ colour.label }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                                <select class="form-select form-select-sm" id="qe-trophyRibbonSecondary" name="trophyRibbonSecondary" title="Ribbon secondary">
+                                                    {% for colour in trophyRibbonColours %}
+                                                        <option value="{{ colour.value }}">{{ colour.label }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="qe-trophy-panel empty" id="qe-trophy-panel" style="width:104px;flex-shrink:0;">
-                                    <img id="qe-trophy-preview"
-                                         src="/images/trophies/trophy-1.svg"
-                                         alt="Trophy preview">
+                                    <div class="qe-trophy-sprite" id="qe-trophy-preview"></div>
                                     <span class="qe-trophy-label" id="qe-trophy-label">No trophy</span>
                                 </div>
                             </div>
@@ -642,7 +697,95 @@
     </div>
 </div>
 
+{# The trophy sprite renderer — the same generated bundle the field widget and
+   the landing page use (public/assets/trophy-compositor.js, built from the
+   shared trophy16.ts by scripts/build-trophy-compositor.sh). This page draws
+   trophies in three places: the per-tier defaults table, each league card, and
+   the quick-edit modal. #}
+<script src="{{ asset('assets/trophy-compositor.js') }}?v={{ 'now'|date('YmdHis') }}"></script>
 <script>
+// ── Shared trophy helpers ────────────────────────────────────────────────────
+// Deliberately global (not wrapped in an IIFE) because the quick-edit modal's
+// own IIFE further down needs them too. Labels come from the enum lists the
+// controller passed, so the admin never shows a bare `twotone` to anyone.
+var TROPHY_STYLE_LABELS  = {{ trophyStyles|reduce((acc, s) => acc|merge({(s.value): s.label}), {})|json_encode|raw }};
+var TROPHY_FINISH_LABELS = {{ trophyFinishes|reduce((acc, f) => acc|merge({(f.value): f.label}), {})|json_encode|raw }};
+var TROPHY_DEFAULTS      = {{ trophyDefaults|json_encode|raw }};
+
+function trophyStyleLabel(value)  { return TROPHY_STYLE_LABELS[value]  || value || ''; }
+function trophyFinishLabel(value) { return TROPHY_FINISH_LABELS[value] || value || ''; }
+
+/** Transparent and shadowless: these all sit on an existing panel or card. */
+function trophySvg(config, scale) {
+    if (typeof window.composeTrophySvg !== 'function') return '';
+    return window.composeTrophySvg(config, scale, { background: 'none' });
+}
+
+/** A data-trophy attribute to a config, tolerating absent or malformed JSON. */
+function parseTrophy(raw) {
+    if (!raw) return null;
+    try {
+        var parsed = JSON.parse(raw);
+        return parsed && parsed.style ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** Fill one .league-trophy-row from its own data-trophy attribute. */
+function renderTrophyRow(row) {
+    var config = parseTrophy(row.getAttribute('data-trophy'));
+    if (!config) return;
+    var sprite = row.querySelector('[data-trophy-sprite]');
+    var styleEl = row.querySelector('[data-trophy-style-label]');
+    var finishEl = row.querySelector('[data-trophy-finish-label]');
+    if (sprite)   sprite.innerHTML    = trophySvg(config, 1.5);
+    if (styleEl)  styleEl.textContent = trophyStyleLabel(config.style);
+    if (finishEl) finishEl.textContent = trophyFinishLabel(config.finish);
+}
+
+/** Push a config (or null, for "no trophy") into the quick-edit modal's controls. */
+function applyTrophyToModal(config) {
+    var c = config || TROPHY_DEFAULTS;
+    var set = function (id, value) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (el.type === 'checkbox') { el.checked = !!value; } else { el.value = value; }
+    };
+    set('qe-trophyStyle', config ? c.style : '');
+    set('qe-trophyFinish', c.finish);
+    set('qe-trophyRibbons', c.ribbons);
+    set('qe-trophyRibbonPrimary', c.ribbonPrimary);
+    set('qe-trophyRibbonSecondary', c.ribbonSecondary);
+}
+
+// ── Live previews: league cards + the per-tier defaults table ────────────────
+(function () {
+    document.querySelectorAll('.league-trophy-row[data-trophy]').forEach(renderTrophyRow);
+
+    // The tier table's selects aren't a TrophyConfigType widget (see the comment
+    // on that cell), so wire their preview up by hand — one per tier row.
+    document.querySelectorAll('[data-tier-trophy]').forEach(function (group) {
+        var tier = group.getAttribute('data-tier-trophy');
+        var preview = document.querySelector('[data-tier-trophy-preview="' + tier + '"]');
+        if (!preview) return;
+
+        function render() {
+            var config = {};
+            group.querySelectorAll('[data-tier-trophy-field]').forEach(function (el) {
+                var key = el.getAttribute('data-tier-trophy-field');
+                config[key] = el.type === 'checkbox' ? el.checked : el.value;
+            });
+            preview.innerHTML = config.style
+                ? trophySvg(config, 1.5)
+                : '<span class="text-muted" style="font-size:.6rem;line-height:1.2;text-align:center">No<br>trophy</span>';
+        }
+
+        group.addEventListener('change', render);
+        render();
+    });
+})();
+
 // Rotate chevron on collapse toggle
 document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     var chevron = el.querySelector('.fa-chevron-down');
@@ -705,12 +848,6 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     var modal = document.getElementById('leagueQuickEditModal');
     if (!modal) return;
 
-    var COLOUR_FILTERS = {
-        silver:      'brightness(0) invert(0.72) saturate(0) brightness(1.15) contrast(1.05)',
-        gold:        'brightness(0) invert(1) sepia(1) saturate(6) hue-rotate(8deg) brightness(0.82)',
-        gold_silver: 'brightness(0) invert(1) sepia(0.7) saturate(3) hue-rotate(8deg) brightness(0.9)',
-    };
-
     var TIER_COLORS = {
         1: '#ffd700', 2: '#e0b020', 3: '#c0a060',
         4: '#6c757d', 5: '#6c757d', 6: '#495057',
@@ -718,27 +855,44 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
     };
 
     // ── trophy preview in modal ──────────────────────────────────────────
+    // Reads the five flat controls and draws the real sprite, so the modal shows
+    // exactly what the League edit form's widget and the app would render.
+    var TROPHY_FIELD_IDS = {
+        style: 'qe-trophyStyle', finish: 'qe-trophyFinish', ribbons: 'qe-trophyRibbons',
+        ribbonPrimary: 'qe-trophyRibbonPrimary', ribbonSecondary: 'qe-trophyRibbonSecondary',
+    };
+
+    function modalTrophyConfig() {
+        var out = {};
+        Object.keys(TROPHY_FIELD_IDS).forEach(function (key) {
+            var el = document.getElementById(TROPHY_FIELD_IDS[key]);
+            if (!el) return;
+            out[key] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        return out;
+    }
+
     function refreshTrophyPreview() {
-        var slug   = document.getElementById('qe-trophyImage').value;
-        var colour = document.getElementById('qe-trophyColour').value;
+        var config = modalTrophyConfig();
         var panel  = document.getElementById('qe-trophy-panel');
-        var img    = document.getElementById('qe-trophy-preview');
+        var sprite = document.getElementById('qe-trophy-preview');
         var label  = document.getElementById('qe-trophy-label');
 
-        if (slug) {
-            img.src           = '/images/trophies/' + slug + '.svg';
-            img.style.filter  = COLOUR_FILTERS[colour] || 'brightness(0) invert(0.15)';
-            label.textContent = slug.replace('trophy-', 'Trophy ') + (colour ? '\n' + colour.replace('_', ' & ') : '');
+        if (config.style) {
+            sprite.innerHTML  = trophySvg(config, 2);
+            label.textContent = trophyStyleLabel(config.style) + ' · ' + trophyFinishLabel(config.finish);
             panel.classList.remove('empty');
         } else {
-            img.src           = '/images/trophies/trophy-1.svg';
-            img.style.filter  = 'none';
+            sprite.innerHTML  = '';
             label.textContent = 'No trophy';
             panel.classList.add('empty');
         }
     }
-    document.getElementById('qe-trophyImage').addEventListener('change', refreshTrophyPreview);
-    document.getElementById('qe-trophyColour').addEventListener('change', refreshTrophyPreview);
+
+    Object.keys(TROPHY_FIELD_IDS).forEach(function (key) {
+        var el = document.getElementById(TROPHY_FIELD_IDS[key]);
+        if (el) el.addEventListener('change', refreshTrophyPreview);
+    });
 
     // ── toast helper ─────────────────────────────────────────────────────
     function showToast(msg, type) {
@@ -791,33 +945,23 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
 
         var cardHeader = card.querySelector('.league-card-header');
 
-        // Trophy row
+        // Trophy row. The row owns its own data-trophy, so re-stamping that and
+        // calling the shared renderTrophyRow() keeps a freshly-saved card and a
+        // server-rendered one going through exactly the same code path.
         var trophyRow = card.querySelector('.league-trophy-row');
-        if (lg.trophyImage) {
-            var filt   = COLOUR_FILTERS[lg.trophyColour] || 'brightness(0) invert(0.15)';
-            var tLabel = lg.trophyImage.replace('trophy-', 'Trophy ');
-            var cLabel = lg.trophyColour ? lg.trophyColour.replace('_', ' & ') : '';
-            if (trophyRow) {
-                trophyRow.querySelector('img').src          = '/images/trophies/' + lg.trophyImage + '.svg';
-                trophyRow.querySelector('img').style.filter = filt;
-                trophyRow.querySelector('.league-trophy-name').textContent = tLabel;
-                var cEl = trophyRow.querySelector('.league-trophy-colour');
-                if (cEl) {
-                    cEl.textContent = cLabel;
-                } else if (cLabel) {
-                    var s = document.createElement('span');
-                    s.className = 'league-trophy-colour';
-                    s.textContent = cLabel;
-                    trophyRow.querySelector('.league-trophy-meta').appendChild(s);
-                }
-            } else {
+        if (lg.trophy) {
+            if (!trophyRow) {
                 trophyRow = document.createElement('div');
                 trophyRow.className = 'league-trophy-row';
-                trophyRow.innerHTML = '<img class="league-trophy-img" src="/images/trophies/' + lg.trophyImage + '.svg" alt="Trophy" style="filter:' + filt + ';">'
-                    + '<div class="league-trophy-meta"><span class="league-trophy-name">' + tLabel + '</span>'
-                    + (cLabel ? '<span class="league-trophy-colour">' + cLabel + '</span>' : '') + '</div>';
+                trophyRow.innerHTML = '<div class="league-trophy-img" data-trophy-sprite></div>'
+                    + '<div class="league-trophy-meta">'
+                    + '<span class="league-trophy-name" data-trophy-style-label></span>'
+                    + '<span class="league-trophy-colour" data-trophy-finish-label></span>'
+                    + '</div>';
                 insertBeforeFirst(card, trophyRow, ['.league-stats', '.league-sponsors', '.league-clubs', '.league-clubs-empty']);
             }
+            trophyRow.setAttribute('data-trophy', JSON.stringify(lg.trophy));
+            renderTrophyRow(trophyRow);
         } else if (trophyRow) {
             trophyRow.remove();
         }
@@ -850,8 +994,7 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
         btn.dataset.tvDeal            = lg.tvDeal            ? Math.round(lg.tvDeal / 100)            : '';
         btn.dataset.prizeMoney        = lg.prizeMoney        ? Math.round(lg.prizeMoney / 100)        : '';
         btn.dataset.leaguePositionPot = lg.leaguePositionPot ? Math.round(lg.leaguePositionPot / 100) : '';
-        btn.dataset.trophyImage       = lg.trophyImage  || '';
-        btn.dataset.trophyColour      = lg.trophyColour || '';
+        btn.dataset.trophy            = lg.trophy ? JSON.stringify(lg.trophy) : '';
         btn.dataset.sponsorCount      = lg.sponsorCount != null ? lg.sponsorCount : '';
     }
 
@@ -872,8 +1015,7 @@ document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
         document.getElementById('qe-tvDeal').value            = currentBtn.dataset.tvDeal           || '';
         document.getElementById('qe-prizeMoney').value        = currentBtn.dataset.prizeMoney       || '';
         document.getElementById('qe-leaguePositionPot').value = currentBtn.dataset.leaguePositionPot|| '';
-        document.getElementById('qe-trophyImage').value       = currentBtn.dataset.trophyImage      || '';
-        document.getElementById('qe-trophyColour').value      = currentBtn.dataset.trophyColour     || '';
+        applyTrophyToModal(parseTrophy(currentBtn.dataset.trophy));
         document.getElementById('qe-sponsorCount').value      = currentBtn.dataset.sponsorCount     || '';
         document.getElementById('qe-full-edit-link').href     = currentBtn.dataset.fullEditUrl      || '#';
         refreshTrophyPreview();

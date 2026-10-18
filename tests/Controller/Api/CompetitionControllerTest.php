@@ -255,8 +255,7 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertSame(4, $activeEntry['registeredCount']);
         $this->assertSame(CompetitionDuration::TEN_HOURS->value, $activeEntry['durationOption']);
         $this->assertArrayHasKey('entryConditions', $activeEntry);
-        $this->assertArrayHasKey('trophyImage', $activeEntry);
-        $this->assertArrayHasKey('trophyColour', $activeEntry);
+        $this->assertArrayHasKey('trophy', $activeEntry);
         $this->assertArrayHasKey('entryFeePerRound', $activeEntry);
         $this->assertArrayHasKey('victorPrize', $activeEntry['prizes']);
         $this->assertArrayHasKey('bonusRewards', $activeEntry['prizes']);

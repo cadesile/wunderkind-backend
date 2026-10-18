@@ -136,8 +136,7 @@ class WorldInitializationService
             'prizeMoney'                    => $league->getPrizeMoney(),
             'leaguePositionPot'             => $league->getLeaguePositionPot(),
             'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
-            'trophyImage'                   => $league->getTrophyImage(),
-            'trophyColour'                  => $league->getTrophyColour()?->value,
+            'trophy'                        => $league->getTrophy(),
             'clubs'                         => $clubsData,
             'fixtures'                      => $fixtures,
         ];

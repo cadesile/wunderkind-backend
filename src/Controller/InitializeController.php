@@ -175,8 +175,7 @@ class InitializeController extends AbstractController
             'tvDeal'            => $league->getTvDeal(),
             'prizeMoney'        => $league->getPrizeMoney(),
             'leaguePositionPot' => $league->getLeaguePositionPot(),
-            'trophyImage'       => $league->getTrophyImage(),
-            'trophyColour'      => $league->getTrophyColour()?->value,
+            'trophy'            => $league->getTrophy(),
         ], $leagues);
 
         return $this->json(['leagues' => $data]);

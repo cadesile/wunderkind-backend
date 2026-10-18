@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Enum\StatCategory;
 use App\Enum\StatsPeriod;
 use App\Repository\GameConfigRepository;
+use App\Service\TrophyConfigFactory;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: GameConfigRepository::class)]
@@ -1355,37 +1356,96 @@ class GameConfig
      * to be LeagueService::LEAGUE_TIER_DEFAULTS, a hardcoded const that only ever fed
      * newly-generated leagues and couldn't be edited without a code change.
      *
-     * @var array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}>
+     * @var array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}>
      */
     #[ORM\Column(type: 'json')]
     private array $leagueTierDefaults = [
-        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
-        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null],
+        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null],
+        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null],
     ];
 
-    /** @return array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}> */
-    public function getLeagueTierDefaults(): array { return $this->leagueTierDefaults; }
-
-    /** @param array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}> $v */
-    public function setLeagueTierDefaults(array $v): static { $this->leagueTierDefaults = $v; return $this; }
+    /**
+     * Every row is normalised on the way out (see normaliseTierRow), so the admin
+     * bulk-edit screen never has to know the retired trophy keys existed.
+     *
+     * @return array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}>
+     */
+    public function getLeagueTierDefaults(): array
+    {
+        return array_map(
+            static fn (mixed $row): array => is_array($row) ? self::normaliseTierRow($row) : [],
+            $this->leagueTierDefaults,
+        );
+    }
 
     /**
-     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophyImage:?string,trophyColour:?string}
+     * Normalised on write too, so a saved config converges on the new shape and
+     * the legacy fold becomes dead weight rather than a permanent read-time cost.
+     *
+     * @param array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}> $v
+     */
+    public function setLeagueTierDefaults(array $v): static
+    {
+        $this->leagueTierDefaults = array_map(
+            static fn (mixed $row): array => is_array($row) ? self::normaliseTierRow($row) : [],
+            $v,
+        );
+
+        return $this;
+    }
+
+    /**
+     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}
      */
     public function getLeagueTierDefaultsForTier(int $tier): array
     {
         $tier = max(1, min(8, $tier));
 
-        return $this->leagueTierDefaults[(string) $tier] ?? [
+        $row = $this->leagueTierDefaults[(string) $tier] ?? null;
+        if (is_array($row)) {
+            return self::normaliseTierRow($row);
+        }
+
+        return [
             'promotionSpots' => 2, 'tvDeal' => null, 'prizeMoney' => null,
-            'leaguePositionPot' => null, 'sponsorCount' => 0, 'trophyImage' => null, 'trophyColour' => null,
+            'leaguePositionPot' => null, 'sponsorCount' => 0, 'trophy' => null,
         ];
+    }
+
+    /**
+     * Fold a stored tier row's retired `trophyImage`/`trophyColour` pair into the
+     * single `trophy` config the new trophy sprite takes.
+     *
+     * This column is plain stored JSON, so a row written before the trophy
+     * component was replaced still carries the old pair — as does any config
+     * export file taken back then, and admins are told those files are safe to
+     * commit and re-import (see ConfigImportExportService). Converting on read
+     * rather than only in the migration means neither quietly loses its trophy.
+     *
+     * @param array<string, mixed> $row
+     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}
+     */
+    private static function normaliseTierRow(array $row): array
+    {
+        $trophy = TrophyConfigFactory::validateNullable($row['trophy'] ?? null);
+
+        if ($trophy === null && array_key_exists('trophyImage', $row)) {
+            $trophy = TrophyConfigFactory::fromLegacy(
+                is_string($row['trophyImage']) ? $row['trophyImage'] : null,
+                is_string($row['trophyColour'] ?? null) ? $row['trophyColour'] : null,
+            );
+        }
+
+        unset($row['trophyImage'], $row['trophyColour']);
+        $row['trophy'] = $trophy;
+
+        return $row;
     }
 
     // ── NPC Facility Level Ranges ─────────────────────────────────────────

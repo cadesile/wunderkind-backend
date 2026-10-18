@@ -10,7 +10,6 @@ use App\Entity\NpcClub;
 use App\Enum\CitySize;
 use App\Enum\Formation;
 use App\Enum\ReputationTier;
-use App\Enum\TrophyColour;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,8 +43,7 @@ class LeagueImportExportService
                 'prizeMoney'           => $l->getPrizeMoney(),
                 'leaguePositionPot'    => $l->getLeaguePositionPot(),
                 'sponsorCount'         => $l->getSponsorCount(),
-                'trophyImage'          => $l->getTrophyImage(),
-                'trophyColour'         => $l->getTrophyColour()?->value,
+                'trophy'               => $l->getTrophy(),
             ];
         }
 
@@ -156,14 +154,19 @@ class LeagueImportExportService
                     );
                 if (array_key_exists('sponsorCount', $row))
                     $league->setSponsorCount((int) $row['sponsorCount']);
-                if (array_key_exists('trophyImage', $row))
-                    $league->setTrophyImage($row['trophyImage'] !== null ? (string) $row['trophyImage'] : null);
-                if (array_key_exists('trophyColour', $row))
-                    $league->setTrophyColour(
-                        $row['trophyColour'] !== null
-                            ? TrophyColour::from((string) $row['trophyColour'])
-                            : null
-                    );
+                // The `trophyImage` fallback is for export files written before the
+                // trophy sprite replaced the old slug+colour pair: those carry the two
+                // legacy keys and no 'trophy'. Converting rather than ignoring them
+                // means a world backup an admin committed months ago still restores
+                // its trophies — see TrophyConfigFactory::fromLegacy().
+                if (array_key_exists('trophy', $row)) {
+                    $league->setTrophy(TrophyConfigFactory::validateNullable($row['trophy']));
+                } elseif (array_key_exists('trophyImage', $row)) {
+                    $league->setTrophy(TrophyConfigFactory::fromLegacy(
+                        is_string($row['trophyImage']) ? $row['trophyImage'] : null,
+                        is_string($row['trophyColour'] ?? null) ? $row['trophyColour'] : null,
+                    ));
+                }
             } catch (\Throwable $e) {
                 // Don't leave a half-built row behind: a rejected row must not reach the flush.
                 if ($created !== null) {

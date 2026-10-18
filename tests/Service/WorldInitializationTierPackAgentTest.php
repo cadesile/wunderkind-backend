@@ -234,6 +234,85 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
         }
     }
 
+    /**
+     * The tier pack carries the league's trophy as the sprite's own config, not the
+     * retired `trophy-N` slug + colour-enum pair.
+     *
+     * Worth a test of its own because the world pack is how the client learns what a
+     * division awards, and the config is a verbatim passthrough — a renamed key is
+     * invisible here and surfaces as a blank trophy cabinet on the device.
+     */
+    public function testGeneratedTierPackCarriesTheLeagueTrophyConfig(): void
+    {
+        $trophy = [
+            'style' => 'winged', 'finish' => 'twotone', 'ribbons' => true,
+            'ribbonPrimary' => '#1f4fb8', 'ribbonSecondary' => '#f2c230',
+        ];
+
+        $league = new League(self::COUNTRY, self::TIER, 'Trophy Test League');
+        $league->setTrophy($trophy);
+        $this->em->persist($league);
+        $this->track($league);
+
+        foreach (['Delta', 'Epsilon'] as $name) {
+            $npc = new NpcClub($name . ' FC', self::COUNTRY, self::TIER, 20, '#111111', '#eeeeee', 1_000_000, []);
+            $npc->setLeague($league);
+            $this->em->persist($npc);
+            $this->track($npc);
+        }
+
+        $user = new User('trophy-tierpack-test@example.com');
+        $user->setPassword('x');
+        $this->em->persist($user);
+        $this->track($user);
+        $club = new Club('Trophy Club', $user);
+        $this->em->persist($club);
+        $this->track($club);
+
+        $this->em->flush();
+
+        /** @var WorldInitializationService $svc */
+        $svc  = self::getContainer()->get(WorldInitializationService::class);
+        $pack = $svc->buildTierPack($club, self::COUNTRY, self::TIER);
+
+        $this->assertArrayHasKey('trophy', $pack);
+        $this->assertSame($trophy, $pack['trophy'], 'the config must pass through verbatim');
+        $this->assertArrayNotHasKey('trophyImage', $pack);
+        $this->assertArrayNotHasKey('trophyColour', $pack);
+    }
+
+    /** A league with no trophy configured must say so, not fall back to a default cup. */
+    public function testGeneratedTierPackTrophyIsNullWhenNoneIsConfigured(): void
+    {
+        $league = new League(self::COUNTRY, self::TIER, 'No Trophy League');
+        $this->em->persist($league);
+        $this->track($league);
+
+        foreach (['Zeta', 'Eta'] as $name) {
+            $npc = new NpcClub($name . ' FC', self::COUNTRY, self::TIER, 20, '#111111', '#eeeeee', 1_000_000, []);
+            $npc->setLeague($league);
+            $this->em->persist($npc);
+            $this->track($npc);
+        }
+
+        $user = new User('no-trophy-tierpack-test@example.com');
+        $user->setPassword('x');
+        $this->em->persist($user);
+        $this->track($user);
+        $club = new Club('No Trophy Club', $user);
+        $this->em->persist($club);
+        $this->track($club);
+
+        $this->em->flush();
+
+        /** @var WorldInitializationService $svc */
+        $svc  = self::getContainer()->get(WorldInitializationService::class);
+        $pack = $svc->buildTierPack($club, self::COUNTRY, self::TIER);
+
+        $this->assertArrayHasKey('trophy', $pack);
+        $this->assertNull($pack['trophy']);
+    }
+
     private function track(object $entity): void
     {
         $this->cleanup[] = $entity;

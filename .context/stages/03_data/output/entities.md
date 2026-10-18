@@ -147,8 +147,14 @@ migrations are the change log (see `migrations.md`).
   `sortOrder`, `isActive`, `imagePath`.
 - **`League`** — a competitive tier. `country`, `tier`, `name`,
   `promotionSpots`, `tvDeal`, `leagueReputationTier:?ReputationTier(enum)`,
-  `prizeMoney`, `leaguePositionPot`, `sponsorCount`, `trophyImage`,
-  `trophyColour:?TrophyColour(enum)`. `OneToMany` → `leagueSponsors`
+  `prizeMoney`, `leaguePositionPot`, `sponsorCount`,
+  `trophy:?array` (json, nullable — the 16-bit trophy sprite's own
+  `TrophyConfig`: `{style, finish, ribbons, ribbonPrimary, ribbonSecondary}`,
+  stored and served verbatim like `Player::$appearance`. Replaced the retired
+  `trophyImage` slug + `trophyColour:?TrophyColour(enum)` pair in
+  `Version20261018202041`; null means "awards no trophy" and is load-bearing —
+  see CLAUDE.md's "Trophy Identity" section and `docs/api/trophy-config.md`).
+  `OneToMany` → `leagueSponsors`
   (cascade persist/remove, orphanRemoval); `ManyToMany` → `sponsors`
   (explicit `JoinTable`, `onDelete:CASCADE`). At creation,
   `LeagueService::generateLeaguesForCountry()` populates these financial/
@@ -351,12 +357,11 @@ migrations are the change log (see `migrations.md`).
   auto-fill every remaining slot with spoof entrants after the delay, so
   a solo tester isn't stuck waiting on real registrants — see
   `CompetitionAutoFillService` in `04_interfaces/output/services.md`.
-  `trophyImage:?string` (trophy silhouette slug, e.g. "trophy-3") +
-  `trophyColour:?TrophyColour(enum)` — same shape/columns as `League`'s
-  trophy fields (see `League` above); read live off the template by the
-  API rather than copied onto `ActiveCompetition`, since trophy design is
-  cosmetic, not a live-bracket-integrity concern like `entrantCapacity`/
-  `durationOption`. `ManyToMany` → `rewardTemplates` (`JoinTable:
+  `trophy:?array` (json, nullable — same column and shape as `League`'s, see
+  `League` above); read live off the template by the API rather than copied
+  onto `ActiveCompetition`, since trophy design is cosmetic, not a
+  live-bracket-integrity concern like `entrantCapacity`/`durationOption` —
+  so re-skinning a cup updates every competition already running under it. `ManyToMany` → `rewardTemplates` (`JoinTable:
   competition_template_reward_template`).
 - **`ActiveCompetition`** (table `active_competition`) — one live
   instance of a template. `status:ActiveCompetitionStatus(enum)`,
@@ -441,7 +446,13 @@ Each is effectively a single global-config row.
   `wageMultiplierTiers`, `leagueWinPoints`, `pyramidNewsConfig`,
   `statPostRotation/Schedule/LastRunAt`, `leagueTierDefaults` (new — json,
   keyed `"1"`-`"8"`, each `{promotionSpots, tvDeal, prizeMoney,
-  leaguePositionPot, sponsorCount, trophyImage, trophyColour}`; replaces the
+  leaguePositionPot, sponsorCount, trophy}` — `trophy` being the same nullable
+  sprite config `League::$trophy` holds. **Rows are normalised on read AND
+  write** (`GameConfig::normaliseTierRow()`): this is plain stored JSON, so a
+  row saved before the trophy component changed still carries the retired
+  `trophyImage`/`trophyColour` pair, as does any config export file taken back
+  then — both are folded through `TrophyConfigFactory::fromLegacy()` rather
+  than losing their trophy. Replaces the
   old hardcoded `LeagueService::LEAGUE_TIER_DEFAULTS` const as the source
   `generateLeaguesForCountry()` reads, and is what the admin "League Tier
   Defaults" bulk-edit screen on `admin_leagues_overview` writes to — see

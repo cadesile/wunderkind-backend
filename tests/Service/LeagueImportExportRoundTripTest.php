@@ -9,10 +9,10 @@ use App\Entity\NpcClub;
 use App\Enum\CitySize;
 use App\Enum\Formation;
 use App\Enum\ReputationTier;
-use App\Enum\TrophyColour;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\LeagueImportExportService;
+use App\Service\TrophyConfigFactory;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping as ORM;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -143,8 +143,10 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
 
         $league = $this->leagues->findOneBy(['country' => self::COUNTRY]);
         self::assertSame(6, $league->getSponsorCount());
-        self::assertSame('trophy-3', $league->getTrophyImage());
-        self::assertSame(TrophyColour::GOLD, $league->getTrophyColour());
+        self::assertSame(
+            ['style' => 'loving', 'finish' => 'gold', 'ribbons' => true, 'ribbonPrimary' => '#c8202f', 'ribbonSecondary' => '#f4f3ee'],
+            $league->getTrophy(),
+        );
     }
 
     /** A malformed row is reported, and the rest of the file still applies. */
@@ -186,8 +188,7 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         $league->setLeaguePositionPot(75_000);
         $league->setLeagueReputationTier(ReputationTier::REGIONAL);
         $league->setSponsorCount(6);
-        $league->setTrophyImage('trophy-3');
-        $league->setTrophyColour(TrophyColour::GOLD);
+        $league->setTrophy(TrophyConfigFactory::validate(['style' => 'loving', 'finish' => 'gold']));
         $this->em->persist($league);
 
         $club = new NpcClub(

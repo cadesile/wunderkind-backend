@@ -1,0 +1,111 @@
+{# Custom widget for TrophyConfigType: style grid + finish grid + ribbon
+   swatches + live SVG trophy preview + Randomise. Included from
+   templates/admin/form/trophy_config_theme.html.twig's `trophy_config_widget`
+   block, so `form` here refers to the TrophyConfigType FormView (its children
+   are style, finish, ribbons, ribbonPrimary, ribbonSecondary — the flat shape
+   stored verbatim in the `trophy` json column; see TrophyConfigType's class
+   docblock).
+
+   The real Symfony fields stay in the DOM — rendered via form_label/
+   form_widget/form_errors with `.visually-hidden` (not display:none) — so
+   accessibility, validation and form submission are unchanged. The visible
+   picker UI below (built by trophy-config-widget.js) drives those hidden
+   fields' values and dispatches native `change` events, which the render()
+   script at the bottom already listens for.
+
+   Single-panel, unlike the kit widget's three tabs: a trophy is one object, so
+   there is nothing to tab between. An empty `style` is the real "no trophy"
+   state (see TrophyConfigType::NO_TROPHY) — the widget surfaces it as a
+   "No trophy" toggle that blanks the preview and hides the rest of the
+   controls, rather than as a thumbnail in the style grid, because an empty
+   tile in a grid of trophies reads as a missing asset rather than a choice. #}
+<div class="appearance-editor appearance-editor-v2" data-trophy-editor>
+    {% for child in form.children %}
+        {{ form_label(child, null, {'label_attr': {'class': 'visually-hidden'}}) }}
+        {{ form_widget(child, {'attr': {'class': 'visually-hidden'}}) }}
+        {{ form_errors(child) }}
+    {% endfor %}
+
+    <div class="ap-preview-col">
+        <div data-tr-preview class="ap-preview-panel"></div>
+        <small class="text-muted">Live preview</small>
+        <button type="button" class="ap-randomise-btn" data-tr-randomise>Randomise</button>
+    </div>
+
+    <div class="ap-fields-col">
+        <div class="ap-section">
+            <div data-tr-none-toggle></div>
+        </div>
+
+        <div data-tr-config>
+            <div class="ap-section">
+                <div class="ap-section-label">Design</div>
+                <div data-tr-field="style" data-tr-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div class="ap-section-label">Finish</div>
+                <div data-tr-field="finish" data-tr-mode="grid"></div>
+            </div>
+            <div class="ap-section">
+                <div data-tr-field="ribbons" data-tr-mode="toggle" data-tr-label="Ribbons"></div>
+            </div>
+            <div data-tr-ribbon-colours>
+                <div class="ap-section">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div class="ap-section-label">Ribbon primary</div>
+                        <button type="button" class="ap-tab-btn" style="padding:2px 8px" data-tr-swap>Swap colours</button>
+                    </div>
+                    <div data-tr-field="ribbonPrimary" data-tr-mode="swatch"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Ribbon secondary</div>
+                    <div data-tr-field="ribbonSecondary" data-tr-mode="swatch"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% set cacheBust = 'now'|date('YmdHis') %}
+<link rel="stylesheet" href="{{ asset('admin-appearance-widget.css') }}?v={{ cacheBust }}">
+<script src="{{ asset('assets/trophy-compositor.js') }}?v={{ cacheBust }}"></script>
+<script src="{{ asset('assets/trophy-config-widget.js') }}?v={{ cacheBust }}"></script>
+<script>
+(function () {
+    var root = document.currentScript.closest('[data-trophy-editor]')
+        || document.querySelector('[data-trophy-editor]');
+    if (!root) return;
+    var preview = root.querySelector('[data-tr-preview]');
+
+    function field(name) {
+        return root.querySelector('[id$="_' + name + '"]');
+    }
+    function val(name) {
+        var el = field(name);
+        if (!el) return '';
+        return el.type === 'checkbox' ? el.checked : el.value;
+    }
+    function render() {
+        if (typeof window.composeTrophySvg !== 'function') return;
+        if (!val('style')) {
+            // "No trophy" — say so rather than drawing the default cup, which
+            // would read as "a trophy IS set" to anyone glancing at the page.
+            preview.innerHTML = '<span class="text-muted" style="font-size:.75rem">No trophy</span>';
+            return;
+        }
+        preview.innerHTML = window.composeTrophySvg({
+            style: val('style'), finish: val('finish'), ribbons: !!val('ribbons'),
+            ribbonPrimary: val('ribbonPrimary'), ribbonSecondary: val('ribbonSecondary'),
+        // The designed "cabinet tile" look — teal ground and a cast shadow —
+        // which composeTrophySvg leaves off by default for inline callers.
+        }, 4, {background: 'colour', shadow: true, padding: 2});
+    }
+    root.addEventListener('change', render);
+    root.addEventListener('input', render);
+    render();
+
+    if (typeof window.initTrophyConfigWidget === 'function') {
+        window.initTrophyConfigWidget(root);
+    }
+})();
+</script>
