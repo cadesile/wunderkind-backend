@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Controller\Admin;
 
+use App\Dto\Leaderboard\LeaderboardItemDto;
 use App\Entity\Admin;
 use App\Enum\LeaderboardCategory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -95,12 +96,27 @@ class AdminStatsControllerTest extends WebTestCase
             self::assertContains($category->value, $returned);
         }
 
+        // The expected shape is read off LeaderboardItemDto's own constructor rather
+        // than hardcoded here. A hardcoded list went stale the moment the kit/badge
+        // and country chips were added to the leaderboards, and this test sat red
+        // against correct code; reflecting the DTO means a new field can only fail
+        // this test by genuinely being missing from the serialized output.
+        $expectedKeys = array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionClass(LeaderboardItemDto::class))->getConstructor()->getParameters(),
+        );
+
         foreach ($data['boards'] as $board) {
             self::assertLessThanOrEqual(10, count($board['entries']));
             foreach ($board['entries'] as $entry) {
                 self::assertSame(
-                    ['rank', 'clubId', 'clubName', 'score', 'displayLabel'],
-                    array_keys($entry)
+                    $expectedKeys,
+                    array_keys($entry),
+                    sprintf(
+                        'Board "%s" serializes a different shape than LeaderboardItemDto declares — '
+                        . 'a property was added to the DTO without reaching toArray(), or vice versa.',
+                        $board['category'],
+                    ),
                 );
             }
         }
