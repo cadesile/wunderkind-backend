@@ -153,11 +153,11 @@ Shared conventions worth knowing before adding a section:
 - **Pixel sprites are composed client-side from `data-*` attributes**, never
   server-rendered as markup. `public/assets/kit-compositor.js`
   (`composeKitSvg()` — club kits/badges), `avatar-compositor.js`
-  (`composePlayerSpriteSvg()` — people), and `stadium-compositor.js`
-  (`composeStadiumSvg()`) all load before `landing.js` (see
-  `templates/landing/base.html.twig`). All three are mechanical ports of the
-  client's own sprite code — port verbatim if it changes, never
-  hand-reinterpret the pixel maths.
+  (`composePlayerSpriteSvg()` — people), `stadium-compositor.js`
+  (`composeStadiumSvg()`) and `trophy-compositor.js` (`composeTrophySvg()`) all
+  load before `landing.js` (see `templates/landing/base.html.twig`). All four
+  are verbatim ports of the client's own sprite code — and all four are
+  GENERATED, so you never port one by hand; see the build-rule bullet below.
 - **`clubBadgeIconsHtml()` in `landing.js` is the one club-identity renderer**,
   shared by the ticker, the Owner Spotlight, the community-stats lists and the
   global leaderboards. It emits badge + kit from a
@@ -185,13 +185,31 @@ Shared conventions worth knowing before adding a section:
   and nothing to keep in step. Three surfaces use it: the per-tier defaults
   table and league cards on the admin leagues screen, the `TrophyConfigType`
   field widget, and the landing page's honours board.
-- **Three generated sprite compositors, one build rule.**
-  `public/assets/{avatar,kit,trophy}-compositor.js` are each built from a
-  shared `assets/Components/*` TypeScript sprite by
-  `scripts/build-{avatar,kit,trophy}-compositor.sh` (esbuild type-stripping
-  only), gated on that sprite's own pixel-hash parity fixture. **Never hand-edit
-  one**; change the sprite and rebuild. `stadium-compositor.js` predates the
-  rule and is still a hand port.
+- **Four generated sprite compositors, one build rule.**
+  `public/assets/{avatar,kit,trophy,stadium}-compositor.js` are each built from
+  a shared `assets/Components/*` TypeScript sprite by
+  `scripts/build-{avatar,kit,trophy,stadium}-compositor.sh` (esbuild
+  type-stripping only), gated on that sprite's own pixel-hash parity fixture.
+  **Never hand-edit one**; change the sprite and rebuild. Each script is
+  deliberately separate and self-contained rather than factored into a shared
+  one — the four differ in where their source lives and in how their fixtures
+  are shaped.
+- **The stadium compositor is the one built from a multi-file drop.** Its source
+  is `assets/Components/facilitiesV2/facilities/` — `stadiumSprite.ts` plus the
+  shared `isoEngine.ts` that all four facility sites draw through. Only the
+  stadium is bundled (nothing in this repo renders the training ground, medical
+  centre or scouting site), but the build parity-checks **all four** sites'
+  hashes, because a drift anywhere in the shared engine is a drift in the
+  stadium's own renderer. The drop's `look="v1"` legacy tree is neither checked
+  nor shipped.
+- **Stadium levels are the sprite's 1-10, not the backend's 1-5.** Every
+  `*Level` field in `StadiumConfig` — stands and the shop/museum/car park alike
+  — runs 1-10, while `FacilityTemplate` levels run 1-5, so
+  `ClubSpotlightService::buildStadiumConfig()` doubles each one. (The buildings
+  ran 1-5 in the v1 sprite and were passed through raw; v2 redrew them for 10
+  levels.) The levels also floor at 1 so the renderer never indexes a size table
+  out of range, which is precisely why the separate `shop`/`museum`/`carpark`
+  booleans have to carry "not built at all".
 
 ## Known issue — not a design-system finding, flagged for visibility
 

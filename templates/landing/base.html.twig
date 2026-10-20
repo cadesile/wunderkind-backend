@@ -4,7 +4,7 @@
    Assets are versioned with `landing_v` so a deploy cannot leave a browser
    serving a stale stylesheet — there is no build step to fingerprint them.
 #}
-{% set landing_v = '20261006b' %}
+{% set landing_v = '20261020' %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -47,8 +47,9 @@
      the admin appearance widget (templates/admin/field/appearance.html.twig). Used
      here only by the Club Spotlight section to render the featured club's owner. -->
 <script src="{{ asset('assets/avatar-compositor.js') }}?v={{ landing_v }}"></script>
-<!-- Read-only stadium sprite rendering (composeStadiumSvg) — mechanical port of
-     assets/Components/facilities/{isoEngine,stadiumSprite}.ts, see
+<!-- Read-only stadium sprite rendering (composeStadiumSvg) — generated from the
+     shared assets/Components/facilitiesV2/facilities/{isoEngine,stadiumSprite}.ts
+     by scripts/build-stadium-compositor.sh, see
      public/assets/stadium-compositor.js's own docblock. Used only by the Club
      Spotlight section. -->
 <script src="{{ asset('assets/stadium-compositor.js') }}?v={{ landing_v }}"></script>

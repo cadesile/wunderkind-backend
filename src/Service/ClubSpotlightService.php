@@ -231,8 +231,8 @@ class ClubSpotlightService
      *  - shop/museum/carpark are booleans the renderer gates on, separate from
      *    the *Level ints. The defaults are shop:true, carpark:true, museum:false,
      *    so sending levels alone meant a club with no car park still drew a
-     *    full two-row one, a club with no shop drew a shop whose height came out
-     *    `undefined` (h = [4,4,5,6,7][-1]), and a maxed-out museum never drew at all.
+     *    full two-row one, a club with no shop drew a shop sized off a negative
+     *    level, and a maxed-out museum never drew at all.
      *  - seat/roof default to a red-and-white that has nothing to do with the
      *    featured club, on a section whose entire point is the club's identity.
      *    Taken from the club's own home kit when it has one.
@@ -255,26 +255,31 @@ class ClubSpotlightService
             $levelBySlug[$facility->getFacilitySlug()] = $facility->getLevel();
         }
 
-        // FacilityTemplate levels run 1-5; the ported StadiumConfig's stand
-        // fields are documented 1-10, so each level is doubled, with a floor
-        // of 1 so an unbuilt stand still renders rather than vanishing.
-        $standLevel = static fn (string $slug): int => max(1, ($levelBySlug[$slug] ?? 0) * 2);
-
-        $shopLevel    = max(0, $levelBySlug['club_shop'] ?? 0);
-        $museumLevel  = max(0, $levelBySlug['museum'] ?? 0);
-        $carparkLevel = max(0, $levelBySlug['car_park'] ?? 0);
+        // FacilityTemplate levels run 1-5; every StadiumConfig level field runs
+        // 1-10, so each level is doubled, with a floor of 1 so an unbuilt stand
+        // still renders rather than vanishing.
+        //
+        // The stands always ran 1-10. The shop/museum/car park ran 1-5 in the v1
+        // sprite and were passed through raw; v2 redrew all three for 10 levels
+        // with size proportional to sqrt(cost), so an un-doubled level 5 shop
+        // would now draw at roughly half the size it used to.
+        $spriteLevel = static fn (string $slug): int => max(1, ($levelBySlug[$slug] ?? 0) * 2);
+        $isBuilt     = static fn (string $slug): bool => ($levelBySlug[$slug] ?? 0) > 0;
 
         $config = [
-            'north' => $standLevel('north_stand'),
-            'east'  => $standLevel('east_stand'),
-            'south' => $standLevel('south_stand'),
-            'west'  => $standLevel('west_stand'),
-            'shopLevel'     => $shopLevel,
-            'museumLevel'   => $museumLevel,
-            'carparkLevel'  => $carparkLevel,
-            'shop'          => $shopLevel > 0,
-            'museum'        => $museumLevel > 0,
-            'carpark'       => $carparkLevel > 0,
+            'north' => $spriteLevel('north_stand'),
+            'east'  => $spriteLevel('east_stand'),
+            'south' => $spriteLevel('south_stand'),
+            'west'  => $spriteLevel('west_stand'),
+            'shopLevel'     => $spriteLevel('club_shop'),
+            'museumLevel'   => $spriteLevel('museum'),
+            'carparkLevel'  => $spriteLevel('car_park'),
+            // The levels are floored at 1 above so the renderer never indexes a
+            // size table out of range, which is exactly why these booleans have
+            // to carry "not built at all" on their own.
+            'shop'          => $isBuilt('club_shop'),
+            'museum'        => $isBuilt('museum'),
+            'carpark'       => $isBuilt('car_park'),
         ];
 
         $kit = $club->getHomeKitConfig() ?? [];
