@@ -90,7 +90,7 @@ class ClubSpotlightStadiumConfigTest extends TestCase
         $config = $this->stadiumConfig(['club_shop' => 0, 'museum' => 0, 'car_park' => 0]);
 
         // Without these the compositor's defaults draw a full two-row car park
-        // and a shop whose height is [4,4,5,6,7][-1] === undefined.
+        // and a shop sized off a negative level.
         $this->assertFalse($config['shop']);
         $this->assertFalse($config['carpark']);
         $this->assertFalse($config['museum']);
@@ -105,8 +105,23 @@ class ClubSpotlightStadiumConfigTest extends TestCase
         // museum defaults to FALSE in the compositor, so a built museum is the
         // case that silently never rendered before.
         $this->assertTrue($config['museum']);
-        $this->assertSame(3, $config['shopLevel']);
-        $this->assertSame(2, $config['museumLevel']);
+        // Doubled, like the stands: every StadiumConfig level field runs 1-10
+        // since the v2 sprite redrew the buildings for 10 levels.
+        $this->assertSame(6, $config['shopLevel']);
+        $this->assertSame(4, $config['museumLevel']);
+        $this->assertSame(2, $config['carparkLevel']);
+    }
+
+    /**
+     * The booleans carry "not built", because the levels cannot: they floor at 1
+     * so the renderer never indexes a size table out of range.
+     */
+    public function testUnbuiltBuildingsStillSendARenderableLevel(): void
+    {
+        $config = $this->stadiumConfig(['club_shop' => 0, 'museum' => 0, 'car_park' => 0]);
+
+        $this->assertSame(1, $config['shopLevel']);
+        $this->assertSame(1, $config['museumLevel']);
         $this->assertSame(1, $config['carparkLevel']);
     }
 

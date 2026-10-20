@@ -441,7 +441,10 @@
         }
         .spotlight-pitch svg { display: block; image-rendering: pixelated; }
         .spotlight-owner svg { width: auto; height: 120px; }
-        .spotlight-stadium svg { width: auto; height: 160px; }
+        /* 178px, not 160: the v2 facility sprite's canvas grew 276x216 to
+           324x240, so the old pinned height drew the bowl itself ~10%
+           smaller. 160 x 240/216 keeps it the size it has always been. */
+        .spotlight-stadium svg { width: auto; height: 178px; }
 
         .spotlight-footer {
             display: flex;
