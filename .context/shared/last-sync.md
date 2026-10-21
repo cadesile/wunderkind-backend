@@ -6,7 +6,8 @@
 > commits that have landed since `.context/` was last reviewed.
 
 - **New pass (2026-10-21), on top of commit 0f1e0c3** (uncommitted).
-  **Stages touched:** 04_interfaces, 06_documentation. Added the public
+  **Stages touched:** 01_overview, 02_architecture, 04_interfaces (routes.md,
+  controllers.md, services.md), 06_documentation, 07_synthesis. Added the public
   `GET /api/telemetry` endpoint (`Api\TelemetryController` +
   `docs/api/live-telemetry.md` + 6 functional tests), exposing the existing
   `LiveTelemetrySnapshot` aggregate as JSON for the React Native app — scoped by the

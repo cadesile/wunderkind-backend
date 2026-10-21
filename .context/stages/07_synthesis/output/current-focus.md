@@ -38,6 +38,19 @@ From `.context/stages/02_architecture/output/git-activity.md`'s
    dependency-floor bullet, `01_overview/output/environment.md`'s "Keeping PHP
    and dependencies patched", and root `CLAUDE.md`'s Testing section.
 
+5. **First JSON exposure of the live telemetry aggregate (2026-10-21)** —
+   `GET /api/telemetry` (`Api\TelemetryController`,
+   `docs/api/live-telemetry.md`). Notable less as a feature than as a pattern:
+   the data, its generator command and its 15-min cron had existed for a while
+   with **no endpoint at all**, because `LandingController` renders it
+   server-side into HTML — so "the service exists" did not imply "the app can
+   read it". The endpoint projects rather than dumps the snapshot, stripping
+   three stored keys (a persisted `DateTimeImmutable`, a generation-time
+   relative string, and the web-only dossier bundle). Same pass suppressed the
+   container's version-disclosure headers. Expect more of this shape as the app
+   grows: landing-page-only aggregates needing a client contract, where the
+   stored shape is not the servable shape.
+
 Clusters 1-2 are corroborated by migration history
 (`.context/stages/03_data/output/migrations.md`: the large Competition
 migration is the most structurally significant recent change) and by
