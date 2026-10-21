@@ -2,7 +2,7 @@
 
 For someone who has read nothing else yet.
 
-This repo is the **Symfony 8 / PHP 8.4 / PostgreSQL 16 backend** for
+This repo is the **Symfony 8.1 / PHP 8.5 / PostgreSQL 16 backend** for
 *The Wunderkind Factory*, a mobile-first football-academy management
 game (see `.context/shared/stack.md`). The real game client is a
 separate React Native repo that plays almost entirely offline —

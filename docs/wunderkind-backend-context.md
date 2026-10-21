@@ -1,12 +1,12 @@
 # wunderkind-backend — Project Context
 
-> Generated: 2026-06-19 23:21:43 | Duration: 40s | Stack: symfony 80 · PHP 8.4 · postgres:16 | Dev: lando
+> Generated: 2026-06-19 23:21:43 | Duration: 40s | Stack: symfony 81 · PHP 8.5 · postgres:16 | Dev: lando
 
 ---
 
 ## Overview
 
-Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players scout, develop, and trade young talent. The backend follows a hybrid client-authoritative architecture: gameplay (training, aging, weekly ticks) runs entirely on-device, while the API handles JWT authentication, anti-cheat sync validation, global leaderboards, and world data distribution. Built on Symfony 8 with PHP 8.4 and PostgreSQL 16, it exposes a REST API consumed by mobile clients alongside an EasyAdmin panel for internal management.
+Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-first youth football academy management game where players scout, develop, and trade young talent. The backend follows a hybrid client-authoritative architecture: gameplay (training, aging, weekly ticks) runs entirely on-device, while the API handles JWT authentication, anti-cheat sync validation, global leaderboards, and world data distribution. Built on Symfony 8.1 with PHP 8.5 and PostgreSQL 16, it exposes a REST API consumed by mobile clients alongside an EasyAdmin panel for internal management.
 
 ---
 
@@ -65,15 +65,15 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 | | |
 |---|---|
 | **Language**      | php |
-| **Framework**     | symfony 80 |
-| **PHP**           | 8.4 |
+| **Framework**     | symfony 81 |
+| **PHP**           | 8.5 |
 | **Database**      | postgres:16 |
 | **Dev env**       | lando (symfony) |
 
 ### Dependencies
 
 **require:**
-- `php`: >=8.4
+- `php`: >=8.5
 - `ext-ctype`: *
 - `ext-iconv`: *
 - `api-platform/core`: ^4.2
@@ -85,24 +85,24 @@ Wunderkind Backend is the server-side API for The Wunderkind Factory, a mobile-f
 - `lexik/jwt-authentication-bundle`: ^3.2
 - `nelmio/cors-bundle`: ^2.6
 - `nyholm/psr7`: ^1.8
-- `symfony/console`: 8.0.*
-- `symfony/dotenv`: 8.0.*
+- `symfony/console`: 8.1.*
+- `symfony/dotenv`: 8.1.*
 - `symfony/flex`: ^2
-- `symfony/framework-bundle`: 8.0.*
-- `symfony/google-mailer`: 8.0.*
-- `symfony/http-client`: 8.0.*
-- `symfony/mailer`: 8.0.*
+- `symfony/framework-bundle`: 8.1.*
+- `symfony/google-mailer`: 8.1.*
+- `symfony/http-client`: 8.1.*
+- `symfony/mailer`: 8.1.*
 - `symfony/monolog-bundle`: ^4.0
-- `symfony/resend-mailer`: 8.0.*
-- `symfony/runtime`: 8.0.*
-- `symfony/security-bundle`: 8.0.*
-- `symfony/uid`: 8.0.*
-- `symfony/yaml`: 8.0.*
+- `symfony/resend-mailer`: 8.1.*
+- `symfony/runtime`: 8.1.*
+- `symfony/security-bundle`: 8.1.*
+- `symfony/uid`: 8.1.*
+- `symfony/yaml`: 8.1.*
 
 **require-dev:**
 - `phpunit/phpunit`: ^13.1
-- `symfony/browser-kit`: 8.0.*
-- `symfony/css-selector`: 8.0.*
+- `symfony/browser-kit`: 8.1.*
+- `symfony/css-selector`: 8.1.*
 - `symfony/maker-bundle`: ^1.66
 
 ---

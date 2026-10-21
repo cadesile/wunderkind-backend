@@ -46,8 +46,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 All PHP commands must run inside the Lando container:
 
+**PHP runs on the 8.5 branch, but local and deployed are NOT on the same patch.**
+Deployed dev/prod pin `php:8.5.12-fpm-alpine` exactly (`Dockerfile`); local Lando runs
+PHP 8.5.7, because Lando can only boot `devwithlando/php` images and that family is
+rebuilt a few times a year. So local dev lags upstream security patches by design —
+read `.lando.yml`'s own comments before trying to "fix" the mismatch, and treat the
+local environment as unpatched. A PHP security release means bumping the `Dockerfile`
+now and the Lando image whenever Lando ships a newer build.
+
 ```bash
-lando start                          # spin up PHP 8.4 + PostgreSQL 16
+lando start                          # spin up PHP 8.5 + PostgreSQL 16
 lando php bin/console <command>      # Symfony console
 lando composer <command>             # Composer
 lando psql                           # PostgreSQL shell (db: wunderkind, user/pass: wunderkind)
@@ -163,6 +171,20 @@ lando php bin/console debug:firewall
   `static::createClient()`, re-fetch the `User` from the fresh EntityManager, then `loginUser()`.
   See `AdminMessageControllerTest::authenticatedRequest()`. This is why
   `InboxControllerTest` only ever asserts 401.
+- **Never name a test helper `runCommand()`.** Symfony 8.1's `KernelTestCase` pulls in
+  `ConsoleCommandAssertionsTrait`, which declares `public static function runCommand()`. A
+  non-static method of that name in a subclass is a hard PHP fatal at class-load time
+  (`Cannot make static method ... non static`) raised during PHPUnit's suite-*building*, so it
+  takes down the **entire run** with exit 255 and zero tests executed — not just that file.
+  `CompetitionProvisionInstancesCommandTest` uses `runProvisionCommand()` for this reason.
+  Either use the inherited static helper, or pick a distinct name.
+- **Don't assert EasyAdmin's `ea-clickable-row` class in a functional test.** It is no longer
+  server-rendered: from EasyAdmin 5.x (confirmed 5.7.0) the row carries
+  `data-default-action-url` + `role="link"` + `tabindex="0"`, and the bundle's own JS adds the
+  class at runtime via `querySelectorAll('[data-default-action-url]')`. DomCrawler executes no
+  JS, so that assertion can only ever fail — and its failure is **not** evidence row-click
+  regressed. Assert `role`/`data-default-action-url` and then follow the URL, as
+  `NotificationLogCrudControllerTest` does.
 - **Admin functional-test login** — the `admin` firewall uses a Doctrine `EntityUserProvider` that re-fetches the user by email on every request, so an in-memory-only `Admin` is silently treated as unauthenticated. Persist a real `Admin` first, then `$client->loginUser($admin, 'admin')` (see `tests/Controller/Admin/SocialAuthControllerTest.php`).
 
 ## Git Workflow

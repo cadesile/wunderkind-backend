@@ -1,4 +1,9 @@
-FROM php:8.4-fpm-alpine
+# PHP is pinned to an exact patch release, not the floating `8.5` tag, so a rebuild
+# can never silently land on a different (or older, from a cached base) PHP than the
+# one this image was verified against. 8.5.12 carries the 2026-10-21 security fixes
+# for GHSA-w8hw-w9fx-j79w / GHSA-6wmf-4rv5-p3rp (Core: state corruption via bailout).
+# Bump this deliberately when a new patch ships; `.lando.yml` tracks the same branch.
+FROM php:8.5.12-fpm-alpine
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -13,8 +18,14 @@ RUN apk add --no-cache \
         pdo \
         pdo_pgsql \
         pgsql \
-        intl \
-        opcache
+        intl
+
+# opcache is NOT in the list above, and must not be added back. PHP 8.5 compiles Zend
+# OPcache in statically — `php -m` already lists it on the bare base image — so
+# `docker-php-ext-install opcache` builds zero modules and the whole RUN step dies with
+# `cp: can't stat 'modules/*': No such file or directory`. That is what broke the first
+# 8.5 build. It stays enabled regardless: `opcache.enable` defaults to On for FPM
+# (`opcache.enable_cli` stays Off, as before).
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

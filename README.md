@@ -23,7 +23,7 @@ Unlike traditional management sims, Wunderkind Factory prioritizes the "human el
 | Layer | Technology |
 |---|---|
 | Frontend | React Native (Mobile) |
-| Backend | Symfony 8.0 (PHP 8.4) + API Platform v4 |
+| Backend | Symfony 8.1 (PHP 8.5) + API Platform v4 |
 | Database | PostgreSQL 16 |
 | Dev Ops | Lando + Docker |
 | Auth | lexik/jwt-authentication-bundle v3.2 |
@@ -61,7 +61,7 @@ JWT firewall → SyncController::sync()
 
 ### Prerequisites
 
-- [Lando](https://lando.dev/) (runs PHP 8.4 + PostgreSQL 16 via Docker)
+- [Lando](https://lando.dev/) (runs PHP 8.5 + PostgreSQL 16 via Docker)
 
 ### Setup
 

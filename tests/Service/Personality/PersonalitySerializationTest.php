@@ -80,8 +80,8 @@ class PersonalitySerializationTest extends TestCase
 
     private function callPrivate(object $svc, string $method, object $arg): array
     {
+        // No setAccessible() call — no-op since PHP 8.1, deprecated in 8.5.
         $m = new \ReflectionMethod($svc, $method);
-        $m->setAccessible(true);
         return $m->invoke($svc, $arg);
     }
 }

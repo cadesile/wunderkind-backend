@@ -5,7 +5,19 @@ not restated here.
 
 ## Local dev — Lando (`.lando.yml`)
 
-- Recipe: `symfony`, PHP 8.4, nginx, webroot `public/`
+- Recipe: `symfony`, nginx, webroot `public/`
+- **PHP 8.5.7, set by an image override — not by the recipe's `php:` key.** That key
+  still reads `'8.4'` on purpose: Lando 3.25.6's `symfony` builder keeps its own
+  version allowlist that stops at 8.4, and `php: '8.5'` aborts `lando start` with
+  `symfony-php version 8.5 is not supported`. The real version comes from
+  `services.appserver.overrides.image: devwithlando/php:8.5-fpm-7`. Lando can only
+  boot images from that family (`/lando-entrypoint.sh` lives inside them, so the
+  official `php:` images are not substitutable), and the family is rebuilt only every
+  few months — hence 8.5.7 (Jun 2026) rather than the `Dockerfile`'s 8.5.12. **Local
+  dev therefore lags upstream security patches by design; treat it as unpatched.**
+- Lando's images ship **no composer binary**, so the `composer` tooling command needs
+  the `build_as_root` installer step in `.lando.yml` — without it `lando composer`
+  fails with `composer: executable file not found in $PATH`.
 - Database service `database`: Postgres 16, forwarded to host port 5433,
   creds `wunderkind`/`wunderkind`, db name `wunderkind`
 - App server exposed on `127.0.0.1:52100:80`
@@ -14,6 +26,24 @@ not restated here.
   `lexik/jwt-authentication-bundle`
 - Tooling shortcuts: `lando php`, `lando composer`, `lando symfony` (runs
   `php bin/console`), `lando psql`
+
+## Keeping PHP and dependencies patched
+
+- **Audit with `lando composer audit`** (0 advisories as of 2026-10-21). Composer blocks
+  advisory-affected versions from even loading (`policy.advisories.block`, default on), so a
+  `MAJOR.MINOR.*` pin can make the whole resolve fail as a unit the moment every version on
+  that branch is affected and the fix lands only on the next minor — which is exactly what
+  forced Symfony 8.0.* -> 8.1.*. See `.context/shared/stack.md`'s dependency-floor bullet.
+  Consequence: a red `composer audit` may need a **minor** bump, not a patch bump; don't
+  assume the pin can hold.
+- **Two PHP versions are in play and they are not the same** — Lando 8.5.7, deployed 8.5.12
+  (see above). Verify a PHP upgrade in BOTH: `lando php vendor/bin/phpunit --no-coverage`
+  for the suite, and `docker build .` for the image, because the base image breaks
+  independently of the code (the PHP 8.5 opcache trap below was invisible to the suite and
+  failed only the build).
+- **Upgrade order that actually catches things:** bump the `Dockerfile` pin -> `docker build .`
+  -> bump `.lando.yml`'s image override -> `lando rebuild -y` -> `lando composer update`
+  -> `lando composer audit` -> full suite -> `lando php bin/console lint:container`.
 
 ## Developing against realistic data — `scripts/pull-prod-db.sh`
 
@@ -64,6 +94,18 @@ script — don't conflate the two just because both touch the local database.
 - Dev stack runs the same optimised prod container as production
   (`APP_ENV: prod` even in the dev compose file — dev is a deployment tier
   name, not a Symfony env name)
+- **PHP is pinned to an exact patch (`php:8.5.12-fpm-alpine`), not a floating
+  `8.5` tag** — a rebuild can't silently land on a different PHP than the one
+  the image was verified against, and the deployed version is auditable from
+  the `Dockerfile` alone. Bump it deliberately on each PHP security release
+  (8.5.12 carries the 2026-10-21 GHSA-w8hw-w9fx-j79w / GHSA-6wmf-4rv5-p3rp
+  fixes). The build pulls the base fresh every time — `docker/build-push-action`
+  on an ephemeral GitHub runner has no local base-image cache — so the pin is
+  for reproducibility and audit, not to defeat caching.
+- **`opcache` must not appear in the `Dockerfile`'s `docker-php-ext-install` list.**
+  PHP 8.5 compiles Zend OPcache in statically, so installing it as an extension builds
+  no module and fails the whole build (`cp: can't stat 'modules/*'`). It is active
+  anyway — `opcache.enable` defaults to On for FPM, `opcache.enable_cli` to Off.
 - Postgres runs as a sibling container (`postgres-dev`/equivalent),
   deliberately kept off the `web` network so it's unreachable from the
   proxy or the other stack

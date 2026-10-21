@@ -1,6 +1,6 @@
 # Project Context
 
-`wunderkind-backend` — Symfony 8 / PHP 8.4 / PostgreSQL 16 API + admin
+`wunderkind-backend` — Symfony 8.1 / PHP 8.5 / PostgreSQL 16 API + admin
 back office. Full plain-language summary:
 `stages/07_synthesis/output/overview.md`.
 
