@@ -5,6 +5,32 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-21), on top of commit c8f4d80** (this pass's own changes
+  are uncommitted on top of it). **Stages touched:** 01_overview, 02_architecture,
+  07_synthesis, plus `shared/stack.md`. A security-patching pass, user-initiated
+  off the 2026-10-21 PHP advisories (GHSA-w8hw-w9fx-j79w / GHSA-6wmf-4rv5-p3rp).
+  Two separate pieces of work: (1) **PHP 8.4 -> 8.5**, deployed images pinned to an
+  exact `php:8.5.12-fpm-alpine` instead of a floating tag, local Lando moved onto
+  `devwithlando/php:8.5-fpm-7` (PHP 8.5.7) via an `appserver` image override
+  because Lando 3.25.6's `symfony` recipe rejects `php: '8.5'` outright — so local
+  dev now deliberately trails deployed by five patches, recorded in `.lando.yml`'s
+  own comments. (2) **43 Composer advisories -> 0**, which required Symfony
+  8.0.* -> 8.1.* (not optional: Composer's advisory policy made the entire 8.0
+  branch unloadable), dragging EasyAdmin 5.0.1->5.7.0, Twig 3.23->3.30, API
+  Platform 4.2.19->4.4.5, PHPUnit 13.1.1->13.4.3. Four real breaks found and
+  fixed, each verified rather than assumed: PHP 8.5's statically-compiled opcache
+  failing `docker build` (`cp: can't stat 'modules/*'`), the
+  `ReflectionMethod::setAccessible()` deprecation (3 call sites), Symfony 8.1's
+  new static `KernelTestCase::runCommand()` colliding with a test helper and
+  killing the whole suite at exit 255, and EasyAdmin moving `ea-clickable-row`
+  from server-rendered markup to runtime JS. Also fixed a pre-existing unrelated
+  breakage: `lando composer` had no composer binary in the image at all. Updated
+  `shared/stack.md` (framework/PHP versions + a new dependency-security-floor
+  bullet), `01_overview/output/environment.md` (Lando PHP override, opcache trap,
+  new "Keeping PHP and dependencies patched" section),
+  `02_architecture/output/structure.md` (Dockerfile pin + opcache), and
+  `07_synthesis/output/current-focus.md` (new cluster 4).
+
 - **New pass (2026-10-20), on top of commit bf037a2** (this pass's own changes
   are uncommitted on top of it). **Stages touched:** 05_ui. Took the v2 facility
   sprite drop (`assets/Components/facilitiesV2/facilities/`, dated 2026-10-20)

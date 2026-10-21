@@ -97,8 +97,10 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
 
 ## Deployment wiring
 
-- **`Dockerfile`** — single image `php:8.4-fpm-alpine`, installs
-  `pdo_pgsql`, `intl`, `opcache`; runs
+- **`Dockerfile`** — single image `php:8.5.12-fpm-alpine` (exact patch pin, not a floating tag), installs
+  `pdo_pgsql`, `intl` — **not** `opcache`, which PHP 8.5 compiles in statically, so
+  installing it as an extension fails the build outright (`cp: can't stat 'modules/*'`);
+  it is still enabled, `opcache.enable` defaulting to On for FPM. Runs
   `composer install --no-dev --optimize-autoloader --no-scripts`; copies
   `docker/nginx.conf` and `docker/supervisord.conf`;
   `ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]`,

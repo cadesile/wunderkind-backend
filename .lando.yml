@@ -1,6 +1,10 @@
 name: wunderkind-backend
 recipe: symfony
 config:
+  # NOT the PHP the container actually runs — see the appserver override below.
+  # Lando 3.25.6's `symfony` recipe keeps its own version allowlist, which stops at
+  # 8.4; setting '8.5' here aborts `lando start` with "symfony-php version 8.5 is not
+  # supported". This value only has to satisfy that validator.
   php: '8.4'
   via: nginx
   webroot: public
@@ -19,6 +23,45 @@ events:
         fi
 
 services:
+  # THE IMAGE OVERRIDE, NOT `config.php` ABOVE, IS WHAT DECIDES THE LOCAL PHP VERSION.
+  #
+  # Two separate Lando limitations make this the only way onto the 8.5 branch locally:
+  #   1. The recipe's version allowlist stops at 8.4 (see the note on `config.php`), so
+  #      the supported knob cannot ask for 8.5 at all.
+  #   2. Lando can only run images from the `devwithlando/php` family — its entrypoint,
+  #      `/lando-entrypoint.sh`, lives inside them, so the official `php:` images are
+  #      not a drop-in substitute.
+  # Overriding the image satisfies (1) by going around it and respects (2).
+  #
+  # LOCAL DEV IS DELIBERATELY NOT ON THE SAME PHP PATCH AS DEPLOYED DEV/PROD. The
+  # Dockerfile pins the exact upstream patch (8.5.12, carrying the 2026-10-21
+  # GHSA-w8hw-w9fx-j79w / GHSA-6wmf-4rv5-p3rp fixes). The `devwithlando` family is
+  # rebuilt only every few months, so the newest build published, `8.5-fpm-7`, is PHP
+  # 8.5.7 from Jun 2026 — five patches behind, and WITHOUT today's security fix.
+  #
+  # Pinning it anyway is still worth it: left to itself Lando resolves whatever build
+  # the INSTALLED Lando version hardcodes, which is how this project ended up serving
+  # PHP 8.4.15 (Nov 2025) a year later. The pin makes local dev as current as Lando
+  # allows, and makes the remaining gap explicit instead of invisible.
+  #
+  # Treat local dev as unpatched and don't expose it. When a PHP security release lands,
+  # bump the Dockerfile immediately, then check whether Lando has shipped a newer build
+  # to move this to:
+  #   curl -s 'https://hub.docker.com/v2/repositories/devwithlando/php/tags?page_size=100' \
+  #     | python3 -c 'import sys,json;[print(r["name"]) for r in json.load(sys.stdin)["results"]]' \
+  #     | grep '^8.5-fpm'
+  appserver:
+    # These images ship no composer binary, so the `composer` tooling command below is
+    # dead without this — `composer: executable file not found in $PATH`.
+    build_as_root:
+      - |
+        if ! command -v composer >/dev/null 2>&1; then
+          curl -sS https://getcomposer.org/installer \
+            | php -- --install-dir=/usr/local/bin --filename=composer --2
+        fi
+    overrides:
+      image: devwithlando/php:8.5-fpm-7
+
   appserver_nginx:
     overrides:
       ports:

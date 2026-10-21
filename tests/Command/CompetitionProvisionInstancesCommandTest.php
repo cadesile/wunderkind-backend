@@ -34,7 +34,11 @@ class CompetitionProvisionInstancesCommandTest extends KernelTestCase
         return self::getContainer()->get('messenger.transport.async');
     }
 
-    private function runCommand(): void
+    // Named runProvisionCommand(), not runCommand(): Symfony 8.1's KernelTestCase pulls in
+    // ConsoleCommandAssertionsTrait, which declares a `public static function runCommand()`.
+    // A non-static override of that name is a hard PHP fatal at class-load time ("Cannot make
+    // static method ... non static"), which takes down the whole suite, not just this file.
+    private function runProvisionCommand(): void
     {
         $application = new Application(self::$kernel);
         $command     = $application->find('app:competition:provision-instances');
@@ -47,7 +51,7 @@ class CompetitionProvisionInstancesCommandTest extends KernelTestCase
         $this->em->persist($template);
         $this->em->flush();
 
-        $this->runCommand();
+        $this->runProvisionCommand();
 
         $instance = $this->em->getRepository(ActiveCompetition::class)->findOneBy(['template' => $template]);
         $this->assertNotNull($instance, 'A new instance should have been provisioned.');
@@ -70,7 +74,7 @@ class CompetitionProvisionInstancesCommandTest extends KernelTestCase
         $this->em->persist($existing);
         $this->em->flush();
 
-        $this->runCommand();
+        $this->runProvisionCommand();
 
         $instances = $this->em->getRepository(ActiveCompetition::class)->findBy(['template' => $template]);
         $this->assertCount(1, $instances, 'No second REGISTERING instance should be created for the same template.');

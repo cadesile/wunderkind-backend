@@ -24,6 +24,20 @@ From `.context/stages/02_architecture/output/git-activity.md`'s
    `.context/stages/04_interfaces/output/push-notifications.md`,
    `docs/api/competition-registration-snapshot-v2.md`.
 
+4. **Platform security upgrade (2026-10-21)** — a dependency/runtime pass rather
+   than a feature one, and the reason the stack's version numbers moved. PHP
+   8.4 -> 8.5 (deployed pinned at an exact `php:8.5.12-fpm-alpine`; local Lando
+   capped at 8.5.7 by Lando's own image family) for the 2026-10-21 Core
+   advisories, then Symfony 8.0.* -> 8.1.* plus EasyAdmin 5.0->5.7, Twig
+   3.23->3.30 and API Platform 4.2->4.4 to clear 43 Composer advisories down to
+   zero. Touched almost no application logic — the real work was four
+   compatibility breaks the upgrade exposed (PHP 8.5 static opcache failing the
+   image build, `ReflectionMethod::setAccessible()` deprecation, Symfony 8.1's
+   `runCommand()` trait collision killing the whole suite, and EasyAdmin moving
+   `ea-clickable-row` to client-side JS). See `.context/shared/stack.md`'s
+   dependency-floor bullet, `01_overview/output/environment.md`'s "Keeping PHP
+   and dependencies patched", and root `CLAUDE.md`'s Testing section.
+
 Clusters 1-2 are corroborated by migration history
 (`.context/stages/03_data/output/migrations.md`: the large Competition
 migration is the most structurally significant recent change) and by

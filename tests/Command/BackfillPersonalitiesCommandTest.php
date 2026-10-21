@@ -72,8 +72,9 @@ class BackfillPersonalitiesCommandTest extends TestCase
 
     public function testContextMatchesTheEntityType(): void
     {
+        // No setAccessible() call: it has been a no-op since PHP 8.1 and is deprecated
+        // as of 8.5, which the suite reports as a deprecation.
         $contextFor = new \ReflectionMethod(BackfillPersonalitiesCommand::class, 'contextFor');
-        $contextFor->setAccessible(true);
         $cmd = $this->command();
 
         foreach ([new Player(), new Staff('A', 'B', StaffRole::COACH), new Scout('S')] as $entity) {

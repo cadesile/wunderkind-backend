@@ -45,8 +45,8 @@ class SeedEventTemplateContractTest extends KernelTestCase
         self::bootKernel();
         $command = self::getContainer()->get($class);
 
+        // No setAccessible() call — no-op since PHP 8.1, deprecated in 8.5.
         $method = new \ReflectionMethod($command, 'buildTemplates');
-        $method->setAccessible(true);
 
         return $method->invoke($command);
     }

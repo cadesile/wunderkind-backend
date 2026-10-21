@@ -13,10 +13,16 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /**
  * Confirms the admin's "click a row to see the full payload" expectation is actually met:
- * EasyAdmin's own built-in row-click-to-detail behavior (`ea-clickable-row` +
- * `defaultActionUrl`, see vendor crud/index.html.twig) requires the DETAIL action to still be
+ * EasyAdmin's own built-in row-click-to-detail behavior requires the DETAIL action to still be
  * enabled — this only disables NEW/EDIT/DELETE, so it should already work, but hadn't been
  * verified end-to-end until now.
+ *
+ * Asserts on `data-default-action-url` + `role="link"`, NOT on the `ea-clickable-row` class.
+ * Up to EasyAdmin 5.0 that class was server-rendered; from 5.x (confirmed on 5.7.0,
+ * vendor crud/index.html.twig) the row carries `data-default-action-url`/`role="link"`/
+ * `tabindex="0"` and the bundle's own JS adds `ea-clickable-row` at runtime via
+ * `querySelectorAll('[data-default-action-url]')`. DomCrawler never executes that JS, so
+ * asserting the class can only ever fail here — it is not evidence the feature regressed.
  */
 class NotificationLogCrudControllerTest extends WebTestCase
 {
@@ -57,7 +63,7 @@ class NotificationLogCrudControllerTest extends WebTestCase
 
         $row = $crawler->filter(sprintf('tr[data-id="%s"]', $log->getId()));
         self::assertGreaterThan(0, $row->count(), 'The row for this log entry should be present.');
-        self::assertTrue($row->attr('class') !== null && str_contains($row->attr('class'), 'ea-clickable-row'), 'The row should be clickable (EasyAdmin\'s built-in row-click-to-detail).');
+        self::assertSame('link', $row->attr('role'), 'The row should be clickable (EasyAdmin\'s built-in row-click-to-detail).');
 
         $detailUrl = $row->attr('data-default-action-url');
         self::assertNotEmpty($detailUrl, 'The row should carry a default action URL to navigate to on click.');
