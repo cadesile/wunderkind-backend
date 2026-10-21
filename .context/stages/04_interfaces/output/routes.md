@@ -21,6 +21,11 @@ the end) — this file is the sole source of truth for the route surface.
   `POST /api/reset-password`, `POST /api/resend-password-reset`,
   `POST /api/sync`.
 - **`LandingController`** — public marketing site (Twig, not API JSON).
+  Renders `LiveTelemetryService::getSnapshot()` server-side into the HTML and
+  makes no client-side fetch of its own. Until 2026-10-21 it was the ONLY
+  consumer and there was no JSON telemetry endpoint at all; the same aggregate
+  is now also served by `Api\TelemetryController` (see below), so a change to
+  the snapshot shape has two consumers, not one.
   `GET /` (`landing_home`), `GET /delete-account`
   (`landing_delete_account`).
 - **`InitializeController`** `#[Route('/api/initialize')]` —
@@ -61,6 +66,7 @@ the end) — this file is the sole source of truth for the route surface.
 | `PoolController` | `/api/pool` | `POST /ensure` (`IsGranted('IS_AUTHENTICATED_FULLY')`) |
 | `ScoutSearchController` | `/api/scout` | `GET /foreign-clubs`, `GET /search` (now also takes `?ignore_country=` — excludes that country's nationality, same validation as `PlayerController::foreign()`) |
 | `StarterConfigController` | `/api` | `GET /starter-config` |
+| `TelemetryController` | `/api/telemetry` | `GET` — **public**, the global live-telemetry aggregate (24h counters + <=20-item incident feed) read from the cached `LiveTelemetrySnapshot` singleton; never aggregates per request. Sends `ETag`/`Last-Modified` off `generatedAt` and answers `If-None-Match` with 304 (snapshot regenerates every 15 min). Deliberately not a verbatim dump: strips the stored `at` (a persisted `DateTimeImmutable` that would serialize as a PHP `{date,timezone_type,timezone}` artifact), `time` (relative string frozen at generation) and `dossier` (web-overlay bulk, excluded by product decision). Contract: `docs/api/live-telemetry.md` |
 | `TransferLeaderboardController` | `/api/leaderboard/transfers` | `GET /top-sellers`, `GET /most-valuable` |
 | `TranslationController` | `/api/translations` | `GET /{code}`, `GET /{code}/version` — generic UI-copy catalogue, public, no auth; unknown/disabled code is a hard 404 (contrast the fallback-to-default behavior of the `?lang=` params above). See `docs/api/translations.md`. |
 | `VideoController` | `/api` | `GET /videos/latest` |
@@ -80,8 +86,12 @@ the end) — this file is the sole source of truth for the route surface.
   `/admin/leagues/overview|generate`, `/admin/facilities/overview`,
   `/admin/world/content|export|import`, `/admin/worldpack-cache`,
   `/admin/developer-tools/trigger-age21|cleanup-entities|generate-leaderboards|reset-database|nuclear-reset`,
-  `/admin/logs`. Also declares `configureMenuItems()` linking to every
-  EasyAdmin CRUD controller below.
+  `/admin/logs`, `/admin/telemetry-config` + `POST
+  /admin/telemetry-config/rebuild` (read-only view of the
+  `LiveTelemetrySnapshot` singleton plus a CSRF-guarded force-rebuild button —
+  the service's windows/limits are hardcoded consts, not admin-editable).
+  Also declares `configureMenuItems()` linking to every EasyAdmin CRUD
+  controller below.
 - **`AdminStatsController`** — `GET /admin/stats/growth`,
   `GET /admin/stats/leaderboards`,
   `GET /admin/stats/pool/{entity}` (`entity` restricted to

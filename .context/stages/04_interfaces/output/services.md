@@ -252,9 +252,22 @@ filename alone.
   including why there is no separate backfill command and why the command
   writes through to the non-aggregate `club_reputation` leaderboard entries
   itself, is in `docs/reputation-decay.md`.
-- **`LiveTelemetryService`** — feeds the landing page's live activity
-  feed; some entries (sackings, contract disputes, youth intake) are
-  illustrative and have no backing data — don't treat as real metrics.
+- **`LiveTelemetryService`** — feeds the landing page's live activity feed
+  (server-rendered Twig via `LandingController`) and, since 2026-10-21, the public
+  `GET /api/telemetry` endpoint the React Native app reads (`Api\TelemetryController`,
+  contract in `docs/api/live-telemetry.md`). **Two consumers now** — a change to the
+  snapshot or feed-item shape affects both, and the API projection strips three stored
+  keys (`at`, `time`, `dossier`) that must never reach a client. **Every counter and every feed line is backed by real data.** The
+  earlier six static sackings/boardroom-clash/contract-dispute/youth-intake lines
+  were illustrative filler with no backing data and were **removed by product
+  decision**; "no illustrative filler" is now a binding constraint on every
+  category added (see the service's class docblock and
+  `templates/landing/sections/_chairmans_terminal.html.twig`). Do not describe
+  this feed as containing placeholder entries. One genuine caveat remains:
+  `weeksPlayed` is an approximation (sync count x `WEEKS_PER_SYNC` = 4), not a
+  true weeks-elapsed count. `tableTurnover` also reads the 7-day feed window, not
+  the 24h stats window the HUD header advertises — deliberate, since
+  promotions/relegations are far rarer than syncs.
   `aggregate()` also produces `totalGoals`/`totalMatches` for the HUD's
   "Goals Logged" box, summed from `fixtures[]` and **deduplicated by
   `fixtureId`** — that array carries the syncing club's WHOLE division's

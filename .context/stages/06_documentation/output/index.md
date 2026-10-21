@@ -9,6 +9,7 @@ Root `CLAUDE.md` and `AGENTS.md` are excluded — they're the generated
 - `docs/api/account-delete.md` — API spec: irreversible account-deletion endpoint
 - `docs/api/admin-messages-client-integration.md` — how the game client consumes server-driven `AdminMessage` announcements (companion to `server-driven-messaging.md`)
 - `docs/api/community-stats.md` — four public, live-computed leaderboard endpoints ranking clubs by activity
+- `docs/api/live-telemetry.md` — contract for the public `GET /api/telemetry` (24h counters + incident feed for the React Native app); documents the three stored keys the endpoint strips, that `amountExact` is a pre-formatted GBP string with no raw-pence equivalent, and that `weeksPlayed`/`tableTurnover` are approximate/wider-windowed
 - `docs/api/countries.md` — spec for `GET /api/countries` (nationality/country/code mapping) and the new `countryCode` field on generated player/staff/scout objects (not yet human-confirmed via the Q5 questionnaire — added alongside the feature that introduced it)
 - `docs/api/leaderboard.md` — twelve public, cached leaderboard categories (`GET /api/leaderboard/{category}`)
 - `docs/api/npc-club-city-size.md` — spec for `region`/`citySize`/`populationSize`/`isCapital` fields on NPC club objects
