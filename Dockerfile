@@ -37,6 +37,8 @@ COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
+# zz- prefix so it sorts last in conf.d and wins over the base image's own ini files.
+COPY docker/php.ini /usr/local/etc/php/conf.d/zz-hardening.ini
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/jwt-entrypoint.sh /usr/local/bin/jwt-entrypoint.sh
 COPY docker/leaderboards-generate.sh /usr/local/bin/leaderboards-generate.sh

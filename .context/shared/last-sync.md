@@ -5,6 +5,45 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-21), on top of commit 0f1e0c3** (uncommitted).
+  **Stages touched:** 04_interfaces, 06_documentation. Added the public
+  `GET /api/telemetry` endpoint (`Api\TelemetryController` +
+  `docs/api/live-telemetry.md` + 6 functional tests), exposing the existing
+  `LiveTelemetrySnapshot` aggregate as JSON for the React Native app — scoped by the
+  human as public / scalars+feed / no dossier. Not a verbatim dump of the snapshot:
+  the stored feed items carry `at` (a real `DateTimeImmutable` persisted into the json
+  column, which json_encodes to a PHP `{date,timezone_type,timezone}` artifact), `time`
+  (a relative string frozen at generation, so stale on arrival and permanently frozen in
+  a client cache) and `dossier` (web boardroom-overlay bulk) — all three stripped, with
+  tests asserting they never reach a client. `capitalDeployedPence` is cast because the
+  `bigint` column hydrates as a string. Note `attachClubDossiers()` runs inside
+  `refresh()`, so dossiers ARE persisted — excluding them is a serializer strip, not an
+  avoided query. Known gap left deliberately: `amountExact` is a pre-formatted GBP
+  string and the raw pence is not stored per event, so a client cannot localise it;
+  fixing that needs a generator change + snapshot rebuild.
+  Same pass also suppressed the deployed container's version-disclosure headers
+  (`expose_php = Off` in a new `docker/php.ini`, `server_tokens off` in
+  `docker/nginx.conf`) — every response had been publishing `PHP/8.5.12` and
+  `nginx/1.30.4`. Verified from a real booted container: `X-Powered-By` gone
+  entirely, `Server` reduced to a bare `nginx`. Local Lando is unaffected (different
+  images, neither reads these files). Updated `01_overview/output/environment.md` and
+  `02_architecture/output/structure.md` for both.
+
+- **Doc-only pass (2026-10-21), on top of commit 0f1e0c3** (uncommitted).
+  **Stages touched:** 04_interfaces. Scoping a telemetry endpoint for the React
+  Native app surfaced two gaps in `04_interfaces/output/routes.md`: the
+  `DashboardController` bespoke-route list omitted `/admin/telemetry-config` and
+  `POST /admin/telemetry-config/rebuild`, and nothing recorded the **negative**
+  fact that there is no `/api/telemetry` route at all — `LiveTelemetryService`,
+  `LiveTelemetrySnapshot`, a generator command and a 15-min cron all exist, so the
+  natural assumption is that an endpoint does too. `LandingController` (Twig) is
+  its only consumer. Both now stated in routes.md. Also corrected a **stale** fact
+  in `04_interfaces/output/services.md`: it claimed some `LiveTelemetryService`
+  feed entries (sackings, contract disputes, youth intake) are illustrative with no
+  backing data. Those six static lines were removed by product decision and "real
+  events only" is now a binding constraint on every category — the note said the
+  opposite of the rule. No code changed.
+
 - **New pass (2026-10-21), on top of commit c8f4d80** (this pass's own changes
   are uncommitted on top of it). **Stages touched:** 01_overview, 02_architecture,
   07_synthesis, plus `shared/stack.md`. A security-patching pass, user-initiated
