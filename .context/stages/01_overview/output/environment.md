@@ -88,6 +88,16 @@ script — don't conflate the two just because both touch the local database.
 - `docker-compose.dev.yml` and `docker-compose.prod.yml` are structurally
   identical: both run the app container built from the root `Dockerfile`,
   image `ghcr.io/cadesile/wunderkind-backend:{dev,prod}`
+- **Four public hostnames, all proxying to the same container, no path rewriting**
+  (`deploy/proxy/Caddyfile`): prod serves `buildmyclub.co.uk`, `www.buildmyclub.co.uk`
+  and **`api.buildmyclub.co.uk`**; dev serves `dev.buildmyclub.co.uk` and
+  **`api.dev.buildmyclub.co.uk`**. The `api.` hosts are the intended client entry
+  points, but because nothing rewrites the path **the `/api` prefix is still
+  required there** — `api.buildmyclub.co.uk/api/telemetry` works,
+  `api.buildmyclub.co.uk/telemetry` 404s. Worth stating because the hostnames were
+  previously recorded nowhere in `.context/` (only the Caddyfile and a comment in
+  `docker-compose.dev.yml`), which is an easy way to document the wrong base URL in a
+  client contract.
 - TLS and host ports 80/443 are owned by a shared Caddy proxy
   (`deploy/proxy/`), reached over an external `web` Docker network — these
   stacks themselves bind no host ports

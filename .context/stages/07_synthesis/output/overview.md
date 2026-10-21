@@ -30,7 +30,9 @@ procedural generation of NPC clubs, players, and market pools. A newer
 clubs without touching their core fields.
 
 Deployment is straightforward: one Docker image, deployed identically to
-`dev` and `prod` tiers behind a shared Caddy proxy, with 7 cron jobs
+`dev` and `prod` tiers behind a shared Caddy proxy (clients call
+`api.buildmyclub.co.uk` / `api.dev.buildmyclub.co.uk`, still with the `/api`
+prefix), with 7 cron jobs
 baked directly into the image for periodic generation/leaderboard/
 competition-processing work
 (`.context/stages/02_architecture/output/structure.md`).

@@ -15,6 +15,21 @@ endpoint is the only JSON access to that aggregate.
 
 ## `GET /api/telemetry`
 
+**Base URL — use the `api.` host:**
+
+| Environment | Base URL |
+|---|---|
+| Production | `https://api.buildmyclub.co.uk` |
+| Dev/staging | `https://api.dev.buildmyclub.co.uk` |
+
+**The `/api` path prefix is still required on those hosts** — the subdomain does not
+replace it. `https://api.buildmyclub.co.uk/api/telemetry` is correct;
+`https://api.buildmyclub.co.uk/telemetry` returns **404**. Caddy routes all four
+hostnames (`buildmyclub.co.uk`, `www.`, `api.`, and the `dev.`/`api.dev.` pair) to the
+same container with no path rewriting, so the `www.`/apex forms serve this endpoint
+identically — but prefer `api.` from a client, so API traffic isn't tied to the
+marketing hostname. See `deploy/proxy/Caddyfile`.
+
 Public, no auth required. Reads the cached singleton snapshot and **never aggregates per
 request** — the aggregation walks every recent `SyncRecord` payload and is far too heavy
 for a request path.

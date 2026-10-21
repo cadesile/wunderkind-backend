@@ -5,6 +5,21 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Doc-only pass (2026-10-21), on top of commit 68331a5** (uncommitted).
+  **Stages touched:** 01_overview, 02_architecture, 04_interfaces, 07_synthesis,
+  plus `shared/stack.md`. The human spotted that the new telemetry endpoint's
+  documented base URL was wrong — and the root cause was a `.context/` gap: the
+  public hostnames were recorded NOWHERE in `.context/`, only in
+  `deploy/proxy/Caddyfile` and a comment in `docker-compose.dev.yml`. Caddy serves
+  **four** hostnames — prod `buildmyclub.co.uk` + `www.` + **`api.`**, dev `dev.` +
+  **`api.dev.`** — all reverse-proxied to the same container with **no path
+  rewriting**, so the `api.` hosts (the intended client entry points) still require
+  the `/api` prefix: `api.buildmyclub.co.uk/api/telemetry` is 200,
+  `api.buildmyclub.co.uk/telemetry` is 404 (both verified live). Recorded in
+  environment.md, structure.md's proxy bullet, routes.md's header (so every path in
+  that file has a stated host), stack.md and the synthesis overview, and added as a
+  Base URL table to `docs/api/live-telemetry.md`. No code changed.
+
 - **New pass (2026-10-21), on top of commit 0f1e0c3** (uncommitted).
   **Stages touched:** 01_overview, 02_architecture, 04_interfaces (routes.md,
   controllers.md, services.md), 06_documentation, 07_synthesis. Added the public
