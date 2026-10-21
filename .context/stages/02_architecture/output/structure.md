@@ -102,7 +102,11 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   installing it as an extension fails the build outright (`cp: can't stat 'modules/*'`);
   it is still enabled, `opcache.enable` defaulting to On for FPM. Runs
   `composer install --no-dev --optimize-autoloader --no-scripts`; copies
-  `docker/nginx.conf` and `docker/supervisord.conf`;
+  `docker/nginx.conf`, `docker/supervisord.conf` and `docker/php.ini` (the last
+  landing at `/usr/local/etc/php/conf.d/zz-hardening.ini` — `zz-` so it sorts
+  after the base image's own ini files and wins; currently just
+  `expose_php = Off`. **Lando does not read it** — local dev boots a
+  `devwithlando` image, not this one);
   `ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]`,
   `CMD ["/usr/bin/supervisord", ...]`. Bakes a busybox cron table into the
   image (`/var/spool/cron/crontabs/root`) with 10 scheduled jobs

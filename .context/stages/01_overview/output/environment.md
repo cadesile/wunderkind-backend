@@ -106,6 +106,17 @@ script — don't conflate the two just because both touch the local database.
   PHP 8.5 compiles Zend OPcache in statically, so installing it as an extension builds
   no module and fails the whole build (`cp: can't stat 'modules/*'`). It is active
   anyway — `opcache.enable` defaults to On for FPM, `opcache.enable_cli` to Off.
+- **Version-disclosure headers are suppressed in the deployed container** —
+  `expose_php = Off` (`docker/php.ini`) kills `X-Powered-By: PHP/<exact patch>`, and
+  `server_tokens off` (`docker/nginx.conf`) reduces `Server: nginx/<version>` to a bare
+  `nginx`. Both previously published the exact build on every response, which makes
+  matching the next advisory a lookup rather than a probe. `server_tokens off` is the
+  only knob core nginx offers; removing the header outright needs the third-party
+  headers-more module. Caddy fronts these stacks but passes the upstream `Server`
+  header through, so fixing it at nginx is what actually changes the public response.
+  **This does not apply to local Lando**, which serves via its own bitnami nginx and
+  a `devwithlando` PHP image — neither reads these files, so local responses still
+  carry versions.
 - Postgres runs as a sibling container (`postgres-dev`/equivalent),
   deliberately kept off the `web` network so it's unreachable from the
   proxy or the other stack

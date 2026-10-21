@@ -13,7 +13,9 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`LandingController`** — server-renders the public marketing site by
   calling `WorldOverviewService` directly (not over HTTP), plus
   `YouTubeFeedService`, `GameConfigRepository`, `ExcursionRepository`,
-  `ArchetypeShowcaseService`, `LiveTelemetryService`.
+  `ArchetypeShowcaseService`, `LiveTelemetryService` — the telemetry aggregate it
+  renders into the HTML is also served as JSON by `Api\TelemetryController`, so the
+  snapshot shape now has two consumers.
 - **`InitializeController`** — new-club/world bootstrap flow. Uses
   `ClubResolver`, `PlayerRepository`, `LeagueRepository`,
   `StarterPackService`, `WorldInitializationService`,
@@ -43,6 +45,13 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`CountryController`** — single invokable action, no repository —
   maps `App\Enum\Country::cases()` directly to `{name, country, code}`
   rows. Public, cacheable. See `docs/api/countries.md`.
+- **`TelemetryController`** — single invokable action over
+  `LiveTelemetrySnapshotRepository` (NOT `LiveTelemetryService`: it only needs the
+  cached singleton, never the aggregation). Public, cacheable, conditional-request
+  aware (`ETag`/`Last-Modified` from `generatedAt`, 304 on `If-None-Match`) because
+  the snapshot only changes every 15 min. Projects the snapshot rather than dumping
+  it — `serializeFeedItem()` strips `at`, `time` and `dossier`; see
+  `docs/api/live-telemetry.md` and `routes.md` for why each one must not ship.
 - **`ArchetypeController`** — single read action over `PlayerArchetypeRepository`;
   `?lang=` localization via `LanguageRepository` + `NarrativeTranslationService`.
 - **`LanguageController`** — single read action over `LanguageRepository`.
