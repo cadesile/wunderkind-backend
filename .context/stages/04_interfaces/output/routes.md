@@ -12,6 +12,12 @@ unused API Platform mount.
 No OpenAPI/Swagger spec file exists in this repo (see "API spec" note at
 the end) — this file is the sole source of truth for the route surface.
 
+**Host for every path below:** clients should use `https://api.buildmyclub.co.uk`
+(prod) / `https://api.dev.buildmyclub.co.uk` (dev). The `/api` prefix is still
+required on those hosts — Caddy does no path rewriting, so `/api/telemetry` works
+and `/telemetry` 404s. The `www.`/apex/`dev.` hostnames reach the same container and
+serve these paths identically; see `01_overview/output/environment.md`.
+
 ## `src/Controller/` (top-level)
 
 - **`SyncController`** `#[Route('/api')]` — `POST /api/login` (dead code

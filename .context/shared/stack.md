@@ -7,7 +7,9 @@
 - **Primary language:** PHP
 - **Framework:** Symfony 8.1 · PHP 8.5 · API Platform v4
 - **App directory:** `src/` (PSR-4 `App\` per `composer.json`)
-- **Dev environment:** Lando (recipe: symfony, php 8.5 via an image override — the recipe's own `php:` key still reads `'8.4'` because Lando 3.25.6's allowlist rejects 8.5; nginx, webroot `public/`) for local dev; Docker Compose (`docker-compose.dev.yml`, `docker-compose.prod.yml`) + `Dockerfile` for deployed dev/prod behind a shared Caddy proxy
+- **Dev environment:** Lando (recipe: symfony, php 8.5 via an image override — the recipe's own `php:` key still reads `'8.4'` because Lando 3.25.6's allowlist rejects 8.5; nginx, webroot `public/`) for local dev; Docker Compose (`docker-compose.dev.yml`, `docker-compose.prod.yml`) + `Dockerfile` for deployed dev/prod behind a shared Caddy proxy (prod:
+  `buildmyclub.co.uk`/`www.`/`api.`; dev: `dev.`/`api.dev.` — clients use the `api.`
+  host, and the `/api` path prefix is still required there)
 - **Database(s):** PostgreSQL 16
 - **Dependency security floor (2026-10-21):** `lando composer audit` is clean — 0 advisories.
   Reaching that forced **Symfony 8.0.* ‒> 8.1.*** (`extra.symfony.require` plus 17 explicit

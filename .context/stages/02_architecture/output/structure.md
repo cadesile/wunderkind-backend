@@ -150,7 +150,12 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   comment).
 - **`deploy/proxy/`** — a separate, hand-deployed shared Caddy 2 reverse
   proxy owning TLS termination and host ports 80/443, joining the same
-  external `web` network to reach the app containers by name.
+  external `web` network to reach the app containers by name. Routes
+  `buildmyclub.co.uk` + `www.` + `api.` to `wunderkind-prod`, and `dev.` +
+  `api.dev.` to `wunderkind-dev` — **four prod-side/dev-side hostnames with no
+  path rewriting**, so the `api.` hosts still need the `/api` prefix. Deployed by
+  hand on purpose: a per-branch workflow would have both tiers fighting over the
+  same Caddyfile path.
 - **`.github/workflows/deploy-prod.yml`** (push to `master`) /
   `deploy-dev.yml` (push to `dev`) — otherwise identical: build+push image
   to GHCR, `scp` the matching compose file to the Hetzner host, write

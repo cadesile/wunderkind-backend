@@ -54,7 +54,16 @@
     function register(c) { charts.push(c); return c; }
     function destroyIn(container) {
         charts = charts.filter(function (c) {
-            if (c.canvas && container.contains(c.canvas)) { c.destroy(); return false; }
+            if (c.canvas && container.contains(c.canvas)) {
+                // stop() before destroy(): every panel refresh destroys and immediately
+                // recreates its charts, and an animation still queued in Chart.js's
+                // global animator then ticks against a destroyed chart, throwing
+                // "this._fn is not a function" from Animation.tick and aborting the
+                // whole animation frame — which leaves OTHER charts half-rendered.
+                c.stop();
+                c.destroy();
+                return false;
+            }
             return true;
         });
     }
@@ -242,11 +251,25 @@
                 }]
             },
             options: {
+                // No animation: a 46px sparkline gains nothing from it, and these are
+                // destroyed/recreated on every refresh (see destroyIn).
+                animation: false,
                 layout: { padding: 0 },
                 plugins: { legend: { display: false }, tooltip: { enabled: false } },
                 scales: { x: { display: false }, y: { display: false, beginAtZero: true } }
             }
         }));
+    }
+
+    /** True when a series has at least one non-zero point, i.e. something to plot. */
+    function hasSignal(series) {
+        return series.some(function (v) { return Number(v) > 0; });
+    }
+
+    /** Wipe a sparkline canvas that no longer has a chart on it. */
+    function clearCanvas(canvas) {
+        var ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     // ── KPI band ─────────────────────────────────────────────────────────
@@ -286,7 +309,21 @@
             var series = growth.trend.series[metric];
             if (spark && series) {
                 destroyIn(spark.parentNode);
-                sparkline(spark, series, SPARK_COLOR[metric] || ACCENT);
+                // An all-zero series has no shape to draw. Chart.js renders it as a
+                // single flat stroke along the baseline, which spans the whole tile and
+                // reads as a rule drawn across the dashboard rather than as a chart.
+                // On invalidSyncs that stroke is DANGER red, so a perfectly healthy
+                // system (zero rejected syncs) painted a red line — alarming, and
+                // exactly backwards. Draw nothing instead; the tile's own value, its
+                // is-clean state and its sub-label already say "none".
+                // Side effect worth keeping: because this only draws when a value is
+                // non-zero, red now appears on invalidSyncs only when there really are
+                // invalid syncs.
+                if (hasSignal(series)) {
+                    sparkline(spark, series, SPARK_COLOR[metric] || ACCENT);
+                } else {
+                    clearCanvas(spark);
+                }
             }
         });
     }
