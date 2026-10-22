@@ -1433,7 +1433,12 @@ class DashboardController extends AbstractDashboardController
 
     public function configureAssets(): Assets
     {
-        return Assets::new()->addCssFile('admin-theme.css');
+        return Assets::new()
+            ->addCssFile('admin-theme.css')
+            // Admin-wide UI corrections. Currently gives EasyAdmin's unlabelled,
+            // keyboard-unreachable sidebar collapse control real button semantics
+            // (admin-theme.css gives it the visible face).
+            ->addJsFile('admin-ui.js');
     }
 
     public function configureDashboard(): Dashboard

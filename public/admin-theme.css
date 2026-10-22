@@ -134,6 +134,78 @@ body {
     text-transform: uppercase;
 }
 
+/* ── Sidebar collapse toggle ────────────────────── */
+/* EasyAdmin renders `#sidebar-resizer-handler` as a 3px-wide, full-height,
+   fully transparent strip pinned to the sidebar's edge, with a `w-resize`
+   cursor. Nothing about it is a resize: its click handler toggles the sidebar
+   between its "normal" and "compact" (64px icon-rail) widths and persists the
+   choice in localStorage under `ea/sidebar/width`.
+
+   So the only control for collapsing the nav looked like a drag edge, gave no
+   hint it had been clicked, and left no visible way back — and because
+   localStorage is per-origin, a sidebar collapsed on one environment stays
+   collapsed there and nowhere else, which reads as the environments having
+   different menus.
+
+   This gives that same element a real affordance. The toggle BEHAVIOUR is
+   EasyAdmin's and is deliberately untouched; only its appearance is ours.
+   The chevron is drawn from borders rather than an icon font, because the
+   bundle ships a mix of Font Awesome 5 and 6 families and the glyph name to
+   use is not stable across them. */
+#sidebar-resizer-handler {
+    /* It toggles; it does not resize. Say so with the cursor. */
+    cursor: pointer !important;
+}
+
+/* The round button face, straddling the sidebar edge. Safe to overhang:
+   `.ea-sidebar` is explicitly `overflow: visible` at desktop widths. */
+#sidebar-resizer-handler::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: -11px;
+    inline-size: 22px;
+    block-size: 22px;
+    border-radius: 50%;
+    background: #1e2a50;
+    border: 1px solid #2c3566;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+/* The chevron, centred on that face. Points back toward the sidebar when
+   expanded (click to collapse). */
+#sidebar-resizer-handler::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 21px;
+    inset-inline-end: -4px;
+    inline-size: 6px;
+    block-size: 6px;
+    border-inline-end: 2px solid #9bb0c4;
+    border-block-end: 2px solid #9bb0c4;
+    transform: rotate(135deg);
+    transition: border-color .15s ease;
+}
+
+/* Collapsed: the chevron points out of the sidebar (click to expand). */
+body.ea-sidebar-width-compact #sidebar-resizer-handler::after {
+    inset-inline-end: -8px;
+    transform: rotate(-45deg);
+}
+
+#sidebar-resizer-handler:hover::before,
+#sidebar-resizer-handler:focus-visible::before {
+    background: #2a3566;
+    border-color: #E8CF59;
+}
+#sidebar-resizer-handler:hover::after,
+#sidebar-resizer-handler:focus-visible::after {
+    border-color: #E8CF59;
+}
+#sidebar-resizer-handler:focus-visible {
+    outline: none;
+}
+
 /* Sidebar section headings */
 .menu-section > span,
 .menu-section > .nav-link-title {
