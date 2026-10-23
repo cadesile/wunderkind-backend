@@ -111,6 +111,24 @@ Read-only report: enum/capability status, which registry categories are present 
 back to generic, whether a name pool exists, league/NPC-club/worldpack-cache coverage per
 tier, and whether `StarterConfig` has an ability-range entry and the player-visibility flag.
 
+Then check the pool can actually serve a new club in that country:
+
+```bash
+lando php bin/console app:starter-pack:check <CODE>          # tier 8, where new clubs start
+```
+
+Or in the browser: **Configuration → Starter Pack Check** (`/admin?routeName=admin_starter_pack_check`).
+Both are read-only — counts only, nothing is created or consumed, so they are safe to run
+against production.
+
+`app:country:check` can report a country as fully stood up while club creation still fails:
+it checks that *content and world data* exist, not that the **player pool** holds players who
+match the starter draw. That draw filters on the tier's ability band **and**
+`PoolConfig::$playerFirstTeamAgeMin` at once, and those two can each be well-stocked while
+their intersection is empty — most often when a tier's configured band sits inside the youth
+ability ceiling, so every player low enough to match is too young to be drawn. This check
+reports the draw filter by filter and names the step where the count collapses.
+
 ## 6. Decide whether to make it player-visible
 
 `StarterConfig::enabledCountries` is a *separate*, deliberately decoupled concept from

@@ -132,6 +132,12 @@ serve these paths identically; see `01_overview/output/environment.md`.
   `POST /admin/worldpack-cache/warm-tier`.
 - **`PoolConfigController`** —
   `/admin/{player,staff,investor}-pool-config[/save|/generate-chunk|/counts|/clear]`.
+- **`StarterPackCheckController`** — `GET /admin/starter-pack-check`
+  (`admin_starter_pack_check`, linked under Configuration). Read-only
+  "can a new club in this country be given a starter pack right now?"
+  diagnostic — counts only, consumes nothing, safe against production.
+  Country + tier come from the query string so a result is a linkable URL.
+  CLI twin: `app:starter-pack:check <CODE> [--tier=N]`.
 - **`CompetitionEntrantCrudController`** — in addition to being an
   EasyAdmin CRUD controller (see below), declares one custom action:
   `GET|POST /admin/competition-entrant/{entrant}/generate-spoof`.

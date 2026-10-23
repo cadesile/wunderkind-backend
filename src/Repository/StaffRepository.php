@@ -141,4 +141,23 @@ class StaffRepository extends ServiceEntityRepository
             'nested' => StatBuckets::nested('role', $roles, $nested, ['ability', 'nationality', 'age']),
         ];
     }
+
+    /**
+     * Pool staff of one role, optionally narrowed to a nationality — the same two draws
+     * StarterPackService::fillStaffRole() makes (native first, then any), counted rather
+     * than fetched so the diagnostic can report a shortfall without consuming anything.
+     */
+    public function countInPoolByRole(StaffRole $role, ?string $nationality = null): int
+    {
+        $qb = $this->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->andWhere('s.role = :role')
+            ->setParameter('role', $role);
+
+        if ($nationality !== null) {
+            $qb->andWhere('s.nationality = :nationality')->setParameter('nationality', $nationality);
+        }
+
+        return (int) $qb->getQuery()->getSingleScalarResult();
+    }
 }

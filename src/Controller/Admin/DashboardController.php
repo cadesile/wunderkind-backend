@@ -1507,6 +1507,7 @@ class DashboardController extends AbstractDashboardController
         ]);
         yield MenuItem::subMenu('Configuration', 'fa fa-sliders')->setSubItems([
             MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config'),
+            MenuItem::linkToRoute('Starter Pack Check', 'fa fa-vial', 'admin_starter_pack_check'),
             MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config'),
             MenuItem::linkToRoute('Player Pool Config', 'fa fa-person-running', 'admin_player_pool_config'),
             MenuItem::linkToRoute('Staff Pool Config', 'fa fa-users', 'admin_staff_pool_config'),

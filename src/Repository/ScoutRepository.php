@@ -96,4 +96,20 @@ class ScoutRepository extends ServiceEntityRepository
             'nested' => StatBuckets::nested('nationality', $nationality, $nested, ['experience', 'age']),
         ];
     }
+
+    /**
+     * Pool scouts, optionally narrowed to a nationality. Counterpart to
+     * StaffRepository::countInPoolByRole() for the starter-pack diagnostic; scouts have no
+     * role axis and, unlike Player/Staff, are not deleted when assigned.
+     */
+    public function countInPool(?string $nationality = null): int
+    {
+        $qb = $this->createQueryBuilder('s')->select('COUNT(s.id)');
+
+        if ($nationality !== null) {
+            $qb->andWhere('s.nationality = :nationality')->setParameter('nationality', $nationality);
+        }
+
+        return (int) $qb->getQuery()->getSingleScalarResult();
+    }
 }

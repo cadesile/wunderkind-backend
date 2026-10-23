@@ -126,6 +126,10 @@ actually *does* (which service/repo it calls), not restated route paths.
   quick-edit actions. `LeagueAdminController` also has
   `bulkEditTierDefaults()` (League Tier Defaults screen), using
   `GameConfigRepository`/`LeagueRepository` alongside `EntityManagerInterface`.
+- **`StarterPackCheckController`** — renders
+  `StarterPackDiagnosticService`'s result for one country/tier. No writes,
+  no entity consumption; the same result object the
+  `app:starter-pack:check` command prints.
 - **`BetaRequestInviteController`** — sends beta invites via
   `EmailVerificationService` + `EntityManagerInterface`.
 - **`SocialAuthController`** — Facebook/Twitter OAuth connect/callback/

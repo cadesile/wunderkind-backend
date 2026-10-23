@@ -489,6 +489,21 @@ filename alone.
   now under-fills loudly (`starter_pack.initialize.position_underfilled`) and,
   if nothing at all qualifies, raises `InsufficientStarterPoolException` —
   a visible failure rather than a squad of children.
+  `resolveAbilityRange(country, tier)` is public so the diagnostic below reports
+  the exact band the real draw will use.
+- **`StarterPackDiagnosticService`** — read-only "can a starter pack be built
+  for country X right now?" check, behind both `app:starter-pack:check <CODE>`
+  and the admin screen `admin_starter_pack_check`. Counts only; creates and
+  consumes nothing. It reports the draw as a **funnel** (position → + ability
+  band → + age floor → + nationality) because the two filters above can each
+  be well-stocked while their *intersection* is empty: a tier band that sits
+  inside the youth ability ceiling (`PoolConfig::abilityCeilingFractionForAge()`)
+  can only ever be matched by players too young to clear
+  `playerFirstTeamAgeMin`, so a 20k-row pool reports zero and the pool totals on
+  the admin screens look fine. It borrows `resolveAbilityRange()`,
+  `distributeByPosition()` and the age floor from the real draw rather than
+  re-deriving them, and suggests a workable band from the abilities
+  age-eligible players actually carry.
 - **`SessionRevocationService`** — signs a `User` out everywhere. Owns **both**
   halves, because either alone leaves them partially logged in: it bumps
   `User::$tokenVersion` (retiring every already-issued stateless access token —
