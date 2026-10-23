@@ -55,7 +55,7 @@ class CompetitionTemplate
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $minClubAgeSeasons = 0;
 
-    /** Pence. Defined for the admin UI/schema; not enforced/charged in Phase 1. */
+    /** One-off registration entry fee in pence (legacy column name entry_fee_per_round). */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $entryFeePerRound = 0;
 
@@ -186,6 +186,9 @@ class CompetitionTemplate
 
     public function getMinClubAgeSeasons(): int { return $this->minClubAgeSeasons; }
     public function setMinClubAgeSeasons(int $minClubAgeSeasons): static { $this->minClubAgeSeasons = $minClubAgeSeasons; return $this; }
+
+    public function getEntryFeePence(): int { return $this->entryFeePerRound; }
+    public function setEntryFeePence(int $entryFeePence): static { $this->entryFeePerRound = $entryFeePence; return $this; }
 
     public function getEntryFeePerRound(): int { return $this->entryFeePerRound; }
     public function setEntryFeePerRound(int $entryFeePerRound): static { $this->entryFeePerRound = $entryFeePerRound; return $this; }

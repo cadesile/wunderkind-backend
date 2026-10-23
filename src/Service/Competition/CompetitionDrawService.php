@@ -11,9 +11,11 @@ use App\Entity\Competition\CompetitionRound;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
+use App\Enum\MessageSenderType;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
+use App\Service\InboxService;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -33,6 +35,7 @@ class CompetitionDrawService
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly ?InboxService $inboxService = null,
     ) {}
 
     /** @return int Number of rounds this call actually drew (0 if none were due, or all were claimed by an overlapping tick). */
@@ -126,6 +129,37 @@ class CompetitionDrawService
 
         $round->setStartedAt($now);
         $round->setMatchesResolveAt($this->resolveDueAt($round, $now));
+
+        if ($this->inboxService !== null) {
+            $templateName  = $activeCompetition->getTemplate()->getName();
+            $competitionId = (string) $activeCompetition->getId();
+            foreach ($fixtures as $fixture) {
+                $home = $fixture->getHomeEntrant();
+                $away = $fixture->getAwayEntrant();
+                foreach ([[$home, $away], [$away, $home]] as [$entrant, $opponent]) {
+                    if (!$entrant instanceof CompetitionEntrant) {
+                        continue;
+                    }
+                    $opponentName = $opponent?->getClub()->getName() ?? 'TBD';
+                    $this->inboxService->createMessage(
+                        club: $entrant->getClub(),
+                        senderType: MessageSenderType::COMPETITION,
+                        senderName: $templateName,
+                        subject: sprintf('%s draw: %s vs %s', $round->getLabel(), $home?->getClub()->getName() ?? 'TBD', $away?->getClub()->getName() ?? 'TBD'),
+                        body: sprintf('You have been drawn against %s in the %s of the %s.', $opponentName, $round->getLabel(), $templateName),
+                        offerData: [
+                            'type'          => 'ROUND_DRAWN',
+                            'link'          => ['kind' => 'match', 'id' => (string) $fixture->getId()],
+                            'competitionId' => $competitionId,
+                            'roundId'       => (string) $round->getId(),
+                            'fixtureId'     => (string) $fixture->getId(),
+                        ],
+                        relatedEntityType: 'competition_fixture',
+                        relatedEntityId: (string) $fixture->getId(),
+                    );
+                }
+            }
+        }
 
         $this->pushNotificationService->notifyUsers(
             $this->userIdsFor($fixtures),

@@ -30,16 +30,18 @@ class RewardApplierService
 
     public function applyVictorPrize(CompetitionEntrant $winner, ActiveCompetition $activeCompetition): void
     {
-        $template = $activeCompetition->getTemplate();
+        $template        = $activeCompetition->getTemplate();
+        $combinedEffects = [];
+        $firstClaimId    = null;
+        $now             = new \DateTimeImmutable();
 
         if ($template->getVictorPrize() > 0) {
-            $this->claimAndDeliver(
-                $winner,
-                null,
-                'victor_prize',
-                [['type' => 'ledger_delta', 'amountPence' => $template->getVictorPrize()]],
-                $template->getName(),
-            );
+            $victorEffects = [['type' => 'ledger_delta', 'amountPence' => $template->getVictorPrize()]];
+            $claimId       = $this->recordClaim($winner, null, 'victor_prize', $victorEffects, $now);
+            if ($claimId !== null) {
+                $firstClaimId    ??= $claimId;
+                $combinedEffects = array_merge($combinedEffects, $victorEffects);
+            }
         }
 
         foreach ($template->getRewardTemplates() as $rewardTemplate) {
@@ -47,20 +49,48 @@ class RewardApplierService
             if ($effects === []) {
                 continue;
             }
-            $this->claimAndDeliver($winner, $rewardTemplate, $rewardTemplate->getSlug(), $effects, $template->getName());
+            $claimId = $this->recordClaim($winner, $rewardTemplate, $rewardTemplate->getSlug(), $effects, $now);
+            if ($claimId !== null) {
+                $firstClaimId    ??= $claimId;
+                $combinedEffects = array_merge($combinedEffects, $effects);
+            }
         }
+
+        if ($combinedEffects === [] || $firstClaimId === null) {
+            return;
+        }
+
+        $templateName  = $template->getName();
+        $competitionId = (string) $activeCompetition->getId();
+
+        $message = new InboxMessage(
+            club:       $winner->getClub(),
+            senderType: MessageSenderType::COMPETITION,
+            senderName: $templateName,
+            subject:    "You won the {$templateName}!",
+            body:       "Congratulations — your club won the {$templateName}. Accept to claim your prize.",
+        );
+        $message->setOfferData([
+            'type'          => 'COMPETITION_WON',
+            'link'          => ['kind' => 'competition', 'id' => $competitionId],
+            'effects'       => $combinedEffects,
+            'competitionId' => $competitionId,
+        ]);
+        $message->setRelatedEntityType('EntrantRewardClaim');
+        $message->setRelatedEntityId((string) $firstClaimId);
+
+        $this->em->persist($message);
     }
 
     /** @param list<array<string, mixed>> $effects */
-    private function claimAndDeliver(
+    private function recordClaim(
         CompetitionEntrant $entrant,
         ?RewardTemplate $rewardTemplate,
         string $triggerContext,
         array $effects,
-        string $templateName,
-    ): void {
-        $id  = new UuidV7();
-        $now = new \DateTimeImmutable();
+        \DateTimeImmutable $now,
+    ): ?UuidV7 {
+        $id = new UuidV7();
 
         // Idempotency backstop against a round-processor retry re-applying the Final's
         // reward: the two partial unique indexes on entrant_reward_claim (with/without
@@ -81,26 +111,6 @@ class RewardApplierService
             ],
         );
 
-        if ($affected === 0) {
-            return;
-        }
-
-        $message = new InboxMessage(
-            club:       $entrant->getClub(),
-            senderType: MessageSenderType::COMPETITION,
-            senderName: $templateName,
-            subject:    $triggerContext === 'victor_prize' ? "You won the {$templateName}!" : "Reward from the {$templateName}",
-            body:       $triggerContext === 'victor_prize'
-                ? "Congratulations — your club won the {$templateName}. Accept to claim your prize."
-                : "You've earned a reward from the {$templateName}. Accept to claim it.",
-        );
-        $message->setOfferData([
-            'effects'       => $effects,
-            'competitionId' => (string) $entrant->getActiveCompetition()->getId(),
-        ]);
-        $message->setRelatedEntityType('EntrantRewardClaim');
-        $message->setRelatedEntityId((string) $id);
-
-        $this->em->persist($message);
+        return $affected > 0 ? $id : null;
     }
 }

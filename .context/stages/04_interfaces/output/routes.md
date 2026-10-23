@@ -53,16 +53,19 @@ serve these paths identically; see `01_overview/output/environment.md`.
 | `ArchetypeController` | `/api/archetypes` | `GET` (single action; optional `?lang=` localizes `name`/`description` in place, falling back to the default language on an unknown/disabled code — see `docs/api/translations.md`) |
 | `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
 | `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /all`, `GET /status` |
+| `ClubHubController` | `/api/club` | `GET /hub`, `GET /competitions` (`IsGranted('ROLE_CLUB')`) — combined Tournament Hub read and club-entered competition history |
 | `ClubKitIdentityController` | `/api/club/kit-identity` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the real club's own kit+badge identity (`homeKitConfig`/`awayKitConfig`/`badgeConfig`); see `docs/api/club-kit-identity.md` |
 | `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-wins`, `/most-development`, `/most-seasons`, `/most-trophies` |
-| `CompetitionController` | `/api/competitions` | `GET /available`, `POST /{id}/register`, `POST /{id}/resubmit`, `GET /{id}` — register/resubmit also trigger push notifications (`PushNotificationService`) to other entrants |
+| `CompetitionController` | `/api/competitions` | `GET ''` (filtered list), `GET /champions`, `GET /available`, `GET /active`, `POST /{id}/register`, `POST /{id}/withdraw`, `POST /{id}/resubmit`, `GET /{id}` (supports `ETag` / `If-None-Match` 304) |
+| `FriendlyController` | `/api` | `GET /friendlies/challenges`, `GET /club/friendlies/challenges`, `POST /friendlies/challenges`, `POST /friendlies/challenges/{challengeId}/cancel`, `POST /friendlies/challenges/{challengeId}/accept` |
+| `MatchController` | `/api` | `GET /matches/{matchId}`, `GET /club/matches` (`?state=upcoming\|recent`), `GET /club/h2h/{opponentClubId}` |
 | `CountryController` | `/api/countries` | `GET` — public, no auth, cacheable (1h). One row per `Country` case: `{name: nationality demonym, country: display label, code}` — the canonical mapping clients should read instead of keeping their own copy. See `docs/api/countries.md`. |
 | `DeviceTokenController` | `/api/device-tokens` | `POST ''` (`IsGranted('ROLE_CLUB')`, upserts by `deviceToken`), `DELETE /{deviceToken}` — FCM push registration, see `services.md`'s `PushNotificationService` |
 | `EventController` | `/api/events` | `GET /templates` (optional `?category=` narrows to one `EventCategory`, e.g. `MATCH_NARRATIVE`; optional `?lang=` localizes `title`/`bodyTemplate` in place, falling back to the default language on an unknown/disabled code — see `docs/api/translations.md`) |
 | `ExcursionController` | `/api/excursions` | `GET` (optional `?lang=`, same localize-in-place behavior as `EventController` above, for `title`/`body`; `versionHash` is computed over the localized values) |
 | `FinanceController` | `/api/finance` | `GET /overview`, `GET /investors`, `GET /sponsors`, `POST /sponsors/{id}/terminate` |
 | `GameConfigController` | `/api` | `GET /game-config` (optional `?lang=` localizes each `facilityTemplates[]` entry's `label`/`description` in place) |
-| `InboxController` | `/api/inbox` | `GET ''`, `GET /{id}`, `POST /{id}/accept`, `POST /{id}/reject`, `POST /{id}/read` |
+| `InboxController` | `/api/inbox` | `GET ''`, `GET /{id}`, `POST /{id}/accept`, `POST /{id}/reject`, `POST /{id}/read`, `POST /{id}/dismiss` |
 | `LanguageController` | `/api/languages` | `GET` — enabled languages, public, no auth |
 | `LeaderboardController` | `/api` | `GET /leaderboard/{category}` |
 | `LeagueController` | `/api/league` | `POST /conclude-season`, `GET /season-history`, `GET /season-history/{season}` |

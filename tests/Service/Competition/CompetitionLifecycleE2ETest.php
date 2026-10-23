@@ -168,7 +168,11 @@ class CompetitionLifecycleE2ETest extends KernelTestCase
         $this->assertSame(CompetitionEntrantStatus::WINNER, $champion->getStatus());
 
         $messages = $this->em->getRepository(\App\Entity\InboxMessage::class)->findBy(['club' => $champion->getClub()]);
-        $this->assertCount(1, $messages);
-        $this->assertSame(500_000, $messages[0]->getOfferData()['effects'][0]['amountPence']);
+        $prizeMessages = array_values(array_filter(
+            $messages,
+            static fn (\App\Entity\InboxMessage $m): bool => ($m->getOfferData()['type'] ?? null) === 'COMPETITION_WON',
+        ));
+        $this->assertCount(1, $prizeMessages);
+        $this->assertSame(500_000, $prizeMessages[0]->getOfferData()['effects'][0]['amountPence']);
     }
 }

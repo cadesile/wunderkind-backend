@@ -71,6 +71,70 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function findLatestCompletedForTemplate(CompetitionTemplate $template): ?ActiveCompetition
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.template = :template')
+            ->andWhere('a.status = :status')
+            ->setParameter('template', $template->getId())
+            ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
+            ->orderBy('a.completedAt', 'DESC')
+            ->addOrderBy('a.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
+     * Consolidated filterable competition query for GET /api/competitions.
+     *
+     * @param list<ActiveCompetitionStatus>|null $statuses
+     * @param list<int>|null                     $capacities
+     * @return list<ActiveCompetition>
+     */
+    public function findFiltered(
+        ?array $statuses = null,
+        ?array $capacities = null,
+        ?string $templateId = null,
+        string $sort = 'startsAt',
+        int $offset = 0,
+        int $limit = 20,
+    ): array {
+        $qb = $this->createQueryBuilder('a')
+            ->innerJoin('a.template', 't')
+            ->where('t.isActive = true');
+
+        if ($statuses !== null && $statuses !== []) {
+            $qb->andWhere('a.status IN (:statuses)')
+                ->setParameter('statuses', $statuses);
+        } else {
+            $qb->andWhere('a.status != :cancelled')
+                ->setParameter('cancelled', ActiveCompetitionStatus::CANCELLED);
+        }
+
+        if ($capacities !== null && $capacities !== []) {
+            $qb->andWhere('a.entrantCapacity IN (:capacities)')
+                ->setParameter('capacities', $capacities);
+        }
+
+        if ($templateId !== null && $templateId !== '') {
+            $qb->andWhere('t.id = :templateId')
+                ->setParameter('templateId', $templateId);
+        }
+
+        if ($sort === 'completedAt') {
+            $qb->orderBy('a.completedAt', 'DESC')
+                ->addOrderBy('a.createdAt', 'DESC');
+        } else {
+            $qb->orderBy('a.createdAt', 'DESC');
+        }
+
+        return $qb->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
     /**
      * Candidates for CompetitionAutoFillService — still REGISTERING, opted into auto-fill,
      * with at least one entrant already registered (the delay is measured from that

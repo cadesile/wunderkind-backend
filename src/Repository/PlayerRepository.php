@@ -473,4 +473,81 @@ class PlayerRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
+    /**
+     * Counts pool players under any combination of the filters the starter-pack and
+     * world-init draws apply. Every argument is optional so one method can report each
+     * step of that draw's funnel — position alone, then + ability band, then + age floor,
+     * then + nationality — which is how StarterPackDiagnosticService shows an operator
+     * WHICH condition empties the result rather than only that it came back empty.
+     *
+     * $bornOnOrBefore mirrors the real draw: the age floor is expressed as a date because
+     * date_of_birth is the column that exists, there is no age column.
+     */
+    public function countPoolMatching(
+        ?PlayerPosition $position = null,
+        ?int $abilityMin = null,
+        ?int $abilityMax = null,
+        ?string $nationality = null,
+        ?\DateTimeImmutable $bornOnOrBefore = null,
+    ): int {
+        $qb = $this->createQueryBuilder('p')->select('COUNT(p.id)');
+
+        if ($position !== null) {
+            $qb->andWhere('p.position = :position')->setParameter('position', $position);
+        }
+        if ($abilityMin !== null) {
+            $qb->andWhere('p.currentAbility >= :abilityMin')->setParameter('abilityMin', $abilityMin);
+        }
+        if ($abilityMax !== null) {
+            $qb->andWhere('p.currentAbility <= :abilityMax')->setParameter('abilityMax', $abilityMax);
+        }
+        if ($nationality !== null) {
+            $qb->andWhere('p.nationality = :nationality')->setParameter('nationality', $nationality);
+        }
+        if ($bornOnOrBefore !== null) {
+            $qb->andWhere('p.dateOfBirth <= :bornOnOrBefore')->setParameter('bornOnOrBefore', $bornOnOrBefore);
+        }
+
+        return (int) $qb->getQuery()->getSingleScalarResult();
+    }
+
+    /**
+     * The lowest $limit currentAbility values among players who clear the first-team age
+     * floor, optionally for one position/nationality.
+     *
+     * Powers the diagnostic's suggested ability band: the question an operator has after
+     * an empty draw is not "how many were excluded" but "what band WOULD have worked",
+     * and the honest answer is the bottom slice of what age-eligible players actually
+     * carry. Returned as raw values rather than a min/max pair so the caller can decide
+     * how wide a slice to quote.
+     *
+     * @return int[] ascending
+     */
+    public function lowestEligibleAbilities(
+        \DateTimeImmutable $bornOnOrBefore,
+        int $limit,
+        ?PlayerPosition $position = null,
+        ?string $nationality = null,
+    ): array {
+        if ($limit <= 0) {
+            return [];
+        }
+
+        $qb = $this->createQueryBuilder('p')
+            ->select('p.currentAbility AS ability')
+            ->andWhere('p.dateOfBirth <= :bornOnOrBefore')
+            ->setParameter('bornOnOrBefore', $bornOnOrBefore)
+            ->orderBy('p.currentAbility', 'ASC')
+            ->setMaxResults($limit);
+
+        if ($position !== null) {
+            $qb->andWhere('p.position = :position')->setParameter('position', $position);
+        }
+        if ($nationality !== null) {
+            $qb->andWhere('p.nationality = :nationality')->setParameter('nationality', $nationality);
+        }
+
+        return array_map(static fn (array $r): int => (int) $r['ability'], $qb->getQuery()->getArrayResult());
+    }
+
 }

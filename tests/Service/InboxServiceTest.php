@@ -102,4 +102,74 @@ class InboxServiceTest extends TestCase
 
         $this->assertSame(MessageStatus::ACCEPTED, $message->getStatus());
     }
+
+    public function testAcceptCompetitionRewardAppliesFundsAndReputationAndReturnsEffects(): void
+    {
+        $user = new User('cup@example.com');
+        $club = new Club('Cup Winner FC', $user);
+        $club->setBalance(100_000);
+        $club->setReputation(20);
+
+        $this->em->expects($this->once())->method('flush');
+
+        $message = new InboxMessage(
+            club:       $club,
+            senderType: \App\Enum\MessageSenderType::COMPETITION,
+            senderName: 'Test Cup',
+            subject:    'You won!',
+            body:       'Claim your prize.',
+        );
+        $effects = [
+            ['type' => 'ledger_delta', 'amountPence' => 250_000],
+            ['type' => 'reputation_delta', 'amount' => 10],
+        ];
+        $message->setOfferData([
+            'type'    => 'COMPETITION_WON',
+            'effects' => $effects,
+        ]);
+
+        $applied = $this->service->acceptMessage($message, $user);
+
+        $this->assertSame(MessageStatus::ACCEPTED, $message->getStatus());
+        $this->assertSame($effects, $applied);
+        $this->assertSame(350_000, $club->getBalance());
+        $this->assertSame(30, $club->getReputation());
+    }
+
+    public function testAcceptMessageThrowsDomainExceptionWhenAlreadyProcessed(): void
+    {
+        $user    = new User('dup@example.com');
+        $club    = new Club('Dup FC', $user);
+        $message = new InboxMessage(
+            club:       $club,
+            senderType: \App\Enum\MessageSenderType::COMPETITION,
+            senderName: 'Test Cup',
+            subject:    'You won!',
+            body:       'Claim your prize.',
+        );
+        $message->accept();
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('already_processed');
+        $this->service->acceptMessage($message, $user);
+    }
+
+    public function testDismissMessageSetsDismissedStatus(): void
+    {
+        $user    = new User('dismiss@example.com');
+        $club    = new Club('Dismiss FC', $user);
+        $message = new InboxMessage(
+            club:       $club,
+            senderType: \App\Enum\MessageSenderType::COMPETITION,
+            senderName: 'Test Cup',
+            subject:    'Round drawn',
+            body:       'Check your fixture.',
+        );
+
+        $this->em->expects($this->once())->method('flush');
+        $this->service->dismissMessage($message);
+
+        $this->assertSame(MessageStatus::DISMISSED, $message->getStatus());
+        $this->assertNotNull($message->getRespondedAt());
+    }
 }

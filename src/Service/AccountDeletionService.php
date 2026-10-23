@@ -76,6 +76,10 @@ final class AccountDeletionService
                     ->setParameter('id', (string) $club->getId())
                     ->execute();
 
+                $this->em->createQuery('DELETE FROM App\Entity\Friendly\FriendlyChallenge f WHERE f.challengerClub = :club AND f.acceptorClub IS NULL')
+                    ->setParameter('club', $club)
+                    ->execute();
+
                 // Removed explicitly (not left to cascade from $user) so this doesn't depend on
                 // User::$clubs being a populated/lazy-initialized collection at call time.
                 $this->em->remove($club);

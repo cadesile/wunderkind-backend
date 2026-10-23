@@ -26,6 +26,7 @@ class CompetitionControllerTest extends WebTestCase
     private KernelBrowser $client;
     private EntityManagerInterface $em;
     private mixed $currentUserId = null;
+    private mixed $currentClubId = null;
 
     protected function setUp(): void
     {
@@ -39,7 +40,7 @@ class CompetitionControllerTest extends WebTestCase
         );
     }
 
-    private function createClub(string $name, int $reputation = 0): Club
+    private function createClub(string $name, int $reputation = 0, int $balance = 1_000_000): Club
     {
         $user = new User('cup-' . uniqid('', true) . '@example.com');
         $user->setPassword('x');
@@ -47,6 +48,9 @@ class CompetitionControllerTest extends WebTestCase
 
         $club = new Club($name, $user);
         $club->setReputation($reputation);
+        $club->setBalance($balance);
+        $club->setAbbreviation('TST');
+        $club->setCountry('EN');
 
         $this->em->persist($user);
         $this->em->persist($club);
@@ -148,10 +152,11 @@ class CompetitionControllerTest extends WebTestCase
     private function login(Club $club): void
     {
         $this->currentUserId = $club->getUser()->getId();
+        $this->currentClubId = $club->getId();
     }
 
     /** See AdminMessageControllerTest::authenticatedRequest() for why the kernel reboots per request. */
-    private function authenticatedRequest(string $method, string $uri, ?string $content = null): void
+    private function authenticatedRequest(string $method, string $uri, ?string $content = null, array $extraHeaders = []): void
     {
         self::ensureKernelShutdown();
         $this->client = static::createClient();
@@ -160,10 +165,20 @@ class CompetitionControllerTest extends WebTestCase
         $user = $this->em->find(User::class, $this->currentUserId);
         $this->client->loginUser($user, 'api');
 
+        $server = ['CONTENT_TYPE' => 'application/json'];
+        if ($this->currentClubId !== null && !array_key_exists('HTTP_X_CLUB_ID', $extraHeaders)) {
+            $server['HTTP_X_CLUB_ID'] = (string) $this->currentClubId;
+        }
+        foreach ($extraHeaders as $k => $v) {
+            if ($v !== null) {
+                $server[$k] = $v;
+            }
+        }
+
         $this->client->request(
             $method,
             $uri,
-            server: ['CONTENT_TYPE' => 'application/json'],
+            server: $server,
             content: $content,
         );
     }
@@ -405,8 +420,10 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertCount(2, $body['rounds']);
         $this->assertSame('SF', $body['rounds'][0]['label']);
         $this->assertSame('FINAL', $body['rounds'][1]['label']);
+        $this->assertSame('F', $body['rounds'][1]['key']);
         $this->assertSame('draw_pending', $body['rounds'][0]['status'], 'Round 1 no longer draws synchronously at lock time.');
-        $this->assertCount(0, $body['rounds'][0]['fixtures'], 'Fixtures appear once CompetitionDrawService actually draws the round, on a later tick.');
+        $this->assertCount(2, $body['rounds'][0]['fixtures'], 'Undrawn rounds expose placeholder TBD slots matching the bracket slot count.');
+        $this->assertSame('tbd', $body['rounds'][0]['fixtures'][0]['status']);
 
         // A resubmission is allowed immediately after lock — round 1 exists and hasn't started.
         $club = $clubs[0];
@@ -637,10 +654,12 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(200);
         $body = $this->responseJson();
         $this->assertSame(500, $body['entryFeePerRound']);
+        $this->assertSame(500, $body['entryFeePence']);
         $this->assertSame(10000, $body['prizes']['victorPrize']);
         $this->assertCount(1, $body['entrants']);
         $this->assertSame('shield', $body['entrants'][0]['badgeShape']);
-        $this->assertSame([], $body['rounds'], 'Bracket not drawn yet — entrants[] is how the client shows who has registered so far.');
+        $this->assertCount(2, $body['rounds'], 'Full bracket structure is emitted even while registering (status: future).');
+        $this->assertSame('future', $body['rounds'][0]['status']);
     }
 
     /**
@@ -775,5 +794,160 @@ class CompetitionControllerTest extends WebTestCase
 
             $this->assertSame($fixture['fixtureId'], $fixture['result']['fixtureId']);
         }
+    }
+
+    public function testEntryFeeDeductedOnRegisterAndRefundedOnWithdraw(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $template->setEntryFeePence(25_000);
+        $this->em->flush();
+
+        $instance = $this->createOpenInstance($template);
+        $club     = $this->createClub('Fee FC', reputation: 20, balance: 100_000);
+
+        $this->login($club);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->validSnapshotPayload((string) $club->getId(), 'Fee FC')),
+        );
+        $this->assertResponseStatusCodeSame(201);
+        $regBody = $this->responseJson();
+        $this->assertSame(75_000, $regBody['club']['balance']);
+        $this->assertSame('registered', $regBody['competition']['viewer']['relation']);
+        $this->assertSame(10, $regBody['entrant']['ovr']);
+
+        // Withdraw while still registering -> refunds fee, keeps row with status=withdrawn
+        $this->login($club);
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/withdraw", '{}');
+        $this->assertResponseStatusCodeSame(200);
+        $withdrawBody = $this->responseJson();
+        $this->assertSame('withdrawn', $withdrawBody['status']);
+        $this->assertSame(100_000, $withdrawBody['club']['balance']);
+        $this->assertSame(0, $withdrawBody['competition']['registeredCount']);
+        $this->assertSame('withdrawn', $withdrawBody['competition']['viewer']['relation']);
+
+        // Re-registering after withdrawal succeeds and re-deducts fee
+        $this->login($club);
+        $this->authenticatedRequest(
+            'POST',
+            "/api/competitions/{$instance->getId()}/register",
+            json_encode($this->validSnapshotPayload((string) $club->getId(), 'Fee FC')),
+        );
+        $this->assertResponseStatusCodeSame(201);
+        $this->assertSame(75_000, $this->responseJson()['club']['balance']);
+    }
+
+    public function testWithdrawRejectedWhenCompetitionAlreadyLocked(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+        $clubs    = [
+            $this->createClub('Alpha FC'),
+            $this->createClub('Bravo FC'),
+            $this->createClub('Charlie FC'),
+            $this->createClub('Delta FC'),
+        ];
+        foreach ($clubs as $club) {
+            $this->login($club);
+            $this->authenticatedRequest(
+                'POST',
+                "/api/competitions/{$instance->getId()}/register",
+                json_encode($this->validSnapshotPayload((string) $club->getId(), $club->getName())),
+            );
+            $this->assertResponseStatusCodeSame(201);
+        }
+
+        $this->login($clubs[0]);
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/withdraw", '{}');
+        $this->assertResponseStatusCodeSame(409);
+        $this->assertSame('withdrawal_closed', $this->responseJson()['error']);
+    }
+
+    public function testCancelCompetitionRefundsAllNonWithdrawnEntrants(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $template->setEntryFeePence(30_000);
+        $this->em->flush();
+
+        $instance = $this->createOpenInstance($template);
+        $alpha    = $this->createClub('Alpha FC', balance: 100_000);
+        $bravo    = $this->createClub('Bravo FC', balance: 100_000);
+
+        foreach ([$alpha, $bravo] as $club) {
+            $this->login($club);
+            $this->authenticatedRequest(
+                'POST',
+                "/api/competitions/{$instance->getId()}/register",
+                json_encode($this->validSnapshotPayload((string) $club->getId(), $club->getName())),
+            );
+            $this->assertResponseStatusCodeSame(201);
+        }
+
+        // Alpha withdraws before cancel (already refunded to 100_000)
+        $this->login($alpha);
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/withdraw", '{}');
+        $this->assertResponseStatusCodeSame(200);
+
+        // Admin cancels competition -> Bravo is refunded 30_000; Alpha is NOT double-refunded
+        $this->em = self::getContainer()->get(EntityManagerInterface::class);
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+        self::getContainer()->get(\App\Service\Competition\CompetitionRegistrationService::class)->cancel($instance, 'admin_cancelled');
+
+        $alphaReloaded = $this->em->getRepository(Club::class)->find($alpha->getId());
+        $bravoReloaded = $this->em->getRepository(Club::class)->find($bravo->getId());
+        $this->assertSame(100_000, $alphaReloaded->getBalance());
+        $this->assertSame(100_000, $bravoReloaded->getBalance());
+    }
+
+    public function testResubmitRejectsStaleSnapshotTimestamp(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+        $club     = $this->createClub('Timestamp FC');
+
+        $this->login($club);
+        $payload                     = $this->validSnapshotPayload((string) $club->getId(), 'Timestamp FC');
+        $payload['clientSnapshotAt'] = '2026-10-23T12:00:00+00:00';
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/register", json_encode($payload));
+        $this->assertResponseStatusCodeSame(201);
+
+        // Older timestamp -> 409 stale_snapshot
+        $this->login($club);
+        $stalePayload                     = $this->validSnapshotPayload((string) $club->getId(), 'Timestamp FC');
+        $stalePayload['clientSnapshotAt'] = '2026-10-23T11:00:00+00:00';
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/resubmit", json_encode($stalePayload));
+        $this->assertResponseStatusCodeSame(409);
+        $this->assertSame('stale_snapshot', $this->responseJson()['error']);
+    }
+
+    public function testShowSupportsEtagAnd304NotModified(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+
+        $this->client->request('GET', "/api/competitions/{$instance->getId()}");
+        $this->assertResponseStatusCodeSame(200);
+        $etag = $this->client->getResponse()->headers->get('ETag');
+        $this->assertNotEmpty($etag);
+
+        $this->client->request('GET', "/api/competitions/{$instance->getId()}", server: ['HTTP_IF_NONE_MATCH' => $etag]);
+        $this->assertResponseStatusCodeSame(304);
+    }
+
+    public function testConsolidatedListAndChampionsEndpoints(): void
+    {
+        $template = $this->createTemplate(capacity: 4);
+        $instance = $this->createOpenInstance($template);
+
+        $this->client->request('GET', '/api/competitions?status=registering&capacity=4');
+        $this->assertResponseStatusCodeSame(200);
+        $listBody = $this->responseJson();
+        $this->assertCount(1, $listBody['competitions']);
+        $this->assertSame((string) $instance->getId(), $listBody['competitions'][0]['instanceId']);
+
+        $this->client->request('GET', '/api/competitions/champions');
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertArrayHasKey('champions', $this->responseJson());
     }
 }

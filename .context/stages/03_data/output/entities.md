@@ -317,9 +317,11 @@ migrations are the change log (see `migrations.md`).
   join. `joinedAt`. `ManyToOne` → `Club`, `group:AudienceGroup` (both not
   nullable, `CASCADE`).
 - **`InboxMessage`** — a club's inbox item. `senderType:
-  MessageSenderType(enum)`, `senderName/subject/body`, `offerData:?array`,
-  `status:MessageStatus(enum, UNREAD)`, `relatedEntityType/Id:?string`,
+  MessageSenderType(enum: AGENT, GUARDIAN, STAFF, BOARD, COMPETITION, FRIENDLY)`, `senderName/subject/body`, `offerData:?array` (carries `type`, `competitionId`, `matchId`, `challengeId` metadata for tournament/friendly messages), `effects:?array` (actionable reward effects applied on accept: `ledger_delta`, `reputation_delta`, `hall_of_fame_points`),
+  `status:MessageStatus(enum: UNREAD, READ, ACCEPTED, REJECTED, DISMISSED)`, `relatedEntityType/Id:?string`,
   `respondedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`).
+- **`IdempotencyRecord`** (table `idempotency_record`) — 24h idempotency cache for club-scoped write endpoints (`POST /api/competitions/*`, `POST /api/friendlies/*`, `POST /api/inbox/*`). `clubId:string`, `idempotencyKey:string`, `endpoint:string`, `requestHash:string` (SHA-256 of request body), `statusCode:int`, `responseBody:string`, `createdAt`, `expiresAt`. Unique index `uq_idempotency_club_key_endpoint` on `(club_id, idempotency_key, endpoint)`.
+- **`FriendlyChallenge`** (table `friendly_challenge`) — a friendly match challenge on the challenge board (`App\Entity\Friendly\FriendlyChallenge`). `challengerClub:?Club` (`ON DELETE SET NULL`), `challengerClubId:string` (column `challenger_club_uuid`), `challengerSnapshotJson:array`, `acceptorClub:?Club` (`ON DELETE SET NULL`), `acceptorClubId:?string` (column `acceptor_club_uuid`), `acceptorSnapshotJson:?array`, `venue:string` (`'home'|'away'` from the poster's perspective), `stakePence:int`, `status:FriendlyChallengeStatus(enum: OPEN, ACCEPTED, COMPLETE, CANCELLED, EXPIRED)`, `createdAt`, `expiresAt`, `acceptedAt`, `kickoffAt`, `completedAt`, `homeScore/awayScore:?int`, `resultJson:?array` (stores `homeClubJson`, `awayClubJson`, `homeLineupJson`, `awayLineupJson`, `eventLogJson`, `narrativePayload`, `winnerClubId`).
 - **`GameEventTemplate`** — a random-event definition. `slug`,
   `category:EventCategory(enum)`, `weight`, `title`, `bodyTemplate`,
   `impacts:array`, `firingConditions:?array`, `severity`, `noInteract`,

@@ -382,7 +382,7 @@ class NpcClubGenerationService
      *
      * @return array<string, mixed>
      */
-    private function generateIdentity(string $name): array
+    public function generateIdentity(string $name): array
     {
         $home = $this->randomKitVariant();
         $away = $this->randomKitVariant();

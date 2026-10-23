@@ -183,9 +183,13 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertCount(1, $championMessages);
 
         $winnerEntrant = $this->fixtureRepository->findByRoundOrderedBySlot($round2)[0]->getWinnerEntrant();
-        $messages = $this->em->getRepository(InboxMessage::class)->findBy(['club' => $winnerEntrant->getClub()]);
-        $this->assertCount(1, $messages, 'The victor prize should be delivered as an inbox offer.');
-        $this->assertSame(250_000, $messages[0]->getOfferData()['effects'][0]['amountPence']);
+        $messages      = $this->em->getRepository(InboxMessage::class)->findBy(['club' => $winnerEntrant->getClub()]);
+        $wonMessages   = array_values(array_filter(
+            $messages,
+            static fn (InboxMessage $m) => ($m->getOfferData()['type'] ?? null) === 'COMPETITION_WON',
+        ));
+        $this->assertCount(1, $wonMessages, 'The victor prize should be delivered as a single COMPETITION_WON inbox offer.');
+        $this->assertSame(250_000, $wonMessages[0]->getOfferData()['effects'][0]['amountPence']);
     }
 
     public function testResolveLockedAtClaimGuardsAnOverlappingTick(): void

@@ -8,9 +8,13 @@ namespace App\Service\Competition;
  */
 final class EligibilityResult
 {
-    /** @param list<string> $reasons */
+    /**
+     * @param list<string> $reasons Legacy string reason codes for backward compatibility
+     * @param list<array<string, mixed>> $structuredReasons Structured reason objects for viewer.eligibility.reasons
+     */
     public function __construct(
         public readonly bool $eligible,
         public readonly array $reasons,
+        public readonly array $structuredReasons = [],
     ) {}
 }

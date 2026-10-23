@@ -5,6 +5,16 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-23), on top of commit 68331a5** (uncommitted).
+  **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces (`routes.md`, `controllers.md`). Implemented the 7-milestone Tournament / Competition API overhaul & Friendlies Challenge Board (`docs/superpowers/plans/2026-10-22-tournament-and-friendlies-api.md`):
+  1. Enriched competition club identity payloads (`clubId`, `name`, `abbreviation`, `ovr`, `reputation`, `reputationTier`, `homeKitConfig`, `awayKitConfig`, `badgeConfig`), fixed `CompetitionSpoofEntrantService` to emit valid `BadgeShape` cases (`round`/`shield`, not `circle`/`badge`), and added `viewer` block + `serverTime` across competition reads.
+  2. One-off `entryFeePence` atomic deduction on `POST /api/competitions/{id}/register` with `insufficient_funds` eligibility check, `POST /api/competitions/{id}/withdraw` (`CompetitionEntrantStatus::WITHDRAWN` excluded from `registeredCount`, refunds `entryFeePence`), and automatic `entryFeePence` refund on competition cancellation.
+  3. Full bracket rounds (`rounds[]` always contains `log2(entrantCapacity)` rounds with `TBD` placeholders, `bracketSize`, `byeCount: 0`, `champion`, `ETag` 304 support) and first-class Match & H2H endpoints (`MatchQueryService`, `MatchController`: `GET /api/matches/{matchId}`, `GET /api/club/matches?state=upcoming|recent`, `GET /api/club/h2h/{opponentClubId}`).
+  4. Required `X-Club-Id` (`ClubResolver::resolveRequiredFromRequest()`, `400 club_id_required`) on competition/friendly writes, stale `snapshotLockedAt` check (`409 round_already_drawn`) on resubmit, and 24h `Idempotency-Key` support (`IdempotencyRecord`, `IdempotencySubscriber`).
+  5. Hardened `/api/inbox` (`MessageStatus::DISMISSED`, `POST /api/inbox/{id}/dismiss`, `type`/`link`/`requiresAccept` fields, single combined `COMPETITION_WON` reward message in `RewardApplierService`, `409 already_processed` on repeat accept, and persistent inbox notifications on tournament lock, draw, and match resolution).
+  6. Friendlies Challenge Board (`FriendlyChallenge`, `FriendlyChallengeService`, `FriendlyController`, `DeterministicEngine::resolveFriendly()`, `app:friendly:resolve-matches`, `app:friendly:expire-challenges`) with reputation-tier + stake filtering, home/away venue selection, stake escrow/payout, and migration `Version20261023133500`.
+  7. Added `GET /api/competitions`, `GET /api/competitions/champions`, `GET /api/club/competitions`, and `GET /api/club/hub` (`ClubHubController`).
+
 - **Doc-only pass (2026-10-21), on top of commit 68331a5** (uncommitted).
   **Stages touched:** 01_overview, 02_architecture, 04_interfaces, 07_synthesis,
   plus `shared/stack.md`. The human spotted that the new telemetry endpoint's

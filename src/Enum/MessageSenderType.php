@@ -9,4 +9,5 @@ enum MessageSenderType: string
     case INVESTOR    = 'investor';
     case SYSTEM      = 'system';
     case COMPETITION = 'competition';
+    case FRIENDLY    = 'friendly';
 }
