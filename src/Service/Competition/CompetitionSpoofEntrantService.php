@@ -11,6 +11,7 @@ use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
 use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Service\ClubInitializationService;
 use App\Service\NameGeneratorService;
 use App\Service\NpcClubGenerationService;
 use App\Service\PlayerGenerationService;
@@ -43,13 +44,11 @@ class CompetitionSpoofEntrantService
     ];
 
     /**
-     * No backend catalogue exists for these — they're purely client-owned display/asset
-     * identifiers (SnapshotValidator's docblock: "kit colours/badgeShape... deliberately
-     * left unchecked"). Real clients send their own values; this is just enough variety
-     * for a synthetic bootstrap entrant to render believably on-device.
+     * Club tier labels for synthetic bootstrap snapshots; kit/badge identity comes from
+     * NpcClubGenerationService::generateIdentity() so badgeShape is always a valid
+     * BadgeShape case (shield|crest|round|diamond|hex).
      */
-    private const BADGE_SHAPES = ['shield', 'circle', 'badge', 'crest', 'diamond'];
-    private const CLUB_TIERS   = ['elite', 'championship', 'league_one', 'league_two'];
+    private const CLUB_TIERS = ['elite', 'championship', 'league_one', 'league_two'];
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -113,8 +112,16 @@ class CompetitionSpoofEntrantService
     {
         $nationality = $this->nameGenerator->getRandomNationality();
         $clubName    = $this->npcClubGenerationService->generateClubName('EN', []);
-        $homeColors  = $this->npcClubGenerationService->pickColorPair();
-        $awayColors  = $this->npcClubGenerationService->pickColorPair();
+        $identity    = $this->npcClubGenerationService->generateIdentity($clubName);
+        $badgeConfig = [
+            'badgeShape'   => $identity['badgeShape'],
+            'badgePattern' => $identity['badgePattern'],
+            'badgeCentre'  => $identity['badgeCentre'],
+            'initials'     => $identity['initials'],
+            'badgeFill'    => $identity['badgeFill'],
+            'badgeTrim'    => $identity['badgeTrim'],
+            'badgeSymbol'  => $identity['badgeSymbol'],
+        ];
 
         $players = [];
         foreach (self::STARTING_XI_POSITIONS as $position) {
@@ -142,11 +149,14 @@ class CompetitionSpoofEntrantService
                 'country'       => 'EN',
                 'reputation'    => random_int(20, 80),
                 'tier'          => self::CLUB_TIERS[array_rand(self::CLUB_TIERS)],
-                'homePrimary'   => $homeColors[0],
-                'homeSecondary' => $homeColors[1],
-                'awayPrimary'   => $awayColors[0],
-                'awaySecondary' => $awayColors[1],
-                'badgeShape'    => self::BADGE_SHAPES[array_rand(self::BADGE_SHAPES)],
+                'homePrimary'   => $identity['home']['primary'],
+                'homeSecondary' => $identity['home']['secondary'],
+                'awayPrimary'   => $identity['away']['primary'],
+                'awaySecondary' => $identity['away']['secondary'],
+                'badgeShape'    => $identity['badgeShape'],
+                'homeKitConfig' => $identity['home'],
+                'awayKitConfig' => $identity['away'],
+                'badgeConfig'   => $badgeConfig,
                 'homeKitStyle'  => 'j' . random_int(1, 99),
                 'awayKitStyle'  => 'j' . random_int(1, 99),
                 'stadiumName'   => $this->npcClubGenerationService->generateStadiumName($clubName, 'EN'),
@@ -212,10 +222,18 @@ class CompetitionSpoofEntrantService
         $this->em->persist($spoofClub);
         $this->em->flush();
 
-        $finalSnapshot           = $snapshot;
-        $club['id']              = (string) $spoofClub->getId();
-        $club['name']            = $spoofClub->getName();
-        $finalSnapshot['club']   = $club;
+        $finalSnapshot             = $snapshot;
+        $club['id']                = (string) $spoofClub->getId();
+        $club['name']              = $spoofClub->getName();
+        $club['homeKitConfig']     = $spoofClub->getHomeKitConfig();
+        $club['awayKitConfig']     = $spoofClub->getAwayKitConfig();
+        $club['badgeConfig']       = $spoofClub->getBadgeConfig();
+        $club['badgeShape']        = $spoofClub->getBadgeConfig()['badgeShape'] ?? ($club['badgeShape'] ?? 'round');
+        $club['homePrimary']       = $spoofClub->getHomeKitConfig()['primary'] ?? ($club['homePrimary'] ?? null);
+        $club['homeSecondary']     = $spoofClub->getHomeKitConfig()['secondary'] ?? ($club['homeSecondary'] ?? null);
+        $club['awayPrimary']       = $spoofClub->getAwayKitConfig()['primary'] ?? ($club['awayPrimary'] ?? null);
+        $club['awaySecondary']     = $spoofClub->getAwayKitConfig()['secondary'] ?? ($club['awaySecondary'] ?? null);
+        $finalSnapshot['club']     = $club;
         $finalSnapshot['players'] = $randomise
             ? array_map(fn (array $p) => $this->renamePlayer($p), array_values(array_filter($players, 'is_array')))
             : array_values($players);
@@ -299,6 +317,21 @@ class CompetitionSpoofEntrantService
 
         $club = new Club($name, $user);
         $club->setSpoof(true);
+        $club->setBalance(100_000_000);
+        $club->setAbbreviation(ClubInitializationService::generateAbbreviation($name));
+
+        $identity = $this->npcClubGenerationService->generateIdentity($name);
+        $club->setHomeKitConfig(is_array($sourceClub['homeKitConfig'] ?? null) && !$jitterReputation ? $sourceClub['homeKitConfig'] : $identity['home']);
+        $club->setAwayKitConfig(is_array($sourceClub['awayKitConfig'] ?? null) && !$jitterReputation ? $sourceClub['awayKitConfig'] : $identity['away']);
+        $club->setBadgeConfig(is_array($sourceClub['badgeConfig'] ?? null) && !$jitterReputation ? $sourceClub['badgeConfig'] : [
+            'badgeShape'   => $identity['badgeShape'],
+            'badgePattern' => $identity['badgePattern'],
+            'badgeCentre'  => $identity['badgeCentre'],
+            'initials'     => $identity['initials'],
+            'badgeFill'    => $identity['badgeFill'],
+            'badgeTrim'    => $identity['badgeTrim'],
+            'badgeSymbol'  => $identity['badgeSymbol'],
+        ]);
 
         if (is_string($sourceClub['country'] ?? null)) {
             $club->setCountry($sourceClub['country']);
@@ -319,10 +352,19 @@ class CompetitionSpoofEntrantService
     {
         $snapshot = $baseSnapshot;
 
-        $club           = $snapshot['club'] ?? [];
-        $club['id']     = (string) $spoofClub->getId();
-        $club['name']   = $spoofClub->getName();
-        $snapshot['club'] = $club;
+        $club                  = $snapshot['club'] ?? [];
+        $club['id']            = (string) $spoofClub->getId();
+        $club['name']          = $spoofClub->getName();
+        $club['reputation']    = $spoofClub->getReputation();
+        $club['homeKitConfig'] = $spoofClub->getHomeKitConfig();
+        $club['awayKitConfig'] = $spoofClub->getAwayKitConfig();
+        $club['badgeConfig']   = $spoofClub->getBadgeConfig();
+        $club['badgeShape']    = $spoofClub->getBadgeConfig()['badgeShape'] ?? 'round';
+        $club['homePrimary']   = $spoofClub->getHomeKitConfig()['primary'] ?? ($club['homePrimary'] ?? null);
+        $club['homeSecondary'] = $spoofClub->getHomeKitConfig()['secondary'] ?? ($club['homeSecondary'] ?? null);
+        $club['awayPrimary']   = $spoofClub->getAwayKitConfig()['primary'] ?? ($club['awayPrimary'] ?? null);
+        $club['awaySecondary'] = $spoofClub->getAwayKitConfig()['secondary'] ?? ($club['awaySecondary'] ?? null);
+        $snapshot['club']      = $club;
 
         $snapshot['players'] = array_map(
             fn (array $player) => $this->renamePlayer($player),

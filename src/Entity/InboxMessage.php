@@ -111,4 +111,10 @@ class InboxMessage
         $this->status      = MessageStatus::REJECTED;
         $this->respondedAt = new \DateTimeImmutable();
     }
+
+    public function dismiss(): void
+    {
+        $this->status      = MessageStatus::DISMISSED;
+        $this->respondedAt = new \DateTimeImmutable();
+    }
 }

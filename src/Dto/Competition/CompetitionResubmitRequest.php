@@ -11,9 +11,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 class CompetitionResubmitRequest
 {
-    #[Assert\NotBlank]
     #[Assert\Uuid]
-    public string $clubId;
+    public ?string $clubId = null;
 
     #[Assert\NotBlank]
     #[Assert\Type('array')]

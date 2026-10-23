@@ -23,4 +23,14 @@ final class BracketLabeler
             default => throw new \InvalidArgumentException("Unsupported entrant capacity: $entrantCapacity"),
         };
     }
+
+    public static function keyForLabel(string $label): string
+    {
+        return $label === 'FINAL' ? 'F' : $label;
+    }
+
+    public static function slotCountForRound(int $entrantCapacity, int $roundIndex): int
+    {
+        return max(1, intdiv($entrantCapacity, 2 ** $roundIndex));
+    }
 }

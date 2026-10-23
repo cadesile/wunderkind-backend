@@ -23,7 +23,9 @@ class InboxMessageRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('m')
             ->andWhere('m.club = :club')
+            ->andWhere('m.status != :dismissed')
             ->setParameter('club', $club)
+            ->setParameter('dismissed', MessageStatus::DISMISSED)
             ->orderBy('m.createdAt', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()

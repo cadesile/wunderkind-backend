@@ -3,11 +3,15 @@
 namespace App\Service\Competition;
 
 use App\Entity\Competition\ActiveCompetition;
+use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionRound;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\MatchEngineIdentifier;
+use App\Enum\MessageSenderType;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Service\InboxService;
+use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -28,6 +32,8 @@ class CompetitionLockService
         private readonly EntityManagerInterface $em,
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
+        private readonly ?InboxService $inboxService = null,
+        private readonly ?PushNotificationService $pushNotificationService = null,
     ) {}
 
     public function lock(ActiveCompetition $activeCompetition): void
@@ -71,6 +77,29 @@ class CompetitionLockService
             $round = new CompetitionRound($activeCompetition, $roundIndex, $label, $scheduledAt);
             $round->setMatchEngineIdentifier($engineIdentifier);
             $this->em->persist($round);
+        }
+
+        $templateName  = $activeCompetition->getTemplate()->getName();
+        $competitionId = (string) $activeCompetition->getId();
+
+        if ($this->inboxService !== null) {
+            foreach ($entrants as $entrant) {
+                $this->inboxService->createMessage(
+                    club: $entrant->getClub(),
+                    senderType: MessageSenderType::COMPETITION,
+                    senderName: $templateName,
+                    subject: sprintf('Registration full: %s', $templateName),
+                    body: sprintf('All %d slots for the %s are filled. Round 1 draw is scheduled for %s.', $activeCompetition->getEntrantCapacity(), $templateName, $firstRoundDrawAt->format('H:i')),
+                    offerData: [
+                        'type'          => 'COMPETITION_LOCKED',
+                        'link'          => ['kind' => 'competition', 'id' => $competitionId],
+                        'competitionId' => $competitionId,
+                        'drawAt'        => $firstRoundDrawAt->format(DATE_ATOM),
+                    ],
+                    relatedEntityType: 'active_competition',
+                    relatedEntityId: $competitionId,
+                );
+            }
         }
     }
 }

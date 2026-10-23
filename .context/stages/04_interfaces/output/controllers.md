@@ -69,12 +69,14 @@ actually *does* (which service/repo it calls), not restated route paths.
   `docs/api/club-list.md`.
 - **`CommunityStatsController`** — four read-only leaderboard views via
   `CommunityStatsService`.
-- **`CompetitionController`** — competition discovery, registration, and
-  resubmission. Deps: `ClubResolver`, `CompetitionTemplateRepository`,
+- **`CompetitionController`** — competition discovery (`/available`, `/active`, filtered list `GET /api/competitions`, Hall of Fame `GET /api/competitions/champions`), bracket detail (`GET /api/competitions/{id}` with full future rounds, `viewer` block, `serverTime`, and `ETag` / `If-None-Match` 304), registration (`POST /{id}/register` with atomic entry fee deduction), withdrawal (`POST /{id}/withdraw` with entry fee refund while registering), and resubmission (`POST /{id}/resubmit` with stale `snapshotLockedAt` check). Deps: `ClubResolver`, `CompetitionTemplateRepository`,
   `ActiveCompetitionRepository`, `CompetitionEntrantRepository`,
   `CompetitionRoundRepository`, `CompetitionFixtureRepository`,
   `EligibilityEvaluator`, `SnapshotValidator`,
-  `CompetitionRegistrationService`.
+  `CompetitionRegistrationService`, `MatchQueryService`.
+- **`ClubHubController`** — Tournament Hub combined read (`GET /api/club/hub`: `nextMatch`, `openCompetitions`, `myCompetitions`, `recentResults`, `unreadTournamentMessages`, `serverTime`) and club-entered competition history (`GET /api/club/competitions`). Deps: `ClubResolver`, `MatchQueryService`, `CompetitionTemplateRepository`, `ActiveCompetitionRepository`, `CompetitionEntrantRepository`, `CompetitionRoundRepository`, `CompetitionFixtureRepository`, `InboxMessageRepository`, `InboxService`, `EligibilityEvaluator`.
+- **`MatchController`** — first-class match detail (`GET /api/matches/{matchId}` across both tournament fixtures and friendlies), club-scoped match list (`GET /api/club/matches?state=upcoming|recent` including `scheduled`, `awaiting_draw`, and `awaiting_entrants` states), and head-to-head summary (`GET /api/club/h2h/{opponentClubId}`). Deps: `ClubResolver`, `MatchQueryService`.
+- **`FriendlyController`** — Friendlies Challenge Board (`GET /api/friendlies/challenges` with `?stake=` and `?reputation=` filters, `GET /api/club/friendlies/challenges`, `POST /api/friendlies/challenges`, `POST /api/friendlies/challenges/{challengeId}/cancel`, `POST /api/friendlies/challenges/{challengeId}/accept`). Deps: `ClubResolver`, `FriendlyChallengeService`.
 - **`EventController`** — templates listing via
   `GameEventTemplateRepository`; `?lang=` localization via
   `LanguageRepository` + `NarrativeTranslationService`.
@@ -84,8 +86,8 @@ actually *does* (which service/repo it calls), not restated route paths.
   including sponsor termination. Deps: `ClubResolver`,
   `InvestorRepository`, `SponsorRepository`, and (per-method) other
   services as used.
-- **`InboxController`** — inbox listing/accept/reject/read-marking. Uses
-  `ClubResolver`, `InboxMessageRepository`, `InboxService`.
+- **`InboxController`** — inbox listing/accept/reject/read-marking/dismissal (`POST /api/inbox/{id}/dismiss`). Uses
+  `ClubResolver`, `InboxMessageRepository`, `InboxService`. `GET /api/inbox` excludes `dismissed` items and emits `type`, `link`, and `requiresAccept`; `POST /api/inbox/{id}/accept` applies effects and returns `{ status: 'accepted', appliedEffects, club: { clubId, balance, reputation } }` (`409 already_processed` on repeat calls).
 - **`LeaderboardController`** — `LeaderboardCalculationService`.
 - **`LeagueController`** — season conclusion and history. Deps:
   `ClubResolver`, `LeagueService`, `SeasonSnapshotRepository`,
@@ -124,6 +126,10 @@ actually *does* (which service/repo it calls), not restated route paths.
   quick-edit actions. `LeagueAdminController` also has
   `bulkEditTierDefaults()` (League Tier Defaults screen), using
   `GameConfigRepository`/`LeagueRepository` alongside `EntityManagerInterface`.
+- **`StarterPackCheckController`** — renders
+  `StarterPackDiagnosticService`'s result for one country/tier. No writes,
+  no entity consumption; the same result object the
+  `app:starter-pack:check` command prints.
 - **`BetaRequestInviteController`** — sends beta invites via
   `EmailVerificationService` + `EntityManagerInterface`.
 - **`SocialAuthController`** — Facebook/Twitter OAuth connect/callback/

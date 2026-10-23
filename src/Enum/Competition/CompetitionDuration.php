@@ -18,4 +18,14 @@ enum CompetitionDuration: string
             self::ONE_WEEK  => new \DateInterval('P7D'),
         };
     }
+
+    public function toHours(): int
+    {
+        return match ($this) {
+            self::TEN_HOURS => 10,
+            self::ONE_DAY   => 24,
+            self::TWO_DAYS  => 48,
+            self::ONE_WEEK  => 168,
+        };
+    }
 }

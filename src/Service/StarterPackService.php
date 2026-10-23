@@ -22,6 +22,14 @@ use Psr\Log\LoggerInterface;
 
 class StarterPackService
 {
+    /**
+     * The tier a brand-new club's starter squad is drawn at. The club has no league yet
+     * when the starter pack is built — LeagueService::assignClubToStarterLeague() runs
+     * after StarterPackService::initialize() — so in practice this is always the tier
+     * used, and the ?-> below is for re-initialisation of an already-placed club.
+     */
+    public const DEFAULT_STARTER_TIER = 8;
+
     public function __construct(
         private readonly PlayerRepository           $playerRepository,
         private readonly StaffRepository            $staffRepository,
@@ -33,23 +41,45 @@ class StarterPackService
         private readonly LoggerInterface            $logger,
     ) {}
 
+    /**
+     * Resolves the ability band a starter squad is drawn from, and reports WHICH source
+     * supplied it. Public and separate from initialize() so StarterPackDiagnosticService
+     * reports the same band the real draw will use — an operator-facing check that
+     * re-derived this would be free to drift from the code it is checking.
+     *
+     * @return array{min: int, max: int, source: string}
+     */
+    public function resolveAbilityRange(string $country, int $tier): array
+    {
+        $leagueRanges = $this->starterConfigRepository->getConfig()->getLeagueAbilityRanges();
+
+        if (isset($leagueRanges[$country][(string) $tier])) {
+            $raw    = $leagueRanges[$country][(string) $tier];
+            $source = 'starterConfig.leagueAbilityRanges';
+        } elseif (isset(WorldInitializationService::ABILITY_RANGES[$tier])) {
+            $raw    = WorldInitializationService::ABILITY_RANGES[$tier];
+            $source = 'WorldInitializationService::ABILITY_RANGES';
+        } else {
+            $raw    = ['min' => 5, 'max' => 35];
+            $source = 'hardcoded_fallback_5_35';
+        }
+
+        return ['min' => (int) $raw['min'], 'max' => (int) $raw['max'], 'source' => $source];
+    }
+
     public function initialize(Club $club): array
     {
         $starterConfig  = $this->starterConfigRepository->getConfig();
-        $leagueRanges   = $starterConfig->getLeagueAbilityRanges();
         $country        = $club->getCountry();
-        $ampLeagueTier  = $club->getCurrentLeague()?->getTier() ?? 8;
-        $ampRangeRaw    = $leagueRanges[$country][(string) $ampLeagueTier]
-            ?? WorldInitializationService::ABILITY_RANGES[$ampLeagueTier]
-            ?? ['min' => 5, 'max' => 35];
-        $ampRange       = ['min' => (int) $ampRangeRaw['min'], 'max' => (int) $ampRangeRaw['max']];
+        $ampLeagueTier  = $club->getCurrentLeague()?->getTier() ?? self::DEFAULT_STARTER_TIER;
+        $ampRange       = $this->resolveAbilityRange($country, $ampLeagueTier);
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 
         $this->logger->info('starter_pack.initialize.start', [
             'clubId'           => (string) $club->getId(),
             'country'          => $country,
             'ampLeagueTier'    => $ampLeagueTier,
-            'ampRangeSource'   => isset($leagueRanges[$country][(string) $ampLeagueTier]) ? 'starterConfig.leagueAbilityRanges' : (isset(WorldInitializationService::ABILITY_RANGES[$ampLeagueTier]) ? 'WorldInitializationService::ABILITY_RANGES' : 'hardcoded_fallback_5_35'),
+            'ampRangeSource'   => $ampRange['source'],
             'ampRangeMin'      => $ampRange['min'],
             'ampRangeMax'      => $ampRange['max'],
             'ampNationality'   => $ampNationality,

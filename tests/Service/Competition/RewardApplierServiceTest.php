@@ -114,8 +114,12 @@ class RewardApplierServiceTest extends KernelTestCase
         $this->applier->applyVictorPrize($entrant, $instance);
         $this->em->flush();
 
-        // One message for victor_prize, one for the attached RewardTemplate.
-        $this->assertCount(2, $this->em->getRepository(InboxMessage::class)->findBy(['club' => $club]));
+        // Single combined InboxMessage containing both victor_prize and attached RewardTemplate effects,
+        // backed by two audit EntrantRewardClaim rows.
+        $messages = $this->em->getRepository(InboxMessage::class)->findBy(['club' => $club]);
+        $this->assertCount(1, $messages);
+        $this->assertSame('COMPETITION_WON', $messages[0]->getOfferData()['type']);
+        $this->assertCount(2, $messages[0]->getOfferData()['effects']);
         $this->assertCount(2, $this->em->getRepository(EntrantRewardClaim::class)->findBy(['entrant' => $entrant]));
     }
 }

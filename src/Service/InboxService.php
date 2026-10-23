@@ -84,31 +84,85 @@ class InboxService
         return $message;
     }
 
-    public function acceptMessage(InboxMessage $message, User $user): void
+    /**
+     * Creates and persists an InboxMessage without immediately flushing, so callers inside
+     * larger transactions or batch loops (e.g. CompetitionLockService, CompetitionDrawService,
+     * CompetitionResultsService) can flush once at the end.
+     *
+     * @param array<string, mixed>|null $offerData
+     */
+    public function createMessage(
+        Club $club,
+        MessageSenderType $senderType,
+        string $senderName,
+        string $subject,
+        string $body,
+        ?array $offerData = null,
+        ?string $relatedEntityType = null,
+        ?string $relatedEntityId = null,
+    ): InboxMessage {
+        $message = new InboxMessage(
+            club:       $club,
+            senderType: $senderType,
+            senderName: $senderName,
+            subject:    $subject,
+            body:       $body,
+        );
+        if ($offerData !== null) {
+            $message->setOfferData($offerData);
+        }
+        if ($relatedEntityType !== null) {
+            $message->setRelatedEntityType($relatedEntityType);
+        }
+        if ($relatedEntityId !== null) {
+            $message->setRelatedEntityId($relatedEntityId);
+        }
+
+        $this->em->persist($message);
+
+        return $message;
+    }
+
+    /**
+     * @return list<array<string, mixed>> The applied effects (for competition/friendly rewards).
+     */
+    public function acceptMessage(InboxMessage $message, User $user): array
     {
-        if ($message->getStatus() === MessageStatus::ACCEPTED || $message->getStatus() === MessageStatus::REJECTED) {
-            throw new \RuntimeException('Message has already been processed.');
+        if (in_array($message->getStatus(), [MessageStatus::ACCEPTED, MessageStatus::REJECTED, MessageStatus::DISMISSED], true)) {
+            throw new \DomainException('already_processed');
         }
 
         $message->accept();
-        $offerData = $message->getOfferData();
+        $offerData      = $message->getOfferData();
+        $appliedEffects = [];
 
         if ($offerData !== null) {
             match ($message->getSenderType()) {
                 MessageSenderType::SPONSOR     => $this->acceptSponsorOffer($message->getClub(), $offerData),
                 MessageSenderType::INVESTOR    => $this->acceptInvestorOffer($message->getClub(), $offerData),
-                MessageSenderType::COMPETITION => $this->acceptCompetitionReward($message->getClub(), $offerData),
+                MessageSenderType::COMPETITION,
+                MessageSenderType::FRIENDLY    => $appliedEffects = $this->acceptCompetitionReward($message->getClub(), $offerData),
                 default                        => null,
             };
         }
 
         $this->em->flush();
+
+        return $appliedEffects;
     }
 
     public function rejectMessage(InboxMessage $message): void
     {
         $message->reject();
         $this->em->flush();
+    }
+
+    public function dismissMessage(InboxMessage $message): void
+    {
+        if ($message->getStatus() !== MessageStatus::DISMISSED) {
+            $message->dismiss();
+            $this->em->flush();
+        }
     }
 
     private function acceptSponsorOffer(Club $club, array $offerData): void
@@ -158,19 +212,22 @@ class InboxService
     }
 
     /**
-     * Applies a competition GameEffect list (see RewardApplierService) ONLY when the
+     * Applies a competition/friendly GameEffect list (see RewardApplierService) ONLY when the
      * player explicitly accepts the message — this is what makes the subsequent sync's
      * Club::setBalance()/setReputation() overwrite correct instead of a clobber: the
      * client applies the effect to its own authoritative state first (same user action
      * that triggered this accept), then reports it back up. A round processor tick
      * mutating Club directly, on its own schedule, would just be undone by the next sync.
+     *
+     * @return list<array<string, mixed>>
      */
-    private function acceptCompetitionReward(Club $club, array $offerData): void
+    private function acceptCompetitionReward(Club $club, array $offerData): array
     {
-        foreach ($offerData['effects'] ?? [] as $effect) {
+        $effects = is_array($offerData['effects'] ?? null) ? array_values($offerData['effects']) : [];
+        foreach ($effects as $effect) {
             match ($effect['type'] ?? null) {
                 'ledger_delta'     => $club->addFunds((int) ($effect['amountPence'] ?? 0)),
-                'reputation_delta' => $club->setReputation(max(0, $club->getReputation() + (int) ($effect['amount'] ?? 0))),
+                'reputation_delta' => $club->setReputation(max(0, $club->getReputation() + (int) ($effect['amount'] ?? $effect['delta'] ?? $effect['points'] ?? 0))),
                 // Phase 1 stub — no delivery mechanism exists yet for minting an asset
                 // (e.g. a youth player) outside the Pool Lifecycle model. The claim/message
                 // already recorded the intent; nothing to apply here until that lands.
@@ -178,5 +235,7 @@ class InboxService
                 default              => null,
             };
         }
+
+        return $effects;
     }
 }

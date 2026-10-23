@@ -66,6 +66,16 @@ class DeterministicEngine implements MatchEngineInterface
 
     public function resolve(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): MatchEngineResult
     {
+        return $this->resolveMatch($home, $away, $fixture, allowDraws: false);
+    }
+
+    public function resolveFriendly(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): MatchEngineResult
+    {
+        return $this->resolveMatch($home, $away, $fixture, allowDraws: true);
+    }
+
+    private function resolveMatch(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture, bool $allowDraws = false): MatchEngineResult
+    {
         $rng    = new SeededRng(SeededRng::hashId($fixture->getId()->toRfc4122()));
         $config = $this->gameConfigRepository->getConfig();
 
@@ -85,14 +95,13 @@ class DeterministicEngine implements MatchEngineInterface
         $awayGoalEvents = $this->distributeGoalsAndAssists($rng, $away, 'away', $awayGoals);
 
         // Knockout fixture — a level score after 90 minutes can't stand; extra time gets a
-        // genuine chance to settle it before falling back to penalties. See class docblock's
-        // "Cup knockout resolution" note.
+        // genuine chance to settle it before falling back to penalties. Friendlies allow draws.
         $wentToExtraTime  = false;
         $wentToPenalties  = false;
         $penaltyHomeScore = null;
         $penaltyAwayScore = null;
 
-        if ($homeGoals === $awayGoals) {
+        if (!$allowDraws && $homeGoals === $awayGoals) {
             $wentToExtraTime = true;
 
             $etExpectedGoals = $expectedTotalGoals * (30 / 90);

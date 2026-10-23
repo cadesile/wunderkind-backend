@@ -170,5 +170,9 @@ class DeleteAdminController extends AbstractController
                 ->setParameter('club', $club)
                 ->getQuery()->execute();
         }
+
+        $this->em->createQuery('DELETE FROM App\Entity\Friendly\FriendlyChallenge f WHERE f.challengerClub = :club AND f.acceptorClub IS NULL')
+            ->setParameter('club', $club)
+            ->execute();
     }
 }

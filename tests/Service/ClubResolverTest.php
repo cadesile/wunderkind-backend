@@ -6,6 +6,7 @@ namespace App\Tests\Service;
 
 use App\Entity\Club;
 use App\Entity\User;
+use App\Exception\ClubIdRequiredException;
 use App\Exception\ClubMismatchException;
 use App\Repository\ClubRepository;
 use App\Service\ClubResolver;
@@ -161,5 +162,30 @@ class ClubResolverTest extends TestCase
         $repo->expects($this->once())->method('findByUser')->willReturn($expected);
 
         $this->assertSame($expected, $this->resolver($repo, new Request())->resolveFromRequest($user));
+    }
+
+    public function testResolveRequiredFromRequestThrows400WhenMissingHeaderAndFallback(): void
+    {
+        $user = $this->user(Uuid::v7());
+        $repo = $this->createMock(ClubRepository::class);
+        $repo->expects($this->never())->method('find');
+        $repo->expects($this->never())->method('findByUser');
+
+        $this->expectException(ClubIdRequiredException::class);
+        $this->resolver($repo, new Request())->resolveRequiredFromRequest($user, null);
+    }
+
+    public function testResolveRequiredFromRequestUsesFallbackWhenHeaderIsAbsent(): void
+    {
+        $userId   = Uuid::v7();
+        $user     = $this->user($userId);
+        $expected = $this->club($this->user($userId));
+        $clubId   = (string) Uuid::v7();
+
+        $repo = $this->createMock(ClubRepository::class);
+        $repo->expects($this->once())->method('find')->with($clubId)->willReturn($expected);
+        $repo->expects($this->never())->method('findByUser');
+
+        $this->assertSame($expected, $this->resolver($repo, new Request())->resolveRequiredFromRequest($user, $clubId));
     }
 }

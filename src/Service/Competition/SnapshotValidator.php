@@ -30,7 +30,7 @@ class SnapshotValidator
      * (bench/reserves included) would dilute that average with players who aren't
      * actually on the pitch.
      */
-    private const REQUIRED_PLAYERS = 11;
+    public const REQUIRED_PLAYERS = 11;
 
     /**
      * @var list<string> Numeric player attributes checked for range, when present.

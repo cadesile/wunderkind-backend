@@ -179,7 +179,7 @@ Most recent migrations (chronological):
     starter packs and generated NPC squads. Fixes squads of 11-12 year olds:
     one global age range governed both pool contents and squad eligibility,
     and the starter draw had no age condition at all.
-31. `Version20261018202041` (most recent) — replaces the trophy asset
+31. `Version20261018202041` — replaces the trophy asset
     slug + colour enum with the trophy sprite's config. On both `league` and
     `competition_template`: adds `trophy JSON DEFAULT NULL`, backfills it from
     the old columns, then drops `trophy_image` and `trophy_colour`. The only
@@ -199,6 +199,10 @@ Most recent migrations (chronological):
     folds legacy rows on read and write, which also covers config export files
     taken before the change. See `entities.md`, CLAUDE.md's "Trophy Identity"
     section and `docs/api/trophy-config.md`.
+32. `Version20261023133500` (most recent) — creates `friendly_challenge`
+    (Friendlies Challenge Board matches, stakes, snapshots, and results) and
+    `idempotency_record` (24-hour `Idempotency-Key` request/response store
+    keyed by `(club_id, idempotency_key, endpoint)`).
 
 ## Takeaway
 

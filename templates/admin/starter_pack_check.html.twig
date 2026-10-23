@@ -1,0 +1,305 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Starter Pack Check</h5>
+        <p class="text-muted small mb-0">
+            Tests whether the pool can actually supply a starter squad for a country, without creating a club
+            or consuming anything. Safe to run against live data.
+        </p>
+    </div>
+
+    {# ── Country picker ──────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-3">
+                <form method="get" action="{{ path('admin') }}" class="row g-2 align-items-end">
+                    <input type="hidden" name="routeName" value="admin_starter_pack_check">
+
+                    <div class="col-md-5">
+                        <label class="small fw-bold d-block mb-1" for="spc-country">Country</label>
+                        <select name="country" id="spc-country" class="form-select form-select-sm" required>
+                            <option value="">— Select a country —</option>
+                            {% for code, label in countries %}
+                                <option value="{{ code }}" {{ code == country ? 'selected' : '' }}>{{ label }} ({{ code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="small fw-bold d-block mb-1" for="spc-tier">League tier</label>
+                        <select name="tier" id="spc-tier" class="form-select form-select-sm">
+                            {% for t in 1..8 %}
+                                <option value="{{ t }}" {{ t == tier ? 'selected' : '' }}>
+                                    Tier {{ t }}{{ t == defaultTier ? ' — new clubs start here' : '' }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-vial me-1"></i>Run check
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% if result is null %}
+        <div class="col-12">
+            <div class="alert alert-info small mb-0">
+                Pick a country to test. A new club has no league when its starter pack is built, so
+                <strong>tier {{ defaultTier }}</strong> is what real club creation uses.
+            </div>
+        </div>
+    {% else %}
+        {% set verdictClass = {'ok': 'success', 'degraded': 'warning', 'blocked': 'danger'}[result.verdict] %}
+        {% set verdictText  = {
+            'ok':       'A full starter pack can be built for ' ~ result.countryLabel ~ '.',
+            'degraded': 'A starter pack can be built, but it will be under-filled.',
+            'blocked':  'A starter pack CANNOT be built — club initialisation will fail.'
+        }[result.verdict] %}
+
+        {# ── Verdict ─────────────────────────────────────────────────── #}
+        <div class="col-12">
+            <div class="alert alert-{{ verdictClass }} d-flex align-items-center gap-2 mb-0">
+                <i class="fa fa-{{ result.verdict == 'ok' ? 'circle-check' : (result.verdict == 'degraded' ? 'triangle-exclamation' : 'circle-xmark') }}"></i>
+                <div>
+                    <div class="fw-semibold">{{ verdictText }}</div>
+                    <div class="small">
+                        {{ result.playersAvailable }} of {{ result.playersRequested }} players available
+                        for {{ result.countryLabel }} ({{ result.country }}) at tier {{ result.tier }}.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── What the draw asks for ──────────────────────────────────── #}
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-sliders text-muted"></i>
+                    <span class="fw-semibold small">What the draw asks for</span>
+                </div>
+                <div class="card-body py-2">
+                    <table class="table table-sm mb-0 small">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted">Nationality</td>
+                                <td class="text-end fw-semibold">
+                                    {% if result.nationality %}{{ result.nationality }}
+                                    {% else %}<span class="text-danger">unresolved</span>{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Ability band</td>
+                                <td class="text-end fw-semibold">{{ result.ability.min }}–{{ result.ability.max }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Band comes from</td>
+                                <td class="text-end"><code class="small">{{ result.ability.source }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">First-team age floor</td>
+                                <td class="text-end fw-semibold">
+                                    {{ result.firstTeamAgeMin }}+
+                                    <span class="text-muted fw-normal">(born ≤ {{ result.bornOnOrBefore|date('Y-m-d') }})</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Squad size</td>
+                                <td class="text-end fw-semibold">{{ result.playersRequested }} players</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Client can pick this country</td>
+                                <td class="text-end fw-semibold">
+                                    {% if result.countryEnabled %}yes{% else %}<span class="text-warning">no</span>{% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# ── What the pool holds ─────────────────────────────────────── #}
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-database text-muted"></i>
+                    <span class="fw-semibold small">What the pool holds</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row text-center g-2">
+                        <div class="col-4">
+                            <div class="fs-5 fw-bold">{{ result.poolTotal|number_format }}</div>
+                            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;">Players in pool</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fs-5 fw-bold {{ result.poolAgeEligible == 0 ? 'text-danger' : '' }}">{{ result.poolAgeEligible|number_format }}</div>
+                            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;">Aged {{ result.firstTeamAgeMin }}+</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fs-5 fw-bold">{{ result.poolInBand|number_format }}</div>
+                            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;">In ability band (any age)</div>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0 mt-3">
+                        A big pool and a big ability band can still produce an empty draw — the squad needs players
+                        that satisfy <em>both</em> at once. The funnel below shows which condition empties it.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        {# ── The draw, step by step ──────────────────────────────────── #}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-filter text-muted"></i>
+                    <span class="fw-semibold small">Player draw, filter by filter</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 small align-middle" id="spc-funnel">
+                        <thead>
+                            <tr>
+                                <th>Position</th>
+                                <th class="text-end">Needs</th>
+                                {% for step in result.positions|first.funnel %}
+                                    <th class="text-end">{{ step.label }}</th>
+                                {% endfor %}
+                                <th class="text-end">Can draw</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in result.positions %}
+                                <tr>
+                                    <td class="fw-semibold">{{ row.position }}</td>
+                                    <td class="text-end">{{ row.requested }}</td>
+                                    {% for step in row.funnel %}
+                                        {% set previous = loop.first ? null : row.funnel[loop.index0 - 1].count %}
+                                        {% set collapsed = step.count == 0 and previous is not null and previous > 0 %}
+                                        <td class="text-end {{ collapsed ? 'text-danger fw-bold' : (step.count == 0 ? 'text-muted' : '') }}">
+                                            {{ step.count|number_format }}
+                                            {% if collapsed %}
+                                                <i class="fa fa-arrow-left ms-1" title="The draw empties at this filter"></i>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                    <td class="text-end fw-semibold">{{ row.available|number_format }}</td>
+                                    <td class="text-end">
+                                        {% if row.ok %}
+                                            <span class="badge bg-success-subtle text-success-emphasis">ok</span>
+                                        {% else %}
+                                            <span class="badge bg-{{ row.available == 0 ? 'danger' : 'warning' }}-subtle text-{{ row.available == 0 ? 'danger' : 'warning' }}-emphasis">
+                                                short by {{ row.shortfall }}
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer py-2 small text-muted">
+                    The last column of the funnel is the <em>native</em> draw. Anything short of the need is topped up
+                    from the same ability band regardless of nationality, so “can draw” is the whole age-eligible band.
+                </div>
+            </div>
+        </div>
+
+        {# ── Staff & scouts ──────────────────────────────────────────── #}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-users text-muted"></i>
+                    <span class="fw-semibold small">Staff &amp; scouts</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 small align-middle" id="spc-staff">
+                        <thead>
+                            <tr>
+                                <th>Role</th>
+                                <th class="text-end">Needs</th>
+                                <th class="text-end">{{ result.nationality ?? 'Native' }}</th>
+                                <th class="text-end">In pool</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in result.staff %}
+                                <tr>
+                                    <td>{{ row.role|replace({'_': ' '})|title }}</td>
+                                    <td class="text-end">{{ row.requested }}</td>
+                                    <td class="text-end {{ row.native == 0 ? 'text-muted' : '' }}">{{ row.native|number_format }}</td>
+                                    <td class="text-end fw-semibold">{{ row.available|number_format }}</td>
+                                    <td class="text-end">
+                                        {% if row.ok %}
+                                            <span class="badge bg-success-subtle text-success-emphasis">ok</span>
+                                        {% else %}
+                                            <span class="badge bg-warning-subtle text-warning-emphasis">short by {{ row.shortfall }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            <tr>
+                                <td>Scout</td>
+                                <td class="text-end">{{ result.scouts.requested }}</td>
+                                <td class="text-end {{ result.scouts.native == 0 ? 'text-muted' : '' }}">{{ result.scouts.native|number_format }}</td>
+                                <td class="text-end fw-semibold">{{ result.scouts.available|number_format }}</td>
+                                <td class="text-end">
+                                    {% if result.scouts.ok %}
+                                        <span class="badge bg-success-subtle text-success-emphasis">ok</span>
+                                    {% else %}
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">short by {{ result.scouts.shortfall }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# ── Findings ────────────────────────────────────────────────── #}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-clipboard-list text-muted"></i>
+                    <span class="fw-semibold small">Findings</span>
+                </div>
+                <div class="card-body py-2">
+                    {% for finding in result.findings %}
+                        {% set icon = {
+                            'danger':  ['circle-xmark', 'text-danger'],
+                            'warning': ['triangle-exclamation', 'text-warning'],
+                            'success': ['circle-check', 'text-success'],
+                            'info':    ['circle-info', 'text-info']
+                        }[finding.level] %}
+                        <div class="d-flex gap-2 py-2 {{ not loop.last ? 'border-bottom' : '' }}">
+                            <i class="fa fa-{{ icon[0] }} {{ icon[1] }} mt-1"></i>
+                            <div class="small">{{ finding.message }}</div>
+                        </div>
+                    {% endfor %}
+
+                    {% if result.suggestedBand %}
+                        <div class="alert alert-secondary small mt-2 mb-0">
+                            Suggested tier {{ result.tier }} band:
+                            <strong>{{ result.suggestedBand.min }}–{{ result.suggestedBand.max }}</strong>
+                            — set it on
+                            <a href="{{ path('admin', {routeName: 'admin_starter_config'}) }}">Starter Config</a>
+                            under League Player Ability Ranges.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

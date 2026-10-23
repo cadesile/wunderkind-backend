@@ -11,10 +11,14 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
+use App\Enum\MessageSenderType;
+use App\Enum\Tier;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
+use App\Service\ClubInitializationService;
+use App\Service\InboxService;
 use App\Service\MatchEngine\MatchEngineRegistry;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,6 +48,7 @@ class CompetitionResultsService
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly ?InboxService $inboxService = null,
     ) {}
 
     /** @return int Number of rounds this call actually published results for. */
@@ -304,12 +309,54 @@ class CompetitionResultsService
         // isn't embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT: the
         // client re-fetches via GET /api/competitions/{id}, whose result field is exactly
         // CompetitionResult::toClientSummary()'s shape.
-        $scoreline  = sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName());
+        $scoreline     = sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName());
+        $competitionId = (string) $round->getActiveCompetition()->getId();
+        $fixtureId     = (string) $fixture->getId();
+        $templateName  = $round->getActiveCompetition()->getTemplate()->getName();
+
+        if ($this->inboxService !== null) {
+            foreach ([$home, $away] as $sideEntrant) {
+                $this->inboxService->createMessage(
+                    club: $sideEntrant->getClub(),
+                    senderType: MessageSenderType::COMPETITION,
+                    senderName: $templateName,
+                    subject: sprintf('Match Result (%s): %s', $round->getLabel(), $scoreline),
+                    body: sprintf('Full-time in the %s of the %s: %s.', $round->getLabel(), $templateName, $scoreline),
+                    offerData: [
+                        'type'          => 'MATCH_RESULT',
+                        'link'          => ['kind' => 'match', 'id' => $fixtureId],
+                        'competitionId' => $competitionId,
+                        'roundId'       => (string) $round->getId(),
+                        'fixtureId'     => $fixtureId,
+                    ],
+                    relatedEntityType: 'competition_fixture',
+                    relatedEntityId: $fixtureId,
+                );
+            }
+
+            $this->inboxService->createMessage(
+                club: $loser->getClub(),
+                senderType: MessageSenderType::COMPETITION,
+                senderName: $templateName,
+                subject: sprintf('Eliminated from %s', $templateName),
+                body: sprintf('Your club was knocked out in the %s of the %s (%s).', $round->getLabel(), $templateName, $scoreline),
+                offerData: [
+                    'type'          => 'COMPETITION_ELIMINATED',
+                    'link'          => ['kind' => 'competition', 'id' => $competitionId],
+                    'competitionId' => $competitionId,
+                    'roundId'       => (string) $round->getId(),
+                    'fixtureId'     => $fixtureId,
+                ],
+                relatedEntityType: 'active_competition',
+                relatedEntityId: $competitionId,
+            );
+        }
+
         $resultData = [
             'type'          => 'MATCH_RESULT',
-            'competitionId' => (string) $round->getActiveCompetition()->getId(),
+            'competitionId' => $competitionId,
             'roundId'       => (string) $round->getId(),
-            'fixtureId'     => (string) $fixture->getId(),
+            'fixtureId'     => $fixtureId,
         ];
 
         $this->pushNotificationService->notifyUsers(
@@ -331,9 +378,44 @@ class CompetitionResultsService
     /** @return array<string, mixed> */
     private function clubJsonOf(CompetitionEntrant $entrant): array
     {
-        $club = $entrant->getSnapshotJson()['club'] ?? [];
+        $snapshotClub = $entrant->getSnapshotJson()['club'] ?? [];
+        if (!is_array($snapshotClub)) {
+            $snapshotClub = [];
+        }
 
-        return is_array($club) ? $club : [];
+        $clubEntity   = $entrant->getClub();
+        $name         = (string) ($snapshotClub['name'] ?? $clubEntity->getName());
+        $abbreviation = (string) ($snapshotClub['abbreviation'] ?? $clubEntity->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($name));
+        $reputation   = is_numeric($snapshotClub['reputation'] ?? null)
+            ? (int) $snapshotClub['reputation']
+            : $clubEntity->getReputation();
+        $ovr          = is_numeric($snapshotClub['ovr'] ?? null)
+            ? (int) $snapshotClub['ovr']
+            : CompetitionRegistrationService::computeStartingXiOvr($entrant->getSnapshotJson());
+        $badgeShape   = (string) ($snapshotClub['badgeShape'] ?? $clubEntity->getBadgeConfig()['badgeShape'] ?? 'shield');
+        if ($badgeShape === 'circle' || $badgeShape === 'badge') {
+            $badgeShape = 'round';
+        }
+
+        $badgeConfig = $snapshotClub['badgeConfig'] ?? $clubEntity->getBadgeConfig();
+        if (is_array($badgeConfig) && in_array($badgeConfig['badgeShape'] ?? null, ['circle', 'badge'], true)) {
+            $badgeConfig['badgeShape'] = 'round';
+        }
+
+        return array_merge($snapshotClub, [
+            'clubId'         => (string) $clubEntity->getId(),
+            'clubName'       => $name,
+            'name'           => $name,
+            'abbreviation'   => $abbreviation,
+            'country'        => $snapshotClub['country'] ?? $clubEntity->getCountry(),
+            'ovr'            => $ovr,
+            'reputation'     => $reputation,
+            'reputationTier' => Tier::fromScore($reputation)->value,
+            'homeKitConfig'  => $snapshotClub['homeKitConfig'] ?? $clubEntity->getHomeKitConfig(),
+            'awayKitConfig'  => $snapshotClub['awayKitConfig'] ?? $clubEntity->getAwayKitConfig(),
+            'badgeConfig'    => $badgeConfig,
+            'badgeShape'     => $badgeShape,
+        ]);
     }
 
     private function breakTie(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): CompetitionEntrant

@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\Club;
 use App\Entity\User;
+use App\Exception\ClubIdRequiredException;
 use App\Exception\ClubMismatchException;
 use App\Repository\ClubRepository;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -73,5 +74,36 @@ class ClubResolver
         $request = $this->requestStack->getCurrentRequest();
 
         return $this->resolve($user, $request?->headers->get(self::CLUB_ID_HEADER));
+    }
+
+    /**
+     * Strictly requires the `X-Club-Id` header (or an explicit $fallbackClubId from the
+     * request body). Never guesses via findByUser().
+     *
+     * @throws ClubIdRequiredException if no club id is provided
+     * @throws ClubMismatchException   if the named club is malformed, unknown, or owned by someone else
+     */
+    public function resolveRequiredFromRequest(User $user, ?string $fallbackClubId = null): Club
+    {
+        $request    = $this->requestStack->getCurrentRequest();
+        $headerId   = $request?->headers->get(self::CLUB_ID_HEADER);
+        $headerId   = $headerId !== null ? trim($headerId) : '';
+        $fallbackId = $fallbackClubId !== null ? trim($fallbackClubId) : '';
+
+        if ($headerId !== '' && $fallbackId !== '' && strtolower($headerId) !== strtolower($fallbackId)) {
+            throw new ClubMismatchException($fallbackId);
+        }
+
+        $effectiveId = $headerId !== '' ? $headerId : $fallbackId;
+        if ($effectiveId === '') {
+            throw new ClubIdRequiredException();
+        }
+
+        $club = $this->resolve($user, $effectiveId);
+        if ($club === null) {
+            throw new ClubMismatchException($effectiveId);
+        }
+
+        return $club;
     }
 }

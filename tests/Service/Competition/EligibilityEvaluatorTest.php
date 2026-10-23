@@ -89,4 +89,25 @@ class EligibilityEvaluatorTest extends TestCase
 
         $this->assertTrue($result->eligible);
     }
+
+    public function testInsufficientFundsFailsWithStructuredReason(): void
+    {
+        $template = new CompetitionTemplate('Paid Cup', 'paid-cup', 8, CompetitionDuration::ONE_DAY);
+        $template->setEntryFeePence(50_000);
+
+        $club = $this->makeClub(reputation: 50);
+        $club->setBalance(10_000);
+
+        $result = $this->makeEvaluator()->evaluate($template, $club);
+
+        $this->assertFalse($result->eligible);
+        $this->assertContains('insufficient_funds', $result->reasons);
+        $this->assertSame([
+            [
+                'code'     => 'insufficient_funds',
+                'required' => 50_000,
+                'actual'   => 10_000,
+            ],
+        ], $result->structuredReasons);
+    }
 }
