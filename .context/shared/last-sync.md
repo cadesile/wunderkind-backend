@@ -5,6 +5,17 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-24), on top of commit 0bc0832** (uncommitted).
+  **Stages touched:** 04_interfaces (`services.md`). Closed the one open ask in
+  `wunderkind-app`'s `docs/api/match-detail-club-fields.md` §4a: an unplayed cup fixture or
+  accepted friendly now returns both clubs' registered snapshot XIs as
+  `homeLineup`/`awayLineup` rather than empty arrays, via a new
+  `CompetitionRegistrationService::formatSnapshotXiForClient()` projection onto the played-
+  lineup key set (counters `0`, `rating` null). Showing **both** XIs — rather than only the
+  viewer's, or neither until the XI locks — was an explicit product decision by the human,
+  taken knowing the resubmission window stays open after the draw, so each club can change
+  the XI that actually plays after seeing the other's.
+
 - **New pass (2026-10-24), on top of commit 883f731** (uncommitted).
   **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces
   (`services.md`, `routes.md`). Backend half of the production Sentry sweep

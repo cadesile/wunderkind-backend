@@ -101,7 +101,8 @@ filename alone.
   using `SELECT ... FOR UPDATE` on the `ActiveCompetition` row to
   serialize concurrent last-slot registrations. Also owns the static
   snapshot club/lineup normalizers (`normalizeSnapshotClub()`,
-  `normalizeClubData()`, `formatLineupForClient()`) shared by competition
+  `normalizeClubData()`, `formatLineupForClient()`,
+  `formatSnapshotXiForClient()`) shared by competition
   registration/resubmit, `CompetitionResultsService`, `CompetitionResult::toClientSummary()`,
   `MatchQueryService`, `CompetitionController`, and `FriendlyChallengeService`
   so the client's `TournamentSnapshotBuilder` payload (`club.identity` with
@@ -114,6 +115,24 @@ filename alone.
   explicitly validating `playingStyle` against `PlayingStyle` enum, and
   omitting `stadiumName` and `playingStyle` rather than emitting `null`
   when unset per `docs/api/match-detail-club-fields.md`).
+  **`formatSnapshotXiForClient()` backs the pre-match lineup**: an unplayed
+  cup fixture or accepted friendly returns both clubs' registered snapshot
+  XIs as `homeLineup`/`awayLineup` instead of two empty arrays, projected
+  onto the exact key set a played lineup carries (`name`, `position`,
+  `appearance`, `goals`, `assists`, `yellowCards`, `redCards`, `rating`) with
+  counters at `0` and `rating` **null** — a played rating runs 1.0-10.0, so
+  `0` would render as the worst performance ever rather than "not played".
+  A projection rather than a pass-through because `formatLineupForClient()`
+  only backfills `appearance` and strips `id`, so raw snapshot players would
+  leak the snapshot's wider shape (`currentAbility`, `dateOfBirth`, …) and
+  carry none of the per-match keys. Submitted order is preserved, unlike a
+  played lineup, which the engine sorts by ability. **Both clubs' XIs are
+  visible pre-match by explicit product decision** — note this is live
+  information, not merely stale: the resubmission window stays open while the
+  competition has an upcoming round and a fixture resolves against whatever
+  snapshot the entrant holds at the time, so either club can change the XI
+  that actually plays after seeing the other's. Closes
+  `docs/api/match-detail-club-fields.md` §4a (app repo).
 - **`Competition/CompetitionDrawService`** — owns the draw phase
   (`DRAW_PENDING` → `DRAWN`) behind `app:competition:draw-rounds` (every 1
   min via cron — see `02_architecture/output/structure.md`). Atomically

@@ -255,6 +255,30 @@ class MatchControllerTest extends WebTestCase
         $this->assertSame($matchId, $matchDetail['matchId']);
         $this->assertSame('cup', $matchDetail['kind']);
         $this->assertSame('scheduled', $matchDetail['status']);
+        $this->assertNull($matchDetail['score']);
+
+        // An unplayed fixture answers who each club is fielding, from the registered
+        // snapshot XIs, rather than two empty arrays — same shape as a played lineup with
+        // the per-match values empty. Both sides, for both clubs.
+        foreach (['homeLineup', 'awayLineup'] as $side) {
+            $this->assertCount(11, $matchDetail[$side], "{$side} should carry the registered XI before kickoff");
+
+            $first = $matchDetail[$side][0];
+            $this->assertSame(
+                ['name', 'position', 'appearance', 'goals', 'assists', 'yellowCards', 'redCards', 'rating'],
+                array_keys($first),
+                "{$side} entries must match the played-lineup shape exactly",
+            );
+            $this->assertNull($first['rating'], 'no rating exists before kickoff; 0 would read as the worst performance');
+            $this->assertSame(0, $first['goals']);
+            $this->assertSame(0, $first['assists']);
+            $this->assertSame(0, $first['yellowCards']);
+            $this->assertSame(0, $first['redCards']);
+            $this->assertIsString($first['name']);
+            $this->assertIsString($first['position']);
+            // Appearance rides along so the pre-match screen can draw the players.
+            $this->assertSame('curly', $first['appearance']['hair'] ?? null);
+        }
 
         // 5. Resolve Round 1 -> check recent matches & H2H
         $reloadedInstance = $this->em->getRepository(ActiveCompetition::class)->find($instanceId);
