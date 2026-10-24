@@ -127,9 +127,14 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertCount(4, $matchResultMessages);
     }
 
+    /**
+     * Capacity 8 (QF -> SF -> FINAL) on purpose: at capacity 4 the round after round 1 IS the
+     * final, which now skips its intermission entirely (see the test below), so a 4-entrant
+     * bracket can no longer demonstrate the ordinary intermission path this test is about.
+     */
     public function testNonFinalRoundPublishSchedulesNextRoundDrawWithoutCreatingItsFixtures(): void
     {
-        $instance = $this->buildDrawnCompetition(capacity: 4);
+        $instance = $this->buildDrawnCompetition(capacity: 8);
         $rounds   = $this->roundRepository->findByCompetitionOrderedByIndex($instance);
         [$round1, $round2] = $rounds;
 
@@ -144,8 +149,44 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertNotNull($round1->getCompletedAt());
 
         $this->assertSame(CompetitionRoundStatus::DRAW_PENDING, $round2->getStatus(), 'Drawing round 2 is CompetitionDrawService\'s job, on a later tick.');
-        $this->assertGreaterThan($round1->getCompletedAt(), $round2->getScheduledAt());
+        $this->assertGreaterThan($round1->getCompletedAt(), $round2->getScheduledAt(), 'An intermediate round keeps its intermission — its draw still decides who meets whom.');
         $this->assertCount(0, $this->fixtureRepository->findByRoundOrderedBySlot($round2));
+    }
+
+    /**
+     * The final is the one round whose draw reveals nothing: once the semi-final has resolved
+     * there are two entrants left and exactly one possible fixture, so making the finalists sit
+     * out an intermission first is dead time. It is scheduled for the publishing instant, which
+     * makes the very next draw tick (cron, every minute) pick it up.
+     *
+     * Still DRAW_PENDING rather than drawn here: scheduling is all CompetitionResultsService
+     * does: the draw stays behind CompetitionDrawService's own claim-lock.
+     */
+    public function testSemiFinalPublishMakesTheFinalDueImmediatelyInsteadOfAfterAnIntermission(): void
+    {
+        $instance = $this->buildDrawnCompetition(capacity: 4);
+        [$semiFinal, $final] = $this->roundRepository->findByCompetitionOrderedByIndex($instance);
+
+        foreach ($this->fixtureRepository->findByRoundOrderedBySlot($semiFinal) as $fixture) {
+            $this->resultsService->forceResolveFixture($fixture);
+        }
+
+        $this->em->refresh($semiFinal);
+        $this->em->refresh($final);
+
+        $this->assertSame('FINAL', $final->getLabel());
+        $this->assertSame(CompetitionRoundStatus::DRAW_PENDING, $final->getStatus());
+        $this->assertEquals(
+            $semiFinal->getCompletedAt(),
+            $final->getScheduledAt(),
+            'The final must be due the moment the semi-final publishes, not an intermission later.',
+        );
+        $this->assertLessThanOrEqual(
+            new \DateTimeImmutable(),
+            $final->getScheduledAt(),
+            'Due now means the next draw tick draws it, rather than it sitting pending.',
+        );
+        $this->assertCount(0, $this->fixtureRepository->findByRoundOrderedBySlot($final), 'Seeding the fixture is still the draw service\'s job.');
     }
 
     public function testFinalRoundPublishCompletesTheCompetitionAndDeliversThePrize(): void
