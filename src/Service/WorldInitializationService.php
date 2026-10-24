@@ -52,9 +52,13 @@ class WorldInitializationService
      *     (see version 1's note about all-10s personality matrices).
      *
      * ⚠️ Bumping this makes every cached row a miss, so the next client request per
-     * country/tier pays the rebuild (~1.5s for 8 clubs, ~3-4s for 18) on its critical
-     * path. Run `app:worldpack:warm <CODE> --force` for each enabled country after
-     * deploying a bump, so no player pays for it.
+     * country/tier pays the rebuild (~2s for an 8-club tier, ~3-4s for 18) on its
+     * critical path. To pre-empt that, run plain `app:worldpack:warm <CODE>` per
+     * country — **not** `--force`: a stale-versioned row is already a miss that gets
+     * rebuilt through the atomic replace path, while `--force` in all-tiers mode deletes
+     * the country's entries up front and leaves it with none until the run finishes.
+     * Warming is a manual step, and the admin dashboard's `stalePacks` count is the
+     * signal for what is still outstanding.
      */
     public const WORLD_PACK_VERSION = 3;
 

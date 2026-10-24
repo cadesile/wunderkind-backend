@@ -128,11 +128,19 @@ filename alone.
   carry none of the per-match keys. Submitted order is preserved, unlike a
   played lineup, which the engine sorts by ability. **Both clubs' XIs are
   visible pre-match by explicit product decision** — note this is live
-  information, not merely stale: the resubmission window stays open while the
-  competition has an upcoming round and a fixture resolves against whatever
-  snapshot the entrant holds at the time, so either club can change the XI
-  that actually plays after seeing the other's. Closes
-  `docs/api/match-detail-club-fields.md` §4a (app repo).
+  information, not merely stale, and **the draw does not freeze it**: a round
+  resolves against whatever snapshot the entrant holds at resolve time
+  (`DeterministicEngine::playersOf()` reads the live `snapshotJson`), and
+  `resubmit` stays open while any round is `DRAW_PENDING`. Since every round
+  but the last has a later `DRAW_PENDING` round behind it, resubmit remains
+  open through that round's draw and up to its resolution — a club can change
+  the XI that plays an already-drawn fixture after seeing its opponent's. Only
+  the final locks at its own draw, nothing being `DRAW_PENDING` behind it. So
+  there is no "drawn and locked" state to gate on for a non-final round; the
+  alternatives are a real squad-lock concept or a viewer-scoped payload (own XI
+  only until the result exists). Closes
+  `docs/api/match-detail-club-fields.md` §4a (app repo); its §4 is the product
+  question this answers.
 - **`Competition/CompetitionDrawService`** — owns the draw phase
   (`DRAW_PENDING` → `DRAWN`) behind `app:competition:draw-rounds` (every 1
   min via cron — see `02_architecture/output/structure.md`). Atomically
@@ -619,9 +627,17 @@ filename alone.
   cached packs went on serving the retired asset-slug shape — the cache has no
   TTL and this constant is the only thing that invalidates it. Second time that
   has happened (version 1's note records the all-10s personality matrices).
-  Bumping makes every cached row a miss, so run
-  `app:worldpack:warm <CODE> --force` per enabled country at deploy or the first
-  client request per country/tier pays ~1.5-4s on its critical path.
+  Bumping makes every cached row a miss. **`--force` is not the command for
+  that** — plain `app:worldpack:warm <CODE>` already rebuilds a stale-versioned
+  row, through `forceRebuild`'s atomic path (old entry dropped only once the new
+  payload is built), whereas `--force` in all-tiers mode calls
+  `deleteByCountry()` up front and leaves the country with no packs at all until
+  the run finishes. Warming is a **manual** process here, not part of the deploy;
+  the admin dashboard's `stalePacks` figure (`DashboardStatsService`, counting
+  `payload_version <> WORLD_PACK_VERSION`) is the signal for what still needs it.
+  Nothing breaks if it is never run — a stale pack is a miss, so it self-heals on
+  the next request, and that one client pays the rebuild (measured: ~8s for all 8
+  tiers of an 8-club country, ~18s for an 18-club one).
   `buildLeaguesPack()`/`buildTierPack()` draw each NPC club's full staff —
   Manager/Coach/Chairman (unfiltered draw) plus Director of Football/Facility
   Manager/Scouts (nationality-filtered with backfill, via `fillStaffRole()`/
