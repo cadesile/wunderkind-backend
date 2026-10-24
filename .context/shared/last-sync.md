@@ -5,6 +5,15 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-24), on top of commit 265c3b0** (uncommitted).
+  **Stages touched:** 05_ui (`design-system.md`). Added a live UTC server clock under the
+  admin sidebar's "Build My Club" title, via a new `header_logo` override in
+  `templates/bundles/EasyAdminBundle/layout.html.twig` plus a "Server clock (sidebar)"
+  section in `public/admin-theme.css`. Server-rendered first paint + skew-corrected JS
+  ticker pinned to UTC. Guarded by `tests/Controller/Admin/SidebarServerClockTest.php`,
+  which renders the real EasyAdmin layout — the override restates EasyAdmin's anchor
+  verbatim, so an upstream markup change could otherwise desync it silently.
+
 - **New pass (2026-10-24), on top of commit 0bc0832** (uncommitted).
   **Stages touched:** 04_interfaces (`services.md`). Closed the one open ask in
   `wunderkind-app`'s `docs/api/match-detail-club-fields.md` §4a: an unplayed cup fixture or

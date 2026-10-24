@@ -52,10 +52,24 @@ scrollbars, and Select2 — a full theming pass, not a one-off tweak.
 
 - **`templates/bundles/EasyAdminBundle/layout.html.twig`** — overrides
   EasyAdmin's own core layout (`extends '@!EasyAdmin/layout.html.twig'`).
-  Overrides `head_favicon` (adds a null-safety guard) and
+  Overrides `head_favicon` (adds a null-safety guard),
   `body_javascript` (adds a trophy-image color-filter preview script and a
   custom global delete-confirmation modal, styled with the same
-  `var(--bs-...)` tokens as `admin-theme.css`).
+  `var(--bs-...)` tokens as `admin-theme.css`), and `header_logo` (adds a
+  **live server clock** under the "Build My Club" title). The server runs
+  **UTC** and the operator usually does not, so every timestamp in this panel —
+  cron runs, deploy logs, sync records — otherwise needs converting before it
+  can be read against anything. Rendered server-side as the first paint and the
+  no-JS fallback, then ticked once a second from a `data-server-time` anchor:
+  the script measures the skew between that stamp and the browser's own clock
+  and applies it, so a machine with a wrong clock still shows true server time,
+  and formatting is pinned to `timeZone: 'UTC'` rather than `toLocaleString`,
+  which would silently show the viewer's zone. Note `header_logo` is extended by
+  **restating EasyAdmin's anchor verbatim** (Twig cannot append to a block), so
+  an upstream change to that markup can leave the override out of step —
+  `tests/Controller/Admin/SidebarServerClockTest.php` renders the real layout to
+  catch that. Styles live in `admin-theme.css` under "Server clock (sidebar)";
+  it hides on the 64px compact rail alongside `.logo-custom`.
 - **`templates/admin/form/appearance_theme.html.twig`** +
   **`templates/admin/field/appearance.html.twig`** — a custom EasyAdmin
   form-widget theme, registered per-controller via

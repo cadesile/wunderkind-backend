@@ -602,3 +602,51 @@ code, pre, .font-monospace {
 
 /* ── HR divider ──────────────────────────────────────────────── */
 hr { border-color: #080d1a !important; opacity: 1 !important; }
+
+/* ── Server clock (sidebar) ─────────────────────── */
+/* Sits under the "Build My Club" title. The server runs UTC and the operator
+   usually does not, so every timestamp in this panel — cron runs, deploy logs,
+   sync records — needs a mental conversion without it. Stated once, here.
+
+   Deliberately quiet: this is reference information you glance at, not a
+   feature. Dim text, small, and it never competes with the nav. */
+.ea-sidebar-logo .bmc-server-clock {
+    /* The dashboard-title anchor carries `padding-bottom: var(--ea-sp-14)`, which
+       would otherwise leave the clock floating well clear of the title it belongs
+       to. Pulled back by that same variable so it sits directly underneath, rather
+       than by a guessed pixel value that would drift if the token changed. */
+    margin-block-start: calc(-1 * var(--ea-sp-14));
+    padding: 0 0 6px 4px;
+    line-height: 1.25;
+    /* Tabular figures so the seconds digit does not shuffle the string's width
+       once a second, which is very visible in a sidebar this narrow. */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    cursor: default;
+}
+
+.ea-sidebar-logo .bmc-server-clock-label {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: .5rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    /* The dim-text token, stepped back further — the label is a unit, read once;
+       the value beside it is what gets looked at. Opacity rather than a new hex
+       so this stays on the documented palette. */
+    color: #9bb0c4;
+    opacity: .6;
+}
+
+.ea-sidebar-logo .bmc-server-clock-value {
+    display: block;
+    font-family: 'Space Mono', monospace;
+    font-size: .72rem;
+    color: #9bb0c4;
+}
+
+/* Hidden on the 64px icon rail, exactly as the logo text is — see
+   `#sidebar-resizer-handler` above for what toggles that state. */
+body.ea-sidebar-width-compact .ea-sidebar-logo .bmc-server-clock {
+    display: none;
+}
