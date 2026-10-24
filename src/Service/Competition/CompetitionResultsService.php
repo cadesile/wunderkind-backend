@@ -19,7 +19,9 @@ use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
 use App\Service\ClubInitializationService;
 use App\Service\InboxService;
+use App\Service\MatchEngine\MatchEngineInterface;
 use App\Service\MatchEngine\MatchEngineRegistry;
+use App\Service\MatchEngine\MatchEngineResult;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -266,22 +268,8 @@ class CompetitionResultsService
         $engine      = $this->matchEngineRegistry->resolveFor($round->getMatchEngineIdentifier());
         $matchResult = $engine->resolve($home, $away, $fixture);
 
-        $result = new CompetitionResult(
-            $fixture,
-            $matchResult->homeScore,
-            $matchResult->awayScore,
-            $matchResult->eventLog,
-            $round->getMatchEngineIdentifier(),
-            $this->clubJsonOf($home),
-            $this->clubJsonOf($away),
-            $matchResult->homeLineup,
-            $matchResult->awayLineup,
-        );
-        $result->setNarrativePayload($matchResult->narrativePayload);
-        $result->setShootoutInfo($matchResult->wentToExtraTime, $matchResult->wentToPenalties, $matchResult->penaltyHomeScore, $matchResult->penaltyAwayScore);
-        $this->em->persist($result);
-
-        $winner = match (true) {
+        $usedTiebreak = false;
+        $winner       = match (true) {
             $matchResult->homeScore > $matchResult->awayScore => $home,
             $matchResult->awayScore > $matchResult->homeScore => $away,
             $matchResult->wentToPenalties => ($matchResult->penaltyHomeScore > $matchResult->penaltyAwayScore ? $home : $away),
@@ -289,9 +277,41 @@ class CompetitionResultsService
             // via extra time + penalties, so this branch is unreachable in practice; kept in
             // case an engine that hasn't implemented ET/penalties yet (e.g. a future real AI
             // tier) ever produces a level score.
-            default => $this->breakTie($home, $away, $fixture),
+            default => (function () use ($home, $away, $fixture, &$usedTiebreak): CompetitionEntrant {
+                $usedTiebreak = true;
+
+                return $this->breakTie($home, $away, $fixture);
+            })(),
         };
         $loser = $winner === $home ? $away : $home;
+
+        $homeClubJson = $this->clubJsonOf($home);
+        $awayClubJson = $this->clubJsonOf($away);
+
+        $result = new CompetitionResult(
+            $fixture,
+            $matchResult->homeScore,
+            $matchResult->awayScore,
+            $matchResult->eventLog,
+            $round->getMatchEngineIdentifier(),
+            $homeClubJson,
+            $awayClubJson,
+            $matchResult->homeLineup,
+            $matchResult->awayLineup,
+        );
+        $result->setNarrativePayload($matchResult->narrativePayload);
+        $result->setShootoutInfo($matchResult->wentToExtraTime, $matchResult->wentToPenalties, $matchResult->penaltyHomeScore, $matchResult->penaltyAwayScore);
+        $result->setComputationAuditJson($this->buildComputationAudit(
+            $fixture,
+            $round,
+            $home,
+            $away,
+            $winner,
+            $engine,
+            $matchResult,
+            $usedTiebreak,
+        ));
+        $this->em->persist($result);
 
         $fixture->setStatus(CompetitionFixtureStatus::COMPLETE);
         $fixture->setWinnerEntrant($winner);
@@ -378,44 +398,11 @@ class CompetitionResultsService
     /** @return array<string, mixed> */
     private function clubJsonOf(CompetitionEntrant $entrant): array
     {
-        $snapshotClub = $entrant->getSnapshotJson()['club'] ?? [];
-        if (!is_array($snapshotClub)) {
-            $snapshotClub = [];
-        }
-
-        $clubEntity   = $entrant->getClub();
-        $name         = (string) ($snapshotClub['name'] ?? $clubEntity->getName());
-        $abbreviation = (string) ($snapshotClub['abbreviation'] ?? $clubEntity->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($name));
-        $reputation   = is_numeric($snapshotClub['reputation'] ?? null)
-            ? (int) $snapshotClub['reputation']
-            : $clubEntity->getReputation();
-        $ovr          = is_numeric($snapshotClub['ovr'] ?? null)
-            ? (int) $snapshotClub['ovr']
-            : CompetitionRegistrationService::computeStartingXiOvr($entrant->getSnapshotJson());
-        $badgeShape   = (string) ($snapshotClub['badgeShape'] ?? $clubEntity->getBadgeConfig()['badgeShape'] ?? 'shield');
-        if ($badgeShape === 'circle' || $badgeShape === 'badge') {
-            $badgeShape = 'round';
-        }
-
-        $badgeConfig = $snapshotClub['badgeConfig'] ?? $clubEntity->getBadgeConfig();
-        if (is_array($badgeConfig) && in_array($badgeConfig['badgeShape'] ?? null, ['circle', 'badge'], true)) {
-            $badgeConfig['badgeShape'] = 'round';
-        }
-
-        return array_merge($snapshotClub, [
-            'clubId'         => (string) $clubEntity->getId(),
-            'clubName'       => $name,
-            'name'           => $name,
-            'abbreviation'   => $abbreviation,
-            'country'        => $snapshotClub['country'] ?? $clubEntity->getCountry(),
-            'ovr'            => $ovr,
-            'reputation'     => $reputation,
-            'reputationTier' => Tier::fromScore($reputation)->value,
-            'homeKitConfig'  => $snapshotClub['homeKitConfig'] ?? $clubEntity->getHomeKitConfig(),
-            'awayKitConfig'  => $snapshotClub['awayKitConfig'] ?? $clubEntity->getAwayKitConfig(),
-            'badgeConfig'    => $badgeConfig,
-            'badgeShape'     => $badgeShape,
-        ]);
+        return CompetitionRegistrationService::normalizeSnapshotClub(
+            $entrant->getSnapshotJson(),
+            $entrant->getClub(),
+            (string) $entrant->getClub()->getId(),
+        );
     }
 
     private function breakTie(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): CompetitionEntrant
@@ -430,5 +417,90 @@ class CompetitionResultsService
         $labels = BracketLabeler::labelsForCapacity($round->getActiveCompetition()->getEntrantCapacity());
 
         return $round->getRoundIndex() === count($labels);
+    }
+
+    /**
+     * Builds or enriches the engine-agnostic computation audit stored on CompetitionResult,
+     * ensuring every tournament match result records how it was derived regardless of which
+     * MatchEngineInterface resolved the fixture.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildComputationAudit(
+        CompetitionFixture $fixture,
+        CompetitionRound $round,
+        CompetitionEntrant $home,
+        CompetitionEntrant $away,
+        CompetitionEntrant $winner,
+        MatchEngineInterface $engine,
+        MatchEngineResult $matchResult,
+        bool $usedTiebreak,
+    ): array {
+        $requestedEngine = ($round->getMatchEngineIdentifier() ?? \App\Enum\Competition\MatchEngineIdentifier::DETERMINISTIC)->value;
+        $audit           = $matchResult->computationAudit ?? [
+            'schemaVersion' => 1,
+            'engine'        => [
+                'requestedEngine' => $requestedEngine,
+                'resolvedBy'      => $requestedEngine,
+                'engineClass'     => $engine::class,
+                'delegatedFrom'   => null,
+                'fallbackReason'  => null,
+            ],
+            'fixture' => [
+                'fixtureId'  => $fixture->getId()->toRfc4122(),
+                'rngSeed'    => SeededRng::hashId($fixture->getId()->toRfc4122()),
+                'allowDraws' => false,
+            ],
+            'entrants' => [
+                'home' => [
+                    'entrantId'       => (string) $home->getId(),
+                    'clubId'          => (string) $home->getClub()->getId(),
+                    'clubName'        => $home->getClub()->getName(),
+                    'seed'            => $home->getSeed(),
+                    'snapshotVersion' => $home->getSnapshotVersion(),
+                ],
+                'away' => [
+                    'entrantId'       => (string) $away->getId(),
+                    'clubId'          => (string) $away->getClub()->getId(),
+                    'clubName'        => $away->getClub()->getName(),
+                    'seed'            => $away->getSeed(),
+                    'snapshotVersion' => $away->getSnapshotVersion(),
+                ],
+            ],
+        ];
+
+        $audit['engine'] = array_merge($audit['engine'] ?? [], [
+            'requestedEngine' => $requestedEngine,
+            'engineClass'     => $engine::class,
+        ]);
+
+        $audit['round'] = [
+            'competitionId' => (string) $round->getActiveCompetition()->getId(),
+            'roundId'       => (string) $round->getId(),
+            'roundIndex'    => $round->getRoundIndex(),
+            'label'         => $round->getLabel(),
+            'slotIndex'     => $fixture->getSlotIndex(),
+        ];
+
+        $resolutionMethod = $usedTiebreak
+            ? 'tiebreak_coin_flip'
+            : ($matchResult->wentToPenalties ? 'penalties' : ($matchResult->wentToExtraTime ? 'extra_time' : 'regulation'));
+
+        $audit['outcome'] = array_merge($audit['outcome'] ?? [], [
+            'homeScore'        => $matchResult->homeScore,
+            'awayScore'        => $matchResult->awayScore,
+            'wentToExtraTime'  => $matchResult->wentToExtraTime,
+            'wentToPenalties'  => $matchResult->wentToPenalties,
+            'penaltyHomeScore' => $matchResult->penaltyHomeScore,
+            'penaltyAwayScore' => $matchResult->penaltyAwayScore,
+            'usedTiebreak'     => $usedTiebreak,
+            'tiebreakSeed'     => $usedTiebreak ? SeededRng::hashId($fixture->getId()->toRfc4122() . ':tiebreak') : null,
+            'winnerSide'       => $winner === $home ? 'home' : 'away',
+            'winnerEntrantId'  => (string) $winner->getId(),
+            'winnerClubId'     => (string) $winner->getClub()->getId(),
+            'resolutionMethod' => $resolutionMethod,
+        ]);
+
+        return $audit;
     }
 }

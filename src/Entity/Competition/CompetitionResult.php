@@ -4,6 +4,7 @@ namespace App\Entity\Competition;
 
 use App\Enum\Competition\MatchEngineIdentifier;
 use App\Repository\Competition\CompetitionResultRepository;
+use App\Service\Competition\CompetitionRegistrationService;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
@@ -66,6 +67,17 @@ class CompetitionResult
     /** @var array|null Full generated commentary timeline — see MatchNarrativeGeneratorService. Null for results generated before this feature existed. */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $narrativePayload = null;
+
+    /**
+     * Engine-agnostic audit trail detailing how this result was derived (inputs, dominance
+     * breakdown, tactical/manager/personality/cohesion multipliers, RNG seed, Poisson xG,
+     * extra-time/penalty shootout rolls, goal/assist/card weights, and player rating math,
+     * or delegation/fallback notes for AI engines). Admin-only — never sent in toClientSummary().
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $computationAuditJson = null;
 
     /**
      * Every Competition fixture is a knockout-bracket match and can never end level — these
@@ -142,6 +154,17 @@ class CompetitionResult
     public function getNarrativePayload(): ?array { return $this->narrativePayload; }
     public function setNarrativePayload(?array $narrativePayload): static { $this->narrativePayload = $narrativePayload; return $this; }
 
+    /** @return array<string, mixed>|null */
+    public function getComputationAuditJson(): ?array { return $this->computationAuditJson; }
+
+    /** @param array<string, mixed>|null $computationAuditJson */
+    public function setComputationAuditJson(?array $computationAuditJson): static
+    {
+        $this->computationAuditJson = $computationAuditJson;
+
+        return $this;
+    }
+
     public function setShootoutInfo(bool $wentToExtraTime, bool $wentToPenalties, ?int $penaltyHomeScore, ?int $penaltyAwayScore): static
     {
         $this->wentToExtraTime  = $wentToExtraTime;
@@ -172,6 +195,13 @@ class CompetitionResult
         return $this->narrativePayload === null
             ? null
             : (json_encode($this->narrativePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
+    }
+
+    public function getComputationAuditPretty(): ?string
+    {
+        return $this->computationAuditJson === null
+            ? null
+            : (json_encode($this->computationAuditJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
     }
 
     /**
@@ -212,14 +242,25 @@ class CompetitionResult
     {
         $round             = $this->fixture->getRound();
         $activeCompetition = $round->getActiveCompetition();
+        $homeEntrant       = $this->fixture->getHomeEntrant();
+        $awayEntrant       = $this->fixture->getAwayEntrant();
+
+        $homeSnapshotClub = is_array($homeEntrant?->getSnapshotJson()['club'] ?? null) ? $homeEntrant->getSnapshotJson()['club'] : [];
+        $awaySnapshotClub = is_array($awayEntrant?->getSnapshotJson()['club'] ?? null) ? $awayEntrant->getSnapshotJson()['club'] : [];
+
+        $homeClub = $this->stripClubId(CompetitionRegistrationService::normalizeClubData(array_merge($homeSnapshotClub, $this->homeClubJson), $homeEntrant?->getClub()));
+        $awayClub = $this->stripClubId(CompetitionRegistrationService::normalizeClubData(array_merge($awaySnapshotClub, $this->awayClubJson), $awayEntrant?->getClub()));
+
+        $homeSnapshotPlayers = is_array($homeEntrant?->getSnapshotJson()['players'] ?? null) ? $homeEntrant->getSnapshotJson()['players'] : [];
+        $awaySnapshotPlayers = is_array($awayEntrant?->getSnapshotJson()['players'] ?? null) ? $awayEntrant->getSnapshotJson()['players'] : [];
 
         return [
             'homeScore'        => $this->homeScore,
             'awayScore'        => $this->awayScore,
-            'homeClub'         => $this->stripClubId($this->homeClubJson),
-            'awayClub'         => $this->stripClubId($this->awayClubJson),
-            'homeLineup'       => array_map($this->stripPlayerId(...), $this->homeLineupJson),
-            'awayLineup'       => array_map($this->stripPlayerId(...), $this->awayLineupJson),
+            'homeClub'         => $homeClub,
+            'awayClub'         => $awayClub,
+            'homeLineup'       => CompetitionRegistrationService::formatLineupForClient($this->homeLineupJson, $homeSnapshotPlayers),
+            'awayLineup'       => CompetitionRegistrationService::formatLineupForClient($this->awayLineupJson, $awaySnapshotPlayers),
             'narrativePayload' => $this->narrativePayload,
             'wentToExtraTime'  => $this->wentToExtraTime,
             'wentToPenalties'  => $this->wentToPenalties,
@@ -286,10 +327,11 @@ class CompetitionResult
             'narrativePayload' => $this->narrativePayload,
             'wentToExtraTime'  => $this->wentToExtraTime,
             'wentToPenalties'  => $this->wentToPenalties,
-            'penaltyHomeScore' => $this->penaltyHomeScore,
-            'penaltyAwayScore' => $this->penaltyAwayScore,
-            'engineIdentifier' => $this->engineIdentifier->value,
-            'generatedAt'      => $this->generatedAt->format(DATE_ATOM),
+            'penaltyHomeScore'     => $this->penaltyHomeScore,
+            'penaltyAwayScore'     => $this->penaltyAwayScore,
+            'engineIdentifier'     => $this->engineIdentifier->value,
+            'computationAuditJson' => $this->computationAuditJson,
+            'generatedAt'          => $this->generatedAt->format(DATE_ATOM),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 }

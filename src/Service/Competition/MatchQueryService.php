@@ -335,19 +335,19 @@ class MatchQueryService
         $homeEntrant = $fixture->getHomeEntrant();
         $awayEntrant = $fixture->getAwayEntrant();
 
+        $homeSnapshotClub = is_array($homeEntrant?->getSnapshotJson()['club'] ?? null) ? $homeEntrant->getSnapshotJson()['club'] : [];
+        $awaySnapshotClub = is_array($awayEntrant?->getSnapshotJson()['club'] ?? null) ? $awayEntrant->getSnapshotJson()['club'] : [];
+
         $homeClub = $resultEntity !== null
-            ? $this->normalizeClubIdentityArray($resultEntity->getHomeClubJson(), $homeEntrant?->getClub())
+            ? $this->normalizeClubIdentityArray(array_merge($homeSnapshotClub, $resultEntity->getHomeClubJson()), $homeEntrant?->getClub())
             : ($homeEntrant !== null ? $this->serializeClubFromEntrant($homeEntrant) : null);
 
         $awayClub = $resultEntity !== null
-            ? $this->normalizeClubIdentityArray($resultEntity->getAwayClubJson(), $awayEntrant?->getClub())
+            ? $this->normalizeClubIdentityArray(array_merge($awaySnapshotClub, $resultEntity->getAwayClubJson()), $awayEntrant?->getClub())
             : ($awayEntrant !== null ? $this->serializeClubFromEntrant($awayEntrant) : null);
 
-        $stripPlayerId = static function (array $p): array {
-            unset($p['id']);
-
-            return $p;
-        };
+        $homeSnapshotPlayers = is_array($homeEntrant?->getSnapshotJson()['players'] ?? null) ? $homeEntrant->getSnapshotJson()['players'] : [];
+        $awaySnapshotPlayers = is_array($awayEntrant?->getSnapshotJson()['players'] ?? null) ? $awayEntrant->getSnapshotJson()['players'] : [];
 
         $kickoffAt = ($fixture->getProcessedAt() ?? $round->getMatchesResolveAt() ?? $round->getScheduledAt())->format(DATE_ATOM);
 
@@ -369,8 +369,8 @@ class MatchQueryService
             'home'             => $homeClub,
             'away'             => $awayClub,
             'score'            => $score,
-            'homeLineup'       => $resultEntity !== null ? array_map($stripPlayerId, $resultEntity->getHomeLineupJson()) : [],
-            'awayLineup'       => $resultEntity !== null ? array_map($stripPlayerId, $resultEntity->getAwayLineupJson()) : [],
+            'homeLineup'       => $resultEntity !== null ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getHomeLineupJson(), $homeSnapshotPlayers) : [],
+            'awayLineup'       => $resultEntity !== null ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getAwayLineupJson(), $awaySnapshotPlayers) : [],
             'narrativePayload' => $resultEntity?->getNarrativePayload() ?? [],
         ];
     }
@@ -394,11 +394,10 @@ class MatchQueryService
             ? $this->normalizeClubIdentityArray($challenge->getAwayClubJson(), $homeIsChall ? $challenge->getAcceptorClub() : $challenge->getChallengerClub())
             : ($homeIsChall ? $acceptorIdentity : $challengerIdentity);
 
-        $stripPlayerId = static function (array $p): array {
-            unset($p['id']);
-
-            return $p;
-        };
+        $homeSnapshot        = $homeIsChall ? $challenge->getChallengerSnapshotJson() : ($challenge->getAcceptorSnapshotJson() ?? []);
+        $awaySnapshot        = $homeIsChall ? ($challenge->getAcceptorSnapshotJson() ?? []) : $challenge->getChallengerSnapshotJson();
+        $homeSnapshotPlayers = is_array($homeSnapshot['players'] ?? null) ? $homeSnapshot['players'] : [];
+        $awaySnapshotPlayers = is_array($awaySnapshot['players'] ?? null) ? $awaySnapshot['players'] : [];
 
         $score = $isComplete ? [
             'home'      => $challenge->getHomeScore(),
@@ -424,8 +423,8 @@ class MatchQueryService
             'home'             => $homeClub,
             'away'             => $awayClub,
             'score'            => $score,
-            'homeLineup'       => $challenge->getHomeLineupJson() !== null ? array_map($stripPlayerId, $challenge->getHomeLineupJson()) : [],
-            'awayLineup'       => $challenge->getAwayLineupJson() !== null ? array_map($stripPlayerId, $challenge->getAwayLineupJson()) : [],
+            'homeLineup'       => $challenge->getHomeLineupJson() !== null ? CompetitionRegistrationService::formatLineupForClient($challenge->getHomeLineupJson(), $homeSnapshotPlayers) : [],
+            'awayLineup'       => $challenge->getAwayLineupJson() !== null ? CompetitionRegistrationService::formatLineupForClient($challenge->getAwayLineupJson(), $awaySnapshotPlayers) : [],
             'narrativePayload' => $challenge->getNarrativePayload() ?? [],
         ];
     }
@@ -450,12 +449,15 @@ class MatchQueryService
             ];
         }
 
+        $homeSnapshotClub = is_array($homeEntrant?->getSnapshotJson()['club'] ?? null) ? $homeEntrant->getSnapshotJson()['club'] : [];
+        $awaySnapshotClub = is_array($awayEntrant?->getSnapshotJson()['club'] ?? null) ? $awayEntrant->getSnapshotJson()['club'] : [];
+
         $homeClub = $resultEntity !== null
-            ? $this->normalizeClubIdentityArray($resultEntity->getHomeClubJson(), $homeEntrant?->getClub())
+            ? $this->normalizeClubIdentityArray(array_merge($homeSnapshotClub, $resultEntity->getHomeClubJson()), $homeEntrant?->getClub())
             : ($homeEntrant !== null ? $this->serializeClubFromEntrant($homeEntrant) : null);
 
         $awayClub = $resultEntity !== null
-            ? $this->normalizeClubIdentityArray($resultEntity->getAwayClubJson(), $awayEntrant?->getClub())
+            ? $this->normalizeClubIdentityArray(array_merge($awaySnapshotClub, $resultEntity->getAwayClubJson()), $awayEntrant?->getClub())
             : ($awayEntrant !== null ? $this->serializeClubFromEntrant($awayEntrant) : null);
 
         $h2h = null;
@@ -550,31 +552,38 @@ class MatchQueryService
      */
     public function normalizeClubIdentityArray(array $clubData, ?Club $clubEntity = null): array
     {
-        $clubId       = (string) ($clubData['clubId'] ?? $clubData['id'] ?? ($clubEntity !== null ? (string) $clubEntity->getId() : ''));
-        $name         = (string) ($clubData['name'] ?? $clubData['clubName'] ?? $clubEntity?->getName() ?? 'Unknown FC');
-        $abbreviation = (string) ($clubData['abbreviation'] ?? $clubEntity?->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($name));
-        $reputation   = is_numeric($clubData['reputation'] ?? null)
-            ? (int) $clubData['reputation']
-            : ($clubEntity?->getReputation() ?? 0);
-        $ovr          = is_numeric($clubData['ovr'] ?? null) ? (int) $clubData['ovr'] : 50;
+        $normalized = CompetitionRegistrationService::normalizeClubData($clubData, $clubEntity);
 
-        $badgeConfig = $clubData['badgeConfig'] ?? $clubEntity?->getBadgeConfig();
-        if (is_array($badgeConfig) && in_array($badgeConfig['badgeShape'] ?? null, ['circle', 'badge'], true)) {
-            $badgeConfig['badgeShape'] = 'round';
+        $payload = [
+            'clubId'         => $normalized['clubId'],
+            'clubName'       => $normalized['clubName'],
+            'name'           => $normalized['name'],
+            'abbreviation'   => $normalized['abbreviation'],
+            'country'        => $normalized['country'],
+            'ovr'            => $normalized['ovr'],
+            'reputation'     => $normalized['reputation'],
+            'reputationTier' => $normalized['reputationTier'],
+            'tier'           => $normalized['tier'],
+            'homeKitConfig'  => $normalized['homeKitConfig'],
+            'awayKitConfig'  => $normalized['awayKitConfig'],
+            'badgeConfig'    => $normalized['badgeConfig'],
+            'identity'       => $normalized['identity'],
+            'stadium'        => $normalized['stadium'],
+            'badgeShape'     => $normalized['badgeShape'],
+            'homePrimary'    => $normalized['homePrimary'],
+            'homeSecondary'  => $normalized['homeSecondary'],
+            'awayPrimary'    => $normalized['awayPrimary'],
+            'awaySecondary'  => $normalized['awaySecondary'],
+            'formation'      => $normalized['formation'] ?? null,
+        ];
+
+        if (isset($normalized['stadiumName'])) {
+            $payload['stadiumName'] = $normalized['stadiumName'];
+        }
+        if (isset($normalized['playingStyle'])) {
+            $payload['playingStyle'] = $normalized['playingStyle'];
         }
 
-        return [
-            'clubId'         => $clubId,
-            'clubName'       => $name,
-            'name'           => $name,
-            'abbreviation'   => $abbreviation,
-            'country'        => $clubData['country'] ?? $clubEntity?->getCountry(),
-            'ovr'            => $ovr,
-            'reputation'     => $reputation,
-            'reputationTier' => Tier::fromScore($reputation)->value,
-            'homeKitConfig'  => $clubData['homeKitConfig'] ?? $clubEntity?->getHomeKitConfig(),
-            'awayKitConfig'  => $clubData['awayKitConfig'] ?? $clubEntity?->getAwayKitConfig(),
-            'badgeConfig'    => $badgeConfig,
-        ];
+        return $payload;
     }
 }

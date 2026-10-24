@@ -782,51 +782,45 @@ class CompetitionController extends AbstractController
             return null;
         }
 
-        $snapshotClub = $entrant->getSnapshotJson()['club'] ?? [];
-        if (!is_array($snapshotClub)) {
-            $snapshotClub = [];
-        }
+        $normalized = CompetitionRegistrationService::normalizeSnapshotClub(
+            $entrant->getSnapshotJson(),
+            $entrant->getClub(),
+            (string) $entrant->getClub()->getId(),
+        );
 
-        $clubEntity   = $entrant->getClub();
-        $name         = (string) ($snapshotClub['name'] ?? $clubEntity->getName());
-        $abbreviation = (string) ($snapshotClub['abbreviation'] ?? $clubEntity->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($name));
-        $reputation   = is_numeric($snapshotClub['reputation'] ?? null)
-            ? (int) $snapshotClub['reputation']
-            : $clubEntity->getReputation();
-        $ovr          = is_numeric($snapshotClub['ovr'] ?? null)
-            ? (int) $snapshotClub['ovr']
-            : CompetitionRegistrationService::computeStartingXiOvr($entrant->getSnapshotJson());
-
-        $badgeShape = $snapshotClub['badgeShape'] ?? ($clubEntity->getBadgeConfig()['badgeShape'] ?? null);
-        if ($badgeShape === 'circle' || $badgeShape === 'badge') {
-            $badgeShape = 'round';
-        }
-
-        $badgeConfig = $snapshotClub['badgeConfig'] ?? $clubEntity->getBadgeConfig();
-        if (is_array($badgeConfig) && in_array($badgeConfig['badgeShape'] ?? null, ['circle', 'badge'], true)) {
-            $badgeConfig['badgeShape'] = 'round';
-        }
-
-        return [
+        $summary = [
             'entrantId'      => (string) $entrant->getId(),
-            'clubId'         => (string) $clubEntity->getId(),
-            'clubName'       => $name,
-            'name'           => $name,
-            'abbreviation'   => $abbreviation,
-            'country'        => $snapshotClub['country'] ?? $clubEntity->getCountry(),
-            'ovr'            => $ovr,
-            'reputation'     => $reputation,
-            'reputationTier' => Tier::fromScore($reputation)->value,
+            'clubId'         => $normalized['clubId'],
+            'clubName'       => $normalized['clubName'],
+            'name'           => $normalized['name'],
+            'abbreviation'   => $normalized['abbreviation'],
+            'country'        => $normalized['country'],
+            'ovr'            => $normalized['ovr'],
+            'reputation'     => $normalized['reputation'],
+            'reputationTier' => $normalized['reputationTier'],
+            'tier'           => $normalized['tier'],
             'seed'           => $entrant->getSeed(),
-            'homeKitConfig'  => $snapshotClub['homeKitConfig'] ?? $clubEntity->getHomeKitConfig(),
-            'awayKitConfig'  => $snapshotClub['awayKitConfig'] ?? $clubEntity->getAwayKitConfig(),
-            'badgeConfig'    => $badgeConfig,
-            'badgeShape'     => $badgeShape,
-            'homePrimary'    => $snapshotClub['homePrimary'] ?? null,
-            'homeSecondary'  => $snapshotClub['homeSecondary'] ?? null,
-            'awayPrimary'    => $snapshotClub['awayPrimary'] ?? null,
-            'awaySecondary'  => $snapshotClub['awaySecondary'] ?? null,
+            'homeKitConfig'  => $normalized['homeKitConfig'],
+            'awayKitConfig'  => $normalized['awayKitConfig'],
+            'badgeConfig'    => $normalized['badgeConfig'],
+            'identity'       => $normalized['identity'],
+            'stadium'        => $normalized['stadium'],
+            'badgeShape'     => $normalized['badgeShape'],
+            'homePrimary'    => $normalized['homePrimary'],
+            'homeSecondary'  => $normalized['homeSecondary'],
+            'awayPrimary'    => $normalized['awayPrimary'],
+            'awaySecondary'  => $normalized['awaySecondary'],
+            'formation'      => $normalized['formation'] ?? null,
         ];
+
+        if (isset($normalized['stadiumName'])) {
+            $summary['stadiumName'] = $normalized['stadiumName'];
+        }
+        if (isset($normalized['playingStyle'])) {
+            $summary['playingStyle'] = $normalized['playingStyle'];
+        }
+
+        return $summary;
     }
 
     /** Pre-bracket entrant listing (used before rounds/fixtures exist) — same club display fields as serializeEntrantSummary(), plus registration metadata. */

@@ -306,4 +306,37 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertTrue($foundExtraTime, 'Expected at least one fixture to go to extra time across 60 competitions.');
         $this->assertTrue($foundPenalties, 'Expected at least one fixture to go to penalties across 60 competitions.');
     }
+
+    public function testPersistedResultStoresComputationAuditJsonAndDoesNotLeakItToClientSummary(): void
+    {
+        $instance = $this->buildDrawnCompetition(capacity: 4);
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $fixture  = $this->fixtureRepository->findByRoundOrderedBySlot($round1)[0];
+
+        $result = $this->resultsService->forceResolveFixture($fixture);
+        $audit  = $result->getComputationAuditJson();
+
+        $this->assertIsArray($audit);
+        $this->assertSame(1, $audit['schemaVersion']);
+        $this->assertSame('deterministic', $audit['engine']['requestedEngine']);
+        $this->assertSame('deterministic', $audit['engine']['resolvedBy']);
+        $this->assertSame(\App\Service\MatchEngine\DeterministicEngine::class, $audit['engine']['engineClass']);
+        $this->assertSame((string) $instance->getId(), $audit['round']['competitionId']);
+        $this->assertSame((string) $round1->getId(), $audit['round']['roundId']);
+        $this->assertSame(1, $audit['round']['roundIndex']);
+        $this->assertArrayHasKey('dominance', $audit);
+        $this->assertArrayHasKey('regulation', $audit);
+        $this->assertArrayHasKey('playerRatings', $audit);
+        $this->assertSame((string) $fixture->getWinnerEntrant()?->getId(), $audit['outcome']['winnerEntrantId']);
+        $this->assertContains($audit['outcome']['winnerSide'], ['home', 'away']);
+        $this->assertContains($audit['outcome']['resolutionMethod'], ['regulation', 'extra_time', 'penalties']);
+
+        // Admin accessors expose the audit, while client summary keeps it internal
+        $this->assertNotNull($result->getComputationAuditPretty());
+        $fullPayload = json_decode($result->getFullPayloadPretty(), true);
+        $this->assertIsArray($fullPayload['computationAuditJson'] ?? null);
+        $clientSummary = $result->toClientSummary();
+        $this->assertArrayNotHasKey('computationAudit', $clientSummary);
+        $this->assertArrayNotHasKey('computationAuditJson', $clientSummary);
+    }
 }

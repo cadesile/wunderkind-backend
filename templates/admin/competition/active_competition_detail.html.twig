@@ -256,6 +256,109 @@
                                                     </div>
                                                 </div>
 
+                                                {% if result.computationAuditJson %}
+                                                    {% set audit = result.computationAuditJson %}
+                                                    <div class="card border-secondary-subtle mb-2 mt-2">
+                                                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center small">
+                                                            <span class="fw-semibold">
+                                                                <i class="fa fa-calculator me-1"></i>Computation &amp; Derivation Audit
+                                                            </span>
+                                                            <span class="text-muted">
+                                                                Engine: <code>{{ audit.engine.resolvedBy ?? result.engineIdentifier.value }}</code>
+                                                                {% if audit.engine.delegatedFrom is defined and audit.engine.delegatedFrom %}
+                                                                    (delegated from <code>{{ audit.engine.delegatedFrom }}</code>)
+                                                                {% endif %}
+                                                                {% if audit.fixture.rngSeed is defined %}
+                                                                    &middot; Seed: <code>{{ audit.fixture.rngSeed }}</code>
+                                                                {% endif %}
+                                                                {% if audit.outcome.resolutionMethod is defined %}
+                                                                    &middot; Decided by: <span class="badge text-bg-secondary">{{ audit.outcome.resolutionMethod }}</span>
+                                                                {% endif %}
+                                                            </span>
+                                                        </div>
+                                                        <div class="card-body p-2">
+                                                            {% if audit.engine.fallbackReason is defined and audit.engine.fallbackReason %}
+                                                                <div class="alert alert-warning py-1 px-2 small mb-2">
+                                                                    <i class="fa fa-triangle-exclamation me-1"></i>{{ audit.engine.fallbackReason }}
+                                                                </div>
+                                                            {% endif %}
+                                                            {% if audit.dominance is defined and audit.regulation is defined %}
+                                                                <div class="table-responsive mb-2">
+                                                                    <table class="table table-sm table-bordered mb-0 small">
+                                                                        <thead>
+                                                                            <tr class="text-muted">
+                                                                                <th>Metric</th>
+                                                                                <th>{{ result.homeClubJson.name ?? 'Home' }}</th>
+                                                                                <th>{{ result.awayClubJson.name ?? 'Away' }}</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            <tr>
+                                                                                <td class="text-muted">Playing Style</td>
+                                                                                <td><code>{{ audit.dominance.home.playingStyle ?? 'default' }}</code></td>
+                                                                                <td><code>{{ audit.dominance.away.playingStyle ?? 'default' }}</code></td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td class="text-muted">Raw XI Base Score Sum</td>
+                                                                                <td>{{ (audit.dominance.home.rawPlayerScoreSum ?? 0)|number_format(2) }}</td>
+                                                                                <td>{{ (audit.dominance.away.rawPlayerScoreSum ?? 0)|number_format(2) }}</td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td class="text-muted">Tactical Multiplier</td>
+                                                                                <td>&times;{{ (audit.dominance.home.tacticalAdvantage.multiplier ?? 1)|number_format(3) }}</td>
+                                                                                <td>&times;{{ (audit.dominance.away.tacticalAdvantage.multiplier ?? 1)|number_format(3) }}</td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td class="text-muted">Manager Multiplier</td>
+                                                                                <td>&times;{{ (audit.dominance.home.manager.multiplier ?? 1)|number_format(4) }} (ability {{ audit.dominance.home.manager.ability ?? 50 }}, mot {{ audit.dominance.home.manager.motivation ?? 60 }})</td>
+                                                                                <td>&times;{{ (audit.dominance.away.manager.multiplier ?? 1)|number_format(4) }} (ability {{ audit.dominance.away.manager.ability ?? 50 }}, mot {{ audit.dominance.away.manager.motivation ?? 60 }})</td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td class="text-muted">Personality Multiplier</td>
+                                                                                <td>&times;{{ (audit.dominance.home.personality.multiplier ?? 1)|number_format(4) }} (avg {{ (audit.dominance.home.personality.averageTraitScore ?? 10.5)|number_format(2) }})</td>
+                                                                                <td>&times;{{ (audit.dominance.away.personality.multiplier ?? 1)|number_format(4) }} (avg {{ (audit.dominance.away.personality.averageTraitScore ?? 10.5)|number_format(2) }})</td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td class="text-muted">Cohesion (Pass / Error)</td>
+                                                                                <td>{{ audit.dominance.home.cohesion.rawValue ?? 'neutral' }} (&times;{{ (audit.dominance.home.cohesion.passAccuracyMultiplier ?? 1)|number_format(2) }} / &divide;{{ (audit.dominance.home.cohesion.errorRateMultiplier ?? 1)|number_format(2) }})</td>
+                                                                                <td>{{ audit.dominance.away.cohesion.rawValue ?? 'neutral' }} (&times;{{ (audit.dominance.away.cohesion.passAccuracyMultiplier ?? 1)|number_format(2) }} / &divide;{{ (audit.dominance.away.cohesion.errorRateMultiplier ?? 1)|number_format(2) }})</td>
+                                                                            </tr>
+                                                                            <tr class="fw-semibold">
+                                                                                <td>Final Dominance &amp; Share</td>
+                                                                                <td>{{ (audit.dominance.homeDominance ?? 0)|number_format(2) }} ({{ ((audit.dominance.homeRatio ?? 0.5) * 100)|number_format(1) }}%)</td>
+                                                                                <td>{{ (audit.dominance.awayDominance ?? 0)|number_format(2) }} ({{ ((audit.dominance.awayRatio ?? 0.5) * 100)|number_format(1) }}%)</td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td class="text-muted">Regulation Poisson &lambda; (xG) &rarr; Goals</td>
+                                                                                <td>{{ (audit.regulation.homeExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>{{ audit.regulation.homeGoals ?? 0 }}</strong></td>
+                                                                                <td>{{ (audit.regulation.awayExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>{{ audit.regulation.awayGoals ?? 0 }}</strong></td>
+                                                                            </tr>
+                                                                            {% if audit.extraTime.triggered is defined and audit.extraTime.triggered %}
+                                                                                <tr>
+                                                                                    <td class="text-muted">Extra Time Poisson &lambda; (xG) &rarr; Goals</td>
+                                                                                    <td>{{ (audit.extraTime.homeExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>+{{ audit.extraTime.homeGoals ?? 0 }}</strong></td>
+                                                                                    <td>{{ (audit.extraTime.awayExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>+{{ audit.extraTime.awayGoals ?? 0 }}</strong></td>
+                                                                                </tr>
+                                                                            {% endif %}
+                                                                            {% if audit.penaltyShootout.triggered is defined and audit.penaltyShootout.triggered %}
+                                                                                <tr>
+                                                                                    <td class="text-muted">Penalty Shootout</td>
+                                                                                    <td><strong>{{ audit.penaltyShootout.penaltyHomeScore }}</strong></td>
+                                                                                    <td><strong>{{ audit.penaltyShootout.penaltyAwayScore }}</strong></td>
+                                                                                </tr>
+                                                                            {% endif %}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            {% endif %}
+                                                            <details class="small">
+                                                                <summary class="text-muted fw-semibold" style="cursor: pointer;">Raw Computation Audit JSON (per-player weights, RNG rolls &amp; rating math)</summary>
+                                                                <pre class="small bg-body p-2 mt-1 mb-0" style="max-height: 280px; overflow:auto;">{{ result.computationAuditPretty }}</pre>
+                                                            </details>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+
                                                 <div class="row g-2 mt-1">
                                                     <div class="col-12 col-lg-8">
                                                         <div class="text-muted small fw-semibold mb-1">

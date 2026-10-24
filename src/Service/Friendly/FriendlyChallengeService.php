@@ -66,19 +66,10 @@ class FriendlyChallengeService
         $ovr                  = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
         $reputation           = $club->getReputation();
         $reputationTier       = Tier::fromScore($reputation)->value;
-        $snapshotJson['club'] = array_merge($snapshotJson['club'], [
-            'id'             => (string) $club->getId(),
-            'clubId'         => (string) $club->getId(),
-            'name'           => $club->getName(),
-            'abbreviation'   => $club->getAbbreviation(),
-            'country'        => $club->getCountry(),
-            'ovr'            => $ovr,
-            'reputation'     => $reputation,
-            'reputationTier' => $reputationTier,
-            'homeKitConfig'  => $snapshotJson['club']['homeKitConfig'] ?? $club->getHomeKitConfig(),
-            'awayKitConfig'  => $snapshotJson['club']['awayKitConfig'] ?? $club->getAwayKitConfig(),
-            'badgeConfig'    => $snapshotJson['club']['badgeConfig'] ?? $club->getBadgeConfig(),
-        ]);
+        $snapshotJson['club'] = CompetitionRegistrationService::normalizeSnapshotClub($snapshotJson, $club, (string) $club->getId());
+        $snapshotJson['club']['reputation']     = $reputation;
+        $snapshotJson['club']['reputationTier'] = $reputationTier;
+        $snapshotJson['club']['ovr']            = $ovr;
 
         $now        = new \DateTimeImmutable();
         $expiresAt  = $now->modify(sprintf('+%d hours', $expiresInHours));
@@ -203,19 +194,10 @@ class FriendlyChallengeService
         $ovr                  = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
         $reputation           = $acceptorClub->getReputation();
         $reputationTier       = Tier::fromScore($reputation)->value;
-        $snapshotJson['club'] = array_merge($snapshotJson['club'], [
-            'id'             => (string) $acceptorClub->getId(),
-            'clubId'         => (string) $acceptorClub->getId(),
-            'name'           => $acceptorClub->getName(),
-            'abbreviation'   => $acceptorClub->getAbbreviation(),
-            'country'        => $acceptorClub->getCountry(),
-            'ovr'            => $ovr,
-            'reputation'     => $reputation,
-            'reputationTier' => $reputationTier,
-            'homeKitConfig'  => $snapshotJson['club']['homeKitConfig'] ?? $acceptorClub->getHomeKitConfig(),
-            'awayKitConfig'  => $snapshotJson['club']['awayKitConfig'] ?? $acceptorClub->getAwayKitConfig(),
-            'badgeConfig'    => $snapshotJson['club']['badgeConfig'] ?? $acceptorClub->getBadgeConfig(),
-        ]);
+        $snapshotJson['club'] = CompetitionRegistrationService::normalizeSnapshotClub($snapshotJson, $acceptorClub, (string) $acceptorClub->getId());
+        $snapshotJson['club']['reputation']     = $reputation;
+        $snapshotJson['club']['reputationTier'] = $reputationTier;
+        $snapshotJson['club']['ovr']            = $ovr;
 
         $now        = new \DateTimeImmutable();
         $kickoffAt  = $now->modify(sprintf('+%d seconds', self::KICKOFF_DELAY_SECONDS));

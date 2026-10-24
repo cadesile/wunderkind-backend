@@ -9,8 +9,11 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\MessageSenderType;
+use App\Enum\PlayingStyle;
+use App\Enum\Tier;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
+use App\Service\ClubInitializationService;
 use App\Service\InboxService;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -63,15 +66,295 @@ class CompetitionRegistrationService
     }
 
     /**
+     * Normalizes the `club` object inside a competition or friendly snapshot so that
+     * `identity` (resolved home/away kits + 7 badge keys), `homeKitConfig`, `awayKitConfig`,
+     * `badgeConfig`, `stadium`, `stadiumName`, `ovr`, `reputation`, `reputationTier`, and
+     * legacy flat kit/badge keys (`badgeShape`, `homePrimary`, etc.) are always resolved
+     * consistently while preserving all client-spread `Club` fields verbatim.
+     *
+     * @param array<string, mixed> $snapshotJson
+     * @return array<string, mixed>
+     */
+    public static function normalizeSnapshotClub(array $snapshotJson, ?Club $clubEntity = null, ?string $fallbackClubId = null): array
+    {
+        $clubData = is_array($snapshotJson['club'] ?? null) ? $snapshotJson['club'] : [];
+        $ovr      = is_numeric($clubData['ovr'] ?? null)
+            ? (int) round((float) $clubData['ovr'])
+            : self::computeStartingXiOvr($snapshotJson);
+
+        return self::normalizeClubData($clubData, $clubEntity, $fallbackClubId, $ovr);
+    }
+
+    /**
+     * @param array<string, mixed> $clubData
+     * @return array<string, mixed>
+     */
+    public static function normalizeClubData(array $clubData, ?Club $clubEntity = null, ?string $fallbackClubId = null, ?int $ovrOverride = null): array
+    {
+        $clubId = (string) ($clubData['clubId'] ?? $clubData['id'] ?? $fallbackClubId ?? ($clubEntity !== null ? (string) $clubEntity->getId() : ''));
+        $name   = (string) ($clubData['name'] ?? $clubData['clubName'] ?? $clubEntity?->getName() ?? 'Unknown FC');
+        $abbrev = (string) ($clubData['abbreviation'] ?? $clubEntity?->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($name));
+
+        $reputation = is_numeric($clubData['reputation'] ?? null)
+            ? (int) $clubData['reputation']
+            : ($clubEntity?->getReputation() ?? 0);
+        $reputationTier = Tier::fromScore($reputation)->value;
+        $ovr            = $ovrOverride ?? (is_numeric($clubData['ovr'] ?? null) ? (int) $clubData['ovr'] : 50);
+
+        $rawIdentity  = is_array($clubData['identity'] ?? null) ? $clubData['identity'] : null;
+        $identityHome = is_array($rawIdentity['home'] ?? null) ? $rawIdentity['home'] : null;
+        $identityAway = is_array($rawIdentity['away'] ?? null) ? $rawIdentity['away'] : null;
+
+        $entityHomeKit = $clubEntity?->getHomeKitConfig();
+        $entityAwayKit = $clubEntity?->getAwayKitConfig();
+        $entityBadge   = $clubEntity?->getBadgeConfig();
+
+        $homePrimary = $identityHome['primary']
+            ?? $clubData['homePrimary']
+            ?? $clubData['primaryColor']
+            ?? (is_array($clubData['homeKitConfig'] ?? null) ? ($clubData['homeKitConfig']['primary'] ?? null) : null)
+            ?? ($entityHomeKit['primary'] ?? null);
+
+        $homeSecondary = $identityHome['secondary']
+            ?? $clubData['homeSecondary']
+            ?? $clubData['secondaryColor']
+            ?? (is_array($clubData['homeKitConfig'] ?? null) ? ($clubData['homeKitConfig']['secondary'] ?? null) : null)
+            ?? ($entityHomeKit['secondary'] ?? null);
+
+        $rawAwayPrimary   = is_string($clubData['awayPrimary'] ?? null) && $clubData['awayPrimary'] !== '' ? $clubData['awayPrimary'] : null;
+        $rawAwaySecondary = is_string($clubData['awaySecondary'] ?? null) && $clubData['awaySecondary'] !== '' ? $clubData['awaySecondary'] : null;
+
+        $awayPrimary = $identityAway['primary']
+            ?? $rawAwayPrimary
+            ?? (is_array($clubData['awayKitConfig'] ?? null) ? ($clubData['awayKitConfig']['primary'] ?? null) : null)
+            ?? ($entityAwayKit['primary'] ?? null)
+            ?? $homeSecondary;
+
+        $awaySecondary = $identityAway['secondary']
+            ?? $rawAwaySecondary
+            ?? (is_array($clubData['awayKitConfig'] ?? null) ? ($clubData['awayKitConfig']['secondary'] ?? null) : null)
+            ?? ($entityAwayKit['secondary'] ?? null)
+            ?? $homePrimary;
+
+        // 1. Resolve homeKitConfig: prefer club.identity.home (which carries resolved primary/secondary),
+        //    then club.homeKitConfig, then club.kitHomeConfig (client's stored shape without colours) + colours,
+        //    then Club entity's homeKitConfig.
+        $homeKitConfig = null;
+        if ($identityHome !== null) {
+            $homeKitConfig = $identityHome;
+        } elseif (is_array($clubData['homeKitConfig'] ?? null)) {
+            $homeKitConfig = $clubData['homeKitConfig'];
+            if (!isset($homeKitConfig['primary']) && $homePrimary !== null) {
+                $homeKitConfig['primary'] = $homePrimary;
+            }
+            if (!isset($homeKitConfig['secondary']) && $homeSecondary !== null) {
+                $homeKitConfig['secondary'] = $homeSecondary;
+            }
+        } elseif (is_array($clubData['kitHomeConfig'] ?? null)) {
+            $homeKitConfig = array_merge(
+                [
+                    'kit'       => $clubData['kitHomeConfig']['kit'] ?? 'plain',
+                    'primary'   => $homePrimary ?? '#c8202f',
+                    'secondary' => $homeSecondary ?? '#f4f3ee',
+                    'shorts'    => $clubData['kitHomeConfig']['shorts'] ?? 'black',
+                    'socks'     => $clubData['kitHomeConfig']['socks'] ?? 'primary',
+                ],
+                $clubData['kitHomeConfig'],
+            );
+        } elseif (is_array($entityHomeKit)) {
+            $homeKitConfig = $entityHomeKit;
+        }
+
+        // 2. Resolve awayKitConfig: prefer club.identity.away, then club.awayKitConfig,
+        //    then club.kitAwayConfig + resolved away colours, then Club entity's awayKitConfig.
+        $awayKitConfig = null;
+        if ($identityAway !== null) {
+            $awayKitConfig = $identityAway;
+        } elseif (is_array($clubData['awayKitConfig'] ?? null)) {
+            $awayKitConfig = $clubData['awayKitConfig'];
+            if (!isset($awayKitConfig['primary']) && $awayPrimary !== null) {
+                $awayKitConfig['primary'] = $awayPrimary;
+            }
+            if (!isset($awayKitConfig['secondary']) && $awaySecondary !== null) {
+                $awayKitConfig['secondary'] = $awaySecondary;
+            }
+        } elseif (is_array($clubData['kitAwayConfig'] ?? null)) {
+            $awayKitConfig = array_merge(
+                [
+                    'kit'       => $clubData['kitAwayConfig']['kit'] ?? 'plain',
+                    'primary'   => $awayPrimary ?? '#f4f3ee',
+                    'secondary' => $awaySecondary ?? '#c8202f',
+                    'shorts'    => $clubData['kitAwayConfig']['shorts'] ?? 'white',
+                    'socks'     => $clubData['kitAwayConfig']['socks'] ?? 'secondary',
+                ],
+                $clubData['kitAwayConfig'],
+            );
+        } elseif (is_array($entityAwayKit)) {
+            $awayKitConfig = $entityAwayKit;
+        }
+
+        // 3. Resolve badgeConfig: prefer club.identity's 7 badge keys, then club.badgeConfig, then Club entity.
+        $rawBadgeConfig = is_array($clubData['badgeConfig'] ?? null) ? $clubData['badgeConfig'] : null;
+        $badgeKeys      = ['badgeShape', 'badgePattern', 'badgeCentre', 'initials', 'badgeFill', 'badgeTrim', 'badgeSymbol'];
+        $badgeConfig    = null;
+
+        if ($rawIdentity !== null && isset($rawIdentity['badgeShape'])) {
+            $badgeConfig = [];
+            foreach ($badgeKeys as $k) {
+                if (array_key_exists($k, $rawIdentity)) {
+                    $badgeConfig[$k] = $rawIdentity[$k];
+                } elseif ($rawBadgeConfig !== null && array_key_exists($k, $rawBadgeConfig)) {
+                    $badgeConfig[$k] = $rawBadgeConfig[$k];
+                }
+            }
+        } elseif ($rawBadgeConfig !== null) {
+            $badgeConfig = $rawBadgeConfig;
+        } elseif (is_array($entityBadge)) {
+            $badgeConfig = $entityBadge;
+        }
+
+        if (is_array($badgeConfig) && in_array($badgeConfig['badgeShape'] ?? null, ['circle', 'badge'], true)) {
+            $badgeConfig['badgeShape'] = 'round';
+        }
+
+        // 4. Assemble full identity block (`{ home, away, ...badgeConfig }`).
+        $identity = null;
+        if ($rawIdentity !== null) {
+            $identity = $rawIdentity;
+            if ($homeKitConfig !== null) {
+                $identity['home'] = $homeKitConfig;
+            }
+            if ($awayKitConfig !== null || $homeKitConfig !== null) {
+                $identity['away'] = $awayKitConfig ?? $homeKitConfig;
+            }
+            if (is_array($badgeConfig)) {
+                $identity = array_merge($identity, $badgeConfig);
+            }
+        } elseif (is_array($homeKitConfig) && is_array($badgeConfig)) {
+            $identity = array_merge(
+                [
+                    'home' => $homeKitConfig,
+                    'away' => $awayKitConfig ?? $homeKitConfig,
+                ],
+                $badgeConfig,
+            );
+        }
+
+        // Prefer snapshot's own identity/badgeConfig badgeShape over root club.badgeShape
+        // (which the client hardcodes to "shield" as a legacy placeholder when sending identity).
+        $hasSnapshotBadgeConfig = ($rawIdentity !== null && isset($rawIdentity['badgeShape'])) || ($rawBadgeConfig !== null && isset($rawBadgeConfig['badgeShape']));
+        $badgeShape = $hasSnapshotBadgeConfig
+            ? ($badgeConfig['badgeShape'] ?? $identity['badgeShape'] ?? $clubData['badgeShape'] ?? null)
+            : ($clubData['badgeShape'] ?? $badgeConfig['badgeShape'] ?? $identity['badgeShape'] ?? null);
+        if ($badgeShape === 'circle' || $badgeShape === 'badge') {
+            $badgeShape = 'round';
+        }
+
+        $stadium     = is_array($clubData['stadium'] ?? null) ? $clubData['stadium'] : null;
+        $stadiumName = is_string($clubData['stadiumName'] ?? null) && trim($clubData['stadiumName']) !== ''
+            ? trim($clubData['stadiumName'])
+            : null;
+
+        $playingStyle = is_string($clubData['playingStyle'] ?? null) && trim($clubData['playingStyle']) !== ''
+            ? PlayingStyle::tryFrom(strtoupper(trim($clubData['playingStyle'])))?->value
+            : null;
+
+        $formation = is_string($clubData['formation'] ?? null) && trim($clubData['formation']) !== ''
+            ? trim($clubData['formation'])
+            : ($clubEntity?->getFormation()->value ?? null);
+
+        $normalized = array_merge($clubData, [
+            'clubId'         => $clubId,
+            'clubName'       => $name,
+            'name'           => $name,
+            'abbreviation'   => $abbrev,
+            'country'        => $clubData['country'] ?? $clubEntity?->getCountry(),
+            'ovr'            => $ovr,
+            'reputation'     => $reputation,
+            'reputationTier' => $reputationTier,
+            'tier'           => $clubData['tier'] ?? $reputationTier,
+            'homeKitConfig'  => $homeKitConfig,
+            'awayKitConfig'  => $awayKitConfig,
+            'badgeConfig'    => $badgeConfig,
+            'identity'       => $identity,
+            'stadium'        => $stadium,
+            'badgeShape'     => $badgeShape,
+            'homePrimary'    => $homePrimary,
+            'homeSecondary'  => $homeSecondary,
+            'awayPrimary'    => $awayPrimary,
+            'awaySecondary'  => $awaySecondary,
+            'formation'      => $formation,
+        ]);
+
+        unset($normalized['stadiumName'], $normalized['playingStyle']);
+        if ($stadiumName !== null) {
+            $normalized['stadiumName'] = $stadiumName;
+        }
+        if ($playingStyle !== null) {
+            $normalized['playingStyle'] = $playingStyle;
+        }
+        if ($clubId !== '' && !isset($normalized['id'])) {
+            $normalized['id'] = $clubId;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Ensures every lineup entry carries `appearance` (from the lineup entry itself or
+     * backfilled by player `id`/`name` from the snapshot's `players[]`) and strips `id`
+     * for client-facing responses when `$stripId` is true.
+     *
+     * @param list<array<string, mixed>> $lineup
+     * @param array<int, mixed> $snapshotPlayers
+     * @return list<array<string, mixed>>
+     */
+    public static function formatLineupForClient(array $lineup, array $snapshotPlayers = [], bool $stripId = true): array
+    {
+        $appearanceById   = [];
+        $appearanceByName = [];
+        foreach ($snapshotPlayers as $sp) {
+            if (!is_array($sp) || !is_array($sp['appearance'] ?? null)) {
+                continue;
+            }
+            if (is_string($sp['id'] ?? null) && $sp['id'] !== '') {
+                $appearanceById[$sp['id']] = $sp['appearance'];
+            }
+            if (is_string($sp['name'] ?? null) && $sp['name'] !== '') {
+                $appearanceByName[$sp['name']] = $sp['appearance'];
+            }
+        }
+
+        $result = [];
+        foreach ($lineup as $player) {
+            if (!is_array($player)) {
+                continue;
+            }
+
+            if (!array_key_exists('appearance', $player) || $player['appearance'] === null) {
+                $pid  = is_string($player['id'] ?? null) ? $player['id'] : null;
+                $name = is_string($player['name'] ?? null) ? $player['name'] : null;
+                $player['appearance'] = ($pid !== null ? ($appearanceById[$pid] ?? null) : null)
+                    ?? ($name !== null ? ($appearanceByName[$name] ?? null) : null);
+            }
+
+            if ($stripId) {
+                unset($player['id']);
+            }
+
+            $result[] = $player;
+        }
+
+        return $result;
+    }
+
+    /**
      * @param array<string, mixed> $snapshotJson
      * @return array{entrant: CompetitionEntrant, wasNewRegistration: bool}
      */
     public function register(ActiveCompetition $activeCompetition, Club $club, array $snapshotJson): array
     {
-        if (!isset($snapshotJson['club']) || !is_array($snapshotJson['club'])) {
-            $snapshotJson['club'] = [];
-        }
-        $snapshotJson['club']['ovr'] = self::computeStartingXiOvr($snapshotJson);
+        $snapshotJson['club'] = self::normalizeSnapshotClub($snapshotJson, $club, (string) $club->getId());
 
         $connection = $this->em->getConnection();
         $connection->beginTransaction();
@@ -341,10 +624,8 @@ class CompetitionRegistrationService
      */
     public function resubmit(CompetitionEntrant $entrant, array $snapshotJson): void
     {
-        if (!isset($snapshotJson['club']) || !is_array($snapshotJson['club'])) {
-            $snapshotJson['club'] = [];
-        }
-        $snapshotJson['club']['ovr'] = self::computeStartingXiOvr($snapshotJson);
+        $club                 = $entrant->getClub();
+        $snapshotJson['club'] = self::normalizeSnapshotClub($snapshotJson, $club, (string) $club->getId());
 
         $this->em->getConnection()->executeStatement(
             <<<'SQL'

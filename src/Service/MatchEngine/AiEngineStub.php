@@ -36,6 +36,15 @@ class AiEngineStub implements MatchEngineInterface
 
         $result = $this->deterministicEngine->resolve($home, $away, $fixture);
 
+        $requestedEngine  = ($fixture->getRound()->getMatchEngineIdentifier() ?? MatchEngineIdentifier::AI_ASSISTED)->value;
+        $computationAudit = $result->computationAudit ?? [];
+        $computationAudit['engine'] = array_merge($computationAudit['engine'] ?? [], [
+            'requestedEngine' => $requestedEngine,
+            'resolvedBy'      => MatchEngineIdentifier::DETERMINISTIC->value,
+            'delegatedFrom'   => $requestedEngine,
+            'fallbackReason'  => 'AI match engine is not implemented in Phase 1 — fell back to deterministic scoring.',
+        ]);
+
         return new MatchEngineResult(
             $result->homeScore,
             $result->awayScore,
@@ -47,6 +56,7 @@ class AiEngineStub implements MatchEngineInterface
             $result->wentToPenalties,
             $result->penaltyHomeScore,
             $result->penaltyAwayScore,
+            $computationAudit,
         );
     }
 }

@@ -421,7 +421,14 @@ migrations are the change log (see `migrations.md`).
   `penaltyHomeScore/penaltyAwayScore:?int` (a knockout fixture can never
   end level — these record how a tie was actually settled; the shootout
   winner is a literal coin flip, see `DeterministicEngine`),
-  `engineIdentifier:MatchEngineIdentifier(enum)`, `generatedAt`.
+  `engineIdentifier:MatchEngineIdentifier(enum)`,
+  `computationAuditJson:?array` (engine-agnostic audit trail detailing how
+  the result was derived: requested/resolved engine, fallback/delegation
+  notes, RNG seed, step-by-step dominance calculation per player and team
+  multiplier, regulation & extra-time Poisson xG and rolls, penalty
+  shootout rolls, goal/assist/card weights and rolls, player rating math,
+  and outcome resolution method; admin-only, never sent in
+  `toClientSummary()`), `generatedAt`.
   `OneToOne` → `fixture:CompetitionFixture` (not nullable, unique,
   `CASCADE`) — one result per fixture.
 - **`RewardTemplate`** (table `reward_template`) — a claimable reward
