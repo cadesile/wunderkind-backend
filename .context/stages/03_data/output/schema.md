@@ -146,7 +146,17 @@ one exception, and it is a real, confirmed bug, not a false lead:**
   passes (see `04_interfaces/output/services.md`'s `CompetitionDrawService`
   / `CompetitionResultsService`).
 - **`SyncRecordRepository`** — `deleteByClubFromWeek` (rollback
-  support), `countRollbacksByClub`, `findValidPayloadsSince`.
+  support), `countRollbacksByClub`, `findValidPayloadsSince`,
+  `findTopAttendanceSince`. The first of those **does not return `payload`
+  whole**: it takes a list of top-level keys and narrows each payload to them in
+  SQL (`jsonb_object_agg` over `jsonb_each`, guarded by `jsonb_typeof` because
+  `SyncRecord::$payload` defaults to `[]`, which stores as a JSON *array* and
+  makes `jsonb_each` raise). Its one caller holds the whole 24h window in memory
+  at once and a decoded payload costs ~4.8x its stored JSON, so `relationships`
+  — the largest key, ~60% of payload bytes, up to 162 kB a row, read by nothing
+  in telemetry — must never be fetched. The key list lives on
+  `LiveTelemetryService::PAYLOAD_KEYS`; see
+  `04_interfaces/output/services.md`'s `LiveTelemetryService` entry.
 - **`DeletionRequestRepository`** — `countRecentFailuresByIp`
   (rate-limiting), `deleteOlderThan` (retention cleanup) — GDPR-style
   deletion-request throttling/cleanup.

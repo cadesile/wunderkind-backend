@@ -342,6 +342,36 @@ filename alone.
   so skipping dedup would have reported 2,586 goals instead of 1,868. The
   `wins/draws/losses` tally above still knowingly double-counts because
   `form[]` carries no fixture identity to dedupe on.
+  **`refresh()` raises `memory_limit` to its own `REFRESH_MEMORY_LIMIT_BYTES`
+  (512M) for the rest of the process/request, one-way, no restore.** The whole
+  24h window is fetched up front and held for the entire pipeline (a dozen
+  `build*` passes re-read the same decoded arrays), and real payloads decode to
+  **~4.8x** their stored JSON (measured: 200 rows, 28.5 MB of JSON -> 138 MB of
+  PHP arrays). php-fpm's 128M default was not enough — the admin rebuild button
+  died with `Allowed memory size of 134217728 bytes exhausted` inside DBAL's
+  `JsonTypeConvert.php:54`, still decoding, before aggregation began. The raise
+  lives in the service rather than in `docker/telemetry-generate.sh` so that the
+  cron command and `POST /admin/telemetry-config/rebuild` get the same headroom;
+  that script's `-d memory_limit=256M` is now only a floor.
+  **The window is also PROJECTED, not fetched whole.**
+  `LiveTelemetryService::PAYLOAD_KEYS` is the authoritative list of the nine
+  top-level `payload` keys any `build*` method reads (`attendance`,
+  `excursions`, `fixtures`, `form`, `ledger`, `playerStats`, `promises`,
+  `seasonRecord`, `transfers`), and it is passed to
+  `SyncRecordRepository::findValidPayloadsSince()`, which narrows each payload to
+  those keys **in SQL** (`jsonb_object_agg` over `jsonb_each`) so nothing else
+  crosses the wire or gets decoded. `relationships[]` alone was ~60% of all
+  payload bytes (up to 162 kB in one row) and is read by nothing here;
+  `facilityLevels[]`, `signings[]` and the scalar club aggregates are likewise
+  unread (`SyncService` folds those into the `Club` row at sync time). Measured
+  end-to-end over 1794 real payloads: **peak 377 MB -> 231 MB**, with 41.7% of
+  payload bytes kept. The service owns *what* it reads, the repository owns *how*
+  to narrow it — hence the keys being an argument, not a repository constant.
+  **A `build*` method that starts reading a new key must add it to
+  `PAYLOAD_KEYS`**, or the key arrives absent and that feed category silently
+  produces nothing instead of erroring (the Import/Export failure shape CLAUDE.md
+  warns about). `LiveTelemetryPayloadProjectionTest` guards both directions by
+  scanning the service's own source with comments stripped.
   Any figure derived from `payload.ledger[].amount` (`capitalDeployedPence`,
   `buildLedgerEvents()`'s spend lines) goes through the class's
   `ledgerAmountToPence()` helper to correct for that field's 100x-true-pence

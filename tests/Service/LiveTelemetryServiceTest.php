@@ -3,6 +3,7 @@
 namespace App\Tests\Service;
 
 use App\Service\LiveTelemetryService;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -808,5 +809,36 @@ class LiveTelemetryServiceTest extends TestCase
         $selected = LiveTelemetryService::selectBalanced([[], [['id' => 'only']]], 5);
 
         $this->assertSame([['id' => 'only']], $selected);
+    }
+
+    /**
+     * memoryLimitToBytes() decides whether refresh() raises memory_limit at all, and it
+     * has to cope with PHP's K/M/G shorthand — a plain (int) cast on "128M" reads 128
+     * bytes, which would make the comparison against REFRESH_MEMORY_LIMIT_BYTES always
+     * true and silently stop raising. Reached by reflection on purpose: the method stays
+     * private because its only caller is a one-way ini bump with nothing observable to
+     * assert from outside.
+     */
+    #[DataProvider('memoryLimitProvider')]
+    public function testResolvesMemoryLimitShorthandToBytes(string $iniValue, int $expected): void
+    {
+        $method = new \ReflectionMethod(LiveTelemetryService::class, 'memoryLimitToBytes');
+
+        $this->assertSame($expected, $method->invoke(null, $iniValue));
+    }
+
+    /** @return array<string, array{string, int}> */
+    public static function memoryLimitProvider(): array
+    {
+        return [
+            'php-fpm default'   => ['128M', 134217728],
+            'the cron script'   => ['256M', 268435456],
+            'gigabytes'         => ['1G', 1073741824],
+            'kilobytes'         => ['2048K', 2097152],
+            'lower-case suffix' => ['512m', 536870912],
+            'plain bytes'       => ['134217728', 134217728],
+            'unlimited'         => ['-1', -1],
+            'unset'             => ['', 0],
+        ];
     }
 }
