@@ -130,4 +130,66 @@ class OwnerAvatarControllerTest extends WebTestCase
         $this->authenticatedRequest(json_encode(['gender' => 'unknown']));
         $this->assertResponseStatusCodeSame(422);
     }
+
+    /**
+     * The payload new-game onboarding actually sends. `gender` is deliberately absent —
+     * the flow no longer asks for it — and this endpoint keys on key *presence*, so an
+     * omitted field must not be treated as a missing required one.
+     */
+    public function testTheOnboardingPayloadShapeIsAccepted(): void
+    {
+        $this->createUser();
+
+        $this->authenticatedRequest(json_encode([
+            'name'        => 'Alex Owner',
+            'dob'         => '2008-05-12',
+            'nationality' => 'English',
+            'avatar'      => ['skin' => 's3'],
+        ]));
+
+        $this->assertResponseStatusCodeSame(200);
+        $data = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertSame('2008-05-12', $data['dob']);
+        $this->assertNull($data['gender']);
+    }
+
+    /**
+     * `Date.toISOString()` output. `Assert\Date` rejects it outright, and that rejection
+     * is the most likely cause of Sentry `155644075` — a 422 the player could not get past,
+     * mid new-game setup, before their club was ever registered. Only the date is stored;
+     * a DOB has no time of day.
+     */
+    public function testAnIsoDatetimeDobIsAcceptedAndTruncatedToTheDate(): void
+    {
+        $this->createUser();
+
+        $this->authenticatedRequest(json_encode(['dob' => '2008-05-12T00:00:00.000Z']));
+
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame('2008-05-12', json_decode($this->client->getResponse()->getContent(), true)['dob']);
+    }
+
+    /**
+     * An empty string used to reach `new DateTimeImmutable('')`, which is *today* — so
+     * clearing the field set the owner's birthday to the day they signed up.
+     */
+    public function testAnEmptyDobClearsItRatherThanMeaningToday(): void
+    {
+        $this->createUser();
+
+        $this->authenticatedRequest(json_encode(['dob' => '1990-05-14']));
+        $this->assertSame('1990-05-14', json_decode($this->client->getResponse()->getContent(), true)['dob']);
+
+        $this->authenticatedRequest(json_encode(['dob' => '']));
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertNull(json_decode($this->client->getResponse()->getContent(), true)['dob']);
+    }
+
+    public function testAGarbledDobIsStillRejected(): void
+    {
+        $this->createUser();
+
+        $this->authenticatedRequest(json_encode(['dob' => '12/05/2008']));
+        $this->assertResponseStatusCodeSame(422);
+    }
 }

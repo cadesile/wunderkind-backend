@@ -219,6 +219,30 @@ filename alone.
   (`admin_leagues_overview` → `LeagueAdminController::bulkEditTierDefaults()`,
   route `admin_league_tier_defaults_bulk_edit`), which can also cascade the
   submitted values onto selected already-existing `League` rows.
+  **`concludeSeason()` is idempotent per club + season** — the client queues
+  and retries that POST, and a cancelled request can never be proven not to
+  have reached the server. Three guards: `UNIQUE(club, season)` on both
+  archive tables; the first call's response body stored on
+  `SeasonSnapshot::$responseJson` and replayed verbatim (*not* recomputed —
+  concluding re-rolls sponsors and regenerates fixtures, so a recomputed reply
+  would describe a different world, and would re-roll for every other player
+  in that country); and `currentSeason` advancing only when the season being
+  concluded *is* the current one, so a late retry cannot skip a season
+  forward. The season comes from the new optional `ConcludeSeasonRequest::$season`,
+  falling back to `Club::$currentSeason` for older clients — keying on
+  "current season" alone is what made a *late* retry unsafe.
+  `currentSeason` moves to `max(current, season + 1)`, so a payload for a season
+  *ahead* of the server's count is archived and pulls the count up rather than
+  being rejected. That is deliberate: the client's outbox **drops** a 4xx instead
+  of retrying, so a 422 there would silently lose that season and cascade into
+  every later one queued behind it. The only 422 left is a season above 1000
+  (`SMALLINT` guard — an out-of-range value would be a 500, which the outbox
+  retries forever).
+  `storeConcludeResponse()` writes with raw SQL rather than a flush on purpose:
+  `rollLeagueSponsors()` has just mutated managed `LeagueSponsor` rows and
+  those re-rolls are deliberately never persisted (they only appear in the
+  reply), so a flush there would start committing them as a side effect.
+  Measured cost: ~65 ms for a full eight-tier pyramid, ~5 ms for a replay.
 - **`TrophyConfigFactory`** — the one place a trophy config is defaulted,
   validated and migrated. All-static and dependency-free (following
   `CountryContentRegistry`), because `GameConfig` normalises its own
@@ -513,7 +537,13 @@ filename alone.
   position and nationality handed new clubs 11-12 year olds. An under-age pool
   now under-fills loudly (`starter_pack.initialize.position_underfilled`) and,
   if nothing at all qualifies, raises `InsufficientStarterPoolException` —
-  a visible failure rather than a squad of children.
+  a visible failure rather than a squad of children. **The assembled pack is
+  stored on `Club::$starterPackJson` in the same flush that consumes the pool**
+  — those snapshots are the only remaining copy of the squad, since the
+  `Player`/`Staff` rows are deleted on consume, so a response lost in transit
+  used to leave the club initialized with nothing and a permanent 409 on every
+  retry. `POST /api/initialize/starter` now replays that stored pack with
+  `replayed: true`.
   `resolveAbilityRange(country, tier)` is public so the diagnostic below reports
   the exact band the real draw will use.
 - **`StarterPackDiagnosticService`** — read-only "can a starter pack be built
@@ -563,6 +593,16 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
+  **`WORLD_PACK_VERSION` is 3 and must be bumped for *any* payload shape change,
+  not just the three snapshot builders.** It was missed when the trophy-sprite
+  work (`Version20261018202041`, 2026-10-18) replaced the league block's
+  `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85
+  cached packs went on serving the retired asset-slug shape — the cache has no
+  TTL and this constant is the only thing that invalidates it. Second time that
+  has happened (version 1's note records the all-10s personality matrices).
+  Bumping makes every cached row a miss, so run
+  `app:worldpack:warm <CODE> --force` per enabled country at deploy or the first
+  client request per country/tier pays ~1.5-4s on its critical path.
   `buildLeaguesPack()`/`buildTierPack()` draw each NPC club's full staff —
   Manager/Coach/Chairman (unfiltered draw) plus Director of Football/Facility
   Manager/Scouts (nationality-filtered with backfill, via `fillStaffRole()`/
@@ -575,7 +615,17 @@ filename alone.
   both by `GET /api/world/overview` and directly by `LandingController`
   for server-rendering.
 - **`WorldPackCacheService`** — caches per-country/tier "world pack" data
-  (`CountryWorldPackCache`).
+  (`CountryWorldPackCache`). **`getOrBuild()` serializes a cache miss behind a
+  Postgres advisory lock on (country, tier) and re-checks under it.** Without
+  that, two concurrent `POST /api/initialize/league/{tier}` calls for the same
+  tier both missed, both ran the generator — which creates and then DQL-deletes
+  a whole tier of `Player`/`Staff` rows — and both inserted, so one died on
+  `uq_country_tier` with a 500 after doing all that work. The lock is
+  session-level (the generator flushes and clears several times and must not sit
+  in one long transaction), released in a `finally`, and degrades to running
+  unlocked if it cannot be taken, with the unique index as the backstop.
+  `isCached()` exposes whether a call would hit or build, for the per-response
+  logging on the tier endpoint.
 - **`YouTubeFeedService`** — fetches/filters the YouTube channel feed
   (drops entries with an empty `<media:title>`).
 
@@ -592,6 +642,32 @@ since they run implicitly on every entity write:
   Personality Matrix on any `Staff`/`Scout` persisted without one, via
   `PersonalityGeneratorService`. `Player` is deliberately excluded —
   `PlayerGenerationService` rolls its own matrix.
+- **`ApiExceptionSubscriber`** (`kernel.exception`, priority **-48**) — turns
+  any uncaught exception on an `/api` path into RFC 9457
+  `application/problem+json` carrying `error` (a stable machine slug),
+  `detail` and `violations[]` (one entry per failed field). Without it a
+  `#[MapRequestPayload]` validation failure rendered Symfony's **HTML** error
+  page whenever the request had no `Accept: application/json` — which is what
+  the app sends — so the client got a 422 with nothing machine-readable in it
+  (Sentry `155644075`, `POST /api/owner-avatar` mid-onboarding). The priority
+  is load-bearing: it sits between the security firewall's own exception
+  listener (1), so lexik's JSON 401 is left alone, and
+  `ErrorListener::onKernelException` (-128), so the HTML renderer never sees
+  an `/api` path. `/admin` is untouched — it is a browser UI. A 5xx `detail`
+  is always a fixed string; the real message is logged, not returned.
+  Contract: **Error responses** in `docs/frontend-integration.md`.
+- **`IdempotencySubscriber`** (`kernel.request`/`kernel.response`) — replays a
+  cached response for a repeated `Idempotency-Key` on POSTs under
+  `/api/competitions/`, `/api/friendlies/`, `/api/inbox/` and the exact path
+  `/api/club/initialize`. It only replays a request the server actually
+  *finished*. **`/api/league/conclude-season` is deliberately excluded** despite
+  being what the client's retry queue was built for: it has a domain-level
+  guarantee (club+season, which also survives a request killed mid-flight), so
+  the body-hash check could only ever fire as a false positive — and the client
+  drops a 4xx, which would turn that into permanent loss of a season. The
+  principle: the header covers paths with no domain-level guarantee, and a path
+  that has one should not take on the header's failure mode. A key sent to a
+  non-allowlisted path is ignored, not rejected.
 
 ## One player shape
 

@@ -8,6 +8,11 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: SeasonRecordRepository::class)]
 #[ORM\Table(name: 'season_record')]
+// One concluded season per club, enforced in the database rather than only in
+// LeagueService's pre-check: POST /api/league/conclude-season is retried by the
+// client now, and a duplicate row permanently corrupts a player's history (and
+// double-counts Hall of Fame titles, which are summed from these rows).
+#[ORM\UniqueConstraint(name: 'uq_season_record_club_season', columns: ['club_id', 'season'])]
 class SeasonRecord
 {
     #[ORM\Id]

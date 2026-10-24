@@ -64,7 +64,7 @@ class OwnerAvatarController extends AbstractController
             $identityChanged = true;
         }
         if (array_key_exists('dob', $submitted)) {
-            $user->setDob($dto->dob !== null ? new \DateTimeImmutable($dto->dob) : null);
+            $user->setDob(self::parseDob($dto->dob));
             $identityChanged = true;
         }
 
@@ -98,6 +98,23 @@ class OwnerAvatarController extends AbstractController
             'dob'         => $user->getDob()?->format('Y-m-d'),
             'avatar'      => $user->getAppearance(),
         ];
+    }
+
+    /**
+     * The date part of an accepted `dob`, or null to clear it.
+     *
+     * Takes the leading `Y-m-d` and drops any time component the client sent (see
+     * OwnerAvatarRequest::$dob — an ISO-8601 datetime is a valid input), and treats an
+     * empty string as a cleared field rather than letting it reach
+     * `new \DateTimeImmutable('')`, which resolves to today.
+     */
+    private static function parseDob(?string $dob): ?\DateTimeImmutable
+    {
+        if ($dob === null || trim($dob) === '') {
+            return null;
+        }
+
+        return new \DateTimeImmutable(substr(trim($dob), 0, 10));
     }
 
     private function ageFromDob(?\DateTimeImmutable $dob): int

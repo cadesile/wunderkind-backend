@@ -148,18 +148,32 @@ class PlayerGenerationServiceTest extends TestCase
         }
     }
 
+    /**
+     * Unseeded sampling, so the sample size has to be big enough for the claim to hold
+     * every time rather than most of the time. The base height is uniform 163–203 (SD
+     * ~11.8) and the GK bias is `random_int(3, 8)`, mean +5.5 — at 50 samples a side the
+     * difference in means sits only ~2.3 standard errors out, which fails roughly one run
+     * in a hundred and did. 400 a side puts it past 6 sigma, and asserting a floor of 2 cm
+     * rather than "greater than" pins the magnitude instead of just the direction.
+     */
     public function testGoalkeeperReceivesHeightBias(): void
     {
-        $svc     = $this->makeService();
+        $svc        = $this->makeService();
         $gkHeights  = [];
         $midHeights = [];
-        for ($i = 0; $i < 50; $i++) {
+        for ($i = 0; $i < 400; $i++) {
             $gkHeights[]  = $svc->generate(PlayerPosition::GOALKEEPER, RecruitmentSource::SCOUTING_NETWORK)->getHeight();
             $midHeights[] = $svc->generate(PlayerPosition::MIDFIELDER, RecruitmentSource::SCOUTING_NETWORK)->getHeight();
         }
-        $this->assertGreaterThan(array_sum($midHeights) / count($midHeights),
-                                 array_sum($gkHeights)  / count($gkHeights),
-                                 'GK average height should exceed MID average height');
+
+        $gkMean  = array_sum($gkHeights) / count($gkHeights);
+        $midMean = array_sum($midHeights) / count($midHeights);
+
+        $this->assertGreaterThan(
+            2.0,
+            $gkMean - $midMean,
+            sprintf('GK mean height (%.1f) should clear MID mean (%.1f) by the 3-8cm bias', $gkMean, $midMean),
+        );
     }
 
     public function testWeightIsWithinRange(): void

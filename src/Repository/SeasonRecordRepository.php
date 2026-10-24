@@ -25,7 +25,18 @@ class SeasonRecordRepository extends ServiceEntityRepository
         return $this->findBy(['club' => $club], ['season' => 'ASC']);
     }
 
-    /** Count of successfully concluded seasons for a club — every concludeSeason() call persists one row unconditionally. */
+    /**
+     * The one record for this club+season, or null if the season has not been concluded yet.
+     *
+     * This is the idempotency check behind POST /api/league/conclude-season, and the pair is
+     * unique in the database (`uq_season_record_club_season`), so there is never more than one.
+     */
+    public function findOneByClubAndSeason(Club $club, int $season): ?SeasonRecord
+    {
+        return $this->findOneBy(['club' => $club, 'season' => $season]);
+    }
+
+    /** Count of concluded seasons for a club — one row per concluded season, deduplicated by club+season. */
     public function countByClub(Club $club): int
     {
         return (int) $this->createQueryBuilder('sr')

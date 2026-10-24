@@ -154,10 +154,23 @@ class StarterPackServiceTest extends TestCase
         $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
         $starterConfigRepo->method('getConfig')->willReturn($config);
 
-        $club = $this->createStub(Club::class);
+        // A mock, not a stub: the pack must be written onto the club in the same run that
+        // consumes the pool. These snapshots are the only remaining copy of the squad — the
+        // Player/Staff rows are deleted below — so a club left with
+        // starterInitializedAt set and starterPackJson null can never be served its squad
+        // again. See Club::$starterPackJson.
+        $storedPack = null;
+        $club = $this->createMock(Club::class);
         $club->method('getCountry')->willReturn('EN');
         $club->method('getCurrentLeague')->willReturn(null);
         $club->method('isStarterInitialized')->willReturn(false);
+        $club->expects($this->once())
+            ->method('setStarterPackJson')
+            ->willReturnCallback(function (?array $pack) use (&$storedPack, $club) {
+                $storedPack = $pack;
+
+                return $club;
+            });
 
         // Two mock Player entities in the pool
         $player1 = $this->createStub(Player::class);
@@ -223,6 +236,8 @@ class StarterPackServiceTest extends TestCase
         $this->assertArrayHasKey('players', $result);
         $this->assertArrayHasKey('staff', $result);
         $this->assertArrayHasKey('scouts', $result);
+
+        $this->assertSame($result, $storedPack, 'the stored pack must be the body the client is handed');
     }
 
     /**

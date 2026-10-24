@@ -19,7 +19,21 @@ use Symfony\Component\Uid\UuidV7;
 
 /**
  * Supports the `Idempotency-Key` header on POST /api/competitions/*, POST /api/friendlies/*,
- * and POST /api/inbox/* endpoints.
+ * POST /api/inbox/* and POST /api/club/initialize.
+ *
+ * That last one is an exact path rather than a prefix, and was added for the client's retry
+ * queue: it creates a club on every call and has no domain-level key the server could
+ * deduplicate on, so the header is the only thing that makes a retry safe there.
+ *
+ * **POST /api/league/conclude-season is deliberately NOT on this list**, although it is the
+ * endpoint the retry queue was built for. It already has a strictly better guarantee —
+ * idempotent on (club, season) in LeagueService::concludeSeason, which holds even for a
+ * request killed mid-flight, where this subscriber never gets as far as caching a response.
+ * With that in place the body-hash check below can only ever fire as a false positive (the
+ * same archive re-serialized slightly differently), and the client's outbox *drops* a 4xx
+ * rather than retrying it — so a spurious 422 here would permanently lose a season of a
+ * player's history. All risk, no benefit. A key sent to this path is simply ignored, so
+ * clients that send one need no change.
  *
  * Keyed by (user_id, method, path, idempotency_key) with a 24h TTL:
  * - Same key + same request body hash -> replays the cached status & JSON body.
@@ -29,6 +43,18 @@ class IdempotencySubscriber implements EventSubscriberInterface
 {
     public const HEADER_NAME = 'Idempotency-Key';
     private const ATTR_PENDING_KEY = '_idempotency_pending';
+
+    /** Whole families of write endpoints. */
+    private const PATH_PREFIXES = [
+        '/api/competitions/',
+        '/api/friendlies/',
+        '/api/inbox/',
+    ];
+
+    /** Single endpoints, where the prefix would be too broad to opt in wholesale. */
+    private const EXACT_PATHS = [
+        '/api/club/initialize',
+    ];
 
     public function __construct(
         private readonly Security $security,
@@ -62,11 +88,7 @@ class IdempotencySubscriber implements EventSubscriberInterface
         $key = substr(trim($key), 0, 120);
 
         $path = $request->getPathInfo();
-        if (
-            !str_starts_with($path, '/api/competitions/')
-            && !str_starts_with($path, '/api/friendlies/')
-            && !str_starts_with($path, '/api/inbox/')
-        ) {
+        if (!$this->isIdempotentPath($path)) {
             return;
         }
 
@@ -112,6 +134,17 @@ class IdempotencySubscriber implements EventSubscriberInterface
             'key'      => $key,
             'bodyHash' => $bodyHash,
         ]);
+    }
+
+    private function isIdempotentPath(string $path): bool
+    {
+        foreach (self::PATH_PREFIXES as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return true;
+            }
+        }
+
+        return in_array($path, self::EXACT_PATHS, true);
     }
 
     public function onKernelResponse(ResponseEvent $event): void

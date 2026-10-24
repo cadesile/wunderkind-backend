@@ -29,6 +29,8 @@ class LeagueServiceTest extends TestCase
             $fixtureGenerationService,
             $hallOfFameScoreService,
             $leaderboardCalculationService,
+            $this->createStub(\App\Repository\SeasonRecordRepository::class),
+            $this->createStub(\App\Repository\SeasonSnapshotRepository::class),
         );
     }
 

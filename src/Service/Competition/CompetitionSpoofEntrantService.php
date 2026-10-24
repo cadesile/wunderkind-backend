@@ -288,7 +288,13 @@ class CompetitionSpoofEntrantService
 
         $baseSnapshot = $sourceEntrant->getSnapshotJson();
         $countryCode  = is_string($baseSnapshot['club']['country'] ?? null) ? $baseSnapshot['club']['country'] : null;
-        $usedNames    = [];
+
+        // Seeded from who is already in the competition, not empty. Two things collided
+        // before: spoofAllEntrants() generates its bootstrap club's name through a separate
+        // call before delegating here, so starting empty let this loop pick that same name
+        // straight back (`generateClubName`'s avoidance is only as good as the list it is
+        // given) — and a spoof could equally well duplicate a *real* entrant's club name.
+        $usedNames = $this->existingEntrantClubNames($activeCompetition);
 
         $created = [];
         for ($i = 0; $i < $count; $i++) {
@@ -312,6 +318,28 @@ class CompetitionSpoofEntrantService
         }
 
         return ['created' => $created, 'requested' => $count];
+    }
+
+    /**
+     * Club names already registered in this competition — from each entrant's snapshot where
+     * it has one, falling back to the Club row. Used to keep generated spoof names distinct
+     * from every name already in the bracket.
+     *
+     * @return string[]
+     */
+    private function existingEntrantClubNames(ActiveCompetition $activeCompetition): array
+    {
+        $names = [];
+        foreach ($this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition) as $entrant) {
+            $snapshotName = $entrant->getSnapshotJson()['club']['name'] ?? null;
+            $name         = is_string($snapshotName) && $snapshotName !== ''
+                ? $snapshotName
+                : $entrant->getClub()->getName();
+
+            $names[] = $name;
+        }
+
+        return array_values(array_unique($names));
     }
 
     private function createSpoofClub(string $name, array $sourceClub, bool $jitterReputation = true): Club

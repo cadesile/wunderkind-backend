@@ -214,6 +214,18 @@ class StarterPackService
         foreach ($ampPlayers as $p) { $this->em->remove($p); }
         foreach ($ampStaff   as $s) { $this->em->remove($s); }
 
+        $pack = [
+            'players' => $playerSnapshots,
+            'staff'   => $staffSnapshots,
+            'scouts'  => $scoutSnapshots,
+        ];
+
+        // Stored in the same flush that consumes the pool, so the pack can never be
+        // deleted-but-unrecorded. These snapshots are the only remaining copy of the squad
+        // — the Player/Staff rows are being removed on the lines above — so if the response
+        // is lost in transit the player has no other way back to it. See
+        // Club::$starterPackJson.
+        $club->setStarterPackJson($pack);
         $club->setStarterInitializedAt(new \DateTimeImmutable());
         $this->em->flush();
 
@@ -224,11 +236,7 @@ class StarterPackService
             'scoutCount'  => count($ampScouts),
         ]);
 
-        return [
-            'players' => $playerSnapshots,
-            'staff'   => $staffSnapshots,
-            'scouts'  => $scoutSnapshots,
-        ];
+        return $pack;
     }
 
     private function fillStaffRole(StaffRole $role, int $limit, string $nationality): array

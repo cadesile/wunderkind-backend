@@ -34,6 +34,11 @@ services:
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
+    # $debug decides whether a 5xx detail carries the real exception message.
+    App\EventSubscriber\ApiExceptionSubscriber:
+        arguments:
+            $debug: '%kernel.debug%'
+
     App\Service\EmailVerificationService:
         arguments:
             $mailerFrom: '%env(MAILER_FROM)%'

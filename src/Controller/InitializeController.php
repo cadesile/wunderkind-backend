@@ -41,7 +41,8 @@ class InitializeController extends AbstractController
      * POST /api/initialize/starter
      *
      * Step 1: Assigns AMP squad (players, staff, scouts) to the club and returns the starter pack.
-     * Idempotent — returns starter data again if already initialized.
+     * Idempotent — a club that is already initialized gets its stored pack back with
+     * `replayed: true`, rather than a 409.
      */
     #[Route('/starter', name: 'api_initialize_starter', methods: ['POST'])]
     public function starter(Request $request): JsonResponse
@@ -64,6 +65,43 @@ class InitializeController extends AbstractController
         if ($club === null) {
             $this->logger->error('initialize.starter.club_not_found', ['userId' => (string) $user->getId()]);
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Replay rather than reject. The starter pack consumes pool entities and deletes
+        // them, so a response lost in transit used to strand the player for good: the squad
+        // was gone and every retry answered 409. The pack is now stored on the club at first
+        // init (Club::$starterPackJson) and handed back verbatim here.
+        //
+        // Checked ahead of the ?country= override below on purpose: a club that already has
+        // a squad must not have its country rewritten by a retry, because the stored pack
+        // was drawn for the country it had at the time.
+        if ($club->isStarterInitialized()) {
+            $storedPack = $club->getStarterPackJson();
+
+            if ($storedPack !== null) {
+                $this->logger->info('initialize.starter.replayed', [
+                    'clubId'               => (string) $club->getId(),
+                    'country'              => $club->getCountry(),
+                    'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
+                ]);
+
+                return $this->json(['ampStarter' => $storedPack, 'replayed' => true]);
+            }
+
+            // Initialized before $starterPackJson existed — there is genuinely nothing left
+            // to return, since the Player/Staff rows were deleted on consume.
+            $this->logger->error('initialize.starter.already_initialized_without_stored_pack', [
+                'clubId' => (string) $club->getId(),
+                'country' => $club->getCountry(),
+                'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
+            ]);
+            return $this->json(
+                [
+                    'error'   => 'starter_already_initialized',
+                    'message' => 'Starter already initialized, and this club predates stored starter packs.',
+                ],
+                Response::HTTP_CONFLICT
+            );
         }
 
         // Accept optional ?country= override
@@ -108,18 +146,6 @@ class InitializeController extends AbstractController
             return $this->json(
                 ['error' => "Player pool too small ({$poolCount} players). Run GenerateMarketDataCommand first."],
                 Response::HTTP_PRECONDITION_FAILED
-            );
-        }
-
-        if ($club->isStarterInitialized()) {
-            $this->logger->error('initialize.starter.already_initialized', [
-                'clubId' => (string) $club->getId(),
-                'country' => $club->getCountry(),
-                'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
-            ]);
-            return $this->json(
-                ['error' => 'Starter already initialized.'],
-                Response::HTTP_CONFLICT
             );
         }
 
@@ -216,11 +242,37 @@ class InitializeController extends AbstractController
             );
         }
 
+        $cacheHit = $this->worldPackCacheService->isCached($country, $tier);
+        $startedAt = microtime(true);
+
         $payload = $this->worldPackCacheService->getOrBuild(
             $country,
             $tier,
             fn() => $this->worldInitializationService->buildTierPack($club, $country, $tier)
         );
+
+        // What this tier actually weighs, per response.
+        //
+        // The client reports slow device-side writes as `db: slow write` with a row count
+        // and no country or tier attached (Sentry `153689847`: 6,992 staff rows in 3.6s),
+        // so an outlier cannot be placed against a payload — and no cached pack can
+        // currently produce a number anywhere near that one: the ceiling across every
+        // cached tier is 360 staff + scouts. Logging it here makes the next occurrence
+        // correlatable by timestamp from this side, with no client change and no new
+        // Sentry label. Keep `staff`/`scouts`/`players` counted the way the client counts
+        // them — per entity array, per tier, not cumulative.
+        $this->logger->info('initialize.league_tier.served', [
+            'clubId'       => (string) $club->getId(),
+            'country'      => $country,
+            'tier'         => $tier,
+            'cacheHit'     => $cacheHit,
+            'durationMs'   => (int) round((microtime(true) - $startedAt) * 1000),
+            'clubs'        => count($payload['clubs'] ?? []),
+            'players'      => $this->countNested($payload, 'players'),
+            'staff'        => $this->countNested($payload, 'staff'),
+            'scouts'       => $this->countNested($payload, 'scouts'),
+            'payloadBytes' => strlen((string) json_encode($payload)),
+        ]);
 
         // Check if all tiers are now cached → mark world as fully initialized
         if (!$club->isWorldInitialized()) {
@@ -235,5 +287,16 @@ class InitializeController extends AbstractController
         }
 
         return $this->json(['tier' => $tier, 'data' => $payload]);
+    }
+
+    /** Total entries in `$key` across every club in a tier payload. */
+    private function countNested(array $payload, string $key): int
+    {
+        $total = 0;
+        foreach ($payload['clubs'] ?? [] as $club) {
+            $total += count($club[$key] ?? []);
+        }
+
+        return $total;
     }
 }
