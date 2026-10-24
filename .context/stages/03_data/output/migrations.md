@@ -199,10 +199,13 @@ Most recent migrations (chronological):
     folds legacy rows on read and write, which also covers config export files
     taken before the change. See `entities.md`, CLAUDE.md's "Trophy Identity"
     section and `docs/api/trophy-config.md`.
-32. `Version20261023133500` (most recent) — creates `friendly_challenge`
+32. `Version20261023133500` — creates `friendly_challenge`
     (Friendlies Challenge Board matches, stakes, snapshots, and results) and
     `idempotency_record` (24-hour `Idempotency-Key` request/response store
     keyed by `(club_id, idempotency_key, endpoint)`).
+33. `Version20261024012500` (most recent) — adds `computation_audit_json JSON DEFAULT NULL`
+    to `competition_result` to store an engine-agnostic derivation & computation
+    audit trail for every tournament match result.
 
 ## Takeaway
 

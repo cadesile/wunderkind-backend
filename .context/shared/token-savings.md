@@ -10,23 +10,16 @@
 
 | Load scope | Est. tokens |
 |---|---|
-| Everything (router + `.context/stages/*/output/*.md`, all stages) | 32970 |
-| Router only (`.context/CONTEXT.md`) | 484 |
-| `01_overview` (router + its `output/`) | 1835 |
-| `02_architecture` (same shape) | 3502 |
-| `03_data` (same shape) | 11972 |
-| `04_interfaces` (same shape) | 12683 |
-| `05_ui` (same shape) | 1994 |
-| `06_documentation` (same shape) | 1470 |
-| `07_synthesis` (same shape) | 2416 |
+| Everything (router + `.context/stages/*/output/*.md`, all stages) | 52193 |
+| Router only (`.context/CONTEXT.md`) | 535 |
+| `01_overview` (router + its `output/`) | 3779 |
+| `02_architecture` (same shape) | 3888 |
+| `03_data` (same shape) | 17477 |
+| `04_interfaces` (same shape) | 21412 |
+| `05_ui` (same shape) | 3863 |
+| `06_documentation` (same shape) | 2027 |
+| `07_synthesis` (same shape) | 2960 |
 
-**Typical saving vs. loading everything:** ~84% (not recomputed this pass —
-only `03_data`/`04_interfaces` rows below were re-measured; the other 5
-stage rows are carried over from 2026-09-28 and may be marginally stale)
+**Typical saving vs. loading everything:** ~85%
 
-**Last updated:** 2026-10-02 (targeted pass, not a full regen — added
-`UserLedger`: new entity, `user_ledger` table/migration, `UserLedgerService`
-(shared by the live sync path and the new `app:backfill-user-ledger`
-command), and a read-only admin CRUD. `03_data`/`04_interfaces` rows
-re-measured precisely with `wc -c`; `Everything` re-summed from all 7
-stages' current `output/` sizes, not independently re-measured per stage.)
+**Last updated:** 2026-10-24 (targeted pass — updated `03_data/output/entities.md`, `03_data/output/migrations.md`, and `04_interfaces/output/services.md` for snapshot `identity`/`stadium`/`appearance` normalization and `CompetitionResult::$computationAuditJson`; all stage rows re-measured with `wc -c`.)

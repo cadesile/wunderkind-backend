@@ -6,11 +6,13 @@ use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\User;
+use App\Enum\Appearance\AppearanceRole;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
 use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Service\Appearance\AppearanceGeneratorService;
 use App\Service\ClubInitializationService;
 use App\Service\NameGeneratorService;
 use App\Service\NpcClubGenerationService;
@@ -59,6 +61,7 @@ class CompetitionSpoofEntrantService
         private readonly PlayerGenerationService $playerGenerationService,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly SnapshotValidator $snapshotValidator,
+        private readonly AppearanceGeneratorService $appearanceGenerator = new AppearanceGeneratorService(),
     ) {}
 
     /**
@@ -126,8 +129,9 @@ class CompetitionSpoofEntrantService
         $players = [];
         foreach (self::STARTING_XI_POSITIONS as $position) {
             $player    = $this->playerGenerationService->generate($position, RecruitmentSource::SENIOR_INTAKE, $nationality);
+            $playerId  = (string) new UuidV7();
             $players[] = [
-                'id'             => (string) new UuidV7(),
+                'id'             => $playerId,
                 'position'       => $position->value,
                 'name'           => trim($player->getFirstName() . ' ' . $player->getLastName()),
                 'nationality'    => $player->getNationality(),
@@ -139,6 +143,7 @@ class CompetitionSpoofEntrantService
                 'power'          => $player->getPower(),
                 'stamina'        => $player->getStamina(),
                 'heart'          => $player->getHeart(),
+                'appearance'     => $this->generatePersonalAppearance($playerId, $player->getAge(), $player->getNationality()),
             ];
         }
 
@@ -157,6 +162,8 @@ class CompetitionSpoofEntrantService
                 'homeKitConfig' => $identity['home'],
                 'awayKitConfig' => $identity['away'],
                 'badgeConfig'   => $badgeConfig,
+                'identity'      => $identity,
+                'stadium'       => $this->buildDefaultStadiumConfig($identity['home']['primary'], $identity['home']['secondary']),
                 'homeKitStyle'  => 'j' . random_int(1, 99),
                 'awayKitStyle'  => 'j' . random_int(1, 99),
                 'stadiumName'   => $this->npcClubGenerationService->generateStadiumName($clubName, 'EN'),
@@ -364,7 +371,23 @@ class CompetitionSpoofEntrantService
         $club['homeSecondary'] = $spoofClub->getHomeKitConfig()['secondary'] ?? ($club['homeSecondary'] ?? null);
         $club['awayPrimary']   = $spoofClub->getAwayKitConfig()['primary'] ?? ($club['awayPrimary'] ?? null);
         $club['awaySecondary'] = $spoofClub->getAwayKitConfig()['secondary'] ?? ($club['awaySecondary'] ?? null);
-        $snapshot['club']      = $club;
+        $club['identity']      = array_merge(
+            [
+                'home' => $spoofClub->getHomeKitConfig(),
+                'away' => $spoofClub->getAwayKitConfig(),
+            ],
+            $spoofClub->getBadgeConfig() ?? [],
+        );
+        if (!is_array($club['stadium'] ?? null)) {
+            $club['stadium'] = $this->buildDefaultStadiumConfig(
+                (string) ($club['homePrimary'] ?? '#c8202f'),
+                (string) ($club['homeSecondary'] ?? '#f4f3ee'),
+            );
+        } else {
+            $club['stadium']['seat'] = $club['homePrimary'] ?? ($club['stadium']['seat'] ?? '#c8202f');
+            $club['stadium']['roof'] = $club['homeSecondary'] ?? ($club['stadium']['roof'] ?? '#f4f3ee');
+        }
+        $snapshot['club'] = $club;
 
         $snapshot['players'] = array_map(
             fn (array $player) => $this->renamePlayer($player),
@@ -408,7 +431,67 @@ class CompetitionSpoofEntrantService
             $player['currentAbility'] = min((int) $player['currentAbility'], (int) $player['potential']);
         }
 
+        if (!is_array($player['appearance'] ?? null)) {
+            $age                  = is_numeric($player['age'] ?? null) ? (int) $player['age'] : 24;
+            $player['appearance'] = $this->generatePersonalAppearance($player['id'], $age, $nationality);
+        }
+
         return $player;
+    }
+
+    /**
+     * Generates the 7 personal player sprite traits (`hair`, `hairColor`, `headband`, `skin`,
+     * `face`, `facial`, `lip`) matching `competition-registration-snapshot.md`.
+     *
+     * @return array{hair: mixed, hairColor: mixed, headband: mixed, skin: mixed, face: mixed, facial: mixed, lip: mixed}
+     */
+    private function generatePersonalAppearance(string $id, int $age, ?string $nationality): array
+    {
+        $full = $this->appearanceGenerator->generate($id, AppearanceRole::PLAYER, $age, $nationality);
+
+        return [
+            'hair'      => $full['hair'],
+            'hairColor' => $full['hairColor'],
+            'headband'  => $full['headband'],
+            'skin'      => $full['skin'],
+            'face'      => $full['face'],
+            'facial'    => $full['facial'],
+            'lip'       => $full['lip'],
+        ];
+    }
+
+    /**
+     * Complete 24-key StadiumConfig matching `competition-registration-snapshot.md`.
+     *
+     * @return array<string, int|bool|string>
+     */
+    private function buildDefaultStadiumConfig(string $seatColor, string $roofColor): array
+    {
+        return [
+            'north'             => 2,
+            'east'              => 2,
+            'south'             => 2,
+            'west'              => 2,
+            'northConstruction' => false,
+            'eastConstruction'  => false,
+            'southConstruction' => false,
+            'westConstruction'  => false,
+            'seat'              => $seatColor,
+            'roof'              => $roofColor,
+            'floodlights'       => true,
+            'scoreboard'        => false,
+            'shop'              => true,
+            'museum'            => false,
+            'carpark'           => true,
+            'trees'             => true,
+            'shopLevel'         => 1,
+            'museumLevel'       => 1,
+            'carparkLevel'      => 1,
+            'home'              => 0,
+            'away'              => 0,
+            'pitch'             => 'stripes',
+            'base'              => 'concrete',
+        ];
     }
 
     private function renameStaffMember(array $member): array

@@ -76,23 +76,29 @@ class DeterministicEngine implements MatchEngineInterface
 
     private function resolveMatch(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture, bool $allowDraws = false): MatchEngineResult
     {
-        $rng    = new SeededRng(SeededRng::hashId($fixture->getId()->toRfc4122()));
-        $config = $this->gameConfigRepository->getConfig();
+        $rngSeed = SeededRng::hashId($fixture->getId()->toRfc4122());
+        $rng     = new SeededRng($rngSeed);
+        $config  = $this->gameConfigRepository->getConfig();
 
-        $homeDominance = $this->calculateDominance($home, $away, $config);
-        $awayDominance = $this->calculateDominance($away, $home, $config);
+        [$homeDominance, $homeDominanceAudit] = $this->calculateDominance($home, $away, $config);
+        [$awayDominance, $awayDominanceAudit] = $this->calculateDominance($away, $home, $config);
 
         $totalDominance = $homeDominance + $awayDominance;
         $homeRatio      = $totalDominance > 0 ? $homeDominance / $totalDominance : 0.5;
+        $awayRatio      = 1 - $homeRatio;
 
-        $variation           = ($rng->next() - 0.5) * 1.5; // -0.75..+0.75
-        $expectedTotalGoals  = 3.0 + $variation;
+        $variation          = ($rng->next() - 0.5) * 1.5; // -0.75..+0.75
+        $expectedTotalGoals = 3.0 + $variation;
+        $homeExpectedGoals  = $expectedTotalGoals * $homeRatio;
+        $awayExpectedGoals  = $expectedTotalGoals * $awayRatio;
 
-        $homeGoals = $this->poissonRandom($rng, $expectedTotalGoals * $homeRatio);
-        $awayGoals = $this->poissonRandom($rng, $expectedTotalGoals * (1 - $homeRatio));
+        $homeGoals        = $this->poissonRandom($rng, $homeExpectedGoals);
+        $awayGoals        = $this->poissonRandom($rng, $awayExpectedGoals);
+        $regHomeGoals     = $homeGoals;
+        $regAwayGoals     = $awayGoals;
 
-        $homeGoalEvents = $this->distributeGoalsAndAssists($rng, $home, 'home', $homeGoals);
-        $awayGoalEvents = $this->distributeGoalsAndAssists($rng, $away, 'away', $awayGoals);
+        [$homeGoalEvents, $homeRegGoalAudit] = $this->distributeGoalsAndAssists($rng, $home, 'home', $homeGoals);
+        [$awayGoalEvents, $awayRegGoalAudit] = $this->distributeGoalsAndAssists($rng, $away, 'away', $awayGoals);
 
         // Knockout fixture — a level score after 90 minutes can't stand; extra time gets a
         // genuine chance to settle it before falling back to penalties. Friendlies allow draws.
@@ -100,19 +106,53 @@ class DeterministicEngine implements MatchEngineInterface
         $wentToPenalties  = false;
         $penaltyHomeScore = null;
         $penaltyAwayScore = null;
+        $extraTimeAudit   = [
+            'triggered'          => false,
+            'expectedTotalGoals' => null,
+            'homeExpectedGoals'  => null,
+            'awayExpectedGoals'  => null,
+            'homeGoals'          => null,
+            'awayGoals'          => null,
+            'homeGoalEvents'     => [],
+            'awayGoalEvents'     => [],
+        ];
+        $penaltyShootoutAudit = [
+            'triggered'        => false,
+            'homeWinsShootout' => null,
+            'winnerPens'       => null,
+            'loserPens'        => null,
+            'penaltyHomeScore' => null,
+            'penaltyAwayScore' => null,
+        ];
 
         if (!$allowDraws && $homeGoals === $awayGoals) {
             $wentToExtraTime = true;
 
-            $etExpectedGoals = $expectedTotalGoals * (30 / 90);
-            $etHomeGoals     = $this->poissonRandom($rng, $etExpectedGoals * $homeRatio);
-            $etAwayGoals     = $this->poissonRandom($rng, $etExpectedGoals * (1 - $homeRatio));
+            $etExpectedGoals     = $expectedTotalGoals * (30 / 90);
+            $etHomeExpectedGoals = $etExpectedGoals * $homeRatio;
+            $etAwayExpectedGoals = $etExpectedGoals * $awayRatio;
+            $etHomeGoals         = $this->poissonRandom($rng, $etHomeExpectedGoals);
+            $etAwayGoals         = $this->poissonRandom($rng, $etAwayExpectedGoals);
 
-            $homeGoalEvents = array_merge($homeGoalEvents, $this->distributeGoalsAndAssists($rng, $home, 'home', $etHomeGoals, $this->rollExtraTimeGoalMinute(...)));
-            $awayGoalEvents = array_merge($awayGoalEvents, $this->distributeGoalsAndAssists($rng, $away, 'away', $etAwayGoals, $this->rollExtraTimeGoalMinute(...)));
+            [$etHomeGoalEvents, $etHomeGoalAudit] = $this->distributeGoalsAndAssists($rng, $home, 'home', $etHomeGoals, $this->rollExtraTimeGoalMinute(...));
+            [$etAwayGoalEvents, $etAwayGoalAudit] = $this->distributeGoalsAndAssists($rng, $away, 'away', $etAwayGoals, $this->rollExtraTimeGoalMinute(...));
+
+            $homeGoalEvents = array_merge($homeGoalEvents, $etHomeGoalEvents);
+            $awayGoalEvents = array_merge($awayGoalEvents, $etAwayGoalEvents);
 
             $homeGoals += $etHomeGoals;
             $awayGoals += $etAwayGoals;
+
+            $extraTimeAudit = [
+                'triggered'          => true,
+                'expectedTotalGoals' => $etExpectedGoals,
+                'homeExpectedGoals'  => $etHomeExpectedGoals,
+                'awayExpectedGoals'  => $etAwayExpectedGoals,
+                'homeGoals'          => $etHomeGoals,
+                'awayGoals'          => $etAwayGoals,
+                'homeGoalEvents'     => $etHomeGoalAudit['events'],
+                'awayGoalEvents'     => $etAwayGoalAudit['events'],
+            ];
 
             if ($homeGoals === $awayGoals) {
                 $wentToPenalties = true;
@@ -122,20 +162,29 @@ class DeterministicEngine implements MatchEngineInterface
                 $loserPens        = 5 - $rng->pick([1, 2, 3]);
                 $penaltyHomeScore = $homeWinsShootout ? $winnerPens : $loserPens;
                 $penaltyAwayScore = $homeWinsShootout ? $loserPens : $winnerPens;
+
+                $penaltyShootoutAudit = [
+                    'triggered'        => true,
+                    'homeWinsShootout' => $homeWinsShootout,
+                    'winnerPens'       => $winnerPens,
+                    'loserPens'        => $loserPens,
+                    'penaltyHomeScore' => $penaltyHomeScore,
+                    'penaltyAwayScore' => $penaltyAwayScore,
+                ];
             }
         }
 
         $homeGoalStats = $this->tallyGoalStats($homeGoalEvents);
         $awayGoalStats = $this->tallyGoalStats($awayGoalEvents);
 
-        [$homeCardEvents, $homeCardStats] = $this->distributeCards($rng, $home, 'home', $config, $homeGoals - $awayGoals);
-        [$awayCardEvents, $awayCardStats] = $this->distributeCards($rng, $away, 'away', $config, $awayGoals - $homeGoals);
+        [$homeCardEvents, $homeCardStats, $homeCardAudit] = $this->distributeCards($rng, $home, 'home', $config, $homeGoals - $awayGoals);
+        [$awayCardEvents, $awayCardStats, $awayCardAudit] = $this->distributeCards($rng, $away, 'away', $config, $awayGoals - $homeGoals);
 
         $eventLog = array_merge($homeGoalEvents, $awayGoalEvents, $homeCardEvents, $awayCardEvents);
         usort($eventLog, static fn (array $a, array $b) => $a['minute'] <=> $b['minute']);
 
-        $homeLineup = $this->calculatePerformance($rng, $home, $homeGoals, $awayGoals, $homeGoalStats, $homeCardStats, $config);
-        $awayLineup = $this->calculatePerformance($rng, $away, $awayGoals, $homeGoals, $awayGoalStats, $awayCardStats, $config);
+        [$homeLineup, $homeRatingsAudit] = $this->calculatePerformance($rng, $home, $homeGoals, $awayGoals, $homeGoalStats, $homeCardStats, $config);
+        [$awayLineup, $awayRatingsAudit] = $this->calculatePerformance($rng, $away, $awayGoals, $homeGoals, $awayGoalStats, $awayCardStats, $config);
 
         $narrativePayload = $this->narrativeGenerator->generate(
             $fixture,
@@ -150,44 +199,176 @@ class DeterministicEngine implements MatchEngineInterface
             $penaltyAwayScore,
         );
 
-        return new MatchEngineResult($homeGoals, $awayGoals, $eventLog, $narrativePayload, $homeLineup, $awayLineup, $wentToExtraTime, $wentToPenalties, $penaltyHomeScore, $penaltyAwayScore);
+        $computationAudit = [
+            'schemaVersion'    => 1,
+            'engine'           => [
+                'requestedEngine' => MatchEngineIdentifier::DETERMINISTIC->value,
+                'resolvedBy'      => MatchEngineIdentifier::DETERMINISTIC->value,
+                'delegatedFrom'   => null,
+                'fallbackReason'  => null,
+            ],
+            'fixture'          => [
+                'fixtureId'  => $fixture->getId()->toRfc4122(),
+                'rngSeed'    => $rngSeed,
+                'allowDraws' => $allowDraws,
+            ],
+            'entrants'         => [
+                'home' => [
+                    'entrantId'       => (string) $home->getId(),
+                    'clubId'          => (string) $home->getClub()->getId(),
+                    'clubName'        => $this->clubOf($home)['name'] ?? $home->getClub()->getName(),
+                    'seed'            => $home->getSeed(),
+                    'snapshotVersion' => $home->getSnapshotVersion(),
+                ],
+                'away' => [
+                    'entrantId'       => (string) $away->getId(),
+                    'clubId'          => (string) $away->getClub()->getId(),
+                    'clubName'        => $this->clubOf($away)['name'] ?? $away->getClub()->getName(),
+                    'seed'            => $away->getSeed(),
+                    'snapshotVersion' => $away->getSnapshotVersion(),
+                ],
+            ],
+            'config'           => [
+                'yellowCardBaseChance'        => $config->getYellowCardBaseChance(),
+                'redCardBaseChance'           => $config->getRedCardBaseChance(),
+                'temperamentCardScale'        => $config->getTemperamentCardScale(),
+                'losingTeamCardMultiplierMax' => $config->getLosingTeamCardMultiplierMax(),
+                'losingTeamCardGoalDiffCap'   => $config->getLosingTeamCardGoalDiffCap(),
+            ],
+            'dominance'        => [
+                'home'           => $homeDominanceAudit,
+                'away'           => $awayDominanceAudit,
+                'homeDominance'  => $homeDominance,
+                'awayDominance'  => $awayDominance,
+                'totalDominance' => $totalDominance,
+                'homeRatio'      => $homeRatio,
+                'awayRatio'      => $awayRatio,
+            ],
+            'regulation'       => [
+                'baseExpectedTotalGoals' => 3.0,
+                'variationRoll'          => $variation,
+                'expectedTotalGoals'     => $expectedTotalGoals,
+                'homeExpectedGoals'      => $homeExpectedGoals,
+                'awayExpectedGoals'      => $awayExpectedGoals,
+                'homeGoals'              => $regHomeGoals,
+                'awayGoals'              => $regAwayGoals,
+            ],
+            'extraTime'        => $extraTimeAudit,
+            'penaltyShootout'  => $penaltyShootoutAudit,
+            'goalDistribution' => [
+                'home' => $homeRegGoalAudit,
+                'away' => $awayRegGoalAudit,
+            ],
+            'cardDistribution' => [
+                'home' => $homeCardAudit,
+                'away' => $awayCardAudit,
+            ],
+            'playerRatings'    => [
+                'home' => $homeRatingsAudit,
+                'away' => $awayRatingsAudit,
+            ],
+            'outcome'          => [
+                'homeScore'        => $homeGoals,
+                'awayScore'        => $awayGoals,
+                'wentToExtraTime'  => $wentToExtraTime,
+                'wentToPenalties'  => $wentToPenalties,
+                'penaltyHomeScore' => $penaltyHomeScore,
+                'penaltyAwayScore' => $penaltyAwayScore,
+                'resolutionMethod' => $wentToPenalties ? 'penalties' : ($wentToExtraTime ? 'extra_time' : 'regulation'),
+            ],
+        ];
+
+        return new MatchEngineResult(
+            $homeGoals,
+            $awayGoals,
+            $eventLog,
+            $narrativePayload,
+            $homeLineup,
+            $awayLineup,
+            $wentToExtraTime,
+            $wentToPenalties,
+            $penaltyHomeScore,
+            $penaltyAwayScore,
+            $computationAudit,
+        );
     }
 
-    /** Port of ResultsEngine.ts's calculateDominance() — no RNG draws, pure function of snapshot + config. */
-    private function calculateDominance(CompetitionEntrant $entrant, CompetitionEntrant $opponent, GameConfig $config): float
+    /**
+     * Port of ResultsEngine.ts's calculateDominance() — no RNG draws, pure function of snapshot + config.
+     *
+     * @return array{0: float, 1: array<string, mixed>}
+     */
+    private function calculateDominance(CompetitionEntrant $entrant, CompetitionEntrant $opponent, GameConfig $config): array
     {
         $players       = $this->playersOf($entrant);
         $style         = $this->styleOf($entrant);
         $opponentStyle = $this->styleOf($opponent);
         $boostedAttrs  = $style !== null ? ($config->getPlayingStyleInfluence()[$style->value] ?? []) : [];
 
-        $score = 0.0;
+        $score       = 0.0;
+        $playerAudit = [];
         foreach ($players as $player) {
-            $playerScore = $this->baseScore($player);
+            $ability         = is_numeric($player['currentAbility'] ?? null) ? (float) $player['currentAbility'] : 50.0;
+            $morale          = is_numeric($player['morale'] ?? null) ? (float) $player['morale'] : 50.0;
+            $condition       = is_numeric($player['condition'] ?? null) ? (float) $player['condition'] : 80.0;
+            $conditionFactor = 0.7 + ($condition / 100) * 0.3;
+            $moraleFactor    = 1 + ($morale - 50) / 100;
+            $baseScore       = $this->baseScore($player);
+            $playerScore     = $baseScore;
 
-            if (($player['outOfPosition'] ?? false) === true) {
+            $outOfPosition = ($player['outOfPosition'] ?? false) === true;
+            if ($outOfPosition) {
                 $playerScore *= self::OUT_OF_POSITION_PENALTY;
             }
 
+            $boostedAvg      = $boostedAttrs !== [] ? $this->averageOf($player, $boostedAttrs) : 0.0;
+            $styleAttrFactor = $boostedAttrs !== [] ? 1 + 0.10 * ($boostedAvg / 100) : 1.0;
             if ($boostedAttrs !== []) {
-                $playerScore *= 1 + 0.10 * ($this->averageOf($player, $boostedAttrs) / 100);
+                $playerScore *= $styleAttrFactor;
             }
 
             $score += $playerScore;
+
+            $playerAudit[] = [
+                'id'                      => is_string($player['id'] ?? null) ? $player['id'] : null,
+                'name'                    => is_string($player['name'] ?? null) ? $player['name'] : null,
+                'position'                => is_string($player['position'] ?? null) ? $player['position'] : null,
+                'currentAbility'          => $ability,
+                'condition'               => $condition,
+                'morale'                  => $morale,
+                'conditionFactor'         => $conditionFactor,
+                'moraleFactor'            => $moraleFactor,
+                'baseScore'               => $baseScore,
+                'outOfPosition'           => $outOfPosition,
+                'outOfPositionMultiplier' => $outOfPosition ? self::OUT_OF_POSITION_PENALTY : 1.0,
+                'boostedAttrsAverage'     => $boostedAvg,
+                'styleAttrMultiplier'     => $styleAttrFactor,
+                'finalScore'              => $playerScore,
+            ];
         }
 
+        $rawPlayerScoreSum = $score;
+
+        $tacticalMultiplier = 1.0;
         if ($style !== null && $opponentStyle !== null) {
-            $score *= $this->tacticalAdvantageRepository->findMultiplier($style, $opponentStyle);
+            $tacticalMultiplier = $this->tacticalAdvantageRepository->findMultiplier($style, $opponentStyle);
+            $score *= $tacticalMultiplier;
         }
+        $scoreAfterTactics = $score;
 
         $managerAbility   = $this->managerAbilityOf($entrant);
-        $motivation       = $this->managerMotivationOf($entrant) ?? self::NEUTRAL_MANAGER_MOTIVATION;
+        $rawMotivation    = $this->managerMotivationOf($entrant);
+        $motivation       = $rawMotivation ?? self::NEUTRAL_MANAGER_MOTIVATION;
         $motivationFactor = max(0.5, min(1.5, 0.5 + 0.5 * ($motivation / self::NEUTRAL_MANAGER_MOTIVATION)));
-        $score *= 1 + ($managerAbility / 100) * 0.05 * $motivationFactor;
+        $managerMultiplier = 1 + ($managerAbility / 100) * 0.05 * $motivationFactor;
+        $score *= $managerMultiplier;
+        $scoreAfterManager = $score;
 
-        if (($this->clubOf($entrant)['lowUrgency'] ?? false) === true) {
+        $lowUrgency = ($this->clubOf($entrant)['lowUrgency'] ?? false) === true;
+        if ($lowUrgency) {
             $score *= self::LOW_URGENCY_SHARPNESS_MULTIPLIER;
         }
+        $scoreAfterLowUrgency = $score;
 
         $personalitySum   = 0.0;
         $personalityCount = 0;
@@ -198,17 +379,62 @@ class DeterministicEngine implements MatchEngineInterface
             $personalitySum += ($prof + $cons) / 2;
             $personalityCount++;
         }
-        $avgPersonality = $personalityCount > 0 ? $personalitySum / $personalityCount : 10.5;
-        $score *= 1 + (($avgPersonality - 10.5) / 10.5) * 0.05;
+        $avgPersonality        = $personalityCount > 0 ? $personalitySum / $personalityCount : 10.5;
+        $personalityMultiplier = 1 + (($avgPersonality - 10.5) / 10.5) * 0.05;
+        $score *= $personalityMultiplier;
+        $scoreAfterPersonality = $score;
 
         $cohesion = $this->clubOf($entrant)['cohesion'] ?? null;
+        $cohesionAudit = [
+            'rawValue'               => is_numeric($cohesion) ? (float) $cohesion : null,
+            'passAccuracyMultiplier' => 1.0,
+            'errorRateMultiplier'    => 1.0,
+        ];
         if (is_numeric($cohesion)) {
             $mods   = $this->cohesionMatchModifiers((float) $cohesion);
             $score *= $mods['passAccuracyMultiplier'];
             $score /= $mods['errorRateMultiplier'];
+            $cohesionAudit = [
+                'rawValue'               => (float) $cohesion,
+                'passAccuracyMultiplier' => $mods['passAccuracyMultiplier'],
+                'errorRateMultiplier'    => $mods['errorRateMultiplier'],
+            ];
         }
 
-        return $score;
+        $audit = [
+            'playingStyle'         => $style?->value,
+            'opponentPlayingStyle' => $opponentStyle?->value,
+            'boostedAttributes'    => $boostedAttrs,
+            'players'              => $playerAudit,
+            'rawPlayerScoreSum'    => $rawPlayerScoreSum,
+            'tacticalAdvantage'    => [
+                'multiplier' => $tacticalMultiplier,
+                'scoreAfter' => $scoreAfterTactics,
+            ],
+            'manager'              => [
+                'ability'             => $managerAbility,
+                'motivation'          => $motivation,
+                'motivationDefaulted' => $rawMotivation === null,
+                'motivationFactor'    => $motivationFactor,
+                'multiplier'          => $managerMultiplier,
+                'scoreAfter'          => $scoreAfterManager,
+            ],
+            'lowUrgency'           => [
+                'active'     => $lowUrgency,
+                'multiplier' => $lowUrgency ? self::LOW_URGENCY_SHARPNESS_MULTIPLIER : 1.0,
+                'scoreAfter' => $scoreAfterLowUrgency,
+            ],
+            'personality'          => [
+                'playerCount'       => $personalityCount,
+                'averageTraitScore' => $avgPersonality,
+                'multiplier'        => $personalityMultiplier,
+                'scoreAfter'        => $scoreAfterPersonality,
+            ],
+            'cohesion'             => $cohesionAudit,
+            'finalDominance'       => $score,
+        ];
+
+        return [$score, $audit];
     }
 
     private function baseScore(array $player): float
@@ -253,17 +479,27 @@ class DeterministicEngine implements MatchEngineInterface
      * entry per goal (with a paired assist and its own rolled minute) rather than only
      * match-wide totals — see class docblock.
      *
-     * @return list<array{minute:int,type:'goal',team:string,scorer:?string,assist:?string}>
+     * @return array{0: list<array{minute:int,type:'goal',team:string,scorer:?string,assist:?string}>, 1: array<string, mixed>}
      */
     private function distributeGoalsAndAssists(SeededRng $rng, CompetitionEntrant $entrant, string $team, int $goals, ?\Closure $rollMinute = null): array
     {
         if ($goals <= 0) {
-            return [];
+            return [[], [
+                'goalsRequested' => 0,
+                'goalWeights'    => [],
+                'assistWeights'  => [],
+                'events'         => [],
+            ]];
         }
 
         $players = $this->playersOf($entrant);
         if ($players === []) {
-            return [];
+            return [[], [
+                'goalsRequested' => $goals,
+                'goalWeights'    => [],
+                'assistWeights'  => [],
+                'events'         => [],
+            ]];
         }
 
         $goalWeights   = [];
@@ -280,7 +516,8 @@ class DeterministicEngine implements MatchEngineInterface
             $assistWeights[$id] = ($pos === 'MID' ? 3 : ($pos === 'ATT' ? 2 : ($pos === 'DEF' ? 0.8 : 0.1))) * ($ovr / 100);
         }
 
-        $events = [];
+        $events     = [];
+        $eventAudit = [];
         for ($g = 0; $g < $goals; $g++) {
             $scorer = $this->weightedPickId($rng, $goalWeights);
 
@@ -293,11 +530,25 @@ class DeterministicEngine implements MatchEngineInterface
                 $assist = null;
             }
 
-            $minute   = $rollMinute !== null ? $rollMinute($rng) : $this->rollGoalMinute($rng);
-            $events[] = ['minute' => $minute, 'type' => 'goal', 'team' => $team, 'scorer' => $scorer, 'assist' => $assist];
+            $minute       = $rollMinute !== null ? $rollMinute($rng) : $this->rollGoalMinute($rng);
+            $events[]     = ['minute' => $minute, 'type' => 'goal', 'team' => $team, 'scorer' => $scorer, 'assist' => $assist];
+            $eventAudit[] = [
+                'minute'       => $minute,
+                'scorerId'     => $scorer,
+                'scorerWeight' => $scorer !== null ? ($goalWeights[$scorer] ?? null) : null,
+                'assistId'     => $assist,
+                'assistWeight' => $assist !== null ? ($adjustedAssistWeights[$assist] ?? null) : null,
+            ];
         }
 
-        return $events;
+        return [$events, [
+            'goalsRequested'    => $goals,
+            'totalGoalWeight'   => array_sum($goalWeights),
+            'totalAssistWeight' => array_sum($assistWeights),
+            'goalWeights'       => $goalWeights,
+            'assistWeights'     => $assistWeights,
+            'events'            => $eventAudit,
+        ]];
     }
 
     /** @param array<string, float> $weights */
@@ -375,7 +626,7 @@ class DeterministicEngine implements MatchEngineInterface
      * (config values, cohesion risk bonus) — restructured from "per fixed chance-slot" to
      * per eligible outfield player, once each, matching the source exactly.
      *
-     * @return array{0: list<array{minute:int,type:string,team:string,player:string}>, 1: array<string, array{yellowCards:int,redCards:int}>}
+     * @return array{0: list<array{minute:int,type:string,team:string,player:string}>, 1: array<string, array{yellowCards:int,redCards:int}>, 2: array<string, mixed>}
      */
     private function distributeCards(SeededRng $rng, CompetitionEntrant $entrant, string $team, GameConfig $config, int $goalDifference): array
     {
@@ -386,8 +637,9 @@ class DeterministicEngine implements MatchEngineInterface
         $cohesion           = $this->clubOf($entrant)['cohesion'] ?? null;
         $cohesionMultiplier = 1 + (is_numeric($cohesion) ? $this->cohesionMatchModifiers((float) $cohesion)['cardRiskBonus'] : 0.0);
 
-        $events = [];
-        $stats  = [];
+        $events     = [];
+        $stats      = [];
+        $playerRolls = [];
         foreach ($this->playersOf($entrant) as $player) {
             $id = $player['id'] ?? null;
             if (!is_string($id)) {
@@ -417,16 +669,38 @@ class DeterministicEngine implements MatchEngineInterface
             $rolledRed    = $rng->chance($redProb);
             $minute       = (int) floor($rng->next() * 90) + 1;
 
+            $awardedCard = null;
             if ($rolledRed) {
-                $events[] = ['minute' => $minute, 'type' => 'red_card', 'team' => $team, 'player' => $id];
-                $stats[$id] = ['yellowCards' => 0, 'redCards' => 1];
+                $events[]    = ['minute' => $minute, 'type' => 'red_card', 'team' => $team, 'player' => $id];
+                $stats[$id]  = ['yellowCards' => 0, 'redCards' => 1];
+                $awardedCard = 'red_card';
             } elseif ($rolledYellow) {
-                $events[] = ['minute' => $minute, 'type' => 'yellow_card', 'team' => $team, 'player' => $id];
-                $stats[$id] = ['yellowCards' => 1, 'redCards' => 0];
+                $events[]    = ['minute' => $minute, 'type' => 'yellow_card', 'team' => $team, 'player' => $id];
+                $stats[$id]  = ['yellowCards' => 1, 'redCards' => 0];
+                $awardedCard = 'yellow_card';
             }
+
+            $playerRolls[] = [
+                'id'               => $id,
+                'name'             => is_string($player['name'] ?? null) ? $player['name'] : null,
+                'position'         => is_string($player['position'] ?? null) ? $player['position'] : null,
+                'temperament'      => $temperament,
+                'tempMultiplier'   => $tempMultiplier,
+                'resultMultiplier' => $resultMultiplier,
+                'yellowProb'       => $yellowProb,
+                'redProb'          => $redProb,
+                'rolledYellow'     => $rolledYellow,
+                'rolledRed'        => $rolledRed,
+                'minute'           => $minute,
+                'awardedCard'      => $awardedCard,
+            ];
         }
 
-        return [$events, $stats];
+        return [$events, $stats, [
+            'goalDifference'     => $goalDifference,
+            'cohesionMultiplier' => $cohesionMultiplier,
+            'playerRolls'        => $playerRolls,
+        ]];
     }
 
     /**
@@ -434,7 +708,7 @@ class DeterministicEngine implements MatchEngineInterface
      *
      * @param array<string, array{goals?:int,assists?:int}> $goalStats
      * @param array<string, array{yellowCards:int,redCards:int}> $cardStats
-     * @return list<array{id:?string,name:?string,position:?string,goals:int,assists:int,yellowCards:int,redCards:int,rating:float}>
+     * @return array{0: list<array{id:?string,name:?string,position:?string,appearance:?array<string, mixed>,goals:int,assists:int,yellowCards:int,redCards:int,rating:float}>, 1: list<array<string, mixed>>}
      */
     private function calculatePerformance(SeededRng $rng, CompetitionEntrant $entrant, int $teamScore, int $opponentScore, array $goalStats, array $cardStats, GameConfig $config): array
     {
@@ -448,7 +722,8 @@ class DeterministicEngine implements MatchEngineInterface
         $style        = $this->styleOf($entrant);
         $boostedAttrs = $style !== null ? ($config->getPlayingStyleInfluence()[$style->value] ?? []) : [];
 
-        $lineup = [];
+        $lineup       = [];
+        $ratingsAudit = [];
         foreach ($players as $rank => $player) {
             $id      = is_string($player['id'] ?? null) ? $player['id'] : null;
             $goals   = $id !== null ? ($goalStats[$id]['goals'] ?? 0) : 0;
@@ -480,15 +755,38 @@ class DeterministicEngine implements MatchEngineInterface
                 'id'          => $id,
                 'name'        => is_string($player['name'] ?? null) ? $player['name'] : null,
                 'position'    => is_string($player['position'] ?? null) ? $player['position'] : null,
+                'appearance'  => is_array($player['appearance'] ?? null) ? $player['appearance'] : null,
                 'goals'       => $goals,
                 'assists'     => $assists,
                 'yellowCards' => $yellow,
                 'redCards'    => $red,
                 'rating'      => $rating,
             ];
+
+            $ratingsAudit[] = [
+                'id'            => $id,
+                'name'          => is_string($player['name'] ?? null) ? $player['name'] : null,
+                'position'      => is_string($player['position'] ?? null) ? $player['position'] : null,
+                'abilityRank'   => $rank + 1,
+                'rankRatio'     => $rankRatio,
+                'baseRating'    => $base,
+                'resultBonus'   => $resultBonus,
+                'goals'         => $goals,
+                'assists'       => $assists,
+                'perfBonus'     => $perfBonus,
+                'styleBonus'    => $styleBonus,
+                'consistency'   => $consistency,
+                'temperament'   => $temperament,
+                'pressure'      => $pressure,
+                'varianceScore' => $varianceScore,
+                'noiseRange'    => $noiseRange,
+                'noiseRoll'     => $noise,
+                'rawRating'     => $raw,
+                'clampedRating' => $rating,
+            ];
         }
 
-        return $lineup;
+        return [$lineup, $ratingsAudit];
     }
 
     /** Port of CohesionEngine.ts's getCohesionMatchModifiers() — only the fields this engine reads. */

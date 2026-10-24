@@ -99,7 +99,21 @@ filename alone.
   across every round.
 - **`Competition/CompetitionRegistrationService`** — registers entrants,
   using `SELECT ... FOR UPDATE` on the `ActiveCompetition` row to
-  serialize concurrent last-slot registrations.
+  serialize concurrent last-slot registrations. Also owns the static
+  snapshot club/lineup normalizers (`normalizeSnapshotClub()`,
+  `normalizeClubData()`, `formatLineupForClient()`) shared by competition
+  registration/resubmit, `CompetitionResultsService`, `CompetitionResult::toClientSummary()`,
+  `MatchQueryService`, `CompetitionController`, and `FriendlyChallengeService`
+  so the client's `TournamentSnapshotBuilder` payload (`club.identity` with
+  resolved `home`/`away` kit configs + 7 badge keys, `club.kitHomeConfig` /
+  `kitAwayConfig` / `badgeConfig`, `club.stadium`, `club.stadiumName`, and
+  `players[].appearance`) is preserved and returned consistently across all
+  entrant, match summary/detail, friendly challenge, and result payloads
+  (preferring `identity.badgeShape` / `badgeConfig.badgeShape` over the
+  client's hardcoded root `club.badgeShape = "shield"` legacy placeholder,
+  explicitly validating `playingStyle` against `PlayingStyle` enum, and
+  omitting `stadiumName` and `playingStyle` rather than emitting `null`
+  when unset per `docs/api/match-detail-club-fields.md`).
 - **`Competition/CompetitionDrawService`** — owns the draw phase
   (`DRAW_PENDING` → `DRAWN`) behind `app:competition:draw-rounds` (every 1
   min via cron — see `02_architecture/output/structure.md`). Atomically
@@ -298,15 +312,24 @@ filename alone.
   (players/staff/scouts/sponsors) and top-up/consume operations.
 - **`MatchEngine/AiEngineStub`** — stub match engine standing in for real
   LLM-based match resolution (explicitly out of Phase 1 scope per its own
-  code).
+  code); delegates to `DeterministicEngine` and annotates
+  `MatchEngineResult::$computationAudit['engine']` with `requestedEngine`,
+  `resolvedBy: 'deterministic'`, `delegatedFrom`, and `fallbackReason`.
 - **`MatchEngine/DeterministicEngine`** — full port of `wunderkind-app`'s
   `ResultsEngine.ts`: dominance score (ability/morale/condition, tactics,
   manager, personality, cohesion) drives Poisson-distributed goals,
-  then position-weighted goals/assists/cards/ratings across the XI. A
+  then position-weighted goals/assists/cards/ratings across the XI (preserving
+  each player's `appearance` object onto `homeLineup`/`awayLineup`). Also
+  records a complete step-by-step computation audit in
+  `MatchEngineResult::$computationAudit` (`dominance`, `regulation`,
+  `extraTime`, `penaltyShootout`, `goalDistribution`, `cardDistribution`,
+  `playerRatings`, `outcome`) without altering the RNG sequence. A
   Competition fixture can never end level — a 90' draw triggers a real
   extra-time simulation, and only falls to a coin-flip penalty shootout
-  (fabricated but plausible scoreline) if still level after that. Hands
-  off to `MatchNarrativeGeneratorService` for `narrativePayload`.
+  (fabricated but plausible scoreline) if still level after that. Also
+  provides `resolveFriendly()` for `FriendlyChallengeService` (90-minute
+  regulation match where draws stand). Hands off to
+  `MatchNarrativeGeneratorService` for `narrativePayload`.
 - **`MatchEngine/MatchNarrativeGeneratorService`** — walks the
   `EventCategory::MATCH_NARRATIVE` chain-graph (ported from
   `wunderkind-app`'s `narrativeEngine.ts`/`matchTimelineGenerator.ts`)
@@ -319,8 +342,10 @@ filename alone.
   `config/services.yaml`'s `_instanceof` binding).
 - **`MatchEngine/MatchEngineResult`** — plain value object for a match
   result (score, eventLog, lineups, narrativePayload,
-  wentToExtraTime/wentToPenalties/penalty scores), persisted by the
-  caller into `CompetitionResult`.
+  wentToExtraTime/wentToPenalties/penalty scores, and `computationAudit`),
+  persisted by `CompetitionResultsService` into `CompetitionResult` (with
+  a guaranteed engine-agnostic `computationAuditJson` envelope even if a
+  custom engine omits `computationAudit`).
 - **`NameGeneratorService`** — generates names (players/staff/clubs).
 - **`NarrativeImportExportService`** — imports/exports narrative content
   (events, playing styles, facility/tactical/archetype templates,

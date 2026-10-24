@@ -63,22 +63,44 @@ class DeterministicEngineTest extends TestCase
         return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
     }
 
-    private function makeEntrant(ActiveCompetition $instance, string $name, int $strength, ?PlayingStyle $playingStyle = null): CompetitionEntrant
+    private function makeEntrant(ActiveCompetition $instance, string $name, int $strength, ?PlayingStyle $playingStyle = null, array $extraSnapshot = []): CompetitionEntrant
     {
         $user = new User("$name@example.com");
         $club = new Club($name, $user);
 
         $players = [];
         for ($i = 0; $i < 11; $i++) {
-            $players[] = ['id' => "$name-p$i", 'position' => 'MID', 'name' => "$name Player $i", 'currentAbility' => $strength];
+            $players[] = [
+                'id'             => "$name-p$i",
+                'position'       => 'MID',
+                'name'           => "$name Player $i",
+                'currentAbility' => $strength,
+                'appearance'     => [
+                    'hair'      => 'short',
+                    'hairColor' => '#1a1a1a',
+                    'headband'  => false,
+                    'skin'      => '#c68642',
+                    'face'      => 'round',
+                    'facial'    => 'beard',
+                    'lip'       => '#8d5524',
+                ],
+            ];
         }
 
         $clubSnapshot = ['id' => (string) $club->getId(), 'name' => $name];
         if ($playingStyle !== null) {
             $clubSnapshot['playingStyle'] = $playingStyle->value;
         }
+        if (isset($extraSnapshot['club']) && is_array($extraSnapshot['club'])) {
+            $clubSnapshot = array_merge($clubSnapshot, $extraSnapshot['club']);
+        }
 
-        return new CompetitionEntrant($instance, $club, 0, ['club' => $clubSnapshot, 'players' => $players]);
+        $snapshot = ['club' => $clubSnapshot, 'players' => $players];
+        if (isset($extraSnapshot['staff']) && is_array($extraSnapshot['staff'])) {
+            $snapshot['staff'] = $extraSnapshot['staff'];
+        }
+
+        return new CompetitionEntrant($instance, $club, 0, $snapshot);
     }
 
     private function makeFixture(): array
@@ -218,6 +240,9 @@ class DeterministicEngineTest extends TestCase
             $this->assertArrayHasKey('id', $entry);
             $this->assertArrayHasKey('name', $entry);
             $this->assertArrayHasKey('position', $entry);
+            $this->assertArrayHasKey('appearance', $entry);
+            $this->assertIsArray($entry['appearance']);
+            $this->assertSame('short', $entry['appearance']['hair']);
             $this->assertSame('MID', $entry['position']);
             $this->assertStringContainsString('Player', $entry['name']);
         }
@@ -400,5 +425,88 @@ class DeterministicEngineTest extends TestCase
         }
 
         $this->assertTrue($foundPenalties, 'Expected at least one shootout across 1000 equal-strength seeds.');
+    }
+
+    public function testResolveProducesFullComputationAuditBreakdown(): void
+    {
+        $engine   = $this->makeEngine(['POSSESSION:HIGH_PRESS' => 1.08]);
+        $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+        $instance = new ActiveCompetition($template);
+        $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+
+        $home = $this->makeEntrant($instance, 'Home FC', 80, PlayingStyle::POSSESSION, [
+            'club'  => ['cohesion' => 82, 'managerMotivation' => 90, 'lowUrgency' => false],
+            'staff' => [['role' => 'MANAGER', 'ability' => 75]],
+        ]);
+        $away = $this->makeEntrant($instance, 'Away FC', 60, PlayingStyle::HIGH_PRESS, [
+            'club'  => ['cohesion' => 25, 'lowUrgency' => true],
+            'staff' => [['role' => 'MANAGER', 'ability' => 55]],
+        ]);
+        $fixture = new CompetitionFixture($round, 0, $home, $away);
+
+        $result = $engine->resolve($home, $away, $fixture);
+        $audit  = $result->computationAudit;
+
+        $this->assertIsArray($audit);
+        $this->assertSame(1, $audit['schemaVersion']);
+        $this->assertSame('deterministic', $audit['engine']['resolvedBy']);
+        $this->assertSame($fixture->getId()->toRfc4122(), $audit['fixture']['fixtureId']);
+        $this->assertIsInt($audit['fixture']['rngSeed']);
+        $this->assertFalse($audit['fixture']['allowDraws']);
+
+        // Dominance calculation breakdown
+        $this->assertSame('POSSESSION', $audit['dominance']['home']['playingStyle']);
+        $this->assertSame('HIGH_PRESS', $audit['dominance']['home']['opponentPlayingStyle']);
+        $this->assertCount(11, $audit['dominance']['home']['players']);
+        $this->assertSame(1.08, $audit['dominance']['home']['tacticalAdvantage']['multiplier']);
+        $this->assertSame(75.0, $audit['dominance']['home']['manager']['ability']);
+        $this->assertSame(90.0, $audit['dominance']['home']['manager']['motivation']);
+        $this->assertFalse($audit['dominance']['home']['manager']['motivationDefaulted']);
+        $this->assertSame(1.05, $audit['dominance']['home']['cohesion']['passAccuracyMultiplier']);
+        $this->assertSame(1.0, $audit['dominance']['home']['cohesion']['errorRateMultiplier']);
+
+        $this->assertTrue($audit['dominance']['away']['lowUrgency']['active']);
+        $this->assertSame(0.95, $audit['dominance']['away']['lowUrgency']['multiplier']);
+        $this->assertSame(0.88, $audit['dominance']['away']['cohesion']['passAccuracyMultiplier']);
+        $this->assertSame(1.12, $audit['dominance']['away']['cohesion']['errorRateMultiplier']);
+
+        $this->assertGreaterThan($audit['dominance']['awayDominance'], $audit['dominance']['homeDominance']);
+        $this->assertEqualsWithDelta(1.0, $audit['dominance']['homeRatio'] + $audit['dominance']['awayRatio'], 1e-9);
+
+        // Regulation xG & goal distribution
+        $this->assertSame(3.0, $audit['regulation']['baseExpectedTotalGoals']);
+        $this->assertEqualsWithDelta(
+            3.0 + $audit['regulation']['variationRoll'],
+            $audit['regulation']['expectedTotalGoals'],
+            1e-9,
+        );
+        $this->assertCount(11, $audit['playerRatings']['home']);
+        $this->assertCount(11, $audit['playerRatings']['away']);
+        $this->assertSame($result->homeScore, $audit['outcome']['homeScore']);
+        $this->assertSame($result->awayScore, $audit['outcome']['awayScore']);
+    }
+
+    public function testAiEngineStubPreservesComputationAuditAndRecordsFallbackMetadata(): void
+    {
+        $engine   = $this->makeEngine();
+        $stub     = new \App\Service\MatchEngine\AiEngineStub($engine, new \Psr\Log\NullLogger());
+        $template = new CompetitionTemplate('AI Cup', 'ai-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
+        $instance = new ActiveCompetition($template);
+        $round    = new CompetitionRound($instance, 1, 'FINAL', new \DateTimeImmutable());
+        $round->setMatchEngineIdentifier(MatchEngineIdentifier::AI_ASSISTED);
+        $home     = $this->makeEntrant($instance, 'Home AI', 70);
+        $away     = $this->makeEntrant($instance, 'Away AI', 65);
+        $fixture  = new CompetitionFixture($round, 0, $home, $away);
+
+        $result = $stub->resolve($home, $away, $fixture);
+        $audit  = $result->computationAudit;
+
+        $this->assertIsArray($audit);
+        $this->assertSame('ai_assisted', $audit['engine']['requestedEngine']);
+        $this->assertSame('deterministic', $audit['engine']['resolvedBy']);
+        $this->assertSame('ai_assisted', $audit['engine']['delegatedFrom']);
+        $this->assertNotEmpty($audit['engine']['fallbackReason']);
+        $this->assertArrayHasKey('dominance', $audit);
+        $this->assertArrayHasKey('regulation', $audit);
     }
 }
