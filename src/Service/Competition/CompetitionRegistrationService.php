@@ -349,6 +349,56 @@ class CompetitionRegistrationService
     }
 
     /**
+     * Projects a registered snapshot XI into the same shape a played match's lineup uses, so
+     * a fixture with no result yet can still show who each club is fielding.
+     *
+     * `formatLineupForClient()` is not enough on its own. It backfills `appearance` and strips
+     * `id` but does no reshaping, so handing it raw snapshot players would emit the snapshot's
+     * own wider shape (`currentAbility`, `dateOfBirth`, `nationality`, …) and none of the
+     * per-match keys the client's lineup table reads.
+     *
+     * Counters are `0` because nobody has played yet — factually right, and it keeps the
+     * client's numeric cells rendering. `rating` is `null` rather than `0` because no rating
+     * exists; a null rating already renders as a dash client-side, whereas `0` would read as
+     * the worst possible performance.
+     *
+     * Submitted order is preserved, unlike a played lineup, which the engine sorts by ability
+     * before rating. Before kick-off the club's own ordering is the only statement of intent
+     * there is.
+     *
+     * Note that this XI is **provisional**: the resubmission window stays open while the
+     * competition has an upcoming round, and a fixture's result is computed from whatever
+     * snapshot the entrant holds at resolve time — so the XI shown here can still change
+     * before it plays, for both clubs.
+     *
+     * @param  array<int, mixed> $snapshotPlayers Exactly 11 entries for any snapshot that
+     *                                            passed SnapshotValidator::REQUIRED_PLAYERS.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function formatSnapshotXiForClient(array $snapshotPlayers): array
+    {
+        $lineup = [];
+        foreach ($snapshotPlayers as $player) {
+            if (!is_array($player)) {
+                continue;
+            }
+
+            $lineup[] = [
+                'name'        => is_string($player['name'] ?? null) ? $player['name'] : null,
+                'position'    => is_string($player['position'] ?? null) ? $player['position'] : null,
+                'appearance'  => is_array($player['appearance'] ?? null) ? $player['appearance'] : null,
+                'goals'       => 0,
+                'assists'     => 0,
+                'yellowCards' => 0,
+                'redCards'    => 0,
+                'rating'      => null,
+            ];
+        }
+
+        return $lineup;
+    }
+
+    /**
      * @param array<string, mixed> $snapshotJson
      * @return array{entrant: CompetitionEntrant, wasNewRegistration: bool}
      */

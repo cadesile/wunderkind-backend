@@ -369,8 +369,16 @@ class MatchQueryService
             'home'             => $homeClub,
             'away'             => $awayClub,
             'score'            => $score,
-            'homeLineup'       => $resultEntity !== null ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getHomeLineupJson(), $homeSnapshotPlayers) : [],
-            'awayLineup'       => $resultEntity !== null ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getAwayLineupJson(), $awaySnapshotPlayers) : [],
+            // Before a result exists, both clubs' registered XIs stand in for the played
+            // lineups, so an upcoming fixture answers "who is each club fielding" rather than
+            // two empty arrays. Same shape, ratings and counters empty. Provisional on both
+            // sides — see formatSnapshotXiForClient().
+            'homeLineup'       => $resultEntity !== null
+                ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getHomeLineupJson(), $homeSnapshotPlayers)
+                : CompetitionRegistrationService::formatSnapshotXiForClient($homeSnapshotPlayers),
+            'awayLineup'       => $resultEntity !== null
+                ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getAwayLineupJson(), $awaySnapshotPlayers)
+                : CompetitionRegistrationService::formatSnapshotXiForClient($awaySnapshotPlayers),
             'narrativePayload' => $resultEntity?->getNarrativePayload() ?? [],
         ];
     }
@@ -423,8 +431,14 @@ class MatchQueryService
             'home'             => $homeClub,
             'away'             => $awayClub,
             'score'            => $score,
-            'homeLineup'       => $challenge->getHomeLineupJson() !== null ? CompetitionRegistrationService::formatLineupForClient($challenge->getHomeLineupJson(), $homeSnapshotPlayers) : [],
-            'awayLineup'       => $challenge->getAwayLineupJson() !== null ? CompetitionRegistrationService::formatLineupForClient($challenge->getAwayLineupJson(), $awaySnapshotPlayers) : [],
+            // Same as the cup branch: an accepted-but-unplayed friendly shows both registered
+            // XIs rather than nothing.
+            'homeLineup'       => $challenge->getHomeLineupJson() !== null
+                ? CompetitionRegistrationService::formatLineupForClient($challenge->getHomeLineupJson(), $homeSnapshotPlayers)
+                : CompetitionRegistrationService::formatSnapshotXiForClient($homeSnapshotPlayers),
+            'awayLineup'       => $challenge->getAwayLineupJson() !== null
+                ? CompetitionRegistrationService::formatLineupForClient($challenge->getAwayLineupJson(), $awaySnapshotPlayers)
+                : CompetitionRegistrationService::formatSnapshotXiForClient($awaySnapshotPlayers),
             'narrativePayload' => $challenge->getNarrativePayload() ?? [],
         ];
     }
