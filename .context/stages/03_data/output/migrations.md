@@ -262,3 +262,10 @@ was not safe to retry:
 - `Version20261024140000` — `club.starter_pack_json`, so an already-initialized club can
   be served its starter pack again instead of a 409. Deliberately left null for existing
   clubs: their pool entities were deleted on consume, so those squads really are gone.
+- `Version20261024222441` — `user.debug_logging_enabled`, the per-account override for the
+  in-app debug log panel (see `entities.md`'s `User` entry). Defaults false on every
+  existing row, so it changes nothing on its own, and the flag is additive to the global
+  `GameConfig` switch rather than replacing it. The generated diff also swept in unrelated
+  `COMMENT ON COLUMN` churn for `friendly_challenge`/`idempotency_record` (pre-existing DBAL
+  comment drift, unrelated to this column) — that was stripped, so expect `migrations:diff`
+  to keep proposing it until someone deals with it deliberately.

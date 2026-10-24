@@ -26,6 +26,20 @@ migrations are the change log (see `migrations.md`).
   gives every existing row — so shipping it signed nobody out, while a killed
   account's pre-existing tokens still stop working. Written only via
   `SessionRevocationService`, never directly.
+  `debugLoggingEnabled:bool` (default false) is a **per-account override for the
+  in-app debug log panel**, so one player's device can be debugged without
+  exposing the panel (it logs every API request and response) to the whole
+  player base. It is **additive to** the global `GameConfig::$debugLoggingEnabled`,
+  never a replacement: `DebugLoggingResolver::resolve()` (the single definition)
+  serves `global || per-user` under the unchanged `debugLoggingEnabled` key, so
+  this flag can only ever switch the panel ON while the global switch is off,
+  and can never switch it OFF for an account the global switch covers.
+  **Two endpoints carry it:** `GET /api/game-config` (PUBLIC_ACCESS, so the
+  per-user half only applies when the client actually sends its Bearer token —
+  an anonymous cold boot gets the global value alone) and `GET /api/club/status`
+  (`ROLE_CLUB`, so the override always applies — the reliable read for a
+  signed-in client, and the reason the mirror exists). Client contract:
+  `docs/api/debug-logging.md`.
 - **`UserLedger`** (table `user_ledger`) — centralized, cross-club financial
   audit trail for one `User`; currently only dividend draws the client
   reports via the sync payload's free-form `ledger[]` array (category

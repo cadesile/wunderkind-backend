@@ -2,11 +2,13 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\GameConfig;
 use App\Enum\TranslatableEntityType;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\LanguageRepository;
 use App\Repository\StarterConfigRepository;
+use App\Service\DebugLoggingResolver;
 use App\Service\FacilityImageResolver;
 use App\Service\NarrativeTranslationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -30,6 +32,18 @@ class GameConfigController extends AbstractController
      * Optional `?lang=` localizes each facility template's label/description in place,
      * falling back to English for anything untranslated. An unknown/disabled code silently
      * falls back to the default language rather than erroring — this is core gameplay data.
+     *
+     * PUBLIC_ACCESS, but one key is now account-dependent: `debugLoggingEnabled` (see
+     * DebugLoggingResolver, which both this and GET /api/club/status go through).
+     *
+     * This endpoint being public is why the per-user half of that flag only applies when the
+     * client actually sends its Bearer token here: the api firewall is stateless JWT and
+     * Lexik's authenticator only engages when a token is present, so an anonymous cold boot
+     * gets the global value alone. GET /api/club/status carries the same key for exactly that
+     * reason — it is authenticated, so the per-user override always applies there. The response is therefore marked `Cache-Control:
+     * private` — nothing caches this endpoint today (no ETag here, no proxy_cache in
+     * docker/nginx.conf), and that header is what keeps it that way if a CDN ever lands in
+     * front of the API. Every other key is global and identical for all callers.
      */
     #[Route('/game-config', name: 'api_game_config', methods: ['GET'])]
     public function index(Request $request): JsonResponse
@@ -38,7 +52,7 @@ class GameConfigController extends AbstractController
         $language = $this->languageRepository->findByCode((string) $request->query->get('lang', ''));
         $map      = $this->translationService->buildLocalizationMap(TranslatableEntityType::FACILITY_TEMPLATE, $language);
 
-        return $this->json([
+        $response = $this->json([
             'cliqueRelationshipThreshold'      => $config->getCliqueRelationshipThreshold(),
             'cliqueSquadCapPercent'             => $config->getCliqueSquadCapPercent(),
             'cliqueMinTenureWeeks'              => $config->getCliqueMinTenureWeeks(),
@@ -185,8 +199,8 @@ class GameConfigController extends AbstractController
             'facilityMaintenanceFrequencyWeeks' => $config->getFacilityMaintenanceFrequencyWeeks(),
             'systemNotificationFrequencyWeeks'  => $config->getSystemNotificationFrequencyWeeks(),
 
-            // Developer / Debug
-            'debugLoggingEnabled'               => $config->isDebugLoggingEnabled(),
+            // Developer / Debug — global switch OR the requesting account's own override
+            'debugLoggingEnabled'               => DebugLoggingResolver::resolve($config, $this->getUser()),
 
             // App links (also exposed publicly via GET /api/app-links)
             'facebookPageUrl' => $config->getFacebookPageUrl(),
@@ -290,5 +304,11 @@ class GameConfigController extends AbstractController
                 $this->facilityTemplateRepository->getActiveTemplates()
             ),
         ]);
+
+        // See the action's docblock: one key varies per account, so this must never be
+        // stored in a shared cache.
+        $response->setPrivate();
+
+        return $response;
     }
 }

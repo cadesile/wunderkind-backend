@@ -75,6 +75,20 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private bool $isVerified = false;
 
+    /**
+     * Per-account override for the in-app debug log panel, for debugging one player's
+     * device without turning the panel on for everyone.
+     *
+     * Only consulted when the GLOBAL GameConfig::$debugLoggingEnabled is OFF — with the
+     * global switch on, the panel is already visible to every account and this flag adds
+     * nothing. So the effective value the client receives is `global || per-user`, never
+     * per-user alone: this flag can turn the panel ON for one account, and can never turn
+     * it OFF for an account while the global switch is on. Resolved in
+     * GameConfigController, which is the only place that combines the two.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $debugLoggingEnabled = false;
+
     #[ORM\Column(type: 'datetimetz_immutable', nullable: true)]
     private ?\DateTimeImmutable $verifiedAt = null;
 
@@ -153,6 +167,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function isVerified(): bool { return $this->isVerified; }
     public function setIsVerified(bool $isVerified): void { $this->isVerified = $isVerified; }
+
+    public function isDebugLoggingEnabled(): bool { return $this->debugLoggingEnabled; }
+    public function setDebugLoggingEnabled(bool $debugLoggingEnabled): void { $this->debugLoggingEnabled = $debugLoggingEnabled; }
 
     public function getVerifiedAt(): ?\DateTimeImmutable { return $this->verifiedAt; }
     public function setVerifiedAt(?\DateTimeImmutable $verifiedAt): void { $this->verifiedAt = $verifiedAt; }

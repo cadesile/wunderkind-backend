@@ -11,9 +11,11 @@ use App\Enum\Country;
 use App\Exception\ClubNameTakenException;
 use App\Exception\InvalidCountryCodeException;
 use App\Repository\ClubRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\SyncRecordRepository;
 use App\Service\ClubInitializationService;
+use App\Service\DebugLoggingResolver;
 use App\Service\NpcClubGenerationService;
 use App\Service\ClubResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -33,7 +35,10 @@ class ClubController extends AbstractController
     // by raw UTF-8 byte value, which pushes multi-byte accented letters past
     // all plain ASCII ones). The locale table lives on App\Enum\Country.
 
-    public function __construct(private readonly ClubResolver $clubResolver) {}
+    public function __construct(
+        private readonly ClubResolver $clubResolver,
+        private readonly GameConfigRepository $gameConfigRepository,
+    ) {}
 
     #[Route('/foreign', name: 'api_clubs_foreign', methods: ['GET'])]
     public function foreignClubs(Request $request, NpcClubRepository $npcClubRepo): JsonResponse
@@ -224,6 +229,17 @@ class ClubController extends AbstractController
             'homeKitConfig'       => $club->getHomeKitConfig(),
             'awayKitConfig'       => $club->getAwayKitConfig(),
             'badgeConfig'         => $club->getBadgeConfig(),
+            // Mirrored from GET /api/game-config, which carries the same key with the same
+            // meaning (DebugLoggingResolver owns the one definition both go through).
+            // It is repeated here because that endpoint is public: an anonymous cold-boot
+            // fetch can only ever see the GLOBAL half of the flag, so a per-account override
+            // would appear to do nothing until the client happened to refetch game-config
+            // with its token. This endpoint is ROLE_CLUB, so the override always applies —
+            // which makes this the reliable place for a client to read it post-sign-in.
+            'debugLoggingEnabled' => DebugLoggingResolver::resolve(
+                $this->gameConfigRepository->getConfig(),
+                $user,
+            ),
         ]);
     }
 }
