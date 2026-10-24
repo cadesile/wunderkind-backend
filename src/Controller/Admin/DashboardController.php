@@ -1484,6 +1484,7 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered'),
             MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol'),
             MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro'),
+            MenuItem::linkTo(FriendlyChallengeCrudController::class, 'Challenges', 'fa fa-futbol'),
         ]);
         yield MenuItem::subMenu('Roster', 'fa fa-person-running')->setSubItems([
             MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running'),

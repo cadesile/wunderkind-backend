@@ -176,7 +176,7 @@ controller per entity, each mapping via `getEntityFqcn()`:
 `ActiveCompetition`, `Admin`, `AdminMessage`, `Agent`, `AudienceGroup`,
 `BetaRequest`, `Club`, `CompetitionEntrant`, `CompetitionRound`,
 `CompetitionTemplate`, `DeletionRequest`, `Excursion`,
-`FacilityTemplate`, `GameEventTemplate`, `Guardian`, `Investor`,
+`FacilityTemplate`, `FriendlyChallenge`, `GameEventTemplate`, `Guardian`, `Investor`,
 `Language`, `LeaderboardEntry`, `League`, `NotificationLog`, `NpcClub`,
 `PlayerArchetype`, `Player`, `RewardTemplate`, `Scout`, `SeasonRecord`,
 `SeasonSnapshot`, `SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
@@ -184,9 +184,9 @@ controller per entity, each mapping via `getEntityFqcn()`:
 `UserLedger`. Each gives standard EasyAdmin CRUD screens (index/detail/
 edit/new/delete) plus whatever its own
 `configureFields()`/`configureActions()` customizes.
-`NotificationLogCrudController`/`UserLedgerCrudController` are read-only
-(disable new/edit/delete), styled directly on
-`DeletionRequestCrudController`.
+`NotificationLogCrudController`/`UserLedgerCrudController`/
+`FriendlyChallengeCrudController` are read-only (disable new/edit/delete),
+styled directly on `DeletionRequestCrudController`.
 
 `GameEventTemplateCrudController`/`FacilityTemplateCrudController`/
 `ExcursionCrudController` each add a row action ("Translations", linking to
