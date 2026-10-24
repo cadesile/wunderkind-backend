@@ -374,7 +374,21 @@ migrations are the change log (see `migrations.md`).
 ## Competition (`App\Entity\Competition`)
 
 - **`CompetitionTemplate`** — a competition's static rules. `name/slug`,
-  `entrantCapacity`, `durationOption:CompetitionDuration(enum)`,
+  `entrantCapacity`, `durationOption:CompetitionDuration(enum)` — ten cases,
+  `ONE_HOUR`/`TWO_HOURS`/`FOUR_HOURS`/`SIX_HOURS`/`TEN_HOURS`/`ONE_DAY`/
+  `TWO_DAYS`/`ONE_WEEK`/`ONE_MONTH`/`TWO_MONTHS`, declared shortest-first
+  because that order *is* the admin dropdown's order. The backing strings
+  (`1h`..`2mo`) are persisted, so an existing case's value must never be
+  edited; new cases are additive and need no migration. **The month cases are
+  fixed 30/60-day windows, not calendar months** — a calendar `P1M` would make
+  `toInterval()` (which sets `endsAt`) and `toHours()` (served to the client as
+  `durationHours`) disagree by up to a day. `CompetitionDurationTest` pins both,
+  and `CompetitionScheduleCalculatorTest` derives its matrix from `cases()`, so
+  a future duration too short to give its rounds a visible window fails there
+  rather than in production. For reference, the tightest pick today —
+  `ONE_HOUR` over a 64-entrant bracket — is 600s a round, splitting 420s
+  reveal / 180s intermission, both clear of `MIN_WINDOW_SECONDS` (120) and of
+  the 1-minute draw/resolve cron tick.
   `allowedTiers:?array`, `minClubReputation/minClubAgeSeasons/
   entryFeePerRound/victorPrize`, `roundEngineConfig:?array`, `isActive`,
   `intermissionRatio:float` (default 0.3, validated strictly `0 < x < 1`
