@@ -12,6 +12,39 @@
     {% endif %}
 {% endblock %}
 
+{#
+  Adds a live server clock under the sidebar's "Build My Club" title.
+
+  The admin panel is where cron-driven work is reasoned about — competition
+  draws run every minute, rounds resolve on a schedule, deploys stamp their own
+  timestamps — and the server runs UTC while the operator rarely does. Having to
+  convert from a local wall clock to read any of that is a small tax paid
+  constantly, so the server's own time is stated on every page.
+
+  The whole `<a>` is reproduced verbatim from @!EasyAdmin/layout.html.twig
+  because Twig has no way to append to a block without re-stating it; the clock
+  is the only addition, and it sits OUTSIDE the anchor so clicking it does not
+  navigate to the dashboard.
+#}
+{% block header_logo %}
+    <a class="logo" title="{{ ea.dashboardTitle|striptags }}" href="{{ path(ea.dashboardRouteName) }}">
+        <span class="logo-custom">{{ ea.dashboardTitle|raw }}</span>
+        <span class="logo-compact"><twig:ea:Icon name="internal:home" /></span>
+    </a>
+    {# The rendered value is the initial paint and the no-JS fallback; the data
+       attribute is what the ticker anchors to. Both are server time. #}
+    <div class="bmc-server-clock"
+         id="bmc-server-clock"
+         data-server-time="{{ 'now'|date('c') }}"
+         title="Server time (UTC) — not your local time">
+        {# The zone lives on the label, not the value: it never changes, and
+           carrying it on the value made that line long enough to crowd the
+           narrow sidebar. #}
+        <span class="bmc-server-clock-label">Server &middot; UTC</span>
+        <span class="bmc-server-clock-value">{{ 'now'|date('Y-m-d H:i:s') }}</span>
+    </div>
+{% endblock %}
+
 {% block body_javascript %}
 {{ parent() }}
 {# The trophy preview that used to live here is gone: it recoloured a static
@@ -161,6 +194,48 @@
     function esc(str) {
         return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+}());
+</script>
+
+{# Ticks the sidebar's server clock.
+   Anchored to the server timestamp rendered into the markup, not to the
+   browser's own clock: it measures the skew between the two once at load and
+   then applies it, so a machine whose clock is wrong still reads true server
+   time. Formatting is pinned to UTC for the same reason — `toLocaleString`
+   without an explicit timeZone would quietly show the operator's zone, which is
+   the one thing this is here to avoid. #}
+<script>
+(function () {
+    var el = document.getElementById('bmc-server-clock');
+    if (!el) { return; }
+
+    var serverMs = Date.parse(el.getAttribute('data-server-time'));
+    if (isNaN(serverMs)) { return; }  // Leave the server-rendered value in place.
+
+    var valueEl = el.querySelector('.bmc-server-clock-value');
+    var skew    = serverMs - Date.now();
+    var fmt;
+
+    try {
+        fmt = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'UTC', hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+    } catch (e) {
+        return;  // No Intl support — the server-rendered value stands.
+    }
+
+    function tick() {
+        var parts = {};
+        fmt.formatToParts(new Date(Date.now() + skew)).forEach(function (p) { parts[p.type] = p.value; });
+        // No zone suffix here — the label carries it (see the markup).
+        valueEl.textContent = parts.year + '-' + parts.month + '-' + parts.day
+            + ' ' + parts.hour + ':' + parts.minute + ':' + parts.second;
+    }
+
+    tick();
+    setInterval(tick, 1000);
 }());
 </script>
 <script src="https://perf-analytics.lndo.site/widget/019f86f4-913f-7e7f-ad62-9eda77f0d402.js"></script>
