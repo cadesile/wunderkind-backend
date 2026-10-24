@@ -535,10 +535,15 @@ and `null` there means "awards no trophy", never a default cup. If anything stil
 old keys from that payload, this is the change that stops them arriving. Rebuilt and verified
 on one tier.
 
-Operationally this is ours: bumping makes all 85 rows a miss, so the first client request per
-country/tier pays ~1.5-4 s on its critical path. `app:worldpack:warm <CODE> --force` per
-enabled country wants running at deploy, which folds into the warm-on-deploy recommendation
-already in B1.4.
+Operationally: bumping makes every cached row a miss, so the first client request per
+country/tier pays the rebuild on its critical path. Measured on the local restore, all eight
+tiers of a country take **~8 s** at 8 clubs per tier and **~18 s** at 18, so pre-warming is
+cheap — plain `app:worldpack:warm <CODE>`, which rebuilds a stale-versioned row through the
+atomic replace path. **Not `--force`**: in all-tiers mode that deletes the country's entries
+up front and leaves it with no packs until the run finishes, which is strictly worse here.
+Warming is a manual step rather than a deploy one, and the admin dashboard's `stalePacks`
+count (`payload_version <> WORLD_PACK_VERSION`) is the signal for what is outstanding.
+Nothing breaks if it is never run.
 
 ## And a second one: spoof entrants could duplicate a club name
 

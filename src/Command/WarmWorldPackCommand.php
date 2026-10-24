@@ -42,7 +42,7 @@ class WarmWorldPackCommand extends Command
     {
         $this
             ->addArgument('country', InputArgument::REQUIRED, 'ISO 3166-1 alpha-2 country code (e.g. EN, ES)')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Delete existing cache entry/entries before regenerating')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Regenerate even if already at the current payload version. NOTE: in all-tiers mode this deletes the country\'s entries up front, so the country has no packs until the run finishes — after a WORLD_PACK_VERSION bump you do not need it, since a stale-versioned entry is already rebuilt atomically per tier')
             ->addOption('tier', null, InputOption::VALUE_REQUIRED, 'Process a single tier only (1–8). Recommended for cron use.')
             ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Tiers per batch when running all tiers (ignored with --tier)', 3)
             ->addOption('memory-warning', null, InputOption::VALUE_REQUIRED, 'Memory threshold in MB at which to log a warning', 256);
@@ -103,7 +103,9 @@ class WarmWorldPackCommand extends Command
 
             // forceRebuild generates the payload first, then atomically replaces the old
             // entry — so a failed build never leaves the cache empty.
-            // getOrBuild skips existing entries (used when --force is not set).
+            // getOrBuild skips an entry already at the current WORLD_PACK_VERSION, and
+            // rebuilds one stamped with an older version through that same atomic path —
+            // so after a version bump it regenerates without needing --force.
             $payload = $force
                 ? $this->worldPackCacheService->forceRebuild($country, $tier, $builder)
                 : $this->worldPackCacheService->getOrBuild($country, $tier, $builder);
@@ -168,7 +170,12 @@ class WarmWorldPackCommand extends Command
 
             foreach ($batchLeagues as $league) {
                 $tier       = $league->getTier();
-                $alreadyHit = $this->cacheRepository->findForCountryAndTier($country, $tier) !== null;
+                // Version-aware, not merely "a row exists". A row stamped with an older
+                // WORLD_PACK_VERSION is a miss that getOrBuild() rebuilds, so testing for
+                // existence alone reported "skipped (cached)" for tiers it had just
+                // regenerated — misleading in precisely the situation this output matters,
+                // which is the pass right after a version bump.
+                $alreadyHit = $this->worldPackCacheService->isCached($country, $tier);
 
                 try {
                     $payload = $this->worldPackCacheService->getOrBuild(

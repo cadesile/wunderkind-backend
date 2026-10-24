@@ -366,10 +366,19 @@ class CompetitionRegistrationService
      * before rating. Before kick-off the club's own ordering is the only statement of intent
      * there is.
      *
-     * Note that this XI is **provisional**: the resubmission window stays open while the
-     * competition has an upcoming round, and a fixture's result is computed from whatever
-     * snapshot the entrant holds at resolve time — so the XI shown here can still change
-     * before it plays, for both clubs.
+     * Note that this XI is **provisional, and the draw does not freeze it.** A round's result
+     * is computed from whatever snapshot the entrant holds at *resolve* time
+     * (`DeterministicEngine::playersOf()` reads the live `snapshotJson`), and the
+     * resubmission window stays open while any round is still `DRAW_PENDING`. Every round
+     * except the last therefore has a later `DRAW_PENDING` round behind it, so resubmit
+     * remains open right through that round's draw and up to its resolution — a club can
+     * change the XI that plays an already-drawn fixture. The final is the one exception:
+     * nothing is `DRAW_PENDING` behind it, so its squad genuinely is locked at its draw.
+     *
+     * Which is why there is no useful "drawn and locked" state to gate this on: for any
+     * non-final round, drawn and locked are different things. Closing the leak would need
+     * either a real squad-lock concept or a viewer-scoped payload (own XI only until the
+     * result exists).
      *
      * @param  array<int, mixed> $snapshotPlayers Exactly 11 entries for any snapshot that
      *                                            passed SnapshotValidator::REQUIRED_PLAYERS.
