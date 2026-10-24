@@ -69,8 +69,16 @@ class SidebarServerClockTest extends WebTestCase
         // Rendered value is the no-JS fallback and the first paint, so it must
         // already read as server time rather than waiting for the ticker.
         $value = trim($clock->filter('.bmc-server-clock-value')->text());
-        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$/', $value);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value);
         $this->assertStringStartsWith($parsed->format('Y-m-d H:i'), $value);
+
+        // The zone is stated on the label rather than appended to the value, so it
+        // must actually be there — a bare timestamp with no zone is worse than none.
+        $this->assertStringContainsString(
+            'UTC',
+            $clock->filter('.bmc-server-clock-label')->text(),
+            'the clock must say which zone it is in',
+        );
     }
 
     /**

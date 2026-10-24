@@ -37,8 +37,11 @@
          id="bmc-server-clock"
          data-server-time="{{ 'now'|date('c') }}"
          title="Server time (UTC) — not your local time">
-        <span class="bmc-server-clock-label">server</span>
-        <span class="bmc-server-clock-value">{{ 'now'|date('Y-m-d H:i:s') }} UTC</span>
+        {# The zone lives on the label, not the value: it never changes, and
+           carrying it on the value made that line long enough to crowd the
+           narrow sidebar. #}
+        <span class="bmc-server-clock-label">Server &middot; UTC</span>
+        <span class="bmc-server-clock-value">{{ 'now'|date('Y-m-d H:i:s') }}</span>
     </div>
 {% endblock %}
 
@@ -226,8 +229,9 @@
     function tick() {
         var parts = {};
         fmt.formatToParts(new Date(Date.now() + skew)).forEach(function (p) { parts[p.type] = p.value; });
+        // No zone suffix here — the label carries it (see the markup).
         valueEl.textContent = parts.year + '-' + parts.month + '-' + parts.day
-            + ' ' + parts.hour + ':' + parts.minute + ':' + parts.second + ' UTC';
+            + ' ' + parts.hour + ':' + parts.minute + ':' + parts.second;
     }
 
     tick();
