@@ -5,6 +5,25 @@ on:
     branches:
       - master
 
+# Both stacks live on the same Hetzner box and share one Docker daemon, so the
+# `docker system prune` each deploy runs can delete layer blobs the *other* one is
+# part-way through pulling. That is how the prod deploy of 2026-10-24 died: two
+# pulls failed on different layers with "commit failed: rename ... no such file or
+# directory", five seconds after the dev deploy started, with 63G free and inodes
+# at 3% — nothing wrong with the box, just the two runs overlapping. Re-running it
+# unchanged succeeded.
+#
+# One group name shared across BOTH workflow files is what serialises them; a
+# per-workflow group would not, since the two runs are in different workflows.
+#
+# cancel-in-progress stays false deliberately: the default would cancel a deploy
+# that is already mid-flight, which is a worse failure than making it queue — it
+# can stop between `up -d` and `migrations:migrate` and leave new code running
+# against an old schema.
+concurrency:
+  group: hetzner-deploy
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
@@ -90,6 +109,13 @@ jobs:
             # database is a bind mount (/mnt/volume-wkf/.../pgdata) rather than a
             # volume, so no flag here can reach it. Caddy's certs live in named
             # volumes, which is the other reason --volumes must never appear.
+            #
+            # Note the earlier diagnosis above ("the stale layers were") is at best
+            # half the story: this prune is also what *causes* a mid-pull corruption
+            # when the other stack deploys at the same time, since both share one
+            # daemon and it happily deletes blobs the other pull is still writing.
+            # The `concurrency` group at the top of this file is what makes the prune
+            # safe — do not remove it and leave this in place.
             docker system prune -f || true
 
             # Self-heal rather than page a human: if the pull still fails, the store
