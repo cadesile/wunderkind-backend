@@ -73,6 +73,16 @@ class WorldPackCacheService
         });
     }
 
+    /**
+     * Whether (country, tier) is already cached at the current shape version — i.e. whether
+     * a getOrBuild() call would be served from cache or pay for a build. Read before the
+     * call, for logging that distinguishes the two.
+     */
+    public function isCached(string $country, int $tier): bool
+    {
+        return $this->readFresh($country, $tier) !== null;
+    }
+
     /** The cached payload for (country, tier) if one exists at the current shape version, else null. */
     private function readFresh(string $country, int $tier): ?array
     {

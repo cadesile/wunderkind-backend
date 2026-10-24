@@ -224,13 +224,16 @@ endpoint is ever wanted.
 ## Retry safety / idempotency
 
 The `Idempotency-Key` header is honoured on POSTs under
-`/api/competitions/`, `/api/friendlies/`, `/api/inbox/` and on the exact paths
-`/api/club/initialize` and `/api/league/conclude-season`
-(`IdempotencySubscriber`). Beyond that header:
+`/api/competitions/`, `/api/friendlies/`, `/api/inbox/` and on the exact path
+`/api/club/initialize` (`IdempotencySubscriber`). **Conclude-season is
+deliberately not on that list** even though it is what the client's retry queue
+was built for — it has a strictly better domain-level guarantee, so the header's
+body-hash check could only ever fire as a false positive, and the client drops a
+4xx. See that subscriber's docblock. Beyond the header:
 
 | Route | Behaviour on retry |
 |---|---|
-| `POST /api/league/conclude-season` | Idempotent per club + season; replays the first response, writes nothing. Takes a new optional `season` in the payload — keying on the club's *current* season is unsafe for a late retry |
+| `POST /api/league/conclude-season` | Idempotent per club + season; replays the first response, writes nothing. Takes a new optional `season` in the payload — keying on the club's *current* season is unsafe for a late retry. Order-independent: a season *ahead* of the server's count is archived and pulls `currentSeason` up to it, deliberately **not** rejected — the client's outbox drops a 4xx, so a 422 there would silently lose that season and cascade into every one queued behind it |
 | `POST /api/initialize/starter` | Replays the stored starter pack as `200` + `replayed: true`. Clubs predating `club.starter_pack_json` still get `409 starter_already_initialized` |
 | `POST /api/initialize/league/{tier}` | Cache-backed and now race-safe; concurrent calls for one country+tier are serialized and share one build |
 | `POST /api/club/initialize` | **Not** idempotent alone — creates an additional club. Does *not* collide on the club name (the duplicate check is against `NpcClub` only). Use an `Idempotency-Key` |
@@ -239,9 +242,23 @@ Client-facing detail: **Retries and idempotency** in
 `docs/frontend-integration.md`; the full investigation is in
 `docs/2026-10-24-sentry-sweep-backend-answers.md`.
 
-Note `POST /api/initialize/starter` accepts any `Country` case in `?country=`
-and does **not** check `StarterConfig::enabledCountries`, so a client can
-initialize into a country the operator has not enabled or warmed.
+**`POST /api/initialize/starter` accepts any `Country` case in `?country=` and
+deliberately does NOT check `StarterConfig::enabledCountries`** — this
+permissiveness is load-bearing, not an oversight. The client persists
+`club.country` per save and re-reads it on every retry, so an `enabledCountries`
+check here would brick every existing save in a country later removed from that
+list: the init flow cannot proceed without a starter pack and there is no
+client-side escape. (Which is also the hazard in `enabledCountries` itself —
+it is one admin-editable row, and removing a country strands every save already
+created in it.) If the goal is to stop *new* clubs in an unwarmed country, the
+list the picker reads already does that; the fix for an existing one is to warm
+it. See `docs/2026-10-24-sentry-sweep-frontend-reply.md`.
+
+`POST /api/initialize/league/{tier}` logs every response as
+`initialize.league_tier.served` (country, tier, cacheHit, durationMs, clubs,
+players, staff, scouts, payloadBytes) — added so the client's
+country-and-tier-less `db: slow write` warnings can be placed against a real
+payload by timestamp.
 
 ## API spec
 

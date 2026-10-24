@@ -20,10 +20,11 @@ use App\Service\ClubInitializationService;
 class WorldInitializationService
 {
     /**
-     * Shape version of the world-pack payload. Bump this whenever
-     * buildPlayerSnapshot/buildStaffSnapshot/buildScoutSnapshot change shape —
-     * WorldPackCacheService treats any cached row stamped with a different
-     * version as a miss and rebuilds it.
+     * Shape version of the world-pack payload. Bump this whenever **anything** in the
+     * payload changes shape — WorldPackCacheService treats any cached row stamped with a
+     * different version as a miss and rebuilds it. Not just the snapshot builders: the
+     * league-level block in buildLeagueSnapshot() counts too, which is how version 3 came
+     * to be needed.
      *
      * 1 — first version to guarantee a generated `personality` matrix on players,
      *     staff and scouts. Everything cached before this may carry all-10s
@@ -39,8 +40,23 @@ class WorldInitializationService
      *     directorOfFootballCount/facilityManagerCount/scoutCount). Packs
      *     cached under version 1 lack these entirely and are treated as a
      *     miss on next read.
+     *
+     * 3 — the league block carries `trophy` (the 16-bit trophy sprite's own
+     *     TrophyConfig) instead of the retired `trophyImage`/`trophyColour`
+     *     asset-slug pair. The code changed with the trophy-sprite work
+     *     (`Version20261018202041`, 2026-10-18) but this constant was **not**
+     *     bumped with it, so every pack cached before that date kept serving
+     *     the retired shape — 84 of 85 rows on the production restore, and
+     *     forever, since the cache has no TTL. Exactly the failure this
+     *     constant exists to prevent, and the second time it has happened
+     *     (see version 1's note about all-10s personality matrices).
+     *
+     * ⚠️ Bumping this makes every cached row a miss, so the next client request per
+     * country/tier pays the rebuild (~1.5s for 8 clubs, ~3-4s for 18) on its critical
+     * path. Run `app:worldpack:warm <CODE> --force` for each enabled country after
+     * deploying a bump, so no player pays for it.
      */
-    public const WORLD_PACK_VERSION = 2;
+    public const WORLD_PACK_VERSION = 3;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [

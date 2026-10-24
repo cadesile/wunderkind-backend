@@ -242,11 +242,37 @@ class InitializeController extends AbstractController
             );
         }
 
+        $cacheHit = $this->worldPackCacheService->isCached($country, $tier);
+        $startedAt = microtime(true);
+
         $payload = $this->worldPackCacheService->getOrBuild(
             $country,
             $tier,
             fn() => $this->worldInitializationService->buildTierPack($club, $country, $tier)
         );
+
+        // What this tier actually weighs, per response.
+        //
+        // The client reports slow device-side writes as `db: slow write` with a row count
+        // and no country or tier attached (Sentry `153689847`: 6,992 staff rows in 3.6s),
+        // so an outlier cannot be placed against a payload — and no cached pack can
+        // currently produce a number anywhere near that one: the ceiling across every
+        // cached tier is 360 staff + scouts. Logging it here makes the next occurrence
+        // correlatable by timestamp from this side, with no client change and no new
+        // Sentry label. Keep `staff`/`scouts`/`players` counted the way the client counts
+        // them — per entity array, per tier, not cumulative.
+        $this->logger->info('initialize.league_tier.served', [
+            'clubId'       => (string) $club->getId(),
+            'country'      => $country,
+            'tier'         => $tier,
+            'cacheHit'     => $cacheHit,
+            'durationMs'   => (int) round((microtime(true) - $startedAt) * 1000),
+            'clubs'        => count($payload['clubs'] ?? []),
+            'players'      => $this->countNested($payload, 'players'),
+            'staff'        => $this->countNested($payload, 'staff'),
+            'scouts'       => $this->countNested($payload, 'scouts'),
+            'payloadBytes' => strlen((string) json_encode($payload)),
+        ]);
 
         // Check if all tiers are now cached → mark world as fully initialized
         if (!$club->isWorldInitialized()) {
@@ -261,5 +287,16 @@ class InitializeController extends AbstractController
         }
 
         return $this->json(['tier' => $tier, 'data' => $payload]);
+    }
+
+    /** Total entries in `$key` across every club in a tier payload. */
+    private function countNested(array $payload, string $key): int
+    {
+        $total = 0;
+        foreach ($payload['clubs'] ?? [] as $club) {
+            $total += count($club[$key] ?? []);
+        }
+
+        return $total;
     }
 }

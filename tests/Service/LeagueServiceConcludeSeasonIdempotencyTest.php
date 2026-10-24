@@ -117,14 +117,58 @@ class LeagueServiceConcludeSeasonIdempotencyTest extends KernelTestCase
         $this->assertSame(4, $club->getCurrentSeason());
     }
 
-    public function testConcludingASeasonTheClubHasNotReachedIsRejected(): void
+    /**
+     * A payload for a season *ahead* of the server's count is accepted, and pulls the count
+     * up to it. The gap means the server never received the seasons in between — which is
+     * exactly when keeping the archive it did receive matters most. Rejecting it would be
+     * worse than useless: the client's outbox drops a 4xx rather than retrying, so a 422
+     * would silently and permanently lose that season and cascade into every later one
+     * queued behind it.
+     */
+    public function testASeasonAheadOfTheServersCountIsArchivedAndPullsTheCountUp(): void
     {
         [$club] = $this->clubInLeague('Idem Future Season FC', tier: 7);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/has only reached season/');
+        $this->assertSame(1, $club->getCurrentSeason(), 'precondition');
 
-        $this->service->concludeSeason($club, $this->request(season: 9));
+        $this->service->concludeSeason($club, $this->request(season: 4));
+        $this->collectArchive($club);
+
+        $this->assertSame(5, $club->getCurrentSeason(), 'the count catches up to the payload');
+        $this->assertNotNull(
+            self::getContainer()->get(SeasonRecordRepository::class)->findOneByClubAndSeason($club, 4),
+            'the archive must be kept, not discarded',
+        );
+    }
+
+    /** And it is still idempotent on that season afterwards. */
+    public function testAFutureSeasonArchiveIsStillReplayedOnRetry(): void
+    {
+        [$club] = $this->clubInLeague('Idem Future Replay FC', tier: 8);
+
+        $first = $this->service->concludeSeason($club, $this->request(season: 4));
+        $this->collectArchive($club);
+
+        $replay = $this->service->concludeSeason($club, $this->request(season: 4));
+
+        $this->assertSame($first, $replay);
+        $this->assertSame(5, $club->getCurrentSeason(), 'and it does not advance again');
+        $this->assertSame(1, $this->countRecords($club));
+    }
+
+    /**
+     * The bound exists so a junk season number fails validation rather than reaching the
+     * driver: `SeasonRecord::$season` is a SMALLINT, and an out-of-range value would be a
+     * 500 the outbox retries forever rather than a 422 it drops.
+     */
+    public function testTheSeasonFieldIsBoundedWellInsideSmallint(): void
+    {
+        $dto         = $this->request(season: 40000);
+        $violations  = self::getContainer()->get(\Symfony\Component\Validator\Validator\ValidatorInterface::class)
+            ->validate($dto);
+
+        $this->assertGreaterThan(0, count($violations));
+        $this->assertSame('season', $violations[0]->getPropertyPath());
     }
 
     /**

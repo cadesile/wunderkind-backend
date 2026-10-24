@@ -60,6 +60,16 @@ class WorldPackCacheServiceTest extends KernelTestCase
         $this->assertSame(['clubs' => [['id' => 'club-1']]], $second);
     }
 
+    /** `isCached()` is read before a getOrBuild() call so logging can say hit or build. */
+    public function testIsCachedTracksWhetherACallWouldPayForABuild(): void
+    {
+        $this->assertFalse($this->service->isCached($this->country, 6));
+
+        $this->service->getOrBuild($this->country, 6, fn (): array => ['clubs' => []]);
+
+        $this->assertTrue($this->service->isCached($this->country, 6));
+    }
+
     /**
      * The lock has to be released on the way out, not just on the happy path — a generator
      * that throws must not leave the lock held for the rest of the connection's life, or

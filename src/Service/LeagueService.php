@@ -225,8 +225,17 @@ class LeagueService
      *  2. The first call's response body is stored on `SeasonSnapshot::$responseJson` and
      *     replayed verbatim, rather than recomputed — see that property's docblock for why
      *     recomputing would be wrong.
-     *  3. `currentSeason` only advances when the season being concluded *is* the current
-     *     one, so concluding an older season late never skips a season forward.
+     *  3. `currentSeason` moves to `max(current, season + 1)` — never backwards, and never
+     *     past what the payload itself claims. Concluding an older season late leaves the
+     *     club where it is; a season *ahead* of the server's count pulls the count up to it.
+     *
+     * That last case is deliberately **accepted rather than rejected**. It means the server
+     * missed the seasons in between, which is exactly when keeping the archive you did
+     * receive matters most — and the client's outbox drops a 4xx rather than retrying it, so
+     * a 422 here would turn a recoverable gap into permanent, silent data loss, cascading
+     * across every later season behind it. The client is authoritative for gameplay anyway.
+     * An absurd season number is caught by `ConcludeSeasonRequest`'s own bound instead,
+     * where a 422 is unambiguously right.
      *
      * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
      */
@@ -234,14 +243,6 @@ class LeagueService
     {
         $currentSeason = $club->getCurrentSeason();
         $targetSeason  = $dto->season ?? $currentSeason;
-
-        if ($targetSeason > $currentSeason) {
-            throw new \RuntimeException(sprintf(
-                'Cannot conclude season %d — this club has only reached season %d.',
-                $targetSeason,
-                $currentSeason,
-            ));
-        }
 
         $alreadyConcluded = $this->seasonRecordRepository->findOneByClubAndSeason($club, $targetSeason);
         if ($alreadyConcluded !== null) {
@@ -305,11 +306,13 @@ class LeagueService
             $club->setCurrentLeague($newLeague);
         }
 
-        // Only when the season being concluded is the one the club is actually on. A late
-        // retry for an older season archives what is missing without moving the club on.
-        if ($targetSeason === $currentSeason) {
-            $club->setCurrentSeason($currentSeason + 1);
-        }
+        // Never backwards, and never past where this payload says the club has got to.
+        // A late retry for an *older* season archives what was missing and leaves the club
+        // where it is; a payload for a season ahead of the server's count catches the count
+        // up, because the client is authoritative for gameplay (the server is not the game
+        // engine — see The Hybrid Model in CLAUDE.md) and the gap means the server simply
+        // never received the seasons in between.
+        $club->setCurrentSeason(max($currentSeason, $targetSeason + 1));
 
         $gameConfig = $this->gameConfigRepository->getConfig();
 

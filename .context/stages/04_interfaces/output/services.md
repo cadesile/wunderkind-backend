@@ -231,6 +231,13 @@ filename alone.
   forward. The season comes from the new optional `ConcludeSeasonRequest::$season`,
   falling back to `Club::$currentSeason` for older clients — keying on
   "current season" alone is what made a *late* retry unsafe.
+  `currentSeason` moves to `max(current, season + 1)`, so a payload for a season
+  *ahead* of the server's count is archived and pulls the count up rather than
+  being rejected. That is deliberate: the client's outbox **drops** a 4xx instead
+  of retrying, so a 422 there would silently lose that season and cascade into
+  every later one queued behind it. The only 422 left is a season above 1000
+  (`SMALLINT` guard — an out-of-range value would be a 500, which the outbox
+  retries forever).
   `storeConcludeResponse()` writes with raw SQL rather than a flush on purpose:
   `rollLeagueSponsors()` has just mutated managed `LeagueSponsor` rows and
   those re-rolls are deliberately never persisted (they only appear in the
@@ -586,6 +593,16 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
+  **`WORLD_PACK_VERSION` is 3 and must be bumped for *any* payload shape change,
+  not just the three snapshot builders.** It was missed when the trophy-sprite
+  work (`Version20261018202041`, 2026-10-18) replaced the league block's
+  `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85
+  cached packs went on serving the retired asset-slug shape — the cache has no
+  TTL and this constant is the only thing that invalidates it. Second time that
+  has happened (version 1's note records the all-10s personality matrices).
+  Bumping makes every cached row a miss, so run
+  `app:worldpack:warm <CODE> --force` per enabled country at deploy or the first
+  client request per country/tier pays ~1.5-4s on its critical path.
   `buildLeaguesPack()`/`buildTierPack()` draw each NPC club's full staff —
   Manager/Coach/Chairman (unfiltered draw) plus Director of Football/Facility
   Manager/Scouts (nationality-filtered with backfill, via `fillStaffRole()`/
@@ -607,6 +624,8 @@ filename alone.
   session-level (the generator flushes and clears several times and must not sit
   in one long transaction), released in a `finally`, and degrades to running
   unlocked if it cannot be taken, with the unique index as the backstop.
+  `isCached()` exposes whether a call would hit or build, for the per-response
+  logging on the tier endpoint.
 - **`YouTubeFeedService`** — fetches/filters the YouTube channel feed
   (drops entries with an empty `<media:title>`).
 
@@ -639,11 +658,16 @@ since they run implicitly on every entity write:
   Contract: **Error responses** in `docs/frontend-integration.md`.
 - **`IdempotencySubscriber`** (`kernel.request`/`kernel.response`) — replays a
   cached response for a repeated `Idempotency-Key` on POSTs under
-  `/api/competitions/`, `/api/friendlies/`, `/api/inbox/` and — added for the
-  client's retry queue — the exact paths `/api/club/initialize` and
-  `/api/league/conclude-season`. This only replays a request the server
-  actually *finished*, so it is the cheap layer; conclude-season's durable
-  guarantee is the domain-level club+season one in `LeagueService`.
+  `/api/competitions/`, `/api/friendlies/`, `/api/inbox/` and the exact path
+  `/api/club/initialize`. It only replays a request the server actually
+  *finished*. **`/api/league/conclude-season` is deliberately excluded** despite
+  being what the client's retry queue was built for: it has a domain-level
+  guarantee (club+season, which also survives a request killed mid-flight), so
+  the body-hash check could only ever fire as a false positive — and the client
+  drops a 4xx, which would turn that into permanent loss of a season. The
+  principle: the header covers paths with no domain-level guarantee, and a path
+  that has one should not take on the header's failure mode. A key sent to a
+  non-allowlisted path is ignored, not rejected.
 
 ## One player shape
 

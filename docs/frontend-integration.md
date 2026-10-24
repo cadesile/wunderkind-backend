@@ -76,7 +76,6 @@ retries of the same logical write. Supported on:
 - `POST /api/friendlies/*`
 - `POST /api/inbox/*`
 - `POST /api/club/initialize`
-- `POST /api/league/conclude-season`
 
 Same key + same body replays the first response verbatim, with
 `X-Idempotent-Replay: true`. Same key + a *different* body is rejected
@@ -84,13 +83,21 @@ Same key + same body replays the first response verbatim, with
 server actually finished — one killed mid-flight never cached a response, so it
 is not a substitute for the next mechanism.
 
+**`POST /api/league/conclude-season` is deliberately not on that list**, even
+though it is the endpoint the retry queue exists for. It has a strictly better
+guarantee of its own (below), which also covers a request killed mid-flight.
+With that in place the body-hash check could only ever fire as a false positive
+— the same archive re-serialized slightly differently — and a queue that drops
+4xx would then lose that season permanently. Sending a key to this path is
+harmless; it is simply ignored, so no client change is needed.
+
 **2. Endpoint-level guarantees**, which hold with or without a key:
 
 | Endpoint | Guarantee |
 |---|---|
-| `POST /api/league/conclude-season` | Idempotent per club + season. Send `season` in the payload (see below). A duplicate or late retry replays the first response and writes nothing — no second `SeasonRecord`, no second `SeasonSnapshot`, no second season advance |
+| `POST /api/league/conclude-season` | Idempotent per club + season, with or without a key. Send `season` in the payload (see below). A duplicate or late retry replays the first response and writes nothing — no second `SeasonRecord`, no second `SeasonSnapshot`, no second season advance. Order-independent, and a season ahead of the server's count is accepted rather than rejected |
 | `POST /api/initialize/starter` | A club that is already initialized gets its stored starter pack back as `200` with `"replayed": true`, rather than `409`. (Clubs initialized before this shipped have no stored pack and still answer `409 starter_already_initialized` — their squads are genuinely unrecoverable) |
-| `POST /api/initialize/league/{tier}` | Safe to retry. Concurrent calls for the same country+tier are serialized server-side; the second gets the first one's payload rather than triggering a second world generation |
+| `POST /api/initialize/league/{tier}` | Safe to retry. Concurrent calls for the same country+tier are serialized server-side; the second gets the first one's payload rather than triggering a second world generation. Note the league block now carries `trophy` (a `TrophyConfig`) in place of the retired `trophyImage`/`trophyColour` pair — see `docs/api/trophy-config.md` |
 | `POST /api/club/initialize` | **Not** idempotent on its own — a retry creates an additional club for the account (a user may own several; `GET /api/club/all` lists them). Use an `Idempotency-Key` if you need retry safety here. It does *not* fail on the club name: the name-taken check is against NPC clubs only, so retrying with the same name is fine |
 
 ### `POST /api/league/conclude-season` — `season`
@@ -104,8 +111,20 @@ season by accident. Sending `season` explicitly is what makes a late retry safe
 as well as a duplicate one.
 
 Optional and backwards compatible: omitted, it falls back to the club's current
-season, which is the pre-existing behaviour. Concluding a season the club has not
-reached yet is rejected `422`.
+season, which is the pre-existing behaviour.
+
+Ordering does not matter, and a gap is not an error:
+
+- A season **behind** the server's count is archived if missing, or replayed if
+  already there, and the club is left where it is.
+- A season **ahead** of the server's count is archived and pulls the count up to
+  it. The gap just means the server never received the seasons in between, so
+  there is nothing to be gained by refusing the one that did arrive — the client
+  is authoritative for gameplay regardless.
+- The only `422` is a season above 1000, which is junk rather than a gap.
+
+So a queue can flush in any order, and a dropped entry never poisons the ones
+behind it.
 
 Server-side cost is ~65 ms for a full eight-tier pyramid with a 52 KB payload, so
 the 30 s client timeout is about the upload, not about server time. A replayed

@@ -8,6 +8,13 @@ local database is a `scripts/pull-prod-db.sh` restore and may lag production.
 Client-facing contract changes are in `docs/frontend-integration.md` under **Error
 responses** and **Retries and idempotency**.
 
+> **Read the round-two section at the bottom before acting on this one.** The frontend reply
+> (`docs/2026-10-24-sentry-sweep-frontend-reply.md`) reversed two decisions recorded below —
+> conclude-season came **off** the `Idempotency-Key` allowlist, and the `422` for "a season
+> the club has not reached" was **removed** — both because the client's outbox drops a 4xx
+> rather than retrying it. Round two also bumped `WORLD_PACK_VERSION`. Everything else here
+> still stands.
+
 ---
 
 ## B2 — `POST /api/league/conclude-season`
@@ -376,7 +383,7 @@ race-safe (B1.3).
 | `src/Service/StarterPackService.php` | Stores the pack in the flush that consumes the pool |
 | `src/Controller/InitializeController.php` | `/starter` replays the stored pack instead of 409; replay checked before the `?country=` override |
 | `src/Service/WorldPackCacheService.php` | `getOrBuild` serializes a miss behind an advisory lock and re-checks |
-| `src/EventSubscriber/IdempotencySubscriber.php` | Allowlist adds `/api/club/initialize` and `/api/league/conclude-season` |
+| `src/EventSubscriber/IdempotencySubscriber.php` | Allowlist adds `/api/club/initialize` (conclude-season was added here and then removed again in round two) |
 | `src/Dto/OwnerAvatarRequest.php`, `OwnerAvatarController.php` | `dob` accepts an ISO datetime; `""` clears instead of meaning today |
 | `migrations/Version20261024132000.php` | `season_snapshot.response_json` + both unique indexes |
 | `migrations/Version20261024140000.php` | `club.starter_pack_json` |
@@ -385,3 +392,189 @@ Both migrations applied cleanly against the local production restore (no pre-exi
 duplicate `(club, season)` rows in either archive table — but the migration's own docblock
 says how to find and resolve them if production differs). 21 new tests; full suite 1,330
 green.
+
+Round two adds, on top of the above: `WORLD_PACK_VERSION` 2 → 3
+(`WorldInitializationService`), per-response logging and `WorldPackCacheService::isCached()`,
+the `season` upper bound, and the two reversals. No new migration. Final suite: 1,333 green.
+
+---
+
+# Round two — replies to the frontend reply (24 Oct 2026)
+
+Answers to `docs/2026-10-24-sentry-sweep-frontend-reply.md`. Four of its points changed
+backend code; one of them reversed a decision from the first round, and one turned up an
+unrelated bug.
+
+## `/starter` stays permissive — and now says why in the code
+
+Your point lands and settles it: `club.country` is persisted per save and `runStep1` re-reads
+it on every retry, so an `enabledCountries` check on `POST /api/initialize/starter` would not
+merely stop new clubs in unwarmed countries — **it would brick every existing save in one**,
+with no client-side escape, because the init flow cannot proceed without a starter pack. Not
+doing it. The note in `04_interfaces/output/routes.md` now records the reasoning rather than
+the open question, so the next person reading that permissiveness as an oversight finds out
+why it is load-bearing before changing it.
+
+On where JP came from: `enabledCountryOptions` is **derived from `enabledCountries`** in the
+same response (`StarterConfigController` resolves each enabled code through the `Country`
+enum purely to attach a display label), so the two lists cannot disagree, and neither
+contains JP on the production restore. Your hypothesis is therefore the only one left
+standing: those devices read a `starter-config` whose list did include JP — the dev API being
+the obvious candidate, and one of the three JP events is the dev build. Worth noting the
+mechanism this exposes, which is ours: **`enabledCountries` is a single admin-editable row,
+and removing a country from it silently strands every save already created in it.** That is
+an argument for warming JP rather than for tightening anything.
+
+## `Idempotency-Key` on conclude-season: removed, and your key is now a no-op
+
+This reverses what I told you last round, because of something your reply made clear: **the
+outbox drops a 4xx rather than retrying it.**
+
+With that behaviour, allowlisting conclude-season is a liability. Its body-hash check exists
+to catch a client reusing one key for two genuinely different operations — but club+season
+already determines this operation completely, and the server ignores a duplicate anyway, so
+the check can *only* fire as a false positive (the same archive re-serialized slightly
+differently). The consequence of that false positive is a 422, which the outbox drops, which
+silently loses a season of a player's history. All risk, no benefit.
+
+So `/api/league/conclude-season` is off the allowlist. **You need to change nothing** — a key
+sent to a non-allowlisted path is ignored, not rejected, so `"<clubId>:<season>"` can keep
+being sent. The club+season guarantee is unaffected and covers strictly more: it also holds
+for a request killed mid-flight, which never reached the point of caching a response.
+
+`/api/club/initialize` stays on the list. There the header is the *only* guard — the endpoint
+has no domain key to deduplicate on — so the mismatch 422 there is genuinely protective.
+Which is the principle: the header covers paths with no domain-level guarantee, and paths
+that have one should not take on its failure mode.
+
+## The 422 for a future season is gone — the outbox made it dangerous
+
+Same reasoning, and this one is a behaviour change worth reading carefully.
+
+Last round I added a `422` for "concluding a season the club has not reached", and your reply
+names it approvingly as the poison-entry case the outbox should drop. I have **removed it**,
+because thinking it through against drop-on-4xx, it is the one guard that can cause the exact
+loss this whole change set exists to prevent:
+
+> Device is offline across seasons 2, 3 and 4. The queue flushes; season 2's entry is lost to
+> something non-retryable. Season 3 now arrives at a server that still thinks the club is on
+> season 2 — `3 > 2`, so `422`, so dropped. Season 4 then arrives at a server on season 2 —
+> dropped. **Every subsequent season cascades**, silently, forever.
+
+`currentSeason` now moves to `max(current, season + 1)`. A season behind is archived or
+replayed and the club stays put; a season ahead is archived and pulls the count up to it. A
+gap means the server never received the seasons in between, which is precisely when keeping
+the archive that *did* arrive matters most — and the client is authoritative for gameplay
+anyway (the server is not the game engine). So the queue can flush in any order, and a
+dropped entry cannot poison the ones behind it.
+
+The one remaining `422` on `season` is a value above 1000, which is junk rather than a gap.
+It exists because `SeasonRecord::$season` is a `SMALLINT` and an unbounded value would fail
+in the driver as a **500** — which your outbox retries forever, the opposite failure.
+
+Please make sure the outbox does not depend on the dropped-4xx path for ordering. Nothing
+about ordering is enforced server-side any more, which should make the outbox simpler rather
+than harder.
+
+## Q3 — 6,992: accepted as one call, and I cannot make the payload produce it either
+
+Taking your tracing at face value — one invocation, de-duplicated by id before counting,
+strictly per-tier, three separate labelled calls — then the number does not come from any
+payload this backend can currently serve. Exhaustively, across all 85 cached world packs:
+
+| | |
+|---|---|
+| Largest `staff` array in any one club | **17** |
+| Largest per-tier staff total | **306** (18 clubs × 17, tiers 1 of DE/EN/IT) |
+| Largest per-tier `staff` + `scouts` total | **360** |
+| Largest `staff` + `scouts` + `players` for one tier | ~972 |
+| Whole eight-tier country, all three types | ~6,052 (DE) |
+
+So 6,992 is **19.4×** the largest per-tier staff payload, and does not match any per-tier
+figure at all. It sits closest to a whole-pyramid, all-entity-type total — which your tracing
+says it cannot be. I am not assuming it away either; I agree it is unreconciled.
+
+What I have added from this side, since you cannot attach country/tier to that event without
+changing its rate-limit key: **`/api/initialize/league/{tier}` now logs every response** —
+`initialize.league_tier.served` with `country`, `tier`, `cacheHit`, `durationMs`, `clubs`,
+`players`, `staff`, `scouts` and `payloadBytes`, counted per entity array per tier, the way
+you count them. The next occurrence is placeable by correlating timestamps, with no client
+change and no new Sentry label. If that turns out to be awkward, the alternative is a `meta`
+block on the response you could attach directly — say the word and it is additive.
+
+One possibility worth your eye, given the counts above: if `persistWorldLeagueClubs` is ever
+reached with an accumulated `staffEntries` rather than one league's, a figure near the
+whole-pyramid total is what you would see, and de-duplication by id would not reduce it
+because every entity across tiers has a distinct id.
+
+`coachCount` — noted that nothing in the app depends on large NPC coaching staffs. Still not
+changing it unilaterally: it is live production game data, admin-owned, and plausibly a
+deliberate design choice. It is one edit on the Starter Config screen plus
+`app:worldpack:warm <CODE> --force`, whenever you want it.
+
+## A separate bug this turned up: world packs were serving the retired trophy shape
+
+Not from your reply, but found while reading a cached payload for the staff counts above, so
+it ships here.
+
+`WorldInitializationService::WORLD_PACK_VERSION` was **not bumped** when the trophy-sprite
+work landed (`Version20261018202041`, 2026-10-18) and replaced `trophyImage`/`trophyColour`
+with a single `trophy` `TrophyConfig`. `buildLeagueSnapshot()` emits the new shape, but the
+cache has no TTL and the version check is the only thing that invalidates it — so **84 of the
+85 cached packs still carried `trophyImage` + `trophyColour`**, and would have forever. Every
+client initializing a world was being handed the retired asset-slug design.
+
+This is the second time that constant has been missed (version 1's own note records it
+happening with all-10s personality matrices), so its docblock now says explicitly that *any*
+payload shape change counts, including the league-level block, not just the three snapshot
+builders.
+
+Bumped to **3**. Consequences for you: `trophy` replaces `trophyImage`/`trophyColour` in the
+league block of `POST /api/initialize/league/{tier}` — contract in `docs/api/trophy-config.md`,
+and `null` there means "awards no trophy", never a default cup. If anything still reads the
+old keys from that payload, this is the change that stops them arriving. Rebuilt and verified
+on one tier.
+
+Operationally this is ours: bumping makes all 85 rows a miss, so the first client request per
+country/tier pays ~1.5-4 s on its critical path. `app:worldpack:warm <CODE> --force` per
+enabled country wants running at deploy, which folds into the warm-on-deploy recommendation
+already in B1.4.
+
+## And a second one: spoof entrants could duplicate a club name
+
+Also unrelated to your reply, also found by running the suite rather than reading it —
+`CompetitionSpoofEntrantServiceTest` fails roughly one run in ten, and the test was right.
+
+`spoofAllEntrants()` generates its bootstrap club's name through its own
+`generateClubName('EN', [])` call and then delegates the rest to
+`generateSpoofEntrantsForCompetition()`, which started its own `$usedNames` at **empty** — so
+the bootstrap name was never excluded from the names generated after it, and a four-club
+bracket could come out with two clubs called the same thing. `generateClubName`'s avoidance
+is only ever as good as the list handed to it. The same gap meant a spoof could duplicate a
+*real* entrant's club name too.
+
+`$usedNames` is now seeded from the club names already registered in the competition, which
+closes both. Verified over ten consecutive runs of that file plus two clean full-suite runs.
+
+(A third, genuinely statistical flake was also fixed: `testGoalkeeperReceivesHeightBias`
+compared two 50-sample means whose true difference sits ~2.3 standard errors apart, so it
+failed about one run in a hundred. 400 samples a side puts it past 6 sigma, and it now
+asserts the magnitude of the bias rather than only its direction.)
+
+## Noted, no action
+
+- **`204` returns `undefined` rather than throwing** — good, that is the property worth
+  having. The "no `/api` route answers an empty 2xx" check is now recorded in
+  `04_interfaces/output/routes.md` as something to preserve, with the instruction to use
+  `204` if a body-less endpoint is ever wanted.
+- **`replayed: true` ignored as an extra key** — as intended; it is diagnostic, not a flag
+  you need to branch on.
+- **B3.3, no re-register path** — then the ghost club is unreachable, and the allowlisting
+  stands as insurance only. Agreed it is worth having if that flow changes.
+- **The sponsor re-roll** — understood that you compute all of it locally and ignore the
+  body. If we ever do persist it you will hear about it, ignored body or not.
+- **Refresh-token age in `147350837`** — can't be closed from here either. Agreed on the OTA
+  env hypothesis (a dev-channel publish without `EXPO_PUBLIC_API_BASE_URL` pointing a dev
+  build at production) as the leading candidate, and agreed there is no design problem to
+  fix. Dropping it.
+- **`expo-sqlite` 57.0.2 → 57.0.4** — nothing backend-side; noted as the outstanding item.
