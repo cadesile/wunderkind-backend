@@ -230,7 +230,23 @@ class CompetitionResultsService
         $this->em->flush();
     }
 
-    /** Writes the next round's scheduledAt = now + intermissionSeconds. Drawing it is CompetitionDrawService's job, on a later tick. */
+    /**
+     * Writes the next round's scheduledAt = now + intermissionSeconds. Drawing it is
+     * CompetitionDrawService's job, on a later tick.
+     *
+     * **The final is the exception: it is scheduled for `now`, so the next draw tick picks it
+     * up immediately.** Once the semi-final has resolved there are exactly two entrants left
+     * and therefore exactly one possible fixture — the draw cannot reveal anything, so making
+     * the two finalists sit through an intermission before being told who they already know
+     * they are playing is dead time. Every other round keeps its intermission, where the draw
+     * genuinely resolves which of the remaining winners meet.
+     *
+     * This sets the clock rather than calling CompetitionDrawService inline on purpose: the
+     * draw stays behind its own atomic claim-lock (the single path that moves a round out of
+     * DRAW_PENDING), there is no service cycle between results and draw, and the final still
+     * gets drawRound()'s normal fixture seeding, inbox messages and push. The cost is up to
+     * one cron tick (60s) rather than literal immediacy.
+     */
     private function scheduleNextRoundDraw(CompetitionRound $completedRound, \DateTimeImmutable $now): void
     {
         $activeCompetition = $completedRound->getActiveCompetition();
@@ -240,6 +256,13 @@ class CompetitionResultsService
         }
 
         $roundCount          = count(BracketLabeler::labelsForCapacity($activeCompetition->getEntrantCapacity()));
+
+        if ($nextRound->getRoundIndex() === $roundCount) {
+            $nextRound->setScheduledAt($now);
+
+            return;
+        }
+
         $totalSeconds         = $activeCompetition->getEndsAt()->getTimestamp() - $activeCompetition->getStartsAt()->getTimestamp();
         $intervalSeconds       = $this->scheduleCalculator->intervalSeconds($totalSeconds, $roundCount);
         [, $intermissionSeconds] = $this->scheduleCalculator->splitInterval($intervalSeconds, $activeCompetition->getTemplate()->getIntermissionRatio());

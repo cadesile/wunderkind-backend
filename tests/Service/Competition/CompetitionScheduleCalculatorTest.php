@@ -18,18 +18,26 @@ class CompetitionScheduleCalculatorTest extends TestCase
         $this->calculator = new CompetitionScheduleCalculator();
     }
 
-    /** @return array<string, array{0: int, 1: int}> */
+    /**
+     * Every duration the admin can actually pick, against every bracket size BracketLabeler
+     * supports (4..64 entrants = 2..6 rounds).
+     *
+     * Derived from CompetitionDuration::cases() rather than a hand-listed set: this used to
+     * name the four durations explicitly, which meant adding a case to the enum silently left
+     * it untested. Now a new duration is covered the moment it exists — and if it is too short
+     * to give its rounds a workable window, the floor test below fails rather than the problem
+     * surfacing as an imperceptible round in production.
+     *
+     * @return array<string, array{0: int, 1: int}>
+     */
     public static function durationAndRoundCountProvider(): array
     {
         $cases = [];
-        foreach ([
-            'TEN_HOURS' => CompetitionDuration::TEN_HOURS,
-            'ONE_DAY'   => CompetitionDuration::ONE_DAY,
-            'TWO_DAYS'  => CompetitionDuration::TWO_DAYS,
-            'ONE_WEEK'  => CompetitionDuration::ONE_WEEK,
-        ] as $durationName => $duration) {
-            $totalSeconds = (new \DateTimeImmutable())->add($duration->toInterval())->getTimestamp()
-                - (new \DateTimeImmutable())->getTimestamp();
+        foreach (CompetitionDuration::cases() as $duration) {
+            $durationName = $duration->name;
+            $now          = new \DateTimeImmutable();
+            $totalSeconds = $now->add($duration->toInterval())->getTimestamp() - $now->getTimestamp();
+
             foreach ([2, 3, 4, 5, 6] as $roundCount) {
                 $cases["{$durationName} / {$roundCount} rounds"] = [$totalSeconds, $roundCount];
             }
@@ -56,9 +64,12 @@ class CompetitionScheduleCalculatorTest extends TestCase
         $intervalSeconds = $this->calculator->intervalSeconds($totalSeconds, $roundCount);
         [$reveal, $intermission] = $this->calculator->splitInterval($intervalSeconds, 0.3);
 
-        // Every real duration x round-count combination (10h..1w, 2..6 rounds) comfortably
-        // clears the floor at the default ratio — the floor exists defensively for a future
-        // shorter duration/larger capacity, not because today's matrix needs it.
+        // Every real duration x round-count combination clears the floor at the default
+        // ratio, including the tightest one the admin can now pick: ONE_HOUR over a 64-entrant
+        // bracket is 3600/6 = 600s a round, splitting 420s reveal / 180s intermission — both
+        // comfortably above MIN_WINDOW_SECONDS (120) and above the 1-minute draw/resolve cron
+        // tick, so each phase is still visible to a player. Anything shorter added in future
+        // trips this assertion.
         $this->assertGreaterThan(0, $intermission, "Expected a real intermission window for {$totalSeconds}s / {$roundCount} rounds");
         $this->assertSame((int) round($intervalSeconds * 0.3), $intermission);
         $this->assertSame($intervalSeconds - $intermission, $reveal);

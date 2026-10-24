@@ -162,7 +162,17 @@ filename alone.
   (winner "Victory!" / loser "Eliminated", same `data` payload either
   way) for every fixture; for a non-final round, writes the **next**
   round's `scheduledAt` (`completedAt + intermissionSeconds`) without
-  drawing it — that's a later `CompetitionDrawService` tick; for the
+  drawing it — that's a later `CompetitionDrawService` tick. **The final
+  is the exception: its `scheduledAt` is the publishing instant, not
+  `+ intermissionSeconds`**, so the next draw tick (≤60s) picks it up.
+  Once the semi-final resolves there are exactly two entrants and one
+  possible fixture, so that draw can reveal nothing and an intermission
+  before it is dead time for the two finalists. It is still the draw
+  service that draws it — `scheduleNextRoundDraw()` only moves the clock,
+  so the draw stays behind its own atomic claim-lock, there is no
+  results↔draw service cycle, and the final keeps the normal fixture
+  seeding/inbox/push path (its existing "FINAL draw: X vs Y" message to
+  both finalists is unchanged). For the
   final round, crowns the winner(s), applies the prize via
   `RewardApplierService`, completes the `ActiveCompetition`, and sends a
   `COMPETITION_COMPLETED` push to the champion(s) (`result: "WON"`) and

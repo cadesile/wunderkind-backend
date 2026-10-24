@@ -129,20 +129,23 @@ class CompetitionLifecycleE2ETest extends KernelTestCase
         $this->em->refresh($round2);
         $this->assertSame(CompetitionRoundStatus::RESULTS_PUBLISHED, $round1->getStatus());
         $this->assertNotNull($round1->getCompletedAt());
-        $this->assertSame(CompetitionRoundStatus::DRAW_PENDING, $round2->getStatus(), 'Drawing the FINAL is a later, separate tick.');
-        $this->assertGreaterThan($round1->getCompletedAt(), $round2->getScheduledAt(), 'The FINAL\'s draw is scheduled into the intermission after round 1\'s results.');
+        $this->assertSame(CompetitionRoundStatus::DRAW_PENDING, $round2->getStatus(), 'Drawing the FINAL is still its own tick, just an immediate one.');
+        $this->assertEquals(
+            $round1->getCompletedAt(),
+            $round2->getScheduledAt(),
+            'The FINAL skips the intermission — after the semi-final there are two entrants and '
+            . 'exactly one possible fixture, so there is nothing for a draw to reveal and nothing '
+            . 'to make the finalists wait for.',
+        );
         $this->assertCount(0, $this->fixtureRepository->findByRoundOrderedBySlot($round2));
 
         foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round1) as $fixture) {
             $this->assertNotNull($fixture->getWinnerEntrant());
         }
 
-        // --- Intermission: the FINAL is not due to draw yet ----------------------------
-        $this->assertSame(0, $this->drawService->drawDueRounds(new \DateTimeImmutable()), 'Still in the intermission window.');
-
-        // --- Draw the FINAL -------------------------------------------------------------
-        $round2->setScheduledAt(new \DateTimeImmutable('-1 second'));
-        $this->em->flush();
+        // --- Draw the FINAL: due immediately, no intermission to wait out ---------------
+        // Nothing sets scheduledAt by hand here, unlike every other round in this test —
+        // publishing the semi-final's results is what made the FINAL due.
         $this->assertSame(1, $this->drawService->drawDueRounds(new \DateTimeImmutable()));
 
         $this->em->refresh($round2);
