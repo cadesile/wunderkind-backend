@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Entity\Club;
 use App\Entity\SyncRecord;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -79,28 +80,67 @@ class SyncRecordRepository extends ServiceEntityRepository
      * attached so the telemetry feed can render a club's real kit/badge, not just
      * its name. See docs/api/club-kit-identity.md.
      *
+     * **`payload` is PROJECTED down to $payloadKeys in SQL, not returned whole.** The
+     * caller holds this entire window in memory at once, and a decoded payload costs
+     * ~4.8x its stored JSON (measured), so what is not needed must never be fetched or
+     * decoded at all. `relationships[]` alone was ~60% of all payload bytes (up to
+     * 162 kB in a single row) and is read by nothing in LiveTelemetryService — see
+     * LiveTelemetryService::PAYLOAD_KEYS, which is the authoritative list and the
+     * reason this takes the keys as an argument rather than hardcoding them: the
+     * service owns what it reads, this method owns how to narrow it.
+     *
+     * A key absent from a payload stays absent (it is not nulled in), so every
+     * `?? []` / `?? null` read in the caller behaves exactly as it did when the whole
+     * payload was returned. The jsonb_typeof guard is not paranoia: SyncRecord::$payload
+     * defaults to `[]`, which json_encodes to a JSON *array*, and jsonb_each() raises
+     * "cannot call jsonb_each on a non-object" on one — a single such row would take
+     * down the whole refresh. No ORDER BY: every consumer sorts by `serverTimestamp`
+     * itself (see computeCommunityMoraleDelta(), attachClubDossiers(), every build*).
+     *
+     * @param array<int, string> $payloadKeys top-level payload keys to keep
+     *
      * @return array<int, array{payload: array<string, mixed>, serverTimestamp: \DateTimeImmutable, clubName: string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>
      */
-    public function findValidPayloadsSince(\DateTimeImmutable $since): array
+    public function findValidPayloadsSince(\DateTimeImmutable $since, array $payloadKeys): array
     {
-        $rows = $this->createQueryBuilder('s')
-            ->select('s.payload', 's.serverTimestamp', 'c.id AS clubId', 'c.name AS clubName', 'c.homeKitConfig AS homeKitConfig', 'c.awayKitConfig AS awayKitConfig', 'c.badgeConfig AS badgeConfig')
-            ->innerJoin('s.club', 'c')
-            ->where('s.isValid = true')
-            ->andWhere('s.serverTimestamp >= :since')
-            ->setParameter('since', $since)
-            ->getQuery()
-            ->getArrayResult();
+        if ($payloadKeys === []) {
+            return [];
+        }
+
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT (
+                        SELECT COALESCE(jsonb_object_agg(e.key, e.value), '{}'::jsonb)
+                        FROM jsonb_each(
+                                 CASE WHEN jsonb_typeof(sr.payload::jsonb) = 'object'
+                                      THEN sr.payload::jsonb
+                                      ELSE '{}'::jsonb
+                                 END
+                             ) AS e
+                        WHERE e.key IN (:keys)
+                    ) AS payload,
+                    sr.server_timestamp AS server_timestamp,
+                    c.id AS club_id,
+                    c.name AS club_name,
+                    c.home_kit_config AS home_kit_config,
+                    c.away_kit_config AS away_kit_config,
+                    c.badge_config AS badge_config
+             FROM sync_record sr
+             JOIN club c ON c.id = sr.club_id
+             WHERE sr.is_valid = true
+               AND sr.server_timestamp >= :since",
+            ['since' => $since->format('Y-m-d H:i:sP'), 'keys' => $payloadKeys],
+            ['keys' => ArrayParameterType::STRING],
+        );
 
         return array_map(
             static fn (array $row): array => [
-                'payload'         => $row['payload'],
-                'serverTimestamp' => $row['serverTimestamp'],
-                'clubId'          => (string) $row['clubId'],
-                'clubName'        => (string) $row['clubName'],
-                'homeKitConfig'   => $row['homeKitConfig'],
-                'awayKitConfig'   => $row['awayKitConfig'],
-                'badgeConfig'     => $row['badgeConfig'],
+                'payload'         => self::decodeJsonColumn($row['payload']) ?? [],
+                'serverTimestamp' => new \DateTimeImmutable($row['server_timestamp']),
+                'clubId'          => (string) $row['club_id'],
+                'clubName'        => (string) $row['club_name'],
+                'homeKitConfig'   => self::decodeJsonColumn($row['home_kit_config']),
+                'awayKitConfig'   => self::decodeJsonColumn($row['away_kit_config']),
+                'badgeConfig'     => self::decodeJsonColumn($row['badge_config']),
             ],
             $rows,
         );

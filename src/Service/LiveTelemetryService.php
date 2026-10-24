@@ -87,6 +87,58 @@ class LiveTelemetryService
     /** Each sync represents ~4 weeks of on-device ticks — used only for the footer's "weeks played" figure. */
     private const WEEKS_PER_SYNC = 4;
 
+    /**
+     * Floor that refresh() raises memory_limit to for the rest of the current process
+     * (or, under php-fpm, the rest of the current request).
+     *
+     * refresh() fetches the whole 24h window up front and holds it for the entire
+     * pipeline — a dozen build* passes each re-read the same already-decoded payload
+     * arrays — so peak usage scales with how much JSON that window holds, and a decoded
+     * PHP array costs several times its stored JSON. php-fpm's 128M default is not
+     * enough at production volume: the admin rebuild button died with "Allowed memory
+     * size of 134217728 bytes exhausted" inside DBAL's own json conversion
+     * (JsonTypeConvert.php:54), i.e. still decoding payloads, before any aggregation
+     * had run. Raising it here rather than in docker/telemetry-generate.sh covers BOTH
+     * callers from one place — the cron command (app:telemetry:generate) and the admin
+     * POST /admin/telemetry-config/rebuild button, which runs in a php-fpm worker whose
+     * limit that script never touches.
+     *
+     * Deliberately NOT restored afterwards: php-fpm resets ini_set() values at request
+     * shutdown and the CLI process exits straight after, so there is nothing to leak —
+     * whereas lowering the limit back mid-request, while the window's arrays may not yet
+     * be fully collected, would make the very next allocation fatal for no gain.
+     */
+    private const REFRESH_MEMORY_LIMIT_BYTES = 512 * 1024 * 1024;
+
+    /**
+     * The only top-level SyncRecord.payload keys this class reads. Passed to
+     * SyncRecordRepository::findValidPayloadsSince(), which projects the window down to
+     * them in SQL so nothing else is ever fetched or decoded — see that method for the
+     * mechanism, and REFRESH_MEMORY_LIMIT_BYTES above for why this matters so much:
+     * the whole window is held at once and a decoded payload costs ~4.8x its stored
+     * JSON. `relationships[]` was ~60% of all payload bytes and is read by nothing
+     * here; `facilityLevels[]`, `signings[]` and the scalar club-aggregate keys
+     * (balance, reputation, squadSize, ...) are likewise unread — SyncService already
+     * folds those into the Club row at sync time.
+     *
+     * **A build* method that starts reading a new key MUST add it here**, or that key
+     * arrives absent and the feature silently does nothing rather than erroring — the
+     * same failure shape CLAUDE.md warns about for Import/Export field coverage.
+     * LiveTelemetryPayloadProjectionTest reads the source of this class and fails if a
+     * `$payload['x']` / `$row['payload']['x']` read has no entry here.
+     */
+    public const PAYLOAD_KEYS = [
+        'attendance',
+        'excursions',
+        'fixtures',
+        'form',
+        'ledger',
+        'playerStats',
+        'promises',
+        'seasonRecord',
+        'transfers',
+    ];
+
     /** Ledger categories that represent money leaving the club (spend, not revenue). */
     private const SPEND_LEDGER_CATEGORIES = ['upkeep', 'wages'];
 
@@ -142,10 +194,12 @@ class LiveTelemetryService
 
     public function refresh(): void
     {
+        self::raiseMemoryLimit();
+
         $now   = new \DateTimeImmutable();
         $since = $now->modify('-' . self::WINDOW_HOURS . ' hours');
 
-        $syncRows = $this->syncRecordRepository->findValidPayloadsSince($since);
+        $syncRows = $this->syncRecordRepository->findValidPayloadsSince($since, self::PAYLOAD_KEYS);
         $result   = self::aggregate(array_column($syncRows, 'payload'));
 
         $pyramidRows = $this->seasonRecordRepository->findRecentPyramidEvents(
@@ -209,6 +263,44 @@ class LiveTelemetryService
             $tableTurnover,
         );
         $this->snapshotRepository->getEntityManager()->flush();
+    }
+
+    /**
+     * Raises memory_limit to REFRESH_MEMORY_LIMIT_BYTES unless it is already at least
+     * that high, or unlimited (-1). See that constant for why, and for why this is
+     * one-way with no restore.
+     */
+    private static function raiseMemoryLimit(): void
+    {
+        $current = self::memoryLimitToBytes((string) ini_get('memory_limit'));
+
+        if ($current === -1 || $current >= self::REFRESH_MEMORY_LIMIT_BYTES) {
+            return;
+        }
+
+        ini_set('memory_limit', (string) self::REFRESH_MEMORY_LIMIT_BYTES);
+    }
+
+    /**
+     * Resolves a memory_limit ini value — which may use PHP's K/M/G shorthand notation,
+     * so it cannot just be cast to int — to bytes. -1 (unlimited) is returned as-is.
+     */
+    private static function memoryLimitToBytes(string $limit): int
+    {
+        $limit = strtolower(trim($limit));
+
+        if ($limit === '' || $limit === '-1') {
+            return $limit === '-1' ? -1 : 0;
+        }
+
+        $value = (int) $limit;
+
+        return match (substr($limit, -1)) {
+            'g'     => $value * 1024 * 1024 * 1024,
+            'm'     => $value * 1024 * 1024,
+            'k'     => $value * 1024,
+            default => $value,
+        };
     }
 
     /**
