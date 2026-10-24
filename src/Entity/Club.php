@@ -94,6 +94,25 @@ class Club
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $starterInitializedAt = null;
 
+    /**
+     * The exact `ampStarter` payload POST /api/initialize/starter answered with the first
+     * time it ran, so a retry can be served instead of rejected.
+     *
+     * This is the only copy. Starter players and staff are pool entities: they are
+     * snapshotted and then **deleted** from the database (see Pool Lifecycle in CLAUDE.md),
+     * so once the response is built there is nothing left to rebuild it from. Before this
+     * column existed, a starter response lost in transit — a cancelled request, a
+     * backgrounded app, Sentry `155675759`'s native crash mid-"Assembling your squad…" —
+     * left the player permanently stuck: the squad was consumed, and every retry answered
+     * 409 "Starter already initialized."
+     *
+     * Null only for clubs initialized before this shipped; those still get the 409.
+     *
+     * @var array{players: array, staff: array, scouts: array}|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $starterPackJson = null;
+
     /** Set once when the client completes the first-launch tutorial. Survives reinstalls. */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $tutorialCompletedAt = null;
@@ -259,6 +278,12 @@ class Club
     public function getStarterInitializedAt(): ?\DateTimeImmutable { return $this->starterInitializedAt; }
     public function setStarterInitializedAt(?\DateTimeImmutable $v): static { $this->starterInitializedAt = $v; return $this; }
     public function isStarterInitialized(): bool { return $this->starterInitializedAt !== null; }
+
+    /** @return array{players: array, staff: array, scouts: array}|null */
+    public function getStarterPackJson(): ?array { return $this->starterPackJson; }
+
+    /** @param array{players: array, staff: array, scouts: array}|null $pack */
+    public function setStarterPackJson(?array $pack): static { $this->starterPackJson = $pack; return $this; }
 
     public function getTutorialCompletedAt(): ?\DateTimeImmutable { return $this->tutorialCompletedAt; }
     public function setTutorialCompletedAt(?\DateTimeImmutable $v): static { $this->tutorialCompletedAt = $v; return $this; }

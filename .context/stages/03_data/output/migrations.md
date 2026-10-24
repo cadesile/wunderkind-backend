@@ -242,3 +242,23 @@ row, so a bare `NOT NULL` add would fail. See
 Consistent with
 `02_architecture/output/git-activity.md`'s hotspot findings (Competition
 feature + admin panel polish).
+
+## Retry-safety migrations (2026-10-24)
+
+Three additive columns and two unique indexes, all from the production Sentry sweep
+(`docs/2026-10-24-sentry-sweep-backend-brief.md` and its answers doc), driven by the
+client gaining a retry queue — every one exists because a request the client now retries
+was not safe to retry:
+
+- `Version20261024012500` — `competition_result.computation_audit_json`, the
+  engine-agnostic match derivation audit (admin-only; never in a client payload).
+- `Version20261024132000` — `season_snapshot.response_json` plus
+  `uq_season_record_club_season` and `uq_season_snapshot_club_season`. Makes
+  `POST /api/league/conclude-season` idempotent per club + season. **Will fail if the
+  target database already holds duplicate `(club_id, season)` rows** — the migration's
+  own docblock carries the query to find them and says which row to keep, and why
+  (`hallOfFamePoints` is summed from `season_record`, so duplicates double-count titles).
+  Applied clean against the local prod restore; verify on prod before deploying.
+- `Version20261024140000` — `club.starter_pack_json`, so an already-initialized club can
+  be served its starter pack again instead of a 409. Deliberately left null for existing
+  clubs: their pool entities were deleted on consume, so those squads really are gone.

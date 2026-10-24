@@ -120,7 +120,12 @@ migrations are the change log (see `migrations.md`).
   charged; exists purely to make `app:reputation:decay` idempotent and
   catch-up-safe, see `docs/reputation-decay.md`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
   `country`, `abbreviation`, `worldInitializedAt/starterInitializedAt/
-  tutorialCompletedAt`, `paName`, `managerTemperament/managerDiscipline/
+  tutorialCompletedAt`, `starterPackJson:?array` (added by
+  `Version20261024140000`) — the `ampStarter` payload `POST /api/initialize/
+  starter` first answered with, and **the only copy that exists**: starter
+  players/staff are pool entities, deleted on consume, so before this a lost
+  response left the club initialized with no squad and a permanent 409 on
+  every retry. Null for clubs initialized before it shipped; those still 409. `paName`, `managerTemperament/managerDiscipline/
   managerAmbition:int(50)`, `balance:int` (the old `managerProfile:?array`
   blob is gone — the owning `User`'s own name/nationality/gender/dob is
   the single owner identity now, see Owner Identity in CLAUDE.md),
@@ -190,9 +195,19 @@ migrations are the change log (see `migrations.md`).
 - **`SeasonRecord`** — end-of-season league result. `season/
   finalPosition/gamesPlayed/wins/draws/losses/goalsFor/goalsAgainst/
   points:int`, `promoted/relegated:bool`. `ManyToOne` → `Club`, `League`
-  (both not nullable).
+  (both not nullable). **`UNIQUE(club, season)`**
+  (`uq_season_record_club_season`, added by `Version20261024132000`) — one
+  concluded season per club, enforced in the DB because `POST /api/league/
+  conclude-season` is client-retried and `hallOfFamePoints` is *summed* from
+  these rows, so a duplicate double-counted a title permanently.
 - **`SeasonSnapshot`** — season point-in-time snapshot. `season`,
-  `country`, `snapshotData:array`. `ManyToOne` → `Club` (not nullable).
+  `country`, `snapshotData:array`, `responseJson:?array` (added by
+  `Version20261024132000`) — the exact conclude-season response body, replayed
+  verbatim to a duplicate or late retry rather than recomputed (concluding
+  re-rolls sponsors and regenerates fixtures, so a recomputed reply would
+  describe a different world). `ManyToOne` → `Club` (not nullable).
+  **`UNIQUE(club, season)`** (`uq_season_snapshot_club_season`, same
+  migration). See Idempotent Conclude-Season in `services.md`.
 - **`SeasonRatingsSnapshot`** — denormalized ratings snapshot; stores
   `clubId`/`clubName` as plain strings, no FK relation. `season/weekNum/
   tier`, `overallRating`, `expectedPosition`.

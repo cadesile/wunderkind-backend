@@ -19,7 +19,14 @@ use Symfony\Component\Uid\UuidV7;
 
 /**
  * Supports the `Idempotency-Key` header on POST /api/competitions/*, POST /api/friendlies/*,
- * and POST /api/inbox/* endpoints.
+ * POST /api/inbox/*, POST /api/club/initialize and POST /api/league/conclude-season.
+ *
+ * The last two are exact paths rather than prefixes, and were added for the retry queue:
+ * both are one-shot writes whose response the client cannot afford to lose, and a key makes
+ * a retry return the first answer byte for byte. Note that for conclude-season this is the
+ * *cheap* layer only — the durable guarantee is domain-level, keyed on club + season in
+ * LeagueService::concludeSeason, because a request killed mid-flight never gets as far as
+ * caching a response here.
  *
  * Keyed by (user_id, method, path, idempotency_key) with a 24h TTL:
  * - Same key + same request body hash -> replays the cached status & JSON body.
@@ -29,6 +36,19 @@ class IdempotencySubscriber implements EventSubscriberInterface
 {
     public const HEADER_NAME = 'Idempotency-Key';
     private const ATTR_PENDING_KEY = '_idempotency_pending';
+
+    /** Whole families of write endpoints. */
+    private const PATH_PREFIXES = [
+        '/api/competitions/',
+        '/api/friendlies/',
+        '/api/inbox/',
+    ];
+
+    /** Single endpoints, where the prefix would be too broad to opt in wholesale. */
+    private const EXACT_PATHS = [
+        '/api/club/initialize',
+        '/api/league/conclude-season',
+    ];
 
     public function __construct(
         private readonly Security $security,
@@ -62,11 +82,7 @@ class IdempotencySubscriber implements EventSubscriberInterface
         $key = substr(trim($key), 0, 120);
 
         $path = $request->getPathInfo();
-        if (
-            !str_starts_with($path, '/api/competitions/')
-            && !str_starts_with($path, '/api/friendlies/')
-            && !str_starts_with($path, '/api/inbox/')
-        ) {
+        if (!$this->isIdempotentPath($path)) {
             return;
         }
 
@@ -112,6 +128,17 @@ class IdempotencySubscriber implements EventSubscriberInterface
             'key'      => $key,
             'bodyHash' => $bodyHash,
         ]);
+    }
+
+    private function isIdempotentPath(string $path): bool
+    {
+        foreach (self::PATH_PREFIXES as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return true;
+            }
+        }
+
+        return in_array($path, self::EXACT_PATHS, true);
     }
 
     public function onKernelResponse(ResponseEvent $event): void

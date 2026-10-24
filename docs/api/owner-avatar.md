@@ -45,7 +45,7 @@ explicitly clears it (see the `name`/`gender` behavior below).
 | Key | Type | Validation | Notes |
 |---|---|---|---|
 | `name` | `string \| null` | max 100 chars | display name |
-| `dob` | `string \| null` | `YYYY-MM-DD` | date of birth |
+| `dob` | `string \| null` | `YYYY-MM-DD`, optionally followed by a time | date of birth. A full ISO-8601 datetime is accepted — `"2008-05-12T00:00:00.000Z"`, i.e. `Date.toISOString()` output — and the time part is discarded. `""` means "clear it", the same as `null`. |
 | `gender` | `"male" \| "female" \| null` | fixed choice | — |
 | `nationality` | `string \| null` | max 60 chars | free text, not an enum — e.g. `"English"`, `"Brazilian"` (matches the demonym strings the rest of this API already uses for players/staff) |
 | `avatar` | `object \| null` | none (stored verbatim) | full sprite `Appearance` config — see §3 |
@@ -136,7 +136,28 @@ Staff/Scout/Agent.
 | Status | Cause |
 |---|---|
 | `401` | No/invalid JWT |
-| `422` | Validation failure — e.g. `gender` not `"male"`/`"female"`, `dob` not a valid date, `name`/`nationality` over the length limit |
+| `422` | Validation failure — e.g. `gender` not `"male"`/`"female"`, `dob` not parseable as a date, `name`/`nationality` over the length limit |
+
+A 422 here is `application/problem+json` and names the field that failed:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unprocessable Content",
+  "status": 422,
+  "error": "validation_failed",
+  "detail": "This value should be a date as Y-m-d, optionally followed by a time.",
+  "violations": [
+    { "propertyPath": "dob", "message": "This value should be a date as Y-m-d, optionally followed by a time.", "code": null }
+  ]
+}
+```
+
+This used to be Symfony's HTML error page whenever the request carried no
+`Accept: application/json` header, which is what the app sends — so the client
+received a 422 with nothing machine-readable in it at all. Every `/api/*` error
+is JSON now regardless of `Accept`; see "Error responses" in
+`docs/frontend-integration.md` for the shared shape.
 
 ## 5. Migration note for existing club-creation flows
 

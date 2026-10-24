@@ -5,6 +5,33 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-10-24), on top of commit 883f731** (uncommitted).
+  **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces
+  (`services.md`, `routes.md`). Backend half of the production Sentry sweep
+  (`docs/2026-10-24-sentry-sweep-backend-brief.md`; findings and answers in
+  `docs/2026-10-24-sentry-sweep-backend-answers.md`). Every item exists because the
+  client gained a retry queue and started treating an empty/truncated 2xx as retryable,
+  so requests that were never safe to retry now are:
+  1. `ApiExceptionSubscriber` — every `/api/*` error is `application/problem+json` with
+     `violations[]`, regardless of `Accept` (it was Symfony's HTML error page).
+  2. `LeagueService::concludeSeason()` idempotent per club+season — `UNIQUE(club, season)`
+     on both archive tables, first response stored on `SeasonSnapshot::$responseJson` and
+     replayed, `currentSeason` advanced only for the current season; new optional
+     `ConcludeSeasonRequest::$season`.
+  3. `POST /api/initialize/starter` replays `Club::$starterPackJson` instead of 409 (the
+     pack was previously unrecoverable once the response was lost).
+  4. `WorldPackCacheService::getOrBuild()` serializes a cache miss behind a Postgres
+     advisory lock and re-checks under it.
+  5. `IdempotencySubscriber` allowlist adds `/api/club/initialize` and
+     `/api/league/conclude-season`.
+  6. `OwnerAvatarRequest::$dob` accepts an ISO-8601 datetime, and `""` clears rather than
+     meaning today.
+  **Unactioned findings** (deliberately left for the human — production data/ops
+  decisions, see the answers doc): `StarterConfig.npcSquadConfig.coachCount` is 7–13 per
+  club against a code default of 1, inflating NPC staff 7–13×; `app:worldpack:warm` is not
+  in the deploy sequence and JP/US/NG/CA have only tiers 1–2 cached; JP is not in
+  `enabledCountries` yet clients are initializing into it.
+
 - **New pass (2026-10-24), on top of commit 68331a5** (uncommitted).
   **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces (`services.md`).
   1. Aligned the competition & friendly snapshot pipeline with `wunderkind-app`'s `TournamentSnapshotBuilder.ts` (`docs/api/competition-registration-snapshot.md`) and `docs/api/match-detail-club-fields.md`: added `CompetitionRegistrationService::normalizeSnapshotClub()`, `normalizeClubData()`, and `formatLineupForClient()`, preserved `players[].appearance` in `DeterministicEngine::calculatePerformance()`, explicitly validated `playingStyle` against `PlayingStyle`, omitted `stadiumName` and `playingStyle` (rather than emitting `null`) when unset, merged entrant `snapshotJson['club']` + `Club` entity fallbacks under frozen `homeClubJson`/`awayClubJson` on completed matches, and returned `identity`, `stadium`, `stadiumName`, `playingStyle`, `reputation`, `tier`, `badgeShape`, kit/badge configs, and lineup `appearance` across all competition, match, and friendly endpoints.

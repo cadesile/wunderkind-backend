@@ -205,6 +205,44 @@ renders an `@EasyAdmin`-extending template itself, so (per this
 directory's own `CLAUDE.md`) it's exempt from the `/admin?routeName=...`
 wrapping rule. See `controllers.md` for the full behavior.
 
+## Error shape on `/api/*`
+
+Every error on an `/api` path is JSON regardless of the request's `Accept`
+header — `ApiExceptionSubscriber` (see `services.md`) converts any uncaught
+exception to RFC 9457 `application/problem+json` with `error` (stable machine
+slug), `detail` and, for a failed request body, `violations[]`. Hand-written
+error responses in controllers keep their existing
+`{"error": ..., "message": ...}` shape; both carry `error`, so a client can
+read that key for either. `/admin` keeps Symfony's HTML error pages.
+
+**No `/api` route answers 2xx with an empty body** — every one returns via
+`$this->json(...)`; there is no `204` or bare `Response` among them. Verified
+by grep, and the client now treats an empty 2xx as a retryable transport
+failure, so this is a property to preserve: use `204` if an empty-bodied
+endpoint is ever wanted.
+
+## Retry safety / idempotency
+
+The `Idempotency-Key` header is honoured on POSTs under
+`/api/competitions/`, `/api/friendlies/`, `/api/inbox/` and on the exact paths
+`/api/club/initialize` and `/api/league/conclude-season`
+(`IdempotencySubscriber`). Beyond that header:
+
+| Route | Behaviour on retry |
+|---|---|
+| `POST /api/league/conclude-season` | Idempotent per club + season; replays the first response, writes nothing. Takes a new optional `season` in the payload — keying on the club's *current* season is unsafe for a late retry |
+| `POST /api/initialize/starter` | Replays the stored starter pack as `200` + `replayed: true`. Clubs predating `club.starter_pack_json` still get `409 starter_already_initialized` |
+| `POST /api/initialize/league/{tier}` | Cache-backed and now race-safe; concurrent calls for one country+tier are serialized and share one build |
+| `POST /api/club/initialize` | **Not** idempotent alone — creates an additional club. Does *not* collide on the club name (the duplicate check is against `NpcClub` only). Use an `Idempotency-Key` |
+
+Client-facing detail: **Retries and idempotency** in
+`docs/frontend-integration.md`; the full investigation is in
+`docs/2026-10-24-sentry-sweep-backend-answers.md`.
+
+Note `POST /api/initialize/starter` accepts any `Country` case in `?country=`
+and does **not** check `StarterConfig::enabledCountries`, so a client can
+initialize into a country the operator has not enabled or warmed.
+
 ## API spec
 
 **No OpenAPI/Swagger spec file exists.** The only Swagger-named files

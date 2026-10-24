@@ -29,6 +29,90 @@ All API requests must:
 
 ---
 
+## Error responses
+
+**Every error on an `/api/*` route is JSON, regardless of the `Accept` header.**
+Error bodies that come from the framework rather than from a controller —
+validation failures, unroutable paths, method mismatches, unhandled exceptions —
+are RFC 9457 `application/problem+json`:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unprocessable Content",
+  "status": 422,
+  "error": "validation_failed",
+  "detail": "This value is too long. It should have 100 characters or less.",
+  "violations": [
+    { "propertyPath": "name", "message": "This value is too long. It should have 100 characters or less.", "code": "d94b19cc-114f-4f44-9cc4-4138e80a87b9" }
+  ]
+}
+```
+
+| Key | Notes |
+|---|---|
+| `error` | Stable machine slug — branch on this, not on `detail`. `validation_failed`, `bad_request`, `unauthorized`, `forbidden`, `not_found`, `method_not_allowed`, `conflict`, `precondition_failed`, `unprocessable_entity`, `too_many_requests`, `server_error` |
+| `detail` | Human-readable. For a `5xx` this is always the fixed string `"An internal server error occurred."` — the real message is logged server-side only |
+| `violations` | Present only when a request body failed validation. One entry per field; `propertyPath` is the field name as sent |
+
+Hand-written error responses from individual endpoints keep their existing
+`{"error": "...", "message": "..."}` shape and `Content-Type: application/json`
+— those are documented per endpoint. Both shapes carry `error`, so reading
+`error` works for either.
+
+**No `/api/*` endpoint ever answers `2xx` with an empty body.** If you receive
+one, it is a truncated response and safe to treat as a transport failure.
+
+---
+
+## Retries and idempotency
+
+Two mechanisms, and for one-shot writes you want both.
+
+**1. The `Idempotency-Key` header.** Send a UUID you generate and reuse across
+retries of the same logical write. Supported on:
+
+- `POST /api/competitions/*`
+- `POST /api/friendlies/*`
+- `POST /api/inbox/*`
+- `POST /api/club/initialize`
+- `POST /api/league/conclude-season`
+
+Same key + same body replays the first response verbatim, with
+`X-Idempotent-Replay: true`. Same key + a *different* body is rejected
+`422 idempotency_key_reused`. Keys live 24h. This only replays a request the
+server actually finished — one killed mid-flight never cached a response, so it
+is not a substitute for the next mechanism.
+
+**2. Endpoint-level guarantees**, which hold with or without a key:
+
+| Endpoint | Guarantee |
+|---|---|
+| `POST /api/league/conclude-season` | Idempotent per club + season. Send `season` in the payload (see below). A duplicate or late retry replays the first response and writes nothing — no second `SeasonRecord`, no second `SeasonSnapshot`, no second season advance |
+| `POST /api/initialize/starter` | A club that is already initialized gets its stored starter pack back as `200` with `"replayed": true`, rather than `409`. (Clubs initialized before this shipped have no stored pack and still answer `409 starter_already_initialized` — their squads are genuinely unrecoverable) |
+| `POST /api/initialize/league/{tier}` | Safe to retry. Concurrent calls for the same country+tier are serialized server-side; the second gets the first one's payload rather than triggering a second world generation |
+| `POST /api/club/initialize` | **Not** idempotent on its own — a retry creates an additional club for the account (a user may own several; `GET /api/club/all` lists them). Use an `Idempotency-Key` if you need retry safety here. It does *not* fail on the club name: the name-taken check is against NPC clubs only, so retrying with the same name is fine |
+
+### `POST /api/league/conclude-season` — `season`
+
+Add `season` (integer) to the payload: the season the archive describes.
+
+It is the idempotency key, together with the club. **Keying on "the club's
+current season" is not sufficient** — once this call is queued, a retry can
+arrive after the next season has already started, and would then conclude *that*
+season by accident. Sending `season` explicitly is what makes a late retry safe
+as well as a duplicate one.
+
+Optional and backwards compatible: omitted, it falls back to the club's current
+season, which is the pre-existing behaviour. Concluding a season the club has not
+reached yet is rejected `422`.
+
+Server-side cost is ~65 ms for a full eight-tier pyramid with a 52 KB payload, so
+the 30 s client timeout is about the upload, not about server time. A replayed
+retry costs ~5 ms.
+
+---
+
 ## Balance model
 
 The academy has a server-side liquid `balance` (integer, pence/cents). It is updated on every accepted sync:

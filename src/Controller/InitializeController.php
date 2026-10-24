@@ -41,7 +41,8 @@ class InitializeController extends AbstractController
      * POST /api/initialize/starter
      *
      * Step 1: Assigns AMP squad (players, staff, scouts) to the club and returns the starter pack.
-     * Idempotent — returns starter data again if already initialized.
+     * Idempotent — a club that is already initialized gets its stored pack back with
+     * `replayed: true`, rather than a 409.
      */
     #[Route('/starter', name: 'api_initialize_starter', methods: ['POST'])]
     public function starter(Request $request): JsonResponse
@@ -64,6 +65,43 @@ class InitializeController extends AbstractController
         if ($club === null) {
             $this->logger->error('initialize.starter.club_not_found', ['userId' => (string) $user->getId()]);
             return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Replay rather than reject. The starter pack consumes pool entities and deletes
+        // them, so a response lost in transit used to strand the player for good: the squad
+        // was gone and every retry answered 409. The pack is now stored on the club at first
+        // init (Club::$starterPackJson) and handed back verbatim here.
+        //
+        // Checked ahead of the ?country= override below on purpose: a club that already has
+        // a squad must not have its country rewritten by a retry, because the stored pack
+        // was drawn for the country it had at the time.
+        if ($club->isStarterInitialized()) {
+            $storedPack = $club->getStarterPackJson();
+
+            if ($storedPack !== null) {
+                $this->logger->info('initialize.starter.replayed', [
+                    'clubId'               => (string) $club->getId(),
+                    'country'              => $club->getCountry(),
+                    'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
+                ]);
+
+                return $this->json(['ampStarter' => $storedPack, 'replayed' => true]);
+            }
+
+            // Initialized before $starterPackJson existed — there is genuinely nothing left
+            // to return, since the Player/Staff rows were deleted on consume.
+            $this->logger->error('initialize.starter.already_initialized_without_stored_pack', [
+                'clubId' => (string) $club->getId(),
+                'country' => $club->getCountry(),
+                'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
+            ]);
+            return $this->json(
+                [
+                    'error'   => 'starter_already_initialized',
+                    'message' => 'Starter already initialized, and this club predates stored starter packs.',
+                ],
+                Response::HTTP_CONFLICT
+            );
         }
 
         // Accept optional ?country= override
@@ -108,18 +146,6 @@ class InitializeController extends AbstractController
             return $this->json(
                 ['error' => "Player pool too small ({$poolCount} players). Run GenerateMarketDataCommand first."],
                 Response::HTTP_PRECONDITION_FAILED
-            );
-        }
-
-        if ($club->isStarterInitialized()) {
-            $this->logger->error('initialize.starter.already_initialized', [
-                'clubId' => (string) $club->getId(),
-                'country' => $club->getCountry(),
-                'starterInitializedAt' => $club->getStarterInitializedAt()?->format('c'),
-            ]);
-            return $this->json(
-                ['error' => 'Starter already initialized.'],
-                Response::HTTP_CONFLICT
             );
         }
 

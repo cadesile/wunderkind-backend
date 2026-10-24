@@ -15,6 +15,8 @@ use App\Enum\CompanySize;
 use App\Enum\LeaderboardCategory;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
+use App\Repository\SeasonRecordRepository;
+use App\Repository\SeasonSnapshotRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class LeagueService
@@ -26,6 +28,8 @@ class LeagueService
         private readonly FixtureGenerationService $fixtureGenerationService,
         private readonly HallOfFameScoreService   $hallOfFameScoreService,
         private readonly LeaderboardCalculationService $leaderboardCalculationService,
+        private readonly SeasonRecordRepository   $seasonRecordRepository,
+        private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
     ) {}
 
     /** @return League[] newly created leagues (skips tiers that already exist) */
@@ -200,7 +204,7 @@ class LeagueService
     }
 
     /**
-     * Concludes the current season for a club:
+     * Concludes one season for a club:
      * - Persists SeasonRecord + SeasonSnapshot
      * - Moves AMP club to new league based on dto->promoted/relegated
      * - Increments club.currentSeason
@@ -209,10 +213,41 @@ class LeagueService
      * NPC club/league structure is static pool data and is never mutated here.
      * Promotion/relegation of NPC clubs is managed entirely on the client.
      *
+     * **Idempotent per club + season.** The client queues this call and retries it on the
+     * next good connection, and a cancelled request can never be proven not to have reached
+     * the server — so a duplicate, or one arriving after the next season has already
+     * started, must be a no-op that answers exactly what the first call answered. That is
+     * why `$dto->season` exists: keying on the club's *current* season would let a late
+     * retry conclude the following season by accident. Three guards together:
+     *
+     *  1. `SeasonRecord` is unique on (club, season) in the database, so a duplicate row is
+     *     impossible even if two requests race past the check below.
+     *  2. The first call's response body is stored on `SeasonSnapshot::$responseJson` and
+     *     replayed verbatim, rather than recomputed — see that property's docblock for why
+     *     recomputing would be wrong.
+     *  3. `currentSeason` only advances when the season being concluded *is* the current
+     *     one, so concluding an older season late never skips a season forward.
+     *
      * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
      */
     public function concludeSeason(Club $club, ConcludeSeasonRequest $dto): array
     {
+        $currentSeason = $club->getCurrentSeason();
+        $targetSeason  = $dto->season ?? $currentSeason;
+
+        if ($targetSeason > $currentSeason) {
+            throw new \RuntimeException(sprintf(
+                'Cannot conclude season %d — this club has only reached season %d.',
+                $targetSeason,
+                $currentSeason,
+            ));
+        }
+
+        $alreadyConcluded = $this->seasonRecordRepository->findOneByClubAndSeason($club, $targetSeason);
+        if ($alreadyConcluded !== null) {
+            return $this->replayConcludedSeason($club, $alreadyConcluded, $dto, $targetSeason);
+        }
+
         $currentLeague = $club->getCurrentLeague();
         if ($currentLeague === null) {
             throw new \RuntimeException('Club has no current league assigned.');
@@ -223,7 +258,7 @@ class LeagueService
         $record = new SeasonRecord(
             club:          $club,
             league:        $currentLeague,
-            season:        $club->getCurrentSeason(),
+            season:        $targetSeason,
             finalPosition: $dto->finalPosition,
             gamesPlayed:   $dto->gamesPlayed,
             wins:          $dto->wins,
@@ -239,7 +274,7 @@ class LeagueService
 
         $snapshot = new SeasonSnapshot(
             club:         $club,
-            season:       $club->getCurrentSeason(),
+            season:       $targetSeason,
             country:      $country,
             snapshotData: [
                 'amp' => [
@@ -265,17 +300,16 @@ class LeagueService
         $this->em->persist($snapshot);
 
         // Move AMP club
-        $newLeague = null;
-        if ($dto->promoted && $currentLeague->getTier() > 1) {
-            $newLeague = $this->leagueRepository->findByCountryAndTier($country, $currentLeague->getTier() - 1);
-        } elseif ($dto->relegated && $currentLeague->getTier() < 8) {
-            $newLeague = $this->leagueRepository->findByCountryAndTier($country, $currentLeague->getTier() + 1);
-        }
+        $newLeague = $this->resolveNewLeague($currentLeague, $dto->promoted, $dto->relegated);
         if ($newLeague !== null) {
             $club->setCurrentLeague($newLeague);
         }
 
-        $club->setCurrentSeason($club->getCurrentSeason() + 1);
+        // Only when the season being concluded is the one the club is actually on. A late
+        // retry for an older season archives what is missing without moving the club on.
+        if ($targetSeason === $currentSeason) {
+            $club->setCurrentSeason($currentSeason + 1);
+        }
 
         $gameConfig = $this->gameConfigRepository->getConfig();
 
@@ -290,10 +324,98 @@ class LeagueService
         $this->leaderboardCalculationService->invalidate(LeaderboardCategory::HALL_OF_FAME);
         $this->em->flush();
 
+        $response = $this->buildConcludeResponse(
+            $record,
+            $newLeague,
+            $hallOfFamePoints,
+            $country,
+            $gameConfig,
+            $dto->pyramidSnapshot,
+        );
+
+        $this->storeConcludeResponse($snapshot, $response);
+
+        return $response;
+    }
+
+    /**
+     * Answers a duplicate or late conclude for a season this club has already finished,
+     * without writing anything a second time.
+     *
+     * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
+     */
+    private function replayConcludedSeason(
+        Club                 $club,
+        SeasonRecord         $record,
+        ConcludeSeasonRequest $dto,
+        int                  $season,
+    ): array {
+        $snapshot = $this->seasonSnapshotRepository->findByClubAndSeason($club, $season);
+
+        $stored = $snapshot?->getResponseJson();
+        if (is_array($stored) && $stored !== []) {
+            return $stored;
+        }
+
+        // Concluded, but with no stored body to replay: either a row written before
+        // $responseJson existed, or the narrow window where the first attempt committed the
+        // archive and then died before it finished building the pyramid. Rebuild it once from
+        // the record — which already carries the league and the promoted/relegated flags — and
+        // store it, so every later retry takes the cheap path above.
+        $league  = $record->getLeague();
+        $pyramid = $dto->pyramidSnapshot !== []
+            ? $dto->pyramidSnapshot
+            : (is_array($snapshot?->getSnapshotData()['pyramid'] ?? null) ? $snapshot->getSnapshotData()['pyramid'] : []);
+
+        $response = $this->buildConcludeResponse(
+            $record,
+            $this->resolveNewLeague($league, $record->isPromoted(), $record->isRelegated()),
+            $club->getHallOfFamePoints(),
+            $league->getCountry(),
+            $this->gameConfigRepository->getConfig(),
+            $pyramid,
+        );
+
+        if ($snapshot !== null) {
+            $this->storeConcludeResponse($snapshot, $response);
+        }
+
+        return $response;
+    }
+
+    /**
+     * The league a club moves to given the one it just finished in. Shared by the fresh
+     * conclude and the replay rebuild so both can only ever agree; tier 1 cannot promote
+     * and tier 8 cannot relegate.
+     */
+    private function resolveNewLeague(League $from, bool $promoted, bool $relegated): ?League
+    {
+        if ($promoted && $from->getTier() > 1) {
+            return $this->leagueRepository->findByCountryAndTier($from->getCountry(), $from->getTier() - 1);
+        }
+
+        if ($relegated && $from->getTier() < 8) {
+            return $this->leagueRepository->findByCountryAndTier($from->getCountry(), $from->getTier() + 1);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed> $pyramidSnapshot
+     * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
+     */
+    private function buildConcludeResponse(
+        SeasonRecord $record,
+        ?League      $newLeague,
+        int          $hallOfFamePoints,
+        string       $country,
+        GameConfig   $gameConfig,
+        array        $pyramidSnapshot,
+    ): array {
         // Compute new league membership from the snapshot's promotion/relegation flags,
         // then build the full pyramid: financials, clubs per league, and new fixtures.
-        $newLeagueMembership = $this->computeNewLeagueMembership($dto->pyramidSnapshot, $country);
-        $leagues = $this->buildSeasonPyramid($country, $gameConfig, $newLeagueMembership);
+        $newLeagueMembership = $this->computeNewLeagueMembership($pyramidSnapshot, $country);
 
         return [
             'seasonRecordId'   => (string) $record->getId(),
@@ -303,8 +425,30 @@ class LeagueService
                 'tier' => $newLeague->getTier(),
                 'name' => $newLeague->getName(),
             ] : null,
-            'leagues'        => $leagues,
+            'leagues'        => $this->buildSeasonPyramid($country, $gameConfig, $newLeagueMembership),
         ];
     }
 
+    /**
+     * Writes the replayable body with raw SQL rather than an ORM flush, for two reasons that
+     * both matter here: `json` columns holding mixed types are silently skipped by Doctrine's
+     * dirty check (see CLAUDE.md), and more importantly buildSeasonPyramid() has just called
+     * rollLeagueSponsors(), which mutates managed LeagueSponsor entities. Those re-rolls are
+     * deliberately *not* persisted today — they only ever appear in the response — and a
+     * flush here would start committing them as a side effect of adding this column.
+     *
+     * @param array<string, mixed> $response
+     */
+    private function storeConcludeResponse(SeasonSnapshot $snapshot, array $response): void
+    {
+        $snapshot->setResponseJson($response);
+
+        $this->em->getConnection()->executeStatement(
+            'UPDATE season_snapshot SET response_json = :json WHERE id = :id',
+            [
+                'json' => json_encode($response, JSON_THROW_ON_ERROR),
+                'id'   => (string) $snapshot->getId(),
+            ],
+        );
+    }
 }
