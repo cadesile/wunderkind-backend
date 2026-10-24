@@ -13,6 +13,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -159,6 +160,25 @@ class UserCrudController extends AbstractCrudController
             ->setFormType(AppearanceType::class)
             ->setFormTypeOptions(['person_type' => 'staff'])
             ->onlyOnForms();
+
+        // ── Panel: Developer / Debug ─────────────────────────────────────────
+        yield FormField::addFieldset('Developer / Debug', 'fa fa-bug')->hideOnIndex();
+
+        // Rendered as a plain yes/no on the index rather than EasyAdmin's inline AJAX
+        // switch (renderAsSwitch(false)): this exposes a panel that logs every API request
+        // and response for the account, so it should take opening the edit form, not a
+        // stray click while scanning a user list.
+        yield BooleanField::new('debugLoggingEnabled', 'Debug panel')
+            ->renderAsSwitch(false)
+            ->setHelp(
+                'Shows the <strong>cog icon</strong> in this account\'s bottom navigation, opening the '
+                . 'in-app debug log panel that records all API requests and responses. Use this to debug '
+                . 'one player without exposing the panel to everyone. '
+                . 'Additive only: the global switch (Game Config &rarr; Developer / Debug) already turns '
+                . 'the panel on for every account, so this flag only has an effect while that one is off, '
+                . 'and can never turn the panel off for this account. '
+                . 'Takes effect on the account\'s next authenticated <code>GET /api/game-config</code>.'
+            );
     }
 
     public function detail(AdminContext $context): Response

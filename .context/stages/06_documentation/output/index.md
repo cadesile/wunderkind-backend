@@ -68,6 +68,12 @@ claiming canonical status)
   shape as the bundled locale files), plus the `?lang=` localize-in-place
   param on `/api/events/templates`, `/api/excursions`, `/api/game-config`
   for narrative content — see "Languages & Translations" in CLAUDE.md
+- `docs/api/debug-logging.md` (2026-10-24) — where a client reads
+  `debugLoggingEnabled` now that it can vary per account. Says to read it from the
+  authenticated `GET /api/club/status` rather than the public
+  `GET /api/game-config`, because an anonymous cold-boot fetch of the latter can
+  only ever see the global switch; and that the per-account flag is additive to the
+  global one, never an override downwards — see `User` in `03_data/output/entities.md`
 - `docs/api/trophy-config.md` (2026-10-18) — the `trophy` sprite config that
   **replaced** `trophyImage`/`trophyColour` on league and competition payloads:
   shape, the 12-colour ribbon palette, the legacy slug/colour mapping (so a

@@ -37,6 +37,16 @@
                                         <i class="fa fa-circle-exclamation me-1" aria-hidden="true"></i>Unverified
                                     </span>
                                 {% endif %}
+                                {# Only shown when ON: a per-account debug panel is the
+                                   exception, so an absent pill means the normal state.
+                                   The global Game Config switch is a separate, wider
+                                   thing and is deliberately not reflected here. #}
+                                {% if user.debugLoggingEnabled %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"
+                                          title="In-app debug log panel is enabled for this account (records all API requests and responses)">
+                                        <i class="fa fa-bug me-1" aria-hidden="true"></i>Debug panel
+                                    </span>
+                                {% endif %}
                                 <span class="text-muted small">
                                     <i class="fa fa-calendar me-1" aria-hidden="true"></i>
                                     Joined {{ user.createdAt|date('d M Y') }}
