@@ -10,6 +10,7 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\User;
+use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -206,5 +207,126 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
         self::assertResponseIsSuccessful('invalid input re-renders the form, not a redirect');
         $this->assertStringContainsString('not valid JSON', $crawler->text());
         $this->assertStringContainsString($malformedJson, $crawler->text(), 'pasted text must survive a validation error');
+    }
+
+    /**
+     * The detail-page "Generate Spoof" action: same process as the Create Spoof screen with
+     * Randomise ticked, but sourced from the entrant being viewed. Driven through the real
+     * confirm form rather than by calling the service, so the action link, the CSRF-guarded
+     * POST and the redirect are all exercised.
+     */
+    public function testGenerateSpoofFromAnEntrantCreatesARandomisedClone(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $competition = $this->buildOpenCompetition($em, capacity: 8);
+        $user        = new User('spoof-source-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $club = new Club('Source Town', $user);
+        $em->persist($user);
+        $em->persist($club);
+
+        $entrant = new CompetitionEntrant($competition, $club, 1, $this->pastedSnapshot());
+        $em->persist($entrant);
+        $em->flush();
+
+        $before = $this->entrantCount($em, $competition);
+
+        $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
+        self::assertResponseIsSuccessful();
+
+        $crawler = $client->click($crawler->selectLink('Generate Spoof')->link());
+        self::assertResponseIsSuccessful();
+        $this->assertStringContainsString('Source Town', $crawler->text(), 'The confirm page names the entrant being cloned.');
+
+        $client->submit($crawler->selectButton('Generate Spoof')->form());
+        self::assertResponseRedirects();
+        $client->followRedirect();
+
+        $this->assertSame($before + 1, $this->entrantCount($em, $competition));
+
+        /** @var list<CompetitionEntrant> $clones */
+        $clones = $em->createQuery(
+            'SELECT e FROM App\\Entity\\Competition\\CompetitionEntrant e WHERE e.activeCompetition = :c AND e.id != :source'
+        )->setParameter('c', $competition)->setParameter('source', $entrant->getId())->getResult();
+
+        $this->assertCount(1, $clones);
+        $clone = $clones[0];
+
+        $this->assertTrue($clone->getClub()->isSpoof(), 'The clone must be tagged isSpoof so Clear Spoof Clubs can find it later.');
+
+        // The actual proof that Randomise was on: it renames the players inside the snapshot.
+        // The club gets a fresh name either way, so asserting on that would pass even with
+        // Randomise off and prove nothing.
+        $clonedPlayerNames = array_column($clone->getSnapshotJson()['players'], 'name');
+        $this->assertNotEmpty($clonedPlayerNames);
+        $this->assertNotContains(
+            'Pasted Player 0',
+            $clonedPlayerNames,
+            'With Randomise on the squad is renamed; an unrandomised clone would carry the source names through verbatim.',
+        );
+    }
+
+    public function testGenerateSpoofIsHiddenOnceTheCompetitionIsNoLongerRegistering(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $competition = $this->buildOpenCompetition($em, capacity: 4);
+        $competition->setStatus(ActiveCompetitionStatus::COMPLETED);
+
+        $user = new User('spoof-closed-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $club = new Club('Closed Town', $user);
+        $em->persist($user);
+        $em->persist($club);
+
+        $entrant = new CompetitionEntrant($competition, $club, 1, $this->pastedSnapshot());
+        $em->persist($entrant);
+        $em->flush();
+
+        $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
+        self::assertResponseIsSuccessful();
+
+        $this->assertCount(
+            0,
+            $crawler->selectLink('Generate Spoof'),
+            'An action that could only ever flash "no longer accepting registrations" should not be offered.',
+        );
+    }
+
+    public function testGenerateSpoofRejectsAPostWithoutAValidCsrfToken(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $competition = $this->buildOpenCompetition($em, capacity: 8);
+        $user        = new User('spoof-csrf-' . uniqid('', true) . '@example.com');
+        $user->setPassword('x');
+        $club = new Club('Csrf Town', $user);
+        $em->persist($user);
+        $em->persist($club);
+
+        $entrant = new CompetitionEntrant($competition, $club, 1, $this->pastedSnapshot());
+        $em->persist($entrant);
+        $em->flush();
+
+        $before = $this->entrantCount($em, $competition);
+
+        $client->request('POST', '/admin/competition-entrant/' . $entrant->getId() . '/generate-spoof', ['_token' => 'wrong']);
+        self::assertResponseRedirects();
+
+        $this->assertSame($before, $this->entrantCount($em, $competition), 'A bad token must create nothing.');
+    }
+
+    private function entrantCount(EntityManagerInterface $em, ActiveCompetition $competition): int
+    {
+        return (int) $em->createQuery('SELECT COUNT(e.id) FROM App\Entity\Competition\CompetitionEntrant e WHERE e.activeCompetition = :c')
+            ->setParameter('c', $competition)
+            ->getSingleScalarResult();
     }
 }

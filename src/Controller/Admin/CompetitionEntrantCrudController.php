@@ -8,6 +8,7 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\ActiveCompetitionRepository;
+use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -34,7 +35,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * hand-edited, so every action is disabled — same reasoning as
  * ActiveCompetitionCrudController/CompetitionRoundCrudController.
  *
- * Two deliberate exceptions to "never hand-edited", both admin test-data tools:
+ * Three deliberate exceptions to "never hand-edited", all admin test-data tools:
  *
  * - "Generate Spoof Entrants" lives on ActiveCompetitionCrudController (the competition
  *   row/detail page), not here — spoofing fills out a competition, so the trigger belongs
@@ -44,13 +45,20 @@ use Symfony\Component\Routing\Attribute\Route;
  *   registers it into a chosen open competition, for precisely reproducing a specific test
  *   scenario rather than cloning/randomly varying an existing one. See
  *   CompetitionSpoofEntrantService::createSpoofEntrantFromSnapshot().
+ * - "Generate Spoof" lives on an entrant's own DETAIL page: the same call as "Create Spoof"
+ *   with Randomise ticked, but sourced from the entrant being viewed and registered into its
+ *   own competition, so there is nothing to paste or choose. Only offered while that
+ *   competition is still REGISTERING, since the service refuses otherwise.
  *
  * `club.isSpoof` is surfaced on this index/detail so any spoof-generated entrant (from
  * either tool) stays identifiable from this debugging view.
  */
 class CompetitionEntrantCrudController extends AbstractCrudController
 {
-    public function __construct(private readonly ActiveCompetitionRepository $activeCompetitionRepository) {}
+    public function __construct(
+        private readonly ActiveCompetitionRepository $activeCompetitionRepository,
+        private readonly CompetitionEntrantRepository $entrantRepository,
+    ) {}
 
     public static function getEntityFqcn(): string
     {
@@ -91,12 +99,24 @@ class CompetitionEntrantCrudController extends AbstractCrudController
             ->createAsGlobalAction()
             ->linkToUrl(fn () => $this->generateUrl('admin', ['routeName' => 'admin_competition_entrant_create_spoof']));
 
+        // Clones THIS entrant's snapshot, randomised — the "Create Spoof" screen's process
+        // with Randomise ticked, minus the paste. Shown only while the entrant's own
+        // competition is still REGISTERING, because the service refuses otherwise: an action
+        // that can only ever flash an error is worse than no action.
+        $generateSpoof = Action::new('generateSpoofFromEntrant', 'Generate Spoof', 'fa fa-clone')
+            ->linkToUrl(fn (CompetitionEntrant $entrant) => $this->generateUrl('admin', [
+                'routeName'   => 'admin_competition_entrant_generate_spoof',
+                'routeParams' => ['entrant' => (string) $entrant->getId()],
+            ]))
+            ->displayIf(static fn (CompetitionEntrant $entrant): bool => $entrant->getActiveCompetition()->getStatus() === ActiveCompetitionStatus::REGISTERING);
+
         // EDIT is disabled, so EasyAdmin's default row-click fallback ([EDIT, DETAIL])
         // needs DETAIL explicitly present in the index actions to click through to it.
         return $actions
             ->disable(Action::NEW, Action::EDIT, Action::DELETE)
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
-            ->add(Crud::PAGE_INDEX, $createSpoof);
+            ->add(Crud::PAGE_INDEX, $createSpoof)
+            ->add(Crud::PAGE_DETAIL, $generateSpoof);
     }
 
     public function configureFields(string $pageName): iterable
@@ -125,6 +145,74 @@ class CompetitionEntrantCrudController extends AbstractCrudController
             ->setLanguage('js')
             ->setNumOfRows(24)
             ->onlyOnDetail();
+    }
+
+    /**
+     * Registers a new spoof entrant built from THIS entrant's snapshot, randomised.
+     *
+     * Identical to what admin_competition_entrant_create_spoof does with "Randomise" ticked —
+     * same service call, same validation — except the snapshot comes from the entrant being
+     * viewed instead of being pasted in, and the competition is its own rather than chosen.
+     *
+     * GET renders a confirmation; POST does the work behind a CSRF token. A bare GET link
+     * must not create data: EasyAdmin actions are links, and browsers (and link prefetchers)
+     * follow those freely. Same split as admin_active_competition_generate_spoof.
+     *
+     * Two-segment path under the entrant id, so unlike the create-spoof route above it does
+     * not collide with EasyAdmin's /admin/competition-entrant/{entityId} detail route.
+     */
+    #[Route('/admin/competition-entrant/{entrant}/generate-spoof', name: 'admin_competition_entrant_generate_spoof', methods: ['GET', 'POST'])]
+    public function generateSpoofFromEntrant(CompetitionEntrant $entrant, Request $request, CompetitionSpoofEntrantService $service): Response
+    {
+        // An EasyAdmin pretty CRUD route — it builds its own crud/entity context on a direct
+        // match, so it must NOT be wrapped in the /admin?routeName=... forwarding used for
+        // this action's own route. See ActiveCompetitionCrudController for the same note.
+        $detailUrl   = $this->generateUrl('admin_competition_entrant_detail', ['entityId' => (string) $entrant->getId()]);
+        $competition = $entrant->getActiveCompetition();
+
+        if ($competition->getStatus() !== ActiveCompetitionStatus::REGISTERING) {
+            $this->addFlash('danger', 'This competition is no longer accepting registrations.');
+
+            return $this->redirect($detailUrl);
+        }
+
+        if ($request->isMethod('POST')) {
+            if (!$this->isCsrfTokenValid('generate_spoof_from_entrant', $request->request->get('_token'))) {
+                $this->addFlash('danger', 'Invalid CSRF token.');
+
+                return $this->redirect($detailUrl);
+            }
+
+            try {
+                $spoof = $service->createSpoofEntrantFromSnapshot($competition, $entrant->getSnapshotJson(), randomise: true);
+            } catch (SpoofSnapshotValidationException $e) {
+                // A snapshot already accepted at registration can still fail here if the
+                // validator has tightened since — report it rather than swallowing it.
+                $this->addFlash('danger', 'That snapshot no longer validates: ' . implode(' ', $e->getViolations()));
+
+                return $this->redirect($detailUrl);
+            } catch (\RuntimeException $e) {
+                $this->addFlash('danger', $e->getMessage());
+
+                return $this->redirect($detailUrl);
+            }
+
+            $this->addFlash('success', sprintf('Created spoof entrant "%s".', $spoof->getClub()->getName()));
+
+            return $this->redirect($this->generateUrl('admin_competition_entrant_detail', ['entityId' => (string) $spoof->getId()]));
+        }
+
+        return $this->render('admin/competition/generate_spoof_from_entrant.html.twig', [
+            'competition'  => $competition,
+            'clubName'     => $entrant->getClub()->getName(),
+            'playerCount'  => $entrant->getSnapshotPlayerCount(),
+            'remaining'    => $competition->getEntrantCapacity() - $this->entrantRepository->countForCompetition($competition),
+            'detailUrl'    => $detailUrl,
+            'actionUrl'    => $this->generateUrl('admin', [
+                'routeName'   => 'admin_competition_entrant_generate_spoof',
+                'routeParams' => ['entrant' => (string) $entrant->getId()],
+            ]),
+        ]);
     }
 
     // A single extra path segment here (e.g. /admin/competition-entrant/create-spoof) would
