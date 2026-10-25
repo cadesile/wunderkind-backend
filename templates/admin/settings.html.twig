@@ -53,6 +53,35 @@
         </div>
     </div>
 
+    {# Clear Spoof Clubs #}
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title fw-semibold small">
+                    <i class="fa fa-ghost text-secondary me-1"></i> Clear Spoof Clubs
+                </h6>
+                <p class="card-text text-muted small">
+                    Permanently deletes every spoof club generated for testing, along with the throwaway
+                    account that owns it and everything hanging off it — competition entries and their
+                    snapshots, leaderboard rows, season records and match results. Real clubs are untouched:
+                    an account is only removed when every club it owns is a spoof.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                {# Posts through EasyAdmin's entry point: this page extends @EasyAdmin/layout.html.twig,
+                   whose `ea` context only exists for routes EasyAdmin created. See
+                   src/Controller/Admin/CLAUDE.md. #}
+                <form method="POST" action="{{ path('admin', {routeName: 'admin_purge_spoof_clubs'}) }}" class="d-inline"
+                      onsubmit="return confirmAction(this, 'Permanently delete ALL spoof clubs and their accounts? This cannot be undone.')">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('purge_spoof_clubs') }}">
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fa fa-trash me-1"></i> Clear Spoof Clubs
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     {# Generate Leaderboards #}
     <div class="col-md-4">
         <div class="card h-100">

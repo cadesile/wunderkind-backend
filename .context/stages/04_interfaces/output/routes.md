@@ -95,6 +95,12 @@ serve these paths identically; see `01_overview/output/environment.md`.
   `/admin/leagues/overview|generate`, `/admin/facilities/overview`,
   `/admin/world/content|export|import`, `/admin/worldpack-cache`,
   `/admin/developer-tools/trigger-age21|cleanup-entities|generate-leaderboards|reset-database|nuclear-reset`,
+  `/admin/developer-tools/purge-spoof-clubs` (`POST`, CSRF-guarded — the
+  Settings screen's "Clear Spoof Clubs" button, running
+  `app:clubs:purge-spoof`; unlike the older Developer Tools buttons beside it
+  this one posts to and redirects through `/admin?routeName=...`, which is what
+  `src/Controller/Admin/CLAUDE.md` requires of any action rendering an
+  `@EasyAdmin`-extending template),
   `/admin/logs`, `/admin/telemetry-config` + `POST
   /admin/telemetry-config/rebuild` (read-only view of the
   `LiveTelemetrySnapshot` singleton plus a CSRF-guarded force-rebuild button —

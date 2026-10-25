@@ -1282,6 +1282,40 @@ class DashboardController extends AbstractDashboardController
         return $this->redirectToRoute('admin_settings');
     }
 
+    /**
+     * Deletes every spoof club and its throwaway owning account (app:clubs:purge-spoof).
+     *
+     * Unlike its neighbours here, this one posts to and redirects through EasyAdmin's entry
+     * point (/admin?routeName=...). settings.html.twig extends @EasyAdmin/layout.html.twig,
+     * and the `ea` Twig context is only populated for routes EasyAdmin itself created — see
+     * src/Controller/Admin/CLAUDE.md. The older buttons on this screen still use the plain
+     * route; they are not changed here, but new ones should not copy that.
+     */
+    #[Route('/admin/developer-tools/purge-spoof-clubs', name: 'admin_purge_spoof_clubs', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function purgeSpoofClubs(Request $request, KernelInterface $kernel): Response
+    {
+        $settingsUrl = $this->generateUrl('admin', ['routeName' => 'admin_settings']);
+
+        if (!$this->isCsrfTokenValid('purge_spoof_clubs', $request->request->get('_csrf_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->redirect($settingsUrl);
+        }
+
+        $application = new Application($kernel);
+        $application->setAutoExit(false);
+
+        $input  = new ArrayInput(['command' => 'app:clubs:purge-spoof']);
+        $output = new BufferedOutput();
+        $application->run($input, $output);
+
+        $this->addFlash('success', 'Spoof clubs purged.');
+        $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));
+
+        return $this->redirect($settingsUrl);
+    }
+
     #[Route('/admin/developer-tools/generate-leaderboards', name: 'admin_generate_leaderboards', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
     public function generateLeaderboards(Request $request, KernelInterface $kernel): Response
