@@ -66,6 +66,57 @@ enum Country: string
     case EG = 'EG';
     case TN = 'TN';
 
+    // ── Remaining UEFA members, added 2026-10-25 ─────────────────────────
+    // NATIONALITY options only, unlike the eleven above: none is listed in
+    // isGenerationCapable() (which defaults to false) and none is in
+    // StarterConfig::$enabledCountries, so no pyramid is generated for them and
+    // no one can found a club there. Keeping those two notions apart is what the
+    // class docblock is about. Russia is deliberately absent.
+    //
+    // NI is Northern Ireland and collides with ISO's code for Nicaragua; XK is
+    // Kosovo (ISO user-assigned). Both follow the pseudo-code precedent EN set.
+    // The app never derives a flag from a code — see countryCodeToFlag — because
+    // deriving from SC or NI renders Seychelles and Nicaragua respectively.
+    case AL = 'AL';
+    case AD = 'AD';
+    case AM = 'AM';
+    case AT = 'AT';
+    case AZ = 'AZ';
+    case BY = 'BY';
+    case BA = 'BA';
+    case BG = 'BG';
+    case HR = 'HR';
+    case CY = 'CY';
+    case CZ = 'CZ';
+    case EE = 'EE';
+    case FO = 'FO';
+    case FI = 'FI';
+    case GE = 'GE';
+    case GI = 'GI';
+    case GR = 'GR';
+    case HU = 'HU';
+    case IS = 'IS';
+    case IL = 'IL';
+    case KZ = 'KZ';
+    case XK = 'XK';
+    case LV = 'LV';
+    case LI = 'LI';
+    case LT = 'LT';
+    case LU = 'LU';
+    case MT = 'MT';
+    case MD = 'MD';
+    case ME = 'ME';
+    case MK = 'MK';
+    case NI = 'NI';
+    case NO = 'NO';
+    case RO = 'RO';
+    case SM = 'SM';
+    case RS = 'RS';
+    case SK = 'SK';
+    case SI = 'SI';
+    case CH = 'CH';
+    case UA = 'UA';
+
     /** Display name, e.g. for the landing page and admin dropdowns. */
     public function label(): string
     {
@@ -102,6 +153,45 @@ enum Country: string
             self::TN => 'Tunisia',
             self::US => 'USA',
             self::CA => 'Canada',
+            self::AL => 'Albania',
+            self::AD => 'Andorra',
+            self::AM => 'Armenia',
+            self::AT => 'Austria',
+            self::AZ => 'Azerbaijan',
+            self::BY => 'Belarus',
+            self::BA => 'Bosnia and Herzegovina',
+            self::BG => 'Bulgaria',
+            self::HR => 'Croatia',
+            self::CY => 'Cyprus',
+            self::CZ => 'Czechia',
+            self::EE => 'Estonia',
+            self::FO => 'Faroe Islands',
+            self::FI => 'Finland',
+            self::GE => 'Georgia',
+            self::GI => 'Gibraltar',
+            self::GR => 'Greece',
+            self::HU => 'Hungary',
+            self::IS => 'Iceland',
+            self::IL => 'Israel',
+            self::KZ => 'Kazakhstan',
+            self::XK => 'Kosovo',
+            self::LV => 'Latvia',
+            self::LI => 'Liechtenstein',
+            self::LT => 'Lithuania',
+            self::LU => 'Luxembourg',
+            self::MT => 'Malta',
+            self::MD => 'Moldova',
+            self::ME => 'Montenegro',
+            self::MK => 'North Macedonia',
+            self::NI => 'Northern Ireland',
+            self::NO => 'Norway',
+            self::RO => 'Romania',
+            self::SM => 'San Marino',
+            self::RS => 'Serbia',
+            self::SK => 'Slovakia',
+            self::SI => 'Slovenia',
+            self::CH => 'Switzerland',
+            self::UA => 'Ukraine',
         };
     }
 
@@ -147,6 +237,45 @@ enum Country: string
             self::TN => 'Tunisian',
             self::US => 'American',
             self::CA => 'Canadian',
+            self::AL => 'Albanian',
+            self::AD => 'Andorran',
+            self::AM => 'Armenian',
+            self::AT => 'Austrian',
+            self::AZ => 'Azerbaijani',
+            self::BY => 'Belarusian',
+            self::BA => 'Bosnian',
+            self::BG => 'Bulgarian',
+            self::HR => 'Croatian',
+            self::CY => 'Cypriot',
+            self::CZ => 'Czech',
+            self::EE => 'Estonian',
+            self::FO => 'Faroese',
+            self::FI => 'Finnish',
+            self::GE => 'Georgian',
+            self::GI => 'Gibraltarian',
+            self::GR => 'Greek',
+            self::HU => 'Hungarian',
+            self::IS => 'Icelandic',
+            self::IL => 'Israeli',
+            self::KZ => 'Kazakh',
+            self::XK => 'Kosovar',
+            self::LV => 'Latvian',
+            self::LI => 'Liechtensteiner',
+            self::LT => 'Lithuanian',
+            self::LU => 'Luxembourgish',
+            self::MT => 'Maltese',
+            self::MD => 'Moldovan',
+            self::ME => 'Montenegrin',
+            self::MK => 'Macedonian',
+            self::NI => 'Northern Irish',
+            self::NO => 'Norwegian',
+            self::RO => 'Romanian',
+            self::SM => 'Sammarinese',
+            self::RS => 'Serbian',
+            self::SK => 'Slovak',
+            self::SI => 'Slovenian',
+            self::CH => 'Swiss',
+            self::UA => 'Ukrainian',
         };
     }
 
@@ -187,6 +316,45 @@ enum Country: string
             self::TN => 'ar_TN',
             self::US => 'en_US',
             self::CA => 'en_CA',
+            self::AL => 'sq_AL',
+            self::AD => 'ca_AD',
+            self::AM => 'hy_AM',
+            self::AT => 'de_AT',
+            self::AZ => 'az_AZ',
+            self::BY => 'be_BY',
+            self::BA => 'bs_BA',
+            self::BG => 'bg_BG',
+            self::HR => 'hr_HR',
+            self::CY => 'el_CY',
+            self::CZ => 'cs_CZ',
+            self::EE => 'et_EE',
+            self::FO => 'fo_FO',
+            self::FI => 'fi_FI',
+            self::GE => 'ka_GE',
+            self::GI => 'en_GB',
+            self::GR => 'el_GR',
+            self::HU => 'hu_HU',
+            self::IS => 'is_IS',
+            self::IL => 'he_IL',
+            self::KZ => 'kk_KZ',
+            self::XK => 'sq_XK',
+            self::LV => 'lv_LV',
+            self::LI => 'de_LI',
+            self::LT => 'lt_LT',
+            self::LU => 'fr_LU',
+            self::MT => 'mt_MT',
+            self::MD => 'ro_MD',
+            self::ME => 'sr_ME',
+            self::MK => 'mk_MK',
+            self::NI => 'en_GB',
+            self::NO => 'nb_NO',
+            self::RO => 'ro_RO',
+            self::SM => 'it_SM',
+            self::RS => 'sr_RS',
+            self::SK => 'sk_SK',
+            self::SI => 'sl_SI',
+            self::CH => 'de_CH',
+            self::UA => 'uk_UA',
         };
     }
 
