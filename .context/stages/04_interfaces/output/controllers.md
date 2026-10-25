@@ -160,7 +160,7 @@ actually *does* (which service/repo it calls), not restated route paths.
 
 ## `src/Controller/Admin/*CrudController.php`
 
-36 EasyAdmin CRUD controllers, one per entity (full list in
+37 EasyAdmin CRUD controllers, one per entity (full list in
 `routes.md`). Each provides standard index/detail/edit/new/delete screens
 via `configureFields()`/`configureActions()` — individual field
 configuration wasn't traced controller-by-controller (not architecturally
@@ -171,6 +171,25 @@ disabled), styled directly on `DeletionRequestCrudController`: a
 `ChoiceField` status badge + `ChoiceFilter`, `TextFilter` on
 `messageType`/`summary`/`errorMessage`, and a `CodeEditorField` JSON
 detail view (`detailJsonPretty`) shown only on the detail page.
+
+**`FriendlyChallengeCrudController`** — read-only (new/edit/delete
+disabled), the admin view of the friendly challenge board under
+Competitions -> Challenges. Status badge + `ChoiceFilter`, `EntityFilter` on
+both clubs, and a virtual score column; the detail page pretty-prints all
+eight `json` columns (both squad snapshots, both result club blobs, both
+lineups, the event log and the narrative). **Those json fields are virtual
+`TextField`s with a placeholder `setValue('')`, not fields bound to the real
+array-valued properties** — measured, not assumed: `TextField` bound to an
+array-valued `json` property is rejected by its configurator ("can't be
+converted into a string"), and a generic `Field::new()` silently renders the
+literal text "Array" and never calls `formatValue()` at all. The formatter
+escapes the JSON before wrapping it in `<pre>`, because `TextField` renders
+`field.formattedValue|raw` and these blobs carry client-supplied squad,
+lineup and narrative data. Lifecycle stays with `FriendlyChallengeService`
+(posting, accepting, the `resolveLockedAt` claim-lock, expiry) — hence no
+edit path. Covered by `FriendlyChallengeCrudPageTest`, which loads both an
+OPEN row (null acceptor, null scores, all result blobs null) and a COMPLETE
+one.
 
 **`UserLedgerCrudController`** — read-only (new/edit/delete disabled), same
 `NotificationLogCrudController`/`DeletionRequestCrudController` pattern — an
