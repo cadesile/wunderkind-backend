@@ -135,9 +135,23 @@ class NameGeneratorService
         return $pool['lastNames'][array_rand($pool['lastNames'])];
     }
 
+    /**
+     * A random nationality that can actually produce a name.
+     *
+     * Filtered by hasNamePool() rather than picking from nationalities() directly, because
+     * that method derives every demonym from Country and a Country case is allowed to exist
+     * without a name pool — the enum carries nations that are only ever an owner's
+     * nationality, never a generation target. Picking one of those and handing it to
+     * generateName() throws "Unknown nationality", which surfaced as world-pack, tier-pack
+     * and spoof-entrant generation all failing the moment the UEFA nations were added.
+     *
+     * The same latent hole existed before that, with a single case (South Korean had a
+     * Country case and no pool), so this is not specific to one batch of countries: it is
+     * the general rule that selection must come from pools, not from the enum.
+     */
     public function getRandomNationality(): string
     {
-        $nationalities = self::nationalities();
+        $nationalities = array_values(array_filter(self::nationalities(), self::hasNamePool(...)));
 
         return $nationalities[array_rand($nationalities)];
     }
