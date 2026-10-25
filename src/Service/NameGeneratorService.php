@@ -28,6 +28,38 @@ class NameGeneratorService
     }
 
     /**
+     * Nationalities written surname-first, even in English-language football coverage.
+     *
+     * Korean is the clear case: Son Heung-min, Kim Min-jae, Hwang Hee-chan — given-first
+     * ("Heung-min Son") reads as a mistake to anyone who follows the game. Japanese is
+     * deliberately NOT here despite the same native convention, because football writes
+     * Japanese players given-first (Takumi Minamino, Daichi Kamada). Chinese is the one
+     * other candidate (Wu Lei is surname-first in coverage) and is left out only because
+     * nobody has asked for it — add the key, nothing else.
+     */
+    private const SURNAME_FIRST_NATIONALITIES = ['South Korean'];
+
+    /**
+     * Joins a name's parts in the order that nationality actually writes them.
+     *
+     * The one place that knows about name order, so the rule cannot be applied in one
+     * caller and forgotten in the next. Tolerates an empty surname, which generatePlayerName()
+     * produces for Brazilian mononyms.
+     */
+    public static function formatFullName(string $firstName, string $lastName, string $nationality): string
+    {
+        $lastName = trim($lastName);
+
+        if ($lastName === '') {
+            return trim($firstName);
+        }
+
+        return in_array($nationality, self::SURNAME_FIRST_NATIONALITIES, true)
+            ? trim("{$lastName} {$firstName}")
+            : trim("{$firstName} {$lastName}");
+    }
+
+    /**
      * Generate a simple full-name string (used for scouts, agents, coaches).
      * Brazilian players have a 20% chance of a mononym.
      */
@@ -48,7 +80,7 @@ class NameGeneratorService
 
         $lastName = $pool['lastNames'][array_rand($pool['lastNames'])];
 
-        return "{$firstName} {$lastName}";
+        return self::formatFullName($firstName, $lastName, $nationality);
     }
 
     /**

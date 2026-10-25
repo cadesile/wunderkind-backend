@@ -133,7 +133,7 @@ class CompetitionSpoofEntrantService
             $players[] = [
                 'id'             => $playerId,
                 'position'       => $position->value,
-                'name'           => trim($player->getFirstName() . ' ' . $player->getLastName()),
+                'name'           => NameGeneratorService::formatFullName($player->getFirstName(), $player->getLastName(), $player->getNationality()),
                 'nationality'    => $player->getNationality(),
                 'currentAbility' => $player->getCurrentAbility(),
                 'potential'      => $player->getPotential(),
