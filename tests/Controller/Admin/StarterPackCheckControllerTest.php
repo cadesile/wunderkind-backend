@@ -85,4 +85,68 @@ class StarterPackCheckControllerTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(302, 'the admin firewall should redirect an anonymous request to the login form');
     }
+
+    /**
+     * The warm button is the one control on this screen that writes, so it only appears once a
+     * check has been run — there is nothing to warm before a country is chosen, and binding it
+     * to the rendered result keeps it off a dropdown the admin changed but never submitted.
+     */
+    public function testWarmButtonIsAbsentUntilACountryHasBeenChecked(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check');
+        self::assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->filter('button:contains("Generate starter pack")'));
+
+        $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check&country=EN&tier=8');
+        self::assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('button:contains("Generate starter pack")'));
+    }
+
+    public function testWarmRejectsAPostWithoutAValidCsrfToken(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $before = $this->playerCount();
+
+        $client->request('POST', '/admin/starter-pack-check/warm', [
+            '_token'  => 'wrong',
+            'country' => 'EN',
+            'tier'    => 8,
+        ]);
+
+        self::assertResponseRedirects();
+        $this->assertSame($before, $this->playerCount(), 'A bad token must generate nothing.');
+    }
+
+    /** An unknown code must not reach app:pool:warm, which would warm nothing and report success. */
+    public function testWarmRejectsACodeThatIsNotACountry(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check&country=EN&tier=8');
+        $token   = $crawler->filter('input[name="_token"]')->attr('value');
+
+        $before = $this->playerCount();
+
+        $client->request('POST', '/admin/starter-pack-check/warm', [
+            '_token'  => $token,
+            'country' => 'ZZ',
+            'tier'    => 8,
+        ]);
+
+        self::assertResponseRedirects();
+        $this->assertSame($before, $this->playerCount());
+    }
+
+    private function playerCount(): int
+    {
+        return (int) self::getContainer()->get(EntityManagerInterface::class)
+            ->createQuery('SELECT COUNT(p.id) FROM App\\Entity\\Player p')
+            ->getSingleScalarResult();
+    }
 }
