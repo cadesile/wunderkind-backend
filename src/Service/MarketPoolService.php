@@ -52,6 +52,10 @@ class MarketPoolService
         'west_africa'    => ['Sahel', 'Coastal', 'Savanna', 'Harmattan', 'Gulf', 'Tropical', 'Atlantic', 'Lagoon'],
         'east_asia'      => ['Pacific', 'Sunrise', 'Tokai', 'Hokkai', 'Yangtze', 'Pearl River', 'Mekong', 'Eastern'],
         'north_america'  => ['Heartland', 'Pioneer', 'Liberty', 'Maple', 'Rockies', 'Great Lakes', 'Frontier', 'Interstate'],
+        'latin_america'  => ['Azteca', 'Andina', 'Pacífico', 'Caribe', 'Cordillera', 'Sierra Madre', 'Magdalena', 'Altiplano'],
+        'middle_east'    => ['Levant', 'Gulf', 'Anatolia', 'Bosphorus', 'Desert Rose', 'Oasis', 'Marmara', 'Red Sea'],
+        'south_asia'     => ['Deccan', 'Himalaya', 'Ganges', 'Konkan', 'Malabar', 'Punjab', 'Bengal', 'Coromandel'],
+        'north_africa'   => ['Maghreb', 'Nile', 'Sahara', 'Atlas', 'Cyrenaica', 'Carthage', 'Delta', 'Barbary'],
         '_fallback'      => ['Global', 'International', 'Central', 'Northern', 'Eastern', 'Western', 'Continental', 'Universal'],
     ];
 

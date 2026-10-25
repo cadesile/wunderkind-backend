@@ -96,15 +96,29 @@ class PolandContentTest extends TestCase
         $this->assertTrue(CountryContentRegistry::suffixLeadsName(Country::PL));
     }
 
-    /** Every other country keeps the trailing order; this is opt-in, not a new default. */
-    public function testEveryOtherCountryKeepsTrailingSuffixOrder(): void
+    /**
+     * Club-first order stays opt-in, never a new default — so this pins the exact set rather
+     * than just "everything except Poland". Each of these has the same justification Poland
+     * does: Club Brugge, Al Ahli Jeddah, Deportivo Cali, Al Masry Port Said and Espérance
+     * Tunis are how those clubs are actually written, and the default composition would emit
+     * "Brugge Club" / "Jeddah Al Ahli". Adding a country here is a deliberate act; a country
+     * appearing here by accident is what this test is for.
+     */
+    public function testOnlyTheDeclaredCountriesComposeClubNamesClubFirst(): void
     {
+        $expected = [Country::PL, Country::BE, Country::SA, Country::CO, Country::EG, Country::TN];
+
         foreach (Country::cases() as $country) {
-            if ($country === Country::PL) {
+            $leads = CountryContentRegistry::suffixLeadsName($country);
+
+            if (in_array($country, $expected, true)) {
+                $this->assertTrue($leads, sprintf('%s is declared club-first', $country->value));
+
                 continue;
             }
+
             $this->assertFalse(
-                CountryContentRegistry::suffixLeadsName($country),
+                $leads,
                 sprintf('%s must keep "{place} {suffix}" composition', $country->value),
             );
         }

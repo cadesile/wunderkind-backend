@@ -32,6 +32,15 @@ enum WorldRegion
     case SOUTHERN_CONE;
     case EAST_ASIA;
     case NORTH_AMERICA;
+    // Added for the 2026-10 country expansion. Each exists because no current region
+    // described the new countries' skin-tone distribution closely enough: MESOAMERICA_ANDES
+    // for Mexico/Colombia (predominantly mestizo, unlike SOUTHERN_CONE's largely European
+    // descent), MIDDLE_EAST for Turkey/Saudi Arabia, SOUTH_ASIA for India, and
+    // NORTH_AFRICA for Egypt/Tunisia.
+    case MESOAMERICA_ANDES;
+    case MIDDLE_EAST;
+    case SOUTH_ASIA;
+    case NORTH_AFRICA;
 
     /** Returns null for null, empty, or unrecognised nationalities. */
     public static function fromNationality(?string $nationality): ?self
@@ -65,6 +74,10 @@ enum WorldRegion
             self::SOUTHERN_CONE   => [40, 34, 18,  5,  2,  1],
             self::EAST_ASIA       => [26, 46, 24,  4,  0,  0],
             self::NORTH_AMERICA   => [20, 28, 18, 10, 14, 10],
+            self::MESOAMERICA_ANDES => [ 6, 20, 36, 24, 10,  4],
+            self::MIDDLE_EAST       => [12, 32, 33, 15,  6,  2],
+            self::SOUTH_ASIA        => [ 2, 10, 26, 32, 22,  8],
+            self::NORTH_AFRICA      => [ 8, 26, 34, 20,  8,  4],
         };
 
         return array_combine(

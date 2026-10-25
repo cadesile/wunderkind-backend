@@ -49,6 +49,22 @@ enum Country: string
     case US = 'US';
     case CA = 'CA';
     case PL = 'PL';
+    // Scotland and Wales have no ISO 3166-1 alpha-2 code of their own (both sit under GB),
+    // and every `country` column in this schema is VARCHAR(2), so a three-letter football code
+    // (SCO/WAL) would need a migration across seven tables. These follow the pseudo-code
+    // precedent this enum already set with EN for England, which is likewise not ISO. SC
+    // collides with ISO's code for Seychelles — if Seychelles is ever added it needs a
+    // different code here, rather than this one being reassigned.
+    case SC = 'SC';
+    case WA = 'WA';
+    case BE = 'BE';
+    case MX = 'MX';
+    case TR = 'TR';
+    case IN = 'IN';
+    case SA = 'SA';
+    case CO = 'CO';
+    case EG = 'EG';
+    case TN = 'TN';
 
     /** Display name, e.g. for the landing page and admin dropdowns. */
     public function label(): string
@@ -74,6 +90,16 @@ enum Country: string
             self::SN => 'Senegal',
             self::CN => 'China',
             self::PL => 'Poland',
+            self::SC => 'Scotland',
+            self::WA => 'Wales',
+            self::BE => 'Belgium',
+            self::MX => 'Mexico',
+            self::TR => 'Turkey',
+            self::IN => 'India',
+            self::SA => 'Saudi Arabia',
+            self::CO => 'Colombia',
+            self::EG => 'Egypt',
+            self::TN => 'Tunisia',
             self::US => 'USA',
             self::CA => 'Canada',
         };
@@ -109,6 +135,16 @@ enum Country: string
             self::SN => 'Senegalese',
             self::CN => 'Chinese',
             self::PL => 'Polish',
+            self::SC => 'Scottish',
+            self::WA => 'Welsh',
+            self::BE => 'Belgian',
+            self::MX => 'Mexican',
+            self::TR => 'Turkish',
+            self::IN => 'Indian',
+            self::SA => 'Saudi',
+            self::CO => 'Colombian',
+            self::EG => 'Egyptian',
+            self::TN => 'Tunisian',
             self::US => 'American',
             self::CA => 'Canadian',
         };
@@ -139,6 +175,16 @@ enum Country: string
             self::CI, self::SN => 'fr_FR',
             self::CN => 'zh_CN',
             self::PL => 'pl_PL',
+            self::SC => 'en_GB',
+            self::WA => 'cy_GB',
+            self::BE => 'nl_BE',
+            self::MX => 'es_MX',
+            self::TR => 'tr_TR',
+            self::IN => 'en_IN',
+            self::SA => 'ar_SA',
+            self::CO => 'es_CO',
+            self::EG => 'ar_EG',
+            self::TN => 'ar_TN',
             self::US => 'en_US',
             self::CA => 'en_CA',
         };
@@ -155,7 +201,9 @@ enum Country: string
         return match ($this) {
             self::ES, self::EN, self::DE, self::IT, self::FR,
             self::BR, self::AR, self::NL, self::PT,
-            self::US, self::CA, self::JP, self::NG, self::PL => true,
+            self::US, self::CA, self::JP, self::NG, self::PL,
+            self::SC, self::WA, self::BE, self::MX, self::TR,
+            self::KR, self::IN, self::SA, self::CO, self::EG, self::TN => true,
             default => false,
         };
     }
