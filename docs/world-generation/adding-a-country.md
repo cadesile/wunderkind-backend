@@ -7,7 +7,7 @@ docblock, and `docs/superpowers/specs/2026-07-06-club-name-options-canonical-sou
 
 ## 1. Is the country already in `App\Enum\Country`?
 
-Check `src/Enum/Country.php`. If it's one of the 19+ existing cases, skip to step 3.
+Check `src/Enum/Country.php`. If it's one of the 30+ existing cases, skip to step 3.
 
 If not — a genuinely new country (e.g. adding Poland as a real playable country, not just a
 name pool) — add a new `case`, plus one `match` arm each in `label()`, `nationality()`,
@@ -73,6 +73,16 @@ codebase). If not, add a `'Nationality' => ['firstNames' => [...], 'lastNames' =
 there directly — this file is intentionally not part of the registry above (too large/
 sensitive to move wholesale), but it's still keyed off `Country::nationality()` via
 `NameGeneratorService::nationalities()`, not a separate hand-maintained list.
+
+### Flag asset (every case, not just generation-capable ones)
+
+`public/assets/flags/<code>.svg`, lower-cased. The Owner Spotlight builds its `<img src>`
+straight from the case name with no existence check, so a missing file is a broken image on
+the public landing page, not a caught error. `CountryFlagAssetTest` turns that into a red
+build — grab the file from
+`https://cdn.jsdelivr.net/npm/flag-icons@7.5.0/flags/4x3/<iso-code>.svg` and save it under
+the `Country` code, which differs from the upstream code for nations that are a GB
+subdivision upstream (England, Scotland, Wales). See that directory's README.
 
 ## 3. Flip `isGenerationCapable()`
 

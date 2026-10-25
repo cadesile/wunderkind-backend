@@ -2446,6 +2446,215 @@ class NameGeneratorService
                 ],
             ],
 
+            'Scottish' => [
+                'firstNames' => [
+                    'Callum', 'Ryan', 'Scott', 'Stuart', 'Kenny',
+                    'Andrew', 'Grant', 'Lewis', 'Fraser', 'Kieran',
+                    'Jamie', 'Steven', 'Craig', 'Ross', 'Euan',
+                    'Alasdair', 'Hamish', 'Rory', 'Gordon', 'Douglas',
+                    'Angus', 'Murray', 'Blair', 'Iain', 'Duncan',
+                    'Finlay', 'Struan', 'Archie', 'Logan', 'Cameron',
+                ],
+                'lastNames' => [
+                    'MacLeod', 'MacDonald', 'Campbell', 'Stewart', 'Robertson',
+                    'Fraser', 'Murray', 'Ferguson', 'Hamilton', 'Buchanan',
+                    'Gallacher', 'McGregor', 'Mackay', 'Sinclair', 'Ross',
+                    'Lennox', 'Dalgleish', 'Armstrong', 'Burnett', 'Crichton',
+                    'Muir', 'Rennie', 'Baxter', 'Forrest', 'Gilmour',
+                    'Hendry', 'Kerr', 'Leitch', 'Naismith', 'Ramsay',
+                ],
+            ],
+
+            'Welsh' => [
+                'firstNames' => [
+                    'Gareth', 'Aaron', 'Rhys', 'Dylan', 'Owain',
+                    'Iwan', 'Geraint', 'Huw', 'Ieuan', 'Morgan',
+                    'Emyr', 'Gethin', 'Carwyn', 'Tomos', 'Osian',
+                    'Dewi', 'Elis', 'Bleddyn', 'Alun', 'Meirion',
+                    'Rhodri', 'Steffan', 'Trystan', 'Ewan', 'Hywel',
+                    'Arwel', 'Caradog', 'Idris', 'Eifion', 'Llew',
+                ],
+                'lastNames' => [
+                    'Jones', 'Davies', 'Williams', 'Evans', 'Thomas',
+                    'Roberts', 'Lewis', 'Hughes', 'Morgan', 'Griffiths',
+                    'Edwards', 'Rees', 'Owen', 'Price', 'Powell',
+                    'Bevan', 'Vaughan', 'Pritchard', 'Llewellyn', 'Meredith',
+                    'Probert', 'Gwilym', 'Maddocks', 'Tudor', 'Prosser',
+                    'Howells', 'Bowen', 'Pugh', 'Lloyd', 'Caddick',
+                ],
+            ],
+
+            'Belgian' => [
+                'firstNames' => [
+                    'Kevin', 'Thibaut', 'Romelu', 'Dries', 'Jan',
+                    'Toby', 'Axel', 'Youri', 'Leandro', 'Timothy',
+                    'Hans', 'Bart', 'Wout', 'Lars', 'Sander',
+                    'Nicolas', 'Thomas', 'Maxime', 'Julien', 'Antoine',
+                    'Laurent', 'Olivier', 'Matthias', 'Ruben', 'Jelle',
+                    'Koen', 'Stijn', 'Pieter', 'Arne', 'Senne',
+                ],
+                'lastNames' => [
+                    'De Bruyne', 'Courtois', 'Lukaku', 'Mertens', 'Vertonghen',
+                    'Alderweireld', 'Witsel', 'Tielemans', 'Hazard', 'Castagne',
+                    'Vermaelen', 'Van Damme', 'Janssens', 'Peeters', 'Maes',
+                    'Jacobs', 'Claes', 'Willems', 'Goossens', 'Wouters',
+                    'Dupont', 'Lambert', 'Dubois', 'Martens', 'De Smet',
+                    'Verhoeven', 'Declercq', 'Vandenberghe', 'Leroy', 'Vanhoutte',
+                ],
+            ],
+
+            'Mexican' => [
+                'firstNames' => [
+                    'Guillermo', 'Hirving', 'Raúl', 'Javier', 'Andrés',
+                    'Carlos', 'Héctor', 'Jesús', 'Luis', 'Diego',
+                    'Edson', 'Alexis', 'César', 'Rodolfo', 'Orbelín',
+                    'Uriel', 'Santiago', 'Erick', 'Jorge', 'Rogelio',
+                    'Miguel', 'Néstor', 'Israel', 'Johan', 'Gerardo',
+                    'Ángel', 'Roberto', 'Marco', 'Julián', 'Emilio',
+                ],
+                'lastNames' => [
+                    'Ochoa', 'Lozano', 'Jiménez', 'Hernández', 'Guardado',
+                    'Vela', 'Moreno', 'Corona', 'Rodríguez', 'Reyes',
+                    'Álvarez', 'Vega', 'Montes', 'Pineda', 'Antuna',
+                    'Sánchez', 'Domínguez', 'Araujo', 'Gutiérrez', 'Aguirre',
+                    'Salcedo', 'Herrera', 'Ramírez', 'Castillo', 'Torres',
+                    'Flores', 'Mendoza', 'Ruiz', 'Cervantes', 'Quiñones',
+                ],
+            ],
+
+            'Turkish' => [
+                'firstNames' => [
+                    'Hakan', 'Burak', 'Arda', 'Cengiz', 'Mert',
+                    'Yusuf', 'Emre', 'Okay', 'Kaan', 'Zeki',
+                    'Ozan', 'Umut', 'Serdar', 'Caner', 'Volkan',
+                    'Selçuk', 'Gökhan', 'Berkay', 'Tolga', 'Ahmet',
+                    'Mehmet', 'Mustafa', 'Kerem', 'Barış', 'Enes',
+                    'Furkan', 'Onur', 'Deniz', 'Efe', 'Taylan',
+                ],
+                'lastNames' => [
+                    'Çalhanoğlu', 'Yılmaz', 'Güler', 'Ünder', 'Müldür',
+                    'Yazıcı', 'Demiral', 'Söyüncü', 'Ayhan', 'Erkin',
+                    'Tufan', 'Kabak', 'Karaman', 'Akgün', 'Özdemir',
+                    'Şahin', 'Kaya', 'Demir', 'Çelik', 'Arslan',
+                    'Doğan', 'Aydın', 'Koç', 'Polat', 'Türkmen',
+                    'Güneş', 'Bayram', 'Eren', 'Özkan', 'Yıldırım',
+                ],
+            ],
+
+            'South Korean' => [
+                'firstNames' => [
+                    'Heung-min', 'Min-jae', 'Ji-sung', 'Sung-yueng', 'Kang-in',
+                    'Woo-young', 'Chang-hoon', 'In-beom', 'Seung-ho', 'Jin-su',
+                    'Young-gwon', 'Hee-chan', 'Gue-sung', 'Tae-hwan', 'Jae-sung',
+                    'Dong-jun', 'Seon-min', 'Ju-ho', 'Sang-ho', 'Moon-hwan',
+                    'Ui-jo', 'Min-woo', 'Hyun-woo', 'Seung-gyu', 'Jun-ho',
+                    'Beom-seok', 'Ki-hun', 'Yong-woo', 'Chan-young', 'Do-hyun',
+                ],
+                'lastNames' => [
+                    'Son', 'Kim', 'Hwang', 'Park', 'Lee',
+                    'Jung', 'Choi', 'Kang', 'Cho', 'Yoon',
+                    'Jang', 'Lim', 'Han', 'Oh', 'Seo',
+                    'Shin', 'Kwon', 'Hong', 'Song', 'Yoo',
+                    'Baek', 'Nam', 'Moon', 'Ahn', 'Ryu',
+                    'Jeon', 'Koo', 'Ko', 'Bae', 'Noh',
+                ],
+            ],
+
+            'Indian' => [
+                'firstNames' => [
+                    'Sunil', 'Gurpreet', 'Sandesh', 'Anirudh', 'Rahul',
+                    'Manvir', 'Udanta', 'Ashique', 'Brandon', 'Sahal',
+                    'Liston', 'Akash', 'Jeakson', 'Pritam', 'Amrinder',
+                    'Nikhil', 'Rowllin', 'Mandar', 'Subhasish', 'Vikram',
+                    'Arjun', 'Rohit', 'Karan', 'Aditya', 'Ravi',
+                    'Siddharth', 'Nitesh', 'Harpreet', 'Deepak', 'Anwar',
+                ],
+                'lastNames' => [
+                    'Chhetri', 'Singh', 'Jhingan', 'Thapa', 'Bheke',
+                    'Kotal', 'Kumar', 'Das', 'Fernandes', 'Colaco',
+                    'Sharma', 'Patel', 'Rao', 'Nair', 'Menon',
+                    'Gill', 'Yadav', 'Mishra', 'Reddy', 'Pillai',
+                    'Chauhan', 'Sarkar', 'Ghosh', 'Banerjee', 'Naorem',
+                    'Dsouza', 'Verma', 'Bose', 'Iyer', 'Khan',
+                ],
+            ],
+
+            'Saudi' => [
+                'firstNames' => [
+                    'Salem', 'Salman', 'Yasser', 'Firas', 'Mohammed',
+                    'Abdullah', 'Fahad', 'Saud', 'Nawaf', 'Hassan',
+                    'Ali', 'Sultan', 'Turki', 'Khalid', 'Majed',
+                    'Abdulellah', 'Saleh', 'Ahmed', 'Ziyad', 'Nasser',
+                    'Hattan', 'Ayman', 'Faisal', 'Bandar', 'Mansour',
+                    'Rakan', 'Haitham', 'Omar', 'Waleed', 'Abdulrahman',
+                ],
+                'lastNames' => [
+                    'Al Dawsari', 'Al Faraj', 'Al Shahrani', 'Al Buraikan', 'Al Owais',
+                    'Al Burayk', 'Al Ghamdi', 'Al Zahrani', 'Al Qahtani', 'Al Otaibi',
+                    'Al Harbi', 'Al Shehri', 'Al Malki', 'Al Najei', 'Al Amri',
+                    'Al Sahafi', 'Al Khaibari', 'Al Yami', 'Al Mogren', 'Al Tambakti',
+                    'Al Juwayr', 'Al Dossari', 'Al Mutairi', 'Al Subaie', 'Al Anazi',
+                    'Al Rashidi', 'Al Suwailem', 'Al Hamdan', 'Al Asmari', 'Al Balawi',
+                ],
+            ],
+
+            'Colombian' => [
+                'firstNames' => [
+                    'Radamel', 'James', 'Juan', 'Luis', 'Davinson',
+                    'Wilmar', 'Yerry', 'Duván', 'Mateus', 'Santiago',
+                    'Rafael', 'Carlos', 'Jhon', 'Johan', 'Daniel',
+                    'Camilo', 'Andrés', 'Sebastián', 'Óscar', 'Jefferson',
+                    'Edwin', 'Miguel', 'Cristian', 'Gustavo', 'Álvaro',
+                    'Harold', 'Fredy', 'Diego', 'Nicolás', 'Kevin',
+                ],
+                'lastNames' => [
+                    'Falcao', 'Rodríguez', 'Cuadrado', 'Díaz', 'Sánchez',
+                    'Barrios', 'Mina', 'Zapata', 'Uribe', 'Arias',
+                    'Borré', 'Lerma', 'Muriel', 'Ospina', 'Mojica',
+                    'Medina', 'Castaño', 'Cardona', 'Quintero', 'Murillo',
+                    'Córdoba', 'Hernández', 'Valencia', 'Preciado', 'Palacios',
+                    'Rentería', 'Angulo', 'Moreno', 'Ramos', 'Vargas',
+                ],
+            ],
+
+            'Egyptian' => [
+                'firstNames' => [
+                    'Mohamed', 'Mahmoud', 'Ahmed', 'Omar', 'Mostafa',
+                    'Ramadan', 'Hossam', 'Amr', 'Tarek', 'Karim',
+                    'Islam', 'Ayman', 'Sherif', 'Hamdi', 'Akram',
+                    'Nabil', 'Marwan', 'Mohanad', 'Sayed', 'Abdallah',
+                    'Yasser', 'Khaled', 'Walid', 'Samir', 'Rami',
+                    'Fady', 'Ziad', 'Emam', 'Ibrahim', 'Hussein',
+                ],
+                'lastNames' => [
+                    'Salah', 'Hassan', 'Elneny', 'Hegazi', 'Mohsen',
+                    'Warda', 'Sobhi', 'Ashour', 'Zaki', 'Gabr',
+                    'Fathi', 'Abdelmonem', 'El Said', 'Magdy', 'Shenawy',
+                    'Ghaly', 'Said', 'Marei', 'Metwally', 'Abdelrahman',
+                    'Fawzi', 'Tawfik', 'Nasser', 'Gomaa', 'Mostafa',
+                    'Ramzy', 'Attia', 'Soliman', 'Shawky', 'Kamal',
+                ],
+            ],
+
+            'Tunisian' => [
+                'firstNames' => [
+                    'Wahbi', 'Youssef', 'Hannibal', 'Aïssa', 'Ellyes',
+                    'Mohamed', 'Seifeddine', 'Montassar', 'Dylan', 'Anis',
+                    'Oussama', 'Ferjani', 'Naïm', 'Hamza', 'Yassine',
+                    'Aymen', 'Nader', 'Firas', 'Taha', 'Bilel',
+                    'Hamdi', 'Chaim', 'Sabri', 'Zied', 'Rami',
+                    'Ghaylen', 'Omar', 'Karim', 'Marouane', 'Nassim',
+                ],
+                'lastNames' => [
+                    'Khazri', 'Msakni', 'Mejbri', 'Laïdouni', 'Skhiri',
+                    'Dräger', 'Jaziri', 'Talbi', 'Bronn', 'Slimane',
+                    'Haddadi', 'Sassi', 'Ben Youssef', 'Abdi', 'Meriah',
+                    'Chaalali', 'Ben Romdhane', 'Rafia', 'Ghandri', 'Kechrida',
+                    'Ben Amor', 'Hassen', 'Dahmen', 'Khalifa', 'Trabelsi',
+                    'Nasri', 'Jebali', 'Mathlouthi', 'Ouahabi', 'Khenissi',
+                ],
+            ],
+
         ];
     }
 }
