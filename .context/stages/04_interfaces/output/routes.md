@@ -144,7 +144,17 @@ serve these paths identically; see `01_overview/output/environment.md`.
   diagnostic — counts only, consumes nothing, safe against production.
   Country + tier come from the query string so a result is a linkable URL.
   CLI twin: `app:starter-pack:check <CODE> [--tier=N]`.
-- **`CompetitionEntrantCrudController`** — in addition to being an
+- **`CompetitionEntrantCrudController`** — also owns
+  `/admin/competition-entrant/{entrant}/generate-spoof`
+  (`admin_competition_entrant_generate_spoof`, `GET|POST`): the detail page's
+  "Generate Spoof" action, which clones the entrant being viewed into a new
+  randomised spoof entrant in its own competition —
+  `createSpoofEntrantFromSnapshot(..., randomise: true)`, i.e. the Create Spoof
+  screen's process without the paste. GET confirms, POST acts behind a CSRF
+  token (EasyAdmin actions are plain links, so a GET must not create data), and
+  the action is hidden unless that competition is `REGISTERING`. Two path
+  segments under the entrant id so it does not collide with EasyAdmin's own
+  `/admin/competition-entrant/{entityId}` detail route. In addition to being an
   EasyAdmin CRUD controller (see below), declares one custom action:
   `GET|POST /admin/competition-entrant/{entrant}/generate-spoof`.
 - **`NotificationDebugController`** — manual controls for the

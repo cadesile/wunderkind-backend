@@ -1,0 +1,39 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12 col-lg-6">
+        <h5 class="fw-semibold mb-0">Generate Spoof From This Entrant</h5>
+        <p class="text-muted small">
+            Registers a new spoof entrant into <strong>{{ competition }}</strong> built from
+            <strong>{{ clubName }}</strong>'s own submitted snapshot — the same process as the
+            "Create Spoof" screen with <em>Randomise</em> ticked, so the clone gets a renamed
+            club, renamed players and staff, and jittered attributes rather than being an exact
+            duplicate. The spoof club is tagged (<code>Club.isSpoof</code>) so it stays easy to
+            tell apart, and the "Clear Spoof Clubs" button in Settings removes it later.
+        </p>
+
+        <div class="card">
+            <div class="card-body">
+                <dl class="row small mb-3">
+                    <dt class="col-5 text-muted fw-normal">Source entrant</dt>
+                    <dd class="col-7">{{ clubName }}</dd>
+                    <dt class="col-5 text-muted fw-normal">Squad in snapshot</dt>
+                    <dd class="col-7">{{ playerCount }} player{{ playerCount == 1 ? '' : 's' }}</dd>
+                    <dt class="col-5 text-muted fw-normal">Slots remaining</dt>
+                    <dd class="col-7">{{ remaining }}</dd>
+                </dl>
+
+                <form method="post" action="{{ actionUrl }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('generate_spoof_from_entrant') }}">
+
+                    <button type="submit" class="btn btn-primary" {{ remaining < 1 ? 'disabled' : '' }}>
+                        <i class="fa fa-clone"></i> Generate Spoof
+                    </button>
+                    <a href="{{ detailUrl }}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
