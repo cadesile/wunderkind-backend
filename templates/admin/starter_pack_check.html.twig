@@ -39,12 +39,35 @@
                         </select>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-4 d-flex gap-2">
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="fa fa-vial me-1"></i>Run check
                         </button>
                     </div>
                 </form>
+
+                {# Separate form, and deliberately so: the check above is GET (its result is a
+                   linkable URL), while warming creates data and must be a CSRF-guarded POST —
+                   one form cannot be both. Its country/tier are the server's own last-checked
+                   values rather than the select's, so it can never act on a dropdown that was
+                   changed but never submitted. Hidden entirely until a check has been run,
+                   since there is nothing to warm before then. #}
+                {% if result is not null %}
+                    <form method="post" action="{{ path('admin', {routeName: 'admin_starter_pack_warm'}) }}"
+                          class="mt-2"
+                          onsubmit="return confirm('Generate pool players, staff and scouts for {{ country }}? This creates data and can take up to a minute.')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('starter_pack_warm') }}">
+                        <input type="hidden" name="country" value="{{ country }}">
+                        <input type="hidden" name="tier" value="{{ tier }}">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i>Generate starter pack
+                        </button>
+                        <span class="text-muted ms-2" style="font-size:.75rem;">
+                            Tops up the {{ country }} pool (players, staff, scouts) to the minimums the starter
+                            draw needs, then re-runs this check.
+                        </span>
+                    </form>
+                {% endif %}
             </div>
         </div>
     </div>

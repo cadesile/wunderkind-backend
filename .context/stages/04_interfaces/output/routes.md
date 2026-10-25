@@ -144,6 +144,19 @@ serve these paths identically; see `01_overview/output/environment.md`.
   diagnostic — counts only, consumes nothing, safe against production.
   Country + tier come from the query string so a result is a linkable URL.
   CLI twin: `app:starter-pack:check <CODE> [--tier=N]`.
+  Also owns **`POST /admin/starter-pack-check/warm`**
+  (`admin_starter_pack_warm`) — the "Generate starter pack" button beside Run
+  check, which runs `app:pool:warm <CODE>` for the checked country and redirects
+  back into the check so the effect is visible rather than claimed. **This is
+  the one control on that screen that writes**, hence POST + CSRF + routing
+  through `/admin?routeName=...`, and hence its country coming from the
+  server's last-checked value rather than the form select (so it cannot act on
+  a dropdown changed but never submitted). It is hidden until a check has been
+  run. The action raises `set_time_limit()` deliberately: a cold warm generates
+  500 players, 150 staff and 50 scouts for the nationality, measured ~20s, close
+  enough to PHP's 30s default that a slower box would 504 mid-run and leave a
+  half-warmed pool with no output. Warming tops up to minimums, so a repeat
+  press is safe.
 - **`CompetitionEntrantCrudController`** — also owns
   `/admin/competition-entrant/{entrant}/generate-spoof`
   (`admin_competition_entrant_generate_spoof`, `GET|POST`): the detail page's
