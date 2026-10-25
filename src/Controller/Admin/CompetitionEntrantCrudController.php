@@ -57,9 +57,32 @@ class CompetitionEntrantCrudController extends AbstractCrudController
         return CompetitionEntrant::class;
     }
 
+    /**
+     * The page size is a deliberate guard, not a style choice.
+     *
+     * Every row on this index carries a full club snapshot — squad, staff, tactics, each
+     * player's attributes and appearance — and Doctrine hydrates every mapped column of the
+     * root entity, so listing N entrants decodes N whole snapshots into PHP arrays whether or
+     * not a column renders them. That is what made this screen time out (504) in production.
+     * There is no way to exclude the column: ORM 3 removed PARTIAL hydration, and the
+     * property is read by 25 call sites across the match engine and results services, so it
+     * cannot simply be unmapped.
+     *
+     * Halving the page therefore halves the decode cost, which is the only lever available
+     * without restructuring. **It is proportional relief, not a cure** — if this screen still
+     * times out, the permanent fix is to move `snapshotJson` into its own table behind a lazy
+     * one-to-one, so the index never touches it and the detail page loads exactly one. That
+     * is a data migration plus a change to the raw-SQL writes in
+     * CompetitionRegistrationService, which is why it was not done blind: it needs a real
+     * measurement of production snapshot sizes to justify, and no environment outside
+     * production has representative rows.
+     */
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setDefaultSort(['registeredAt' => 'DESC']);
+        return $crud
+            ->setDefaultSort(['registeredAt' => 'DESC'])
+            ->setPaginatorPageSize(10)
+            ->setHelp('index', 'Each row carries a full squad snapshot, so this list is deliberately paginated small. Use the filters rather than paging through everything.');
     }
 
     public function configureActions(Actions $actions): Actions

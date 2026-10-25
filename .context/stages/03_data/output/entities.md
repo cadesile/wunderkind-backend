@@ -418,7 +418,21 @@ migrations are the change log (see `migrations.md`).
   (`uq_active_competition_one_open_per_template`, `WHERE status =
   'registering'`) — only one open competition per template at a time.
 - **`CompetitionEntrant`** (table `competition_entrant`) — a club's
-  registration. `seed`, `status:CompetitionEntrantStatus(enum)`,
+  registration. **`snapshotJson` is the heavy column in this schema** — a full
+  squad, staff, tactics and every player's attributes and appearance, one per
+  entrant. Doctrine hydrates every mapped column of a root entity, so listing N
+  entrants decodes N whole snapshots whether or not a column renders them; that
+  is what made the admin's Club Snapshots index time out (504) in production.
+  There is no narrowing available: ORM 3 removed `PARTIAL`, and 25 call sites
+  across the match engine and results services read the property, so it cannot
+  be unmapped. The guard in place is a small page size on
+  `CompetitionEntrantCrudController` (10), which is proportional relief only —
+  **the permanent fix is to move the column into its own table behind a lazy
+  one-to-one**, which also means changing the raw-SQL writes in
+  `CompetitionRegistrationService`. Deliberately not done blind: it needs a real
+  measurement of production snapshot sizes, and no environment outside
+  production has representative rows.
+  `seed`, `status:CompetitionEntrantStatus(enum)`,
   `snapshotJson:array`, `snapshotLockedAt`, `snapshotVersion:int(1)`,
   `registeredAt`. `ManyToOne` → `activeCompetition`, `club` (both not
   nullable, `CASCADE`); `eliminatedInRound:?CompetitionRound` (nullable,

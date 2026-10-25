@@ -15,6 +15,15 @@ filename alone.
   production. `AccountDeletionServiceTest` builds one row per dependent, so
   the regression is only caught for entities actually present in that
   fixture.
+  **`deleteAccountsBulk(list<User>)` is the set-based sibling** — same tables,
+  same order, same `BLOCKING_CLUB_DEPENDENTS` const, but one statement per
+  table per chunk (200 accounts) instead of per account, and the leaderboard
+  cache invalidated once at the end rather than per account. It exists because
+  the per-account path opens a transaction and invalidates every leaderboard
+  category each time: clearing the 3,604 spoof accounts a test database had
+  accumulated did not finish inside 115s that way, versus **17.7s** in bulk.
+  Use it for any purge; `deleteAccount()` stays the path for a single GDPR
+  erasure. Its one caller today is `app:clubs:purge-spoof`.
 - **`Admin/DashboardStatsService`** — computes admin dashboard growth/
   leaderboard/pool stats; Postgres-dialect-specific SQL confined here.
 - **`Admin/StatBuckets`** — bucketing helper backing dashboard facet

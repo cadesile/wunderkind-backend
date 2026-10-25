@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\Entity\Club;
 use App\Entity\User;
 use App\Enum\LeaderboardCategory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -35,6 +36,9 @@ final class AccountDeletionService
      * discarding these rows is unambiguously right: the audit trail they protect belongs to a
      * user who is being erased outright.
      */
+    /** Accounts per transaction in deleteAccountsBulk() — keeps IN() parameter lists bounded. */
+    private const BULK_CHUNK_SIZE = 200;
+
     private const BLOCKING_CLUB_DEPENDENTS = [
         'SeasonSnapshot',
         'SeasonRecord',
@@ -50,6 +54,87 @@ final class AccountDeletionService
         private readonly EntityManagerInterface $em,
         private readonly LeaderboardCalculationService $leaderboardCalculationService,
     ) {}
+
+    /**
+     * Set-based deletion of many accounts at once — same tables, same order, same transaction
+     * discipline as deleteAccount() below, but one statement per table for the whole batch
+     * instead of per account.
+     *
+     * deleteAccount() is right for a single GDPR erasure and wrong for a bulk purge: it opens
+     * a transaction and invalidates **every** leaderboard category per account, so clearing
+     * the 3,604 spoof accounts a test database had accumulated meant 3,604 transactions and
+     * ~43,000 cache invalidations. That is slow enough to time out the deploy step and the
+     * admin button that call it — the exact failure being cleaned up after.
+     *
+     * Deliberately shares BLOCKING_CLUB_DEPENDENTS with deleteAccount() rather than restating
+     * the table list: that const is the single record of which FKs block a club delete, and a
+     * second copy would drift the first time one changes.
+     *
+     * @param list<User> $users every club owned by each of these is deleted, so the caller is
+     *                          responsible for confirming that is what it wants
+     *
+     * @return array{users: int, clubs: int}
+     */
+    public function deleteAccountsBulk(array $users): array
+    {
+        if ($users === []) {
+            return ['users' => 0, 'clubs' => 0];
+        }
+
+        $deletedClubs = 0;
+
+        // Chunked so the IN() parameter list stays sane on a large purge; each chunk is its
+        // own transaction, so a failure part-way leaves whole accounts deleted or untouched,
+        // never a club stripped of its dependents but still present.
+        foreach (array_chunk($users, self::BULK_CHUNK_SIZE) as $chunk) {
+            $this->em->wrapInTransaction(function () use ($chunk, &$deletedClubs): void {
+                /** @var list<Club> $clubs */
+                $clubs = $this->em->createQuery('SELECT c FROM App\Entity\Club c WHERE c.user IN (:users)')
+                    ->setParameter('users', $chunk)
+                    ->getResult();
+
+                if ($clubs !== []) {
+                    foreach (self::BLOCKING_CLUB_DEPENDENTS as $entity) {
+                        $this->em->createQuery("DELETE FROM App\\Entity\\{$entity} e WHERE e.club IN (:clubs)")
+                            ->setParameter('clubs', $clubs)
+                            ->execute();
+                    }
+
+                    $this->em->createQuery('DELETE FROM App\Entity\SeasonRatingsSnapshot e WHERE e.clubId IN (:ids)')
+                        ->setParameter('ids', array_map(static fn (Club $c): string => (string) $c->getId(), $clubs))
+                        ->execute();
+
+                    $this->em->createQuery('DELETE FROM App\Entity\Friendly\FriendlyChallenge f WHERE f.challengerClub IN (:clubs) AND f.acceptorClub IS NULL')
+                        ->setParameter('clubs', $clubs)
+                        ->execute();
+
+                    $this->em->createQuery('DELETE FROM App\Entity\Club c WHERE c IN (:clubs)')
+                        ->setParameter('clubs', $clubs)
+                        ->execute();
+
+                    $deletedClubs += count($clubs);
+                }
+
+                $this->em->createQuery('DELETE FROM App\Entity\RefreshToken t WHERE t.username IN (:emails)')
+                    ->setParameter('emails', array_map(static fn (User $u): string => $u->getUserIdentifier(), $chunk))
+                    ->execute();
+
+                $this->em->createQuery('DELETE FROM App\Entity\User u WHERE u IN (:users)')
+                    ->setParameter('users', $chunk)
+                    ->execute();
+            });
+        }
+
+        // Once, after everything has committed — not per account. Same reasoning as
+        // deleteAccount()'s own invalidation, just not repeated thousands of times.
+        if ($deletedClubs > 0) {
+            foreach (LeaderboardCategory::cases() as $category) {
+                $this->leaderboardCalculationService->invalidate($category);
+            }
+        }
+
+        return ['users' => count($users), 'clubs' => $deletedClubs];
+    }
 
     public function deleteAccount(User $user): void
     {
