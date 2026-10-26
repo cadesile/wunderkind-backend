@@ -27,7 +27,7 @@
 
    Ranked on UserLedger dividends actually drawn, NOT on combined club balance
    and NOT on Club::$totalCareerEarnings. Only owners holding ledger entries
-   appear, so fewer than five is normal and the whole section renders nothing
+   appear, so fewer than OWNER_LIMIT is normal and the whole section renders nothing
    when none do — which is the design's own "hidden entirely until at least one
    owner qualifies" state (see design/States.dc.html).
 
@@ -73,7 +73,7 @@
 
         {# <ol>, not a div grid: the ranking is the content, so it lives in the
            markup rather than only in the rendered rank glyph. The second list
-           carries start="2" so ranks 2-5 are numbered correctly on their own. #}
+           carries start="2" so ranks 2-7 are numbered correctly on their own. #}
         <ol class="ospot-leader-list">
             <li class="ospot-row ospot-leader"
                 data-ospot-crop="full"

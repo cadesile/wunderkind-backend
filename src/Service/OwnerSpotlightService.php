@@ -46,8 +46,15 @@ class OwnerSpotlightService
 
     private const CACHE_KEY = 'owner_spotlight';
 
-    /** How many owners the board lists. */
-    public const OWNER_LIMIT = 5;
+    /**
+     * How many owners the board lists.
+     *
+     * Seven, not five, for the shape it makes: rank 1 takes the full-width leader
+     * card on its own, leaving the remainder to a grid that lays out three across
+     * at the section's width. Six fills two complete rows; four left a single
+     * orphaned card hanging under the first row.
+     */
+    public const OWNER_LIMIT = 7;
 
     /**
      * How many clubs are listed per owner. An owner with more than this still has
@@ -96,8 +103,8 @@ class OwnerSpotlightService
         }
 
         // One query for every listed owner's clubs, then bucketed in PHP — the
-        // alternative (a per-owner query, or a LATERAL top-5) costs five round
-        // trips to save a handful of rows.
+        // alternative (a per-owner query, or a LATERAL per-owner limit) costs one
+        // round trip each to save a handful of rows.
         $clubsByOwner = [];
         foreach ($this->clubRepository->findByUserIds(array_column($owners, 'userId')) as $club) {
             $clubsByOwner[(string) $club->getUser()->getId()][] = $club;
@@ -133,7 +140,8 @@ class OwnerSpotlightService
                     : 0.0,
                 'clubCount'        => count($allClubs),
                 // Rank 1 only: the leader's card is the one the design draws a stadium on,
-                // and building it for all five would be four unused ClubFacility queries.
+                // and building it for every listed owner would be six unused ClubFacility
+                // queries.
                 // Reuses the Club Spotlight's own builder — same levels, same clamping,
                 // same explicit on/off — rather than a second copy of that logic.
                 'stadiumConfig'    => $i === 0 && $allClubs !== []
