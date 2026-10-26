@@ -65,14 +65,22 @@ COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
 #   every 15 min — telemetry-generate: recompute the landing page's 24h pyramid
 #     activity aggregate (fixtures simulated, capital deployed) from recent
 #     SyncRecord payloads, into LiveTelemetrySnapshot.
-#   every 12h — spotlight-generate: pick a new landing page "Club Spotlight"
+#   every 3h — spotlight-generate: pick a new landing page "Club Spotlight"
 #     from the 5 most active clubs in the trailing 12h window and notify its
-#     owner (in-game inbox + push), into ClubSpotlight.
+#     owner (in-game inbox + push), into ClubSpotlight. The two windows differ
+#     on purpose: 3h is how long a pick stays featured, 12h is the lookback
+#     deciding who is eligible at all.
+#     THIS CADENCE IS COUPLED TO ClubSpotlightService::SPOTLIGHT_DURATION_HOURS
+#     and must match it. The section is gated on the stored window still being
+#     open, so a cron slower than that constant hides the Club Spotlight for the
+#     gap instead of rotating it. Was 12h/12h until 2026-10.
 #   daily 03:20 UTC — reputation-decay: charges every non-spoof club 5 reputation
 #     per whole day since it last synced (app:reputation:decay). Idempotent and
 #     catch-up-safe via a per-club anchor, so a missed night is settled on the next
-#     run rather than lost. Scheduled off the hour, away from the 00:00/12:00
-#     spotlight run, so the two don't contend. NOTE: the first run on an
+#     run rather than lost. Scheduled at :20 so it never lands on a spotlight run,
+#     which is now every third hour on the hour (00:00, 03:00, ... 21:00) rather
+#     than only 00:00/12:00 — :20 clears the 03:00 one by twenty minutes.
+#     NOTE: the first run on an
 #     environment that has never decayed settles every dormant club at once and
 #     touches far more rows than a nightly run — dry-run it first.
 #   every 10 min — competition-provision-instances: ensures every active
@@ -111,7 +119,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
     '*/15 * * * * /usr/local/bin/post-community-stat-tick.sh >> /var/log/post-stat-cron.log 2>&1' \
     '*/15 * * * * /usr/local/bin/telemetry-generate.sh     >> /var/log/telemetry-cron.log     2>&1' \
-    '0 */12 * * * /usr/local/bin/spotlight-generate.sh     >> /var/log/spotlight-cron.log     2>&1' \
+    '0 */3 * * *  /usr/local/bin/spotlight-generate.sh     >> /var/log/spotlight-cron.log     2>&1' \
     '20 3 * * *   /usr/local/bin/reputation-decay.sh       >> /var/log/reputation-decay-cron.log 2>&1' \
     '*/10 * * * * /usr/local/bin/competition-provision-instances.sh >> /var/log/competition-provision-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/competition-draw-rounds.sh         >> /var/log/competition-draw-cron.log      2>&1' \

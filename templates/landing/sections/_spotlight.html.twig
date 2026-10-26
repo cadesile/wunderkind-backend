@@ -1,5 +1,5 @@
 {#
-   Club Spotlight (#spotlight) — every 12h, one of the 5 most active clubs
+   Club Spotlight (#spotlight) — every 3h, one of the 5 most active clubs
    (minimum ClubSpotlightService::MIN_SYNC_COUNT valid syncs in the window) is
    featured here. The redesign moves it directly under #pillars and adds a
    Facilities panel, a trophy/kit column and a closing CTA.
@@ -14,7 +14,7 @@
 
    Gated on spotlight.isLive(), i.e. windowEndsAt still in the future, not on
    clubName alone. The card says "FEATURED THIS CYCLE" and the note promises a
-   12-hourly pick, so a row left behind by a stopped cron must drop out rather
+   3-hourly pick, so a row left behind by a stopped cron must drop out rather
    than keep advertising a cycle that ended days ago. A quiet cycle where the
    incumbent is still the most active club does NOT hide the section —
    selectNew() re-ups the window for exactly that case. _nav.html.twig gates its
@@ -239,7 +239,7 @@
             </div>
 
             <div class="spotlight-cta-bar">
-                <span class="spotlight-note">Picked at random every 12 hours from the most active clubs. Keep syncing and build something worth featuring.</span>
+                <span class="spotlight-note">Picked at random every 3 hours from the most active clubs. Keep syncing and build something worth featuring.</span>
                 <a href="#get" class="btn btn-gold btn-lg">BUILD YOUR CLUB</a>
             </div>
         </div>

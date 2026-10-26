@@ -1,6 +1,9 @@
 #!/bin/sh
 # Picks a new landing page "Club Spotlight" from the 5 most active clubs in the
-# trailing 12h window and notifies its owner (in-game inbox + push). Cached
+# trailing 12h window and notifies its owner (in-game inbox + push). Runs every
+# 3h: the 12h here is the lookback deciding who is eligible, not how long a pick
+# stays up — that is ClubSpotlightService::SPOTLIGHT_DURATION_HOURS, which this
+# cron's cadence has to match. Cached
 # into ClubSpotlight so the landing page never queries Club at page-load time.
 
 CONSOLE=/var/www/html/bin/console

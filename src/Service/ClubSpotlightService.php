@@ -22,7 +22,7 @@ use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Picks the landing page's "Club Spotlight" every 12h: of the clubs with at
+ * Picks the landing page's "Club Spotlight" every 3h: of the clubs with at
  * least MIN_SYNC_COUNT valid syncs in the trailing 12h window, the 5 most
  * active, one chosen at random, snapshot denormalized onto ClubSpotlight so
  * the landing page never queries Club at render time (same reasoning as
@@ -38,7 +38,24 @@ class ClubSpotlightService
 {
     private const ACTIVITY_WINDOW_HOURS = 12;
     private const CANDIDATE_POOL_SIZE   = 5;
-    private const SPOTLIGHT_DURATION_HOURS = 12;
+
+    /**
+     * How long one pick stays featured, and therefore how often the section
+     * visibly changes. Shortened from 12h to 3h (2026-10).
+     *
+     * **This is coupled to the cron cadence in the Dockerfile and must move
+     * with it.** `isLive()` is what gates the whole section, and it is false
+     * once windowEndsAt passes — so a 3h window behind a 12h cron would hide
+     * the Club Spotlight for 9 hours out of every 12 rather than rotating it.
+     * The entry is `0 * /3 * * *` (written without the space), which lines the
+     * two up exactly: each run's window expires as the next run starts.
+     *
+     * ACTIVITY_WINDOW_HOURS is deliberately NOT changed with it. That is the
+     * lookback deciding who is eligible, not how long they are shown, and
+     * requiring MIN_SYNC_COUNT syncs inside 3 hours instead of 12 would empty
+     * the candidate pool on all but the busiest days.
+     */
+    private const SPOTLIGHT_DURATION_HOURS = 3;
 
     /**
      * Minimum valid syncs inside ACTIVITY_WINDOW_HOURS for a club to be eligible
