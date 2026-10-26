@@ -7,7 +7,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * Singleton row holding the currently-featured club for the landing page's
- * "Club Spotlight" section. Refreshed every 12h by app:spotlight:generate (see
+ * "Club Spotlight" section. Refreshed every 3h by app:spotlight:generate (see
  * ClubSpotlightService), which picks one of the 5 most active clubs at random
  * and denormalizes everything the template needs onto this row — same pattern
  * as LiveTelemetrySnapshot, so the landing page never joins/queries Club at
@@ -217,7 +217,7 @@ class ClubSpotlight
      * Used when nobody new is eligible: the landing page only renders a
      * spotlight whose window is still open (so an abandoned row disappears
      * instead of claiming to be "featured this cycle" forever), but a quiet
-     * 12h window shouldn't blank the section when the incumbent is still the
+     * 3h window shouldn't blank the section when the incumbent is still the
      * most active club there is. Re-upping the window keeps the section honest
      * and live while deliberately NOT re-running update()/notifyOwner(), so
      * the same owner isn't pushed "You're in the Spotlight!" every cycle.

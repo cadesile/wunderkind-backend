@@ -46,7 +46,7 @@ class ClubSpotlightWindowTest extends TestCase
 
     public function testAnExpiredWindowIsNotLive(): void
     {
-        // The card claims "FEATURED THIS CYCLE" and the note promises a 12-hourly
+        // The card claims "FEATURED THIS CYCLE" and the note promises a 3-hourly
         // pick, so a row left behind by a stopped cron must stop rendering.
         $this->assertFalse($this->spotlight('Stale FC', '-2 days')->isLive());
     }
