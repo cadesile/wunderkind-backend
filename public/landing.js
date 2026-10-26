@@ -295,9 +295,129 @@ var FacilitySites = (function () {
         return { built: true, level: Math.max(1, Math.round(spriteLevel / 2)) };
     }
 
+    /**
+     * The ground the sprite paints its plot on, so the box behind it can match.
+     *
+     * Ported from the design drop's own bgOf(): a site's `base` is 'grass' or
+     * 'concrete' and the sprite paints the plot accordingly, but the plot is a
+     * diamond and the box around it is a rectangle — the corners, and whatever
+     * the letterboxing leaves, are the page's background unless it is told.
+     *
+     * Getting this wrong is not subtle. A concrete site on a green box reads as
+     * a brown island floating on grass, which is exactly what shipped before
+     * this was wired up. These two hex values are the sprite's ground colours,
+     * not page palette, which is why they live here beside the other sprite
+     * constants rather than as landing.css tokens.
+     *
+     * `base` is absent from the real Club Spotlight payload — FacilityConfigBuilder
+     * has no opinion about ground type — so it falls through to the sprite's own
+     * DEFAULT_*_CONFIG, which is what the renderer will have used.
+     */
+    function groundColor(site, config) {
+        var base = (config && config.base) || defaults(site).base;
+        return base === 'concrete' ? '#8a867c' : '#4a7a35';
+    }
+
+    /**
+     * Re-crops an emitted SVG to what it actually drew.
+     *
+     * The sprites reserve vertical headroom for the tallest thing that could
+     * stand on the plot — a crane, floodlights, a full stand — so a site with
+     * nothing tall built comes back with its content pressed into the bottom
+     * 70% of the canvas and a band of empty sky above it. Contained in a box,
+     * that reads as a picture sliding off the bottom edge.
+     *
+     * This only rewrites the viewBox and the width/height that follow from it.
+     * No path is touched and nothing is re-drawn — the rule against
+     * re-implementing the sprites is about drawing, and this is framing.
+     *
+     * The paths are pixel rectangles using only M/h/v/z (absolute move, relative
+     * horizontal, relative vertical, close), so walking them gives an exact
+     * bounding box rather than an approximation. Anything unexpected — no
+     * paths, a degenerate box, a missing viewBox — returns the SVG untouched,
+     * because a wrong crop is far worse than no crop.
+     */
+    function tightSvg(svg, pad) {
+        var vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+        var wh = /width="([\d.]+)" height="([\d.]+)"/.exec(svg);
+        if (!vb || !wh) return svg;
+
+        var vw = +vb[1], vh = +vb[2];
+        var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        var found = false;
+
+        var paths = svg.match(/ d="[^"]+"/g) || [];
+        for (var i = 0; i < paths.length; i++) {
+            var d = paths[i].slice(4, -1);
+            var token = /([Mhv])(-?[\d.]+)(?:[ ,](-?[\d.]+))?/g;
+            var x = 0, y = 0, m;
+            while ((m = token.exec(d)) !== null) {
+                if (m[1] === 'M') { x = +m[2]; y = +m[3]; }
+                else if (m[1] === 'h') { x += +m[2]; }
+                else { y += +m[2]; }
+                if (!isFinite(x) || !isFinite(y)) return svg;
+                if (x < x0) x0 = x;
+                if (x > x1) x1 = x;
+                if (y < y0) y0 = y;
+                if (y > y1) y1 = y;
+                found = true;
+            }
+        }
+
+        if (!found || x1 <= x0 || y1 <= y0) return svg;
+
+        pad = pad == null ? 1 : pad;
+        x0 = Math.max(0, Math.floor(x0 - pad));
+        y0 = Math.max(0, Math.floor(y0 - pad));
+        x1 = Math.min(vw, Math.ceil(x1 + pad));
+        y1 = Math.min(vh, Math.ceil(y1 + pad));
+
+        var w = x1 - x0, h = y1 - y0;
+        // Keep the original dp-per-sprite-pixel scale, so a cropped sprite is
+        // drawn at the same size as an uncropped one rather than blown up.
+        var perPx = (+wh[1]) / vw;
+
+        return svg
+            .replace(/viewBox="0 0 [\d.]+ [\d.]+"/, 'viewBox="' + x0 + ' ' + y0 + ' ' + w + ' ' + h + '"')
+            .replace(/width="[\d.]+" height="[\d.]+"/,
+                'width="' + (w * perPx) + '" height="' + (h * perPx) + '"');
+    }
+
     /** The whole site, drawn as one isometric scene. */
     function heroSvg(site, config, scale) {
-        return compose(site, config, { rotation: 0, time: 'day' }, scale || 2);
+        return tightSvg(compose(site, config, { rotation: 0, time: 'day' }, scale || 2));
+    }
+
+    /** Is this one of the stadium's four stands? */
+    function isStand(site, spriteId) {
+        return site === 'stadium' && STANDS[spriteId] === 1;
+    }
+
+    /**
+     * A stadium config showing one stand and nothing else.
+     *
+     * The other three stands drop to level 1 — their unbuilt size, since the
+     * sprite has no way to remove a stand — and every building, light, board
+     * and tree switches off. Without this a "North Stand" tile is a picture of
+     * the whole ground with a north stand somewhere in it.
+     *
+     * The named stand keeps its real level and its real construction flag, so
+     * on the Club Spotlight this is still that club's actual stand at its
+     * actual size.
+     */
+    function standOnly(config, side) {
+        var cfg = Object.assign({}, config, {
+            north: 1, east: 1, south: 1, west: 1,
+            northConstruction: false, eastConstruction: false,
+            southConstruction: false, westConstruction: false,
+            floodlights: false, scoreboard: false,
+            shop: false, museum: false, carpark: false, trees: false
+        });
+
+        cfg[side] = config[side];
+        cfg[side + 'Construction'] = config[side + 'Construction'] === true;
+
+        return cfg;
     }
 
     /**
@@ -306,9 +426,21 @@ var FacilitySites = (function () {
      * `facility` is what makes a single-facility tile possible, and it is passed
      * the full site config rather than a stripped one so the facility sits in
      * the same ground, lighting and accent colour it does on the hero above it.
+     *
+     * EXCEPT for the four stands. The stadium sprite's `facility` option
+     * addresses floodlights, scoreboard, shop, museum, carpark and trees — look
+     * at window.FACILITY_SITES.stadium.ids, which is those six and not the
+     * stands. The stands live in the same slug map only because
+     * STADIUM_SLUGS covers the whole ground, so asking for facility:'north'
+     * matches nothing and the sprite returns a bare plot: four identical empty
+     * tiles, with no error anywhere. They are isolated by config instead.
      */
     function tileSvg(site, config, spriteId, scale) {
-        return compose(site, config, { facility: spriteId, rotation: 0, time: 'day' }, scale || 3);
+        if (isStand(site, spriteId)) {
+            return tightSvg(compose('stadium', standOnly(config, spriteId), { rotation: 0, time: 'day' }, scale || 3));
+        }
+
+        return tightSvg(compose(site, config, { facility: spriteId, rotation: 0, time: 'day' }, scale || 3));
     }
 
     return {
@@ -318,6 +450,8 @@ var FacilitySites = (function () {
         defaults: defaults,
         slugMap: slugMap,
         stateOf: stateOf,
+        isStand: isStand,
+        groundColor: groundColor,
         heroSvg: heroSvg,
         tileSvg: tileSvg,
         ids: function (site) { return (window.FACILITY_SITES[site] || {}).ids || []; }
@@ -454,6 +588,10 @@ var FacilitySites = (function () {
             hero.className = 'spotlight-sector-hero';
             hero.alt = 'Isometric view of this club’s ' + site.replace('_', ' ');
             hero.decoding = 'async';
+            // No `base` in the spotlight payload — FacilityConfigBuilder has no
+            // opinion about ground type — so groundColor() resolves it from the
+            // sprite's own default, which is what the renderer itself used.
+            hero.style.background = FacilitySites.groundColor(site, cfg);
             hero.src = svgDataUri(FacilitySites.heroSvg(site, cfg, 2));
 
             var list = document.createElement('ul');
@@ -471,6 +609,7 @@ var FacilitySites = (function () {
                 var img = document.createElement('img');
                 img.alt = '';
                 img.decoding = 'async';
+                img.style.background = FacilitySites.groundColor(site, cfg);
                 img.src = svgDataUri(FacilitySites.tileSvg(site, cfg, spriteId, 2));
 
                 var name = document.createElement('span');
@@ -1603,21 +1742,16 @@ var Scenes = (function () {
     }
 
     /**
-     * One stand, drawn alone.
+     * A stadium whose only notable feature is one stand, at a random size.
      *
-     * Every other stand is flattened to level 1 and every building switched off,
-     * so the tile shows that stand and nothing else — a stadium tile rendered
-     * from the full config would be four stands with one of them cropped.
+     * Isolating it — flattening the other three, switching the buildings off —
+     * is FacilitySites.standOnly()'s job, because the Club Spotlight needs the
+     * same isolation applied to a real club's config. This only decides how big
+     * the stand is and whether it is mid-build, which are the design's numbers.
      */
     function standTile(side, key) {
         var r = rng(key);
-        var cfg = stadium(r, {
-            north: 1, east: 1, south: 1, west: 1,
-            floodlights: false, scoreboard: false,
-            shop: false, museum: false, carpark: false, trees: false,
-            northConstruction: false, eastConstruction: false,
-            southConstruction: false, westConstruction: false
-        });
+        var cfg = stadium(r);
         cfg[side] = r.int(2, 10);
         cfg[side + 'Construction'] = r.chance(0.25);
 
@@ -1663,18 +1797,25 @@ var Scenes = (function () {
             + '<rect y="' + (h - 18) + '" width="' + w + '" height="18" fill="#4a7a35"/>';
 
         items.forEach(function (it) {
-            var m = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(it.svg);
+            // Four numbers, not two: FacilitySites.heroSvg() re-crops a site to
+            // what it drew, so a facility sprite arrives with a non-zero origin
+            // (viewBox="0 53 248 133"). A regex anchored on "0 0" matched
+            // nothing and this dropped the stadium out of the scene silently.
+            var m = /viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/.exec(it.svg);
             if (!m) return;
 
-            var vw = +m[1];
-            var vh = +m[2];
+            var vx = +m[1];
+            var vy = +m[2];
+            var vw = +m[3];
+            var vh = +m[4];
             var ph = it.h;
             var pw = vw / vh * ph;
             var y = (it.y == null ? h - 12 : it.y) - ph;
             var inner = it.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
 
             out += '<svg x="' + (it.x - pw / 2) + '" y="' + y + '" width="' + pw
-                + '" height="' + ph + '" viewBox="0 0 ' + vw + ' ' + vh + '">' + inner + '</svg>';
+                + '" height="' + ph + '" viewBox="' + vx + ' ' + vy + ' ' + vw + ' ' + vh + '">'
+                + inner + '</svg>';
         });
 
         return svgDataUri(out + '</svg>');
@@ -1824,6 +1965,10 @@ var Scenes = (function () {
         // repeating it as alt text would have a screen reader say it twice.
         img.alt = '';
         img.decoding = 'async';
+        // The box behind the sprite is painted its own ground, not a fixed
+        // green: the plot is a diamond inside a rectangle, so a concrete site
+        // on a grass box reads as a brown island floating on a lawn.
+        img.style.background = FacilitySites.groundColor(site, cfg);
         img.src = svgDataUri(FacilitySites.tileSvg(site, cfg, spriteId, 3));
 
         var name = document.createElement('span');
@@ -1853,6 +1998,7 @@ var Scenes = (function () {
 
             var heroImg = heroBox && heroBox.querySelector('img');
             if (heroImg) {
+                heroBox.style.background = FacilitySites.groundColor(site, cfg);
                 heroImg.src = svgDataUri(FacilitySites.heroSvg(site, cfg, 3));
                 heroBox.classList.add('is-mounted');
             }
@@ -1862,10 +2008,10 @@ var Scenes = (function () {
             var slugs = FacilitySites.slugMap(site);
             Object.keys(slugs).forEach(function (slug) {
                 var spriteId = slugs[slug];
-                // A stand drawn from the full stadium config would be three other
-                // stands with one of them cropped, so each gets its own flattened
-                // config — see Scenes.standTile().
-                var tileCfg = (site === 'stadium' && ['north', 'east', 'south', 'west'].indexOf(spriteId) !== -1)
+                // A stand gets its own stadium so it can have its own size; the
+                // isolation (flattening the other three, switching the buildings
+                // off) is FacilitySites.tileSvg's job, not this loop's.
+                var tileCfg = FacilitySites.isStand(site, spriteId)
                     ? Scenes.standTile(spriteId, 'stand-' + spriteId)
                     : cfg;
 
@@ -1899,6 +2045,7 @@ var Scenes = (function () {
                 var img = document.createElement('img');
                 img.alt = 'Physio clinic at level ' + n;
                 img.decoding = 'async';
+                img.style.background = FacilitySites.groundColor('medical', cfg);
                 img.src = svgDataUri(FacilitySites.tileSvg('medical', cfg, spriteId, 4));
 
                 var label = document.createElement('div');

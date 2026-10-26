@@ -2876,13 +2876,14 @@ button:focus-visible,
 .spotlight-sector-name.is-stadium  { color: var(--mint); }
 .spotlight-sector-count { font-size: 18px; line-height: 1; color: var(--text-muted); }
 
+/* Background set by landing.js, from the sprite's own ground type — the real
+   spotlight payload carries no `base`, so it resolves to the sprite default. */
 .spotlight-sector-hero {
     display: block;
     width: 100%;
     height: 140px;
     object-fit: contain;
     padding: 6px;
-    background: #4a7a35;
     border-bottom: 2px solid var(--border);
 }
 
@@ -2910,7 +2911,6 @@ button:focus-visible,
     aspect-ratio: 1 / 1;
     object-fit: contain;
     padding: 4px;
-    background: #5f8a3a;
 }
 .spotlight-tile-name {
     display: block;
@@ -3099,11 +3099,21 @@ button:focus-visible,
 }
 .sector-blurb { font-size: 13px; line-height: 1.6; color: var(--text); }
 
+/*
+   The hero's box is wider than the sprite's raw canvas because landing.js
+   re-crops each render to what it actually drew — the sprites reserve vertical
+   headroom for the tallest thing that could stand on the plot, so an
+   uncropped site arrives pressed into the bottom of a tall canvas. 16/9 is
+   close to what a cropped site comes back as; `contain` absorbs the rest.
+
+   No background here: landing.js paints the box the sprite's OWN ground colour
+   (grass or concrete, from the config), because the plot is a diamond inside a
+   rectangle and a fixed green behind a concrete site reads as a brown island
+   floating on a lawn.
+*/
 .sector-hero {
-    aspect-ratio: 520 / 400;
-    max-height: 260px;
+    aspect-ratio: 16 / 9;
     width: 100%;
-    background: #4a7a35;
     border-bottom: 4px solid var(--border);
     overflow: hidden;
 }
@@ -3129,13 +3139,13 @@ button:focus-visible,
     border: 2px solid var(--border);
     min-width: 0;
 }
+/* Background set per tile by landing.js, from that site's ground type. */
 .sector-tile img {
     display: block;
     width: 100%;
     aspect-ratio: 4 / 3;
     object-fit: contain;
     padding: 8px;
-    background: #5f8a3a;
 }
 .sector-tile-name {
     display: block;
@@ -3175,7 +3185,6 @@ button:focus-visible,
     aspect-ratio: 4 / 3;
     object-fit: contain;
     padding: 8px;
-    background: #5f8a3a;
 }
 .upgrade-level-label {
     padding: 8px 10px;
