@@ -257,569 +257,22 @@
             50% { opacity: 0.3; }
         }
 
-        /* ── Chairman's Terminal (hero widget) ──
-           Built entirely from the existing token/shadow language above — no new
-           palette, no new shadow style. */
-        .terminal {
-            background: var(--bg-mid);
-            border: 1px solid var(--border);
-            box-shadow: 0 0 0 1px var(--mint-dim), 0 0 24px rgba(63,170,126,.15);
-            padding: 16px;
-        }
-        .terminal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .terminal-header-live {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .terminal-header-live .pixel {
-            font-size: 9px;
-            letter-spacing: 0.08em;
-            color: var(--gold);
-        }
-        .terminal-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--mint);
-            box-shadow: 0 0 8px var(--mint);
-            display: inline-block;
-            flex-shrink: 0;
-            animation: pulse 1.6s ease-in-out infinite;
-        }
-        .terminal-sync {
-            font-size: 16px;
-            color: var(--text-muted);
-        }
-        .terminal-stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            padding-bottom: 16px;
-            margin-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .terminal-stat {
-            background: var(--panel);
-            padding: 12px 8px;
-            text-align: center;
-        }
-        .terminal-stat-label {
-            display: block;
-            font-size: 7px;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-        }
-        .terminal-stat-val {
-            display: block;
-            font-family: 'Press Start 2P', monospace;
-            font-size: clamp(12px, 1.6vw, 16px);
-            color: var(--gold);
-            text-shadow: 0 0 16px rgba(245,200,66,.35);
-        }
-        .terminal-stat-sub {
-            display: block;
-            font-size: 15px;
-            color: var(--text-muted);
-            margin-top: 6px;
-        }
-        .terminal-feed {
-            position: relative;
-            height: 96px;
-            overflow: hidden;
-            padding-bottom: 16px;
-            margin-bottom: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-        .terminal-feed-item {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            opacity: 0;
-            transform: translateY(6px);
-            transition: opacity 0.5s ease, transform 0.5s ease;
-            font-size: 18px;
-            line-height: 1.4;
-            color: var(--text);
-            cursor: pointer;
-        }
-        .terminal-feed-item.active {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .terminal-feed-item[role="button"]:focus-visible {
-            outline: 1px dashed var(--gold);
-            outline-offset: 2px;
-        }
-        .terminal-feed-category {
-            font-size: 7px;
-            letter-spacing: 0.04em;
-            color: var(--text);
-        }
-        .terminal-feed-item.cat-dressing_room .terminal-feed-category { color: var(--red); }
-        .terminal-feed-item.cat-dilution      .terminal-feed-category { color: var(--gold); }
-        .terminal-feed-item.cat-covenant      .terminal-feed-category { color: var(--gold-dim); }
-        .terminal-feed-item.cat-talisman      .terminal-feed-category { color: var(--mint); }
-        .terminal-feed-item.cat-community     .terminal-feed-category { color: var(--orange); }
-        .terminal-feed-item.cat-outlay        .terminal-feed-category { color: var(--text-muted); }
-        .terminal-feed-item.cat-attendance    .terminal-feed-category { color: var(--mint-dim); }
-        .terminal-feed-item.cat-top_transfer  .terminal-feed-category { color: var(--cyan); }
-        .terminal-feed-item.cat-top_scorer    .terminal-feed-category { color: var(--purple); }
-        .terminal-feed-line { display: block; }
-        .terminal-feed-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            vertical-align: middle;
-            margin-right: 4px;
-        }
-        .terminal-feed-badge svg { display: inline-block; vertical-align: middle; image-rendering: pixelated; }
-        .terminal-feed-time {
-            color: var(--mint);
-            font-weight: bold;
-        }
-        .terminal-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            font-size: 15px;
-            color: var(--text-muted);
-        }
-        .terminal-cta {
-            font-size: 8px;
-            color: var(--gold);
-            letter-spacing: 0.05em;
-        }
-        .terminal-cta:hover { color: var(--text); }
+        /* ── Narrow club rows on the leaderboard lists ──
+           clubBadgeIconsHtml() emits badge + kit; only the badge survives a
+           narrow row, which is the "always at least the badge" floor.
 
-        /* ════════════════════════════════
-           CLUB SPOTLIGHT
-        ════════════════════════════════ */
-        .spotlight-section { padding: 40px 0 0; }
-        .spotlight-card {
-            background: var(--bg-mid);
-            border: 1px solid var(--border);
-            box-shadow: 0 0 0 1px var(--gold-dim), 0 0 24px rgba(245,200,66,.15);
-        }
-        .spotlight-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .spotlight-header .pixel { font-size: 9px; letter-spacing: 0.08em; color: var(--gold); }
-        .spotlight-club-name { font-size: 18px; color: var(--text); }
-        .spotlight-badge-kit { display: flex; align-items: center; gap: 6px; }
-        .spotlight-badge-kit svg { width: 32px; height: 32px; }
-
-        .spotlight-pitch {
-            background-image: repeating-linear-gradient(90deg, #6a8e3d 0 44px, #638735 44px 88px);
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            gap: 24px;
-            padding: 20px 16px 0;
-            min-height: 180px;
-            overflow: hidden;
-        }
-        .spotlight-pitch svg { display: block; image-rendering: pixelated; }
-        .spotlight-owner svg { width: auto; height: 120px; }
-        /* 178px, not 160: the v2 facility sprite's canvas grew 276x216 to
-           324x240, so the old pinned height drew the bowl itself ~10%
-           smaller. 160 x 240/216 keeps it the size it has always been. */
-        .spotlight-stadium svg { width: auto; height: 178px; }
-
-        .spotlight-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 14px 16px;
-            border-top: 1px solid var(--border);
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-        .spotlight-footer strong { color: var(--mint); }
-        .spotlight-note {
-            font-family: 'Space Mono', monospace;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-align: center;
-            padding: 10px 16px 16px;
-        }
-        .spotlight-pitch-label {
-            font-family: 'Space Mono', monospace;
-            font-size: 9px;
-            color: var(--text-muted);
-            text-align: center;
-            margin-top: 4px;
-        }
-
-        /* ── Honours board ──
-           Sits between the footer band and the fixtures/transfers grid. Trophies
-           wrap into as many rows as the club has tiers; the count chip carries the
-           number so the artwork is decorative (alt="") rather than load-bearing. */
-        .spotlight-trophies {
-            padding: 14px 16px;
-            border-top: 1px solid var(--border);
-        }
-        .spotlight-trophy-total {
-            display: inline-block;
-            margin-left: 8px;
-            padding: 2px 5px;
-            background: var(--gold-dim);
-            color: var(--dark);
-            font-size: 8px;
-        }
-        .spotlight-trophy-list {
-            list-style: none;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 14px;
-        }
-        .spotlight-trophy {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 10px;
-            background: var(--panel);
-            border: 1px solid var(--border);
-        }
-        /* Holds the inline <svg> composeTrophySvg() injects (trophy-compositor.js),
-           which carries its own width/height from the scale it was drawn at —
-           so this only has to stop the flex row squeezing it. */
-        .spotlight-trophy-img {
-            flex: 0 0 auto;
-            line-height: 0;
-        }
-        .spotlight-trophy-img svg { display: block; }
-        .spotlight-trophy-meta { display: flex; flex-direction: column; }
-        .spotlight-trophy-count {
-            font-family: 'VT323', monospace;
-            font-size: 20px;
-            line-height: 1;
-            color: var(--gold);
-        }
-        .spotlight-trophy-tier {
-            font-family: 'Space Mono', monospace;
-            font-size: 9px;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-
-        .spotlight-detail-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0;
-            border-top: 1px solid var(--border);
-        }
-        .spotlight-detail-col {
-            padding: 14px 16px;
-        }
-        .spotlight-detail-col + .spotlight-detail-col { border-left: 1px solid var(--border); }
-        .spotlight-detail-title {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 9px;
-            color: var(--gold);
-            margin-bottom: 10px;
-            letter-spacing: 0.03em;
-        }
-        .spotlight-detail-list { list-style: none; }
-        .spotlight-detail-list li {
-            font-size: 12.5px;
-            color: var(--text);
-            padding: 6px 0;
-            border-bottom: 1px solid var(--border);
-        }
-        .spotlight-detail-list li:last-child { border-bottom: 0; }
-        .spotlight-detail-sub {
-            display: block;
-            font-family: 'Space Mono', monospace;
-            font-size: 10px;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-        .spotlight-result-badge {
-            display: inline-block;
-            min-width: 18px;
-            text-align: center;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 8px;
-            padding: 2px 4px;
-            margin-right: 6px;
-            color: var(--dark);
-        }
-        .spotlight-result-badge.is-w { background: var(--mint); }
-        .spotlight-result-badge.is-d { background: var(--text-muted); }
-        .spotlight-result-badge.is-l { background: var(--red); }
-
-        /* ════════════════════════════════
-           OWNER SPOTLIGHT
-
-           A board of per-owner cards rather than one panel of stacked rows: each
-           owner is a self-contained card (gold ring, pixel rank, avatar, dividend
-           figure, then their clubs), laid out in balanced columns so a one-club
-           owner doesn't reserve the same vertical slab as a five-club one.
-
-           Masonry via CSS multi-column, not grid: card heights vary with club
-           count, and `columns` packs that ragged edge without the gaps
-           grid-auto-flow leaves behind. Column flow also preserves DOM order
-           reading down each column in turn, so rank order, tab order and visual
-           order stay the same sequence — which an <ol> promises and dense grid
-           packing would quietly break.
-
-           Still its own .ospot-* namespace, separate from the Club Spotlight's
-           .spotlight-* family, so restyling one never silently restyles the other.
-        ════════════════════════════════ */
-        .ospot-section { padding: 0 0 40px; }
-
-        /* The board head sits above the cards, not inside a wrapping panel — the
-           cards themselves carry the gold ring now, and nesting rings inside rings
-           muddied which edge belonged to which owner. */
-        .ospot-board-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 0 2px 12px;
-        }
-        .ospot-board-head .pixel { font-size: 9px; letter-spacing: 0.08em; color: var(--gold); }
-        .ospot-header-sub { font-size: 11px; color: var(--text-muted); }
-
-        .ospot-board {
-            list-style: none;
-            columns: 2;
-            column-gap: 14px;
-        }
-
-        /* Card radius. The page's pixel language is otherwise hard-edged, so this
-           stays deliberately small — set it to 0 for pure sharp-edge, or raise it
-           to soften every card and club pill at once. */
-        .ospot-board { --ospot-radius: 3px; }
-
-        .ospot-row {
-            break-inside: avoid;          /* keeps a card whole instead of splitting it across columns */
-            -webkit-column-break-inside: avoid;
-            page-break-inside: avoid;     /* legacy alias some engines still read */
-            display: block;
-            margin: 0 0 14px;
-            padding: 13px 14px 14px;
-            background: var(--bg-mid);
-            border: 1px solid var(--gold-dim);
-            border-radius: var(--ospot-radius);
-            box-shadow: 0 0 18px rgba(245,200,66,.08);
-        }
-
-        .ospot-head {
-            display: grid;
-            grid-template-columns: auto auto 1fr auto;
-            align-items: center;
-            gap: 2px 10px;
-        }
-        .ospot-rank {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 11px;
-            color: var(--gold-dim);
-            min-width: 24px;
-        }
-        /* Reserved even when the owner has no saved appearance, so a row with an
-           avatar and one without stay the same height — no content jumping as the
-           sprites paint in after landing.js runs. */
-        .ospot-avatar-slot {
-            display: block;
-            width: 34px;
-            height: 48px;
-            overflow: hidden;
-        }
-        .ospot-avatar-slot svg {
-            display: block;
-            width: auto;
-            height: 48px;
-            image-rendering: pixelated;
-        }
-        .ospot-identity { min-width: 0; }
-        .ospot-owner-name {
-            display: block;
-            font-size: 15px;
-            line-height: 1.25;
-            color: var(--text);
-            overflow-wrap: anywhere;
-        }
-        .ospot-owner-meta {
-            display: block;
-            font-size: 10px;
-            color: var(--text-muted);
-            margin-top: 3px;
-        }
-        .ospot-balance { text-align: right; white-space: nowrap; }
-        .ospot-balance-val {
-            display: block;
-            font-family: 'VT323', monospace;
-            font-size: 22px;
-            line-height: 1.1;
-            color: var(--mint);
-        }
-        .ospot-balance-lbl {
-            display: block;
-            font-size: 9px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-        }
-
-        /* Country flag. A vendored SVG (public/assets/flags/, MIT flag-icons — see
-           that directory's README), not an emoji flag: several of these codes have
-           no regional-indicator equivalent at all, and the ones that do render
-           inconsistently across platforms at this size. England in particular needs
-           a subdivision tag sequence that Windows and most Android builds don't draw.
-
-           The hairline border is load-bearing, not decoration: Poland, Indonesia and
-           Monaco are white along one edge, so a flag sitting directly on the card
-           would appear to lose that half. The <img> carries its own width/height
-           attributes too, so a row keeps its height while the SVGs decode. */
-        .ospot-flag {
-            display: inline-block;
-            width: 18px;
-            height: 13px;
-            margin-left: 6px;
-            vertical-align: middle;
-            object-fit: cover;
-            border: 1px solid rgba(5,21,18,0.75);
-            border-radius: var(--ospot-radius);
-        }
-
-        .ospot-clubs-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 8px;
-            margin-top: 12px;
-            padding-bottom: 6px;
-        }
-        .ospot-clubs-label {
-            font-size: 9px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-        }
-        /* A count, not a control: OwnerSpotlightService caps the payload at
-           CLUBS_PER_OWNER, so there is nothing further to disclose client-side.
-           Styled flat for that reason — anything button-shaped here would be an
-           affordance that cannot deliver. */
-        .ospot-more {
-            font-size: 9px;
-            letter-spacing: 0.06em;
-            color: var(--gold-dim);
-            white-space: nowrap;
-        }
-
-        .ospot-clubs { list-style: none; display: grid; gap: 5px; }
-        .ospot-club {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 5px 8px;
-            font-size: 12.5px;
-            color: var(--text);
-            background: var(--dark);
-            border: 1px solid var(--border);
-            border-radius: var(--ospot-radius);
-        }
-        /* Fixed box, not just a min-width: clubBadgeIconsHtml() injects these SVGs
-           after first paint, and an unsized slot let every club pill jump taller
-           the moment they landed. */
-        .ospot-club-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            flex: 0 0 auto;
-            min-width: 22px;
-            height: 22px;
-        }
-        .ospot-club-badge svg {
-            width: 22px;
-            height: 22px;
-            image-rendering: pixelated;
-        }
-        .ospot-club-name {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .ospot-club-division {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 10px;
-            color: var(--text-muted);
-            white-space: nowrap;
-        }
-        .ospot-tier {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 7px;
-            padding: 3px 4px;
-            color: var(--dark);
-            background: var(--gold-dim);
-            border-radius: var(--ospot-radius);
-        }
-        .ospot-note {
-            font-family: 'Space Mono', monospace;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-align: center;
-            padding: 2px 16px 0;
-        }
-
-        /* Drops to a single column before a card gets too narrow to hold a club
-           pill's badge + name + flag + division on one line. Two columns stay
-           readable well below this, so there is no intermediate step. */
-        @media (max-width: 720px) {
-            .ospot-board { columns: 1; }
-            /* The kit rides along with the badge in clubBadgeIconsHtml()'s output;
-               below this width the row only has room for the badge itself. */
-            .ospot-club-badge svg:nth-child(2) { display: none; }
-        }
-        @media (max-width: 420px) {
-            .ospot-head { grid-template-columns: auto auto 1fr; }
-            .ospot-balance { grid-column: 3 / -1; text-align: left; margin-top: 6px; }
-            .ospot-balance-lbl { display: inline; margin-left: 6px; }
-            .ospot-balance-val { display: inline; }
-            .ospot-club { flex-wrap: wrap; }
-            .ospot-club-division { margin-left: 30px; width: 100%; }
-        }
-
+           This rule is all that remains of the block that used to sit here. The
+           Chairman's Terminal, Club Spotlight and Owner Spotlight rules that
+           surrounded it were written for layouts the 2026-10 redesign replaced
+           outright — a 96px rotating feed viewport, a two-column hero, stacked
+           full-width owner rows — so they were removed rather than overridden.
+           All three sections are now defined exactly once, at the end of this
+           file. */
         @media (max-width: 560px) {
-            /* clubBadgeIconsHtml() emits badge + kit; only the badge survives a
-               narrow row, which is the "always at least the badge" floor. */
             .lb-badge svg:nth-child(2),
             .lbg-row-badge svg:nth-child(2) { display: none; }
         }
 
-        @media (max-width: 600px) {
-            .spotlight-pitch { flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding-bottom: 12px; }
-            .spotlight-detail-grid { grid-template-columns: 1fr; }
-            .spotlight-detail-col + .spotlight-detail-col { border-left: 0; border-top: 1px solid var(--border); }
-        }
 
         /* ════════════════════════════════
            TICKER
@@ -2678,4 +2131,1414 @@ img[width][height] { height: auto; }
    replaced, and two 162px columns at 375px leaves them very cramped. */
 @media (max-width: 480px) {
     .archetype-grid { grid-template-columns: 1fr; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TERMINAL / CLUB SPOTLIGHT / OWNER SPOTLIGHT — base shells
+
+   These three sections were redesigned in 2026-10 and their original rules
+   (written for a 96px rotating feed inside a two-column hero, and for a column
+   board of stacked owner rows) were removed rather than overridden. What is
+   here is the shared chrome that survived the redesign unchanged in intent —
+   panel shells, header bands, the status light, the nine feed-category colours,
+   the trophy chips, the result badges. The layout on top of it is in the
+   LANDING REDESIGN layer immediately below, which is ordered after this on
+   purpose: everything here is a base that layer refines.
+
+   The design file's terminal background (#051512) and header band (#0a2420) are
+   --border and --dark: no new tokens, same two colours.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Terminal shell ──────────────────────────────────────────────────────── */
+
+.terminal {
+    background: var(--border);
+    border: 4px solid var(--panel);
+}
+
+.terminal-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+    padding: 16px 24px;
+    border-bottom: 4px solid var(--panel);
+    background: var(--dark);
+}
+.terminal-header-live { display: flex; align-items: center; gap: 12px; }
+
+/* The status light. Its colour is the snapshot state (see the redesign layer);
+   the pulse only runs on a live one, and never under reduced motion. */
+.terminal-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint);
+    display: inline-block;
+    flex-shrink: 0;
+    animation: pulse 1.6s ease-in-out infinite;
+}
+
+.terminal-sync { font-size: 20px; line-height: 1.1; color: var(--text-muted); }
+
+/* auto-fit, not repeat(4, 1fr): four fixed columns at 360px gives each tile
+   about 80px, which the pixel font cannot render a five-figure number in. */
+.terminal-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    border-bottom: 4px solid var(--panel);
+}
+.terminal-stat {
+    padding: 20px 24px;
+    border-right: 2px solid var(--panel);
+    min-width: 0;
+}
+.terminal-stat-label {
+    display: block;
+    font-size: 9px;
+    line-height: 1.6;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+.terminal-stat-val {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(14px, 1.8vw, 20px);
+    line-height: 1.3;
+    color: var(--text);
+}
+.terminal-stat-sub {
+    display: block;
+    font-size: 20px;
+    line-height: 1.2;
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+
+.terminal-feed-category {
+    font-size: 9px;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    color: var(--text);
+}
+/* One colour per feed source. The category label is also spelled out in words
+   on every line, so the colour is reinforcement, never the only carrier. */
+.terminal-feed-item.cat-dressing_room .terminal-feed-category { color: var(--red); }
+.terminal-feed-item.cat-dilution      .terminal-feed-category { color: var(--gold); }
+.terminal-feed-item.cat-covenant      .terminal-feed-category { color: var(--gold-dim); }
+.terminal-feed-item.cat-talisman      .terminal-feed-category { color: var(--mint); }
+.terminal-feed-item.cat-community     .terminal-feed-category { color: var(--orange); }
+.terminal-feed-item.cat-outlay        .terminal-feed-category { color: var(--text-muted); }
+.terminal-feed-item.cat-attendance    .terminal-feed-category { color: var(--mint-dim); }
+.terminal-feed-item.cat-top_transfer  .terminal-feed-category { color: var(--cyan); }
+.terminal-feed-item.cat-top_scorer    .terminal-feed-category { color: var(--purple); }
+/* The left rule repeats the category colour, which is what makes the feed
+   scannable at a glance rather than a wall of identical rows. */
+.terminal-feed-item.cat-dressing_room { border-left-color: var(--red); }
+.terminal-feed-item.cat-dilution      { border-left-color: var(--gold); }
+.terminal-feed-item.cat-covenant      { border-left-color: var(--gold-dim); }
+.terminal-feed-item.cat-talisman      { border-left-color: var(--mint); }
+.terminal-feed-item.cat-community     { border-left-color: var(--orange); }
+.terminal-feed-item.cat-attendance    { border-left-color: var(--mint-dim); }
+.terminal-feed-item.cat-top_transfer  { border-left-color: var(--cyan); }
+.terminal-feed-item.cat-top_scorer    { border-left-color: var(--purple); }
+
+.terminal-feed-time { color: var(--text-muted); }
+
+/* ── Club Spotlight shell ────────────────────────────────────────────────── */
+
+/* No top padding: #pillars sits directly above and already has its own. */
+.spotlight-section { padding-top: 0; }
+
+.spotlight-card {
+    background: var(--bg-mid);
+    border: 4px solid var(--gold);
+    box-shadow: 10px 10px 0 var(--border);
+}
+.spotlight-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+    padding: 20px 24px;
+    border-bottom: 4px solid var(--border);
+    background: var(--bg);
+}
+.spotlight-badge-kit { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.spotlight-badge-kit svg { height: 42px; width: auto; }
+.spotlight-club-name { color: var(--text); overflow-wrap: anywhere; }
+.spotlight-pitch svg { display: block; }
+
+.spotlight-note {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
+/* Honours board chips. A tier with real titles and no trophy configured still
+   appears, count-only — dropping it would under-report real silverware. */
+.spotlight-trophy-total {
+    display: inline-block;
+    padding: 2px 5px;
+    background: var(--gold-dim);
+    color: var(--dark);
+    font-size: 8px;
+}
+.spotlight-trophy-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 20px;
+    padding: 0;
+}
+.spotlight-trophy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--panel);
+    border: 2px solid var(--border);
+}
+.spotlight-trophy-img svg { display: block; height: 54px; width: auto; }
+.spotlight-trophy-meta { display: flex; flex-direction: column; line-height: 1.1; }
+.spotlight-trophy-count { font-size: 20px; color: var(--gold); }
+.spotlight-trophy-tier { font-size: 16px; color: var(--text-muted); }
+
+/* W/D/L and IN/OUT. The letter is the content, so the colour is never the only
+   thing distinguishing a win from a loss. */
+.spotlight-result-badge {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    line-height: 1;
+    padding: 6px 7px;
+    border: 2px solid var(--border);
+    flex: none;
+    color: var(--border);
+}
+.spotlight-result-badge.is-w { background: var(--mint); }
+.spotlight-result-badge.is-d { background: var(--text-muted); }
+.spotlight-result-badge.is-l { background: var(--red); }
+
+/* ── Owner Spotlight shell ──────────────────────────────────────────────── */
+
+.ospot-board-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 24px;
+    margin-bottom: 32px;
+}
+.ospot-board-head .pixel {
+    font-size: clamp(14px, 2.2vw, 22px);
+    line-height: 1.5;
+    font-weight: 400;
+    color: var(--gold);
+    margin: 0;
+}
+.ospot-header-sub { font-size: 22px; line-height: 1.1; color: var(--text-muted); }
+
+.ospot-rank { font-size: 13px; line-height: 1; color: var(--text-muted); flex: none; }
+.ospot-avatar-slot { display: inline-flex; align-items: flex-end; }
+.ospot-avatar-slot svg { display: block; height: 52px; width: auto; }
+.ospot-identity { min-width: 0; }
+.ospot-owner-name {
+    font-family: 'Press Start 2P', monospace;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+.ospot-owner-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 20px;
+    line-height: 1.1;
+    color: var(--text-muted);
+}
+.ospot-balance-val { font-family: 'Press Start 2P', monospace; color: var(--mint); }
+.ospot-balance-lbl { font-size: 18px; line-height: 1.1; color: var(--text-muted); }
+
+/* Explicitly sized so a row does not reflow as the flags decode. Each one
+   carries its country name as alt AND title — an 18x13 flag is not reliably
+   identifiable, and several are near-identical at that size. */
+.ospot-flag {
+    width: 18px;
+    height: 13px;
+    flex: none;
+    vertical-align: middle;
+    border: 1px solid var(--border);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LANDING REDESIGN (2026-10)
+
+   Appended rather than interleaved, deliberately: the rules above are the
+   extracted original stylesheet, and several of them are overridden here
+   (.hero-inner's two-column grid, .terminal's hero-widget sizing, a handful of
+   .spotlight-* and .ospot-* names). Cascade order does that for free, and it
+   keeps "what the page was" readable next to "what it is", which matters while
+   the thirteen dropped sections are still on disk and could be put back.
+
+   Every colour here is a token from the :root block at the top of this file.
+   The design file's hex values ARE this palette, so nothing new was needed.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+
+/* Visible to assistive tech, not to the eye. The Rich List's rank glyphs read
+   "01" on screen, where the surrounding card makes it obviously a rank; a
+   screen reader gets "Rank 01" from this. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+/* Accent helpers, so a section's own colour can be set in the markup without a
+   style attribute per element. Named for the token, not for a meaning. */
+.is-gold { color: var(--gold); }
+.is-mint { color: var(--mint); }
+.is-cyan { color: var(--cyan); }
+.is-red  { color: var(--red); }
+
+/* A button that reads as a link, for an action in the middle of a sentence.
+   A real <button> rather than an <a href="#">, because it performs an action
+   (opening a modal) and does not navigate. */
+.link-button {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--gold);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.link-button:hover { color: var(--text); }
+
+.btn-sm {
+    font-size: 8px;
+    padding: 12px 14px;
+    /* 44px minimum touch target, which the design calls for explicitly on the
+       terminal's two controls. */
+    min-height: 44px;
+}
+
+/* Focus must be visible on the dark palette. The default ring is often the
+   browser's own dark blue, which disappears against --border; gold is the one
+   accent nothing else on the page uses for an idle state. */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+}
+
+/* ── Sprite rendering ────────────────────────────────────────────────────── */
+
+/* Every sprite on the page, however it is mounted.
+   Inline SVG (the real-data panels) and rasterised data URIs (the scenes and
+   facility tiles, which go through <img> so IntersectionObserver has something
+   to set a src on) both need the nearest-neighbour scaling — a pixel sprite
+   smoothed by the browser is the one rendering mistake that is visible from
+   across a room. */
+.scene img,
+.sector-hero img,
+.sector-tile img,
+.upgrade-level img,
+.spotlight-sector-hero,
+.spotlight-tile img,
+.terminal-feed-badge svg,
+.spotlight-badge-slot svg,
+.spotlight-owner-slot svg,
+.spotlight-performer-slot svg,
+.spotlight-stadium-slot svg,
+.spotlight-kit-slot svg,
+.ospot-avatar-slot svg,
+.ospot-stadium-slot svg,
+.ospot-club-badge svg {
+    image-rendering: pixelated;
+}
+
+/* Boxes that hold a late-mounting sprite reserve their aspect ratio up front.
+   A scene is ~200KB of path data composed on an IntersectionObserver callback;
+   without the reservation every one of them would shift the page as it lands,
+   which is exactly the layout-shift the design brief rules out. */
+.scene {
+    aspect-ratio: 520 / 400;
+    width: 100%;
+    max-width: 520px;
+    background: var(--dark);
+    border: 2px solid var(--border);
+    box-shadow: 6px 6px 0 var(--border);
+    overflow: hidden;
+}
+.scene img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.scene-figure { margin: 0; }
+.scene-figure figcaption {
+    margin-top: 14px;
+    font-size: 18px;
+    line-height: 1.2;
+    color: var(--text-muted);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.nav-links { flex-wrap: wrap; }
+
+/* The CLUB SPOTLIGHT jump. Cyan and outlined so it reads as secondary to the
+   gold PLAY NOW while still being obviously a control rather than a nav link —
+   the design uses exactly this contrast to rank the two CTAs. */
+.nav-spotlight-cta {
+    display: inline-block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    line-height: 1;
+    color: var(--cyan) !important;
+    padding: 10px 12px;
+    border: 2px solid var(--cyan);
+    box-shadow: 3px 3px 0 var(--border);
+    letter-spacing: 0.05em;
+}
+.nav-spotlight-cta:hover {
+    background: var(--cyan);
+    color: var(--border) !important;
+}
+
+/* ── Hero (#top) ─────────────────────────────────────────────────────────── */
+
+/* Overrides the original two-column hero: the terminal that filled the right
+   column is now its own section below. */
+.hero-inner {
+    display: block;
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.hero-kicker {
+    font-size: 24px;
+    line-height: 1.1;
+    color: var(--cyan);
+    letter-spacing: 0.1em;
+    margin-bottom: 24px;
+}
+
+.hero-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(18px, 3.6vw, 40px);
+    line-height: 1.45;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 28px;
+}
+
+/* The original .hero-sub is 480px wide and left-aligned for the old split
+   layout; centred copy needs the centring and a wider measure. */
+.hero-inner .hero-sub {
+    max-width: 620px;
+    margin: 0 auto 36px;
+}
+
+.hero-inner .hero-actions { justify-content: center; }
+
+.hero-release {
+    margin-top: 28px;
+    font-size: 20px;
+    line-height: 1.2;
+    color: var(--text-muted);
+}
+
+/* ── Telemetry (#telemetry) ──────────────────────────────────────────────── */
+
+.telemetry-section { padding-top: 0; }
+
+/* Full width now, not a hero column. The original .terminal rules still supply
+   the palette and the inner spacing. */
+.terminal {
+    width: 100%;
+    max-width: none;
+    box-shadow: 10px 10px 0 var(--border);
+}
+
+.terminal-title {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.6;
+    font-weight: 400;
+    color: var(--text);
+}
+
+/* The state light and the sync chip are the only things that change between the
+   three snapshot states, so the state class drives both and nothing else needs
+   a variant. */
+.terminal.is-active  .terminal-dot { background: var(--mint); }
+.terminal.is-stale   .terminal-dot { background: var(--gold); animation: none; }
+.terminal.is-pending .terminal-dot { background: var(--text-muted); animation: none; }
+.terminal.is-active  .terminal-sync { color: var(--mint); }
+.terminal.is-stale   .terminal-sync { color: var(--gold); }
+.terminal.is-pending .terminal-sync { color: var(--text-muted); }
+
+/* An ungenerated snapshot's tiles are em-dashes; the muted colour stops them
+   reading as a measured zero. */
+.terminal.is-pending .terminal-stat-val { color: var(--text-muted) !important; }
+
+.terminal-stat-val.is-mint { color: var(--mint); }
+.terminal-stat-val.is-gold { color: var(--gold); }
+.terminal-stat-val.is-red  { color: var(--red); }
+
+.terminal-body {
+    display: flex;
+    flex-wrap: wrap;
+    border-top: 2px solid var(--panel);
+}
+
+.terminal-feed {
+    flex: 2 1 460px;
+    min-width: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    /* Overrides the original fixed-height rotating viewport. */
+    height: auto;
+    max-height: none;
+    overflow: visible;
+}
+
+.terminal-feed-row { border-bottom: 2px solid var(--panel); }
+.terminal-feed-row:last-child { border-bottom: 0; }
+
+/* Each line is a real button spanning its row. The left border is the category
+   colour, which is the one thing a glance should pick up. */
+.terminal-feed-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-left: 8px solid var(--text-muted);
+    padding: 16px 20px;
+    color: var(--text);
+    font-family: 'VT323', monospace;
+    font-size: 21px;
+    line-height: 1.25;
+    cursor: pointer;
+    min-height: 44px;
+}
+.terminal-feed-item:hover { background: var(--bg); }
+.terminal-feed-item.active { background: var(--bg); }
+
+.terminal-feed-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.terminal-feed-badge { flex: none; display: inline-flex; }
+.terminal-feed-badge svg { height: 28px; width: auto; }
+
+.terminal-feed-empty {
+    padding: 20px 24px;
+    font-size: 21px;
+    line-height: 1.3;
+    color: var(--text);
+}
+
+/*
+   Rotation reveals one line at a time; .is-static shows the whole list.
+
+   .is-static is set by landing.js whenever the rotation is off — either because
+   the viewer paused it or because they asked the OS for reduced motion. The
+   other nineteen lines are real content, so there is no reason to keep them
+   hidden once nothing is cycling.
+*/
+.terminal-feed:not(.is-static) .terminal-feed-row { display: none; }
+.terminal-feed:not(.is-static) .terminal-feed-row:has(.terminal-feed-item.active) { display: block; }
+.terminal-feed:not(.is-static) .terminal-feed-row:has(.terminal-feed-empty) { display: block; }
+
+/*
+   No :has() support means no way to hide the inactive rows from the row
+   element, so the list simply renders in full — which is the same thing
+   .is-static does and is a perfectly good page, just a longer one. Nothing is
+   hidden or broken; stated here so the fallback is a decision rather than a
+   surprise.
+*/
+
+.terminal-aside {
+    flex: 1 1 260px;
+    min-width: 0;
+    padding: 24px;
+    border-left: 2px solid var(--panel);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 20px;
+}
+.terminal-aside-title {
+    font-size: 9px;
+    line-height: 1.6;
+    color: var(--gold);
+    margin-bottom: 12px;
+}
+.terminal-aside-copy {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+}
+.terminal-aside-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.terminal-footer {
+    display: block;
+    padding: 14px 24px;
+    border-top: 4px solid var(--panel);
+    background: var(--dark);
+    font-size: 18px;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+
+/* ── Pillars (#pillars) and the card family it seeds ─────────────────────── */
+
+.pillars-section {
+    background: var(--bg-mid);
+    border-top: 4px solid var(--border);
+    border-bottom: 4px solid var(--border);
+}
+
+.pillars-grid,
+.testers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 28px;
+    margin-top: 40px;
+}
+
+.pillar-card {
+    background: var(--panel);
+    border: 4px solid var(--border);
+    box-shadow: 6px 6px 0 var(--border);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+.pillar-card p { font-size: 14px; line-height: 1.7; }
+.pillar-index {
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--cyan);
+}
+.pillar-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    font-weight: 400;
+    color: var(--text);
+}
+
+/* ── Club Spotlight (#spotlight) ─────────────────────────────────────────── */
+
+.spotlight-eyebrow {
+    margin: 0;
+    font-size: clamp(10px, 1.4vw, 14px);
+    line-height: 1.6;
+    font-weight: 400;
+    color: var(--gold);
+}
+
+.spotlight-club-name { font-size: clamp(22px, 3vw, 34px); line-height: 1.1; }
+
+/* The pitch band. Its stripes are drawn in CSS rather than by a sprite so the
+   three figures standing on it can be ordinary flex children. */
+.spotlight-pitch {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(8px, 3vw, 48px);
+    padding: 32px 24px 12px;
+    min-height: 260px;
+    background: repeating-linear-gradient(90deg, #6b9a3e 0, #6b9a3e 80px, #608f37 80px, #608f37 160px);
+    border-bottom: 4px solid var(--border);
+    overflow: hidden;
+}
+.spotlight-figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+.spotlight-figure svg { height: clamp(110px, 16vw, 200px); width: auto; max-width: 100%; }
+.spotlight-figure--stadium svg { height: auto; width: min(100%, 480px); max-height: 320px; }
+/* Dark on grass: the captions sit on the pitch, where --text-muted vanishes. */
+.spotlight-pitch-label { font-size: 20px; line-height: 1.1; color: var(--border); }
+
+.spotlight-facts {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    border-bottom: 4px solid var(--border);
+}
+.spotlight-fact {
+    padding: 18px 24px;
+    border-right: 2px solid var(--border);
+    min-width: 0;
+}
+.spotlight-fact dt { font-size: 20px; line-height: 1.1; color: var(--text-muted); }
+.spotlight-fact dd {
+    margin: 4px 0 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--mint);
+    overflow-wrap: anywhere;
+}
+
+.spotlight-col-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    line-height: 1.6;
+    font-weight: 400;
+    color: var(--gold);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Facilities panel — the featured club's real build-out. */
+.spotlight-facilities {
+    padding: 24px;
+    border-bottom: 4px solid var(--border);
+}
+.spotlight-facilities-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+    margin-bottom: 16px;
+}
+.spotlight-facilities-head .spotlight-col-title { margin-bottom: 0; }
+.spotlight-facilities-count { font-size: 12px; color: var(--text-muted); }
+
+.spotlight-sectors {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 16px;
+}
+.spotlight-sector {
+    background: var(--bg);
+    border: 2px solid var(--border);
+    min-width: 0;
+}
+.spotlight-sector-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 2px solid var(--border);
+}
+.spotlight-sector-name {
+    margin: 0;
+    font-size: 9px;
+    line-height: 1.6;
+    font-weight: 400;
+}
+/* One colour per site, matching the Facilities section's own sector headings so
+   the two surfaces agree on which colour means which site. */
+.spotlight-sector-name.is-training { color: var(--cyan); }
+.spotlight-sector-name.is-medical  { color: var(--red); }
+.spotlight-sector-name.is-scouting { color: var(--gold); }
+.spotlight-sector-name.is-stadium  { color: var(--mint); }
+.spotlight-sector-count { font-size: 18px; line-height: 1; color: var(--text-muted); }
+
+/* Background set by landing.js, from the sprite's own ground type — the real
+   spotlight payload carries no `base`, so it resolves to the sprite default. */
+.spotlight-sector-hero {
+    display: block;
+    width: 100%;
+    height: 140px;
+    object-fit: contain;
+    padding: 6px;
+    border-bottom: 2px solid var(--border);
+}
+
+.spotlight-sector-tiles {
+    list-style: none;
+    margin: 0;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+    gap: 6px;
+}
+.spotlight-tile {
+    position: relative;
+    background: var(--panel);
+    border: 2px solid var(--border);
+    min-width: 0;
+}
+/* An unbuilt facility is still drawn — the sprite renders its empty plot, and
+   "a plot you have not built on" is the useful thing to show — but dimmed, so
+   the panel reads as progress rather than as a complete campus. */
+.spotlight-tile.is-unbuilt { opacity: 0.45; }
+.spotlight-tile img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    padding: 4px;
+}
+.spotlight-tile-name {
+    display: block;
+    padding: 2px 4px;
+    font-size: 15px;
+    line-height: 1.1;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.spotlight-tile-level {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: var(--border);
+    color: var(--gold);
+    font-size: 7px;
+    line-height: 1;
+    padding: 3px;
+}
+
+.spotlight-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.spotlight-col {
+    padding: 24px;
+    border-right: 2px solid var(--border);
+    min-width: 0;
+}
+.spotlight-col-list { list-style: none; margin: 0; padding: 0; }
+.spotlight-col-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 2px solid var(--border);
+}
+.spotlight-col-body { min-width: 0; flex: 1 1 auto; }
+.spotlight-col-main { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.spotlight-col-sub { display: block; font-size: 12px; color: var(--text-muted); }
+
+.spotlight-kits { display: flex; gap: 16px; align-items: flex-end; }
+.spotlight-kit { margin: 0; text-align: center; }
+.spotlight-kit svg { height: 90px; width: auto; }
+.spotlight-kit figcaption { font-size: 18px; color: var(--text-muted); }
+
+.spotlight-cta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+    padding: 20px 24px;
+    border-top: 4px solid var(--border);
+    background: var(--bg);
+}
+.spotlight-cta-bar .spotlight-note { margin: 0; max-width: 600px; text-align: left; }
+
+/* ── Your Role (#role) ───────────────────────────────────────────────────── */
+
+.role-split {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 48px;
+    align-items: flex-start;
+}
+.role-main { flex: 1 1 460px; min-width: 0; }
+
+.role-list-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    font-weight: 400;
+    color: var(--text);
+    margin: 28px 0 12px;
+}
+
+.role-control-list { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.role-control-list li {
+    padding: 10px 0 10px 22px;
+    position: relative;
+    border-top: 2px solid var(--border);
+}
+/* A square bullet rather than a list marker: the marker would inherit the list
+   font and the design's bullet is a mint pixel, which is also the one thing
+   tying this list to the pillars above it. */
+.role-control-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 19px;
+    width: 10px;
+    height: 10px;
+    background: var(--mint);
+}
+
+.role-pa {
+    flex: 1 1 340px;
+    min-width: 0;
+    align-self: flex-start;
+    background: var(--panel);
+    border: 4px solid var(--border);
+    box-shadow: 8px 8px 0 var(--border);
+    padding: 28px;
+}
+.role-pa-title { font-size: 10px; line-height: 1.6; color: var(--gold); margin-bottom: 8px; }
+.role-pa-intro { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+.role-pa-row { border-top: 2px solid var(--border); padding: 14px 0; }
+.role-pa-row:last-child { padding-bottom: 0; }
+.role-pa-row p { margin-top: 4px; font-size: 13px; }
+.role-pa-head { font-size: 22px; line-height: 1.1; }
+
+.role-staff { margin-top: 56px; }
+.role-staff-list { list-style: none; margin: 0; padding: 0; }
+.role-staff-list li {
+    padding: 14px 0;
+    border-top: 2px solid var(--border);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-muted);
+}
+
+/* ── Journey (#journey) ──────────────────────────────────────────────────── */
+
+.journey-section {
+    background: var(--bg-mid);
+    border-top: 4px solid var(--border);
+    border-bottom: 4px solid var(--border);
+}
+.journey-steps { display: grid; gap: 64px; margin-top: 56px; }
+.journey-step {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 32px 56px;
+}
+.journey-step--flip { flex-direction: row-reverse; }
+.journey-step .scene { flex: 0 1 260px; max-width: 260px; }
+.journey-text { flex: 1 1 380px; min-width: 0; }
+.journey-chapter { font-size: 10px; line-height: 1.6; color: var(--cyan); margin-bottom: 12px; }
+.journey-headline {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 12px;
+}
+.journey-text p { font-size: 15px; margin-bottom: 14px; }
+.journey-tags { list-style: none; margin: 0; padding: 0; color: var(--text-muted); }
+.journey-tags li { padding: 6px 0; font-size: 13px; }
+
+/* ── Facilities (#facilities) ────────────────────────────────────────────── */
+
+.facilities-section {
+    background: var(--bg-mid);
+    border-top: 4px solid var(--border);
+    border-bottom: 4px solid var(--border);
+}
+
+.sector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+    gap: 32px;
+    margin-top: 40px;
+}
+.sector-card {
+    background: var(--panel);
+    border: 4px solid var(--border);
+    box-shadow: 6px 6px 0 var(--border);
+    min-width: 0;
+}
+.sector-head {
+    padding: 20px 24px;
+    border-bottom: 4px solid var(--border);
+    background: var(--bg);
+}
+.sector-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    font-weight: 400;
+    margin-bottom: 6px;
+}
+.sector-blurb { font-size: 13px; line-height: 1.6; color: var(--text); }
+
+/*
+   The hero's box is wider than the sprite's raw canvas because landing.js
+   re-crops each render to what it actually drew — the sprites reserve vertical
+   headroom for the tallest thing that could stand on the plot, so an
+   uncropped site arrives pressed into the bottom of a tall canvas. 16/9 is
+   close to what a cropped site comes back as; `contain` absorbs the rest.
+
+   No background here: landing.js paints the box the sprite's OWN ground colour
+   (grass or concrete, from the config), because the plot is a diamond inside a
+   rectangle and a fixed green behind a concrete site reads as a brown island
+   floating on a lawn.
+*/
+.sector-hero {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    border-bottom: 4px solid var(--border);
+    overflow: hidden;
+}
+.sector-hero img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 12px;
+}
+
+.sector-tiles {
+    list-style: none;
+    margin: 0;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 12px;
+}
+.sector-tile {
+    position: relative;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    min-width: 0;
+}
+/* Background set per tile by landing.js, from that site's ground type. */
+.sector-tile img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: contain;
+    padding: 8px;
+}
+.sector-tile-name {
+    display: block;
+    padding: 8px 10px;
+    font-size: 19px;
+    line-height: 1.1;
+    color: var(--text);
+}
+.sector-tile-level {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: var(--border);
+    color: var(--gold);
+    font-size: 7px;
+    line-height: 1;
+    padding: 3px;
+}
+
+.upgrade-path { margin-top: 56px; }
+.upgrade-levels {
+    list-style: none;
+    margin: 20px 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+}
+.upgrade-level {
+    background: var(--bg);
+    border: 2px solid var(--border);
+    min-width: 0;
+}
+.upgrade-level img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: contain;
+    padding: 8px;
+}
+.upgrade-level-label {
+    padding: 8px 10px;
+    font-size: 9px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
+.facility-notes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 28px;
+    margin-top: 48px;
+}
+.facility-note-title {
+    display: block;
+    font-size: 10px;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+.facility-note p { font-size: 13px; line-height: 1.7; color: var(--text-muted); }
+
+/* ── Dressing room (#dressing-room) ──────────────────────────────────────── */
+
+.dr-split {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 40px 64px;
+}
+.dr-main { flex: 1 1 420px; min-width: 0; }
+.dr-scenes {
+    flex: 0 1 540px;
+    min-width: 0;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.dr-scenes .scene { flex: 0 1 240px; max-width: 240px; }
+
+.dr-legend { margin: 24px 0 0; display: grid; gap: 14px; }
+.dr-legend-row { padding-left: 16px; border-left: 8px solid var(--text-muted); }
+.dr-legend-row dt { font-size: 10px; line-height: 1.6; }
+.dr-legend-row dd { margin: 4px 0 0; font-size: 13px; }
+.dr-legend-row.is-bonded   { border-left-color: var(--mint); }
+.dr-legend-row.is-bonded   dt { color: var(--mint); }
+/* A lighter red than --red for the label: --red on --bg clears 3:1 as a border
+   but not 4.5:1 as 10px text. */
+.dr-legend-row.is-friction { border-left-color: var(--red); }
+.dr-legend-row.is-friction dt { color: #e07a7a; }
+.dr-legend-row.is-unformed dt { color: var(--text-muted); }
+.dr-footer { margin-top: 24px; font-size: 14px; color: var(--text-muted); }
+
+/* ── Leagues (#leagues) ──────────────────────────────────────────────────── */
+
+.leagues-section {
+    background: var(--bg-mid);
+    border-top: 4px solid var(--border);
+    border-bottom: 4px solid var(--border);
+}
+.leagues-split {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px 56px;
+    align-items: flex-start;
+    margin-top: 40px;
+}
+.leagues-data { flex: 1 1 520px; min-width: 0; }
+.leagues-scene { flex: 0 1 250px; min-width: 0; }
+.leagues-scene .scene { max-width: 250px; }
+.leagues-data .pyramid-wrap { margin-top: 40px; }
+.prize-table caption {
+    text-align: left;
+    padding: 0 0 12px;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--gold);
+    caption-side: top;
+}
+
+/* ── Scouting (#scouting) ────────────────────────────────────────────────── */
+
+.scouting-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px 56px;
+    align-items: flex-start;
+    margin-top: 40px;
+}
+.scouting-grid .scene-figure { flex: 0 1 250px; min-width: 0; }
+.scouting-grid .scene { max-width: 250px; }
+.scouting-points { flex: 1 1 320px; min-width: 0; display: grid; gap: 20px; }
+.scouting-points .pillar-card { padding: 20px; }
+
+/* ── No pay-to-win band ──────────────────────────────────────────────────── */
+
+.nptw-band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px 48px;
+    background: var(--gold);
+    border: 4px solid var(--border);
+    box-shadow: 10px 10px 0 var(--border);
+    padding: 40px;
+}
+.nptw-headline {
+    flex: 1 1 300px;
+    min-width: 0;
+    font-size: clamp(18px, 3vw, 30px);
+    line-height: 1.5;
+    color: var(--border);
+}
+.nptw-copy {
+    flex: 1 1 340px;
+    min-width: 0;
+    margin: 0;
+    font-size: 16px;
+    color: var(--border);
+}
+
+/* ── Rich List (#owner-spotlight) ────────────────────────────────────────── */
+
+.ospot-leader-list, .ospot-grid { list-style: none; margin: 0; padding: 0; }
+
+/* The leader card: a pitch scene on one side, the figures on the other. */
+.ospot-leader {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+    background: var(--panel);
+    border: 4px solid var(--gold);
+    box-shadow: 10px 10px 0 var(--border);
+    margin-bottom: 24px;
+}
+.ospot-leader-scene {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 20px;
+    padding: 28px 20px 0;
+    min-height: 240px;
+    background: repeating-linear-gradient(90deg, #6b9a3e 0, #6b9a3e 56px, #608f37 56px, #608f37 112px);
+    border-right: 4px solid var(--border);
+    overflow: hidden;
+}
+.ospot-rank-chip {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: var(--gold);
+    color: var(--border);
+    border: 4px solid var(--border);
+    font-size: 9px;
+    line-height: 1;
+    padding: 8px 10px;
+}
+.ospot-leader-scene .ospot-avatar-slot svg { height: 190px; width: auto; }
+.ospot-leader-scene .ospot-stadium-slot { display: flex; align-items: flex-end; }
+.ospot-leader-scene .ospot-stadium-slot svg { height: 160px; width: auto; max-width: 100%; }
+
+.ospot-leader-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+.ospot-leader .ospot-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px 20px;
+}
+.ospot-leader .ospot-owner-name { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.ospot-leader .ospot-balance { text-align: right; }
+.ospot-leader .ospot-balance-val { font-size: clamp(14px, 2.2vw, 20px); line-height: 1.3; }
+
+/* Ranks 2-5. */
+.ospot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    gap: 20px;
+}
+.ospot-card {
+    background: var(--panel);
+    border: 4px solid var(--text-muted);
+    box-shadow: 6px 6px 0 var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+/* Rank 2 keeps a dimmed gold ring, so the podium is readable without colour
+   being the only cue — the rank glyph is right there in the markup. */
+.ospot-grid li:first-child { border-color: var(--gold-dim); }
+.ospot-grid li:first-child .ospot-rank { color: var(--gold-dim); }
+.ospot-card .ospot-head { display: flex; align-items: center; gap: 12px; }
+.ospot-card .ospot-rank { font-size: 13px; line-height: 1; color: var(--text-muted); }
+.ospot-card .ospot-avatar-slot { flex: none; }
+.ospot-card .ospot-avatar-slot svg { height: 52px; width: auto; }
+.ospot-card .ospot-identity { min-width: 0; flex: 1 1 auto; }
+.ospot-card .ospot-owner-name { display: block; font-size: 9px; line-height: 1.6; overflow-wrap: anywhere; }
+.ospot-balance-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+
+/* Share of the leader's total. role="img" with the percentage in its
+   aria-label, since a bar with no number is nothing to a screen reader. */
+.ospot-share {
+    height: 10px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+}
+.ospot-share-fill { display: block; height: 100%; background: var(--mint); }
+.ospot-leader .ospot-share-fill { background: var(--gold); }
+
+/*
+   Club rows, two lines: badge + kit + name, then tier chip + division.
+
+   The grid is the load-bearing part. A single-line layout gives the name
+   whatever is left after two sprites and a chip, which at grid-card width is
+   narrow enough that a long club name wraps to one letter per line — the design
+   calls this out explicitly. minmax(0, 1fr) on the name column plus the
+   division on its own full-width row is what prevents it.
+*/
+.ospot-club {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 6px 10px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+.ospot-club-badge { display: flex; align-items: center; gap: 6px; }
+.ospot-club-badge svg { height: 26px; width: auto; }
+.ospot-club-name { min-width: 0; overflow-wrap: break-word; word-break: normal; }
+.ospot-club-division {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.ospot-tier {
+    background: var(--gold);
+    color: var(--border);
+    font-size: 8px;
+    line-height: 1;
+    padding: 4px 5px;
+}
+.ospot-clubs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ospot-clubs-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    line-height: 1.1;
+    color: var(--text-muted);
+}
+
+.ospot-note { margin-top: 28px; font-size: 13px; line-height: 1.6; color: var(--text-muted); max-width: 760px; }
+
+/* ── Testers (#testers) and the closing CTA ──────────────────────────────── */
+
+.testers-section {
+    background: var(--bg-mid);
+    border-top: 4px solid var(--border);
+    border-bottom: 4px solid var(--border);
+}
+.testers-pending { font-size: 13px; color: var(--text-muted); }
+
+.cta-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(18px, 3vw, 30px);
+    line-height: 1.5;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 24px;
+}
+.cta-note { margin-top: 24px; font-size: 11px; color: var(--text-muted); }
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+
+/*
+   The feed's rotation is handled in landing.js, which starts it paused under
+   this query — a media query cannot stop a setInterval. What is left here is
+   the decoration: the terminal's pulsing status light and the CTA glow.
+*/
+@media (prefers-reduced-motion: reduce) {
+    .terminal-dot,
+    .cta-glow {
+        animation: none !important;
+    }
+}
+
+/* ── Narrow screens ──────────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+    /* The terminal's incident sidebar sits beside the feed on desktop; stacked,
+       its left border would be a stray rule across the middle of the card. */
+    .terminal-aside {
+        border-left: 0;
+        border-top: 2px solid var(--panel);
+    }
+
+    /* The leader card's pitch scene is two sprites side by side; below this it
+       loses its border-right partner and the stadium gets too small to read. */
+    .ospot-leader-scene { border-right: 0; border-bottom: 4px solid var(--border); }
+
+    .spotlight-fact,
+    .spotlight-col { border-right: 0; border-bottom: 2px solid var(--border); }
+
+    /* Alternating sides stops meaning anything once each step is one column. */
+    .journey-step--flip { flex-direction: row; }
+    .journey-step .scene,
+    .journey-step .journey-text { flex-basis: 100%; max-width: 520px; }
+}
+
+@media (max-width: 640px) {
+    /* 16px gutters, per the brief. .wrap's 24px is fine until the content
+       inside it is a grid that has already collapsed to one column. */
+    .wrap { padding: 0 16px; }
+
+    section { padding: 56px 0; }
+
+    /* Both of these are required to be single-column on mobile. They already
+       collapse via minmax(min(100%, …)) — stated explicitly so a later change
+       to those minimums cannot quietly reintroduce a second column. */
+    .ospot-grid,
+    .spotlight-sectors,
+    .sector-grid { grid-template-columns: 1fr; }
+
+    .nptw-band { padding: 24px; }
+
+    /* A club row at this width has no space for a badge AND a kit; the badge is
+       the identifier, so the kit goes. Same rule the page has always applied to
+       its club lists, just at the width these cards need it. */
+    .ospot-club-badge svg + svg { display: none; }
+
+    /* Three figures on the spotlight pitch at 360px leaves each about 100px.
+       Dropping to a column keeps the stadium legible, which is the one that
+       carries the most information. */
+    .spotlight-pitch { flex-direction: column; align-items: center; }
+    .spotlight-figure--stadium svg { width: 100%; }
+
+    .terminal-feed-item { font-size: 19px; padding: 14px 16px; }
+    .terminal-footer { padding: 14px 16px; }
+    .spotlight-facilities,
+    .spotlight-col,
+    .spotlight-cta-bar { padding: 20px 16px; }
+    .spotlight-fact { padding: 16px; }
 }

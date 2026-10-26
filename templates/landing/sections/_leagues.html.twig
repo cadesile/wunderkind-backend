@@ -1,29 +1,64 @@
-<!-- ═══════════════════════════════ LEAGUES ═══════════════════════════════ -->
+{#
+   The League System (#leagues). The tier-payment table and the pyramid both
+   come from the League table rather than from copy — this section once claimed a
+   flat "22 clubs" for all eight tiers, which is why neither number is written
+   down here.
+
+   Changed in the redesign:
+     - the matchday GIF (images/match-ticker.gif) is gone. It is a capture of the
+       app, which the design rules out alongside the screenshots, and it was the
+       page's single largest asset. Its copy point — live 1x/2x/4x matchday
+       ticker — now sits in the prose, where it costs nothing to load.
+     - a decorative kits-and-players scene takes its place.
+
+   The pyramid list is NOT in the design, which shows the payment table and one
+   scene. It is kept because it is live League data and the only place the page
+   shows the shape of the ladder; it sits beside the table in the same column
+   block so the designed two-column split still reads as drawn.
+
+   Tiers with no prize/TV value configured are omitted from the table rather
+   than rendered as £0, which would read as a deliberate figure.
+#}
 {% set country_names = world.countries|map(c => c.name) %}
-<section id="leagues">
+{% set funded = world.tiers|filter(t => t.prizeMoney is not null or t.tvDeal is not null) %}
+
+<section class="leagues-section" id="leagues" aria-labelledby="lg-title">
     <div class="wrap">
-        <div class="leagues-inner">
-            <div>
-                <div class="section-label">The League System</div>
-                <h2 class="section-title">
-                    {{ world.totals.tierCount }} league tiers. {{ world.totals.npcClubs }} clubs. One ascent.
-                </h2>
-                <p class="section-sub">
-                    Start in Non-League obscurity at the bottom of a {{ world.totals.tierCount }}-tier
-                    league pyramid{%- if world.totals.clubsPerTier %} — {{ world.totals.clubsPerTier }} clubs
-                    per division{% endif %}, playing everyone home and away. Track live match updates on
-                    the 2D matchday pitch at 1x, 2x, or 4x speed, or skip straight to the result.
-                </p>
-                <br>
-                <p class="section-sub" style="color: var(--text-muted);">
-                    Watch rival AI clubs manage their own budgets, scout talent, and compete
-                    on global leaderboards. NPC clubs have fully simulated squads, staff,
-                    finances, and tactics. Beating them means building something real.
-                </p>
-            </div>
-            <div>
-                {# Pyramid rows come from the League table, not from copy — this is
-                   what previously claimed a flat "22 clubs" for all eight tiers. #}
+        <div class="section-label">The League System</div>
+        <h2 class="section-title" id="lg-title">{{ world.totals.tierCount }} TIERS. {{ world.totals.npcClubs|number_format }} CLUBS. ONE ASCENT.</h2>
+        <p class="section-sub">Start in non-league obscurity at the bottom of the pyramid, playing everyone home and away. Rival clubs have fully simulated squads, staff, finances and tactics, so beating them means building something real. Track live match updates on the 2D matchday pitch at 1x, 2x or 4x speed, or skip straight to the result.</p>
+
+        <div class="leagues-split">
+            <div class="leagues-data">
+                {% if funded is not empty %}
+                    <div class="prize-table-wrap dash-scroll">
+                        <table class="prize-table">
+                            <caption class="pixel">WHAT EACH TIER PAYS</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Tier</th>
+                                    <th scope="col">Division</th>
+                                    <th scope="col" class="num">Prize money</th>
+                                    <th scope="col" class="num">TV deal</th>
+                                    <th scope="col" class="num">Position pot</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tier in funded %}
+                                    <tr>
+                                        <td class="is-cyan">T{{ tier.tier }}</td>
+                                        <td>{{ tier.name }}</td>
+                                        <td class="num">{{ tier.prizeMoney is null ? '—' : '£' ~ tier.prizeMoney|number_format }}</td>
+                                        <td class="num">{{ tier.tvDeal is null ? '—' : '£' ~ tier.tvDeal|number_format }}</td>
+                                        <td class="num">{{ tier.leaguePositionPot is null ? '—' : '£' ~ tier.leaguePositionPot|number_format }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <p class="prize-note">Season-end payouts. Climb a tier and the money changes shape entirely.</p>
+                    </div>
+                {% endif %}
+
                 <div class="pyramid-wrap" role="list" aria-label="League pyramid tiers">
                     {% for tier in world.tiers %}
                         <div class="pyramid-tier t{{ tier.tier }}" role="listitem">
@@ -35,51 +70,16 @@
                     {% endfor %}
                 </div>
                 <p class="pyramid-label">
-                    {{ world.totals.npcClubs }} NPC clubs ·
+                    {{ world.totals.npcClubs|number_format }} NPC clubs ·
                     {{ country_names|join(', ') }}{% if world.totals.playableCountries == 1 %} only{% endif %} · more countries coming
                 </p>
             </div>
-        </div>
 
-        {# Prize money and TV income, straight from the League rows. Tiers with no
-           value configured are omitted rather than shown as £0, which would read
-           as a deliberate figure. #}
-        {% set funded = world.tiers|filter(t => t.prizeMoney is not null or t.tvDeal is not null) %}
-        {% if funded is not empty %}
-            <div class="prize-table-wrap dash-scroll" style="margin-top:48px;">
-                <h3 class="section-label" style="margin-bottom:12px;">What each tier pays</h3>
-                <table class="prize-table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Tier</th>
-                            <th scope="col">Division</th>
-                            <th scope="col" class="num">Prize money</th>
-                            <th scope="col" class="num">TV deal</th>
-                            <th scope="col" class="num">Position pot</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for tier in funded %}
-                            <tr>
-                                <td>T{{ tier.tier }}</td>
-                                <td>{{ tier.name }}</td>
-                                <td class="num">{{ tier.prizeMoney is null ? '—' : '£' ~ tier.prizeMoney|number_format }}</td>
-                                <td class="num">{{ tier.tvDeal is null ? '—' : '£' ~ tier.tvDeal|number_format }}</td>
-                                <td class="num">{{ tier.leaguePositionPot is null ? '—' : '£' ~ tier.leaguePositionPot|number_format }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                <p class="prize-note">Season-end payouts. Climb a tier, and the money changes shape entirely.</p>
+            <div class="leagues-scene">
+                <div class="scene" data-scene="match">
+                    <img alt="Home and away kits above three pixel players" width="520" height="400" decoding="async">
+                </div>
             </div>
-        {% endif %}
-
-        {# The match engine GIF — deliberately untouched. #}
-        <figure class="match-ticker-visual">
-            <img src="images/match-ticker.gif" alt="2D matchday pitch — live match ticker with 1x/2x/4x speed controls, minute counter, live commentary, and running scoreline">
-            <p class="ss-caption">Live Matchday Ticker — 1x / 2x / 4x</p>
-        </figure>
+        </div>
     </div>
 </section>
-
-<hr class="divider">

@@ -1,156 +1,249 @@
 {#
-   Club Spotlight — every 12h, one of the 5 most active clubs (minimum
-   ClubSpotlightService::MIN_SYNC_COUNT valid syncs in the window) is featured here.
-   Entirely client-rendered from data attributes (same technique as the
-   Chairman's Terminal ticker's club badges): kit/badge via the existing
-   composeKitSvg()/clubBadgeIconsHtml(), owner avatar and top performer avatar
-   via composePlayerSpriteSvg() (avatar-compositor.js), stadium via
-   composeStadiumSvg() (stadium-compositor.js). All three scripts must
-   load before landing.js — see base.html.twig.
+   Club Spotlight (#spotlight) — every 12h, one of the 5 most active clubs
+   (minimum ClubSpotlightService::MIN_SYNC_COUNT valid syncs in the window) is
+   featured here. The redesign moves it directly under #pillars and adds a
+   Facilities panel, a trophy/kit column and a closing CTA.
 
-   spotlight is the cached ClubSpotlight singleton (App\Entity\ClubSpotlight),
-   refreshed by app:spotlight:generate — never computed live here. Before the
-   first cron run, every field is null/empty and the section renders nothing
-   (empty clubName).
+   Entirely client-rendered from data attributes: kit/badge via composeKitSvg(),
+   owner and top-performer avatars via composePlayerSpriteSvg(), all four
+   facility sites via the facility compositor's compose*Svg(). Every one of those
+   scripts loads before landing.js — see base.html.twig.
 
-   Gated on spotlight.isLive(), i.e. windowEndsAt still in the future — not on
+   spotlight is the cached ClubSpotlight singleton, refreshed by
+   app:spotlight:generate — never computed live here.
+
+   Gated on spotlight.isLive(), i.e. windowEndsAt still in the future, not on
    clubName alone. The card says "FEATURED THIS CYCLE" and the note promises a
-   12-hourly pick, so a row left behind by a stopped cron (or by a long run of
-   cycles where nobody cleared MIN_SYNC_COUNT) must drop out rather than keep
-   advertising a cycle that ended days ago. A quiet cycle where the incumbent
-   is still the most active club does NOT hide the section —
-   ClubSpotlightService::selectNew() re-ups the window for exactly that case.
-
-   trophies is the club's honours board — SeasonRecord finalPosition=1 counts
-   grouped by league tier, with the trophy artwork read live off the League row
-   for (club country, tier) at generation time. establishedAt is Club::$createdAt;
-   there is no separate founding date server-side. Both are null/empty on rows
-   written before those columns existed, and both degrade to simply not rendering.
+   12-hourly pick, so a row left behind by a stopped cron must drop out rather
+   than keep advertising a cycle that ended days ago. A quiet cycle where the
+   incumbent is still the most active club does NOT hide the section —
+   selectNew() re-ups the window for exactly that case. _nav.html.twig gates its
+   CLUB SPOTLIGHT jump link on the same flag, so it never scrolls nowhere.
 
    Career earnings shows dividendDrawsPence (real UserLedger DIVIDEND_DRAW
    entries against this club), not Club::$totalCareerEarnings — the latter is
-   every income source the club has ever had, not money the owner has
-   actually drawn out. See ClubSpotlightService::selectNew().
+   every income source the club ever had, not money the owner actually drew out.
 
    topPerformer* is a goals+assists-ranked proxy, not a literal "rating" —
-   there's no persisted per-player match rating anywhere server-side (see
-   PlayerCareerStatRepository::findTopPerformerForClub()). Its avatar only
-   renders if the player has ever reported a sync v2 appearanceConfig —
-   most haven't yet, since no client consumes this field today.
+   nothing persists a per-player match rating server-side. Its avatar renders
+   only if that player has ever reported a sync v2 appearanceConfig; most have
+   not, so the figure is omitted rather than drawn as a default body.
+
+   NOT AVAILABLE from the payload, so not rendered: the design captions the
+   stadium with a [STADIUM NAME]. ClubSpotlight carries no stadium name (it is
+   NpcClub that has stadiumName; a player's own club does not snapshot one), so
+   the caption is omitted rather than filled with the club's name, which would
+   be a different fact.
 #}
 {% if spotlight.isLive %}
-<section class="spotlight-section" id="spotlight">
+
+{#
+   "N of 22 built", server-rendered so the count is text rather than something
+   only a browser with JS can see.
+
+   The three plot sites each carry an explicit on/off boolean per facility, so
+   they are counted directly — `v is same as(true)` matches only those bare
+   facility keys, since every *Construction is always false and every *Level is
+   an int (see FacilityConfigBuilder).
+
+   The stadium needs two passes. shop/museum/carpark have their own booleans.
+   The four stands do not — and FacilityConfigBuilder::spriteLevel() is explicit
+   that "not built" cannot be read off a level, because it floors at 1 so an
+   unbuilt facility still draws a plot. That prohibition is about RENDERING: a
+   renderer must not gate a building on its level. For counting it is safe here
+   and only here, because spriteLevel is max(1, min(10, L*2)) — L=0 gives exactly
+   1 and any L>=1 gives at least 2, so the floor never collides with a real
+   level and `>= 2` is a lossless inverse of `club_facility.level > 0`. If that
+   doubling ever changes, this count changes with it.
+#}
+{% set f = spotlight.facilities|default({}) %}
+{% set st = f.stadium|default({}) %}
+{% set builtBySite = {
+    training: (f.training|default({}))|filter(v => v is same as(true))|length,
+    medical:  (f.medical|default({}))|filter(v => v is same as(true))|length,
+    scouting: (f.scouting|default({}))|filter(v => v is same as(true))|length,
+    stadium:  ['shop', 'museum', 'carpark']|filter(k => st[k]|default(false))|length
+              + ['north', 'east', 'south', 'west']|filter(k => st[k]|default(1) >= 2)|length
+} %}
+{% set builtTotal = builtBySite|reduce((carry, n) => carry + n, 0) %}
+
+<section class="spotlight-section" id="spotlight" aria-labelledby="spotlight-title">
     <div class="wrap">
         <div class="section-label">Club Spotlight</div>
+
         <div class="spotlight-card"
              data-owner-appearance="{{ spotlight.ownerAppearance|json_encode|e('html_attr') }}"
              data-stadium-config="{{ spotlight.stadiumConfig|json_encode|e('html_attr') }}"
              data-performer-appearance="{{ spotlight.topPerformerAppearanceConfig|json_encode|e('html_attr') }}"
+             data-home-kit="{{ spotlight.homeKitConfig|json_encode|e('html_attr') }}"
+             data-away-kit="{{ spotlight.awayKitConfig|json_encode|e('html_attr') }}"
              data-club-badge="{{ {home: spotlight.homeKitConfig, away: spotlight.awayKitConfig, badge: spotlight.badgeConfig}|json_encode|e('html_attr') }}">
+
             <div class="spotlight-header">
-                <span class="pixel">FEATURED THIS CYCLE</span>
+                <h2 class="pixel spotlight-eyebrow" id="spotlight-title">FEATURED THIS CYCLE</h2>
                 <div class="spotlight-badge-kit">
                     <span class="spotlight-badge-slot" aria-hidden="true"></span>
-                    <span class="spotlight-club-name">{{ spotlight.clubName }}</span>
+                    <span class="spotlight-club-name vt">{{ spotlight.clubName }}</span>
                 </div>
             </div>
 
             <div class="spotlight-pitch">
-                <figure class="spotlight-owner" style="margin:0;">
+                <figure class="spotlight-figure">
                     <span class="spotlight-owner-slot" aria-hidden="true"></span>
-                    <figcaption class="spotlight-pitch-label">Owner</figcaption>
+                    <figcaption class="spotlight-pitch-label vt">Owner</figcaption>
                 </figure>
-                <figure class="spotlight-stadium" style="margin:0;">
+                <figure class="spotlight-figure spotlight-figure--stadium">
                     <span class="spotlight-stadium-slot" aria-hidden="true"></span>
                 </figure>
                 {% if spotlight.topPerformerName is not empty %}
-                    <figure class="spotlight-owner" style="margin:0;">
+                    <figure class="spotlight-figure">
                         <span class="spotlight-performer-slot" aria-hidden="true"></span>
-                        <figcaption class="spotlight-pitch-label">{{ spotlight.topPerformerName }}</figcaption>
+                        <figcaption class="spotlight-pitch-label vt">{{ spotlight.topPerformerName }}</figcaption>
                     </figure>
                 {% endif %}
             </div>
 
-            <div class="spotlight-footer vt">
-                <span>Owner: <strong>{{ spotlight.ownerName ?? 'Anonymous' }}</strong></span>
+            <dl class="spotlight-facts">
+                <div class="spotlight-fact">
+                    <dt class="vt">Owner</dt>
+                    <dd class="pixel">{{ spotlight.ownerName ?? 'Anonymous' }}</dd>
+                </div>
                 {% if spotlight.establishedAt %}
-                    <span>Established: <strong>{{ spotlight.establishedAt|date('M Y') }}</strong></span>
+                    <div class="spotlight-fact">
+                        <dt class="vt">Established</dt>
+                        <dd class="pixel">{{ spotlight.establishedAt|date('M Y') }}</dd>
+                    </div>
                 {% endif %}
-                <span>Reputation: <strong>{{ spotlight.clubReputation|number_format }}</strong></span>
-                <span>Dividends Drawn: <strong>£{{ (spotlight.dividendDrawsPence / 100)|number_format }}</strong></span>
-            </div>
+                <div class="spotlight-fact">
+                    <dt class="vt">Reputation</dt>
+                    <dd class="pixel">{{ spotlight.clubReputation|number_format }}</dd>
+                </div>
+                <div class="spotlight-fact">
+                    <dt class="vt">Dividends drawn</dt>
+                    <dd class="pixel">£{{ (spotlight.dividendDrawsPence / 100)|round(0, 'floor')|number_format }}</dd>
+                </div>
+            </dl>
 
             {#
-               Honours board. Each trophy is drawn client-side by composeTrophySvg()
-               (trophy-compositor.js) from the chip's own data-trophy attribute — the
-               same renderer the admin leagues screen and the trophy field widget use,
-               so there is no longer a CSS filter chain to keep in step across two
-               templates. See landing.js's Club Spotlight block for the wiring.
+               Facilities panel — the featured club's REAL build-out, from
+               ClubSpotlight.facilities (one json column, no extra query at render
+               time; the whole point of the spotlight being a denormalised row).
 
-               League::$trophy is nullable (an admin may simply not have set one), so a
-               tier can carry real titles and no trophy — those still appear, as a
-               count-only chip. Dropping them would under-report real silverware.
+               Null on rows generated before that column existed, in which case the
+               panel is omitted entirely. Null must never read as "empty": every
+               DEFAULT_*_CONFIG in the sprite bundle is the web builder's DEMO
+               config, so a page that drew an empty payload would show a stranger's
+               fully-built training ground as this club's.
+
+               The sector blocks and tiles are built by landing.js from
+               window.FACILITY_SITES (the bundle's own export of which facilities
+               each site has) merged with the config below — the level badges and
+               on/off state all come from this attribute. Hand-listing the 22
+               facilities here would duplicate a mapping that is generated
+               specifically so only one copy exists.
             #}
-            {% if spotlight.trophies is not empty %}
-                <div class="spotlight-trophies">
-                    <div class="spotlight-detail-title">
-                        Trophies Won
-                        <span class="spotlight-trophy-total">{{ spotlight.totalTrophies }}</span>
+            {% if spotlight.facilities is not empty %}
+                <div class="spotlight-facilities"
+                     data-spotlight-facilities="{{ spotlight.facilities|json_encode|e('html_attr') }}"
+                     data-built-by-site="{{ builtBySite|json_encode|e('html_attr') }}">
+                    <div class="spotlight-facilities-head">
+                        <h3 class="pixel spotlight-col-title">FACILITIES</h3>
+                        <span class="spotlight-facilities-count">{{ builtTotal }} of 22 built · tile shows current level</span>
                     </div>
-                    <ul class="spotlight-trophy-list">
-                        {% for trophy in spotlight.trophies %}
-                            <li class="spotlight-trophy"
-                                title="{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }} — {{ trophy.titles }} {{ trophy.titles == 1 ? 'title' : 'titles' }}">
-                                {% if trophy.trophy ?? null %}
-                                    <span class="spotlight-trophy-img"
-                                          data-spotlight-trophy="{{ trophy.trophy|json_encode|e('html_attr') }}"></span>
-                                {% endif %}
-                                <span class="spotlight-trophy-meta">
-                                    <span class="spotlight-trophy-count">&times;{{ trophy.titles }}</span>
-                                    <span class="spotlight-trophy-tier">{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }}</span>
-                                </span>
-                            </li>
-                        {% endfor %}
-                    </ul>
+                    <div class="spotlight-sectors"></div>
                 </div>
             {% endif %}
 
-            {% if spotlight.recentFixtures is not empty or spotlight.recentTransfers is not empty %}
-                <div class="spotlight-detail-grid">
-                    {% if spotlight.recentFixtures is not empty %}
-                        <div class="spotlight-detail-col">
-                            <div class="spotlight-detail-title">Recent Fixtures</div>
-                            <ul class="spotlight-detail-list">
-                                {% for fixture in spotlight.recentFixtures %}
-                                    <li>
-                                        <span class="spotlight-result-badge is-{{ fixture.result|lower }}">{{ fixture.result }}</span>
-                                        vs {{ fixture.opponent }}
-                                        <span class="spotlight-detail-sub">{{ fixture.scoreFor }}–{{ fixture.scoreAgainst }} · Wk {{ fixture.week }}</span>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
+            <div class="spotlight-columns">
+                {% if spotlight.recentFixtures is not empty %}
+                    <div class="spotlight-col">
+                        <h3 class="pixel spotlight-col-title">RECENT FIXTURES</h3>
+                        <ul class="spotlight-col-list">
+                            {% for fixture in spotlight.recentFixtures %}
+                                <li>
+                                    <span class="spotlight-result-badge is-{{ fixture.result|lower }}">{{ fixture.result }}</span>
+                                    <span class="spotlight-col-body">
+                                        <span class="spotlight-col-main">vs {{ fixture.opponent }}</span>
+                                        <span class="spotlight-col-sub">{{ fixture.scoreFor }}–{{ fixture.scoreAgainst }} · Wk {{ fixture.week }}</span>
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                {% if spotlight.recentTransfers is not empty %}
+                    <div class="spotlight-col">
+                        <h3 class="pixel spotlight-col-title">RECENT TRANSFERS</h3>
+                        <ul class="spotlight-col-list">
+                            {% for transfer in spotlight.recentTransfers %}
+                                <li>
+                                    <span class="spotlight-result-badge is-{{ transfer.direction == 'in' ? 'w' : 'l' }}">{{ transfer.direction == 'in' ? 'IN' : 'OUT' }}</span>
+                                    <span class="spotlight-col-body">
+                                        <span class="spotlight-col-main">{{ transfer.playerName }}</span>
+                                        <span class="spotlight-col-sub">£{{ (transfer.feePence / 100)|round(0, 'floor')|number_format }} {{ transfer.direction == 'in' ? 'from' : 'to' }} {{ transfer.counterpartyClub }}</span>
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <div class="spotlight-col">
+                    {#
+                       Honours board. Each trophy is drawn by composeTrophySvg() from
+                       the chip's own data-trophy — the same renderer the admin leagues
+                       screen and the trophy field widget use.
+
+                       League::$trophy is nullable (an admin may simply not have set
+                       one), so a tier can carry real titles and no trophy; those still
+                       appear, as a count-only chip. Dropping them would under-report
+                       real silverware. A row written before the trophy component was
+                       replaced carries the retired trophyImage/trophyColour keys, which
+                       parse to no `style` and are skipped rather than drawn wrong.
+                    #}
+                    {% if spotlight.trophies is not empty %}
+                        <h3 class="pixel spotlight-col-title">TROPHY CABINET
+                            <span class="spotlight-trophy-total">{{ spotlight.totalTrophies }}</span>
+                        </h3>
+                        <ul class="spotlight-trophy-list">
+                            {% for trophy in spotlight.trophies %}
+                                <li class="spotlight-trophy"
+                                    title="{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }} — {{ trophy.titles }} {{ trophy.titles == 1 ? 'title' : 'titles' }}">
+                                    {% if trophy.trophy ?? null %}
+                                        <span class="spotlight-trophy-img"
+                                              data-spotlight-trophy="{{ trophy.trophy|json_encode|e('html_attr') }}"
+                                              aria-hidden="true"></span>
+                                    {% endif %}
+                                    <span class="spotlight-trophy-meta vt">
+                                        <span class="spotlight-trophy-count">&times;{{ trophy.titles }}</span>
+                                        <span class="spotlight-trophy-tier">{{ trophy.leagueName ?? 'Tier ' ~ trophy.tier }}</span>
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        </ul>
                     {% endif %}
-                    {% if spotlight.recentTransfers is not empty %}
-                        <div class="spotlight-detail-col">
-                            <div class="spotlight-detail-title">Recent Transfers</div>
-                            <ul class="spotlight-detail-list">
-                                {% for transfer in spotlight.recentTransfers %}
-                                    <li>
-                                        <span class="spotlight-result-badge is-{{ transfer.direction == 'in' ? 'w' : 'l' }}">{{ transfer.direction == 'in' ? 'IN' : 'OUT' }}</span>
-                                        {{ transfer.playerName }}
-                                        <span class="spotlight-detail-sub">£{{ (transfer.feePence / 100)|number_format }} {{ transfer.direction == 'in' ? 'from' : 'to' }} {{ transfer.counterpartyClub }}</span>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% endif %}
+
+                    <h3 class="pixel spotlight-col-title">HOME &amp; AWAY KITS</h3>
+                    <div class="spotlight-kits">
+                        <figure class="spotlight-kit">
+                            <span class="spotlight-kit-slot" data-spotlight-kit="home" aria-hidden="true"></span>
+                            <figcaption class="vt">Home</figcaption>
+                        </figure>
+                        <figure class="spotlight-kit">
+                            <span class="spotlight-kit-slot" data-spotlight-kit="away" aria-hidden="true"></span>
+                            <figcaption class="vt">Away</figcaption>
+                        </figure>
+                    </div>
                 </div>
-            {% endif %}
+            </div>
+
+            <div class="spotlight-cta-bar">
+                <span class="spotlight-note">Picked at random every 12 hours from the most active clubs. Keep syncing and build something worth featuring.</span>
+                <a href="#get" class="btn btn-gold btn-lg">BUILD YOUR CLUB</a>
+            </div>
         </div>
-        <p class="spotlight-note">Picked at random every 12 hours from the most active clubs — keep syncing and build something worth featuring.</p>
     </div>
 </section>
 
-<hr class="divider">
 {% endif %}

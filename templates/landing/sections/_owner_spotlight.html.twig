@@ -1,134 +1,216 @@
 {#
-   Owner Spotlight — the five richest owners in the game, each with up to five of
-   their clubs and the division each sits in. Sits directly under Chapter 01 of
-   the Journey section (the "create your owner" chapter), which is why it is
-   included from _story.html.twig rather than from index.html.twig.
+   Owner Spotlight / The Rich List (#owner-spotlight) — the richest owners in the
+   game, each with up to OwnerSpotlightService::CLUBS_PER_OWNER of their clubs and
+   the division each sits in.
 
-   Laid out as a board of per-owner cards (see .ospot-board in landing.css), not
-   one panel of stacked full-width rows: club counts vary wildly, so a card per
-   owner in balanced columns stops a one-club owner reserving the same vertical
-   slab as a five-club one. The cards carry the gold ring themselves — there is
-   no outer ringed panel, because nesting rings inside rings muddied which edge
-   belonged to which owner.
+   Now a top-level section. It used to be included from _story.html.twig, sitting
+   inside Journey Chapter 01 as that chapter's payoff; the redesign gives it its
+   own slot after the no-pay-to-win band, where it reads as a leaderboard rather
+   than as chapter furniture. Owners are avatars, not real people, and the data is
+   the game's own.
 
-   Still its own .ospot-* class namespace, distinct from the Club Spotlight card
-   (.spotlight-card) it shares a visual family with, so changing one never
-   silently restyles the other.
+   Two layouts, per the design, because rank 1 is the only row with room for a
+   scene: a full-width gold leader card (full-body owner sprite + that owner's
+   own stadium) and a 4-up grid of head-avatar cards for ranks 2-5. Both share
+   the .ospot-* namespace, distinct from the Club Spotlight's .spotlight-* it
+   borrows its visual family from, so restyling one never silently restyles the
+   other.
 
-   ownerSpotlight is computed live behind a 10-minute cache (OwnerSpotlightService),
-   unlike the cron-refreshed Club Spotlight — it is two indexed queries, not an
-   aggregate over sync payloads.
+   Club rows use the TWO-LINE layout — badge + kit + name on line one, tier chip
+   and division on line two. The single-line version collapses a long club name
+   to one letter per line at grid-card width, which is why the design specifies
+   this explicitly.
 
-   Ranked on UserLedger dividends actually drawn, NOT on combined club balance and
-   NOT on Club::$totalCareerEarnings (which is being phased out). Only owners
-   holding ledger entries appear, so the panel lists however many qualify — fewer
-   than five is normal, and the whole section renders nothing when none do. Expect
-   it to stay sparse until clients report `dividend_draw` at volume.
+   ownerSpotlight is computed live behind a 10-minute cache
+   (OwnerSpotlightService), unlike the cron-refreshed Club Spotlight — it is two
+   indexed queries, not an aggregate over sync payloads.
 
-   Avatars render client-side from data-owner-appearance via composePlayerSpriteSvg()
-   (avatar-compositor.js), the same technique the Club Spotlight uses. Owner identity
-   is newer than most accounts, so a null appearance is common — the slot simply
-   stays empty rather than drawing a placeholder body.
+   Ranked on UserLedger dividends actually drawn, NOT on combined club balance
+   and NOT on Club::$totalCareerEarnings. Only owners holding ledger entries
+   appear, so fewer than five is normal and the whole section renders nothing
+   when none do — which is the design's own "hidden entirely until at least one
+   owner qualifies" state (see design/States.dc.html).
 
-   Country chips are flag SVGs from public/assets/flags/, keyed by the lower-cased
-   App\Enum\Country code (see that directory's README for provenance and for why
-   England is en.svg rather than upstream's gb-eng). Each one carries the country
-   name as both alt and title, so the flag is never the only carrier of which
-   country it is — a 18x13 flag is not reliably identifiable, and several are
-   near-identical at that size. The <img> is explicitly sized so the row doesn't
-   reflow as flags decode. The leaderboards and community-stats cards render the
-   same flags client-side via landing.js's clubCountryChipHtml(), sized to match.
+   sharePct is a share of the LEADER's total, not of the board total, and is
+   computed server-side: the template only ever sees the rows it renders, so it
+   cannot work out a denominator that includes anyone it is not showing. 0.0 when
+   the leader is 0, which an all-zero board makes a real state.
 
-   Club badges render via clubBadgeIconsHtml() in landing.js, the shared helper the
-   ticker and both leaderboards use. Every club row carries at least a badge; the kit
-   rides along in the same helper output and is hidden by CSS under 720px, where the
-   row no longer has width for both.
+   stadiumConfig is sent for rank 1 only — four extra ClubFacility queries for
+   cards that never draw one — so a null here means "not the leader", not
+   "no stadium".
 
-   The JS hooks are load-bearing and unchanged by the card restructure: landing.js
-   walks `.ospot-row`, then `.ospot-avatar-slot` and `.ospot-club`/`.ospot-club-badge`
-   within it. `.ospot-row` is the owner CARD here, not a table-style row — keep the
-   class on whatever element wraps one owner.
+   Avatars render client-side from data-owner-appearance via
+   composePlayerSpriteSvg(). Owner identity is newer than most accounts, so a
+   null appearance is common; the slot stays empty rather than drawing a default
+   face attributed to a named owner.
+
+   Country chips are flag SVGs from public/assets/flags/, keyed by the
+   lower-cased App\Enum\Country code (see that directory's README for provenance,
+   and for why England is en.svg). Each carries the country name as alt AND
+   title, so the flag is never the only carrier of which country it is — an
+   18x13 flag is not reliably identifiable. Explicitly sized so the row does not
+   reflow as flags decode.
+
+   The JS hooks are load-bearing: landing.js walks `.ospot-row`, then
+   `.ospot-avatar-slot` / `.ospot-stadium-slot` / `.ospot-club`'s
+   `.ospot-club-badge` within it. `.ospot-row` is one owner's CARD, in both
+   layouts — keep the class on whatever element wraps a single owner.
 #}
+{% import _self as ui %}
+
 {% if ownerSpotlight is not empty %}
-<section class="ospot-section" id="owner-spotlight" aria-labelledby="owner-spotlight-title">
+{% set leader = ownerSpotlight|first %}
+{% set rest = ownerSpotlight|slice(1) %}
+
+<section class="ospot-section" id="owner-spotlight" aria-labelledby="ospot-title">
     <div class="wrap">
         <div class="section-label">Owner Spotlight</div>
-
         <div class="ospot-board-head">
-            <span class="pixel" id="owner-spotlight-title">THE RICH LIST</span>
-            <span class="ospot-header-sub">Top {{ ownerSpotlight|length }} by dividends drawn</span>
+            <h2 class="pixel" id="ospot-title">THE RICH LIST</h2>
+            <span class="ospot-header-sub vt">Top {{ ownerSpotlight|length }} {{ ownerSpotlight|length == 1 ? 'owner' : 'owners' }} by dividends drawn</span>
         </div>
 
-        {# <ol>, not <ul> or a div grid: the ranking is the content, so it stays in
-           the markup rather than living only in the rendered .ospot-rank glyph. #}
-        <ol class="ospot-board">
-            {% for owner in ownerSpotlight %}
-                <li class="ospot-row"
-                    data-owner-appearance="{{ owner.ownerAppearance|json_encode|e('html_attr') }}">
+        {# <ol>, not a div grid: the ranking is the content, so it lives in the
+           markup rather than only in the rendered rank glyph. The second list
+           carries start="2" so ranks 2-5 are numbered correctly on their own. #}
+        <ol class="ospot-leader-list">
+            <li class="ospot-row ospot-leader"
+                data-ospot-crop="full"
+                data-owner-appearance="{{ leader.ownerAppearance|json_encode|e('html_attr') }}"
+                data-stadium-config="{{ leader.stadiumConfig|json_encode|e('html_attr') }}">
 
+                <div class="ospot-leader-scene">
+                    <span class="ospot-rank-chip pixel">
+                        <span class="visually-hidden">Rank </span>01 · TOP DRAWER
+                    </span>
+                    <span class="ospot-avatar-slot" aria-hidden="true"></span>
+                    <span class="ospot-stadium-slot" aria-hidden="true"></span>
+                </div>
+
+                <div class="ospot-leader-body">
                     <div class="ospot-head">
-                        <span class="ospot-rank" aria-hidden="true">{{ '%02d'|format(owner.rank) }}</span>
-
-                        <span class="ospot-avatar-slot" aria-hidden="true"></span>
-
-                        <span class="ospot-identity">
-                            <span class="ospot-owner-name">
-                                {{ owner.ownerName }}
-                                {% if owner.ownerCountryCode %}
+                        <div class="ospot-identity">
+                            <div class="ospot-owner-name pixel">{{ leader.ownerName }}</div>
+                            <div class="ospot-owner-meta vt">
+                                {% if leader.ownerCountryCode %}
                                     <img class="ospot-flag"
-                                         src="{{ asset('assets/flags/' ~ owner.ownerCountryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                                         src="{{ asset('assets/flags/' ~ leader.ownerCountryCode|lower ~ '.svg') }}?v={{ landing_v }}"
                                          width="18" height="13" loading="lazy" decoding="async"
-                                         alt="{{ owner.ownerNationality }}" title="{{ owner.ownerNationality }}">
+                                         alt="{{ leader.ownerNationality }}" title="{{ leader.ownerNationality }}">
                                 {% endif %}
-                            </span>
-                            <span class="ospot-owner-meta">
-                                {{ owner.clubCount }} {{ owner.clubCount == 1 ? 'club' : 'clubs' }}
-                            </span>
-                        </span>
-
-                        <span class="ospot-balance">
-                            <span class="ospot-balance-val">£{{ (owner.drawnPence / 100)|round(0, 'floor')|number_format }}</span>
-                            <span class="ospot-balance-lbl">drawn</span>
-                        </span>
+                                {{ leader.clubCount }} {{ leader.clubCount == 1 ? 'club' : 'clubs' }}
+                            </div>
+                        </div>
+                        <div class="ospot-balance">
+                            <div class="ospot-balance-val pixel">£{{ (leader.drawnPence / 100)|round(0, 'floor')|number_format }}</div>
+                            <div class="ospot-balance-lbl vt">DRAWN</div>
+                        </div>
                     </div>
 
-                    {% if owner.clubs is not empty %}
-                        <div class="ospot-clubs-head">
-                            <span class="ospot-clubs-label">Clubs</span>
+                    <div class="ospot-share" role="img" aria-label="Share of the leader's total: {{ leader.sharePct|round }}%">
+                        <span class="ospot-share-fill" style="width:{{ leader.sharePct|round(1) }}%"></span>
+                    </div>
+
+                    {% if leader.clubs is not empty %}
+                        <div class="ospot-clubs-head vt">
+                            <span>CLUBS</span>
                             {# A plain count, never a toggle: the payload is capped at
-                               OwnerSpotlightService::CLUBS_PER_OWNER, so the remaining
-                               clubs aren't on the page to reveal. #}
-                            {% if owner.clubCount > owner.clubs|length %}
-                                <span class="ospot-more">+{{ owner.clubCount - owner.clubs|length }} more</span>
+                               CLUBS_PER_OWNER, so the remaining clubs are not on the
+                               page to reveal. #}
+                            {% if leader.clubCount > leader.clubs|length %}
+                                <span>+{{ leader.clubCount - leader.clubs|length }} more</span>
                             {% endif %}
                         </div>
-
-                        <ul class="ospot-clubs">
-                            {% for club in owner.clubs %}
-                                <li class="ospot-club"
-                                    data-club-badge="{{ {home: club.homeKitConfig, away: club.awayKitConfig, badge: club.badgeConfig}|json_encode|e('html_attr') }}">
-                                    <span class="ospot-club-badge" aria-hidden="true"></span>
-                                    <span class="ospot-club-name">{{ club.name }}</span>
-                                    {% if club.countryCode %}
-                                        {% set clubCountry = club.countryLabel ?? club.countryCode %}
-                                        <img class="ospot-flag"
-                                             src="{{ asset('assets/flags/' ~ club.countryCode|lower ~ '.svg') }}?v={{ landing_v }}"
-                                             width="18" height="13" loading="lazy" decoding="async"
-                                             alt="{{ clubCountry }}" title="{{ clubCountry }}">
-                                    {% endif %}
-                                    <span class="ospot-club-division">
-                                        {% if club.tier %}<span class="ospot-tier">T{{ club.tier }}</span>{% endif %}
-                                        {{ club.division }}
-                                    </span>
-                                </li>
-                            {% endfor %}
-                        </ul>
+                        {{ ui.clubList(leader.clubs, landing_v) }}
                     {% endif %}
-                </li>
-            {% endfor %}
+                </div>
+            </li>
         </ol>
 
-        <p class="ospot-note">Dividends drawn across every club an owner holds, refreshed every few minutes from Integrity Sync.</p>
+        {% if rest is not empty %}
+            <ol class="ospot-grid" start="2">
+                {% for owner in rest %}
+                    <li class="ospot-row ospot-card"
+                        data-ospot-crop="head"
+                        data-owner-appearance="{{ owner.ownerAppearance|json_encode|e('html_attr') }}">
+
+                        <div class="ospot-head">
+                            <span class="ospot-rank pixel">
+                                <span class="visually-hidden">Rank </span>{{ '%02d'|format(owner.rank) }}
+                            </span>
+                            <span class="ospot-avatar-slot" aria-hidden="true"></span>
+                            <span class="ospot-identity">
+                                <span class="ospot-owner-name pixel">{{ owner.ownerName }}</span>
+                                <span class="ospot-owner-meta vt">
+                                    {% if owner.ownerCountryCode %}
+                                        <img class="ospot-flag"
+                                             src="{{ asset('assets/flags/' ~ owner.ownerCountryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                                             width="18" height="13" loading="lazy" decoding="async"
+                                             alt="{{ owner.ownerNationality }}" title="{{ owner.ownerNationality }}">
+                                    {% endif %}
+                                    {{ owner.clubCount }} {{ owner.clubCount == 1 ? 'club' : 'clubs' }}
+                                </span>
+                            </span>
+                        </div>
+
+                        <div class="ospot-balance-row">
+                            <span class="ospot-balance-val pixel">£{{ (owner.drawnPence / 100)|round(0, 'floor')|number_format }}</span>
+                            <span class="ospot-balance-lbl vt">DRAWN</span>
+                        </div>
+
+                        <div class="ospot-share" role="img" aria-label="Share of the leader's total: {{ owner.sharePct|round }}%">
+                            <span class="ospot-share-fill" style="width:{{ owner.sharePct|round(1) }}%"></span>
+                        </div>
+
+                        {% if owner.clubs is not empty %}
+                            {{ ui.clubList(owner.clubs, landing_v) }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ol>
+        {% endif %}
+
+        <p class="ospot-note">
+            Dividends drawn across every club an owner holds, as reported by the app and
+            refreshed every few minutes. Owners appear by display name only.
+            <a href="#privacy">How we handle your data</a>.
+        </p>
     </div>
 </section>
 {% endif %}
+
+{#
+   One club row, shared by both layouts so the two-line structure cannot drift
+   between the leader card and the grid cards.
+
+   Every club shows at least its badge — clubBadgeIconsHtml() falls back to
+   composeKitSvg()'s own defaults, so a club that has never customised its
+   identity still draws something. The kit rides along in the same helper output
+   and is hidden by CSS on the narrowest cards, where the row has no width for
+   both.
+#}
+{% macro clubList(clubs, landing_v) %}
+    <ul class="ospot-clubs">
+        {% for club in clubs %}
+            <li class="ospot-club"
+                data-club-badge="{{ {home: club.homeKitConfig, away: club.awayKitConfig, badge: club.badgeConfig}|json_encode|e('html_attr') }}">
+                <span class="ospot-club-badge" aria-hidden="true"></span>
+                <span class="ospot-club-name">
+                    {{ club.name }}
+                    {% if club.countryCode %}
+                        {% set clubCountry = club.countryLabel ?? club.countryCode %}
+                        <img class="ospot-flag"
+                             src="{{ asset('assets/flags/' ~ club.countryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                             width="18" height="13" loading="lazy" decoding="async"
+                             alt="{{ clubCountry }}" title="{{ clubCountry }}">
+                    {% endif %}
+                </span>
+                <span class="ospot-club-division">
+                    {% if club.tier %}<span class="ospot-tier pixel">T{{ club.tier }}</span>{% endif %}
+                    {{ club.division }}
+                </span>
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}

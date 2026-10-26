@@ -1,0 +1,197 @@
+{#
+   Live Telemetry (#telemetry) — the Boardroom Incident & Consequence Feed.
+
+   Was _chairmans_terminal.html.twig, a widget in the right-hand column of the
+   hero. The redesign promotes it to a full-bleed section of its own: the feed
+   now needs a pause control, a four-tile stat strip and a per-line button
+   target, none of which fits beside hero copy.
+
+   Real, live data only (refreshed by app:telemetry:generate) — no illustrative
+   filler. That constraint predates this redesign and still governs every line
+   here. See LiveTelemetryService for exactly how each figure and each feed
+   category is built; the short version:
+     - fixturesSimulated / getCapitalDeployedFormatted() / getResultsFormatted() /
+       activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads.
+       weeksPlayed is sync count * 4 (each sync ~= 4 on-device weekly ticks), an
+       approximation rather than a true weeks-elapsed count.
+     - totalGoals / getGoalsPerMatchFormatted() and tableTurnover — pyramid-wide
+       collective totals. Goals are summed from fixtures[] deduplicated by
+       fixtureId, since each payload carries the syncing club's whole division's
+       round and several clubs report the same fixtures. Table Turnover counts
+       SeasonRecord promotions/relegations over the feed's 7-day window, not the
+       stats window: a season concludes far more rarely than a sync, so a 24h
+       count would read 0 almost permanently.
+     - recentEvents — up to 20 items across 9 real sources, selected round-robin
+       (selectBalanced()) so a rare category can't be crowded out, then re-sorted
+       newest-first. Each carries {time, text, category, categoryLabel, club,
+       clubId, clubs, detail, amountExact, timestampIso, meta, dossier}.
+
+   THREE STATES, per design/States.dc.html. The distinction that matters is
+   "never generated" vs "generated and everything was zero" — a zero snapshot is
+   a real, reportable state and must not read as a broken cron:
+     - not generated: no row at all (getId() === null), so every figure is a
+       default rather than a measurement. Tiles render as em-dashes, not zeros.
+     - stale: generated, but longer ago than the cron's own cadence allows.
+     - active: everything else.
+
+   STALE_AFTER_SECONDS is 1800 here and in Api\TelemetryController, which is a
+   duplicated constant: the API endpoint computes `stale` server-side, but this
+   page is rendered from the entity directly (LandingController passes
+   LiveTelemetryService::getSnapshot(), never a round trip to its own API) and
+   the entity carries no staleness accessor. Keep the two numbers in step, or
+   the page and the endpoint will disagree about the same snapshot.
+#}
+{% set telemetry_generated = telemetry.id is not null %}
+{% set telemetry_age = 'now'|date('U') - telemetry.generatedAt|date('U') %}
+{% set telemetry_stale = telemetry_generated and telemetry_age > 1800 %}
+{% set telemetry_state = not telemetry_generated ? 'pending' : (telemetry_stale ? 'stale' : 'active') %}
+
+<section class="telemetry-section" id="telemetry" aria-labelledby="telemetry-title">
+    <div class="wrap">
+        <div class="terminal is-{{ telemetry_state }}">
+            <div class="terminal-header">
+                <div class="terminal-header-live">
+                    <span class="terminal-dot" aria-hidden="true"></span>
+                    <h2 class="pixel terminal-title" id="telemetry-title">
+                        {%- if telemetry_state == 'pending' -%}
+                            TELEMETRY // AWAITING FIRST REFRESH
+                        {%- elseif telemetry_state == 'stale' -%}
+                            TELEMETRY // STALE SYNC
+                        {%- else -%}
+                            LIVE TELEMETRY // 24H PYRAMID FEED
+                        {%- endif -%}
+                    </h2>
+                </div>
+                <span class="terminal-sync vt">
+                    {%- if telemetry_state == 'pending' -%}
+                        SYNC: AWAITING FIRST REFRESH
+                    {%- elseif telemetry_state == 'stale' -%}
+                        SYNC: DELAYED [LAST REFRESH {{ telemetry.generatedAt|date('H:i') }}, {{ (telemetry_age / 60)|round(0, 'floor') }} MIN AGO]
+                    {%- else -%}
+                        SYNC: ACTIVE [REFRESHED {{ telemetry.generatedAt|date('H:i') }}]
+                    {%- endif -%}
+                </span>
+            </div>
+
+            {#
+               Four tiles. Each big pixel-font value stays a bare number with the
+               descriptive text in the smaller sub-line — a full sentence in the
+               pixel font wraps and overflows the tile.
+
+               An ungenerated snapshot shows an em-dash rather than 0: a real
+               pyramid-wide zero and "we have never measured this" look identical
+               as numerals, and only one of them is a figure.
+            #}
+            <div class="terminal-stats">
+                <div class="terminal-stat">
+                    <span class="terminal-stat-label pixel">Fixtures &amp; Form</span>
+                    <span class="terminal-stat-val">{{ telemetry_generated ? telemetry.fixturesSimulated|number_format : '—' }}</span>
+                    <span class="terminal-stat-sub vt">{{ telemetry_generated ? telemetry.getResultsFormatted() ~ ' (W-D-L)' : 'No snapshot yet' }}</span>
+                </div>
+                <div class="terminal-stat">
+                    <span class="terminal-stat-label pixel">Capital Deployed</span>
+                    <span class="terminal-stat-val is-mint">{{ telemetry_generated ? telemetry.getCapitalDeployedFormatted() : '—' }}</span>
+                    <span class="terminal-stat-sub vt">Transfers &amp; infra</span>
+                </div>
+                <div class="terminal-stat">
+                    <span class="terminal-stat-label pixel">Goals Logged</span>
+                    <span class="terminal-stat-val is-gold">{{ telemetry_generated ? telemetry.totalGoals|number_format : '—' }}</span>
+                    <span class="terminal-stat-sub vt">{{ telemetry_generated ? telemetry.getGoalsPerMatchFormatted() : 'No snapshot yet' }}</span>
+                </div>
+                <div class="terminal-stat">
+                    <span class="terminal-stat-label pixel">Table Turnover</span>
+                    <span class="terminal-stat-val is-red">{{ telemetry_generated ? telemetry.tableTurnover|number_format : '—' }}</span>
+                    <span class="terminal-stat-sub vt">Promotions &amp; drops, 7 days</span>
+                </div>
+            </div>
+
+            <div class="terminal-body">
+                {#
+                   One real <button> per line, inside a list item. These used to be
+                   divs carrying tabindex="0" role="button" plus a keydown shim for
+                   Enter/Space in landing.js — a button gets all of that from the
+                   platform, including the right focus ring and the right behaviour
+                   for assistive tech that enumerates controls.
+                #}
+                <ul class="terminal-feed" aria-label="Recent pyramid activity">
+                    {% for event in telemetry.recentEvents %}
+                        <li class="terminal-feed-row">
+                            <button type="button"
+                                    class="terminal-feed-item{{ loop.first ? ' active' }} vt cat-{{ event.category|lower }}"
+                                    data-category-label="{{ event.categoryLabel }}"
+                                    data-club="{{ event.club }}"
+                                    data-detail="{{ event.detail }}"
+                                    data-amount="{{ event.amountExact }}"
+                                    data-timestamp="{{ event.timestampIso }}"
+                                    data-meta="{{ event.meta|json_encode|e('html_attr') }}"
+                                    data-club-badge="{{ event.clubBadge|json_encode|e('html_attr') }}"
+                                    data-dossier="{{ event.dossier|default(null)|json_encode|e('html_attr') }}">
+                                <span class="terminal-feed-category pixel">{{ event.categoryLabel }}</span>
+                                <span class="terminal-feed-line">
+                                    {#
+                                       A badge per club the line NAMES, not just the first.
+                                       event.clubs is [{name, clubId, badge}] in the order the
+                                       names appear, with the primary club at index 0; a
+                                       transfer names two sides and the design draws both.
+
+                                       A null badge means "no Club row behind this name" (an
+                                       NPC side, typically), not "kit unset" — those slots
+                                       carry no data-club-badge at all and landing.js leaves
+                                       them empty rather than drawing a default kit and
+                                       implying a club that does not exist.
+                                    #}
+                                    {% for named in event.clubs|default([]) %}
+                                        {% if named.badge %}
+                                            <span class="terminal-feed-badge"
+                                                  data-club-badge="{{ named.badge|json_encode|e('html_attr') }}"
+                                                  aria-hidden="true"></span>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <span class="terminal-feed-time">[{{ event.time }}]</span> {{ event.text }}
+                                </span>
+                            </button>
+                        </li>
+                    {% else %}
+                        <li class="terminal-feed-row">
+                            <p class="terminal-feed-empty vt">
+                                {%- if telemetry_generated -%}
+                                    No activity to report in the last 24 hours.
+                                {%- else -%}
+                                    No activity to report yet. The first snapshot lands within 15 minutes of the next refresh.
+                                {%- endif -%}
+                            </p>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="terminal-aside">
+                    <div>
+                        <div class="terminal-aside-title pixel">INCIDENT REPORT</div>
+                        <p class="terminal-aside-copy">Select any line to open the boardroom dossier: the club's badge and kit, the logged time, the value, its best-rated player and its latest fixtures.</p>
+                    </div>
+                    <div class="terminal-aside-actions">
+                        {#
+                           Hidden when there is nothing to rotate — a pause control
+                           over a single line (or none) is a dead toggle. Its pressed
+                           state and label are owned by landing.js, which also starts
+                           it already paused under prefers-reduced-motion.
+                        #}
+                        {% if telemetry.recentEvents|length > 1 %}
+                            <button type="button" class="btn btn-outline btn-sm pixel" id="telemetry-pause" aria-pressed="false">PAUSE FEED</button>
+                        {% endif %}
+                        <button type="button" class="btn btn-gold btn-sm pixel" id="terminal-cta">ENTER BOARDROOM</button>
+                    </div>
+                </div>
+            </div>
+
+            <p class="terminal-footer vt">
+                {% if telemetry_generated %}
+                    {{ telemetry.activeClubs|number_format }} ACTIVE CLUBS // ~{{ telemetry.weeksPlayed|number_format }} WEEKS PLAYED (ESTIMATE) // OFFLINE-FIRST ENGINE.
+                    Results are tallied from the last five matches per sync, so a club that syncs often can be counted twice.
+                {% else %}
+                    OFFLINE-FIRST ENGINE. Figures appear once the first snapshot is generated.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</section>
