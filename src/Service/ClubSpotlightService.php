@@ -10,6 +10,7 @@ use App\Entity\MatchResult;
 use App\Entity\Transfer;
 use App\Enum\TransferType;
 use App\Repository\ClubFacilityRepository;
+use App\Service\Facility\FacilitySpriteMap;
 use App\Repository\ClubSpotlightRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\MatchResultRepository;
@@ -157,6 +158,7 @@ class ClubSpotlightService
             ownerNationality: $owner->getNationality(),
             ownerAppearance: $owner->getAppearance(),
             stadiumConfig: $this->buildStadiumConfig($club, $recentResults),
+            facilities: $this->buildFacilityConfigs($club, $recentResults),
             recentFixtures: $this->buildRecentFixtures($recentResults),
             recentTransfers: $this->buildRecentTransfers($club),
             topPerformerName: $topPerformer?->getPlayerName(),
@@ -263,7 +265,9 @@ class ClubSpotlightService
         // sprite and were passed through raw; v2 redrew all three for 10 levels
         // with size proportional to sqrt(cost), so an un-doubled level 5 shop
         // would now draw at roughly half the size it used to.
-        $spriteLevel = static fn (string $slug): int => max(1, ($levelBySlug[$slug] ?? 0) * 2);
+        // Clamped as well as doubled now — see spriteLevel()'s own note on why a
+        // raw doubling could hand the renderer a level past the end of its table.
+        $spriteLevel = static fn (string $slug): int => self::spriteLevel($levelBySlug[$slug] ?? 0);
         $isBuilt     = static fn (string $slug): bool => ($levelBySlug[$slug] ?? 0) > 0;
 
         $config = [
@@ -310,6 +314,95 @@ class ClubSpotlightService
         }
 
         return $config;
+    }
+
+    /**
+     * A FacilityTemplate level (1-5) as the sprite's own level (1-10).
+     *
+     * Doubling is the mapping the stadium has always used; the three plot sites
+     * document the same 1-10 range, so they get the same treatment rather than a
+     * second convention.
+     *
+     * **The upper clamp is not defensive padding.** club_facility.level is written
+     * from the client's `facilityLevels` sync payload and is not validated against
+     * the template's 1-5 range: live rows reach 11 for training, 10 for medical,
+     * 7 for scouting. Doubled, an 11 becomes 22 and indexes a size table that stops
+     * at 10. The stadium escapes this today only because its own levels happen to
+     * sit at 5 or below — the same bug was always latent there, and routing it
+     * through here fixes it rather than leaving one caller exposed.
+     *
+     * Floor of 1 so an unbuilt facility still renders a plot rather than vanishing;
+     * "not built at all" is carried by the explicit on/off boolean beside it,
+     * which is why that boolean cannot be inferred from the level.
+     */
+    private static function spriteLevel(int $templateLevel): int
+    {
+        return max(1, min(10, $templateLevel * 2));
+    }
+
+    /**
+     * Ready-to-render sprite configs for all four facility sites.
+     *
+     * Slugs resolve through FacilitySpriteMap, which is generated from the sprite
+     * drop itself, so this never carries its own idea of which slug draws as which
+     * id. A slug with no mapping is skipped: `club_facility` stores whatever the
+     * client sends, and live data holds five slugs with no FacilityTemplate at all
+     * (away_stand, main_stand, kinetic_lab, neuro_shed, zenith_sanctuary), so an
+     * unknown slug is an expected input here, not an error.
+     *
+     * Every facility is emitted with an explicit on/off boolean, because each
+     * DEFAULT_*_CONFIG in the drop is the web builder's demo config — omitting a
+     * key means "show the demo value", never "unset", and a club with no medical
+     * centre would otherwise render someone else's.
+     *
+     * `*Construction` is always false. `club_facility` is (club, slug, level) and
+     * the sync payload's `facilityLevels` is a flat slug => int map: the backend
+     * has no notion of an upgrade in progress, so claiming one would be invention.
+     *
+     * @param MatchResult[] $recentResults
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildFacilityConfigs(Club $club, array $recentResults): array
+    {
+        $levelBySlug = [];
+        foreach ($this->clubFacilityRepository->findBy(['club' => $club]) as $facility) {
+            $levelBySlug[$facility->getFacilitySlug()] = $facility->getLevel();
+        }
+
+        $accent = null;
+        $kit    = $club->getHomeKitConfig() ?? [];
+        if (self::isHexColor($kit['primary'] ?? null)) {
+            $accent = $kit['primary'];
+        }
+
+        $configs = [];
+
+        foreach (['training', 'medical', 'scouting'] as $site) {
+            $config = [];
+
+            foreach (FacilitySpriteMap::SITES[$site] as $slug => $spriteId) {
+                $level = $levelBySlug[$slug] ?? 0;
+
+                $config[$spriteId]                       = $level > 0;
+                $config[$spriteId . 'Level']             = self::spriteLevel($level);
+                $config[$spriteId . 'Construction']      = false;
+            }
+
+            if ($accent !== null) {
+                $config['accent'] = $accent;
+            }
+
+            $configs[$site] = $config;
+        }
+
+        // The stadium's own builder already produces the shape its sprite wants
+        // (named stand keys, scoreboard from the last home result), so it is reused
+        // rather than rebuilt from the map — one stadium config, two places to read
+        // it from.
+        $configs['stadium'] = $this->buildStadiumConfig($club, $recentResults);
+
+        return $configs;
     }
 
     private static function isHexColor(mixed $value): bool
