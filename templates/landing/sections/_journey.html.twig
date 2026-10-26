@@ -1,0 +1,93 @@
+{#
+   The Journey (#journey). Was _story.html.twig (#story), four chapters built
+   around phone screenshots; the redesign keeps the four chapters and replaces
+   every screenshot with a decorative sprite scene.
+
+   Two structural changes beyond the imagery:
+     - The Owner Spotlight used to be included from inside Chapter 01, as the
+       "here are the owners who did exactly this" payoff. It is now its own
+       top-level section late in the page (see index.html.twig), so a chapter is
+       no longer interrupted by a leaderboard.
+     - Chapters alternate sides via .journey-step--flip, as before.
+
+   Scenes are generated client-side from seeded random configs, not from any real
+   club — see landing.js's scene composer. The seed is fixed once per page load,
+   so a scene is stable while the page is open and different on the next reload,
+   which is the one visible difference between these and the real-data panels.
+
+   The figures in the copy are real: world.totals comes from WorldOverviewService,
+   read directly rather than fetched from /api/world/overview.
+#}
+<section class="journey-section" id="journey" aria-labelledby="journey-title">
+    <div class="wrap">
+        <div class="section-label">The Journey</div>
+        <h2 class="section-title" id="journey-title">FROM BLANK CANVAS TO TOP FLIGHT</h2>
+        <p class="section-sub">Four chapters, endless decisions, one club to call yours. Every scene below is drawn with the same pixel sprites you will see in the game.</p>
+
+        <div class="journey-steps">
+            <div class="journey-step">
+                <div class="scene" data-scene="owner">
+                    <img alt="Pixel owner in a club blazer beside two club badges and kits" width="520" height="400" decoding="async">
+                </div>
+                <div class="journey-text">
+                    <div class="journey-chapter pixel">CHAPTER 01 // CREATE</div>
+                    <h3 class="journey-headline">NAME YOUR CLUB. PICK YOUR BATTLEGROUND.</h3>
+                    <p>Create your owner, choose your nation and christen your club. The game then builds a world of {{ world.totals.npcClubs|number_format }} rival clubs across {{ world.totals.tierCount }} tiers, all simulated and all waiting to be beaten.</p>
+                    <ul class="journey-tags">
+                        <li>Your owner: name, age, nationality</li>
+                        <li>Choose from {{ world.totals.playableCountries }} playable {{ world.totals.playableCountries == 1 ? 'country' : 'countries' }}</li>
+                        <li>{{ world.totals.npcClubs|number_format }} rival clubs generated at kickoff</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="journey-step journey-step--flip">
+                <div class="scene" data-scene="leadership">
+                    <img alt="Four pixel staff members: manager, director of football, scout and physio" width="520" height="400" decoding="async">
+                </div>
+                <div class="journey-text">
+                    <div class="journey-chapter pixel">CHAPTER 02 // BUILD</div>
+                    <h3 class="journey-headline">ASSEMBLE YOUR SQUAD. HIRE YOUR STAFF.</h3>
+                    <p>Every player has a personality, a contract, a guardian and an agent. Your Director of Football scouts and your Manager coaches. Delegate everything, or stay hands-on across every call.</p>
+                    <ul class="journey-tags">
+                        <li>8 personality traits per player</li>
+                        <li>6 staff roles to fill</li>
+                        <li>Contract negotiations and guardian dynamics</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="journey-step">
+                <div class="scene" data-scene="advance">
+                    <img alt="Pixel stadium with two players ready for matchday" width="520" height="400" decoding="async">
+                </div>
+                <div class="journey-text">
+                    <div class="journey-chapter pixel">CHAPTER 03 // COMPETE</div>
+                    <h3 class="journey-headline">EVERY WEEK, THE SIMULATION RUNS.</h3>
+                    <p>Advance time with a tap. The engine simulates matches, ages players, triggers events, pays wages and checks your finances all at once. Stay ahead of the table or get relegated trying.</p>
+                    <ul class="journey-tags">
+                        <li>18-round seasons with full match events</li>
+                        <li>Inbox-driven narrative events</li>
+                        <li>Real player ratings and form</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="journey-step journey-step--flip">
+                <div class="scene" data-scene="league">
+                    <img alt="Four pixel trophies and two club badges" width="520" height="400" decoding="async">
+                </div>
+                <div class="journey-text">
+                    <div class="journey-chapter pixel">CHAPTER 04 // ASCEND</div>
+                    <h3 class="journey-headline">GET PROMOTED. DO IT AGAIN.</h3>
+                    <p>Win promotion and step up a division: new clubs, harder opponents, bigger wages, richer investors. The season review shows every champion across all tiers.</p>
+                    <ul class="journey-tags">
+                        <li>{{ world.totals.tierCount }} tiers from local minnow to top flight</li>
+                        <li>Full season review across every tier</li>
+                        <li>Hall of Fame points that last</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

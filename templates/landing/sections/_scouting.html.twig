@@ -1,0 +1,53 @@
+{#
+   Scouting & Transfers (#scouting) — new in the redesign.
+
+   Two decorative sprite scenes plus three copy cards. The scenes are generated
+   client-side from seeded random configs (see landing.js's scene composer, ported
+   from design/random.js.src) rather than drawn from any club's real data — these
+   are illustrations of a scout and a row of agents, not a claim about anybody's
+   squad. Everything on the page that renders REAL data (the Club Spotlight, the
+   Rich List, the telemetry badges) is kept visually distinct by living inside a
+   ringed panel; these sit bare on the section background.
+
+   data-scene names the composition landing.js builds; the alt text is authored
+   here because it describes the content, and the sizes reserve the aspect box so
+   a late-mounting sprite causes no layout shift.
+#}
+<section class="scouting-section" id="scouting" aria-labelledby="scouting-title">
+    <div class="wrap">
+        <div class="section-label">Scouting &amp; Transfers</div>
+        <h2 class="section-title" id="scouting-title">NEVER BUY BLIND</h2>
+        <p class="section-sub">Every signing runs the same chain. Your Lead Scout files a report, the Director of Football sets it against recruitment priorities, the Manager weighs in on squad fit, and the final offer still needs your sign-off.</p>
+
+        <div class="scouting-grid">
+            <figure class="scene-figure">
+                <div class="scene" data-scene="scout1">
+                    <img alt="Pixel scout standing beside two young prospects" width="520" height="400" decoding="async">
+                </div>
+                <figcaption class="vt">Your DoF sets the priorities. You set the budget.</figcaption>
+            </figure>
+
+            <figure class="scene-figure">
+                <div class="scene" data-scene="scout2">
+                    <img alt="Three pixel agents in suits" width="520" height="400" decoding="async">
+                </div>
+                <figcaption class="vt">Six agent tiers, from Elite down to Unknown.</figcaption>
+            </figure>
+
+            <div class="scouting-points">
+                <article class="pillar-card">
+                    <h3 class="pillar-title">SCARCITY BY DESIGN</h3>
+                    <p>Every player in the pool is a single, real entity. Sign one and they are gone for everyone else. No restocks, no duplicates.</p>
+                </article>
+                <article class="pillar-card">
+                    <h3 class="pillar-title">BUY THE DOSSIER</h3>
+                    <p>The best agents' books are locked until you pay. Unlock a full client list and you unlock preferred rates on every player they represent.</p>
+                </article>
+                <article class="pillar-card">
+                    <h3 class="pillar-title">NO BANKRUPTCY</h3>
+                    <p>Navigate agent personalities, sign-on fees and squad-role expectations without going bankrupt.</p>
+                </article>
+            </div>
+        </div>
+    </div>
+</section>

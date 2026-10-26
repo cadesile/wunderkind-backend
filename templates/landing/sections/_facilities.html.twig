@@ -1,50 +1,91 @@
-{% import 'landing/sections/_shot.html.twig' as shot %}
+{#
+   Infrastructure / "Brick by brick" (#facilities). Reworked: the four sector
+   cards used to be phone screenshots of each sector screen, and are now a
+   full-site isometric hero plus a tile for every facility in that sector, drawn
+   by the same engine the game runs on.
 
-<!-- ═══════════════════════════════ FACILITIES ═══════════════════════════════ -->
-<section class="facilities-section" id="facilities">
+   The tiles are NOT listed here. Twig supplies the sector shell — its name,
+   colour and blurb, which are copy — and landing.js fills the hero and one tile
+   per facility from window.FACILITY_SITES, the sprite bundle's own export of
+   which facilities each site has and which game slug each draws as. Hand-listing
+   22 facility names in this template would be a second copy of a mapping that is
+   generated precisely so there is only one (see FacilitySpriteMap's docblock for
+   the PHP half of the same argument).
+
+   These are DECORATIVE: the configs are seeded random, not a real club's
+   facilities. The featured club's actual build-out is in the Club Spotlight's own
+   Facilities panel, above. That panel reads ClubSpotlight.facilities and shows
+   level badges; this section shows what the catalogue contains.
+
+   The upgrade-path row is the one place a single facility is drawn five times at
+   five levels. Physio Clinic is the design's choice and a good one — it is the
+   first facility most clubs invest in.
+#}
+<section class="facilities-section" id="facilities" aria-labelledby="facilities-title">
     <div class="wrap">
         <div class="section-label">Infrastructure</div>
-        <h2 class="section-title">Brick by brick: isometric club development</h2>
-        <p class="section-sub">Build an enduring footballing empire across four sectors and 22 upgradable facilities. Construct Hydro Pools to slash recovery times, build out your Tactical Room to sharpen matchday preparation, or expand your Youth Academy to develop the next generation. Every facility governs recovery, development pace, scouting yield, or matchday revenue — and every construction project carries time, budget, and delay risks.</p>
+        <h2 class="section-title" id="facilities-title">BRICK BY BRICK</h2>
+        <p class="section-sub">Build an isometric empire across four sectors and 22 upgradable facilities, drawn in the same isometric engine the game runs on. Every one governs recovery, development pace, scouting yield or matchday revenue, and every build risks delay.</p>
 
-        <div class="facilities-grid">
-            <div class="facility-card">
-                {{ shot.img('facility-training', 'Training sector screen — isometric Training Pitch at level 2, with ground and pitch-pattern site settings', false, 260, '2026-10') }}
-                <div class="facility-card-body">
-                    <div class="facility-card-name">Training</div>
-                    <p class="facility-card-desc">Training Pitch, Strength Suite, Technical Zone, Tactical Room — accelerates player growth, supports tactical mastery, reduces developmental stalls.</p>
+        <div class="sector-grid">
+            <article class="sector-card" data-facility-site="training" aria-labelledby="sector-training-title">
+                <header class="sector-head">
+                    <h3 class="sector-name pixel is-cyan" id="sector-training-title">TRAINING</h3>
+                    <p class="sector-blurb">Accelerates player growth, supports tactical mastery and reduces developmental stalls.</p>
+                </header>
+                <div class="sector-hero" data-facility-hero>
+                    <img alt="Isometric training ground with pitch, gym, technical zone and tactics room" width="520" height="400" decoding="async">
                 </div>
-            </div>
-            <div class="facility-card">
-                {{ shot.img('facility-medical', 'Medical sector screen — isometric Physio Clinic at level 2, -16% injury probability, expands squad capacity', false, 260, '2026-10') }}
-                <div class="facility-card-body">
-                    <div class="facility-card-name">Medical</div>
-                    <p class="facility-card-desc">Physio Clinic, Hydro Pool, Biometric Hub, Imaging Suite, Nutrition Centre, Player Wellbeing — speeds up rehabilitation, boosts stamina, limits long-term wear.</p>
+                <ul class="sector-tiles" data-facility-tiles></ul>
+            </article>
+
+            <article class="sector-card" data-facility-site="medical" aria-labelledby="sector-medical-title">
+                <header class="sector-head">
+                    <h3 class="sector-name pixel is-red" id="sector-medical-title">MEDICAL</h3>
+                    <p class="sector-blurb">Speeds up rehabilitation, boosts stamina and limits long-term wear.</p>
+                </header>
+                <div class="sector-hero" data-facility-hero>
+                    <img alt="Isometric medical centre with six clinics" width="520" height="400" decoding="async">
                 </div>
-            </div>
-            <div class="facility-card">
-                {{ shot.img('facility-scouting', 'Scouting sector screen — isometric Scouting Centre complex, with a link through to Scouting Directives', false, 260, '2026-10') }}
-                <div class="facility-card-body">
-                    <div class="facility-card-name">Scouting</div>
-                    <p class="facility-card-desc">Youth Academy, Scouting Centre, Advanced Scouting Network, Trial Pitch, Scout Fleet — enlarges youth intake, broadens scouting range, surfaces higher-potential prospects.</p>
+                <ul class="sector-tiles" data-facility-tiles></ul>
+            </article>
+
+            <article class="sector-card" data-facility-site="scouting" aria-labelledby="sector-scouting-title">
+                <header class="sector-head">
+                    <h3 class="sector-name pixel is-gold" id="sector-scouting-title">SCOUTING</h3>
+                    <p class="sector-blurb">Enlarges youth intake, broadens scouting range and surfaces higher-potential prospects.</p>
+                </header>
+                <div class="sector-hero" data-facility-hero>
+                    <img alt="Isometric scouting complex with HQ, data hub, trial pitch, fleet and academy" width="520" height="400" decoding="async">
                 </div>
-            </div>
-            <div class="facility-card">
-                {{ shot.img('facility-stadium', 'Stadium sector screen — estimated capacity 6,000, record attendance 2,665, isometric stadium render below', false, 260, '2026-10') }}
-                <div class="facility-card-body">
-                    <div class="facility-card-name">Stadium</div>
-                    <p class="facility-card-desc">Club Shop, Club Museum, Car Park, North, East, South &amp; West Stand — expands capacity, scales commercial revenue, elevates reputation.</p>
+                <ul class="sector-tiles" data-facility-tiles></ul>
+            </article>
+
+            <article class="sector-card" data-facility-site="stadium" aria-labelledby="sector-stadium-title">
+                <header class="sector-head">
+                    <h3 class="sector-name pixel is-mint" id="sector-stadium-title">STADIUM</h3>
+                    <p class="sector-blurb">Expands capacity, scales commercial revenue and elevates reputation.</p>
+                </header>
+                <div class="sector-hero" data-facility-hero>
+                    <img alt="Isometric stadium with stands, floodlights, scoreboard, shop and car park" width="520" height="400" decoding="async">
                 </div>
-            </div>
+                <ul class="sector-tiles" data-facility-tiles></ul>
+            </article>
         </div>
 
-        <div class="point-list" style="margin-top:32px;">
-            <div class="point">
-                <span class="point-title">Youth Academy intake</span>
+        <div class="upgrade-path">
+            <h3 class="sector-name pixel is-gold">UPGRADE PATH: PHYSIO CLINIC</h3>
+            <p class="section-sub">Every facility grows through five levels. Invest early, then keep up the upkeep: neglect one and players complain, your Facility Manager's morale slides and the club's reputation takes the hit.</p>
+            <ol class="upgrade-levels" data-upgrade-path="physio"></ol>
+        </div>
+
+        <div class="facility-notes">
+            <div class="facility-note">
+                <span class="facility-note-title pixel is-mint">Youth Academy intake</span>
                 <p>A new intake of prospects arrives at the start of every season. They develop inside the Academy until they turn 16 and become eligible for a first-team contract — the size and quality of each intake scales with your Academy's level.</p>
             </div>
-            <div class="point">
-                <span class="point-title is-red">Upkeep isn't optional</span>
+            <div class="facility-note">
+                <span class="facility-note-title pixel is-red">Upkeep isn't optional</span>
                 <p>Facilities decay over time. Neglect one and players start complaining, your Facility Manager's morale slides toward resignation, and the club's reputation takes the hit — proactive maintenance costs more per week, but it's cheaper than the alternative.</p>
             </div>
         </div>

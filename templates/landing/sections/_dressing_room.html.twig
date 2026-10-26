@@ -1,42 +1,46 @@
-{% import 'landing/sections/_shot.html.twig' as shot %}
+{#
+   Dressing Room Dynamics (#dressing-room). Copy unchanged in substance; the
+   phone screenshot of the relationship network is replaced by two decorative
+   squad scenes, per the redesign's no-screenshots rule.
 
-<!-- ═══════════════════════════════ DRESSING ROOM ═══════════════════════════════ -->
-<section id="dressing-room">
+   The design collapses the four points to three (bonded / friction / unformed)
+   and folds "it compounds" into a closing line, which is what this does — the
+   fourth point was making the same argument as the closing sentence.
+#}
+<section class="dressing-room-section" id="dressing-room" aria-labelledby="dr-title">
     <div class="wrap">
-        <div class="section-label">Dressing Room Dynamics</div>
-        <h2 class="section-title">Your squad has opinions about each other.</h2>
-        <p class="section-sub">
-            Every player carries a live relationship with every team-mate. Bonds form
-            between players who train, room and win together; friction builds between
-            the ones who don't. The network is visible, and it moves.
-        </p>
+        <div class="dr-split">
+            <div class="dr-main">
+                <div class="section-label">Dressing Room Dynamics</div>
+                <h2 class="section-title" id="dr-title">YOUR SQUAD HAS OPINIONS ABOUT EACH OTHER</h2>
+                <p class="section-sub">Every player carries a live relationship with every teammate. Bonds form between players who train, room and win together. Friction builds between the ones who don't. The network is visible, and it moves.</p>
 
-        <div class="feature-split">
-            <div class="point-list">
-                <div class="point">
-                    <span class="point-title is-mint">Bonded</span>
-                    <p>Solid green links. Bonded players lift each other's morale week on week and hold their form through a bad run.</p>
-                </div>
-                <div class="point">
-                    <span class="point-title is-red">Friction</span>
-                    <p>Dashed red links. Friction drags morale down, and a dressing room carrying enough of it will turn on a manager.</p>
-                </div>
-                <div class="point">
-                    <span class="point-title is-plain">Unformed</span>
-                    <p>Most of the squad, most of the time. Relationships are earned rather than assigned at signing — a new arrival starts connected to nobody.</p>
-                </div>
-                <div class="point">
-                    <span class="point-title">It compounds</span>
-                    <p>Sell the wrong player and you cut three bonds at once. The squad you build is a network, not a list.</p>
-                </div>
+                <dl class="dr-legend">
+                    <div class="dr-legend-row is-bonded">
+                        <dt class="pixel">BONDED</dt>
+                        <dd>Bonded players lift each other's morale and hold their form through a bad run.</dd>
+                    </div>
+                    <div class="dr-legend-row is-friction">
+                        <dt class="pixel">FRICTION</dt>
+                        <dd>Friction drags morale down, and enough of it will turn a dressing room on you.</dd>
+                    </div>
+                    <div class="dr-legend-row is-unformed">
+                        <dt class="pixel">UNFORMED</dt>
+                        <dd>Relationships are earned, not assigned. A new signing starts connected to nobody.</dd>
+                    </div>
+                </dl>
+
+                <p class="dr-footer">It compounds: sell the wrong player and you cut three bonds at once. The squad you build is a network, not a list.</p>
             </div>
 
-            <figure class="feature-shot">
-                {{ shot.img('dressing-room-pulse', 'Dressing room overview — 35% bonded, 65% unformed, 0% friction, average morale 88, with a relationship network mapping links between named players', false, 340, '2026-10') }}
-                <figcaption>Key relationship network — tap a face for scores</figcaption>
-            </figure>
+            <div class="dr-scenes">
+                <div class="scene" data-scene="dr1">
+                    <img alt="Four pixel squad players lined up together" width="520" height="400" decoding="async">
+                </div>
+                <div class="scene" data-scene="dr2">
+                    <img alt="Two pixel players side by side" width="520" height="400" decoding="async">
+                </div>
+            </div>
         </div>
     </div>
 </section>
-
-<hr class="divider">

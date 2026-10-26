@@ -4,7 +4,7 @@
    Assets are versioned with `landing_v` so a deploy cannot leave a browser
    serving a stale stylesheet — there is no build step to fingerprint them.
 #}
-{% set landing_v = '20261020' %}
+{% set landing_v = '20261026' %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,15 +44,23 @@
      which calls composeKitSvg() for leaderboard rows and telemetry ticker items. -->
 <script src="{{ asset('assets/kit-compositor.js') }}?v={{ landing_v }}"></script>
 <!-- Read-only avatar sprite rendering (composePlayerSpriteSvg) — shared verbatim with
-     the admin appearance widget (templates/admin/field/appearance.html.twig). Used
-     here only by the Club Spotlight section to render the featured club's owner. -->
+     the admin appearance widget (templates/admin/field/appearance.html.twig). Draws
+     the Club Spotlight's owner and top performer, the Rich List's owner avatars, and
+     every person in the decorative sprite scenes. -->
 <script src="{{ asset('assets/avatar-compositor.js') }}?v={{ landing_v }}"></script>
-<!-- Read-only stadium sprite rendering (composeStadiumSvg) — generated from the
-     shared assets/Components/facilitiesV2/facilities/{isoEngine,stadiumSprite}.ts
-     by scripts/build-stadium-compositor.sh, see
-     public/assets/stadium-compositor.js's own docblock. Used only by the Club
-     Spotlight section. -->
-<script src="{{ asset('assets/stadium-compositor.js') }}?v={{ landing_v }}"></script>
+<!-- Read-only facility sprite rendering — all four sites in ONE bundle
+     (composeStadiumSvg / composeTrainingGroundSvg / composeMedicalCentreSvg /
+     composeScoutingSvg), generated from
+     assets/Components/facilitiesV2/facilities/ by
+     scripts/build-facility-compositor.sh. See that bundle's own docblock.
+
+     Replaces stadium-compositor.js, which shipped the stadium alone. The two
+     emit byte-identical composeStadiumSvg output, so switching the tag changed
+     no call site; the point of one bundle is isoEngine, which is ~32KB and
+     shared by all four sites. Used by the Club Spotlight (real data), the
+     Facilities section and the Rich List leader card (decorative + real).
+     stadium-compositor.js is now unreferenced by this page. -->
+<script src="{{ asset('assets/facility-compositor.js') }}?v={{ landing_v }}"></script>
 <!-- Read-only trophy sprite rendering (composeTrophySvg) — generated from the shared
      assets/Components/trophy16/trophy16.ts by scripts/build-trophy-compositor.sh,
      see public/assets/trophy-compositor.js's own docblock. Used only by the Club

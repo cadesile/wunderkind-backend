@@ -1,26 +1,48 @@
 {% extends 'landing/base.html.twig' %}
 
+{#
+   Section order follows design/Main.dc.html (the landing redesign spec, published
+   at https://claude.ai/artifact/HY4WFVivm8fxEjbnwaEqg5), top to bottom:
+
+     header → #top → #telemetry → #pillars → #spotlight → #role → #journey
+     → #facilities → #dressing-room → #leagues → #scouting → no-pay-to-win band
+     → #owner-spotlight → #testers → final CTA → footer
+
+   Two sections used to be nested children and are now top level, which is the
+   substantive structural change in this pass:
+
+     - _telemetry was _chairmans_terminal, a widget inside _hero. The redesign
+       gives the feed its own full-bleed terminal with a pause control and real
+       per-line buttons, which does not fit beside hero copy.
+     - _owner_spotlight was included from _story (then Journey Chapter 01, as the
+       "here are the owners who did this" payoff). It is now its own section late
+       in the page, directly after the no-pay-to-win band, where the Rich List
+       reads as a leaderboard rather than as chapter furniture.
+
+   The redesign also drops thirteen sections that used to live here: the feature
+   marquee (_ticker), the screenshot gallery (_screens) and its _shot macro,
+   _stats_band, _features, _excursions, _archetypes, _depth, _tick, _consensus,
+   _video, _community and _leaderboards. Those files are deliberately left on
+   disk rather than deleted — the design replaces the page's whole imagery
+   strategy (sprites, no screenshots), and restoring any one of them is a single
+   include line. Nothing else references them; _shot is now used only by the
+   orphaned _screens.
+#}
+
 {% block body %}
     {% include 'landing/sections/_nav.html.twig' %}
     {% include 'landing/sections/_hero.html.twig' %}
+    {% include 'landing/sections/_telemetry.html.twig' %}
+    {% include 'landing/sections/_pillars.html.twig' %}
     {% include 'landing/sections/_spotlight.html.twig' %}
-    {% include 'landing/sections/_ticker.html.twig' %}
     {% include 'landing/sections/_role.html.twig' %}
+    {% include 'landing/sections/_journey.html.twig' %}
     {% include 'landing/sections/_facilities.html.twig' %}
-    {% include 'landing/sections/_story.html.twig' %}
-    {% include 'landing/sections/_screens.html.twig' %}
-    {% include 'landing/sections/_stats_band.html.twig' %}
-    {% include 'landing/sections/_features.html.twig' %}
     {% include 'landing/sections/_dressing_room.html.twig' %}
-    {% include 'landing/sections/_excursions.html.twig' %}
-    {% include 'landing/sections/_archetypes.html.twig' %}
-    {% include 'landing/sections/_depth.html.twig' %}
-    {% include 'landing/sections/_tick.html.twig' %}
     {% include 'landing/sections/_leagues.html.twig' %}
-    {% include 'landing/sections/_consensus.html.twig' %}
-    {% include 'landing/sections/_video.html.twig' %}
-    {% include 'landing/sections/_community.html.twig' %}
-    {% include 'landing/sections/_leaderboards.html.twig' %}
+    {% include 'landing/sections/_scouting.html.twig' %}
+    {% include 'landing/sections/_no_pay_to_win.html.twig' %}
+    {% include 'landing/sections/_owner_spotlight.html.twig' %}
     {% include 'landing/sections/_testers.html.twig' %}
     {% include 'landing/sections/_cta.html.twig' %}
     {% include 'landing/sections/_footer.html.twig' %}

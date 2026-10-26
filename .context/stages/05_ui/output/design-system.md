@@ -162,6 +162,87 @@ Same hard constraints as the admin theme: `border-radius: 0 !important`
 globally, and `image-rendering: pixelated` on every sprite. A CRT scanline
 overlay is painted via `body::before`.
 
+**Redesigned 2026-10** to `design/Main.dc.html` in the external
+`assets/bmc-landing-export` drop. Section order is now, top to bottom:
+header → `#top` → `#telemetry` → `#pillars` → `#spotlight` → `#role` →
+`#journey` → `#facilities` → `#dressing-room` → `#leagues` → `#scouting` →
+no-pay-to-win band → `#owner-spotlight` → `#testers` → closing CTA → footer.
+Two sections that were nested children became top level: the telemetry terminal
+(was `_chairmans_terminal`, a hero widget) and the Rich List (was included from
+`_story`, inside Journey Chapter 01). Thirteen sections were dropped from
+`index.html.twig` — `_ticker`, `_screens` and its `_shot` macro, `_stats_band`,
+`_features`, `_excursions`, `_archetypes`, `_depth`, `_tick`, `_consensus`,
+`_video`, `_community`, `_leaderboards` — and **deliberately left on disk**:
+restoring one is a single include line, and `_shot`/`public/screenshots/*` are
+still referenced by the orphans. `_story` became `_journey` and
+`_chairmans_terminal` became `_telemetry`.
+
+**No screenshots anywhere on the page.** Every image is now a sprite drawn by a
+compositor — that is the redesign's central rule. `images/match-ticker.gif` (a
+capture of the matchday ticker, previously in `_leagues`) went with them and is
+still on disk, unreferenced. Two kinds of sprite surface, and keeping them
+distinct is load-bearing:
+- **Real data** — the Club Spotlight, its Facilities panel, the Rich List and
+  the telemetry feed's club badges, all from `data-*` attributes written from
+  the `ClubSpotlight` row, `OwnerSpotlightService` and the telemetry snapshot.
+  These live inside ringed panels.
+- **Decorative** — the journey, dressing-room, scouting and leagues scenes, plus
+  the Facilities section's four sector cards. Generated from seeded random
+  configs by the `Scenes` module in `landing.js`, ported from the drop's
+  `design/random.js.src` (which is the spec for "random within role": levels
+  1-5, facilities on 85%, construction 12%). Seeded **once per page load**, so a
+  scene is stable while the page is open and different on the next reload — the
+  one visible tell that it is not somebody's real club. Nothing generated is
+  ever labelled with a club or owner name. `design/sprites.js` is NOT shipped
+  (it is built from an older facility engine), and `window.BMC_ISO` is replaced
+  by the real `compose*Svg`.
+
+**The landing page loads `facility-compositor.js`, not `stadium-compositor.js`**
+(changed 2026-10). One bundle, all four sites, and `composeStadiumSvg` is
+byte-identical between the two, so the switch in `base.html.twig` needed no call-site
+edits. **Nothing in the repo loads `stadium-compositor.js` any more** — it, its
+build script and its `entry.ts` are candidates for retirement, which the
+facility entry's own docblock says is the landing task's call; it was left in
+place because deleting it is a build-script change.
+
+**Every sprite mounts through `IntersectionObserver`** (`mountWhenVisible()` in
+`landing.js`). A full facility site is ~200KB of path data and the page draws
+more than thirty, so each box reserves its aspect ratio in CSS and the sprite
+lands later. No observer support means mount immediately.
+
+**Facility tile structure comes from `window.FACILITY_SITES`, never from Twig
+or a hand-written list** — the bundle's own export of which facilities each site
+has and which game slug draws as which sprite id, the browser-side twin of
+`FacilitySpriteMap`. The payload supplies state (built, level, accent), never
+structure. Its `labels` are i18n **keys**, not display text, so `landing.js`
+title-cases the game slug and overrides only the handful that read wrong.
+`FacilitySites.stateOf()` is the one place built-ness and level are read, and it
+reports the **game's** level (1-5), halving the sprite's 1-10 — the number a
+player recognises. The four stadium stands are the one group with no boolean
+beside their level; `>= 2` is a sound test there *only* because
+`spriteLevel()` is `max(1, min(10, L*2))`, so an unbuilt stand is exactly 1 and
+any real level is at least 2.
+
+**The telemetry terminal has three states**, per `design/States.dc.html`: not
+generated (`getId() === null` — tiles render em-dashes, never zeros, because a
+real pyramid-wide zero and "never measured" look identical as numerals), stale,
+and active. `_telemetry.html.twig` computes staleness in Twig with its own
+`1800` second threshold, **duplicating `Api\TelemetryController`'s
+`STALE_AFTER_SECONDS`** — the page renders from the entity, which carries no
+staleness accessor, and never round-trips to its own API. Keep the two in step.
+
+**Feed lines are real `<button>`s** with a pause control, and `landing.js` starts
+the rotation paused under `prefers-reduced-motion`, adding `.is-static` so the
+whole list renders instead of one frozen line. A media query cannot stop a
+`setInterval`, which is why that lives in JS.
+
+**Store CTAs are driven by `data-store-link`, not element ids.** Five roles —
+`android`, `ios`, `android-missing`, `ios-fallback`, `pending` — all shipped
+hidden and revealed by `GET /api/app-links`. The previous version named five
+specific ids and called `getElementById` unguarded on each, so adding a sixth
+button meant editing `landing.js` and removing one threw a `TypeError` that took
+the social links down with it.
+
 Shared conventions worth knowing before adding a section:
 
 - **Pixel sprites are composed client-side from `data-*` attributes**, never
@@ -208,14 +289,17 @@ Shared conventions worth knowing before adding a section:
   deliberately separate and self-contained rather than factored into a shared
   one — the four differ in where their source lives and in how their fixtures
   are shaped.
-- **The stadium compositor is the one built from a multi-file drop.** Its source
-  is `assets/Components/facilitiesV2/facilities/` — `stadiumSprite.ts` plus the
-  shared `isoEngine.ts` that all four facility sites draw through. Only the
-  stadium is bundled (nothing in this repo renders the training ground, medical
-  centre or scouting site), but the build parity-checks **all four** sites'
-  hashes, because a drift anywhere in the shared engine is a drift in the
-  stadium's own renderer. The drop's `look="v1"` legacy tree is neither checked
-  nor shipped.
+- **The facility compositor is the one built from a multi-file drop**, and as of
+  2026-10 it is what the landing page loads. Its source is
+  `assets/Components/facilitiesV2/facilities/` — all four site sprites plus the
+  shared `isoEngine.ts` they draw through, bundled together because that engine
+  is ~32KB and four per-site bundles would ship four copies of it. The build
+  gates on the drop's 301-case pixel-hash fixture and also generates
+  `src/Service/Facility/FacilitySpriteMap.php`. The drop's `look="v1"` legacy
+  tree is neither checked nor shipped. `build-stadium-compositor.sh` and
+  `public/assets/stadium-compositor.js` still exist but nothing loads them —
+  that pair bundled the stadium alone, back when nothing here rendered the other
+  three sites.
 - **Stadium levels are the sprite's 1-10, not the backend's 1-5.** Every
   `*Level` field in `StadiumConfig` — stands and the shop/museum/car park alike
   — runs 1-10, while `FacilityTemplate` levels run 1-5, so
