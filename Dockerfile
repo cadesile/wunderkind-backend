@@ -54,6 +54,8 @@ COPY docker/competition-send-round-reminders.sh /usr/local/bin/competition-send-
 COPY docker/competition-auto-fill-spoof-entrants.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh
 COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
+COPY docker/pool-consume.sh /usr/local/bin/pool-consume.sh
+COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   every 5 min — leaderboards-generate: recompute scores/ranks + invalidate leaderboard cache
@@ -114,6 +116,20 @@ COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
 #     regenerate can queue 100+ DB-heavy club-generation messages, and sharing
 #     one queue with push notifications meant each delayed the other. Own
 #     lockfile/log, so a slow generation batch never blocks push delivery.
+#   every 1 min — pool-consume: drains the separate `pool` Messenger transport
+#     (starter-pool top-up chunks). Third transport rather than a third user of
+#     `worldpack` for the same reason worldpack split from async: a sweep across
+#     every enabled country queues hundreds of generation chunks, and an admin
+#     waiting on a country regenerate should not sit behind a routine overnight
+#     top-up. --limit is low (20) because each chunk is up to 100 players.
+#   hourly at :35 — starter-pool-audit: runs app:starter-pool:audit, which checks
+#     every enabled country's starter-pack supply (the same verdict
+#     app:starter-pack:check reports) and queues top-up chunks for any that fall
+#     short. Queues only — the generating happens on pool-consume above, so this
+#     tick is cheap however much it finds. Hourly because the command's own guard
+#     skips a sweep while the previous one's chunks are still undrained, and
+#     because pool stock moves at the rate clubs are created. Offset off :00 to
+#     miss the spotlight-generate cluster.
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
@@ -128,10 +144,12 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '* * * * *    /usr/local/bin/competition-auto-fill-spoof-entrants.sh >> /var/log/competition-auto-fill-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/messenger-consume.sh               >> /var/log/messenger-consume-cron.log     2>&1' \
     '* * * * *    /usr/local/bin/worldpack-consume.sh                >> /var/log/worldpack-consume-cron.log    2>&1' \
+    '* * * * *    /usr/local/bin/pool-consume.sh                     >> /var/log/pool-consume-cron.log         2>&1' \
+    '35 * * * *   /usr/local/bin/starter-pool-audit.sh               >> /var/log/starter-pool-audit-cron.log   2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/starter-pool-audit.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

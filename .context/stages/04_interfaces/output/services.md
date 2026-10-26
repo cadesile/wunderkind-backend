@@ -634,7 +634,45 @@ filename alone.
   the admin screens look fine. It borrows `resolveAbilityRange()`,
   `distributeByPosition()` and the age floor from the real draw rather than
   re-deriving them, and suggests a workable band from the abilities
-  age-eligible players actually carry.
+  age-eligible players actually carry. Also returns `bandHoldsOnlyKids`,
+  which exists for `StarterPoolAuditService` below — telling a band that is
+  merely under-stocked from one whose every member is too young is the
+  difference between "queue a top-up" and "an operator has to widen the band".
+- **`StarterPoolAuditService`** — the unattended counterpart to an admin
+  reading the check screen above and pressing **Warm**. Sweeps every country in
+  `StarterConfig::enabledCountries`, runs the same diagnostic, and for any whose
+  verdict is **not** `ok` queues bounded `TopUpStarterPoolMessage` chunks onto
+  the `pool` Messenger transport (`docker/pool-consume.sh` drains it; the
+  handler generates, this service only decides). Behind
+  `app:starter-pool:audit`, run hourly by `docker/starter-pool-audit.sh`.
+  Three things make it safe to leave running, and all three are the point of
+  the class:
+    1. **It only acts on a country that cannot currently serve.** The trigger is
+       the verdict, not raw pool counts — a healthy country queues nothing
+       however far its pool has drifted from the warm floors. It is a
+       starter-pack remedy, not a general pool warmer; `app:pool:warm` remains
+       that, and is still unscheduled (see `01_overview/output/deployment.md`).
+    2. **It never queues work generation cannot finish.** Under the default
+       `PoolConfig` (players generated at 12–13, draw floored at 19) no newly
+       generated player is ever eligible, so a player shortfall becomes a
+       reported *blocker* rather than hundreds of rows an hour that never move
+       the verdict. Same for `bandHoldsOnlyKids`. This is the single most
+       important behaviour here — the obvious implementation loops forever.
+    3. **It will not stack.** `queueIsBusy()` counts undrained `pool` rows in
+       `messenger_messages` directly (no transport-agnostic depth API exists,
+       and a tracking table of our own would be a second source of truth) and
+       skips the sweep while the previous one is still draining.
+  The decision itself is `planFor()`, a pure static taking the diagnosis plus
+  current native stock — so the precedence that matters (short-but-unfixable
+  becomes a blocker, never a chunk) is asserted directly in
+  `tests/Service/StarterPoolAuditPlanTest.php` rather than inferred from mocks.
+  Targets are per **nationality** (the unit generation actually addresses —
+  auditing against the shared pool-wide count would have all enabled countries
+  read the same zero and each queue a full deficit for it) and default to the
+  same floors `app:pool:warm` uses. It covers all five starter staff roles,
+  where `app:pool:warm` only warms `MANAGER`/`COACH`/`CHAIRMAN` — so a country
+  short on `DIRECTOR_OF_FOOTBALL`/`FACILITY_MANAGER` is fixed here and never by
+  a hand-run warm.
 - **`SessionRevocationService`** — signs a `User` out everywhere. Owns **both**
   halves, because either alone leaves them partially logged in: it bumps
   `User::$tokenVersion` (retiring every already-issued stateless access token —

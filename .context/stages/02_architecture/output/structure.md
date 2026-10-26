@@ -37,7 +37,13 @@ restated here.
   (`MESSENGER_TRANSPORT_DSN`, `auto_setup=1` so its table self-creates,
   though the migration already creates it), `in-memory://` under
   `when@test` so functional tests can assert dispatched envelopes
-  without a real consumer. Drained by `docker/messenger-consume.sh`
+  without a real consumer. Since then two more sub-namespaces have been
+  added, each with its own transport: `WorldPack/` (`worldpack`, added
+  2026-09-28) and `Pool/` (`pool`, added 2026-10-26 —
+  `TopUpStarterPoolMessage`, one bounded chunk of pool generation for one
+  nationality, queued by `app:starter-pool:audit`; see
+  `StarterPoolAuditService` in `04_interfaces/output/services.md`).
+  Drained by `docker/messenger-consume.sh`
   every 1 minute (see Deployment wiring below) — not a long-running
   worker, matching this codebase's existing cron-driven-command
   convention rather than introducing a new "daemon" pattern.
@@ -129,14 +135,23 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `CompetitionResultsService` in `04_interfaces/output/services.md`),
   `competition-auto-fill-spoof-entrants.sh`
   (dev/testing convenience added 2026-09-20 — see
-  `CompetitionAutoFillService`), `messenger-consume.sh`, and
-  `worldpack-consume.sh` (all five every 1 min — the finest auto-fill delay
-  is 5 min; the last two drain separate Messenger transports, `async` for
-  push notifications (added 2026-09-19) and `worldpack` for World Pack Cache
-  tier/club generation (added 2026-09-28, split out from `async` once a
-  country regenerate's 100+ DB-heavy club-generation messages started
-  delaying push delivery by sharing one queue — see
-  `config/packages/messenger.yaml`).
+  `CompetitionAutoFillService`), `messenger-consume.sh`,
+  `worldpack-consume.sh`, and `pool-consume.sh` (all six every 1 min — the
+  finest auto-fill delay is 5 min; the last three drain separate Messenger
+  transports, `async` for push notifications (added 2026-09-19), `worldpack`
+  for World Pack Cache tier/club generation (added 2026-09-28, split out
+  from `async` once a country regenerate's 100+ DB-heavy club-generation
+  messages started delaying push delivery by sharing one queue) and `pool`
+  for starter-pool top-up chunks (added 2026-10-26, split off for the same
+  reason — see `config/packages/messenger.yaml`)), plus
+  `starter-pool-audit.sh` (hourly at :35, added 2026-10-26 — runs
+  `app:starter-pool:audit`, which sweeps every enabled country's
+  starter-pack verdict and queues `pool` chunks for any that fall short;
+  queue-only, so the tick itself is cheap. Note this is a deliberate,
+  narrow exception to "pool warming is no longer cron-scheduled" — it acts
+  only on a country that cannot currently serve a starter pack, never as a
+  blanket warm; see `01_overview/output/deployment.md` and
+  `docs/deploy/hetzner.md`).
 - **`docker/supervisord.conf`** — runs `php-fpm`, `nginx`, and `crond`
   together inside the container, all logging to stdout/stderr.
 - **`docker-compose.dev.yml` / `docker-compose.prod.yml`** — near-identical

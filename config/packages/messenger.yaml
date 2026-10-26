@@ -23,6 +23,14 @@ framework:
             # (docker/worldpack-consume.sh), not messenger-consume.sh, so the two make
             # independent progress. See docs/deploy/hetzner.md's Cron section.
             worldpack: 'doctrine://default?queue_name=worldpack'
+            # Pool top-ups queued by `app:starter-pool:audit` — separate from `worldpack`
+            # for the same reason `worldpack` is separate from `async`: a sweep across 25
+            # enabled countries can queue hundreds of generation chunks, and sharing the
+            # worldpack queue would put a routine overnight top-up in front of an admin
+            # sitting and waiting on a country regenerate. Drained by
+            # docker/pool-consume.sh. StarterPoolAuditService::TRANSPORT_QUEUE must match
+            # this queue_name — it counts undrained rows to avoid stacking sweeps.
+            pool: 'doctrine://default?queue_name=pool'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
@@ -33,6 +41,8 @@ framework:
             # Own transport (`worldpack`, not `async`) — see the transport comment above.
             'App\Message\WorldPack\WarmWorldPackTierMessage': worldpack
             'App\Message\WorldPack\WarmWorldPackClubMessage': worldpack
+            # Cron-queued starter pool top-ups — see StarterPoolAuditService.
+            'App\Message\Pool\TopUpStarterPoolMessage': pool
 
 when@test:
     framework:
@@ -43,3 +53,4 @@ when@test:
                 async: 'in-memory://'
                 failed: 'in-memory://'
                 worldpack: 'in-memory://'
+                pool: 'in-memory://'

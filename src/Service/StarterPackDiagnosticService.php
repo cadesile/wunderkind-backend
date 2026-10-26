@@ -193,6 +193,10 @@ final class StarterPackDiagnosticService
             'staff'            => $staff,
             'scouts'           => $scouts,
             'verdict'          => $verdict,
+            // Exposed, not just used for findings: StarterPoolAuditService needs to tell a
+            // band that is merely under-stocked (queue a top-up) from one whose every
+            // member is too young to be drawn (generating more changes nothing).
+            'bandHoldsOnlyKids' => $bandHoldsOnlyKids,
             'suggestedBand'    => $suggestion,
             'findings'         => $this->buildFindings(
                 $verdict, $country, $countryCode, $nationality, $tier, $ability,
