@@ -8,6 +8,7 @@ use App\Entity\Club;
 use App\Enum\Country;
 use App\Repository\ClubRepository;
 use App\Repository\UserLedgerRepository;
+use App\Service\Facility\FacilityConfigBuilder;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -58,13 +59,15 @@ class OwnerSpotlightService
     public function __construct(
         private readonly ClubRepository $clubRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
+        private readonly FacilityConfigBuilder $facilityConfigBuilder,
         private readonly CacheInterface $cache,
     ) {}
 
     /**
      * @return array<array{
      *     rank: int, ownerName: string, ownerNationality: ?string, ownerCountryCode: ?string,
-     *     ownerAppearance: ?array, drawnPence: int, clubCount: int,
+     *     ownerAppearance: ?array, drawnPence: int, sharePct: float, clubCount: int,
+     *     stadiumConfig: ?array,
      *     clubs: array<array{name: string, division: string, tier: ?int, countryCode: ?string,
      *         countryLabel: ?string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>
      * }>
@@ -100,6 +103,12 @@ class OwnerSpotlightService
             $clubsByOwner[(string) $club->getUser()->getId()][] = $club;
         }
 
+        // Share is of the LEADER's total, not of the board's sum: the design shows each
+        // owner against the richest, so rank 1 is always 100% and the rest read as "how
+        // close is anyone to the top". Computed here rather than in the template because
+        // the template cannot see owners it is not rendering.
+        $leaderPence = (int) ($owners[0]['balancePence'] ?? 0);
+
         $result = [];
         foreach ($owners as $i => $owner) {
             // Every non-spoof club the owner holds; the list is truncated for display
@@ -116,7 +125,20 @@ class OwnerSpotlightService
                 'ownerCountryCode' => self::countryCodeForNationality($owner['ownerNationality']),
                 'ownerAppearance'  => $owner['ownerAppearance'],
                 'drawnPence'       => $owner['balancePence'],
+                // A leader on zero makes every share meaningless rather than infinite —
+                // the ledger only holds client-reported dividend draws, so an all-zero
+                // board is a real state early on, not a divide-by-zero to guard against.
+                'sharePct'         => $leaderPence > 0
+                    ? round(((int) $owner['balancePence'] / $leaderPence) * 100, 1)
+                    : 0.0,
                 'clubCount'        => count($allClubs),
+                // Rank 1 only: the leader's card is the one the design draws a stadium on,
+                // and building it for all five would be four unused ClubFacility queries.
+                // Reuses the Club Spotlight's own builder — same levels, same clamping,
+                // same explicit on/off — rather than a second copy of that logic.
+                'stadiumConfig'    => $i === 0 && $allClubs !== []
+                    ? $this->facilityConfigBuilder->buildStadium($allClubs[0], [])
+                    : null,
                 'clubs'            => array_map(self::serializeClub(...), array_slice($allClubs, 0, self::CLUBS_PER_OWNER)),
             ];
         }
