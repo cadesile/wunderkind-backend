@@ -269,3 +269,10 @@ was not safe to retry:
   `COMMENT ON COLUMN` churn for `friendly_challenge`/`idempotency_record` (pre-existing DBAL
   comment drift, unrelated to this column) — that was stripped, so expect `migrations:diff`
   to keep proposing it until someone deals with it deliberately.
+- `Version20261026005046` — `club_spotlight.facilities`, the four-site sprite config payload
+  (training/medical/scouting/stadium) the redesigned landing page draws. Additive, nullable,
+  no backfill: existing rows stay null until the next spotlight generation, and null means
+  "no payload" rather than "no facilities" — the sprite defaults are demo configs, so the two
+  must not be confused. `stadium_config` is left exactly as it was; `landing.js` consumes it.
+  Same pre-existing `COMMENT ON COLUMN` churn was stripped from the generated diff as for
+  `Version20261024222441`.

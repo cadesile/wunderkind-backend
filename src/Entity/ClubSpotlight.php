@@ -81,6 +81,23 @@ class ClubSpotlight
     private ?array $stadiumConfig = null;
 
     /**
+     * Every facility site the club has, each a ready-to-render sprite config:
+     * {training, medical, scouting, stadium}. The stadium is duplicated here so
+     * the panel can read one shape for all four, while $stadiumConfig above stays
+     * exactly as it was for the existing Club Spotlight card — changing that key
+     * would break a contract landing.js already consumes.
+     *
+     * Built by ClubSpotlightService::buildFacilityConfigs() from the club's own
+     * ClubFacility rows, with slugs resolved through the generated
+     * FacilitySpriteMap. Null for spotlights generated before this column existed;
+     * the panel falls back rather than drawing demo defaults.
+     *
+     * @var array<string, array<string, mixed>>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $facilities = null;
+
+    /**
      * Last few MatchResult rows for the club, newest first.
      *
      * @var array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}>
@@ -175,6 +192,8 @@ class ClubSpotlight
     public function getOwnerNationality(): ?string { return $this->ownerNationality; }
     public function getOwnerAppearance(): ?array { return $this->ownerAppearance; }
     public function getStadiumConfig(): ?array { return $this->stadiumConfig; }
+    /** @return array<string, array<string, mixed>>|null */
+    public function getFacilities(): ?array { return $this->facilities; }
     /** @return array<int, array{opponent: string, scoreFor: int, scoreAgainst: int, week: int, result: string}> */
     public function getRecentFixtures(): array { return $this->recentFixtures; }
     /** @return array<int, array{playerName: string, feePence: int, direction: string, counterpartyClub: string}> */
@@ -241,6 +260,10 @@ class ClubSpotlight
         ?\DateTimeImmutable $establishedAt,
         \DateTimeImmutable $windowStartsAt,
         \DateTimeImmutable $windowEndsAt,
+        // Last and defaulted so the dozen callers that predate the Facilities panel
+        // keep working: null is a real state here ("no payload"), not a missing
+        // argument, and every call site uses named arguments anyway.
+        ?array $facilities = null,
     ): void {
         $this->clubName                     = $clubName;
         $this->clubId                       = $clubId;
@@ -253,6 +276,7 @@ class ClubSpotlight
         $this->ownerNationality             = $ownerNationality;
         $this->ownerAppearance              = $ownerAppearance;
         $this->stadiumConfig                = $stadiumConfig;
+        $this->facilities                   = $facilities;
         $this->recentFixtures               = $recentFixtures;
         $this->recentTransfers              = $recentTransfers;
         $this->topPerformerName             = $topPerformerName;
