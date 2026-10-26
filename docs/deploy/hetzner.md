@@ -267,17 +267,58 @@ shared pool (still consumed by `StarterPackService`'s starter-squad draw and
 `MarketController`'s live "sign from market" feature) has **no automatic replenishment**
 going forward and will drain over time; run `app:pool:warm` by hand if it does. This
 isn't a bug to "fix" by re-adding the cron — it's a deliberate tradeoff, so don't assume
-a future "market/starter-pack pool ran dry" report points at a regression here.
+a future "market pool ran dry" report points at a regression here.
+
+**The one exception, added deliberately: starter-pack supply.** `docker/starter-pool-audit.sh`
+runs `app:starter-pool:audit` hourly at :35. It is *not* the old blanket pool warm coming
+back — it tops nothing up on its own schedule. It runs the same per-country check
+`app:starter-pack:check` reports (`StarterPackDiagnosticService`), and only for a country
+whose verdict is **not** `ok` does it queue bounded top-up chunks onto the `pool` Messenger
+transport, which `docker/pool-consume.sh` drains every minute. A healthy country queues
+nothing however far its pool has drifted from the warm floors, so the tradeoff above still
+holds for the market pool — what is now covered automatically is the narrower case where a
+country can no longer hand a new club its starting squad at all, which surfaces to the
+client as a failed club initialisation rather than as a thin market.
+
+Three guards make it safe unattended, all in `StarterPoolAuditService` (read its docblock
+before changing the cadence):
+
+* **It never queues work generation cannot finish.** Under the default `PoolConfig` (players
+  generated at 12–13, starter draw floored at `playerFirstTeamAgeMin` 19) no newly generated
+  player is ever eligible, so a player shortfall is reported as a *blocker* — a config
+  decision for an operator — rather than ground at forever. Same for an ability band whose
+  every member is too young. Blockers are printed by the command and land in
+  `/var/log/starter-pool-audit-cron.log`; **nothing else surfaces them**, so that log is the
+  place to look when a country stays degraded with an empty queue.
+* **It will not stack.** The sweep is skipped while the `pool` queue still has undrained
+  chunks (the counts a second sweep would read have not caught up yet, so it would re-queue
+  the same deficit). `--force` overrides this for a hand-run.
+* **Chunks re-check their own target.** `TopUpStarterPoolMessageHandler` clamps to
+  `target - current` before generating, so a replayed message, a double dispatch, or an admin
+  pressing **Warm** on the check screen mid-drain all cost nothing instead of overshooting.
+
+Run it by hand with `--dry-run` to see what a sweep would do without queueing, and
+`--country=XX` to scope it to one. Targets default to the same floors `app:pool:warm` uses
+(500 players / 50 per staff role / 50 scouts per nationality) and are overridable per run
+with `--min-players` / `--min-staff` / `--min-scouts` / `--chunk`.
+
+One thing the audit covers that `app:pool:warm` does not: warm only ever generates
+`MANAGER`/`COACH`/`CHAIRMAN`, so a country short on `DIRECTOR_OF_FOOTBALL` or
+`FACILITY_MANAGER` stays short no matter how often it is warmed by hand. The audit is driven
+by the starter pack's own requirements, so it covers all five roles.
 
 Also every 1 minute: `docker/messenger-consume.sh` drains the `async` Messenger transport
 (push notifications — see `src/Service/Notification/PushNotificationService.php`), and
 `docker/worldpack-consume.sh` separately drains the `worldpack` transport (World Pack Cache
-tier/club generation — see `WorldPackGenerationOrchestrator`). These are two independent
-consumers, not one consumer reading two transports: a country regenerate can queue 100+
+tier/club generation — see `WorldPackGenerationOrchestrator`), and `docker/pool-consume.sh`
+drains the `pool` transport (starter-pool top-up chunks — see above). These are three
+independent consumers, not one consumer reading three transports: a country regenerate can queue 100+
 DB-heavy club-generation messages, and the two transports used to share one queue, so a
 large regenerate (or a backlog of failing/retrying push sends) delayed the other. Splitting
 them into separate `queue_name`s (`config/packages/messenger.yaml`) with their own
-cron-scheduled consumer means each makes independent progress. Both use the same
+cron-scheduled consumer means each makes independent progress — `pool` is split off for the
+same reason, so a routine overnight top-up never sits in front of an admin waiting on a
+country regenerate. All three use the same
 underlying Doctrine `messenger_messages` table (`queue_name` differentiates rows, not the
 table), created by the migration in this repo, not a separate `messenger:setup-transports`
 deploy step — `MESSENGER_TRANSPORT_DSN`'s `auto_setup=1` means it would also self-create on
@@ -287,7 +328,9 @@ first dispatch if ever missing.
 `symfony` recipe, not this repo's `Dockerfile`, so none of its baked-in cron entries
 (including both Messenger consumers) ever run locally. Queued messages just sit in
 `messenger_messages` until drained by hand: `lando php bin/console messenger:consume async
--vv` / `messenger:consume worldpack -vv` (add `--time-limit`/`--limit` to bound a run). This
+-vv` / `messenger:consume worldpack -vv` / `messenger:consume pool -vv` (add
+`--time-limit`/`--limit` to bound a run). The hourly starter-pool audit does not run locally
+either — run `app:starter-pool:audit` by hand, then drain `pool`. This
 is why a local "Regenerate Country Cache" can appear to hang at "already active" — the run
 is genuinely still queued, not stuck; draining `worldpack` resolves it. The deployed dev/
 staging/prod environments below **do** run the real Dockerfile crontab, so this gap is

@@ -116,6 +116,12 @@ lando php bin/console app:market:generate         # generate market pool entitie
 lando php bin/console app:pool:warm               # pre-warm the market entity pool
 lando php bin/console app:worldpack:warm          # warm country/nationality data cache
 
+# Starter pack supply
+lando php bin/console app:starter-pack:check EN   # can a new EN club be given a starter pack right now?
+lando php bin/console app:starter-pool:audit --dry-run   # sweep every enabled country; show what would be queued
+lando php bin/console app:starter-pool:audit             # ...and queue it onto the `pool` transport
+lando php bin/console messenger:consume pool -vv         # drain it locally (no crontab under Lando)
+
 # Admin
 lando php bin/console app:admin:create            # create a backend admin user
 
@@ -229,6 +235,51 @@ The backend is a **data pool**. `Player` and `Staff` entities have **no club FK*
 - Snapshots are built via `WorldInitializationService::buildPlayerSnapshot()` / `buildStaffSnapshot()` **before** the entity is removed.
 - `Sponsor` and `Investor` are **not** pool entities — they retain a `club_id` FK (financial contracts).
 - `Scout` has no club FK and is not deleted on assign.
+
+### Starter Pool Audit (cron-queued top-ups)
+`app:starter-pool:audit` (hourly, `docker/starter-pool-audit.sh`) sweeps every country in
+`StarterConfig::enabledCountries`, runs the **same** `StarterPackDiagnosticService` verdict
+`app:starter-pack:check` reports, and for any country that is not `ok` queues bounded
+`TopUpStarterPoolMessage` chunks onto the **`pool`** Messenger transport — drained every
+minute by `docker/pool-consume.sh`. Queue-only by design: a cold top-up is ~20s of DB-heavy
+work per country, and doing that for every enabled country inline in one cron tick is how a
+box falls over.
+
+**This is a deliberate, narrow exception to "pool warming is no longer cron-scheduled"**
+(`docs/deploy/hetzner.md`) — it is not the old blanket warm returning. A healthy country
+queues nothing however far its pool has drifted from the warm floors; only "this country
+can no longer hand a new club its starting squad" triggers it. `app:pool:warm` is still
+unscheduled and still the general-purpose tool.
+
+Three guards, all in `StarterPoolAuditService` — read its docblock before changing any of
+them:
+- **It never queues work generation cannot finish.** Under the default `PoolConfig`
+  (players generated at 12–13, starter draw floored at `playerFirstTeamAgeMin` 19) a newly
+  generated player can **never** clear the age floor, so a player shortfall is reported as a
+  *blocker* for an operator to decide about, not ground at forever. Same when
+  `bandHoldsOnlyKids` (the diagnostic now returns this specifically for the audit). The
+  naive implementation generates hundreds of rows an hour and never moves the verdict —
+  this is the single most important behaviour in the class.
+- **It will not stack.** `queueIsBusy()` counts undrained `pool` rows in `messenger_messages`
+  and skips the sweep while the previous one is still draining (the counts a second sweep
+  would read have not caught up yet). `--force` overrides for a hand-run.
+- **Chunks re-check their own target.** `TopUpStarterPoolMessageHandler` clamps to
+  `target - current` before generating, so a replay, a double dispatch, or an admin pressing
+  **Warm** mid-drain costs nothing instead of overshooting the floor.
+
+Other things worth knowing:
+- Targets are per **nationality**, not per country — that is the unit generation addresses.
+  Auditing against the pool-wide count would have all enabled countries read the same zero
+  and each queue a full deficit for it.
+- It covers **all five** starter staff roles. `app:pool:warm` only ever warms
+  `MANAGER`/`COACH`/`CHAIRMAN`, so a country short on `DIRECTOR_OF_FOOTBALL` or
+  `FACILITY_MANAGER` stays short no matter how often it is warmed by hand.
+- Blockers are printed by the command and land in `/var/log/starter-pool-audit-cron.log`.
+  **Nothing else surfaces them** — that log is the place to look when a country stays
+  degraded with an empty queue.
+- The decision is `StarterPoolAuditService::planFor()`, a pure static (diagnosis + current
+  stock in, plan out), so the precedence above is asserted directly rather than through
+  mocks — see `tests/Service/StarterPoolAuditPlanTest.php`.
 
 ### Request Flow (POST /api/sync)
 ```
@@ -674,6 +725,7 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `AdminMessageService` | Resolve pending announcements for a club, cap the payload, upsert acknowledgements, sanitize admin HTML |
 | `AudienceCriteriaEvaluator` | Evaluate a DYNAMIC `AudienceGroup`'s JSON criteria against a `Club`, live at poll time |
 | `DebugLoggingResolver` | The one place the in-app debug log panel's effective state is decided — `global GameConfig switch \|\| the account's own User flag`, additive only; all-static like `TrophyConfigFactory`. Shared by `GET /api/game-config` and `GET /api/club/status` so the two can't disagree — see Key Entities' `User` entry |
+| `StarterPoolAuditService` | Sweeps every enabled country's starter-pack verdict and queues bounded pool top-up chunks (`pool` transport) for the ones that fall short — never for a shortfall generation cannot fix; see Starter Pool Audit above |
 | `UserLedgerService` | Detect `dividend_draw` entries in the sync ledger and centralize them onto `UserLedger`, chaining before/after balance across clubs — see Centralized User Ledger above |
 | `NarrativeTranslationService` | Find-or-create `TranslationKey`s for narrative fields; builds the per-language localization map the `?lang=` endpoints read; EN is always read live off the entity, never stored — see Languages & Translations above |
 | `TranslationCatalogueService` | Builds the generic UI-copy `{_meta, entries}` catalogue (`/api/translations/{code}`), shared by the public endpoint and the admin bulk-export |
