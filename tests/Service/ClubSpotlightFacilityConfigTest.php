@@ -8,19 +8,8 @@ use App\Entity\Club;
 use App\Entity\ClubFacility;
 use App\Entity\User;
 use App\Repository\ClubFacilityRepository;
-use App\Repository\ClubSpotlightRepository;
-use App\Repository\LeagueRepository;
-use App\Repository\MatchResultRepository;
-use App\Repository\PlayerCareerStatRepository;
-use App\Repository\SeasonRecordRepository;
-use App\Repository\SyncRecordRepository;
-use App\Repository\TransferRepository;
-use App\Repository\UserLedgerRepository;
-use App\Service\ClubSpotlightService;
+use App\Service\Facility\FacilityConfigBuilder;
 use App\Service\Facility\FacilitySpriteMap;
-use App\Service\InboxService;
-use App\Service\Notification\PushNotificationService;
-use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -52,22 +41,9 @@ class ClubSpotlightFacilityConfigTest extends TestCase
             array_keys($facilityLevels),
         ));
 
-        $service = new ClubSpotlightService(
-            $this->createStub(SyncRecordRepository::class),
-            $facilityRepo,
-            $this->createStub(ClubSpotlightRepository::class),
-            $this->createStub(MatchResultRepository::class),
-            $this->createStub(TransferRepository::class),
-            $this->createStub(PlayerCareerStatRepository::class),
-            $this->createStub(UserLedgerRepository::class),
-            $this->createStub(SeasonRecordRepository::class),
-            $this->createStub(LeagueRepository::class),
-            $this->createStub(InboxService::class),
-            $this->createStub(PushNotificationService::class),
-            $this->createStub(EntityManagerInterface::class),
-        );
+        $service = new FacilityConfigBuilder($facilityRepo);
 
-        return (new \ReflectionMethod($service, 'buildFacilityConfigs'))->invoke($service, $club, []);
+        return $service->buildAllSites($club, []);
     }
 
     /** @return array<string,int> every seeded facility at the given level */

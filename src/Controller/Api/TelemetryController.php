@@ -39,6 +39,19 @@ class TelemetryController extends AbstractController
     private const STATS_WINDOW_HOURS = 24;
     private const FEED_WINDOW_DAYS   = 7;
 
+    /**
+     * How old a snapshot may be before the page should say so.
+     *
+     * Two full generation cycles (the cron runs every 15 minutes). One cycle would flag
+     * any run that merely started late; two means the cron has actually missed a turn.
+     * Computed here rather than client-side because only the server knows the cadence —
+     * a client comparing `generatedAt` against its own clock would also be measuring its
+     * own clock skew. Not hypothetical: this page served a snapshot frozen for 90 minutes
+     * in October while the generator was running out of memory, and nothing in the
+     * payload said so.
+     */
+    private const STALE_AFTER_SECONDS = 1800;
+
     public function __construct(
         private readonly LiveTelemetrySnapshotRepository $snapshotRepository,
     ) {
@@ -52,8 +65,23 @@ class TelemetryController extends AbstractController
         // `feed` is empty.
         $snapshot = $this->snapshotRepository->getSnapshot();
 
+        // A snapshot with no id has never been written: getSnapshot() builds a zeroed row
+        // in memory and deliberately does not flush it (a GET must not write). That is a
+        // different state from "generated, and everything was zero", and the page has to
+        // tell them apart — "NOT YET GENERATED" against a world that is merely quiet.
+        $generated  = $snapshot->getId() !== null;
+        $ageSeconds = time() - $snapshot->getGeneratedAt()->getTimestamp();
+
         $response = new JsonResponse([
             'generatedAt' => $snapshot->getGeneratedAt()->format(\DateTimeInterface::ATOM),
+            // Explicit zero-state flag. False means every counter below reads 0 and `feed`
+            // is empty because nothing has ever run, not because nothing happened.
+            'generated'   => $generated,
+            // Server-computed so the client needs no knowledge of the cron cadence. Stays
+            // false in the zero state rather than reporting a freshly-built empty row as
+            // delayed: `generated: false` is the stronger signal and takes precedence.
+            'stale'       => $generated && $ageSeconds > self::STALE_AFTER_SECONDS,
+            'ageSeconds'  => $generated ? max(0, $ageSeconds) : null,
             'windows'     => [
                 'statsHours' => self::STATS_WINDOW_HOURS,
                 'feedDays'   => self::FEED_WINDOW_DAYS,
@@ -160,6 +188,12 @@ class TelemetryController extends AbstractController
             // The club's kit/badge config, same KitConfig shape the app's KitSprite
             // already renders. Nullable.
             'clubBadge' => $event['clubBadge'] ?? null,
+            // Every club the line names, in order, each with a badge where a real Club row
+            // exists. Entry 0 is the primary club. Only it can carry a badge — the others
+            // are free text out of the sync payload (a transfer's other side is often an
+            // NPC with no row), so a null badge here means "no row", not "no kit set".
+            // `club`/`clubId`/`clubBadge` above stay for callers that only want the first.
+            'clubs' => array_values($event['clubs'] ?? []),
             // Free-form per-category extras; shape varies by `category`.
             'meta'         => $event['meta'] ?? [],
             'timestampIso' => $event['timestampIso'] ?? null,

@@ -983,6 +983,9 @@ class LiveTelemetryService
                     'grossFeePence'   => $entry['grossFee'],
                 ],
                 clubBadge: $entry['clubBadge'],
+                // The selling side, when the payload named one. No badge: it is a name
+                // from the client, not a Club row.
+                alsoNamed: [$entry['startingClub']],
             ),
             array_slice($entries, 0, $limit),
         );
@@ -1366,6 +1369,7 @@ class LiveTelemetryService
         array $meta = [],
         ?array $clubBadge = null,
         ?string $clubId = null,
+        array $alsoNamed = [],
     ): array {
         return [
             'time'          => self::relativeTime($at, $now),
@@ -1384,6 +1388,16 @@ class LiveTelemetryService
             // club is a name only — a transfer's destination club may be an NPC side
             // with no Club row at all.
             'clubId'        => $clubId,
+            // Every club this line NAMES, in the order they appear, so the page can draw
+            // a badge beside each rather than only beside the first. The primary club is
+            // always entry 0 when there is one.
+            //
+            // Only the primary club can carry a badge: it is the club that SYNCED, so it
+            // is the one with a real Club row behind it. The others come out of the sync
+            // payload as free text — a transfer's other side is frequently an NPC with no
+            // row at all — so they ship with a null badge rather than a guessed one, and
+            // a null badge here means "no row", not "no kit set".
+            'clubs'         => self::namedClubs($club, $clubId, $clubBadge, $alsoNamed),
             'at'            => $at,
         ];
     }
@@ -1398,6 +1412,33 @@ class LiveTelemetryService
      * @param array<string, mixed> $row
      * @return array{home: ?array, away: ?array, badge: ?array}
      */
+    /**
+     * The clubs a feed line names, badge-resolved where a real Club row exists.
+     *
+     * @param list<?string> $alsoNamed further club names mentioned in the text
+     *
+     * @return list<array{name: string, clubId: ?string, badge: ?array}>
+     */
+    private static function namedClubs(?string $club, ?string $clubId, ?array $clubBadge, array $alsoNamed): array
+    {
+        $clubs = [];
+
+        if ($club !== null && trim($club) !== '') {
+            $clubs[] = ['name' => $club, 'clubId' => $clubId, 'badge' => $clubBadge];
+        }
+
+        foreach ($alsoNamed as $name) {
+            $name = is_string($name) ? trim($name) : '';
+            if ($name === '' || $name === $club) {
+                continue;
+            }
+
+            $clubs[] = ['name' => $name, 'clubId' => null, 'badge' => null];
+        }
+
+        return $clubs;
+    }
+
     private static function clubBadge(array $row): array
     {
         return [

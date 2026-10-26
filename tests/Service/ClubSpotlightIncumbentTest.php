@@ -8,6 +8,7 @@ use App\Entity\Club;
 use App\Entity\ClubSpotlight;
 use App\Entity\User;
 use App\Repository\ClubFacilityRepository;
+use App\Service\Facility\FacilityConfigBuilder;
 use App\Repository\ClubSpotlightRepository;
 use App\Repository\MatchResultRepository;
 use App\Repository\LeagueRepository;
@@ -54,7 +55,7 @@ class ClubSpotlightIncumbentTest extends TestCase
 
         return new ClubSpotlightService(
             $syncRepo,
-            $this->createStub(ClubFacilityRepository::class),
+            new FacilityConfigBuilder($this->createStub(ClubFacilityRepository::class)),
             $spotlightRepo,
             $this->createStub(MatchResultRepository::class),
             $this->createStub(TransferRepository::class),

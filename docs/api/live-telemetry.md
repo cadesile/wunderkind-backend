@@ -41,6 +41,9 @@ GET /api/telemetry
 200 OK
 {
   "generatedAt": "2026-10-21T22:15:00+00:00",
+  "generated": true,
+  "stale": false,
+  "ageSeconds": 312,
   "windows": { "statsHours": 24, "feedDays": 7 },
   "stats": {
     "fixturesSimulated": 42,
@@ -116,8 +119,29 @@ a new category can ship server-side without an app release. Current values:
 | `club` | Display name only. **Not an identifier** — club names are not unique (production carries six "London FC"). |
 | `clubId` | The real `Club` row, when there is one. **Key on this, never `club`.** `null` for items whose club is a name only — a transfer's destination may be an NPC side with no `Club` row. |
 | `clubBadge` | The club's kit/badge config, the same `KitConfig` shape the app's existing `KitSprite` renders. Nullable. |
+| `clubs` | **Every club the line names**, in order, each `{name, clubId, badge}`. Entry 0 is the same club as `club`/`clubId`/`clubBadge` above, which stay for callers that only want the first. Only entry 0 can carry a badge — the rest are free text out of the sync payload (a transfer's other side is frequently an NPC with no `Club` row), so a `null` badge means "no row", not "no kit set". Use this to badge every club in a line rather than only the first. |
 | `meta` | Free-form per-category extras; shape varies by `category`. Treat as opaque unless you've checked the generator for that category. |
 | `timestampIso` | The event instant. **Compute relative time from this**, client-side. |
+
+### Freshness: `generated`, `stale`, `ageSeconds`
+
+The snapshot is rebuilt by cron every 15 minutes, and a payload of zeros has two very
+different causes. These three fields say which, so the page never has to infer it from a
+row of noughts:
+
+| Field | Meaning |
+|---|---|
+| `generated` | `false` = the generator has **never run**; every counter is 0 and `feed` is empty for that reason alone. Show "NOT YET GENERATED". This is a real state on a fresh environment — the endpoint answers 200 with a zeroed in-memory row rather than erroring, and deliberately does not write one (a GET must not write). |
+| `stale` | `true` = generated, but more than **two generation cycles** (1800s) ago, i.e. the cron has missed a turn. Show "SYNC: DELAYED". |
+| `ageSeconds` | Age of the snapshot in seconds, or `null` when `generated` is false. |
+
+`generated: false` takes precedence: a never-generated row reports `stale: false`, because
+"never run" is the stronger signal and a freshly-built empty row is not late.
+
+**Why server-computed.** Only the server knows the cron cadence, and a client comparing
+`generatedAt` against its own clock would also be measuring its own clock skew. This is not
+hypothetical — in October the landing page served a snapshot frozen for 90 minutes while the
+generator was running out of memory, and nothing in the payload said so.
 
 ### Three keys are deliberately not emitted
 

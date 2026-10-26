@@ -180,4 +180,62 @@ class TelemetryControllerTest extends WebTestCase
         self::assertSame(0, $payload['stats']['fixturesSimulated']);
         self::assertSame(0, $payload['stats']['capitalDeployedPence']);
     }
+
+    /**
+     * The landing page has to distinguish "nothing has happened" from "nothing has run".
+     * Both produce a payload of zeros, and only the second is a problem to show an
+     * operator — so the server says which it is rather than leaving the page to guess
+     * from a row of noughts.
+     */
+    public function testAFreshlyGeneratedSnapshotIsNeitherStaleNorUngenerated(): void
+    {
+        $client = static::createClient();
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+        $this->seedSnapshot($em);
+
+        $client->request('GET', '/api/telemetry');
+        $payload = json_decode($client->getResponse()->getContent(), true);
+
+        $this->assertTrue($payload['generated']);
+        $this->assertFalse($payload['stale']);
+        $this->assertIsInt($payload['ageSeconds']);
+        $this->assertLessThan(60, $payload['ageSeconds']);
+    }
+
+    /**
+     * The exact failure this flag exists for: in October the generator was running out of
+     * memory and the page served a 90-minute-old snapshot with nothing to say so.
+     */
+    public function testASnapshotOlderThanTwoCyclesIsReportedStale(): void
+    {
+        $client = static::createClient();
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+        $this->seedSnapshot($em);
+
+        $snapshot = $em->getRepository(LiveTelemetrySnapshot::class)->findOneBy([]);
+        (new \ReflectionProperty(LiveTelemetrySnapshot::class, 'generatedAt'))
+            ->setValue($snapshot, new \DateTimeImmutable('-91 minutes'));
+        $em->flush();
+
+        $client->request('GET', '/api/telemetry');
+        $payload = json_decode($client->getResponse()->getContent(), true);
+
+        $this->assertTrue($payload['generated'], 'it HAS been generated — just not recently');
+        $this->assertTrue($payload['stale']);
+        $this->assertGreaterThan(5400, $payload['ageSeconds']);
+    }
+
+    /** Every club a line names gets an entry, so the page can badge each one. */
+    public function testFeedItemsCarryEveryClubTheyName(): void
+    {
+        $client = static::createClient();
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+        $this->seedSnapshot($em);
+
+        $client->request('GET', '/api/telemetry');
+        $item = json_decode($client->getResponse()->getContent(), true)['feed'][0];
+
+        $this->assertArrayHasKey('clubs', $item);
+        $this->assertIsArray($item['clubs']);
+    }
 }
