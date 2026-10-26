@@ -298,8 +298,12 @@ class LiveTelemetryServiceTest extends TestCase
         // 'clubId' joined this shape with the boardroom overlay's per-club dossier:
         // attachClubDossiers() keys off it, so it has to survive the merge's own
         // key-by-key rebuild. See LiveTelemetryDossierTest for that regression.
+        // Note this pins the WHITELIST's output, so it can only catch a key that should
+        // not be here — a key wrongly *missing* from the whitelist matches it perfectly,
+        // which is how `clubs` reached dev silently empty. testMergingKeepsEveryKeyAnEvent
+        // Carries() below is the one that compares against what event() actually emits.
         $this->assertSame([
-            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge', 'clubId',
+            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge', 'clubId', 'clubs',
         ], array_keys($merged[0]));
         $this->assertSame('[BOARDROOM // OUTLAY]', $merged[0]['categoryLabel']);
         $this->assertSame('Ledger Club', $merged[0]['club']);
@@ -840,5 +844,77 @@ class LiveTelemetryServiceTest extends TestCase
             'unlimited'         => ['-1', -1],
             'unset'             => ['', 0],
         ];
+    }
+
+    /**
+     * mergeEventsByRecency() rebuilds every event key-by-key, to drop the internal `at`
+     * sort key before the events are persisted. That makes it a whitelist, and a key
+     * missing from it is dropped in total silence — the generator keeps emitting it, the
+     * column simply never receives it, and the endpoint serves the `?? []` fallback.
+     *
+     * That is not hypothetical: `clubs` shipped to dev missing from this list, and the
+     * only symptom was an empty array in a payload that looked otherwise healthy. This
+     * asserts the whitelist against what event() actually produces, so the next key added
+     * to an event cannot be lost the same way.
+     */
+    public function testMergingKeepsEveryKeyAnEventCarries(): void
+    {
+        $at    = new \DateTimeImmutable('2026-10-26T01:00:00+00:00');
+        $event = (new \ReflectionMethod(LiveTelemetryService::class, 'event'))->invoke(
+            null,
+            $at,
+            $at,
+            'TOP_TRANSFER',
+            '[TRANSFER MARKET // RECORD FEE]',
+            'Villa Rangers',
+            'Villa Rangers sign A. Player from Oldham Warriors for £1.2M.',
+            null,
+            '£1,200,000',
+            ['playerName' => 'A. Player'],
+            ['home' => null, 'away' => null, 'badge' => null],
+            'club-123',
+            ['Oldham Warriors'],
+        );
+
+        $merged = LiveTelemetryService::mergeEventsByRecency([$event])[0];
+
+        // `at` is dropped on purpose — it is a DateTimeImmutable that would serialize
+        // into the json column as a PHP artifact. Everything else must survive.
+        $expected = array_keys($event);
+        unset($expected[array_search('at', $expected, true)]);
+
+        $lost = array_values(array_diff($expected, array_keys($merged)));
+
+        $this->assertSame([], $lost, sprintf(
+            'mergeEventsByRecency() dropped %s. Add it to that method\'s whitelist — '
+            . 'nothing else will tell you, the field just never reaches the database.',
+            implode(', ', $lost),
+        ));
+    }
+
+    /** The multi-club list is the reason the whitelist bug mattered, so pin its shape too. */
+    public function testAnEventCarriesEveryClubItNames(): void
+    {
+        $at    = new \DateTimeImmutable('2026-10-26T01:00:00+00:00');
+        $event = (new \ReflectionMethod(LiveTelemetryService::class, 'event'))->invoke(
+            null,
+            $at, $at, 'TOP_TRANSFER', '[X]', 'Villa Rangers', 'text', null, null, [],
+            ['home' => null, 'away' => null, 'badge' => ['badgeShape' => 'round']],
+            'club-123',
+            ['Oldham Warriors', '', 'Villa Rangers'],
+        );
+
+        $merged = LiveTelemetryService::mergeEventsByRecency([$event])[0];
+
+        $this->assertCount(2, $merged['clubs'], 'blank names and the primary club repeated are skipped');
+        $this->assertSame('Villa Rangers', $merged['clubs'][0]['name']);
+        $this->assertSame('club-123', $merged['clubs'][0]['clubId']);
+        $this->assertNotNull($merged['clubs'][0]['badge']);
+
+        // The other side of a transfer is free text out of the sync payload: no Club row,
+        // so no badge. Null here means "no row", not "no kit set".
+        $this->assertSame('Oldham Warriors', $merged['clubs'][1]['name']);
+        $this->assertNull($merged['clubs'][1]['clubId']);
+        $this->assertNull($merged['clubs'][1]['badge']);
     }
 }

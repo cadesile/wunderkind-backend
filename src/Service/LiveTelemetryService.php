@@ -1125,6 +1125,7 @@ class LiveTelemetryService
                 // dropped before attachClubDossiers() can key the boardroom overlay's
                 // dossier off it — which reads as "no dossier anywhere", with no error.
                 'clubId'        => $event['clubId'] ?? null,
+                'clubs'         => $event['clubs'] ?? [],
             ],
             $events,
         );
