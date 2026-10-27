@@ -4,20 +4,15 @@ declare(strict_types=1);
 
 namespace App\Tests\Service\MatchEngine;
 
-use App\Entity\Club;
-use App\Entity\Competition\ActiveCompetition;
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
-use App\Entity\Competition\CompetitionRound;
-use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\GameConfig;
-use App\Entity\User;
-use App\Enum\Competition\CompetitionDuration;
 use App\Enum\Competition\MatchEngineIdentifier;
 use App\Enum\PlayingStyle;
 use App\Repository\GameConfigRepository;
 use App\Repository\TacticalAdvantageRepository;
+use App\Service\Competition\CompetitionRegistrationService;
 use App\Service\MatchEngine\DeterministicEngine;
+use App\Service\MatchEngine\MatchEngineContext;
+use App\Service\MatchEngine\MatchEngineSide;
 use App\Service\MatchEngine\MatchNarrativeGeneratorService;
 use PHPUnit\Framework\TestCase;
 
@@ -63,11 +58,16 @@ class DeterministicEngineTest extends TestCase
         return new DeterministicEngine($repo, $configRepo, $narrativeGenerator);
     }
 
-    private function makeEntrant(ActiveCompetition $instance, string $name, int $strength, ?PlayingStyle $playingStyle = null, array $extraSnapshot = []): CompetitionEntrant
+    /**
+     * Builds an engine input side directly. Previously this had to mint a User, a Club and
+     * an entrant against a throwaway ActiveCompetition just to hand the engine a squad.
+     *
+     * `$extraSnapshot` keeps its old shape so the call sites read unchanged, but its `club`
+     * entries are now routed to where each key actually belongs: cohesion /
+     * managerMotivation / lowUrgency are engine inputs, everything else is display.
+     */
+    private function makeSide(string $name, int $strength, ?PlayingStyle $playingStyle = null, array $extraSnapshot = []): MatchEngineSide
     {
-        $user = new User("$name@example.com");
-        $club = new Club($name, $user);
-
         $players = [];
         for ($i = 0; $i < 11; $i++) {
             $players[] = [
@@ -87,32 +87,30 @@ class DeterministicEngineTest extends TestCase
             ];
         }
 
-        $clubSnapshot = ['id' => (string) $club->getId(), 'name' => $name];
-        if ($playingStyle !== null) {
-            $clubSnapshot['playingStyle'] = $playingStyle->value;
-        }
-        if (isset($extraSnapshot['club']) && is_array($extraSnapshot['club'])) {
-            $clubSnapshot = array_merge($clubSnapshot, $extraSnapshot['club']);
-        }
+        $clubExtras = isset($extraSnapshot['club']) && is_array($extraSnapshot['club']) ? $extraSnapshot['club'] : [];
 
-        $snapshot = ['club' => $clubSnapshot, 'players' => $players];
-        if (isset($extraSnapshot['staff']) && is_array($extraSnapshot['staff'])) {
-            $snapshot['staff'] = $extraSnapshot['staff'];
-        }
-
-        return new CompetitionEntrant($instance, $club, 0, $snapshot);
+        return new MatchEngineSide(
+            sideId: "entrant-$name",
+            clubId: "club-$name",
+            clubName: $name,
+            seed: 0,
+            snapshotVersion: 1,
+            displayName: $name,
+            playingStyle: $playingStyle,
+            players: $players,
+            staff: isset($extraSnapshot['staff']) && is_array($extraSnapshot['staff']) ? $extraSnapshot['staff'] : [],
+            engineInputs: CompetitionRegistrationService::clubEngineBlock($clubExtras),
+        );
     }
 
+    /** @return array{MatchEngineContext, MatchEngineSide, MatchEngineSide} */
     private function makeFixture(): array
     {
-        $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-        $instance  = new ActiveCompetition($template);
-        $round      = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-
-        $home = $this->makeEntrant($instance, 'Home', 15);
-        $away = $this->makeEntrant($instance, 'Away', 5);
-
-        return [new CompetitionFixture($round, 0, $home, $away), $home, $away];
+        return [
+            MatchEngineContext::forCupTie(uniqid('fixture-', true)),
+            $this->makeSide('Home', 15),
+            $this->makeSide('Away', 5),
+        ];
     }
 
     public function testSupportsOnlyDeterministicIdentifier(): void
@@ -126,10 +124,10 @@ class DeterministicEngineTest extends TestCase
     public function testSameFixtureIdProducesTheSameResultEveryTime(): void
     {
         $engine = $this->makeEngine();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$context, $home, $away] = $this->makeFixture();
 
-        $first  = $engine->resolve($home, $away, $fixture);
-        $second = $engine->resolve($home, $away, $fixture);
+        $first  = $engine->resolve($home, $away, $context);
+        $second = $engine->resolve($home, $away, $context);
 
         $this->assertSame($first->homeScore, $second->homeScore);
         $this->assertSame($first->awayScore, $second->awayScore);
@@ -139,9 +137,9 @@ class DeterministicEngineTest extends TestCase
     public function testEventLogIsOrderedByMinute(): void
     {
         $engine = $this->makeEngine();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$context, $home, $away] = $this->makeFixture();
 
-        $result = $engine->resolve($home, $away, $fixture);
+        $result = $engine->resolve($home, $away, $context);
         $minutes = array_column($result->eventLog, 'minute');
 
         $sorted = $minutes;
@@ -156,14 +154,11 @@ class DeterministicEngineTest extends TestCase
         $trials       = 200;
 
         for ($i = 0; $i < $trials; $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance  = new ActiveCompetition($template);
-            $round      = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $strong      = $this->makeEntrant($instance, 'Strong', 20);
-            $weak         = $this->makeEntrant($instance, 'Weak', 1);
-            $fixture       = new CompetitionFixture($round, 0, $strong, $weak);
+            $strong      = $this->makeSide('Strong', 20);
+            $weak         = $this->makeSide('Weak', 1);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($strong, $weak, $fixture);
+            $result = $engine->resolve($strong, $weak, $context);
             if ($result->homeScore > $result->awayScore) {
                 $strongerWins++;
             }
@@ -187,14 +182,11 @@ class DeterministicEngineTest extends TestCase
         $trials       = 200;
 
         for ($i = 0; $i < $trials; $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance  = new ActiveCompetition($template);
-            $round      = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $favoured    = $this->makeEntrant($instance, 'Favoured', 50, PlayingStyle::HIGH_PRESS);
-            $other        = $this->makeEntrant($instance, 'Other', 50, PlayingStyle::POSSESSION);
-            $fixture       = new CompetitionFixture($round, 0, $favoured, $other);
+            $favoured    = $this->makeSide('Favoured', 50, PlayingStyle::HIGH_PRESS);
+            $other        = $this->makeSide('Other', 50, PlayingStyle::POSSESSION);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($favoured, $other, $fixture);
+            $result = $engine->resolve($favoured, $other, $context);
             if ($result->homeScore > $result->awayScore) {
                 $favouredWins++;
             }
@@ -216,8 +208,8 @@ class DeterministicEngineTest extends TestCase
             PlayingStyle::HIGH_PRESS->value . ':' . PlayingStyle::POSSESSION->value => 3.0,
         ]);
 
-        [$fixture, $home, $away] = $this->makeFixture(); // strengths 15 vs 5, no playingStyle set
-        $result = $engine->resolve($home, $away, $fixture);
+        [$context, $home, $away] = $this->makeFixture(); // strengths 15 vs 5, no playingStyle set
+        $result = $engine->resolve($home, $away, $context);
 
         // Just confirms resolve() runs to completion without a style-driven skew being
         // forced — the real assertion is the absence of an exception/type error from
@@ -229,9 +221,9 @@ class DeterministicEngineTest extends TestCase
     public function testLineupsContainAllElevenPlayersWithNamesAndPositions(): void
     {
         $engine = $this->makeEngine();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$context, $home, $away] = $this->makeFixture();
 
-        $result = $engine->resolve($home, $away, $fixture);
+        $result = $engine->resolve($home, $away, $context);
 
         $this->assertCount(11, $result->homeLineup);
         $this->assertCount(11, $result->awayLineup);
@@ -253,14 +245,11 @@ class DeterministicEngineTest extends TestCase
         $engine = $this->makeEngine();
 
         for ($i = 0; $i < 30; $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance = new ActiveCompetition($template);
-            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $home     = $this->makeEntrant($instance, 'Home', 15);
-            $away     = $this->makeEntrant($instance, 'Away', 5);
-            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+            $home     = $this->makeSide('Home', 15);
+            $away     = $this->makeSide('Away', 5);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($home, $away, $fixture);
+            $result = $engine->resolve($home, $away, $context);
 
             foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
                 $this->assertGreaterThanOrEqual(1.0, $entry['rating']);
@@ -279,14 +268,11 @@ class DeterministicEngineTest extends TestCase
         // tests above — search until both cases are observed rather than assume any one
         // fixed seed produces them.
         for ($i = 0; $i < 100 && (!$foundGoalWithScorer || !$foundGoalWithAssist); $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance = new ActiveCompetition($template);
-            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $home     = $this->makeEntrant($instance, 'Home', 15);
-            $away     = $this->makeEntrant($instance, 'Away', 15);
-            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+            $home     = $this->makeSide('Home', 15);
+            $away     = $this->makeSide('Away', 15);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($home, $away, $fixture);
+            $result = $engine->resolve($home, $away, $context);
             $lineupById = [];
             foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
                 $lineupById[$entry['id']] = $entry;
@@ -318,14 +304,11 @@ class DeterministicEngineTest extends TestCase
         $foundRed    = false;
 
         for ($i = 0; $i < 200 && (!$foundYellow || !$foundRed); $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance = new ActiveCompetition($template);
-            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $home     = $this->makeEntrant($instance, 'Home', 15);
-            $away     = $this->makeEntrant($instance, 'Away', 15);
-            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+            $home     = $this->makeSide('Home', 15);
+            $away     = $this->makeSide('Away', 15);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($home, $away, $fixture);
+            $result = $engine->resolve($home, $away, $context);
             $lineupById = [];
             foreach (array_merge($result->homeLineup, $result->awayLineup) as $entry) {
                 $lineupById[$entry['id']] = $entry;
@@ -352,9 +335,9 @@ class DeterministicEngineTest extends TestCase
     public function testNarrativePayloadIsPopulatedFromTheGenerator(): void
     {
         $engine = $this->makeEngine();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$context, $home, $away] = $this->makeFixture();
 
-        $result = $engine->resolve($home, $away, $fixture);
+        $result = $engine->resolve($home, $away, $context);
 
         $this->assertNotNull($result->narrativePayload);
         $this->assertNotSame([], $result->narrativePayload);
@@ -368,14 +351,11 @@ class DeterministicEngineTest extends TestCase
         $foundExtraTime = false;
 
         for ($i = 0; $i < 300 && !$foundExtraTime; $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance = new ActiveCompetition($template);
-            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $home     = $this->makeEntrant($instance, 'Home', 15);
-            $away     = $this->makeEntrant($instance, 'Away', 15);
-            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+            $home     = $this->makeSide('Home', 15);
+            $away     = $this->makeSide('Away', 15);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($home, $away, $fixture);
+            $result = $engine->resolve($home, $away, $context);
             $call   = $capturedCalls[array_key_last($capturedCalls)];
 
             if ($call['wentToExtraTime']) {
@@ -400,14 +380,11 @@ class DeterministicEngineTest extends TestCase
         $foundPenalties = false;
 
         for ($i = 0; $i < 1000 && !$foundPenalties; $i++) {
-            $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-            $instance = new ActiveCompetition($template);
-            $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-            $home     = $this->makeEntrant($instance, 'Home', 15);
-            $away     = $this->makeEntrant($instance, 'Away', 15);
-            $fixture  = new CompetitionFixture($round, 0, $home, $away);
+            $home     = $this->makeSide('Home', 15);
+            $away     = $this->makeSide('Away', 15);
+            $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-            $result = $engine->resolve($home, $away, $fixture);
+            $result = $engine->resolve($home, $away, $context);
             $call   = $capturedCalls[array_key_last($capturedCalls)];
 
             if ($call['wentToPenalties']) {
@@ -429,28 +406,25 @@ class DeterministicEngineTest extends TestCase
 
     public function testResolveProducesFullComputationAuditBreakdown(): void
     {
-        $engine   = $this->makeEngine(['POSSESSION:HIGH_PRESS' => 1.08]);
-        $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-        $instance = new ActiveCompetition($template);
-        $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
+        $engine = $this->makeEngine(['POSSESSION:HIGH_PRESS' => 1.08]);
 
-        $home = $this->makeEntrant($instance, 'Home FC', 80, PlayingStyle::POSSESSION, [
+        $home = $this->makeSide('Home FC', 80, PlayingStyle::POSSESSION, [
             'club'  => ['cohesion' => 82, 'managerMotivation' => 90, 'lowUrgency' => false],
             'staff' => [['role' => 'MANAGER', 'ability' => 75]],
         ]);
-        $away = $this->makeEntrant($instance, 'Away FC', 60, PlayingStyle::HIGH_PRESS, [
+        $away = $this->makeSide('Away FC', 60, PlayingStyle::HIGH_PRESS, [
             'club'  => ['cohesion' => 25, 'lowUrgency' => true],
             'staff' => [['role' => 'MANAGER', 'ability' => 55]],
         ]);
-        $fixture = new CompetitionFixture($round, 0, $home, $away);
+        $context = MatchEngineContext::forCupTie(uniqid('fixture-', true));
 
-        $result = $engine->resolve($home, $away, $fixture);
+        $result = $engine->resolve($home, $away, $context);
         $audit  = $result->computationAudit;
 
         $this->assertIsArray($audit);
         $this->assertSame(1, $audit['schemaVersion']);
         $this->assertSame('deterministic', $audit['engine']['resolvedBy']);
-        $this->assertSame($fixture->getId()->toRfc4122(), $audit['fixture']['fixtureId']);
+        $this->assertSame($context->matchId, $audit['fixture']['fixtureId']);
         $this->assertIsInt($audit['fixture']['rngSeed']);
         $this->assertFalse($audit['fixture']['allowDraws']);
 
@@ -488,17 +462,16 @@ class DeterministicEngineTest extends TestCase
 
     public function testAiEngineStubPreservesComputationAuditAndRecordsFallbackMetadata(): void
     {
-        $engine   = $this->makeEngine();
-        $stub     = new \App\Service\MatchEngine\AiEngineStub($engine, new \Psr\Log\NullLogger());
-        $template = new CompetitionTemplate('AI Cup', 'ai-cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-        $instance = new ActiveCompetition($template);
-        $round    = new CompetitionRound($instance, 1, 'FINAL', new \DateTimeImmutable());
-        $round->setMatchEngineIdentifier(MatchEngineIdentifier::AI_ASSISTED);
-        $home     = $this->makeEntrant($instance, 'Home AI', 70);
-        $away     = $this->makeEntrant($instance, 'Away AI', 65);
-        $fixture  = new CompetitionFixture($round, 0, $home, $away);
+        $engine = $this->makeEngine();
+        $stub   = new \App\Service\MatchEngine\AiEngineStub($engine, new \Psr\Log\NullLogger());
+        $home   = $this->makeSide('Home AI', 70);
+        $away   = $this->makeSide('Away AI', 65);
 
-        $result = $stub->resolve($home, $away, $fixture);
+        // The requested engine now travels on the context instead of being read back off
+        // $fixture->getRound(), which is what let the round entity go.
+        $context = MatchEngineContext::forCupTie(uniqid('fixture-', true), MatchEngineIdentifier::AI_ASSISTED);
+
+        $result = $stub->resolve($home, $away, $context);
         $audit  = $result->computationAudit;
 
         $this->assertIsArray($audit);

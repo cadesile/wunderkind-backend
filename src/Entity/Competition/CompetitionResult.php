@@ -34,7 +34,7 @@ class CompetitionResult
     /**
      * Snapshot of each side's club display data (name, kit colours, badge, stadium,
      * playing style, etc.) at the moment this result was generated — copied verbatim from
-     * CompetitionEntrant::getSnapshotJson()['club']. Denormalized deliberately: a result is
+     * CompetitionEntrant::getClubDisplayJson(). Denormalized deliberately: a result is
      * a historical record (same reasoning as CompetitionFixture's SET NULL entrant FKs),
      * so it must not depend on the entrant/club rows still existing or being unchanged
      * later, and it's exactly the shape the client needs to render kits/names for this
@@ -184,7 +184,7 @@ class CompetitionResult
 
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
 
-    /** Read-only virtual accessor for the admin detail view — see CompetitionEntrant::getSnapshotJsonPretty(). */
+    /** Read-only virtual accessor for the admin detail view — see CompetitionEntrant::getClubDisplayJsonPretty(). */
     public function getEventLogJsonPretty(): string
     {
         return json_encode($this->eventLogJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]';
@@ -245,22 +245,27 @@ class CompetitionResult
         $homeEntrant       = $this->fixture->getHomeEntrant();
         $awayEntrant       = $this->fixture->getAwayEntrant();
 
-        $homeSnapshotClub = is_array($homeEntrant?->getSnapshotJson()['club'] ?? null) ? $homeEntrant->getSnapshotJson()['club'] : [];
-        $awaySnapshotClub = is_array($awayEntrant?->getSnapshotJson()['club'] ?? null) ? $awayEntrant->getSnapshotJson()['club'] : [];
+        // The entrant's stored display block is read only as a base layer, exactly as its
+        // snapshot's `club` object used to be, with this result's own frozen copy winning on
+        // every key. That ordering is what lets a result outlive its entrant: when the
+        // fixture's SET NULL entrant FK is already null, the frozen copy stands alone.
+        $homeSnapshotClub = $homeEntrant?->getClubDisplayJson() ?? [];
+        $awaySnapshotClub = $awayEntrant?->getClubDisplayJson() ?? [];
 
         $homeClub = $this->stripClubId(CompetitionRegistrationService::normalizeClubData(array_merge($homeSnapshotClub, $this->homeClubJson), $homeEntrant?->getClub()));
         $awayClub = $this->stripClubId(CompetitionRegistrationService::normalizeClubData(array_merge($awaySnapshotClub, $this->awayClubJson), $awayEntrant?->getClub()));
-
-        $homeSnapshotPlayers = is_array($homeEntrant?->getSnapshotJson()['players'] ?? null) ? $homeEntrant->getSnapshotJson()['players'] : [];
-        $awaySnapshotPlayers = is_array($awayEntrant?->getSnapshotJson()['players'] ?? null) ? $awayEntrant->getSnapshotJson()['players'] : [];
 
         return [
             'homeScore'        => $this->homeScore,
             'awayScore'        => $this->awayScore,
             'homeClub'         => $homeClub,
             'awayClub'         => $awayClub,
-            'homeLineup'       => CompetitionRegistrationService::formatLineupForClient($this->homeLineupJson, $homeSnapshotPlayers),
-            'awayLineup'       => CompetitionRegistrationService::formatLineupForClient($this->awayLineupJson, $awaySnapshotPlayers),
+            // No snapshot backfill: the engine writes each player's `appearance` straight
+            // into the lineup row (DeterministicEngine::calculatePerformance), so a stored
+            // lineup is already complete. Reading the entrant's squad to re-fill a key that
+            // is present is what made a bracket decode every squad it rendered.
+            'homeLineup'       => CompetitionRegistrationService::formatLineupForClient($this->homeLineupJson),
+            'awayLineup'       => CompetitionRegistrationService::formatLineupForClient($this->awayLineupJson),
             'narrativePayload' => $this->narrativePayload,
             'wentToExtraTime'  => $this->wentToExtraTime,
             'wentToPenalties'  => $this->wentToPenalties,

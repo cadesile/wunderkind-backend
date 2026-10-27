@@ -18,9 +18,12 @@ use App\Service\Competition\CompetitionRoundReminderService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Envelope;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class CompetitionRoundReminderServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionRoundReminderService $reminderService;
     private CompetitionRoundRepository $roundRepository;
@@ -67,11 +70,10 @@ class CompetitionRoundReminderServiceTest extends KernelTestCase
 
         foreach (['Alpha', 'Bravo', 'Charlie', 'Delta'] as $name) {
             $club    = $this->createClub($name);
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => $name],
                 'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
             ]);
-            $this->em->persist($entrant);
         }
         $this->em->flush();
 
@@ -144,11 +146,10 @@ class CompetitionRoundReminderServiceTest extends KernelTestCase
         $this->em->persist($instance);
         foreach (['Alpha', 'Bravo', 'Charlie', 'Delta'] as $name) {
             $club    = $this->createClub($name);
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => $name],
                 'players' => [],
             ]);
-            $this->em->persist($entrant);
         }
         $this->em->flush();
 

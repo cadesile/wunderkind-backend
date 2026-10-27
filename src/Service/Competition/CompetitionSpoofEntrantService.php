@@ -12,6 +12,7 @@ use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
 use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Repository\Competition\CompetitionEntrantSquadRepository;
 use App\Service\Appearance\AppearanceGeneratorService;
 use App\Service\ClubInitializationService;
 use App\Service\NameGeneratorService;
@@ -56,6 +57,7 @@ class CompetitionSpoofEntrantService
         private readonly EntityManagerInterface $em,
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionRegistrationService $registrationService,
+        private readonly CompetitionEntrantSquadRepository $squadRepository,
         private readonly NpcClubGenerationService $npcClubGenerationService,
         private readonly NameGeneratorService $nameGenerator,
         private readonly PlayerGenerationService $playerGenerationService,
@@ -164,8 +166,6 @@ class CompetitionSpoofEntrantService
                 'badgeConfig'   => $badgeConfig,
                 'identity'      => $identity,
                 'stadium'       => $this->buildDefaultStadiumConfig($identity['home']['primary'], $identity['home']['secondary']),
-                'homeKitStyle'  => 'j' . random_int(1, 99),
-                'awayKitStyle'  => 'j' . random_int(1, 99),
                 'stadiumName'   => $this->npcClubGenerationService->generateStadiumName($clubName, 'EN'),
                 'playingStyle'  => $this->npcClubGenerationService->playingStyleForTier(4),
             ],
@@ -176,7 +176,6 @@ class CompetitionSpoofEntrantService
                 'name'        => $this->nameGenerator->generateName($nationality),
                 'nationality' => $nationality,
             ]],
-            'facilities' => [],
         ];
     }
 
@@ -230,7 +229,7 @@ class CompetitionSpoofEntrantService
         $this->em->flush();
 
         $finalSnapshot             = $snapshot;
-        $club['id']                = (string) $spoofClub->getId();
+        $club                      = CompetitionRegistrationService::repointClubData($club, $spoofClub);
         $club['name']              = $spoofClub->getName();
         $club['homeKitConfig']     = $spoofClub->getHomeKitConfig();
         $club['awayKitConfig']     = $spoofClub->getAwayKitConfig();
@@ -286,7 +285,10 @@ class CompetitionSpoofEntrantService
         $remaining = $activeCompetition->getEntrantCapacity() - $this->entrantRepository->countForCompetition($activeCompetition);
         $count     = max(0, min($count, $remaining));
 
-        $baseSnapshot = $sourceEntrant->getSnapshotJson();
+        $baseSnapshot = CompetitionRegistrationService::snapshotEnvelopeFrom(
+            $sourceEntrant,
+            $this->squadRepository->findForEntrant($sourceEntrant),
+        );
         $countryCode  = is_string($baseSnapshot['club']['country'] ?? null) ? $baseSnapshot['club']['country'] : null;
 
         // Seeded from who is already in the competition, not empty. Two things collided
@@ -331,7 +333,7 @@ class CompetitionSpoofEntrantService
     {
         $names = [];
         foreach ($this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition) as $entrant) {
-            $snapshotName = $entrant->getSnapshotJson()['club']['name'] ?? null;
+            $snapshotName = $entrant->getClubDisplayJson()['name'] ?? null;
             $name         = is_string($snapshotName) && $snapshotName !== ''
                 ? $snapshotName
                 : $entrant->getClub()->getName();
@@ -388,7 +390,7 @@ class CompetitionSpoofEntrantService
         $snapshot = $baseSnapshot;
 
         $club                  = $snapshot['club'] ?? [];
-        $club['id']            = (string) $spoofClub->getId();
+        $club                  = CompetitionRegistrationService::repointClubData($club, $spoofClub);
         $club['name']          = $spoofClub->getName();
         $club['reputation']    = $spoofClub->getReputation();
         $club['homeKitConfig'] = $spoofClub->getHomeKitConfig();

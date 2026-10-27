@@ -5,21 +5,17 @@ declare(strict_types=1);
 namespace App\Service\Friendly;
 
 use App\Entity\Club;
-use App\Entity\Competition\ActiveCompetition;
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
-use App\Entity\Competition\CompetitionRound;
-use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\Friendly\FriendlyChallenge;
-use App\Enum\Competition\CompetitionDuration;
 use App\Enum\Friendly\FriendlyChallengeStatus;
 use App\Enum\MessageSenderType;
 use App\Enum\Tier;
 use App\Repository\Friendly\FriendlyChallengeRepository;
 use App\Service\Competition\CompetitionRegistrationService;
+use App\Service\Competition\MatchEngineSideFactory;
 use App\Service\Competition\MatchQueryService;
 use App\Service\InboxService;
 use App\Service\MatchEngine\DeterministicEngine;
+use App\Service\MatchEngine\MatchEngineContext;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -313,19 +309,39 @@ class FriendlyChallengeService
         $homeSnapshot     = $homeIsChallenger ? $challenge->getChallengerSnapshotJson() : $challenge->getAcceptorSnapshotJson();
         $awaySnapshot     = $homeIsChallenger ? $challenge->getAcceptorSnapshotJson() : $challenge->getChallengerSnapshotJson();
 
-        // Build transient wrapper entities so DeterministicEngine can run unchanged without persisting cup rows
-        $dummyTemplate    = new CompetitionTemplate('Friendly', 'friendly', 4, CompetitionDuration::TEN_HOURS);
-        $dummyCompetition = new ActiveCompetition($dummyTemplate);
-        $dummyRound       = new CompetitionRound($dummyCompetition, 1, 'FINAL', $now);
-        $homeEntrant      = new CompetitionEntrant($dummyCompetition, $homeClub, 1, $homeSnapshot);
-        $awayEntrant      = new CompetitionEntrant($dummyCompetition, $awayClub, 2, $awaySnapshot);
-        $dummyFixture     = new CompetitionFixture($dummyRound, 0, $homeEntrant, $awayEntrant);
+        // A friendly now reaches the engine as what the engine actually wants: two sides and
+        // a context. This used to fabricate a CompetitionTemplate, ActiveCompetition,
+        // CompetitionRound, two CompetitionEntrants and a CompetitionFixture, then use
+        // reflection to overwrite the fixture's private id — all so the RNG could be seeded
+        // from the challenge id. The context carries that id directly, and `allowDraws` is
+        // now data on it rather than a separate resolveFriendly() entry point, so a friendly
+        // goes through MatchEngineInterface like any other match.
+        $homeSide = MatchEngineSideFactory::fromFriendlySide(
+            sideId: (string) $challenge->getId() . ':home',
+            clubId: (string) $homeClub->getId(),
+            clubName: $homeClub->getName(),
+            clubDisplay: is_array($homeSnapshot['club'] ?? null) ? $homeSnapshot['club'] : [],
+            players: array_values(array_filter(is_array($homeSnapshot['players'] ?? null) ? $homeSnapshot['players'] : [], 'is_array')),
+            staff: array_values(array_filter(is_array($homeSnapshot['staff'] ?? null) ? $homeSnapshot['staff'] : [], 'is_array')),
+            engineInputs: CompetitionRegistrationService::clubEngineBlock(is_array($homeSnapshot['club'] ?? null) ? $homeSnapshot['club'] : []),
+            seed: 1,
+        );
+        $awaySide = MatchEngineSideFactory::fromFriendlySide(
+            sideId: (string) $challenge->getId() . ':away',
+            clubId: (string) $awayClub->getId(),
+            clubName: $awayClub->getName(),
+            clubDisplay: is_array($awaySnapshot['club'] ?? null) ? $awaySnapshot['club'] : [],
+            players: array_values(array_filter(is_array($awaySnapshot['players'] ?? null) ? $awaySnapshot['players'] : [], 'is_array')),
+            staff: array_values(array_filter(is_array($awaySnapshot['staff'] ?? null) ? $awaySnapshot['staff'] : [], 'is_array')),
+            engineInputs: CompetitionRegistrationService::clubEngineBlock(is_array($awaySnapshot['club'] ?? null) ? $awaySnapshot['club'] : []),
+            seed: 2,
+        );
 
-        // Set the dummy fixture ID to match the challenge ID so SeededRng produces deterministic results per challengeId
-        $idProp = new \ReflectionProperty(CompetitionFixture::class, 'id');
-        $idProp->setValue($dummyFixture, $challenge->getId());
-
-        $engineResult = $this->deterministicEngine->resolveFriendly($homeEntrant, $awayEntrant, $dummyFixture);
+        $engineResult = $this->deterministicEngine->resolve(
+            $homeSide,
+            $awaySide,
+            MatchEngineContext::forFriendly((string) $challenge->getId()),
+        );
 
         $homeClubIdentity = $this->matchQueryService->serializeClubFromSnapshot($homeSnapshot, $homeClub, (string) $homeClub->getId());
         $awayClubIdentity = $this->matchQueryService->serializeClubFromSnapshot($awaySnapshot, $awayClub, (string) $awayClub->getId());

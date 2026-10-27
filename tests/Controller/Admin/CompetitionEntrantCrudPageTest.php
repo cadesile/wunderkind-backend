@@ -15,6 +15,7 @@ use App\Enum\Competition\CompetitionDuration;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use App\Tests\Support\EntrantFixtureTrait;
 
 /**
  * The read-only "view club snapshots" admin — renders the index (summary columns derived
@@ -25,6 +26,8 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class CompetitionEntrantCrudPageTest extends WebTestCase
 {
+    use EntrantFixtureTrait;
+
     private const TEST_ADMIN_EMAIL = 'competition-entrant-crud-test-admin@example.com';
 
     private function loginAsAdmin(KernelBrowser $client): void
@@ -61,7 +64,7 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
             $players[] = ['id' => "p$i", 'position' => 'MID', 'currentAbility' => 65];
         }
 
-        $entrant = new CompetitionEntrant($instance, $club, 1, [
+        $entrant = $this->makeEntrantFromEnvelope($em, $instance, $club, 1, [
             'club'    => ['id' => (string) $club->getId(), 'name' => 'Snapshot FC', 'formation' => '4-3-3', 'playingStyle' => 'HIGH_PRESS'],
             'players' => $players,
             'staff'   => [['id' => 's1', 'role' => 'MANAGER']],
@@ -228,7 +231,7 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
         $em->persist($user);
         $em->persist($club);
 
-        $entrant = new CompetitionEntrant($competition, $club, 1, $this->pastedSnapshot());
+        $entrant = $this->makeEntrantFromEnvelope($em, $competition, $club, 1, $this->pastedSnapshot());
         $em->persist($entrant);
         $em->flush();
 
@@ -260,7 +263,7 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
         // The actual proof that Randomise was on: it renames the players inside the snapshot.
         // The club gets a fresh name either way, so asserting on that would pass even with
         // Randomise off and prove nothing.
-        $clonedPlayerNames = array_column($clone->getSnapshotJson()['players'], 'name');
+        $clonedPlayerNames = array_column($this->entrantEnvelope($em, $clone)['players'], 'name');
         $this->assertNotEmpty($clonedPlayerNames);
         $this->assertNotContains(
             'Pasted Player 0',
@@ -284,7 +287,7 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
         $em->persist($user);
         $em->persist($club);
 
-        $entrant = new CompetitionEntrant($competition, $club, 1, $this->pastedSnapshot());
+        $entrant = $this->makeEntrantFromEnvelope($em, $competition, $club, 1, $this->pastedSnapshot());
         $em->persist($entrant);
         $em->flush();
 
@@ -311,7 +314,7 @@ class CompetitionEntrantCrudPageTest extends WebTestCase
         $em->persist($user);
         $em->persist($club);
 
-        $entrant = new CompetitionEntrant($competition, $club, 1, $this->pastedSnapshot());
+        $entrant = $this->makeEntrantFromEnvelope($em, $competition, $club, 1, $this->pastedSnapshot());
         $em->persist($entrant);
         $em->flush();
 

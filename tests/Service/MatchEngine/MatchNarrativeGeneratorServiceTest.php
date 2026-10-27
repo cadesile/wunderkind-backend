@@ -5,17 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Service\MatchEngine;
 
 use App\Command\SeedMatchNarrativeTemplatesCommand;
-use App\Entity\Club;
-use App\Entity\Competition\ActiveCompetition;
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
-use App\Entity\Competition\CompetitionRound;
-use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\GameEventTemplate;
-use App\Entity\User;
-use App\Enum\Competition\CompetitionDuration;
 use App\Enum\EventCategory;
 use App\Repository\GameEventTemplateRepository;
+use App\Service\MatchEngine\MatchEngineSide;
 use App\Service\MatchEngine\MatchNarrativeGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
@@ -51,35 +44,44 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
         return new MatchNarrativeGeneratorService($repo);
     }
 
-    private function makeEntrant(ActiveCompetition $instance, string $name): CompetitionEntrant
+    private function makeSide(string $name): MatchEngineSide
     {
-        $user  = new User("$name@example.com");
-        $club  = new Club($name, $user);
-        $players = [];
+        $players   = [];
         $positions = ['GK', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'ATT', 'ATT', 'ATT'];
         foreach ($positions as $i => $position) {
             $players[] = ['id' => "$name-p$i", 'position' => $position, 'name' => "$name Player $i", 'currentAbility' => 60];
         }
 
-        return new CompetitionEntrant($instance, $club, 0, ['club' => ['id' => (string) $club->getId(), 'name' => $name], 'players' => $players]);
+        return new MatchEngineSide(
+            sideId: "entrant-$name",
+            clubId: "club-$name",
+            clubName: $name,
+            seed: 0,
+            snapshotVersion: 1,
+            displayName: $name,
+            playingStyle: null,
+            players: $players,
+            staff: [],
+            engineInputs: [],
+        );
     }
 
-    /** @return array{CompetitionFixture, CompetitionEntrant, CompetitionEntrant} */
+    /**
+     * No User, Club, CompetitionTemplate, ActiveCompetition, CompetitionRound or
+     * CompetitionFixture. The generator takes the match id it seeds from and two sides, so
+     * none of that scaffolding is needed to exercise it any more.
+     *
+     * @return array{string, MatchEngineSide, MatchEngineSide}
+     */
     private function makeFixture(): array
     {
-        $template = new CompetitionTemplate('Cup', 'cup-' . uniqid('', true), 4, CompetitionDuration::TEN_HOURS);
-        $instance = new ActiveCompetition($template);
-        $round    = new CompetitionRound($instance, 1, 'SF', new \DateTimeImmutable());
-        $home     = $this->makeEntrant($instance, 'Home');
-        $away     = $this->makeEntrant($instance, 'Away');
-
-        return [new CompetitionFixture($round, 0, $home, $away), $home, $away];
+        return [uniqid('match-', true), $this->makeSide('Home'), $this->makeSide('Away')];
     }
 
-    private function lineupFor(CompetitionEntrant $entrant, array $goalStats = [], array $cardStats = []): array
+    private function lineupFor(MatchEngineSide $entrant, array $goalStats = [], array $cardStats = []): array
     {
         $lineup = [];
-        foreach ($entrant->getSnapshotJson()['players'] as $p) {
+        foreach ($entrant->players as $p) {
             $lineup[] = [
                 'id' => $p['id'], 'name' => $p['name'], 'position' => $p['position'],
                 'goals' => $goalStats[$p['id']]['goals'] ?? 0, 'assists' => $goalStats[$p['id']]['assists'] ?? 0,
@@ -94,13 +96,13 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testSameFixtureIdProducesTheSameNarrativeEveryTime(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
         $eventLog = [['minute' => 30, 'type' => 'goal', 'team' => 'home', 'scorer' => 'Home-p8', 'assist' => 'Home-p6']];
         $homeLineup = $this->lineupFor($home, ['Home-p8' => ['goals' => 1]]);
         $awayLineup = $this->lineupFor($away);
 
-        $first  = $service->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup);
-        $second = $service->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup);
+        $first  = $service->generate($matchId, $home, $away, $eventLog, $homeLineup, $awayLineup);
+        $second = $service->generate($matchId, $home, $away, $eventLog, $homeLineup, $awayLineup);
 
         $this->assertSame($first, $second);
     }
@@ -110,12 +112,12 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
         $service = $this->makeService();
 
         for ($i = 0; $i < 25; $i++) {
-            [$fixture, $home, $away] = $this->makeFixture();
+            [$matchId, $home, $away] = $this->makeFixture();
             $eventLog   = [['minute' => 40, 'type' => 'goal', 'team' => 'home', 'scorer' => 'Home-p8', 'assist' => 'Home-p6']];
             $homeLineup = $this->lineupFor($home, ['Home-p8' => ['goals' => 1]]);
             $awayLineup = $this->lineupFor($away);
 
-            $items = $service->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup);
+            $items = $service->generate($matchId, $home, $away, $eventLog, $homeLineup, $awayLineup);
 
             $goalKeyEvents = array_values(array_filter($items, static fn (array $item) => $item['eventType'] === 'GOAL'));
             $this->assertCount(1, $goalKeyEvents, "Expected exactly one GOAL key event on trial $i.");
@@ -126,11 +128,11 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testFillerItemsNeverCarryAScoringEventType(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
         $homeLineup = $this->lineupFor($home);
         $awayLineup = $this->lineupFor($away);
 
-        $items = $service->generate($fixture, $home, $away, [], $homeLineup, $awayLineup);
+        $items = $service->generate($matchId, $home, $away, [], $homeLineup, $awayLineup);
 
         foreach ($items as $item) {
             if ($item['eventType'] === 'FILLER') {
@@ -142,12 +144,12 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testCardEventProducesAFoulFillerFollowedByTheCardKeyEvent(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
         $eventLog   = [['minute' => 55, 'type' => 'yellow_card', 'team' => 'away', 'player' => 'Away-p3']];
         $homeLineup = $this->lineupFor($home);
         $awayLineup = $this->lineupFor($away, [], ['Away-p3' => ['yellowCards' => 1]]);
 
-        $items = $service->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup);
+        $items = $service->generate($matchId, $home, $away, $eventLog, $homeLineup, $awayLineup);
 
         $cardEvents = array_values(array_filter($items, static fn (array $i) => $i['eventType'] === 'YELLOW_CARD'));
         $this->assertCount(1, $cardEvents);
@@ -161,11 +163,11 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testTimelineContainsHalfTimeAndFullTimeMarkersAndIsMinuteOrdered(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
         $homeLineup = $this->lineupFor($home);
         $awayLineup = $this->lineupFor($away);
 
-        $items = $service->generate($fixture, $home, $away, [], $homeLineup, $awayLineup);
+        $items = $service->generate($matchId, $home, $away, [], $homeLineup, $awayLineup);
 
         $texts = array_column($items, 'text');
         $this->assertContains('Half-time.', $texts);
@@ -183,8 +185,8 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
         $repo->method('findByCategory')->willReturn([]);
         $service = new MatchNarrativeGeneratorService($repo);
 
-        [$fixture, $home, $away] = $this->makeFixture();
-        $items = $service->generate($fixture, $home, $away, [], $this->lineupFor($home), $this->lineupFor($away));
+        [$matchId, $home, $away] = $this->makeFixture();
+        $items = $service->generate($matchId, $home, $away, [], $this->lineupFor($home), $this->lineupFor($away));
 
         $this->assertSame([], $items);
     }
@@ -192,12 +194,12 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testExtraTimeAddsAGoingToExtraTimeMarkerAndExtendsTheFillerWindow(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
         $eventLog   = [['minute' => 105, 'type' => 'goal', 'team' => 'home', 'scorer' => 'Home-p8', 'assist' => null]];
         $homeLineup = $this->lineupFor($home, ['Home-p8' => ['goals' => 1]]);
         $awayLineup = $this->lineupFor($away);
 
-        $items = $service->generate($fixture, $home, $away, $eventLog, $homeLineup, $awayLineup, wentToExtraTime: true);
+        $items = $service->generate($matchId, $home, $away, $eventLog, $homeLineup, $awayLineup, wentToExtraTime: true);
 
         $texts = array_column($items, 'text');
         $this->assertContains('Half-time.', $texts);
@@ -215,9 +217,9 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testRegulationOnlyMatchHasNoExtraTimeOrPenaltyMarkers(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
 
-        $items = $service->generate($fixture, $home, $away, [], $this->lineupFor($home), $this->lineupFor($away));
+        $items = $service->generate($matchId, $home, $away, [], $this->lineupFor($home), $this->lineupFor($away));
 
         $texts = array_column($items, 'text');
         $this->assertNotContains('Full-time in normal time — this one\'s going to extra time!', $texts);
@@ -227,11 +229,11 @@ class MatchNarrativeGeneratorServiceTest extends TestCase
     public function testPenaltyShootoutAddsAFinalKeySummaryLineNamingTheWinnerAndScore(): void
     {
         $service = $this->makeService();
-        [$fixture, $home, $away] = $this->makeFixture();
+        [$matchId, $home, $away] = $this->makeFixture();
         $homeLineup = $this->lineupFor($home);
         $awayLineup = $this->lineupFor($away);
 
-        $items = $service->generate($fixture, $home, $away, [], $homeLineup, $awayLineup, wentToExtraTime: true, wentToPenalties: true, penaltyHomeScore: 5, penaltyAwayScore: 4);
+        $items = $service->generate($matchId, $home, $away, [], $homeLineup, $awayLineup, wentToExtraTime: true, wentToPenalties: true, penaltyHomeScore: 5, penaltyAwayScore: 4);
 
         $shootoutEvents = array_values(array_filter($items, static fn (array $i) => str_contains($i['text'], 'on penalties!')));
         $this->assertCount(1, $shootoutEvents);

@@ -2,8 +2,6 @@
 
 namespace App\Service\MatchEngine;
 
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
 use App\Entity\GameEventTemplate;
 use App\Enum\EventCategory;
 use App\Repository\GameEventTemplateRepository;
@@ -54,9 +52,9 @@ class MatchNarrativeGeneratorService
      * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}>
      */
     public function generate(
-        CompetitionFixture $fixture,
-        CompetitionEntrant $home,
-        CompetitionEntrant $away,
+        string $matchId,
+        MatchEngineSide $home,
+        MatchEngineSide $away,
         array $eventLog,
         array $homeLineup,
         array $awayLineup,
@@ -72,7 +70,7 @@ class MatchNarrativeGeneratorService
 
         $rowsByNodeType = $this->groupByNodeType($rows);
         $graph          = $this->buildGraph($rowsByNodeType);
-        $rng            = new SeededRng(SeededRng::hashId($fixture->getId()->toRfc4122() . ':narrative'));
+        $rng            = new SeededRng(SeededRng::hashId($matchId . ':narrative'));
 
         $homeName = $this->clubName($home);
         $awayName = $this->clubName($away);
@@ -269,11 +267,17 @@ class MatchNarrativeGeneratorService
         }, $template);
     }
 
-    private function clubName(CompetitionEntrant $entrant): string
+    /**
+     * Uses the side's resolved name — the registered display name, else the live club
+     * name — so commentary and the engine's own audit cannot disagree about what a side
+     * is called. Previously this read the snapshot name alone and fell through to
+     * 'The team', while the engine fell back to the club name for the same side.
+     */
+    private function clubName(MatchEngineSide $entrant): string
     {
-        $name = $entrant->getSnapshotJson()['club']['name'] ?? null;
+        $name = trim($entrant->resolvedName());
 
-        return is_string($name) && $name !== '' ? $name : 'The team';
+        return $name !== '' ? $name : 'The team';
     }
 
     /** @param list<array{id:?string,name:?string,position:?string,...}> $lineup */
@@ -313,7 +317,7 @@ class MatchNarrativeGeneratorService
      *  @param array<string, GameEventTemplate[]> $rowsByNodeType
      *  @param array<string, list<string>> $graph
      *  @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}> */
-    private function buildGoalChainItems(SeededRng $rng, array $event, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph): array
+    private function buildGoalChainItems(SeededRng $rng, array $event, MatchEngineSide $home, MatchEngineSide $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph): array
     {
         $isHome         = $event['team'] === 'home';
         $scoringLineup  = $isHome ? $homeLineup : $awayLineup;
@@ -377,7 +381,7 @@ class MatchNarrativeGeneratorService
     }
 
     /** @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}> */
-    private function buildCardChainItems(SeededRng $rng, array $event, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph): array
+    private function buildCardChainItems(SeededRng $rng, array $event, MatchEngineSide $home, MatchEngineSide $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph): array
     {
         $isHome      = $event['team'] === 'home';
         $lineup      = $isHome ? $homeLineup : $awayLineup;
@@ -424,7 +428,7 @@ class MatchNarrativeGeneratorService
      * @param list<array{minute:int,type:string}> $eventLog
      * @return list<array{minute:int,isKeyEvent:bool,eventType:?string,text:string,playerA:?string,playerB:?string,side:?string}>
      */
-    private function buildFillerItems(SeededRng $rng, CompetitionEntrant $home, CompetitionEntrant $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph, array $eventLog, int $maxMinute = 90): array
+    private function buildFillerItems(SeededRng $rng, MatchEngineSide $home, MatchEngineSide $away, array $homeLineup, array $awayLineup, string $homeName, string $awayName, array $rowsByNodeType, array $graph, array $eventLog, int $maxMinute = 90): array
     {
         $availableEntries = array_intersect_key(self::FILLER_ENTRY_WEIGHTS, $rowsByNodeType);
         if ($availableEntries === []) {

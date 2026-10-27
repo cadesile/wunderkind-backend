@@ -13,12 +13,14 @@ use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\MessageSenderType;
 use App\Enum\Tier;
+use App\Repository\Competition\CompetitionEntrantSquadRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
 use App\Service\ClubInitializationService;
 use App\Service\InboxService;
+use App\Service\MatchEngine\MatchEngineContext;
 use App\Service\MatchEngine\MatchEngineInterface;
 use App\Service\MatchEngine\MatchEngineRegistry;
 use App\Service\MatchEngine\MatchEngineResult;
@@ -46,6 +48,7 @@ class CompetitionResultsService
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
         private readonly CompetitionResultRepository $resultRepository,
+        private readonly CompetitionEntrantSquadRepository $squadRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
@@ -288,8 +291,17 @@ class CompetitionResultsService
             return $survivor;
         }
 
-        $engine      = $this->matchEngineRegistry->resolveFor($round->getMatchEngineIdentifier());
-        $matchResult = $engine->resolve($home, $away, $fixture);
+        $engine = $this->matchEngineRegistry->resolveFor($round->getMatchEngineIdentifier());
+
+        // Both squads in one query. The engine reads the XI, staff and club tuning keys from
+        // these rows and nowhere else, so this is the one place a resolution pass touches
+        // competition_entrant_squad.
+        $squads      = $this->squadRepository->findByEntrants([$home, $away]);
+        $matchResult = $engine->resolve(
+            MatchEngineSideFactory::fromEntrant($home, $squads[(string) $home->getId()] ?? null),
+            MatchEngineSideFactory::fromEntrant($away, $squads[(string) $away->getId()] ?? null),
+            MatchEngineContext::forCupTie((string) $fixture->getId(), $round->getMatchEngineIdentifier()),
+        );
 
         $usedTiebreak = false;
         $winner       = match (true) {
@@ -418,14 +430,18 @@ class CompetitionResultsService
         return $winner;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The club copy frozen onto a result.
+     *
+     * This is now a plain read: the entrant already stores the resolved display block, so
+     * there is nothing left to normalise at resolve time. It used to re-run the whole
+     * normaliser over the entrant's full snapshot on every fixture.
+     *
+     * @return array<string, mixed>
+     */
     private function clubJsonOf(CompetitionEntrant $entrant): array
     {
-        return CompetitionRegistrationService::normalizeSnapshotClub(
-            $entrant->getSnapshotJson(),
-            $entrant->getClub(),
-            (string) $entrant->getClub()->getId(),
-        );
+        return $entrant->getClubDisplayJson();
     }
 
     private function breakTie(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): CompetitionEntrant

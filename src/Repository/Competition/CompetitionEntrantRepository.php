@@ -42,6 +42,30 @@ class CompetitionEntrantRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
+    /**
+     * Sum of every entrant's snapshotVersion for this competition.
+     *
+     * Feeds the instance state version, which previously counted only entrants and round
+     * statuses. That made a resubmission invisible to it: swapping a squad changes neither
+     * the entrant count nor any round status, so the version held still while the response
+     * genuinely changed. The ETag only escaped the consequences by also folding in the
+     * *viewing* club's own snapshot version — meaning another club's resubmission already
+     * failed to invalidate your ETag, and would have served a stale shared cache document.
+     *
+     * Withdrawn rows are included on purpose, unlike countForCompetition(): a withdrawal is
+     * itself a change the response must reflect, and excluding them would let a withdraw and
+     * a resubmission cancel out to the same total.
+     */
+    public function sumSnapshotVersions(ActiveCompetition $activeCompetition): int
+    {
+        return (int) $this->createQueryBuilder('e')
+            ->select('COALESCE(SUM(e.snapshotVersion), 0)')
+            ->where('e.activeCompetition = :competition')
+            ->setParameter('competition', $activeCompetition->getId())
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /** @return list<CompetitionEntrant> Registration order (used to seed the initial bracket), excluding withdrawn rows. */
     public function findByCompetitionOrderedByRegistration(ActiveCompetition $activeCompetition): array
     {

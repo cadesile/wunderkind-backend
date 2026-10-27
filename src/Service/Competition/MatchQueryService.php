@@ -16,6 +16,7 @@ use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\Friendly\FriendlyChallengeStatus;
 use App\Enum\Tier;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Repository\Competition\CompetitionEntrantSquadRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
@@ -30,6 +31,7 @@ class MatchQueryService
         private readonly CompetitionResultRepository $resultRepository,
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
+        private readonly CompetitionEntrantSquadRepository $squadRepository,
         private readonly FriendlyChallengeRepository $friendlyRepository,
     ) {}
 
@@ -335,8 +337,8 @@ class MatchQueryService
         $homeEntrant = $fixture->getHomeEntrant();
         $awayEntrant = $fixture->getAwayEntrant();
 
-        $homeSnapshotClub = is_array($homeEntrant?->getSnapshotJson()['club'] ?? null) ? $homeEntrant->getSnapshotJson()['club'] : [];
-        $awaySnapshotClub = is_array($awayEntrant?->getSnapshotJson()['club'] ?? null) ? $awayEntrant->getSnapshotJson()['club'] : [];
+        $homeSnapshotClub = $homeEntrant?->getClubDisplayJson() ?? [];
+        $awaySnapshotClub = $awayEntrant?->getClubDisplayJson() ?? [];
 
         $homeClub = $resultEntity !== null
             ? $this->normalizeClubIdentityArray(array_merge($homeSnapshotClub, $resultEntity->getHomeClubJson()), $homeEntrant?->getClub())
@@ -346,8 +348,17 @@ class MatchQueryService
             ? $this->normalizeClubIdentityArray(array_merge($awaySnapshotClub, $resultEntity->getAwayClubJson()), $awayEntrant?->getClub())
             : ($awayEntrant !== null ? $this->serializeClubFromEntrant($awayEntrant) : null);
 
-        $homeSnapshotPlayers = is_array($homeEntrant?->getSnapshotJson()['players'] ?? null) ? $homeEntrant->getSnapshotJson()['players'] : [];
-        $awaySnapshotPlayers = is_array($awayEntrant?->getSnapshotJson()['players'] ?? null) ? $awayEntrant->getSnapshotJson()['players'] : [];
+        // Squads are loaded only to stand in for a lineup that does not exist yet. A played
+        // fixture needs none: the engine writes each player's appearance into the stored
+        // lineup, so formatLineupForClient() has nothing left to backfill. This is a single
+        // match detail, so one query here is fine — what the split forbids is a bracket
+        // doing it per entrant.
+        $needsProvisionalXi  = $resultEntity === null;
+        $squads              = $needsProvisionalXi
+            ? $this->squadRepository->findByEntrants(array_values(array_filter([$homeEntrant, $awayEntrant])))
+            : [];
+        $homeSnapshotPlayers = $homeEntrant !== null ? (($squads[(string) $homeEntrant->getId()] ?? null)?->getPlayersJson() ?? []) : [];
+        $awaySnapshotPlayers = $awayEntrant !== null ? (($squads[(string) $awayEntrant->getId()] ?? null)?->getPlayersJson() ?? []) : [];
 
         $kickoffAt = ($fixture->getProcessedAt() ?? $round->getMatchesResolveAt() ?? $round->getScheduledAt())->format(DATE_ATOM);
 
@@ -374,10 +385,10 @@ class MatchQueryService
             // two empty arrays. Same shape, ratings and counters empty. Provisional on both
             // sides — see formatSnapshotXiForClient().
             'homeLineup'       => $resultEntity !== null
-                ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getHomeLineupJson(), $homeSnapshotPlayers)
+                ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getHomeLineupJson())
                 : CompetitionRegistrationService::formatSnapshotXiForClient($homeSnapshotPlayers),
             'awayLineup'       => $resultEntity !== null
-                ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getAwayLineupJson(), $awaySnapshotPlayers)
+                ? CompetitionRegistrationService::formatLineupForClient($resultEntity->getAwayLineupJson())
                 : CompetitionRegistrationService::formatSnapshotXiForClient($awaySnapshotPlayers),
             'narrativePayload' => $resultEntity?->getNarrativePayload() ?? [],
         ];
@@ -463,8 +474,8 @@ class MatchQueryService
             ];
         }
 
-        $homeSnapshotClub = is_array($homeEntrant?->getSnapshotJson()['club'] ?? null) ? $homeEntrant->getSnapshotJson()['club'] : [];
-        $awaySnapshotClub = is_array($awayEntrant?->getSnapshotJson()['club'] ?? null) ? $awayEntrant->getSnapshotJson()['club'] : [];
+        $homeSnapshotClub = $homeEntrant?->getClubDisplayJson() ?? [];
+        $awaySnapshotClub = $awayEntrant?->getClubDisplayJson() ?? [];
 
         $homeClub = $resultEntity !== null
             ? $this->normalizeClubIdentityArray(array_merge($homeSnapshotClub, $resultEntity->getHomeClubJson()), $homeEntrant?->getClub())
@@ -535,10 +546,18 @@ class MatchQueryService
         ];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * A cup entrant's club identity, straight off the stored display block.
+     *
+     * No longer goes through serializeClubFromSnapshot(): that exists to dig a `club` object
+     * out of a whole snapshot and recompute OVR from the XI, and the entrant now stores the
+     * resolved block with its OVR already in it.
+     *
+     * @return array<string, mixed>
+     */
     public function serializeClubFromEntrant(CompetitionEntrant $entrant): array
     {
-        return $this->serializeClubFromSnapshot($entrant->getSnapshotJson(), $entrant->getClub(), (string) $entrant->getClub()->getId());
+        return $this->normalizeClubIdentityArray($entrant->getClubDisplayJson(), $entrant->getClub());
     }
 
     /**

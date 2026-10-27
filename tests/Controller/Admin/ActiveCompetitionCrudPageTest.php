@@ -20,6 +20,7 @@ use App\Service\Competition\CompetitionResultsService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use App\Tests\Support\EntrantFixtureTrait;
 
 /**
  * Covers two things for the Active Competitions admin section:
@@ -44,6 +45,8 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class ActiveCompetitionCrudPageTest extends WebTestCase
 {
+    use EntrantFixtureTrait;
+
     private const TEST_ADMIN_EMAIL = 'active-competition-crud-test-admin@example.com';
     private const SLUG             = 'crud-page-probe-active-cup';
 
@@ -149,7 +152,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
             $club    = $this->createClub($em, $name);
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => $name],
                 'players' => [['id' => 'p1', 'position' => 'MID', 'name' => "{$name} Talisman", 'currentAbility' => 10]],
             ]);
@@ -198,7 +201,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
             $club    = $this->createClub($em, $name);
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => $name],
                 'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
             ]);
@@ -480,7 +483,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $em->persist($instance);
 
         $club    = $this->createClub($em, 'Real FC');
-        $entrant = new CompetitionEntrant($instance, $club, 0, [
+        $entrant = $this->makeEntrantFromEnvelope($em, $instance, $club, 0, [
             'club'    => ['id' => (string) $club->getId(), 'name' => 'Real FC', 'country' => 'EN', 'reputation' => 50],
             'players' => [['id' => 'p1', 'position' => 'MID', 'name' => 'Real Player', 'currentAbility' => 65]],
             'staff'   => [['id' => 's1', 'role' => 'MANAGER', 'name' => 'Real Manager']],

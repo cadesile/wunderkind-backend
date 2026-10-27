@@ -17,9 +17,12 @@ use App\Enum\MessageSenderType;
 use App\Service\Competition\RewardApplierService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class RewardApplierServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private RewardApplierService $applier;
 
@@ -57,8 +60,7 @@ class RewardApplierServiceTest extends KernelTestCase
         $this->em->persist($user);
         $this->em->persist($club);
 
-        $entrant = new CompetitionEntrant($instance, $club, 1, ['club' => ['id' => (string) $club->getId(), 'name' => 'Winner FC'], 'players' => []]);
-        $this->em->persist($entrant);
+        $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 1, ['club' => ['id' => (string) $club->getId(), 'name' => 'Winner FC'], 'players' => []]);
         $this->em->flush();
 
         return [$entrant, $instance, $club];

@@ -2,8 +2,6 @@
 
 namespace App\Service\MatchEngine;
 
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
 use App\Enum\Competition\MatchEngineIdentifier;
 use Psr\Log\LoggerInterface;
 
@@ -28,15 +26,15 @@ class AiEngineStub implements MatchEngineInterface
         return in_array($identifier, [MatchEngineIdentifier::AI_ASSISTED, MatchEngineIdentifier::AI_NARRATIVE], true);
     }
 
-    public function resolve(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): MatchEngineResult
+    public function resolve(MatchEngineSide $home, MatchEngineSide $away, MatchEngineContext $context): MatchEngineResult
     {
         $this->logger->warning('AI match engine is not implemented in Phase 1 — falling back to deterministic scoring.', [
-            'fixtureId' => (string) $fixture->getId(),
+            'matchId' => $context->matchId,
         ]);
 
-        $result = $this->deterministicEngine->resolve($home, $away, $fixture);
+        $result = $this->deterministicEngine->resolve($home, $away, $context);
 
-        $requestedEngine  = ($fixture->getRound()->getMatchEngineIdentifier() ?? MatchEngineIdentifier::AI_ASSISTED)->value;
+        $requestedEngine  = ($context->requestedEngine ?? MatchEngineIdentifier::AI_ASSISTED)->value;
         $computationAudit = $result->computationAudit ?? [];
         $computationAudit['engine'] = array_merge($computationAudit['engine'] ?? [], [
             'requestedEngine' => $requestedEngine,

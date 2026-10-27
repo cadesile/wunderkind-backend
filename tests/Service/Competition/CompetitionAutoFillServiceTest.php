@@ -15,9 +15,12 @@ use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Service\Competition\CompetitionAutoFillService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class CompetitionAutoFillServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionAutoFillService $autoFillService;
     private CompetitionEntrantRepository $entrantRepository;
@@ -59,12 +62,11 @@ class CompetitionAutoFillServiceTest extends KernelTestCase
             $players[] = ['id' => "p$i", 'position' => 'MID', 'name' => "Real Player $i", 'currentAbility' => 65];
         }
 
-        $entrant = new CompetitionEntrant($instance, $club, 1, [
+        $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 1, [
             'club'    => ['id' => (string) $club->getId(), 'name' => 'Real FC', 'country' => 'EN', 'reputation' => 50],
             'players' => $players,
             'staff'   => [['id' => 's1', 'role' => 'MANAGER', 'name' => 'Real Manager']],
         ]);
-        $this->em->persist($entrant);
         $this->em->flush();
 
         return $instance;

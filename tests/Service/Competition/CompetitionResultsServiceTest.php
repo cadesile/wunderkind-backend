@@ -24,9 +24,12 @@ use App\Service\Competition\CompetitionResultsService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Envelope;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class CompetitionResultsServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionDrawService $drawService;
     private CompetitionResultsService $resultsService;
@@ -77,11 +80,10 @@ class CompetitionResultsServiceTest extends KernelTestCase
 
         for ($i = 1; $i <= $capacity; $i++) {
             $club    = $this->createClub("Club {$i}");
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => "Club {$i}"],
                 'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
             ]);
-            $this->em->persist($entrant);
         }
         $this->em->flush();
 
@@ -282,8 +284,7 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->em->persist($instance);
         for ($i = 1; $i <= 4; $i++) {
             $club    = $this->createClub("Club {$i}");
-            $entrant = new CompetitionEntrant($instance, $club, 0, ['club' => ['id' => (string) $club->getId(), 'name' => "Club {$i}"], 'players' => []]);
-            $this->em->persist($entrant);
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, ['club' => ['id' => (string) $club->getId(), 'name' => "Club {$i}"], 'players' => []]);
         }
         $this->em->flush();
         self::getContainer()->get(CompetitionLockService::class)->lock($instance);

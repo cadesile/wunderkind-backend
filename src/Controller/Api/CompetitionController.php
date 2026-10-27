@@ -233,7 +233,7 @@ class CompetitionController extends AbstractController
             $result = $this->registrationService->register(
                 $activeCompetition,
                 $club,
-                $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->facilities, $dto->clientSnapshotAt),
+                $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->clientSnapshotAt),
             );
         } catch (\DomainException $e) {
             return match ($e->getMessage()) {
@@ -349,7 +349,7 @@ class CompetitionController extends AbstractController
         }
 
         if ($dto->clientSnapshotAt !== null) {
-            $existingAt = $entrant->getSnapshotJson()['clientSnapshotAt'] ?? null;
+            $existingAt = $entrant->getClientSnapshotAt();
             if (is_string($existingAt)) {
                 try {
                     $incomingTime = new \DateTimeImmutable($dto->clientSnapshotAt);
@@ -368,7 +368,7 @@ class CompetitionController extends AbstractController
             return $this->json(['error' => 'invalid_snapshot', 'violations' => $violations], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $this->registrationService->resubmit($entrant, $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->facilities, $dto->clientSnapshotAt));
+        $this->registrationService->resubmit($entrant, $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->clientSnapshotAt));
 
         $currentRound = $this->roundRepository->findCurrentRound($activeCompetition);
         $locksAt      = $currentRound !== null && $currentRound->getStatus() === CompetitionRoundStatus::DRAW_PENDING
@@ -401,6 +401,13 @@ class CompetitionController extends AbstractController
         if ($ifNone !== null && trim($ifNone) === $etag) {
             return new JsonResponse(null, Response::HTTP_NOT_MODIFIED, ['ETag' => $etag]);
         }
+
+        // Load every entrant once, up front. The rounds loop below reaches through each
+        // fixture's home/away association, and those are lazy proxies — so without this the
+        // bracket resolved them one SELECT at a time, up to 64 round trips before the
+        // entrant listing at the end of this method asked for the same rows again. Doctrine's
+        // identity map means that listing is now served from memory.
+        $entrants = $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition);
 
         $roundEntities     = $this->roundRepository->findByCompetitionOrderedByIndex($activeCompetition);
         $roundsByIndex     = [];
@@ -512,10 +519,7 @@ class CompetitionController extends AbstractController
 
         $summary = $this->serializeInstanceSummary($activeCompetition, $club);
         $payload = array_merge($summary, [
-            'entrants'   => array_map(
-                $this->serializeEntrantPreview(...),
-                $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition),
-            ),
+            'entrants'   => array_map($this->serializeEntrantPreview(...), $entrants),
             'rounds'     => $rounds,
             'serverTime' => (new \DateTimeImmutable())->format(DATE_ATOM),
         ]);
@@ -680,7 +684,7 @@ class CompetitionController extends AbstractController
                 $locksAt = $currentRound->getScheduledAt()->format(DATE_ATOM);
             }
 
-            $acceptedAt = $entrant->getSnapshotJson()['clientSnapshotAt'] ?? $entrant->getRegisteredAt()->format(DATE_ATOM);
+            $acceptedAt = $entrant->getClientSnapshotAt() ?? $entrant->getRegisteredAt()->format(DATE_ATOM);
             $snapshot   = [
                 'version'    => $entrant->getSnapshotVersion(),
                 'acceptedAt' => is_string($acceptedAt) ? $acceptedAt : $entrant->getRegisteredAt()->format(DATE_ATOM),
@@ -697,6 +701,18 @@ class CompetitionController extends AbstractController
         ];
     }
 
+    /**
+     * A single integer standing for "everything in this competition that the response
+     * depends on". Used for the ETag and as the freshness key for the prebuilt response
+     * document.
+     *
+     * The snapshot-version sum is load-bearing, not decoration. Without it a resubmission
+     * moved nothing: the entrant count and every round status stay put while a squad is
+     * swapped, so the version — and therefore a cached document keyed on it — would not
+     * change even though the response had. The ETag papered over that for the viewing club
+     * only, by separately folding in that club's own snapshot version, which is why another
+     * club's resubmission already failed to invalidate your ETag.
+     */
     private function computeInstanceVersion(ActiveCompetition $instance, int $registeredCount): int
     {
         $rounds     = $this->roundRepository->findByCompetitionOrderedByIndex($instance);
@@ -710,7 +726,7 @@ class CompetitionController extends AbstractController
             };
         }
 
-        return 1 + $registeredCount + $roundState;
+        return 1 + $registeredCount + $roundState + $this->entrantRepository->sumSnapshotVersions($instance);
     }
 
     private function computeEtag(ActiveCompetition $instance, ?Club $club): string
@@ -782,11 +798,11 @@ class CompetitionController extends AbstractController
             return null;
         }
 
-        $normalized = CompetitionRegistrationService::normalizeSnapshotClub(
-            $entrant->getSnapshotJson(),
-            $entrant->getClub(),
-            (string) $entrant->getClub()->getId(),
-        );
+        // Straight off the stored display block. This used to re-run the full club
+        // normaliser over the entrant's whole snapshot, once per entrant AND twice more per
+        // fixture, which is how a 64-club bracket came to decode every squad in it several
+        // times over in a single request.
+        $normalized = $entrant->getClubDisplayJson();
 
         $summary = [
             'entrantId'      => (string) $entrant->getId(),
@@ -838,13 +854,16 @@ class CompetitionController extends AbstractController
         return $result?->toClientSummary();
     }
 
-    private function buildSnapshotArray(array $club, array $players, array $staff, array $facilities, ?string $clientSnapshotAt): array
+    /**
+     * The envelope handed to the registration service, which splits it across the entrant's
+     * display block and its squad row. No `facilities`: nothing ever read it back.
+     */
+    private function buildSnapshotArray(array $club, array $players, array $staff, ?string $clientSnapshotAt): array
     {
         return [
             'club'             => $club,
             'players'          => $players,
             'staff'            => $staff,
-            'facilities'       => $facilities,
             'clientSnapshotAt' => $clientSnapshotAt,
         ];
     }
