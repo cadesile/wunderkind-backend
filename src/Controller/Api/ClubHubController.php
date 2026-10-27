@@ -15,6 +15,7 @@ use App\Repository\Competition\CompetitionTemplateRepository;
 use App\Repository\Friendly\FriendlyChallengeRepository;
 use App\Repository\InboxMessageRepository;
 use App\Service\ClubResolver;
+use App\Service\Competition\CompetitionResponseBuilder;
 use App\Service\Competition\MatchQueryService;
 use App\Service\Friendly\FriendlyChallengeService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,7 +30,7 @@ class ClubHubController extends AbstractController
 {
     public function __construct(
         private readonly ClubResolver $clubResolver,
-        private readonly CompetitionController $competitionController,
+        private readonly CompetitionResponseBuilder $competitionResponseBuilder,
         private readonly InboxController $inboxController,
         private readonly CompetitionTemplateRepository $templateRepository,
         private readonly ActiveCompetitionRepository $activeCompetitionRepository,
@@ -85,7 +86,7 @@ class ClubHubController extends AbstractController
         $nextCursor = $hasMore ? (string) ($offset + $limit) : null;
 
         return $this->json([
-            'competitions' => array_map(fn (ActiveCompetition $a) => $this->competitionController->serializeInstanceSummary($a, $club), $pageRows),
+            'competitions' => array_map(fn (ActiveCompetition $a) => $this->competitionResponseBuilder->serializeInstanceSummary($a, $club), $pageRows),
             'nextCursor'   => $nextCursor,
             'serverTime'   => (new \DateTimeImmutable())->format(DATE_ATOM),
         ]);
@@ -130,12 +131,12 @@ class ClubHubController extends AbstractController
         foreach ($this->templateRepository->findAllActive() as $template) {
             $openInstance = $this->activeCompetitionRepository->findOpenForTemplate($template);
             if ($openInstance !== null) {
-                $openCompetitions[] = $this->competitionController->serializeInstanceSummary($openInstance, $club);
+                $openCompetitions[] = $this->competitionResponseBuilder->serializeInstanceSummary($openInstance, $club);
             }
 
             $latestCompleted = $this->activeCompetitionRepository->findLatestCompletedForTemplate($template);
             if ($latestCompleted !== null) {
-                $summary     = $this->competitionController->serializeInstanceSummary($latestCompleted, null);
+                $summary     = $this->competitionResponseBuilder->serializeInstanceSummary($latestCompleted, null);
                 $champions[] = [
                     'templateId'      => (string) $template->getId(),
                     'templateName'    => $template->getName(),

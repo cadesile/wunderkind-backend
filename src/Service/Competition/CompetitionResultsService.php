@@ -26,6 +26,7 @@ use App\Service\MatchEngine\MatchEngineRegistry;
 use App\Service\MatchEngine\MatchEngineResult;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * Owns the entire resolution + finalization phase (DRAWN -> RESULTS_PUBLISHED), and, for
@@ -53,7 +54,10 @@ class CompetitionResultsService
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly CompetitionResponseBuilder $responseBuilder,
+        private readonly CompetitionResponseCacheService $responseCache,
         private readonly ?InboxService $inboxService = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     /** @return int Number of rounds this call actually published results for. */
@@ -63,6 +67,7 @@ class CompetitionResultsService
         foreach ($this->roundRepository->findDueForResults($now) as $round) {
             if ($this->claimResults($round, $now)) {
                 $this->publishResults($round, $now);
+                $this->prewarmResponse($round->getActiveCompetition());
                 $published++;
             }
         }
@@ -123,6 +128,8 @@ class CompetitionResultsService
         if ($roundFullyResolved) {
             $this->finalizeRound($round, $now, $winners);
         }
+
+        $this->prewarmResponse($round->getActiveCompetition());
 
         return $this->resultRepository->findOneBy(['fixture' => $fixture])
             ?? throw new \RuntimeException('Fixture was resolved but no result was recorded — this should never happen.');
@@ -231,6 +238,19 @@ class CompetitionResultsService
         }
 
         $this->em->flush();
+
+        // Prune the engine inputs only once COMPLETED is actually committed.
+        //
+        // These rows are the match engine's only source for each entrant's XI, staff and
+        // club tuning keys, so dropping them is safe exactly when no further fixture can
+        // resolve — and not one statement earlier. deleteForCompetition() is raw SQL and
+        // commits on its own, so running it before the flush above would, on a failed
+        // flush, leave a competition that is not COMPLETED with no way to resolve its
+        // remaining fixtures. Ordering it after is the difference between a pruned finished
+        // bracket and a permanently stuck live one.
+        if ($activeCompetition->getStatus() === ActiveCompetitionStatus::COMPLETED) {
+            $this->squadRepository->deleteForCompetition((string) $activeCompetition->getId());
+        }
     }
 
     /**
@@ -541,5 +561,33 @@ class CompetitionResultsService
         ]);
 
         return $audit;
+    }
+
+    /**
+     * Rebuilds this competition's prebuilt bracket response.
+     *
+     * Called after a pass that changed the bracket, so the next reader finds the document
+     * ready instead of paying to assemble it. Strictly an optimisation: the cache validates
+     * itself against the competition's state version, so skipping this costs one rebuild on
+     * the next read and can never serve a stale bracket.
+     *
+     * Failures are swallowed deliberately. A tick that published a result has already
+     * committed real game state; letting a cache rebuild turn that into a failed tick would
+     * be strictly worse than serving the next request from a cold cache.
+     */
+    private function prewarmResponse(ActiveCompetition $activeCompetition): void
+    {
+        try {
+            $this->responseCache->rebuild(
+                $activeCompetition,
+                $this->responseBuilder->stateVersion($activeCompetition),
+                fn (): array => $this->responseBuilder->sharedDocument($activeCompetition),
+            );
+        } catch (\Throwable $e) {
+            $this->logger?->warning('Failed to prewarm the competition response cache.', [
+                'competitionId' => (string) $activeCompetition->getId(),
+                'exception'     => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -35,7 +35,10 @@ class CompetitionDrawService
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly CompetitionResponseBuilder $responseBuilder,
+        private readonly CompetitionResponseCacheService $responseCache,
         private readonly ?InboxService $inboxService = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     /** @return int Number of rounds this call actually drew (0 if none were due, or all were claimed by an overlapping tick). */
@@ -45,6 +48,7 @@ class CompetitionDrawService
         foreach ($this->roundRepository->findDueForDraw($now) as $round) {
             if ($this->claimDraw($round, $now)) {
                 $this->drawRound($round, $now);
+                $this->prewarmResponse($round->getActiveCompetition());
                 $drawn++;
             }
         }
@@ -73,6 +77,7 @@ class CompetitionDrawService
         }
 
         $this->drawRound($round, $now);
+        $this->prewarmResponse($round->getActiveCompetition());
     }
 
     /**
@@ -252,5 +257,33 @@ class CompetitionDrawService
         }
 
         return array_values(array_unique($userIds));
+    }
+
+    /**
+     * Rebuilds this competition's prebuilt bracket response.
+     *
+     * Called after a pass that changed the bracket, so the next reader finds the document
+     * ready instead of paying to assemble it. Strictly an optimisation: the cache validates
+     * itself against the competition's state version, so skipping this costs one rebuild on
+     * the next read and can never serve a stale bracket.
+     *
+     * Failures are swallowed deliberately. A cron tick that drew a round or published a
+     * result has already committed real game state; letting a cache rebuild turn that into a
+     * failed tick would be strictly worse than serving the next request from a cold cache.
+     */
+    private function prewarmResponse(ActiveCompetition $activeCompetition): void
+    {
+        try {
+            $this->responseCache->rebuild(
+                $activeCompetition,
+                $this->responseBuilder->stateVersion($activeCompetition),
+                fn (): array => $this->responseBuilder->sharedDocument($activeCompetition),
+            );
+        } catch (\Throwable $e) {
+            $this->logger?->warning('Failed to prewarm the competition response cache.', [
+                'competitionId' => (string) $activeCompetition->getId(),
+                'exception'     => $e->getMessage(),
+            ]);
+        }
     }
 }
