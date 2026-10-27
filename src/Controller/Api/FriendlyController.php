@@ -131,7 +131,6 @@ class FriendlyController extends AbstractController
         $clubArr       = is_array($snapshot['club'] ?? null) ? $snapshot['club'] : [];
         $playersArr    = is_array($snapshot['players'] ?? null) ? $snapshot['players'] : [];
         $staffArr      = is_array($snapshot['staff'] ?? null) ? $snapshot['staff'] : [];
-        $facilitiesArr = is_array($snapshot['facilities'] ?? null) ? $snapshot['facilities'] : [];
 
         $violations = $this->snapshotValidator->validate($clubArr, $playersArr, $staffArr, (string) $club->getId());
         if ($violations !== []) {
@@ -142,7 +141,6 @@ class FriendlyController extends AbstractController
             'club'             => $clubArr,
             'players'          => $playersArr,
             'staff'            => $staffArr,
-            'facilities'       => $facilitiesArr,
             'clientSnapshotAt' => is_string($snapshot['clientSnapshotAt'] ?? null) ? $snapshot['clientSnapshotAt'] : null,
         ];
 
@@ -241,7 +239,6 @@ class FriendlyController extends AbstractController
         $clubArr       = is_array($snapshot['club'] ?? null) ? $snapshot['club'] : [];
         $playersArr    = is_array($snapshot['players'] ?? null) ? $snapshot['players'] : [];
         $staffArr      = is_array($snapshot['staff'] ?? null) ? $snapshot['staff'] : [];
-        $facilitiesArr = is_array($snapshot['facilities'] ?? null) ? $snapshot['facilities'] : [];
 
         $violations = $this->snapshotValidator->validate($clubArr, $playersArr, $staffArr, (string) $club->getId());
         if ($violations !== []) {
@@ -252,7 +249,6 @@ class FriendlyController extends AbstractController
             'club'             => $clubArr,
             'players'          => $playersArr,
             'staff'            => $staffArr,
-            'facilities'       => $facilitiesArr,
             'clientSnapshotAt' => is_string($snapshot['clientSnapshotAt'] ?? null) ? $snapshot['clientSnapshotAt'] : null,
         ];
 

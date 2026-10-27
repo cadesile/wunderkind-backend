@@ -21,6 +21,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\DateTimeFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
+use App\Enum\Friendly\FriendlySide;
+use App\Repository\Friendly\FriendlyChallengeSquadRepository;
 
 /**
  * Read-only view of the friendly challenge board — one row per challenge posted by a club,
@@ -42,6 +44,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
  */
 class FriendlyChallengeCrudController extends AbstractCrudController
 {
+    public function __construct(
+        private readonly FriendlyChallengeSquadRepository $squadRepository,
+    ) {}
+
     public static function getEntityFqcn(): string
     {
         return FriendlyChallenge::class;
@@ -141,8 +147,22 @@ class FriendlyChallengeCrudController extends AbstractCrudController
         yield TextField::new('challengerUserId', 'Challenger user UUID')->onlyOnDetail();
         yield TextField::new('acceptorUserId', 'Acceptor user UUID')->onlyOnDetail();
 
-        yield $this->jsonField('challengerSnapshotPretty', 'Challenger squad snapshot', static fn (FriendlyChallenge $c): ?array => $c->getChallengerSnapshotJson());
-        yield $this->jsonField('acceptorSnapshotPretty', 'Acceptor squad snapshot', static fn (FriendlyChallenge $c): ?array => $c->getAcceptorSnapshotJson());
+        yield $this->jsonField('challengerDisplayPretty', 'Challenger club (display block)', static fn (FriendlyChallenge $c): ?array => $c->getChallengerClubDisplayJson());
+        yield $this->jsonField('acceptorDisplayPretty', 'Acceptor club (display block)', static fn (FriendlyChallenge $c): ?array => $c->getAcceptorClubDisplayJson());
+
+        // The submitted XIs, from friendly_challenge_squad. Detail-only, like every field
+        // built by jsonField(): these two are the only ones here that load extra rows, and
+        // the public challenge board must never touch them.
+        yield $this->jsonField(
+            'challengerSquadPretty',
+            'Challenger squad (XI + staff)',
+            fn (FriendlyChallenge $c): ?array => $this->squadPayload($c, FriendlySide::CHALLENGER),
+        );
+        yield $this->jsonField(
+            'acceptorSquadPretty',
+            'Acceptor squad (XI + staff)',
+            fn (FriendlyChallenge $c): ?array => $this->squadPayload($c, FriendlySide::ACCEPTOR),
+        );
         yield $this->jsonField('homeClubPretty', 'Home club (result)', static fn (FriendlyChallenge $c): ?array => $c->getHomeClubJson());
         yield $this->jsonField('awayClubPretty', 'Away club (result)', static fn (FriendlyChallenge $c): ?array => $c->getAwayClubJson());
         yield $this->jsonField('homeLineupPretty', 'Home lineup', static fn (FriendlyChallenge $c): ?array => $c->getHomeLineupJson());
@@ -201,5 +221,26 @@ class FriendlyChallengeCrudController extends AbstractCrudController
         }
 
         return $choices;
+    }
+
+    /**
+     * One side's stored engine inputs, shaped like the envelope it arrived as so the admin
+     * view reads the way a submitted snapshot did before the split.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function squadPayload(FriendlyChallenge $challenge, FriendlySide $side): ?array
+    {
+        $squad = $this->squadRepository->findForSide($challenge, $side);
+
+        if ($squad === null) {
+            return null;
+        }
+
+        return [
+            'club'    => $squad->getClubEngineJson(),
+            'players' => $squad->getPlayersJson(),
+            'staff'   => $squad->getStaffJson(),
+        ];
     }
 }

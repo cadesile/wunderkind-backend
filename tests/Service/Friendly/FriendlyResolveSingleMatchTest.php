@@ -15,6 +15,9 @@ use App\Service\MatchEngine\DeterministicEngine;
 use App\Service\MatchEngine\MatchEngineContext;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use App\Enum\Friendly\FriendlySide;
+use App\Repository\Friendly\FriendlyChallengeSquadRepository;
+use App\Tests\Support\FriendlyFixtureTrait;
 
 /**
  * Covers FriendlyChallengeService::resolveSingleMatch(), which had no test at all.
@@ -30,6 +33,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 class FriendlyResolveSingleMatchTest extends KernelTestCase
 {
+    use FriendlyFixtureTrait;
+
     private EntityManagerInterface $em;
     private FriendlyChallengeService $service;
 
@@ -78,23 +83,10 @@ class FriendlyResolveSingleMatchTest extends KernelTestCase
         $challenger = $this->club('Challenger ' . uniqid('', true));
         $acceptor   = $this->club('Acceptor ' . uniqid('', true));
 
-        $challenge = new FriendlyChallenge(
-            $challenger,
-            'home',
-            0,
-            72,
-            480,
-            'semi_pro',
-            $this->snapshot('Challenger FC', $challengerAbility),
-            new \DateTimeImmutable('+2 days'),
-        );
-        $challenge->setAcceptorClub($acceptor)
-            ->setAcceptorSnapshotJson($this->snapshot('Acceptor FC', $acceptorAbility))
-            ->setAcceptedAt(new \DateTimeImmutable('-1 hour'))
-            ->setKickoffAt(new \DateTimeImmutable('-30 minutes'))
-            ->setStatus(FriendlyChallengeStatus::ACCEPTED);
+        $challenge = $this->makeOpenChallenge($this->em, $challenger, $this->snapshot('Challenger FC', $challengerAbility));
+        $this->acceptChallengeFixture($this->em, $challenge, $acceptor, $this->snapshot('Acceptor FC', $acceptorAbility));
+        $challenge->setStatus(FriendlyChallengeStatus::ACCEPTED);
 
-        $this->em->persist($challenge);
         $this->em->flush();
 
         return $challenge;
@@ -128,8 +120,12 @@ class FriendlyResolveSingleMatchTest extends KernelTestCase
     public function testTheScorelineIsSeededFromTheChallengeId(): void
     {
         $challenge = $this->seedAcceptedChallenge();
-        $home      = $challenge->getChallengerSnapshotJson();
-        $away      = $challenge->getAcceptorSnapshotJson() ?? [];
+        $squads    = self::getContainer()->get(FriendlyChallengeSquadRepository::class)->findBothSides($challenge);
+
+        $homeDisplay = $challenge->getChallengerClubDisplayJson();
+        $awayDisplay = $challenge->getAcceptorClubDisplayJson() ?? [];
+        $homeSquad   = $squads[FriendlySide::CHALLENGER->value];
+        $awaySquad   = $squads[FriendlySide::ACCEPTOR->value];
 
         $this->service->resolveSingleMatch($challenge);
         $this->em->flush();
@@ -139,20 +135,20 @@ class FriendlyResolveSingleMatchTest extends KernelTestCase
                 sideId: (string) $challenge->getId() . ':home',
                 clubId: (string) $challenge->getChallengerClub()->getId(),
                 clubName: $challenge->getChallengerClub()->getName(),
-                clubDisplay: $home['club'],
-                players: $home['players'],
-                staff: $home['staff'],
-                engineInputs: CompetitionRegistrationService::clubEngineBlock($home['club']),
+                clubDisplay: $homeDisplay,
+                players: $homeSquad->getPlayersJson(),
+                staff: $homeSquad->getStaffJson(),
+                engineInputs: $homeSquad->getClubEngineJson(),
                 seed: 1,
             ),
             MatchEngineSideFactory::fromFriendlySide(
                 sideId: (string) $challenge->getId() . ':away',
                 clubId: (string) $challenge->getAcceptorClub()->getId(),
                 clubName: $challenge->getAcceptorClub()->getName(),
-                clubDisplay: $away['club'],
-                players: $away['players'],
-                staff: $away['staff'],
-                engineInputs: CompetitionRegistrationService::clubEngineBlock($away['club']),
+                clubDisplay: $awayDisplay,
+                players: $awaySquad->getPlayersJson(),
+                staff: $awaySquad->getStaffJson(),
+                engineInputs: $awaySquad->getClubEngineJson(),
                 seed: 2,
             ),
             MatchEngineContext::forFriendly((string) $challenge->getId()),
@@ -185,5 +181,30 @@ class FriendlyResolveSingleMatchTest extends KernelTestCase
         }
 
         self::assertTrue($sawDraw, 'a friendly must be allowed to end level');
+    }
+
+    /**
+     * The public challenge board must render with no squad rows present at all.
+     *
+     * This is the invariant the split exists to protect. GET /api/friendlies/challenges is
+     * public and lists every open challenge, and it used to decode two whole squads per row
+     * to show a club name, kit and badge. Deleting the squads and asserting the board still
+     * renders is the only way to prove no serializer quietly reaches for them again — a
+     * passing board test with the rows present would prove nothing.
+     */
+    public function testTheChallengeBoardRendersWithoutAnySquadRows(): void
+    {
+        $challenge = $this->seedAcceptedChallenge();
+
+        self::getContainer()->get(FriendlyChallengeSquadRepository::class)->deleteForChallenge($challenge);
+        $this->em->clear();
+
+        $challenge = $this->em->getRepository(FriendlyChallenge::class)->find($challenge->getId());
+        self::assertNotNull($challenge);
+
+        $item = $this->service->serializeChallengeItem($challenge);
+
+        self::assertNotEmpty($item['challenger']['clubName']);
+        self::assertNotEmpty($item['acceptor']['clubName'], 'an accepted challenge must still name its acceptor');
     }
 }

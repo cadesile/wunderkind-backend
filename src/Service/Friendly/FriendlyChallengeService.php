@@ -18,6 +18,9 @@ use App\Service\MatchEngine\DeterministicEngine;
 use App\Service\MatchEngine\MatchEngineContext;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Entity\Friendly\FriendlyChallengeSquad;
+use App\Enum\Friendly\FriendlySide;
+use App\Repository\Friendly\FriendlyChallengeSquadRepository;
 
 class FriendlyChallengeService
 {
@@ -42,6 +45,7 @@ class FriendlyChallengeService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly FriendlyChallengeRepository $repository,
+        private readonly FriendlyChallengeSquadRepository $squadRepository,
         private readonly MatchQueryService $matchQueryService,
         private readonly DeterministicEngine $deterministicEngine,
         private readonly InboxService $inboxService,
@@ -59,13 +63,17 @@ class FriendlyChallengeService
             $snapshotJson['club'] = [];
         }
 
-        $ovr                  = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
-        $reputation           = $club->getReputation();
-        $reputationTier       = Tier::fromScore($reputation)->value;
-        $snapshotJson['club'] = CompetitionRegistrationService::normalizeSnapshotClub($snapshotJson, $club, (string) $club->getId());
-        $snapshotJson['club']['reputation']     = $reputation;
-        $snapshotJson['club']['reputationTier'] = $reputationTier;
-        $snapshotJson['club']['ovr']            = $ovr;
+        $ovr            = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
+        $reputation     = $club->getReputation();
+        $reputationTier = Tier::fromScore($reputation)->value;
+
+        // Reputation is taken from the live Club rather than from whatever the client sent,
+        // which is why these three are reasserted after the normaliser runs.
+        $parts            = $this->splitSnapshot($snapshotJson, $club, $ovr);
+        $display          = $parts['display'];
+        $display['reputation']     = $reputation;
+        $display['reputationTier'] = $reputationTier;
+        $display['ovr']            = $ovr;
 
         $now        = new \DateTimeImmutable();
         $expiresAt  = $now->modify(sprintf('+%d hours', $expiresInHours));
@@ -104,11 +112,22 @@ class FriendlyChallengeService
                 challengerOvr: $ovr,
                 challengerReputation: $reputation,
                 challengerReputationTier: $reputationTier,
-                challengerSnapshotJson: $snapshotJson,
+                challengerClubDisplayJson: $display,
                 expiresAt: $expiresAt,
             );
 
             $this->em->persist($challenge);
+
+            // Persisted in the same flush as the challenge. Doctrine orders the inserts by
+            // the association, so the squad row cannot land before the row it points at.
+            $this->em->persist(new FriendlyChallengeSquad(
+                $challenge,
+                FriendlySide::CHALLENGER,
+                $parts['players'],
+                $parts['staff'],
+                $parts['engine'],
+            ));
+
             $this->em->flush();
             $connection->commit();
 
@@ -188,12 +207,14 @@ class FriendlyChallengeService
         }
 
         $ovr                  = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
+        $acceptorParts        = null;
         $reputation           = $acceptorClub->getReputation();
         $reputationTier       = Tier::fromScore($reputation)->value;
-        $snapshotJson['club'] = CompetitionRegistrationService::normalizeSnapshotClub($snapshotJson, $acceptorClub, (string) $acceptorClub->getId());
-        $snapshotJson['club']['reputation']     = $reputation;
-        $snapshotJson['club']['reputationTier'] = $reputationTier;
-        $snapshotJson['club']['ovr']            = $ovr;
+        $acceptorParts                       = $this->splitSnapshot($snapshotJson, $acceptorClub, $ovr);
+        $acceptorDisplay                     = $acceptorParts['display'];
+        $acceptorDisplay['reputation']       = $reputation;
+        $acceptorDisplay['reputationTier']   = $reputationTier;
+        $acceptorDisplay['ovr']              = $ovr;
 
         $now        = new \DateTimeImmutable();
         $kickoffAt  = $now->modify(sprintf('+%d seconds', self::KICKOFF_DELAY_SECONDS));
@@ -232,7 +253,14 @@ class FriendlyChallengeService
 
             $this->em->refresh($challenge);
             $challenge->setAcceptorClub($acceptorClub);
-            $challenge->setAcceptorSnapshotJson($snapshotJson);
+            $challenge->setAcceptorClubDisplayJson($acceptorDisplay);
+            $this->squadRepository->upsertSide(
+                $challenge,
+                FriendlySide::ACCEPTOR,
+                $acceptorParts['players'],
+                $acceptorParts['staff'],
+                $acceptorParts['engine'],
+            );
             $challenge->setStatus(FriendlyChallengeStatus::ACCEPTED);
             $challenge->setAcceptedAt($now);
             $challenge->setKickoffAt($kickoffAt);
@@ -299,15 +327,25 @@ class FriendlyChallengeService
     {
         $challengerClub = $challenge->getChallengerClub();
         $acceptorClub   = $challenge->getAcceptorClub();
-        if ($challengerClub === null || $acceptorClub === null || $challenge->getAcceptorSnapshotJson() === null) {
+        if ($challengerClub === null || $acceptorClub === null || $challenge->getAcceptorClubDisplayJson() === null) {
             return;
         }
 
         $homeIsChallenger = $challenge->getVenue() === 'home';
         $homeClub         = $homeIsChallenger ? $challengerClub : $acceptorClub;
         $awayClub         = $homeIsChallenger ? $acceptorClub : $challengerClub;
-        $homeSnapshot     = $homeIsChallenger ? $challenge->getChallengerSnapshotJson() : $challenge->getAcceptorSnapshotJson();
-        $awaySnapshot     = $homeIsChallenger ? $challenge->getAcceptorSnapshotJson() : $challenge->getChallengerSnapshotJson();
+
+        // Venue decides which participant is home, so it cannot key stored rows — those are
+        // keyed challenger/acceptor, which is fixed for the life of a challenge. Both sides
+        // come back in one query; this is the only place in the friendly domain that reads
+        // them.
+        $squads           = $this->squadRepository->findBothSides($challenge);
+        $challengerSquad  = $squads[FriendlySide::CHALLENGER->value] ?? null;
+        $acceptorSquad    = $squads[FriendlySide::ACCEPTOR->value] ?? null;
+        $homeSquad        = $homeIsChallenger ? $challengerSquad : $acceptorSquad;
+        $awaySquad        = $homeIsChallenger ? $acceptorSquad : $challengerSquad;
+        $homeDisplay      = $homeIsChallenger ? $challenge->getChallengerClubDisplayJson() : $challenge->getAcceptorClubDisplayJson();
+        $awayDisplay      = $homeIsChallenger ? $challenge->getAcceptorClubDisplayJson() : $challenge->getChallengerClubDisplayJson();
 
         // A friendly now reaches the engine as what the engine actually wants: two sides and
         // a context. This used to fabricate a CompetitionTemplate, ActiveCompetition,
@@ -320,20 +358,20 @@ class FriendlyChallengeService
             sideId: (string) $challenge->getId() . ':home',
             clubId: (string) $homeClub->getId(),
             clubName: $homeClub->getName(),
-            clubDisplay: is_array($homeSnapshot['club'] ?? null) ? $homeSnapshot['club'] : [],
-            players: array_values(array_filter(is_array($homeSnapshot['players'] ?? null) ? $homeSnapshot['players'] : [], 'is_array')),
-            staff: array_values(array_filter(is_array($homeSnapshot['staff'] ?? null) ? $homeSnapshot['staff'] : [], 'is_array')),
-            engineInputs: CompetitionRegistrationService::clubEngineBlock(is_array($homeSnapshot['club'] ?? null) ? $homeSnapshot['club'] : []),
+            clubDisplay: $homeDisplay ?? [],
+            players: $homeSquad?->getPlayersJson() ?? [],
+            staff: $homeSquad?->getStaffJson() ?? [],
+            engineInputs: $homeSquad?->getClubEngineJson() ?? [],
             seed: 1,
         );
         $awaySide = MatchEngineSideFactory::fromFriendlySide(
             sideId: (string) $challenge->getId() . ':away',
             clubId: (string) $awayClub->getId(),
             clubName: $awayClub->getName(),
-            clubDisplay: is_array($awaySnapshot['club'] ?? null) ? $awaySnapshot['club'] : [],
-            players: array_values(array_filter(is_array($awaySnapshot['players'] ?? null) ? $awaySnapshot['players'] : [], 'is_array')),
-            staff: array_values(array_filter(is_array($awaySnapshot['staff'] ?? null) ? $awaySnapshot['staff'] : [], 'is_array')),
-            engineInputs: CompetitionRegistrationService::clubEngineBlock(is_array($awaySnapshot['club'] ?? null) ? $awaySnapshot['club'] : []),
+            clubDisplay: $awayDisplay ?? [],
+            players: $awaySquad?->getPlayersJson() ?? [],
+            staff: $awaySquad?->getStaffJson() ?? [],
+            engineInputs: $awaySquad?->getClubEngineJson() ?? [],
             seed: 2,
         );
 
@@ -343,8 +381,8 @@ class FriendlyChallengeService
             MatchEngineContext::forFriendly((string) $challenge->getId()),
         );
 
-        $homeClubIdentity = $this->matchQueryService->serializeClubFromSnapshot($homeSnapshot, $homeClub, (string) $homeClub->getId());
-        $awayClubIdentity = $this->matchQueryService->serializeClubFromSnapshot($awaySnapshot, $awayClub, (string) $awayClub->getId());
+        $homeClubIdentity = $this->matchQueryService->normalizeClubIdentityArray($homeDisplay ?? [], $homeClub);
+        $awayClubIdentity = $this->matchQueryService->normalizeClubIdentityArray($awayDisplay ?? [], $awayClub);
 
         $challenge->recordResult(
             homeScore: $engineResult->homeScore,
@@ -539,10 +577,9 @@ class FriendlyChallengeService
     /** @return array<string, mixed> */
     public function serializeChallengeItem(FriendlyChallenge $challenge, ?Club $viewerClub = null): array
     {
-        $challengerIdentity = $this->matchQueryService->serializeClubFromSnapshot(
-            $challenge->getChallengerSnapshotJson(),
+        $challengerIdentity = $this->matchQueryService->normalizeClubIdentityArray(
+            $challenge->getChallengerClubDisplayJson(),
             $challenge->getChallengerClub(),
-            $challenge->getChallengerClubId(),
         );
 
         $venue       = $challenge->getVenue();
@@ -574,11 +611,11 @@ class FriendlyChallengeService
         if ($challenge->getStatus() === FriendlyChallengeStatus::ACCEPTED || $challenge->getStatus() === FriendlyChallengeStatus::COMPLETE) {
             $item['matchId']   = (string) $challenge->getId();
             $item['kickoffAt'] = $challenge->getKickoffAt()?->format(DATE_ATOM);
-            if ($challenge->getAcceptorSnapshotJson() !== null) {
-                $item['acceptor'] = $this->matchQueryService->serializeClubFromSnapshot(
-                    $challenge->getAcceptorSnapshotJson(),
+            $acceptorDisplayBlock = $challenge->getAcceptorClubDisplayJson();
+            if ($acceptorDisplayBlock !== null) {
+                $item['acceptor'] = $this->matchQueryService->normalizeClubIdentityArray(
+                    $acceptorDisplayBlock,
                     $challenge->getAcceptorClub(),
-                    (string) $challenge->getAcceptorClubId(),
                 );
             }
         }
@@ -610,5 +647,28 @@ class FriendlyChallengeService
         $this->em->refresh($challenge);
 
         return true;
+    }
+
+    /**
+     * Splits a submitted friendly envelope into the two rows it is stored across.
+     *
+     * The competition side has its own copy of this because its write path is raw SQL inside
+     * a locking transaction; this one goes through the ORM. What they share — which keys are
+     * display and which are engine-only — lives in CompetitionRegistrationService, so the two
+     * cannot disagree about that.
+     *
+     * @param array<string, mixed> $snapshotJson
+     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>}
+     */
+    private function splitSnapshot(array $snapshotJson, Club $club, int $ovr): array
+    {
+        $clubData = is_array($snapshotJson['club'] ?? null) ? $snapshotJson['club'] : [];
+
+        return [
+            'display' => CompetitionRegistrationService::clubDisplayBlock($clubData, $club, (string) $club->getId(), $ovr),
+            'engine'  => CompetitionRegistrationService::clubEngineBlock($clubData),
+            'players' => array_values(array_filter(is_array($snapshotJson['players'] ?? null) ? $snapshotJson['players'] : [], 'is_array')),
+            'staff'   => array_values(array_filter(is_array($snapshotJson['staff'] ?? null) ? $snapshotJson['staff'] : [], 'is_array')),
+        ];
     }
 }

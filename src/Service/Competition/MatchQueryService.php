@@ -23,6 +23,8 @@ use App\Repository\Competition\CompetitionRoundRepository;
 use App\Repository\Friendly\FriendlyChallengeRepository;
 use App\Service\ClubInitializationService;
 use Symfony\Component\Uid\Uuid;
+use App\Enum\Friendly\FriendlySide;
+use App\Repository\Friendly\FriendlyChallengeSquadRepository;
 
 class MatchQueryService
 {
@@ -33,6 +35,7 @@ class MatchQueryService
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionEntrantSquadRepository $squadRepository,
         private readonly FriendlyChallengeRepository $friendlyRepository,
+        private readonly FriendlyChallengeSquadRepository $friendlySquadRepository,
     ) {}
 
     /**
@@ -400,9 +403,10 @@ class MatchQueryService
         $isComplete  = $challenge->getStatus() === FriendlyChallengeStatus::COMPLETE;
         $homeIsChall = $challenge->getVenue() === 'home';
 
-        $challengerIdentity = $this->serializeClubFromSnapshot($challenge->getChallengerSnapshotJson(), $challenge->getChallengerClub(), $challenge->getChallengerClubId());
-        $acceptorIdentity   = $challenge->getAcceptorSnapshotJson() !== null
-            ? $this->serializeClubFromSnapshot($challenge->getAcceptorSnapshotJson(), $challenge->getAcceptorClub(), (string) $challenge->getAcceptorClubId())
+        $acceptorDisplay    = $challenge->getAcceptorClubDisplayJson();
+        $challengerIdentity = $this->normalizeClubIdentityArray($challenge->getChallengerClubDisplayJson(), $challenge->getChallengerClub());
+        $acceptorIdentity   = $acceptorDisplay !== null
+            ? $this->normalizeClubIdentityArray($acceptorDisplay, $challenge->getAcceptorClub())
             : null;
 
         $homeClub = $isComplete && $challenge->getHomeClubJson() !== null
@@ -413,10 +417,18 @@ class MatchQueryService
             ? $this->normalizeClubIdentityArray($challenge->getAwayClubJson(), $homeIsChall ? $challenge->getAcceptorClub() : $challenge->getChallengerClub())
             : ($homeIsChall ? $acceptorIdentity : $challengerIdentity);
 
-        $homeSnapshot        = $homeIsChall ? $challenge->getChallengerSnapshotJson() : ($challenge->getAcceptorSnapshotJson() ?? []);
-        $awaySnapshot        = $homeIsChall ? ($challenge->getAcceptorSnapshotJson() ?? []) : $challenge->getChallengerSnapshotJson();
-        $homeSnapshotPlayers = is_array($homeSnapshot['players'] ?? null) ? $homeSnapshot['players'] : [];
-        $awaySnapshotPlayers = is_array($awaySnapshot['players'] ?? null) ? $awaySnapshot['players'] : [];
+        // Squad rows only to stand in for a lineup that does not exist yet: an
+        // accepted-but-unplayed friendly shows both registered XIs. A played one needs none —
+        // the engine writes each player's appearance straight into the stored lineup. Keyed
+        // challenger/acceptor rather than home/away, because venue decides which side is
+        // home and so flips per challenge.
+        $squads              = $challenge->getHomeLineupJson() === null || $challenge->getAwayLineupJson() === null
+            ? $this->friendlySquadRepository->findBothSides($challenge)
+            : [];
+        $challengerPlayers   = ($squads[FriendlySide::CHALLENGER->value] ?? null)?->getPlayersJson() ?? [];
+        $acceptorPlayers     = ($squads[FriendlySide::ACCEPTOR->value] ?? null)?->getPlayersJson() ?? [];
+        $homeSnapshotPlayers = $homeIsChall ? $challengerPlayers : $acceptorPlayers;
+        $awaySnapshotPlayers = $homeIsChall ? $acceptorPlayers : $challengerPlayers;
 
         $score = $isComplete ? [
             'home'      => $challenge->getHomeScore(),
@@ -549,34 +561,16 @@ class MatchQueryService
     /**
      * A cup entrant's club identity, straight off the stored display block.
      *
-     * No longer goes through serializeClubFromSnapshot(): that exists to dig a `club` object
-     * out of a whole snapshot and recompute OVR from the XI, and the entrant now stores the
-     * resolved block with its OVR already in it.
+     * A plain read of the stored display block, which already carries its OVR. The method
+     * this used to call — serializeClubFromSnapshot(), which dug a `club` object out of a
+     * whole snapshot and recomputed OVR from the XI — is gone: once friendlies stored
+     * display blocks too, it had no callers left.
      *
      * @return array<string, mixed>
      */
     public function serializeClubFromEntrant(CompetitionEntrant $entrant): array
     {
         return $this->normalizeClubIdentityArray($entrant->getClubDisplayJson(), $entrant->getClub());
-    }
-
-    /**
-     * @param array<string, mixed> $snapshotJson
-     * @return array<string, mixed>
-     */
-    public function serializeClubFromSnapshot(array $snapshotJson, ?Club $clubEntity, string $fallbackClubId): array
-    {
-        $snapshotClub = is_array($snapshotJson['club'] ?? null) ? $snapshotJson['club'] : [];
-        $ovr          = is_numeric($snapshotClub['ovr'] ?? null)
-            ? (int) $snapshotClub['ovr']
-            : CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
-
-        $snapshotClub['ovr'] = $ovr;
-        if (!isset($snapshotClub['clubId'])) {
-            $snapshotClub['clubId'] = $fallbackClubId;
-        }
-
-        return $this->normalizeClubIdentityArray($snapshotClub, $clubEntity);
     }
 
     /**
