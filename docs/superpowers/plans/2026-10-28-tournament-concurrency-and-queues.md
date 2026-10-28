@@ -150,11 +150,37 @@ unique index to prevent duplicate rows. That turns a lock failure into a unique-
 `flush()` — which, until §1.1 lands, closes the EntityManager. Decide deliberately: either
 fail the rebuild, or make the write idempotent (which §1.1's `ON CONFLICT` does).
 
-### 2.3 Capacity-fill → lock transition under concurrent registration
+### 2.3 Capacity-fill → lock transition — AUDITED, no bug
 
-`register()` serializes last-slot registrations with `SELECT … FOR UPDATE` on the competition
-row, which is sound. The subsequent transition to `scheduled` via `CompetitionLockService`
-needs the same audit under genuine concurrency; not yet verified.
+`register()` takes `SELECT … FOR UPDATE` on the ActiveCompetition row as its **first**
+statement and calls `CompetitionLockService::lock()` inside that same transaction. Three
+properties follow, all verified by reading the code:
+
+- **Serialization.** A concurrent last-slot registration blocks on the row lock, then reads
+  the now-SCHEDULED status and is rejected. Two clubs cannot fill the same final slot.
+- **Atomicity.** `lock()` only persists — `InboxService::createMessage()` deliberately does
+  not flush, and nothing pushes — so the seeds, the rounds and the per-entrant inbox messages
+  all land on `register()`'s single flush inside the transaction, together with the entrant
+  insert and the fee deduction. A failure anywhere rolls back all of it, fee included.
+- **`withdraw()` serializes against it**, taking the same `FOR UPDATE`.
+
+**One real gap found and closed: `registration_closed` had no test coverage at all.** That
+matters more than it looks, because there are two paths to it — the controller's pre-flight
+status check, whose read can be stale by the time the transaction opens, and the
+in-transaction check against the `FOR UPDATE`-read row. The second is the one that actually
+handles the race, and it was the untested one. Covered now by
+`tests/Service/Competition/CompetitionRegistrationCapacityTest.php`, including that a
+rejected registration does not charge the entry fee and does not re-lock the competition.
+
+**One characteristic recorded, deliberately not fixed.** The final registrant's request
+performs the whole bracket lock while holding that row lock: N seed updates, log2(N) round
+inserts and N inbox messages (64 for a full bracket). Every other registration for *that*
+competition blocks for the duration. It happens once per competition and does not
+cross-contaminate tournaments, so it is acceptable — and queueing it would be worse: the
+status transition has to stay transactional with the capacity check, and splitting it leaves
+a window where a SCHEDULED competition has no rounds, which `findDueForDraw()` would silently
+not find. That is the orphaning shape §2.1 just removed, and it is not worth reintroducing for
+a latency win on one request per tournament.
 
 ---
 
@@ -274,7 +300,32 @@ cache row itself.
 | Phase | Blocks | Why in this order |
 |---|---|---|
 | 0 (§1) | `master` | Correctness. §1.1 can permanently stall a live bracket. |
-| 1 (§2.1) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
+| 1 (§2.1, §2.2, §2.3) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
 | 2 (§3) | §3.1/§3.2/§3.4 **done**; §3.3 open | Bounds the work per tick, and restores prewarming in the form it should have had. |
 | 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
 | §5 | `master` | A data decision, not an engineering one. |
+
+---
+
+## 7. Phase 4 — measurement (not started, and the real remaining gap)
+
+Everything above rests on **reading the code and on unit tests that simulate contention** — a
+stale lease, a duplicate delivery, a deleted round, a locked competition. Nothing has run two
+tournaments in parallel against a real queue and a real consumer.
+
+That is a genuine limit on how much the rest of this plan should be trusted, and it is worth
+saying plainly rather than leaving implied by a green suite:
+
+1. **Nothing here is load-tested.** The claim "this scales to concurrent rolling tournaments"
+   is an argument, not a measurement.
+2. **No metric exists for the thing that started this.** There is no instrumentation on
+   bracket-document build time, cache hit rate, queue depth or consumer lag — so the first
+   signal that any of it is wrong would again be a 500 in a log.
+3. **The lease window (15 minutes) is a guess.** It was chosen to sit clear of observed
+   per-round work, but per-round work has not been timed.
+
+Worth doing before trusting this under real load: provision several concurrent competitions on
+dev, let them roll through their rounds, and watch `messenger_messages` depth for the
+`competition` queue, consumer wall-clock per message, and `competition_response_cache` hit
+rate. The lease window and the consumer's `--limit`/`--time-limit` should then be set from
+those numbers rather than from reasoning.

@@ -574,3 +574,16 @@
   register/withdraw/resubmit — the document is cheap before any round exists, and that would
   queue one rebuild per registration. §3.3 (inline provisioning) is the only open Phase 2
   item.
+
+- **New pass (2026-10-28), on top of commit 883922b** (uncommitted).
+  **Stages touched:** none (test-only plus the plan doc). §2.3 audited: the capacity-fill →
+  lock transition is correctly serialized and atomic — `register()` takes
+  `SELECT ... FOR UPDATE` on the competition row first and calls
+  `CompetitionLockService::lock()` inside that transaction, and `lock()` only persists, so
+  seeds/rounds/inbox messages commit with the entrant insert and the fee. No bug. One real gap
+  closed: `registration_closed` had no coverage, and the meaningful path is the
+  *in-transaction* check rather than the controller's (possibly stale) pre-flight read. Also
+  recorded in the plan: the final registrant pays the latency of locking the whole bracket,
+  acceptable and deliberately not queued, because splitting it would leave a SCHEDULED
+  competition with no rounds — the orphaning shape §2.1 removed. Plan gains a Phase 4:
+  nothing in it has been load-tested, and the 15-minute lease window is a guess.
