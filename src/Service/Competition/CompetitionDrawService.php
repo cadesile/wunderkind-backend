@@ -17,6 +17,8 @@ use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\InboxService;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Message\Competition\DrawCompetitionRoundMessage;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Owns the entire draw phase (DRAW_PENDING -> DRAWN), symmetric for round 1 and every
@@ -56,16 +58,72 @@ class CompetitionDrawService
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly MessageBusInterface $messageBus,
         private readonly ?InboxService $inboxService = null,
     ) {}
 
-    /** @return int Number of rounds this call actually drew (0 if none were due, or all were claimed by an overlapping tick). */
+    /**
+     * Queues every due round for drawing, one message each.
+     *
+     * What the cron calls. The tick itself now does O(due rounds) cheap inserts instead of
+     * drawing them all inline — which is the whole point when several tournaments are
+     * rolling at once, since a draw also writes an inbox message per entrant and a push per
+     * fixture.
+     *
+     * Nothing dedupes the dispatch, deliberately. StarterPoolAuditService gates its sweep on
+     * an undrained queue because its queue depth scales with how far a pool has drifted, so a
+     * second sweep genuinely stacks. Here a dispatch is one row per due round and a duplicate
+     * is free — the handler claims, and the second claim fails — so gating would stall every
+     * *other* competition's progress for no benefit. Throughput is bounded at the consumer,
+     * where the expensive work actually is.
+     *
+     * @return int Number of rounds queued.
+     */
+    public function dispatchDueDraws(\DateTimeImmutable $now): int
+    {
+        $queued = 0;
+        foreach ($this->roundRepository->findDueForDraw($now) as $round) {
+            $this->messageBus->dispatch(new DrawCompetitionRoundMessage((string) $round->getId()));
+            $queued++;
+        }
+
+        return $queued;
+    }
+
+    /**
+     * Draws one round if its claim can be taken.
+     *
+     * The single per-round implementation, shared by the queue handler and by
+     * drawDueRounds() below, so the synchronous and queued paths cannot drift.
+     *
+     * @return bool False when another tick (or handler) holds the lease, or the round is no
+     *              longer draw-pending — both of which are ordinary, not errors.
+     */
+    public function drawRoundIfClaimable(CompetitionRound $round, \DateTimeImmutable $now): bool
+    {
+        if (!$this->claimDraw($round, $now)) {
+            return false;
+        }
+
+        $this->drawRound($round, $now);
+
+        return true;
+    }
+
+    /**
+     * Draws every due round inline.
+     *
+     * Kept as the synchronous driver: it is what the tests exercise, and it remains a usable
+     * fallback if the `competition` consumer is ever not running. Production goes through
+     * dispatchDueDraws() instead.
+     *
+     * @return int Number of rounds this call actually drew (0 if none were due, or all were claimed by an overlapping tick).
+     */
     public function drawDueRounds(\DateTimeImmutable $now): int
     {
         $drawn = 0;
         foreach ($this->roundRepository->findDueForDraw($now) as $round) {
-            if ($this->claimDraw($round, $now)) {
-                $this->drawRound($round, $now);
+            if ($this->drawRoundIfClaimable($round, $now)) {
                 $drawn++;
             }
         }

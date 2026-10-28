@@ -24,6 +24,8 @@ use App\Service\MatchEngine\MatchEngineRegistry;
 use App\Service\MatchEngine\MatchEngineResult;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Message\Competition\ResolveCompetitionRoundMessage;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Owns the entire resolution + finalization phase (DRAWN -> RESULTS_PUBLISHED), and, for
@@ -73,16 +75,69 @@ class CompetitionResultsService
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly MessageBusInterface $messageBus,
         private readonly ?InboxService $inboxService = null,
     ) {}
 
-    /** @return int Number of rounds this call actually published results for. */
+    /**
+     * Queues every due round for resolution, one message each.
+     *
+     * What the cron calls, and the change that matters most for running many tournaments
+     * concurrently: resolving a round runs the match engine and narrative generation for
+     * every fixture in it, up to 32, and this tick used to do that for *every* due round
+     * inline in one process. It now writes one row per due round and the consumer decides
+     * how fast to drain them.
+     *
+     * Dispatch is not deduped — see dispatchDueDraws() for why that is deliberate rather
+     * than an oversight.
+     *
+     * @return int Number of rounds queued.
+     */
+    public function dispatchDueResults(\DateTimeImmutable $now): int
+    {
+        $queued = 0;
+        foreach ($this->roundRepository->findDueForResults($now) as $round) {
+            $this->messageBus->dispatch(new ResolveCompetitionRoundMessage((string) $round->getId()));
+            $queued++;
+        }
+
+        return $queued;
+    }
+
+    /**
+     * Publishes one round's results if its claim can be taken.
+     *
+     * The single per-round implementation, shared by the queue handler and by
+     * publishDueResults() below, so the synchronous and queued paths cannot drift.
+     *
+     * @return bool False when another tick (or handler) holds the lease, or the round is no
+     *              longer DRAWN — both ordinary, not errors.
+     */
+    public function publishResultsIfClaimable(CompetitionRound $round, \DateTimeImmutable $now): bool
+    {
+        if (!$this->claimResults($round, $now)) {
+            return false;
+        }
+
+        $this->publishResults($round, $now);
+
+        return true;
+    }
+
+    /**
+     * Publishes results for every due round inline.
+     *
+     * Kept as the synchronous driver: it is what the tests exercise, and a usable fallback if
+     * the `competition` consumer is not running. Production goes through
+     * dispatchDueResults().
+     *
+     * @return int Number of rounds this call actually published results for.
+     */
     public function publishDueResults(\DateTimeImmutable $now): int
     {
         $published = 0;
         foreach ($this->roundRepository->findDueForResults($now) as $round) {
-            if ($this->claimResults($round, $now)) {
-                $this->publishResults($round, $now);
+            if ($this->publishResultsIfClaimable($round, $now)) {
                 $published++;
             }
         }

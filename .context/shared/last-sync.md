@@ -553,3 +553,13 @@
   failed flush orphaned the round from `findDueForDraw()` *and* `findDueForResults()` at once
   (the latter because `matches_resolve_at` stayed NULL). No schema change: the lock columns
   were already mapped.
+
+- **New pass (2026-10-28), on top of commit 7e22416** (uncommitted).
+  **Stages touched:** 04_interfaces (`services.md`). Phase 2 §3.1/§3.2 of
+  `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md`: the competition
+  draw and resolve cron ticks now only dispatch, one message per due round onto a new
+  `competition` Messenger transport drained by `docker/competition-consume.sh`. The claim is
+  taken in the handler rather than at dispatch, which is what makes over-dispatching free and
+  keeps the lease from expiring while a message waits in the queue — and is why, unlike
+  `app:starter-pool:audit`, dispatch is not gated on an undrained queue. §3.3 (inline
+  provisioning) and §3.4 (queued cache prewarm) remain open.

@@ -31,6 +31,17 @@ framework:
             # docker/pool-consume.sh. StarterPoolAuditService::TRANSPORT_QUEUE must match
             # this queue_name — it counts undrained rows to avoid stacking sweeps.
             pool: 'doctrine://default?queue_name=pool'
+            # Competition round processing queued by competition-draw-rounds.sh and
+            # competition-resolve-rounds.sh. Its own transport for the same reason `pool` and
+            # `worldpack` have theirs: resolving one round runs the match engine and narrative
+            # generation for up to 32 fixtures, and a round must not wait behind an overnight
+            # pool top-up or an admin-triggered country regenerate. Drained by
+            # docker/competition-consume.sh.
+            #
+            # Round processing is latency-sensitive in a way the other queues are not — a
+            # tournament's next round is scheduled against wall-clock time, so a backlog here
+            # is visible to players as a late draw rather than as a slow background job.
+            competition: 'doctrine://default?queue_name=competition'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
@@ -43,6 +54,11 @@ framework:
             'App\Message\WorldPack\WarmWorldPackClubMessage': worldpack
             # Cron-queued starter pool top-ups — see StarterPoolAuditService.
             'App\Message\Pool\TopUpStarterPoolMessage': pool
+            # Cron-queued competition round processing — see CompetitionDrawService and
+            # CompetitionResultsService. Each message carries only a round id; the handler
+            # re-reads the round and takes the claim, so a duplicate dispatch is a no-op.
+            'App\Message\Competition\DrawCompetitionRoundMessage': competition
+            'App\Message\Competition\ResolveCompetitionRoundMessage': competition
 
 when@test:
     framework:
@@ -54,3 +70,4 @@ when@test:
                 failed: 'in-memory://'
                 worldpack: 'in-memory://'
                 pool: 'in-memory://'
+                competition: 'in-memory://'

@@ -31,9 +31,13 @@ class CompetitionResolveRoundsCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $published = $this->resultsService->publishDueResults(new \DateTimeImmutable());
+        // Queues rather than resolves. A round runs the match engine and narrative generation
+        // per fixture, so doing every due round inline in one tick is what did not scale to
+        // concurrent tournaments — see CompetitionResultsService::dispatchDueResults().
+        // Drained by competition-consume.sh.
+        $queued = $this->resultsService->dispatchDueResults(new \DateTimeImmutable());
 
-        $io->writeln($published > 0 ? "Published results for {$published} due round(s)." : 'No round is due to have results published.');
+        $io->writeln($queued > 0 ? "Queued {$queued} due round(s) for resolution." : 'No round is due to have results published.');
 
         return Command::SUCCESS;
     }

@@ -31,9 +31,12 @@ class CompetitionDrawRoundsCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $drawn = $this->drawService->drawDueRounds(new \DateTimeImmutable());
+        // Queues rather than draws. The work moved to the `competition` transport so a tick
+        // costs one row per due round instead of drawing them all inline — see
+        // CompetitionDrawService::dispatchDueDraws(). Drained by competition-consume.sh.
+        $queued = $this->drawService->dispatchDueDraws(new \DateTimeImmutable());
 
-        $io->writeln($drawn > 0 ? "Drew {$drawn} due round(s)." : 'No round is due to be drawn.');
+        $io->writeln($queued > 0 ? "Queued {$queued} due round(s) for drawing." : 'No round is due to be drawn.');
 
         return Command::SUCCESS;
     }
