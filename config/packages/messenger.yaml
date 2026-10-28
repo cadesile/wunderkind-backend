@@ -42,6 +42,21 @@ framework:
             # tournament's next round is scheduled against wall-clock time, so a backlog here
             # is visible to players as a late draw rather than as a slow background job.
             competition: 'doctrine://default?queue_name=competition'
+            # Entrant submissions, queued by CompetitionRegistrationService::register() so the
+            # ~1.4MB squad/submission write happens outside the competition row lock.
+            #
+            # Its own transport, and NOT shared with `competition`, for the reason that
+            # transport's own comment gives: round draws and resolves are latency-sensitive
+            # against wall-clock time, and a burst of registrations is exactly the backlog that
+            # must not get in front of them. The dependency runs the other way too — a draw
+            # waits for pending submissions — so sharing a queue could deadlock a round behind
+            # work it is itself blocking on.
+            #
+            # Unlike every other transport here it is drained by an always-on worker
+            # (supervisord), not a once-a-minute cron: a competition can fill and become
+            # drawable within seconds of its last registration, so a 60s pickup delay would
+            # routinely stall draws. See docker/supervisord.conf.
+            registration: 'doctrine://default?queue_name=registration'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
@@ -64,6 +79,8 @@ framework:
             # it describes has landed, and ordering behind that round on one queue is exactly
             # the behaviour wanted.
             'App\Message\Competition\WarmCompetitionResponseMessage': competition
+            # The one message carrying a payload rather than an id — see its own docblock.
+            'App\Message\Competition\StoreEntrantSubmissionMessage': registration
 
 when@test:
     framework:
@@ -76,3 +93,14 @@ when@test:
                 worldpack: 'in-memory://'
                 pool: 'in-memory://'
                 competition: 'in-memory://'
+                # sync://, not in-memory://, and alone among these in being so. The others are
+                # fire-and-forget side effects a test asserts were *dispatched*; this one is
+                # the second half of registration itself, so a test that only saw the envelope
+                # queued would be asserting against an entrant with no squad — a state
+                # production never serves, because an always-on worker drains it in
+                # milliseconds. sync:// runs the real handler in-process, so functional tests
+                # exercise the true post-drain behaviour.
+                #
+                # The queueing itself is covered directly in RegistrationQueueingTest, with a
+                # spy bus, rather than inferred from transport config here.
+                registration: 'sync://'

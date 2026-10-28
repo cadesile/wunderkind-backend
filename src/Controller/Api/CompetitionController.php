@@ -23,6 +23,7 @@ use App\Service\Competition\EligibilityEvaluator;
 use App\Service\Competition\SnapshotValidator;
 use App\Service\Notification\PushNotificationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Doctrine\DBAL\Exception\DriverException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -234,6 +235,22 @@ class CompetitionController extends AbstractController
                 ], Response::HTTP_FORBIDDEN),
                 default => throw $e,
             };
+        } catch (DriverException $e) {
+            // Postgres lock_timeout (SQLSTATE 55P03) — set per-transaction in register(). The
+            // competition's row was held by another registration for longer than
+            // CompetitionRegistrationService::LOCK_TIMEOUT_SECONDS, which means contention,
+            // not a bad request: nothing was written and the same payload will succeed on a
+            // retry. 503 + Retry-After says exactly that, where the alternative is a 500 that
+            // looks like a bug and that a client has no reason to retry.
+            if ($e->getSQLState() !== '55P03') {
+                throw $e;
+            }
+
+            return $this->json(
+                ['error' => 'registration_busy', 'message' => 'This competition is handling other registrations. Retry shortly.'],
+                Response::HTTP_SERVICE_UNAVAILABLE,
+                ['Retry-After' => '2'],
+            );
         }
 
         $entrant = $result['entrant'];

@@ -48,6 +48,18 @@ class CompetitionHealthService
     /** Consumer lag past which the queue is not being drained at the cadence it assumes. */
     public const QUEUE_LAG_WARN_SECONDS = 120;
 
+    /** The `registration` transport — drained by an always-on worker, not a cron. */
+    public const REGISTRATION_QUEUE = 'registration';
+
+    /**
+     * How long an entrant may sit un-stored before it is worth reporting.
+     *
+     * Much tighter than QUEUE_LAG_WARN_SECONDS because the consumer is always on rather than
+     * once a minute, so normal latency here is sub-second. It is also the one lag in this
+     * service that blocks something: a competition with a pending entrant cannot be drawn.
+     */
+    public const SUBMISSION_PENDING_WARN_SECONDS = 60;
+
     public function __construct(private readonly Connection $connection) {}
 
     /**
@@ -68,11 +80,33 @@ class CompetitionHealthService
         $now    = ($now ?? new \DateTimeImmutable('now'))->setTimezone(new \DateTimeZone('UTC'));
         $nowSql = $now->format('Y-m-d H:i:s');
 
-        $queue  = $this->queueSnapshot($nowSql);
-        $rounds = $this->roundSnapshot($nowSql);
-        $cache  = $this->cacheSnapshot($nowSql);
+        $queue        = $this->queueSnapshot($nowSql);
+        $rounds       = $this->roundSnapshot($nowSql);
+        $cache        = $this->cacheSnapshot($nowSql);
+        $submissions  = $this->submissionSnapshot($nowSql);
 
         $warnings = [];
+
+        // Reported before the round warnings below, because an un-stored submission is a
+        // *cause* of rounds going overdue — the draw defers rather than seeding a fixture
+        // against an empty XI. Seeing the two in this order is the difference between
+        // diagnosing it and chasing the consumer.
+        if ($submissions['failed'] > 0) {
+            $warnings[] = sprintf(
+                '%d entrant submission(s) FAILED to store. Those clubs hold a slot with no XI and their competition cannot be drawn until it is resolved. '
+                . 'The envelope is on the failed transport (messenger:failed:show) — replay it, or withdraw the club.',
+                $submissions['failed'],
+            );
+        }
+
+        if ($submissions['stalePending'] > 0) {
+            $warnings[] = sprintf(
+                '%d entrant submission(s) pending for more than %ds (worst %ds). The registration consumer should be sub-second — check supervisord has registration-consume running.',
+                $submissions['stalePending'],
+                self::SUBMISSION_PENDING_WARN_SECONDS,
+                $submissions['worstPendingSeconds'] ?? 0,
+            );
+        }
 
         if ($rounds['staleClaims'] > 0) {
             $warnings[] = sprintf(
@@ -116,12 +150,68 @@ class CompetitionHealthService
         }
 
         return [
-            'at'       => $now->format(DATE_ATOM),
-            'queue'    => $queue,
-            'rounds'   => $rounds,
-            'cache'    => $cache,
-            'warnings' => $warnings,
-            'healthy'  => $warnings === [],
+            'at'          => $now->format(DATE_ATOM),
+            'queue'       => $queue,
+            'rounds'      => $rounds,
+            'cache'       => $cache,
+            'submissions' => $submissions,
+            'warnings'    => $warnings,
+            'healthy'     => $warnings === [],
+        ];
+    }
+
+    /**
+     * Entrants whose squad row has not landed, and the registration queue behind them.
+     *
+     * Counts only non-withdrawn entrants of competitions that are still live: a withdrawn
+     * club's unstored squad blocks nothing, and a finished competition's entrants are history.
+     * Without that filter a single old failure would warn forever.
+     *
+     * @return array{pending: int, failed: int, stalePending: int, worstPendingSeconds: ?int, queuePending: int}
+     */
+    private function submissionSnapshot(string $nowSql): array
+    {
+        $row = $this->connection->fetchAssociative(
+            <<<'SQL'
+            SELECT
+                COUNT(*) FILTER (WHERE e.squad_state = 'pending')                        AS pending,
+                COUNT(*) FILTER (WHERE e.squad_state = 'failed')                         AS failed,
+                COUNT(*) FILTER (
+                    WHERE e.squad_state = 'pending'
+                      AND e.registered_at < CAST(:now AS timestamp) - CAST(:grace AS interval)
+                )                                                                        AS stale_pending,
+                MAX(
+                    CASE WHEN e.squad_state = 'pending'
+                         THEN EXTRACT(EPOCH FROM (CAST(:now AS timestamp) - e.registered_at))
+                    END
+                )                                                                        AS worst_pending_seconds
+              FROM competition_entrant e
+              JOIN active_competition ac ON ac.id = e.active_competition_id
+             WHERE e.status <> 'withdrawn'
+               AND ac.status NOT IN ('completed', 'cancelled')
+            SQL,
+            ['now' => $nowSql, 'grace' => sprintf('%d seconds', self::SUBMISSION_PENDING_WARN_SECONDS)],
+        ) ?: [];
+
+        // Same guard as queueSnapshot(): messenger_messages is created on first dispatch, so
+        // on a fresh database querying it would make a read-only health check the thing that
+        // fails. The entrant counts above are the load-bearing half anyway — they come from
+        // competition_entrant, which always exists.
+        $queuePending = $this->messengerTableExists()
+            ? (int) $this->connection->fetchOne(
+                'SELECT COUNT(*) FROM messenger_messages WHERE queue_name = :queue AND delivered_at IS NULL',
+                ['queue' => self::REGISTRATION_QUEUE],
+            )
+            : 0;
+
+        return [
+            'pending'             => (int) ($row['pending'] ?? 0),
+            'failed'              => (int) ($row['failed'] ?? 0),
+            'stalePending'        => (int) ($row['stale_pending'] ?? 0),
+            'worstPendingSeconds' => isset($row['worst_pending_seconds']) && $row['worst_pending_seconds'] !== null
+                ? (int) $row['worst_pending_seconds']
+                : null,
+            'queuePending'        => $queuePending,
         ];
     }
 

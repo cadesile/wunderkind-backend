@@ -4,6 +4,7 @@ namespace App\Entity\Competition;
 
 use App\Entity\Club;
 use App\Enum\Competition\CompetitionEntrantStatus;
+use App\Enum\Competition\EntrantSquadState;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
@@ -90,6 +91,19 @@ class CompetitionEntrant
     #[ORM\Column(type: 'smallint', options: ['default' => 1])]
     private int $snapshotVersion = 1;
 
+    /**
+     * Whether this entrant's squad and submission rows have landed yet.
+     *
+     * Registration reserves the slot in a short locked transaction and queues the bulky
+     * write, so an entrant exists for a moment with no squad. Defaults to STORED so the
+     * synchronous path (and every row that predates the queue) is correct without a
+     * backfill; the reserve path sets PENDING explicitly.
+     *
+     * Not part of `status` on purpose — see EntrantSquadState.
+     */
+    #[ORM\Column(type: 'string', length: 16, enumType: EntrantSquadState::class, options: ['default' => 'stored'])]
+    private EntrantSquadState $squadState = EntrantSquadState::STORED;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $registeredAt;
 
@@ -158,6 +172,11 @@ class CompetitionEntrant
     public function setSnapshotLockedAt(?\DateTimeImmutable $snapshotLockedAt): static { $this->snapshotLockedAt = $snapshotLockedAt; return $this; }
 
     public function getSnapshotVersion(): int { return $this->snapshotVersion; }
+
+    public function getSquadState(): EntrantSquadState { return $this->squadState; }
+    public function setSquadState(EntrantSquadState $squadState): static { $this->squadState = $squadState; return $this; }
+    /** True when the squad row the match engine reads is actually present. */
+    public function hasStoredSquad(): bool { return $this->squadState === EntrantSquadState::STORED; }
     public function setSnapshotVersion(int $snapshotVersion): static { $this->snapshotVersion = $snapshotVersion; return $this; }
 
     public function getRegisteredAt(): \DateTimeImmutable { return $this->registeredAt; }
