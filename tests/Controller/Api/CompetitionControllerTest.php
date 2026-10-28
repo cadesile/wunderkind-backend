@@ -996,4 +996,188 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(200);
         $this->assertArrayHasKey('champions', $this->responseJson());
     }
+
+    // ---------------------------------------------------------------------------------
+    // Contract-doc sync
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * Asserts every key `docs/api/competition-registration-status.md` shows actually exists
+     * in the response it claims to describe.
+     *
+     * This exists because that document drifted three times in one day. Each edit was
+     * correct where it was made and left something elsewhere false — at one point it
+     * promised `entrant.submissionStatus` from `/resubmit`, an endpoint that had no
+     * `entrant` object at all, so a client following it would have read `undefined` on the
+     * exact call used to recover a failed entry. Nothing caught that but reading the two
+     * side by side, which is not a thing anyone does reliably.
+     *
+     * It lives in this class rather than its own file purely to reuse the request helpers —
+     * `authenticatedRequest()` reboots the kernel per call for the reason its docblock
+     * gives, and duplicating that is how two copies of it start disagreeing.
+     *
+     * **Presence, not values.** The doc's register example says `"submissionStatus":
+     * "pending"`, which is right in production and wrong here: the `registration` transport
+     * is `sync://` under test, so the queued write runs inside the request and the entrant
+     * is already `confirmed` by the time the response is built. Asserting values would
+     * therefore fail on a document that is correct. This catches the failure that actually
+     * happened — a documented key that does not exist — and deliberately not more.
+     */
+    public function testTheRegistrationStatusContractMatchesTheRealResponses(): void
+    {
+        $club     = $this->createClub('Contract FC');
+        $instance = $this->createOpenInstance($this->createTemplate(4));
+        $this->login($club);
+
+        $payload = json_encode(array_merge(
+            $this->validSnapshotPayload((string) $club->getId(), $club->getName()),
+            ['clubId' => (string) $club->getId()],
+        ));
+
+        $actual = [];
+
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/register", $payload);
+        $this->assertResponseStatusCodeSame(201);
+        $actual['register'] = $this->responseJson();
+
+        $this->authenticatedRequest('GET', "/api/competitions/{$instance->getId()}");
+        $this->assertResponseStatusCodeSame(200);
+        $actual['viewer'] = $this->responseJson();
+
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/resubmit", $payload);
+        $this->assertResponseStatusCodeSame(200);
+        $actual['resubmit'] = $this->responseJson();
+
+        // Last: it ends the entry, so everything above has to happen first.
+        $this->authenticatedRequest('POST', "/api/competitions/{$instance->getId()}/withdraw", $payload);
+        $this->assertResponseStatusCodeSame(200);
+        $actual['withdraw'] = $this->responseJson();
+
+        $examples = $this->registrationStatusDocExamples();
+
+        // Guards against the quieter failure: a heading renamed or an example deleted, which
+        // would otherwise make this test pass by checking nothing at all.
+        self::assertSame(
+            ['register', 'resubmit', 'viewer', 'withdraw'],
+            array_keys($examples),
+            'docs/api/competition-registration-status.md should carry exactly one jsonc example per endpoint, plus viewer.snapshot',
+        );
+
+        foreach ($examples as $target => $documented) {
+            $this->assertDocumentedKeysExist($documented, $actual[$target], '', $target);
+        }
+    }
+
+    /**
+     * Pulls the ```jsonc examples out of the contract doc, keyed by which response each one
+     * describes.
+     *
+     * The blocks are jsonc, not json — comments are what make the document readable — so
+     * they are normalised before decoding: line comments dropped, `{ … }` elisions collapsed
+     * to `{}`, trailing commas removed, and a fragment starting at a key (the
+     * `"viewer": {…}` one) wrapped so it parses as an object.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function registrationStatusDocExamples(): array
+    {
+        $path = \dirname(__DIR__, 3) . '/docs/api/competition-registration-status.md';
+        self::assertFileExists($path, 'the contract this test guards has moved or been deleted');
+
+        $heading  = null;
+        $inBlock  = false;
+        $buffer   = [];
+        $examples = [];
+
+        foreach (explode("\n", file_get_contents($path)) as $line) {
+            if (str_starts_with($line, '### ')) {
+                $heading = $line;
+                continue;
+            }
+
+            if (str_starts_with(trim($line), '```jsonc')) {
+                $inBlock = true;
+                $buffer  = [];
+                continue;
+            }
+
+            if ($inBlock && str_starts_with(trim($line), '```')) {
+                $inBlock = false;
+                $target  = match (true) {
+                    $heading === null                        => null,
+                    str_contains($heading, '/register')      => 'register',
+                    str_contains($heading, '/resubmit')      => 'resubmit',
+                    str_contains($heading, '/withdraw')      => 'withdraw',
+                    str_contains($heading, 'viewer.snapshot') => 'viewer',
+                    default                                  => null,
+                };
+
+                if ($target !== null) {
+                    $examples[$target] = $this->decodeJsonc(implode("\n", $buffer), $heading);
+                }
+                continue;
+            }
+
+            if ($inBlock) {
+                $buffer[] = $line;
+            }
+        }
+
+        ksort($examples);
+
+        return $examples;
+    }
+
+    /** @return array<string, mixed> */
+    private function decodeJsonc(string $block, string $heading): array
+    {
+        // Only strip `//` when it opens a comment rather than sitting inside a string — no
+        // example carries a URL today, but one will eventually and silently losing half a
+        // line would be a confusing way to find out.
+        $block = preg_replace('~(^|\s)//.*$~m', '', $block);
+        // `{ … }` marks "the rest of this object, unchanged" — an empty object asserts the
+        // key exists without claiming anything about what is inside it.
+        $block = preg_replace('~\{\s*…\s*\}~u', '{}', $block);
+        $block = preg_replace('~,(\s*[}\]])~', '$1', $block);
+        $block = trim($block);
+
+        // The viewer example starts at a key rather than a brace, because it is a fragment of
+        // a larger document.
+        if (!str_starts_with($block, '{')) {
+            $block = '{' . rtrim($block, ',') . '}';
+        }
+
+        $decoded = json_decode($block, true);
+        self::assertIsArray(
+            $decoded,
+            sprintf('the jsonc example under "%s" does not parse: %s', trim($heading), json_last_error_msg()),
+        );
+
+        return $decoded;
+    }
+
+    /**
+     * Every key the doc shows must exist in the real response. Extra real keys are fine —
+     * the examples are explicitly abbreviated to the fields the document is about.
+     *
+     * @param array<string, mixed> $documented
+     * @param array<string, mixed> $actual
+     */
+    private function assertDocumentedKeysExist(array $documented, array $actual, string $path, string $target): void
+    {
+        foreach ($documented as $key => $value) {
+            $here = $path === '' ? (string) $key : $path . '.' . $key;
+
+            self::assertArrayHasKey($key, $actual, sprintf(
+                'docs/api/competition-registration-status.md documents `%s` on the %s response, but the API does not return it. '
+                . 'Either the endpoint changed and the doc was not updated, or the doc describes a field that never existed.',
+                $here,
+                $target,
+            ));
+
+            if (is_array($value) && $value !== [] && is_array($actual[$key])) {
+                $this->assertDocumentedKeysExist($value, $actual[$key], $here, $target);
+            }
+        }
+    }
 }
