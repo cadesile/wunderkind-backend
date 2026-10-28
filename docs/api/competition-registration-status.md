@@ -4,8 +4,12 @@
 **Status:** backend shipped 2026-10-28.
 
 **One breaking change, deliberately taken while tournaments are not yet player-facing:**
-`POST /resubmit`'s `status` no longer returns the literal `"accepted"`. Everything else here
-is additive. Details under that endpoint below.
+`POST /resubmit`'s `status` no longer returns the literal `"accepted"` — it carries the
+entrant's standing, as `/register` and `/withdraw` already did. Everything else here is
+additive, including the new `entrant` object on `/resubmit` and `/withdraw`.
+
+All three write endpoints now answer in the same shape: `status` is the entrant's standing,
+and the entry itself is nested under `entrant`.
 
 ---
 
@@ -75,6 +79,38 @@ change** — check the HTTP status instead.
 Resubmit writes inline rather than queueing, so `entrant.submissionStatus` is always
 `confirmed` on success. It is stated rather than implied, because this is how a client
 confirms a `failed` entry actually recovered.
+
+### `POST /api/competitions/{id}/withdraw` → `entrant.submissionStatus`
+
+Same again. Nothing changed in value here — `status` was already the string `"withdrawn"` and
+still is; it is now read off the entrant rather than hardcoded, so all three endpoints mean
+the same thing by that key.
+
+```jsonc
+{
+  "status": "withdrawn",
+  "entrant": {                     // NEW
+    "entrantId": "01a17fe9-…",
+    "status": "withdrawn",
+    "submissionStatus": "failed"   // whatever it was — see below
+  },
+  "competition": { … },
+  "club": { "clubId": "…", "balance": 4300000 }   // fee already refunded
+}
+```
+
+`submissionStatus` is returned as it stood, not reset — so a club withdrawing a `failed` entry
+gets `"failed"` back. That is deliberate: it confirms you withdrew the thing you meant to.
+
+### All three, side by side
+
+| Endpoint | `status` | `entrant.submissionStatus` |
+|---|---|---|
+| `/register` | `registered` | `pending` → becomes `confirmed` |
+| `/resubmit` | `registered` \| `active` | `confirmed` |
+| `/withdraw` | `withdrawn` | unchanged from before the withdrawal |
+
+`status` is the entrant's standing on all three. `entrant` is nested on all three.
 
 ### `GET /api/competitions/{id}` → `viewer.snapshot`
 

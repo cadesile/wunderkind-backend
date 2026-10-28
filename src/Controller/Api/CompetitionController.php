@@ -304,7 +304,7 @@ class CompetitionController extends AbstractController
         }
 
         try {
-            $this->registrationService->withdraw($activeCompetition, $club);
+            $entrant = $this->registrationService->withdraw($activeCompetition, $club);
         } catch (\DomainException $e) {
             return match ($e->getMessage()) {
                 'withdrawal_closed' => $this->json(['error' => 'withdrawal_closed'], Response::HTTP_CONFLICT),
@@ -314,7 +314,15 @@ class CompetitionController extends AbstractController
         }
 
         return $this->json([
-            'status'      => 'withdrawn',
+            // Read off the entrant rather than hardcoded, so all three write endpoints mean
+            // the same thing by `status`. The value is unchanged — CompetitionEntrantStatus
+            // ::WITHDRAWN is the string 'withdrawn' — so unlike the equivalent fix on
+            // /resubmit this one breaks nothing; it was only accidentally correct before.
+            'status'      => $entrant->getStatus()->value,
+            // Nested as on /register and /resubmit. Worth returning on a withdrawal too: a
+            // club withdrawing a FAILED entry gets back submissionStatus 'failed', which is
+            // how a client confirms it withdrew the thing it meant to.
+            'entrant'     => $this->responseBuilder->serializeEntrantPreview($entrant),
             'competition' => $this->responseBuilder->serializeInstanceSummary($activeCompetition, $club),
             'club'        => [
                 'clubId'  => (string) $club->getId(),

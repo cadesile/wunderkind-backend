@@ -863,6 +863,12 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(200);
         $withdrawBody = $this->responseJson();
         $this->assertSame('withdrawn', $withdrawBody['status']);
+
+        // Nested entrant, as on /register and /resubmit — all three write endpoints answer in
+        // the same shape. submissionStatus comes back as it stood rather than reset, so a club
+        // withdrawing a failed entry can confirm it withdrew the thing it meant to.
+        $this->assertSame('withdrawn', $withdrawBody['entrant']['status']);
+        $this->assertSame('confirmed', $withdrawBody['entrant']['submissionStatus']);
         $this->assertSame(100_000, $withdrawBody['club']['balance']);
         $this->assertSame(0, $withdrawBody['competition']['registeredCount']);
         $this->assertSame('withdrawn', $withdrawBody['competition']['viewer']['relation']);
