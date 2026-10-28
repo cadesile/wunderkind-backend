@@ -230,4 +230,44 @@ class RegistrationQueueingTest extends KernelTestCase
 
         self::assertGreaterThan(0, $drawService->drawDueRounds($now), 'with every squad stored the draw goes ahead');
     }
+
+    /**
+     * The client-facing half: a reserved-but-unfilled entry must be distinguishable from a
+     * settled one, and the vocabulary is the API's own ('confirmed'), not the enum's
+     * ('stored'). Contract: docs/api/competition-registration-status.md.
+     */
+    public function testSubmissionStatusIsExposedToTheClientAndFlipsOnStore(): void
+    {
+        $bus      = $this->spyBus();
+        $instance = $this->competition();
+        $club     = $this->club('Visible FC');
+        $service  = $this->serviceWith($bus);
+
+        $service->register($instance, $club, $this->envelope($club, 'Visible FC'));
+        $message = $bus->dispatched[0];
+        $entrant = $this->entrantRepository->find($message->entrantId);
+
+        $builder = self::getContainer()->get(\App\Service\Competition\CompetitionResponseBuilder::class);
+
+        $preview = $builder->serializeEntrantPreview($entrant);
+        self::assertSame('pending', $preview['submissionStatus']);
+        self::assertSame('registered', $preview['status'], 'the two are different axes — a pending entry is still registered');
+
+        $service->storeSubmission($entrant, $message->envelope);
+        $this->em->clear();
+
+        $entrant = $this->entrantRepository->find($message->entrantId);
+        self::assertSame('confirmed', $builder->serializeEntrantPreview($entrant)['submissionStatus'], 'clients see "confirmed", never the internal "stored"');
+    }
+
+    public function testSettledIsFalseOnlyWhilePending(): void
+    {
+        self::assertFalse(EntrantSquadState::PENDING->isSettled());
+        // FAILED is settled on purpose: terminal without an operator, so a client polling it
+        // would poll forever.
+        self::assertTrue(EntrantSquadState::FAILED->isSettled());
+        self::assertTrue(EntrantSquadState::STORED->isSettled());
+
+        self::assertSame('failed', EntrantSquadState::FAILED->clientValue());
+    }
 }

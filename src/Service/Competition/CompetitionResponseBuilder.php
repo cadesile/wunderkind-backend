@@ -315,6 +315,14 @@ class CompetitionResponseBuilder
                 'version'    => $entrant->getSnapshotVersion(),
                 'acceptedAt' => is_string($acceptedAt) ? $acceptedAt : $entrant->getRegisteredAt()->format(DATE_ATOM),
                 'locksAt'    => $locksAt,
+                // The viewer's own submission state. Safe to put here specifically because
+                // the `viewer` block is composed per request — the rest of this document is
+                // served from competition_response_cache, where a value that changes seconds
+                // after registration would be stale under a fingerprint that does not include
+                // it. Deliberately not added to serializeEntrantSummary(): one club does not
+                // need to watch another's write land, and that path IS cached.
+                'status'     => $entrant->getSquadState()->clientValue(),
+                'settled'    => $entrant->getSquadState()->isSettled(),
             ];
         }
 
@@ -461,6 +469,11 @@ class CompetitionResponseBuilder
             ...$this->serializeEntrantSummary($entrant),
             'registeredAt' => $entrant->getRegisteredAt()->format(DATE_ATOM),
             'status'       => $entrant->getStatus()->value,
+            // Whether the squad submitted with this registration has actually been stored.
+            // Distinct from `status` above: `status` is the entry's standing in the
+            // competition (registered / active / eliminated), this is the state of the
+            // payload that came with it. See docs/api/competition-registration-status.md.
+            'submissionStatus' => $entrant->getSquadState()->clientValue(),
         ];
     }
 
