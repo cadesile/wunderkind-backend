@@ -16,9 +16,12 @@ use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class CompetitionSpoofEntrantServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionSpoofEntrantService $spoofService;
     private CompetitionEntrantRepository $entrantRepository;
@@ -66,12 +69,11 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
             ];
         }
 
-        $entrant = new CompetitionEntrant($instance, $club, 1, [
+        $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 1, [
             'club'    => ['id' => (string) $club->getId(), 'name' => 'Real FC', 'country' => $country, 'reputation' => 50, 'formation' => '4-3-3'],
             'players' => $players,
             'staff'   => [['id' => 's1', 'role' => 'MANAGER', 'name' => 'Real Manager', 'nationality' => 'English']],
         ]);
-        $this->em->persist($entrant);
         $this->em->flush();
 
         return $entrant;
@@ -91,7 +93,7 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
             self::assertNotSame('Real FC', $entrant->getClub()->getName());
             self::assertTrue(User::isSpoofEmail($entrant->getClub()->getUser()->getEmail()));
 
-            $snapshot = $entrant->getSnapshotJson();
+            $snapshot = $this->entrantEnvelope($this->em, $entrant);
             self::assertSame((string) $entrant->getClub()->getId(), $snapshot['club']['id']);
             self::assertCount(11, $snapshot['players']);
 
@@ -145,7 +147,7 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
             self::assertTrue($entrant->getClub()->isSpoof());
             self::assertNotSame('Real FC', $entrant->getClub()->getName());
             // country carried through from the earliest entrant's snapshot (the resolved basis).
-            self::assertSame('EN', $entrant->getSnapshotJson()['club']['country']);
+            self::assertSame('EN', $this->entrantEnvelope($this->em, $entrant)['club']['country']);
         }
     }
 
@@ -212,7 +214,7 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
         self::assertTrue($entrant->getClub()->isSpoof());
         self::assertSame('Oldham Warriors', $entrant->getClub()->getName());
 
-        $snapshot = $entrant->getSnapshotJson();
+        $snapshot = $this->entrantEnvelope($this->em, $entrant);
         // club.id is resynced to the real persisted entity, everything else passes through untouched.
         self::assertSame((string) $entrant->getClub()->getId(), $snapshot['club']['id']);
         self::assertSame('Oldham Warriors', $snapshot['club']['name']);
@@ -220,7 +222,10 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
         self::assertSame('Pasted Player 0', $snapshot['players'][0]['name']);
         self::assertSame('pasted-p0', $snapshot['players'][0]['id']);
         self::assertSame('Klaus Braun', $snapshot['staff'][0]['name']);
-        self::assertSame(['training_pitch' => 9], $snapshot['facilities']);
+        // `facilities` is intentionally no longer stored or round-tripped. It was accepted
+        // from clients and persisted on every entrant, but nothing in the codebase ever read
+        // it back — so it was pure weight on a column every bracket render decoded.
+        self::assertArrayNotHasKey('facilities', $snapshot);
     }
 
     public function testCreateSpoofEntrantFromSnapshotRandomisesWhenRequested(): void
@@ -231,7 +236,7 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
 
         self::assertNotSame('Oldham Warriors', $entrant->getClub()->getName());
 
-        $snapshot = $entrant->getSnapshotJson();
+        $snapshot = $this->entrantEnvelope($this->em, $entrant);
         self::assertNotSame('Pasted Player 0', $snapshot['players'][0]['name']);
         self::assertNotSame('pasted-p0', $snapshot['players'][0]['id']);
         self::assertNotSame('Klaus Braun', $snapshot['staff'][0]['name']);
@@ -260,7 +265,7 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
             $club = new Club("Filler FC $i", $user);
             $this->em->persist($user);
             $this->em->persist($club);
-            $this->em->persist(new CompetitionEntrant($activeCompetition, $club, $i, ['club' => ['id' => (string) $club->getId()], 'players' => []]));
+            $this->makeEntrantFromEnvelope($this->em, $activeCompetition, $club, $i, ['club' => ['id' => (string) $club->getId()], 'players' => []]);
         }
         $this->em->flush();
         self::assertSame(ActiveCompetitionStatus::REGISTERING, $activeCompetition->getStatus());
@@ -283,7 +288,7 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
             self::assertTrue($entrant->getClub()->isSpoof());
             self::assertTrue(User::isSpoofEmail($entrant->getClub()->getUser()->getEmail()));
 
-            $snapshot = $entrant->getSnapshotJson();
+            $snapshot = $this->entrantEnvelope($this->em, $entrant);
             self::assertCount(11, $snapshot['players'], 'a full starting XI must be generated for the bootstrap entrant and every clone');
             foreach ($snapshot['players'] as $player) {
                 self::assertNotEmpty($player['name']);
@@ -293,9 +298,20 @@ class CompetitionSpoofEntrantServiceTest extends KernelTestCase
             // Kit/badge/stadium display data must be present on every entrant — including
             // the clones, which inherit it from the bootstrap entrant's club object — so
             // the device can render kits/badges for this competition's matches.
-            foreach (['homePrimary', 'homeSecondary', 'awayPrimary', 'awaySecondary', 'badgeShape', 'homeKitStyle', 'awayKitStyle', 'stadiumName', 'playingStyle', 'tier'] as $field) {
+            //
+            // `homeKitStyle`/`awayKitStyle` are deliberately no longer asserted, or
+            // generated. They were flat duplicates of homeKitConfig['kit'] that nothing in
+            // the codebase ever read, and they only survived because the club normaliser
+            // passed unrecognised client keys through verbatim. The kit style the device
+            // actually draws from is asserted below instead.
+            foreach (['homePrimary', 'homeSecondary', 'awayPrimary', 'awaySecondary', 'badgeShape', 'stadiumName', 'playingStyle', 'tier'] as $field) {
                 self::assertArrayHasKey($field, $snapshot['club'], "club.$field must be present");
                 self::assertNotSame('', (string) $snapshot['club'][$field]);
+            }
+
+            foreach (['homeKitConfig', 'awayKitConfig'] as $kitField) {
+                self::assertArrayHasKey($kitField, $snapshot['club'], "club.$kitField must be present");
+                self::assertNotEmpty($snapshot['club'][$kitField]['kit'] ?? null, "club.$kitField.kit must carry a kit style");
             }
 
             $names[] = $entrant->getClub()->getName();

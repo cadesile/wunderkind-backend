@@ -9,14 +9,31 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
 /**
- * A club's registration into an ActiveCompetition. snapshotJson is the client-supplied
- * JSON snapshot of the club (roster/staff/facilities) — validated structurally by
- * SnapshotValidator before persist, never server-built (there's no persisted Player/Staff
- * owned by a club server-side, per the Pool Lifecycle model).
+ * A club's registration into an ActiveCompetition — the half of it that display paths read.
  *
- * Any UPDATE to snapshotJson (resubmission) must go through raw SQL
- * (Connection::executeStatement), not setSnapshotJson()+flush() — the payload mixes
- * string/int values and Doctrine's json dirty-check silently skips such updates.
+ * This entity used to carry the whole client-supplied snapshot in one `snapshotJson`
+ * column: club, the starting XI, staff and facilities together. That column had four
+ * readers with four unrelated read profiles, and ORM 3 removed PARTIAL hydration, so every
+ * reader decoded all of it. A single public bracket GET therefore decoded one whole squad
+ * per entrant — up to 64 of them — which exhausted the request memory limit, and was the
+ * same cause behind the admin entrant index timing out (see
+ * CompetitionEntrantCrudController's docblock, which prescribed this split).
+ *
+ * What stays here is bounded and hot:
+ *  - `clubDisplayJson` — the resolved, known-key display block
+ *    (CompetitionRegistrationService::clubDisplayBlock()). Bounded on purpose: the
+ *    normalizer it comes from passes unrecognised client keys through verbatim, so storing
+ *    its raw output would let one registration inflate every later read.
+ *  - `clientSnapshotAt`, `squadPlayerCount` — envelope facts the API and admin index want
+ *    without touching a squad row.
+ *
+ * The starting XI, staff, and the engine-only club tuning keys live in
+ * CompetitionEntrantSquad, which nothing on a client read path may load. There is
+ * deliberately no association to it from here — a OneToOne inverse side is always fetched
+ * eagerly and cannot be proxied, which would undo the split.
+ *
+ * Still validated structurally by SnapshotValidator before persist, and still never
+ * server-built (no persisted Player/Staff is owned by a club, per the Pool Lifecycle model).
  */
 #[ORM\Entity(repositoryClass: CompetitionEntrantRepository::class)]
 #[ORM\Table(name: 'competition_entrant')]
@@ -42,9 +59,30 @@ class CompetitionEntrant
     #[ORM\Column(type: 'string', enumType: CompetitionEntrantStatus::class)]
     private CompetitionEntrantStatus $status;
 
-    /** @var array<string, mixed> Client-supplied club/roster/staff/facilities snapshot. */
+    /**
+     * The resolved club display block — see CompetitionRegistrationService::clubDisplayBlock().
+     *
+     * @var array<string, mixed>
+     */
     #[ORM\Column(type: 'json')]
-    private array $snapshotJson;
+    private array $clubDisplayJson;
+
+    /**
+     * The client's own timestamp for the squad it submitted, stored verbatim as the string
+     * it sent rather than parsed into a datetime: the API echoes this value back under
+     * `viewer.snapshot.acceptedAt`, and round-tripping it through a DateTimeImmutable could
+     * change the rendered offset. Length-capped because it is unvalidated client input, and
+     * left null when absent or over-long — callers already fall back to `registeredAt`.
+     */
+    #[ORM\Column(type: 'string', length: 64, nullable: true)]
+    private ?string $clientSnapshotAt = null;
+
+    /**
+     * How many players the submitted XI held. Denormalised so the admin index can show it
+     * without loading a squad row — which is the whole point of the split.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $squadPlayerCount = 0;
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $snapshotLockedAt = null;
@@ -59,15 +97,38 @@ class CompetitionEntrant
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?CompetitionRound $eliminatedInRound = null;
 
-    public function __construct(ActiveCompetition $activeCompetition, Club $club, int $seed, array $snapshotJson)
-    {
+    /**
+     * @param array<string, mixed> $clubDisplayJson Already passed through clubDisplayBlock().
+     */
+    public function __construct(
+        ActiveCompetition $activeCompetition,
+        Club $club,
+        int $seed,
+        array $clubDisplayJson,
+        ?string $clientSnapshotAt = null,
+        int $squadPlayerCount = 0,
+    ) {
         $this->id                = new UuidV7();
         $this->activeCompetition = $activeCompetition;
-        $this->club                = $club;
-        $this->seed                 = $seed;
-        $this->status                = CompetitionEntrantStatus::REGISTERED;
-        $this->snapshotJson          = $snapshotJson;
-        $this->registeredAt          = new \DateTimeImmutable();
+        $this->club              = $club;
+        $this->seed              = $seed;
+        $this->status            = CompetitionEntrantStatus::REGISTERED;
+        $this->clubDisplayJson   = $clubDisplayJson;
+        $this->clientSnapshotAt  = self::sanitizeClientSnapshotAt($clientSnapshotAt);
+        $this->squadPlayerCount  = $squadPlayerCount;
+        $this->registeredAt      = new \DateTimeImmutable();
+    }
+
+    /** Null rather than a violation for anything unusable — this field must never fail a registration. */
+    public static function sanitizeClientSnapshotAt(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return ($trimmed !== '' && strlen($trimmed) <= 64) ? $trimmed : null;
     }
 
     public function getId(): UuidV7 { return $this->id; }
@@ -82,10 +143,16 @@ class CompetitionEntrant
     public function getStatus(): CompetitionEntrantStatus { return $this->status; }
     public function setStatus(CompetitionEntrantStatus $status): static { $this->status = $status; return $this; }
 
-    public function getSnapshotJson(): array { return $this->snapshotJson; }
+    /** @return array<string, mixed> */
+    public function getClubDisplayJson(): array { return $this->clubDisplayJson; }
+    /** @param array<string, mixed> $clubDisplayJson */
+    public function setClubDisplayJson(array $clubDisplayJson): static { $this->clubDisplayJson = $clubDisplayJson; return $this; }
 
-    /** Prefer raw SQL for updates outside initial persist — see class docblock. */
-    public function setSnapshotJson(array $snapshotJson): static { $this->snapshotJson = $snapshotJson; return $this; }
+    public function getClientSnapshotAt(): ?string { return $this->clientSnapshotAt; }
+    public function setClientSnapshotAt(?string $clientSnapshotAt): static { $this->clientSnapshotAt = self::sanitizeClientSnapshotAt($clientSnapshotAt); return $this; }
+
+    public function getSquadPlayerCount(): int { return $this->squadPlayerCount; }
+    public function setSquadPlayerCount(int $squadPlayerCount): static { $this->squadPlayerCount = $squadPlayerCount; return $this; }
 
     public function getSnapshotLockedAt(): ?\DateTimeImmutable { return $this->snapshotLockedAt; }
     public function setSnapshotLockedAt(?\DateTimeImmutable $snapshotLockedAt): static { $this->snapshotLockedAt = $snapshotLockedAt; return $this; }
@@ -103,31 +170,37 @@ class CompetitionEntrant
      * string, not the array-typed Doctrine column (the same json-column-to-form gotcha
      * documented for GameEventTemplate's *Json properties, but no setter/trait needed
      * here since CompetitionEntrantCrudController never renders an edit form).
+     *
+     * This shows the display block only. The squad is a separate row with its own
+     * accessor (CompetitionEntrantSquad::getSquadJsonPretty()) precisely so that opening
+     * the index does not load it.
      */
-    public function getSnapshotJsonPretty(): string
+    public function getClubDisplayJsonPretty(): string
     {
-        return json_encode($this->snapshotJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
+        return json_encode($this->clubDisplayJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 
-    /** Index-page convenience column — avoids opening the full snapshot just to sanity-check tactics. */
+    /** Index-page convenience column — now a plain read of the small display block. */
     public function getSnapshotFormation(): ?string
     {
-        $value = $this->snapshotJson['club']['formation'] ?? null;
+        $value = $this->clubDisplayJson['formation'] ?? null;
 
         return is_string($value) ? $value : null;
     }
 
     public function getSnapshotPlayingStyle(): ?string
     {
-        $value = $this->snapshotJson['club']['playingStyle'] ?? null;
+        $value = $this->clubDisplayJson['playingStyle'] ?? null;
 
         return is_string($value) ? $value : null;
     }
 
+    /**
+     * Reads the denormalised counter rather than counting a players array, so the admin
+     * index can render this column without touching competition_entrant_squad.
+     */
     public function getSnapshotPlayerCount(): int
     {
-        $players = $this->snapshotJson['players'] ?? [];
-
-        return is_array($players) ? count($players) : 0;
+        return $this->squadPlayerCount;
     }
 }

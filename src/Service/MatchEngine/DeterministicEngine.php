@@ -2,8 +2,6 @@
 
 namespace App\Service\MatchEngine;
 
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
 use App\Entity\GameConfig;
 use App\Enum\Competition\MatchEngineIdentifier;
 use App\Enum\PlayingStyle;
@@ -24,7 +22,7 @@ use App\Service\Appearance\SeededRng;
  * send to get more of this model driven by real data instead of neutral defaults.
  *
  * One deliberate divergence from the TS source: every "random" draw here goes through
- * this fixture's seeded `SeededRng` (seeded via `SeededRng::hashId($fixture->getId())`,
+ * this fixture's seeded `SeededRng` (seeded via `SeededRng::hashId($matchId)`,
  * same convention as the rest of this codebase) rather than `Math.random()` — the
  * frontend doesn't need reproducibility, this engine does (see
  * DeterministicEngineTest::testSameFixtureIdProducesTheSameResultEveryTime()).
@@ -64,19 +62,14 @@ class DeterministicEngine implements MatchEngineInterface
         return $identifier === MatchEngineIdentifier::DETERMINISTIC;
     }
 
-    public function resolve(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): MatchEngineResult
+    public function resolve(MatchEngineSide $home, MatchEngineSide $away, MatchEngineContext $context): MatchEngineResult
     {
-        return $this->resolveMatch($home, $away, $fixture, allowDraws: false);
+        return $this->resolveMatch($home, $away, $context->matchId, allowDraws: $context->allowDraws);
     }
 
-    public function resolveFriendly(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): MatchEngineResult
+    private function resolveMatch(MatchEngineSide $home, MatchEngineSide $away, string $matchId, bool $allowDraws = false): MatchEngineResult
     {
-        return $this->resolveMatch($home, $away, $fixture, allowDraws: true);
-    }
-
-    private function resolveMatch(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture, bool $allowDraws = false): MatchEngineResult
-    {
-        $rngSeed = SeededRng::hashId($fixture->getId()->toRfc4122());
+        $rngSeed = SeededRng::hashId($matchId);
         $rng     = new SeededRng($rngSeed);
         $config  = $this->gameConfigRepository->getConfig();
 
@@ -187,7 +180,7 @@ class DeterministicEngine implements MatchEngineInterface
         [$awayLineup, $awayRatingsAudit] = $this->calculatePerformance($rng, $away, $awayGoals, $homeGoals, $awayGoalStats, $awayCardStats, $config);
 
         $narrativePayload = $this->narrativeGenerator->generate(
-            $fixture,
+            $matchId,
             $home,
             $away,
             $eventLog,
@@ -208,24 +201,24 @@ class DeterministicEngine implements MatchEngineInterface
                 'fallbackReason'  => null,
             ],
             'fixture'          => [
-                'fixtureId'  => $fixture->getId()->toRfc4122(),
+                'fixtureId'  => $matchId,
                 'rngSeed'    => $rngSeed,
                 'allowDraws' => $allowDraws,
             ],
             'entrants'         => [
                 'home' => [
-                    'entrantId'       => (string) $home->getId(),
-                    'clubId'          => (string) $home->getClub()->getId(),
-                    'clubName'        => $this->clubOf($home)['name'] ?? $home->getClub()->getName(),
-                    'seed'            => $home->getSeed(),
-                    'snapshotVersion' => $home->getSnapshotVersion(),
+                    'entrantId'       => $home->sideId,
+                    'clubId'          => $home->clubId,
+                    'clubName'        => $home->resolvedName(),
+                    'seed'            => $home->seed,
+                    'snapshotVersion' => $home->snapshotVersion,
                 ],
                 'away' => [
-                    'entrantId'       => (string) $away->getId(),
-                    'clubId'          => (string) $away->getClub()->getId(),
-                    'clubName'        => $this->clubOf($away)['name'] ?? $away->getClub()->getName(),
-                    'seed'            => $away->getSeed(),
-                    'snapshotVersion' => $away->getSnapshotVersion(),
+                    'entrantId'       => $away->sideId,
+                    'clubId'          => $away->clubId,
+                    'clubName'        => $away->resolvedName(),
+                    'seed'            => $away->seed,
+                    'snapshotVersion' => $away->snapshotVersion,
                 ],
             ],
             'config'           => [
@@ -298,7 +291,7 @@ class DeterministicEngine implements MatchEngineInterface
      *
      * @return array{0: float, 1: array<string, mixed>}
      */
-    private function calculateDominance(CompetitionEntrant $entrant, CompetitionEntrant $opponent, GameConfig $config): array
+    private function calculateDominance(MatchEngineSide $entrant, MatchEngineSide $opponent, GameConfig $config): array
     {
         $players       = $this->playersOf($entrant);
         $style         = $this->styleOf($entrant);
@@ -364,7 +357,7 @@ class DeterministicEngine implements MatchEngineInterface
         $score *= $managerMultiplier;
         $scoreAfterManager = $score;
 
-        $lowUrgency = ($this->clubOf($entrant)['lowUrgency'] ?? false) === true;
+        $lowUrgency = $entrant->engineInput('lowUrgency') === true;
         if ($lowUrgency) {
             $score *= self::LOW_URGENCY_SHARPNESS_MULTIPLIER;
         }
@@ -384,7 +377,7 @@ class DeterministicEngine implements MatchEngineInterface
         $score *= $personalityMultiplier;
         $scoreAfterPersonality = $score;
 
-        $cohesion = $this->clubOf($entrant)['cohesion'] ?? null;
+        $cohesion = $entrant->engineInput('cohesion');
         $cohesionAudit = [
             'rawValue'               => is_numeric($cohesion) ? (float) $cohesion : null,
             'passAccuracyMultiplier' => 1.0,
@@ -481,7 +474,7 @@ class DeterministicEngine implements MatchEngineInterface
      *
      * @return array{0: list<array{minute:int,type:'goal',team:string,scorer:?string,assist:?string}>, 1: array<string, mixed>}
      */
-    private function distributeGoalsAndAssists(SeededRng $rng, CompetitionEntrant $entrant, string $team, int $goals, ?\Closure $rollMinute = null): array
+    private function distributeGoalsAndAssists(SeededRng $rng, MatchEngineSide $entrant, string $team, int $goals, ?\Closure $rollMinute = null): array
     {
         if ($goals <= 0) {
             return [[], [
@@ -628,13 +621,13 @@ class DeterministicEngine implements MatchEngineInterface
      *
      * @return array{0: list<array{minute:int,type:string,team:string,player:string}>, 1: array<string, array{yellowCards:int,redCards:int}>, 2: array<string, mixed>}
      */
-    private function distributeCards(SeededRng $rng, CompetitionEntrant $entrant, string $team, GameConfig $config, int $goalDifference): array
+    private function distributeCards(SeededRng $rng, MatchEngineSide $entrant, string $team, GameConfig $config, int $goalDifference): array
     {
         $scale         = $config->getTemperamentCardScale();
         $maxMultiplier = $config->getLosingTeamCardMultiplierMax();
         $diffCap       = $config->getLosingTeamCardGoalDiffCap();
 
-        $cohesion           = $this->clubOf($entrant)['cohesion'] ?? null;
+        $cohesion           = $entrant->engineInput('cohesion');
         $cohesionMultiplier = 1 + (is_numeric($cohesion) ? $this->cohesionMatchModifiers((float) $cohesion)['cardRiskBonus'] : 0.0);
 
         $events     = [];
@@ -710,7 +703,7 @@ class DeterministicEngine implements MatchEngineInterface
      * @param array<string, array{yellowCards:int,redCards:int}> $cardStats
      * @return array{0: list<array{id:?string,name:?string,position:?string,appearance:?array<string, mixed>,goals:int,assists:int,yellowCards:int,redCards:int,rating:float}>, 1: list<array<string, mixed>>}
      */
-    private function calculatePerformance(SeededRng $rng, CompetitionEntrant $entrant, int $teamScore, int $opponentScore, array $goalStats, array $cardStats, GameConfig $config): array
+    private function calculatePerformance(SeededRng $rng, MatchEngineSide $entrant, int $teamScore, int $opponentScore, array $goalStats, array $cardStats, GameConfig $config): array
     {
         $players = $this->playersOf($entrant);
         usort($players, static fn (array $a, array $b) => (
@@ -806,9 +799,9 @@ class DeterministicEngine implements MatchEngineInterface
         return ['passAccuracyMultiplier' => 1.05, 'errorRateMultiplier' => 1.0, 'cardRiskBonus' => 0.0];
     }
 
-    private function managerAbilityOf(CompetitionEntrant $entrant): float
+    private function managerAbilityOf(MatchEngineSide $entrant): float
     {
-        foreach ($entrant->getSnapshotJson()['staff'] ?? [] as $member) {
+        foreach ($entrant->staff as $member) {
             if (is_array($member) && strtoupper((string) ($member['role'] ?? '')) === 'MANAGER' && is_numeric($member['ability'] ?? null)) {
                 return (float) $member['ability'];
             }
@@ -817,31 +810,21 @@ class DeterministicEngine implements MatchEngineInterface
         return self::DEFAULT_MANAGER_ABILITY;
     }
 
-    private function managerMotivationOf(CompetitionEntrant $entrant): ?float
+    private function managerMotivationOf(MatchEngineSide $entrant): ?float
     {
-        $value = $this->clubOf($entrant)['managerMotivation'] ?? null;
+        $value = $entrant->engineInput('managerMotivation');
 
         return is_numeric($value) ? (float) $value : null;
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function playersOf(CompetitionEntrant $entrant): array
+    private function playersOf(MatchEngineSide $entrant): array
     {
-        return array_values(array_filter($entrant->getSnapshotJson()['players'] ?? [], 'is_array'));
+        return array_values(array_filter($entrant->players, 'is_array'));
     }
 
-    /** @return array<string, mixed> */
-    private function clubOf(CompetitionEntrant $entrant): array
+    private function styleOf(MatchEngineSide $entrant): ?PlayingStyle
     {
-        $club = $entrant->getSnapshotJson()['club'] ?? [];
-
-        return is_array($club) ? $club : [];
-    }
-
-    private function styleOf(CompetitionEntrant $entrant): ?PlayingStyle
-    {
-        $value = $this->clubOf($entrant)['playingStyle'] ?? null;
-
-        return is_string($value) ? PlayingStyle::tryFrom($value) : null;
+        return $entrant->playingStyle;
     }
 }

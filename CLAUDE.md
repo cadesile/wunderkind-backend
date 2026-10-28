@@ -236,6 +236,64 @@ The backend is a **data pool**. `Player` and `Staff` entities have **no club FK*
 - `Sponsor` and `Investor` are **not** pool entities — they retain a `club_id` FK (financial contracts).
 - `Scout` has no club FK and is not deleted on assign.
 
+### Competition & Friendly Snapshots (split by read profile)
+
+Client-submitted squads and admin-only forensics live in **separate rows** from the
+display data public endpoints read. Full detail:
+`.context/stages/03_data/output/schema.md`'s "The split rows".
+
+| Row | Holds | Who may read it |
+|---|---|---|
+| `competition_entrant.clubDisplayJson` | bounded club display block | every bracket render |
+| `competition_entrant_squad` | XI, staff, engine-only club keys | resolve, one match detail, admin |
+| `friendly_challenge.{challenger,acceptor}ClubDisplayJson` | same, per side | the public challenge board |
+| `friendly_challenge_squad` | XI, staff, engine keys, keyed by `FriendlySide` | resolve, one match detail, admin |
+| `competition_result_audit` / `friendly_challenge_audit` | event log, derivation audit | admin detail pages only |
+
+This exists because ORM 3 removed `PARTIAL`, so **every mapped column is decoded on
+every read of its row**. One `GET /api/competitions/{id}` used to decode up to 64 whole
+squads and exhaust the request memory limit; the admin entrant index had already 504'd in
+production for it; the public friendly board decoded two squads per listed challenge.
+
+**Two rules, both easy to break by accident:**
+- **Never add an inverse `OneToOne` from the parent to a split row.** A `OneToOne` inverse
+  side cannot be proxied (the owning FK is on the other table), so Doctrine fetches it
+  eagerly *regardless of* `fetch: LAZY` — silently restoring the whole cost. Go through the
+  repository.
+- **Batch-fetch wherever more than one row is on screen.** `findByEntrants()`,
+  `findByResults()`, `findBothSides()` exist so a split doesn't trade a hydration cost for
+  an N+1 of the same size. The admin bracket page renders every result at once.
+
+`*_squad` rows are pruned when a competition completes (no fixture can resolve, so they're
+dead) — **after** the flush that commits `COMPLETED`, since that prune is raw SQL and
+committing it before a failed flush would leave a live bracket unresolvable. `*_audit` rows
+are deliberately **not** pruned: an audit answers "how was this result derived" about a
+match already played, which is exactly when someone asks.
+
+Other things worth knowing:
+- **`clubDisplayJson` is a picked key set, not the normaliser's output.**
+  `normalizeClubData()` ends in `array_merge($clubData, ...)` and forwards every
+  unrecognised client key verbatim; `clubDisplayBlock()` picks known keys, which is what
+  keeps the stored block bounded. It carries both `id` and `clubId` (same value) because
+  `SnapshotValidator` checks `club.id` specifically. Re-pointing a snapshot at another club
+  must move **both** via `repointClubData()` — identity resolves as `clubId ?? id ??
+  fallback`, so setting one leaves the stale other winning.
+- **`SnapshotValidator` caps a submitted snapshot at 256KB** (~10x a real one) plus staff
+  ≤ 20. Before that, `club`/`staff`/`facilities` had no bound at all and nginx's
+  `client_max_body_size 5m` was the only ceiling — so one registrant could make a public,
+  unauthenticated bracket unservable for everyone else in it.
+- **`facilities` is gone from both contracts.** Accepted, stored on every row, decoded on
+  every read, never read back. `MapRequestPayload` ignores undeclared properties, so a
+  client still sending it is unaffected.
+- **`GET /api/competitions/{id}` serves a prebuilt document** from
+  `competition_response_cache`; only the `viewer` key and `serverTime` are composed per
+  request. The cache is self-validating against the competition's state version, so the
+  cron prewarm hooks are an optimisation, not what correctness rests on.
+- **The match engines take no entities.** `resolve(MatchEngineSide, MatchEngineSide,
+  MatchEngineContext)`. `resolveFriendly()` is gone — a friendly is `allowDraws: true` on
+  the context. Resolving one used to fabricate five entities and reflect over a private id
+  to supply one UUID as an RNG seed.
+
 ### Starter Pool Audit (cron-queued top-ups)
 `app:starter-pool:audit` (hourly, `docker/starter-pool-audit.sh`) sweeps every country in
 `StarterConfig::enabledCountries`, runs the **same** `StarterPackDiagnosticService` verdict

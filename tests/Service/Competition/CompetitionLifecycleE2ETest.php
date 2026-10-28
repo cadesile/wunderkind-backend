@@ -20,6 +20,7 @@ use App\Service\Competition\CompetitionLockService;
 use App\Service\Competition\CompetitionResultsService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use App\Tests\Support\EntrantFixtureTrait;
 
 /**
  * Drives a capacity-4 competition (the shortest bracket — 2 rounds, fastest path to
@@ -31,6 +32,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 class CompetitionLifecycleE2ETest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionLockService $lockService;
     private CompetitionDrawService $drawService;
@@ -78,11 +81,10 @@ class CompetitionLifecycleE2ETest extends KernelTestCase
 
         for ($i = 1; $i <= 4; $i++) {
             $club    = $this->createClub("Club {$i}");
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => "Club {$i}"],
                 'players' => [],
             ]);
-            $this->em->persist($entrant);
         }
         $this->em->flush();
 

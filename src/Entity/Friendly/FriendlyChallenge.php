@@ -61,13 +61,32 @@ class FriendlyChallenge
     #[ORM\Column(type: 'string', length: 20)]
     private string $challengerReputationTier;
 
-    /** @var array<string, mixed> */
+    /**
+     * The challenger's bounded club display block — see
+     * CompetitionRegistrationService::clubDisplayBlock().
+     *
+     * This replaced a whole inline squad snapshot. GET /api/friendlies/challenges is public
+     * and lists every open challenge, so rendering a board of names, kits and badges decoded
+     * two full squads per row: the same fault as the competition bracket, with a smaller
+     * multiplier. The XI, staff and engine-only club keys now live in
+     * FriendlyChallengeSquad, which nothing on a client read path may load.
+     *
+     * @var array<string, mixed>
+     */
     #[ORM\Column(type: 'json')]
-    private array $challengerSnapshotJson;
+    private array $challengerClubDisplayJson;
 
-    /** @var array<string, mixed>|null */
+    /**
+     * The acceptor's display block, or null while the challenge is unaccepted.
+     *
+     * The null is load-bearing, not merely an empty value: it is how the service, the match
+     * detail serializer and the board all recognise a challenge nobody has taken yet. Do not
+     * default it to an empty array.
+     *
+     * @var array<string, mixed>|null
+     */
     #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $acceptorSnapshotJson = null;
+    private ?array $acceptorClubDisplayJson = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
@@ -111,10 +130,6 @@ class FriendlyChallenge
 
     /** @var list<array<string, mixed>>|null */
     #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $eventLogJson = null;
-
-    /** @var list<array<string, mixed>>|null */
-    #[ORM\Column(type: 'json', nullable: true)]
     private ?array $narrativePayload = null;
 
     public function __construct(
@@ -124,7 +139,7 @@ class FriendlyChallenge
         int $challengerOvr,
         int $challengerReputation,
         string $challengerReputationTier,
-        array $challengerSnapshotJson,
+        array $challengerClubDisplayJson,
         \DateTimeImmutable $expiresAt,
     ) {
         $this->id                       = new UuidV7();
@@ -137,7 +152,7 @@ class FriendlyChallenge
         $this->challengerOvr            = $challengerOvr;
         $this->challengerReputation     = $challengerReputation;
         $this->challengerReputationTier = $challengerReputationTier;
-        $this->challengerSnapshotJson   = $challengerSnapshotJson;
+        $this->challengerClubDisplayJson = $challengerClubDisplayJson;
         $this->createdAt                = new \DateTimeImmutable();
         $this->expiresAt                = $expiresAt;
     }
@@ -165,9 +180,15 @@ class FriendlyChallenge
     public function getChallengerOvr(): int { return $this->challengerOvr; }
     public function getChallengerReputation(): int { return $this->challengerReputation; }
     public function getChallengerReputationTier(): string { return $this->challengerReputationTier; }
-    public function getChallengerSnapshotJson(): array { return $this->challengerSnapshotJson; }
-    public function getAcceptorSnapshotJson(): ?array { return $this->acceptorSnapshotJson; }
-    public function setAcceptorSnapshotJson(?array $snapshot): static { $this->acceptorSnapshotJson = $snapshot; return $this; }
+    /** @return array<string, mixed> */
+    public function getChallengerClubDisplayJson(): array { return $this->challengerClubDisplayJson; }
+    /** @param array<string, mixed> $block */
+    public function setChallengerClubDisplayJson(array $block): static { $this->challengerClubDisplayJson = $block; return $this; }
+
+    /** @return array<string, mixed>|null Null means the challenge has not been accepted. */
+    public function getAcceptorClubDisplayJson(): ?array { return $this->acceptorClubDisplayJson; }
+    /** @param array<string, mixed>|null $block */
+    public function setAcceptorClubDisplayJson(?array $block): static { $this->acceptorClubDisplayJson = $block; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getExpiresAt(): \DateTimeImmutable { return $this->expiresAt; }
     public function getAcceptedAt(): ?\DateTimeImmutable { return $this->acceptedAt; }
@@ -184,9 +205,16 @@ class FriendlyChallenge
     public function getAwayClubJson(): ?array { return $this->awayClubJson; }
     public function getHomeLineupJson(): ?array { return $this->homeLineupJson; }
     public function getAwayLineupJson(): ?array { return $this->awayLineupJson; }
-    public function getEventLogJson(): ?array { return $this->eventLogJson; }
     public function getNarrativePayload(): ?array { return $this->narrativePayload; }
 
+    /**
+     * Records the played result.
+     *
+     * No `$eventLogJson`: the minute-by-minute log is admin-only and now lives in
+     * FriendlyChallengeAudit, written by FriendlyChallengeService::resolveSingleMatch()
+     * alongside this call. It used to sit here, on an entity the public challenge board
+     * hydrates for every COMPLETE challenge it lists.
+     */
     public function recordResult(
         int $homeScore,
         int $awayScore,
@@ -194,7 +222,6 @@ class FriendlyChallenge
         array $awayClubJson,
         array $homeLineupJson,
         array $awayLineupJson,
-        array $eventLogJson,
         array $narrativePayload,
         \DateTimeImmutable $resolvedAt,
     ): static {
@@ -204,7 +231,6 @@ class FriendlyChallenge
         $this->awayClubJson     = $awayClubJson;
         $this->homeLineupJson   = $homeLineupJson;
         $this->awayLineupJson   = $awayLineupJson;
-        $this->eventLogJson     = $eventLogJson;
         $this->narrativePayload = $narrativePayload;
         $this->resolvedAt       = $resolvedAt;
         $this->status           = FriendlyChallengeStatus::COMPLETE;

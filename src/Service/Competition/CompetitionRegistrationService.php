@@ -5,6 +5,7 @@ namespace App\Service\Competition;
 use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
+use App\Entity\Competition\CompetitionEntrantSquad;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
@@ -28,6 +29,18 @@ use Symfony\Component\Uid\UuidV7;
  */
 class CompetitionRegistrationService
 {
+    /**
+     * The club keys the match engine reads and no display path does.
+     *
+     * They reached the engine only because normalizeClubData() merges unrecognised client
+     * keys straight through, which left them indistinguishable from display fields sitting
+     * in the same object. Verified exhaustively against DeterministicEngine: besides these
+     * three it reads only `name` and `playingStyle`, both of which are display-block keys.
+     *
+     * @var list<string>
+     */
+    public const CLUB_ENGINE_KEYS = ['cohesion', 'managerMotivation', 'lowUrgency'];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionEntrantRepository $entrantRepository,
@@ -83,6 +96,197 @@ class CompetitionRegistrationService
             : self::computeStartingXiOvr($snapshotJson);
 
         return self::normalizeClubData($clubData, $clubEntity, $fallbackClubId, $ovr);
+    }
+
+    /**
+     * The canonical, bounded club display block — the only club data a bracket render,
+     * challenge board or match summary needs.
+     *
+     * This set was already the de facto contract, picked identically (and separately) by
+     * MatchQueryService::normalizeClubIdentityArray() and
+     * CompetitionController::serializeEntrantSummary(). Defining it once here means it is
+     * stored once and read everywhere, instead of being re-derived from a whole snapshot on
+     * every read.
+     *
+     * Note what this does NOT do: normalizeClubData() ends in `array_merge($clubData, ...)`
+     * and so passes every unrecognised client key through verbatim. Picking a known set is
+     * the point — it is what makes the stored block bounded, and therefore what stops one
+     * registration from inflating every subsequent read of that competition.
+     *
+     * @param array<string, mixed> $clubData
+     * @return array<string, mixed>
+     */
+    public static function clubDisplayBlock(array $clubData, ?Club $clubEntity = null, ?string $fallbackClubId = null, ?int $ovrOverride = null): array
+    {
+        $normalized = self::normalizeClubData($clubData, $clubEntity, $fallbackClubId, $ovrOverride);
+
+        $block = [
+            // Both `id` and `clubId`, carrying the same value, because both are part of the
+            // established client shape and SnapshotValidator checks `club.id` specifically.
+            // Dropping it broke snapshot re-validation on the spoof-clone path, which
+            // reassembles an envelope from stored rows and runs it back through the validator.
+            'id'             => $normalized['clubId'],
+            'clubId'         => $normalized['clubId'],
+            'clubName'       => $normalized['clubName'],
+            'name'           => $normalized['name'],
+            'abbreviation'   => $normalized['abbreviation'],
+            'country'        => $normalized['country'],
+            'ovr'            => $normalized['ovr'],
+            'reputation'     => $normalized['reputation'],
+            'reputationTier' => $normalized['reputationTier'],
+            'tier'           => $normalized['tier'],
+            'homeKitConfig'  => $normalized['homeKitConfig'],
+            'awayKitConfig'  => $normalized['awayKitConfig'],
+            'badgeConfig'    => $normalized['badgeConfig'],
+            'identity'       => $normalized['identity'],
+            'stadium'        => $normalized['stadium'],
+            'badgeShape'     => $normalized['badgeShape'],
+            'homePrimary'    => $normalized['homePrimary'],
+            'homeSecondary'  => $normalized['homeSecondary'],
+            'awayPrimary'    => $normalized['awayPrimary'],
+            'awaySecondary'  => $normalized['awaySecondary'],
+            'formation'      => $normalized['formation'] ?? null,
+        ];
+
+        // Both stay absent rather than null when unset, which is the shape every existing
+        // consumer already branches on (`isset`, not `!== null`).
+        if (isset($normalized['stadiumName'])) {
+            $block['stadiumName'] = $normalized['stadiumName'];
+        }
+        if (isset($normalized['playingStyle'])) {
+            $block['playingStyle'] = $normalized['playingStyle'];
+        }
+
+        return $block;
+    }
+
+    /**
+     * Splits a submitted envelope into the two rows it is stored across.
+     *
+     * One place decides what lands where, so register() and resubmit() cannot drift — which
+     * matters because they write through raw SQL and so get no help from the ORM in keeping
+     * the two tables consistent.
+     *
+     * @param array<string, mixed> $snapshotJson
+     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>, clientSnapshotAt: ?string, playerCount: int}
+     */
+    private static function splitSnapshot(array $snapshotJson, Club $club): array
+    {
+        $clubData = is_array($snapshotJson['club'] ?? null) ? $snapshotJson['club'] : [];
+        $players  = array_values(array_filter(is_array($snapshotJson['players'] ?? null) ? $snapshotJson['players'] : [], 'is_array'));
+        $staff    = array_values(array_filter(is_array($snapshotJson['staff'] ?? null) ? $snapshotJson['staff'] : [], 'is_array'));
+
+        // OVR is computed from the XI here and frozen into the display block, which is why
+        // no read path needs the players to show a club's rating.
+        $ovr = is_numeric($clubData['ovr'] ?? null)
+            ? (int) round((float) $clubData['ovr'])
+            : self::computeStartingXiOvr($snapshotJson);
+
+        $rawClientSnapshotAt = $snapshotJson['clientSnapshotAt'] ?? null;
+
+        return [
+            'display'          => self::clubDisplayBlock($clubData, $club, (string) $club->getId(), $ovr),
+            'engine'           => self::clubEngineBlock($clubData),
+            'players'          => $players,
+            'staff'            => $staff,
+            'clientSnapshotAt' => CompetitionEntrant::sanitizeClientSnapshotAt(is_string($rawClientSnapshotAt) ? $rawClientSnapshotAt : null),
+            'playerCount'      => count($players),
+        ];
+    }
+
+    /**
+     * Writes (or replaces) the engine-input row for one entrant.
+     *
+     * Upserted rather than inserted because an entrant row can be reused: re-registering
+     * after a withdrawal takes the ON CONFLICT branch in register() and keeps its original
+     * id, and every resubmission replaces the XI wholesale.
+     *
+     * @param array<string, mixed> $parts Output of splitSnapshot().
+     */
+    private function writeSquad(\Doctrine\DBAL\Connection $connection, string $entrantId, array $parts): void
+    {
+        $connection->executeStatement(
+            <<<'SQL'
+            INSERT INTO competition_entrant_squad
+                (id, entrant_id, players_json, staff_json, club_engine_json)
+            VALUES (:id, :entrantId, :players, :staff, :engine)
+            ON CONFLICT (entrant_id) DO UPDATE
+                SET players_json     = EXCLUDED.players_json,
+                    staff_json       = EXCLUDED.staff_json,
+                    club_engine_json = EXCLUDED.club_engine_json
+            SQL,
+            [
+                'id'        => (new UuidV7())->toRfc4122(),
+                'entrantId' => $entrantId,
+                'players'   => json_encode($parts['players'], JSON_THROW_ON_ERROR),
+                'staff'     => json_encode($parts['staff'], JSON_THROW_ON_ERROR),
+                'engine'    => json_encode($parts['engine'], JSON_THROW_ON_ERROR),
+            ],
+        );
+    }
+
+    /**
+     * Reassembles the `{club, players, staff, clientSnapshotAt}` envelope an entrant was
+     * registered with, out of the two rows it is now stored across.
+     *
+     * Deliberately narrow. Only two callers genuinely want the old shape back — cloning an
+     * entrant into spoof entrants, and the admin's full-snapshot viewer — and both act on a
+     * single entrant. Nothing on a client read path may call this: it loads a squad row,
+     * which is the exact cost the split exists to avoid.
+     *
+     * @return array<string, mixed>
+     */
+    public static function snapshotEnvelopeFrom(CompetitionEntrant $entrant, ?CompetitionEntrantSquad $squad): array
+    {
+        return [
+            'club'             => array_merge($entrant->getClubDisplayJson(), $squad?->getClubEngineJson() ?? []),
+            'players'          => $squad?->getPlayersJson() ?? [],
+            'staff'            => $squad?->getStaffJson() ?? [],
+            'clientSnapshotAt' => $entrant->getClientSnapshotAt(),
+        ];
+    }
+
+    /**
+     * Re-points a club object at a different Club, for the spoof paths that clone one
+     * entrant's submission onto a freshly minted club.
+     *
+     * Both `id` and `clubId` must move together. normalizeClubData() resolves identity as
+     * `clubId ?? id ?? fallback`, so setting only `id` leaves a stale `clubId` winning and
+     * the clone keeps pointing at the club it was copied from — which is exactly what
+     * happened once `clubId` started being stored in the display block, where previously
+     * only `id` was reliably present on a pasted snapshot.
+     *
+     * @param array<string, mixed> $clubData
+     * @return array<string, mixed>
+     */
+    public static function repointClubData(array $clubData, Club $to): array
+    {
+        $clubData['id']     = (string) $to->getId();
+        $clubData['clubId'] = (string) $to->getId();
+
+        return $clubData;
+    }
+
+    /**
+     * The engine-only club tuning inputs, lifted out of the same client object.
+     *
+     * Absent keys are left absent: every consumer in DeterministicEngine reads these with
+     * `?? null` / `?? false` defaults, so storing explicit nulls would be a behaviour
+     * change rather than a faithful move.
+     *
+     * @param array<string, mixed> $clubData
+     * @return array<string, mixed>
+     */
+    public static function clubEngineBlock(array $clubData): array
+    {
+        $block = [];
+        foreach (self::CLUB_ENGINE_KEYS as $key) {
+            if (array_key_exists($key, $clubData)) {
+                $block[$key] = $clubData[$key];
+            }
+        }
+
+        return $block;
     }
 
     /**
@@ -413,7 +617,7 @@ class CompetitionRegistrationService
      */
     public function register(ActiveCompetition $activeCompetition, Club $club, array $snapshotJson): array
     {
-        $snapshotJson['club'] = self::normalizeSnapshotClub($snapshotJson, $club, (string) $club->getId());
+        $parts = self::splitSnapshot($snapshotJson, $club);
 
         $connection = $this->em->getConnection();
         $connection->beginTransaction();
@@ -457,38 +661,52 @@ class CompetitionRegistrationService
                 }
             }
 
-            $id       = new UuidV7();
-            $now      = new \DateTimeImmutable();
-            $affected = $connection->executeStatement(
+            $id  = new UuidV7();
+            $now = new \DateTimeImmutable();
+
+            // RETURNING id, not the affected-row count. On the ON CONFLICT branch the
+            // surviving row keeps its ORIGINAL id, so the generated $id above is not the
+            // entrant the squad must attach to — writing the squad against $id would orphan
+            // it and leave the re-registered entrant with the previous XI.
+            $entrantId = $connection->fetchOne(
                 <<<'SQL'
                 INSERT INTO competition_entrant
-                    (id, active_competition_id, club_id, seed, status, snapshot_json, snapshot_locked_at, snapshot_version, registered_at, eliminated_in_round_id)
-                VALUES (:id, :competitionId, :clubId, 0, :status, :snapshotJson, NULL, 1, :registeredAt, NULL)
+                    (id, active_competition_id, club_id, seed, status, club_display_json, client_snapshot_at, squad_player_count, snapshot_locked_at, snapshot_version, registered_at, eliminated_in_round_id)
+                VALUES (:id, :competitionId, :clubId, 0, :status, :clubDisplay, :clientSnapshotAt, :playerCount, NULL, 1, :registeredAt, NULL)
                 ON CONFLICT (active_competition_id, club_id) DO UPDATE
                     SET status = EXCLUDED.status,
-                        snapshot_json = EXCLUDED.snapshot_json,
+                        club_display_json = EXCLUDED.club_display_json,
+                        client_snapshot_at = EXCLUDED.client_snapshot_at,
+                        squad_player_count = EXCLUDED.squad_player_count,
                         registered_at = EXCLUDED.registered_at,
                         snapshot_version = competition_entrant.snapshot_version + 1,
                         snapshot_locked_at = NULL
                   WHERE competition_entrant.status = :withdrawnStatus
+                RETURNING id
                 SQL,
                 [
-                    'id'              => $id->toRfc4122(),
-                    'competitionId'   => $activeCompetition->getId()->toRfc4122(),
-                    'clubId'          => $club->getId()->toRfc4122(),
-                    'status'          => CompetitionEntrantStatus::REGISTERED->value,
-                    'snapshotJson'    => json_encode($snapshotJson, JSON_THROW_ON_ERROR),
-                    'registeredAt'    => $now->format('Y-m-d H:i:s'),
-                    'withdrawnStatus' => CompetitionEntrantStatus::WITHDRAWN->value,
+                    'id'               => $id->toRfc4122(),
+                    'competitionId'    => $activeCompetition->getId()->toRfc4122(),
+                    'clubId'           => $club->getId()->toRfc4122(),
+                    'status'           => CompetitionEntrantStatus::REGISTERED->value,
+                    'clubDisplay'      => json_encode($parts['display'], JSON_THROW_ON_ERROR),
+                    'clientSnapshotAt' => $parts['clientSnapshotAt'],
+                    'playerCount'      => $parts['playerCount'],
+                    'registeredAt'     => $now->format('Y-m-d H:i:s'),
+                    'withdrawnStatus'  => CompetitionEntrantStatus::WITHDRAWN->value,
                 ],
             );
 
-            if ($affected === 0) {
+            // No row returned means the ON CONFLICT guard rejected it: an active
+            // registration already exists and must not be overwritten.
+            if ($entrantId === false || $entrantId === null) {
                 $connection->commit();
                 $existing = $this->entrantRepository->findByCompetitionAndClub($activeCompetition, $club);
 
                 return ['entrant' => $existing, 'wasNewRegistration' => false];
             }
+
+            $this->writeSquad($connection, (string) $entrantId, $parts);
 
             if ($entryFeePence > 0) {
                 $this->em->refresh($club);
@@ -676,28 +894,47 @@ class CompetitionRegistrationService
     }
 
     /**
-     * Raw SQL UPDATE — snapshotJson mixes string/int values, so Doctrine's json
-     * dirty-check would silently skip an ORM-level setSnapshotJson()+flush() update.
+     * Replaces an entrant's submitted squad, bumping snapshotVersion and clearing the lock.
+     *
+     * Still raw SQL, and still for the original reason: these payloads mix string and int
+     * values in one json column, which Doctrine's dirty-check silently skips. Both rows are
+     * written in one transaction so an entrant can never end up with a new display block
+     * and the previous XI.
      *
      * @param array<string, mixed> $snapshotJson
      */
     public function resubmit(CompetitionEntrant $entrant, array $snapshotJson): void
     {
-        $club                 = $entrant->getClub();
-        $snapshotJson['club'] = self::normalizeSnapshotClub($snapshotJson, $club, (string) $club->getId());
+        $parts      = self::splitSnapshot($snapshotJson, $entrant->getClub());
+        $connection = $this->em->getConnection();
 
-        $this->em->getConnection()->executeStatement(
-            <<<'SQL'
-            UPDATE competition_entrant
-               SET snapshot_json = :snapshotJson,
-                   snapshot_version = snapshot_version + 1,
-                   snapshot_locked_at = NULL
-             WHERE id = :id
-            SQL,
-            [
-                'snapshotJson' => json_encode($snapshotJson, JSON_THROW_ON_ERROR),
-                'id'           => $entrant->getId()->toRfc4122(),
-            ],
-        );
+        $connection->beginTransaction();
+
+        try {
+            $connection->executeStatement(
+                <<<'SQL'
+                UPDATE competition_entrant
+                   SET club_display_json = :clubDisplay,
+                       client_snapshot_at = :clientSnapshotAt,
+                       squad_player_count = :playerCount,
+                       snapshot_version = snapshot_version + 1,
+                       snapshot_locked_at = NULL
+                 WHERE id = :id
+                SQL,
+                [
+                    'clubDisplay'      => json_encode($parts['display'], JSON_THROW_ON_ERROR),
+                    'clientSnapshotAt' => $parts['clientSnapshotAt'],
+                    'playerCount'      => $parts['playerCount'],
+                    'id'               => $entrant->getId()->toRfc4122(),
+                ],
+            );
+
+            $this->writeSquad($connection, $entrant->getId()->toRfc4122(), $parts);
+            $connection->commit();
+        } catch (\Throwable $e) {
+            $connection->rollBack();
+
+            throw $e;
+        }
     }
 }

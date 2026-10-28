@@ -24,9 +24,13 @@ use App\Service\Competition\CompetitionResultsService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Envelope;
+use App\Tests\Support\EntrantFixtureTrait;
+use App\Repository\Competition\CompetitionResultAuditRepository;
 
 class CompetitionResultsServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionDrawService $drawService;
     private CompetitionResultsService $resultsService;
@@ -77,11 +81,10 @@ class CompetitionResultsServiceTest extends KernelTestCase
 
         for ($i = 1; $i <= $capacity; $i++) {
             $club    = $this->createClub("Club {$i}");
-            $entrant = new CompetitionEntrant($instance, $club, 0, [
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => "Club {$i}"],
                 'players' => [['id' => 'p1', 'position' => 'MID', 'currentAbility' => 10]],
             ]);
-            $this->em->persist($entrant);
         }
         $this->em->flush();
 
@@ -282,8 +285,7 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->em->persist($instance);
         for ($i = 1; $i <= 4; $i++) {
             $club    = $this->createClub("Club {$i}");
-            $entrant = new CompetitionEntrant($instance, $club, 0, ['club' => ['id' => (string) $club->getId(), 'name' => "Club {$i}"], 'players' => []]);
-            $this->em->persist($entrant);
+            $entrant = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, ['club' => ['id' => (string) $club->getId(), 'name' => "Club {$i}"], 'players' => []]);
         }
         $this->em->flush();
         self::getContainer()->get(CompetitionLockService::class)->lock($instance);
@@ -355,7 +357,14 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $fixture  = $this->fixtureRepository->findByRoundOrderedBySlot($round1)[0];
 
         $result = $this->resultsService->forceResolveFixture($fixture);
-        $audit  = $result->getComputationAuditJson();
+
+        // The audit is its own row now, reached through its repository rather than the
+        // result — CompetitionResult holds no association to it on purpose, because a
+        // OneToOne inverse is always fetched eagerly and would put admin-only forensics back
+        // on every public read path.
+        $auditRow = self::getContainer()->get(CompetitionResultAuditRepository::class)->findForResult($result);
+        $this->assertNotNull($auditRow, 'resolving a fixture must store its derivation audit');
+        $audit = $auditRow->getComputationAuditJson();
 
         $this->assertIsArray($audit);
         $this->assertSame(1, $audit['schemaVersion']);
@@ -373,11 +382,48 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertContains($audit['outcome']['resolutionMethod'], ['regulation', 'extra_time', 'penalties']);
 
         // Admin accessors expose the audit, while client summary keeps it internal
-        $this->assertNotNull($result->getComputationAuditPretty());
-        $fullPayload = json_decode($result->getFullPayloadPretty(), true);
+        $this->assertNotNull($auditRow->getComputationAuditJsonPretty());
+        $this->assertNotEmpty($auditRow->getEventLogJson(), 'the event log moved to the audit row with it');
+        $fullPayload = json_decode($result->getFullPayloadPretty($auditRow), true);
         $this->assertIsArray($fullPayload['computationAuditJson'] ?? null);
         $clientSummary = $result->toClientSummary();
         $this->assertArrayNotHasKey('computationAudit', $clientSummary);
         $this->assertArrayNotHasKey('computationAuditJson', $clientSummary);
+    }
+
+    /**
+     * The client summary of a result must build with no audit row present at all.
+     *
+     * This is the invariant the audit split protects, and the only way to prove it: an
+     * assertion that `computationAudit` is absent from the payload passes whether or not the
+     * forensics were decoded to produce it. Deleting the row and then serializing is what
+     * actually shows no public path reaches for them.
+     */
+    public function testAClientSummaryBuildsWithNoAuditRow(): void
+    {
+        $instance = $this->buildDrawnCompetition(capacity: 4);
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+        $fixture  = $this->fixtureRepository->findByRoundOrderedBySlot($round1)[0];
+
+        $result = $this->resultsService->forceResolveFixture($fixture);
+
+        $this->em->getConnection()->executeStatement(
+            'DELETE FROM competition_result_audit WHERE result_id = :id',
+            ['id' => $result->getId()->toRfc4122()],
+        );
+        $this->em->clear();
+
+        $result = $this->em->getRepository(\App\Entity\Competition\CompetitionResult::class)->find($result->getId());
+        $this->assertNotNull($result);
+
+        $summary = $result->toClientSummary();
+        $this->assertSame($result->getHomeScore(), $summary['homeScore']);
+        // Counted against the stored lineup rather than a fixed number: this fixture seeds a
+        // minimal squad, and the point is that the lineup survives the audit row's absence,
+        // not how big it is.
+        $this->assertCount(count($result->getHomeLineupJson()), $summary['homeLineup']);
+        $this->assertNotEmpty($summary['homeLineup']);
+        $this->assertArrayNotHasKey('eventLogJson', $summary);
+        $this->assertArrayNotHasKey('computationAuditJson', $summary);
     }
 }

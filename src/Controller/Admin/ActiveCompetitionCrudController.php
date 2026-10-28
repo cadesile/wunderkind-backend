@@ -8,6 +8,7 @@ use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
+use App\Repository\Competition\CompetitionResultAuditRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Entity\Competition\CompetitionRound;
 use App\Repository\Competition\CompetitionRoundRepository;
@@ -85,6 +86,7 @@ class ActiveCompetitionCrudController extends AbstractCrudController
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
         private readonly CompetitionResultRepository $resultRepository,
+        private readonly CompetitionResultAuditRepository $resultAuditRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly EntityManagerInterface $em,
     ) {}
@@ -113,6 +115,12 @@ class ActiveCompetitionCrudController extends AbstractCrudController
 
         $resultsByFixtureId = $this->resultRepository->findByFixtureIds($allFixtureIds);
 
+        // Audits for the whole bracket in one query. They live in their own table now
+        // (admin-only forensics, off every public read path), and this screen shows every
+        // result at once — so fetching them per result would swap the hydration cost the
+        // split removed for an N+1 of exactly the same size.
+        $auditsByResultId = $this->resultAuditRepository->findByResults(array_values($resultsByFixtureId));
+
         $canGenerateSpoof = $competition->getStatus() === ActiveCompetitionStatus::REGISTERING
             && $this->entrantRepository->countForCompetition($competition) > 0;
         $canSpoofAll = $competition->getStatus() === ActiveCompetitionStatus::REGISTERING
@@ -133,6 +141,7 @@ class ActiveCompetitionCrudController extends AbstractCrudController
             'rounds'                        => $rounds,
             'fixturesByRoundId'             => $fixturesByRoundId,
             'resultsByFixtureId'            => $resultsByFixtureId,
+            'auditsByResultId'              => $auditsByResultId,
             'canGenerateSpoof'              => $canGenerateSpoof,
             'generateSpoofUrl'              => $this->generateUrl('admin', [
                 'routeName'   => 'admin_active_competition_generate_spoof',

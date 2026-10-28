@@ -6,6 +6,7 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionResult;
+use App\Entity\Competition\CompetitionResultAudit;
 use App\Entity\Competition\CompetitionRound;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
@@ -13,17 +14,20 @@ use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\MessageSenderType;
 use App\Enum\Tier;
+use App\Repository\Competition\CompetitionEntrantSquadRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
 use App\Service\ClubInitializationService;
 use App\Service\InboxService;
+use App\Service\MatchEngine\MatchEngineContext;
 use App\Service\MatchEngine\MatchEngineInterface;
 use App\Service\MatchEngine\MatchEngineRegistry;
 use App\Service\MatchEngine\MatchEngineResult;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * Owns the entire resolution + finalization phase (DRAWN -> RESULTS_PUBLISHED), and, for
@@ -46,11 +50,15 @@ class CompetitionResultsService
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionFixtureRepository $fixtureRepository,
         private readonly CompetitionResultRepository $resultRepository,
+        private readonly CompetitionEntrantSquadRepository $squadRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly CompetitionResponseBuilder $responseBuilder,
+        private readonly CompetitionResponseCacheService $responseCache,
         private readonly ?InboxService $inboxService = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     /** @return int Number of rounds this call actually published results for. */
@@ -60,6 +68,7 @@ class CompetitionResultsService
         foreach ($this->roundRepository->findDueForResults($now) as $round) {
             if ($this->claimResults($round, $now)) {
                 $this->publishResults($round, $now);
+                $this->prewarmResponse($round->getActiveCompetition());
                 $published++;
             }
         }
@@ -120,6 +129,8 @@ class CompetitionResultsService
         if ($roundFullyResolved) {
             $this->finalizeRound($round, $now, $winners);
         }
+
+        $this->prewarmResponse($round->getActiveCompetition());
 
         return $this->resultRepository->findOneBy(['fixture' => $fixture])
             ?? throw new \RuntimeException('Fixture was resolved but no result was recorded — this should never happen.');
@@ -228,6 +239,19 @@ class CompetitionResultsService
         }
 
         $this->em->flush();
+
+        // Prune the engine inputs only once COMPLETED is actually committed.
+        //
+        // These rows are the match engine's only source for each entrant's XI, staff and
+        // club tuning keys, so dropping them is safe exactly when no further fixture can
+        // resolve — and not one statement earlier. deleteForCompetition() is raw SQL and
+        // commits on its own, so running it before the flush above would, on a failed
+        // flush, leave a competition that is not COMPLETED with no way to resolve its
+        // remaining fixtures. Ordering it after is the difference between a pruned finished
+        // bracket and a permanently stuck live one.
+        if ($activeCompetition->getStatus() === ActiveCompetitionStatus::COMPLETED) {
+            $this->squadRepository->deleteForCompetition((string) $activeCompetition->getId());
+        }
     }
 
     /**
@@ -288,8 +312,17 @@ class CompetitionResultsService
             return $survivor;
         }
 
-        $engine      = $this->matchEngineRegistry->resolveFor($round->getMatchEngineIdentifier());
-        $matchResult = $engine->resolve($home, $away, $fixture);
+        $engine = $this->matchEngineRegistry->resolveFor($round->getMatchEngineIdentifier());
+
+        // Both squads in one query. The engine reads the XI, staff and club tuning keys from
+        // these rows and nowhere else, so this is the one place a resolution pass touches
+        // competition_entrant_squad.
+        $squads      = $this->squadRepository->findByEntrants([$home, $away]);
+        $matchResult = $engine->resolve(
+            MatchEngineSideFactory::fromEntrant($home, $squads[(string) $home->getId()] ?? null),
+            MatchEngineSideFactory::fromEntrant($away, $squads[(string) $away->getId()] ?? null),
+            MatchEngineContext::forCupTie((string) $fixture->getId(), $round->getMatchEngineIdentifier()),
+        );
 
         $usedTiebreak = false;
         $winner       = match (true) {
@@ -315,7 +348,6 @@ class CompetitionResultsService
             $fixture,
             $matchResult->homeScore,
             $matchResult->awayScore,
-            $matchResult->eventLog,
             $round->getMatchEngineIdentifier(),
             $homeClubJson,
             $awayClubJson,
@@ -324,17 +356,28 @@ class CompetitionResultsService
         );
         $result->setNarrativePayload($matchResult->narrativePayload);
         $result->setShootoutInfo($matchResult->wentToExtraTime, $matchResult->wentToPenalties, $matchResult->penaltyHomeScore, $matchResult->penaltyAwayScore);
-        $result->setComputationAuditJson($this->buildComputationAudit(
-            $fixture,
-            $round,
-            $home,
-            $away,
-            $winner,
-            $engine,
-            $matchResult,
-            $usedTiebreak,
-        ));
+
+        // The event log and the derivation audit go to their own row. Both are admin-only,
+        // and holding them on the result meant every public bracket read, every
+        // GET /api/matches/{id} and every club-hub query decoded them. Persisted in the same
+        // flush as the result, so Doctrine orders the inserts by the association and the
+        // audit cannot land before the row it points at.
+        $audit = new CompetitionResultAudit(
+            $result,
+            $matchResult->eventLog,
+            $this->buildComputationAudit(
+                $fixture,
+                $round,
+                $home,
+                $away,
+                $winner,
+                $engine,
+                $matchResult,
+                $usedTiebreak,
+            ),
+        );
         $this->em->persist($result);
+        $this->em->persist($audit);
 
         $fixture->setStatus(CompetitionFixtureStatus::COMPLETE);
         $fixture->setWinnerEntrant($winner);
@@ -418,14 +461,18 @@ class CompetitionResultsService
         return $winner;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The club copy frozen onto a result.
+     *
+     * This is now a plain read: the entrant already stores the resolved display block, so
+     * there is nothing left to normalise at resolve time. It used to re-run the whole
+     * normaliser over the entrant's full snapshot on every fixture.
+     *
+     * @return array<string, mixed>
+     */
     private function clubJsonOf(CompetitionEntrant $entrant): array
     {
-        return CompetitionRegistrationService::normalizeSnapshotClub(
-            $entrant->getSnapshotJson(),
-            $entrant->getClub(),
-            (string) $entrant->getClub()->getId(),
-        );
+        return $entrant->getClubDisplayJson();
     }
 
     private function breakTie(CompetitionEntrant $home, CompetitionEntrant $away, CompetitionFixture $fixture): CompetitionEntrant
@@ -525,5 +572,33 @@ class CompetitionResultsService
         ]);
 
         return $audit;
+    }
+
+    /**
+     * Rebuilds this competition's prebuilt bracket response.
+     *
+     * Called after a pass that changed the bracket, so the next reader finds the document
+     * ready instead of paying to assemble it. Strictly an optimisation: the cache validates
+     * itself against the competition's state version, so skipping this costs one rebuild on
+     * the next read and can never serve a stale bracket.
+     *
+     * Failures are swallowed deliberately. A tick that published a result has already
+     * committed real game state; letting a cache rebuild turn that into a failed tick would
+     * be strictly worse than serving the next request from a cold cache.
+     */
+    private function prewarmResponse(ActiveCompetition $activeCompetition): void
+    {
+        try {
+            $this->responseCache->rebuild(
+                $activeCompetition,
+                $this->responseBuilder->stateVersion($activeCompetition),
+                fn (): array => $this->responseBuilder->sharedDocument($activeCompetition),
+            );
+        } catch (\Throwable $e) {
+            $this->logger?->warning('Failed to prewarm the competition response cache.', [
+                'competitionId' => (string) $activeCompetition->getId(),
+                'exception'     => $e->getMessage(),
+            ]);
+        }
     }
 }

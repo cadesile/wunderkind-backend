@@ -9,6 +9,8 @@ use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\ActiveCompetitionRepository;
 use App\Repository\Competition\CompetitionEntrantRepository;
+use App\Repository\Competition\CompetitionEntrantSquadRepository;
+use App\Service\Competition\CompetitionRegistrationService;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -58,6 +60,7 @@ class CompetitionEntrantCrudController extends AbstractCrudController
     public function __construct(
         private readonly ActiveCompetitionRepository $activeCompetitionRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
+        private readonly CompetitionEntrantSquadRepository $squadRepository,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -66,31 +69,26 @@ class CompetitionEntrantCrudController extends AbstractCrudController
     }
 
     /**
-     * The page size is a deliberate guard, not a style choice.
+     * The page size is no longer load-bearing, but it stays small on purpose.
      *
-     * Every row on this index carries a full club snapshot — squad, staff, tactics, each
-     * player's attributes and appearance — and Doctrine hydrates every mapped column of the
-     * root entity, so listing N entrants decodes N whole snapshots into PHP arrays whether or
-     * not a column renders them. That is what made this screen time out (504) in production.
-     * There is no way to exclude the column: ORM 3 removed PARTIAL hydration, and the
-     * property is read by 25 call sites across the match engine and results services, so it
-     * cannot simply be unmapped.
+     * This screen used to time out (504) in production because every row carried the whole
+     * registration snapshot — squad, staff, tactics, every player's attributes and
+     * appearance — and ORM 3 removed PARTIAL hydration, so listing N entrants decoded N
+     * whole snapshots whether or not a column rendered them. Halving the page was the only
+     * lever available then, and this docblock used to prescribe the real cure: move the
+     * snapshot into its own table.
      *
-     * Halving the page therefore halves the decode cost, which is the only lever available
-     * without restructuring. **It is proportional relief, not a cure** — if this screen still
-     * times out, the permanent fix is to move `snapshotJson` into its own table behind a lazy
-     * one-to-one, so the index never touches it and the detail page loads exactly one. That
-     * is a data migration plus a change to the raw-SQL writes in
-     * CompetitionRegistrationService, which is why it was not done blind: it needs a real
-     * measurement of production snapshot sizes to justify, and no environment outside
-     * production has representative rows.
+     * That has now been done. The squad lives in competition_entrant_squad and this entity
+     * holds only a bounded club display block, so an index page no longer decodes a squad at
+     * all — the summary columns below read the small block or a denormalised counter. The
+     * page size is now just a sensible default for a read-only audit list.
      */
     public function configureCrud(Crud $crud): Crud
     {
         return $crud
             ->setDefaultSort(['registeredAt' => 'DESC'])
             ->setPaginatorPageSize(10)
-            ->setHelp('index', 'Each row carries a full squad snapshot, so this list is deliberately paginated small. Use the filters rather than paging through everything.');
+            ->setHelp('index', 'Squad data lives in a separate row and is not loaded here — open an entrant to see its full submitted snapshot.');
     }
 
     public function configureActions(Actions $actions): Actions
@@ -131,7 +129,7 @@ class CompetitionEntrantCrudController extends AbstractCrudController
             ->setFormType(EnumType::class)
             ->setFormTypeOptions(['class' => CompetitionEntrantStatus::class]);
 
-        // Snapshot-derived summary columns — scan the list without opening every row.
+        // Summary columns read the display block or the denormalised counter, never a squad row.
         yield IntegerField::new('snapshotPlayerCount', 'Players');
         yield TextField::new('snapshotFormation', 'Formation')->hideOnIndex();
         yield TextField::new('snapshotPlayingStyle', 'Playing Style');
@@ -141,10 +139,29 @@ class CompetitionEntrantCrudController extends AbstractCrudController
         yield DateTimeField::new('registeredAt');
         yield AssociationField::new('eliminatedInRound')->hideOnIndex();
 
-        yield CodeEditorField::new('snapshotJsonPretty', 'Full Snapshot')
+        yield CodeEditorField::new('clubDisplayJsonPretty', 'Club Display Block')
             ->setLanguage('js')
             ->setNumOfRows(24)
             ->onlyOnDetail();
+
+        // The submitted XI and staff, from competition_entrant_squad.
+        //
+        // onlyOnDetail() is doing real work here, not tidying a layout: this is the one field
+        // on this screen that loads a second row, and letting it onto the index would restore
+        // precisely the per-row squad decode that made this page time out before the split.
+        //
+        // setValue('') is the documented EasyAdmin workaround for a virtual field — without a
+        // non-null placeholder, CommonPreConfigurator tries PropertyAccessor::getValue() for
+        // the nonexistent `submittedSquad` getter, renders its "inaccessible" template, and
+        // ignores formatValue() entirely. See CLAUDE.md's Key Gotchas.
+        yield CodeEditorField::new('submittedSquad', 'Submitted Squad')
+            ->setLanguage('js')
+            ->setNumOfRows(28)
+            ->onlyOnDetail()
+            ->setValue('')
+            ->formatValue(fn ($value, ?CompetitionEntrant $entrant): string => $entrant === null
+                ? '{}'
+                : ($this->squadRepository->findForEntrant($entrant)?->getSquadJsonPretty() ?? '{}'));
     }
 
     /**
@@ -162,7 +179,7 @@ class CompetitionEntrantCrudController extends AbstractCrudController
      * not collide with EasyAdmin's /admin/competition-entrant/{entityId} detail route.
      */
     #[Route('/admin/competition-entrant/{entrant}/generate-spoof', name: 'admin_competition_entrant_generate_spoof', methods: ['GET', 'POST'])]
-    public function generateSpoofFromEntrant(CompetitionEntrant $entrant, Request $request, CompetitionSpoofEntrantService $service): Response
+    public function generateSpoofFromEntrant(CompetitionEntrant $entrant, Request $request, CompetitionSpoofEntrantService $service, CompetitionEntrantSquadRepository $squadRepository): Response
     {
         // An EasyAdmin pretty CRUD route — it builds its own crud/entity context on a direct
         // match, so it must NOT be wrapped in the /admin?routeName=... forwarding used for
@@ -184,7 +201,11 @@ class CompetitionEntrantCrudController extends AbstractCrudController
             }
 
             try {
-                $spoof = $service->createSpoofEntrantFromSnapshot($competition, $entrant->getSnapshotJson(), randomise: true);
+                $spoof = $service->createSpoofEntrantFromSnapshot(
+                    $competition,
+                    CompetitionRegistrationService::snapshotEnvelopeFrom($entrant, $squadRepository->findForEntrant($entrant)),
+                    randomise: true,
+                );
             } catch (SpoofSnapshotValidationException $e) {
                 // A snapshot already accepted at registration can still fail here if the
                 // validator has tightened since — report it rather than swallowing it.

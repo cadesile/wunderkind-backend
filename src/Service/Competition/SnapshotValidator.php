@@ -33,6 +33,32 @@ class SnapshotValidator
     public const REQUIRED_PLAYERS = 11;
 
     /**
+     * Hard ceiling on the serialized size of one submitted snapshot.
+     *
+     * This is the one check in this class that rejects on *size* rather than shape, and it
+     * is a deliberate exception to the rule above about not failing a registration over
+     * unrecognised fields — because an unbounded section is not a field-shape question.
+     *
+     * `club`, `staff` and `facilities` had no bound of any kind: the envelope's only ceiling
+     * was nginx's `client_max_body_size 5m`. On a 64-entrant bracket that is up to 320MB of
+     * JSON for one competition, every byte of it decoded by a public, unauthenticated
+     * endpoint — so a single registrant could make a competition unservable for everyone
+     * else in it. That is an availability bug, not a validation preference.
+     *
+     * 256KB is roughly ten times a real snapshot (eleven players with full attributes,
+     * personality and appearance, plus club identity and staff, measures around 25KB), so it
+     * rejects abuse without being anywhere near legitimate traffic.
+     */
+    public const MAX_SNAPSHOT_BYTES = 262144;
+
+    /**
+     * Staff is a free-form list with no documented length. Eleven players is exact, but a
+     * club's backroom is open-ended, so this is a generous sanity bound rather than a
+     * contract — it exists so the count cannot be the thing that blows the size cap.
+     */
+    public const MAX_STAFF = 20;
+
+    /**
      * @var list<string> Numeric player attributes checked for range, when present.
      * 0-100 — matches wunderkind-app's real local scale (Player.overallRating /
      * PlayerAttributes), NOT the backend's own 1-20 Personality Matrix convention. An
@@ -103,6 +129,10 @@ class SnapshotValidator
             }
         }
 
+        if (count($staff) > self::MAX_STAFF) {
+            $violations[] = sprintf('staff must hold at most %d entries, got %d', self::MAX_STAFF, count($staff));
+        }
+
         foreach ($staff as $i => $member) {
             if (!is_array($member)) {
                 $violations[] = "staff[$i] must be an object";
@@ -111,6 +141,20 @@ class SnapshotValidator
             if (!isset($member['id']) || !isset($member['role'])) {
                 $violations[] = "staff[$i].id and staff[$i].role are required";
             }
+        }
+
+        // Measured last, on the whole envelope, so one oversized section cannot hide behind
+        // another passing its own checks. json_encode is given the same data that would be
+        // persisted; a payload that cannot even be encoded is rejected rather than stored.
+        $encoded = json_encode(['club' => $club, 'players' => $players, 'staff' => $staff]);
+        if ($encoded === false) {
+            $violations[] = 'snapshot could not be encoded';
+        } elseif (strlen($encoded) > self::MAX_SNAPSHOT_BYTES) {
+            $violations[] = sprintf(
+                'snapshot must be at most %d bytes, got %d',
+                self::MAX_SNAPSHOT_BYTES,
+                strlen($encoded),
+            );
         }
 
         return $violations;

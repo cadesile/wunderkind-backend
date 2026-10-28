@@ -11,10 +11,49 @@ constraints. Don't restate field lists here.
 - **Player/squad:** `player` (embeds `PersonalityProfile` — no separate table), `player_archetype`, `player_career_stat`, `player_career_stat_snapshot`, `staff_career_profile` (sync v2 — staff identity/avatar, no stats), `agent`, `scout`, `staff`, `player_siblings` (self-referential join table)
 - **Sponsorship/finance:** `sponsor`, `investor`
 - **Messaging/admin comms:** `admin_message`, `admin_message_audience_group` (join table), `message_delivery`, `audience_group`, `audience_group_member`, `inbox_message`, `game_event_template`, `social_account_connection`, `social_post_template`
-- **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_round`, `competition_fixture`, `competition_result`, `reward_template`, `entrant_reward_claim`
+- **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_entrant_squad`, `competition_round`, `competition_fixture`, `competition_result`, `competition_result_audit`, `competition_response_cache`, `reward_template`, `entrant_reward_claim`
+- **Friendlies:** `friendly_challenge`, `friendly_challenge_squad`, `friendly_challenge_audit`
 - **Config/singleton:** `game_config`, `pool_config`, `starter_config`
 - **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
 - **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table, shared by the `async` and `failed` transports (differentiated by `queue_name`, not by table — see `config/packages/messenger.yaml`); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
+
+## The split rows (`*_squad`, `*_audit`, `*_response_cache`)
+
+Five of the tables above exist because a single column cannot express two
+different read profiles. ORM 3 removed PARTIAL hydration, so **every mapped
+column is decoded on every read of its row** — and the competition and friendly
+domains both stored client-submitted squads and admin-only forensics on rows
+that public, unauthenticated endpoints read in bulk.
+
+`GET /api/competitions/{id}` decoded up to 64 whole squads to render a bracket
+and exhausted the request memory limit; the admin entrant index had already
+timed out in production for the same reason; and
+`GET /api/friendlies/challenges` decoded two squads per listed challenge.
+
+| Table | Holds | Read by |
+|---|---|---|
+| `competition_entrant_squad` | XI, staff, engine-only club keys (`cohesion`, `managerMotivation`, `lowUrgency`) | round resolution; one match detail; admin viewer |
+| `friendly_challenge_squad` | the same, per side | friendly resolution; one match detail; admin viewer |
+| `competition_result_audit` | `event_log_json`, `computation_audit_json` | the admin competition detail page, and nothing else |
+| `friendly_challenge_audit` | `event_log_json` | the admin challenge detail page, and nothing else |
+| `competition_response_cache` | the prebuilt viewer-independent bracket response | every read of `GET /api/competitions/{id}` |
+
+Two rules keep this from regressing:
+
+1. **No entity declares an inverse association to its split row.** A `OneToOne`
+   inverse side cannot be proxied (the owning FK is on the other table) and is
+   therefore *always* fetched eagerly, regardless of `fetch: LAZY` — which would
+   silently restore the entire cost. Fetch through the repository.
+2. **Fetch in bulk wherever more than one row is on screen.** The repositories
+   expose batch methods (`findByEntrants()`, `findByResults()`, `findBothSides()`)
+   precisely so a split does not trade a hydration cost for an N+1 of the same
+   size. The admin competition detail page renders a whole bracket's results at
+   once and uses them.
+
+`*_squad` rows are pruned when a competition completes (no further fixture can
+resolve, so they are dead). `*_audit` rows are **not** — an audit exists to
+answer "how was this result derived" about a match already played, which is
+exactly when someone asks. Ageing them out is a retention policy, undecided.
 
 ## Notable constraints (beyond ordinary FKs — see `entities.md` for those)
 
@@ -37,6 +76,17 @@ constraints. Don't restate field lists here.
   competition.
 - **`competition_result`** — `OneToOne` + unique on `fixture_id` — one
   result per fixture.
+- **`competition_entrant_squad`** — unique on `entrant_id`. Required, not
+  decorative: `CompetitionRegistrationService::writeSquad()` upserts with
+  `ON CONFLICT (entrant_id)`, which needs a unique constraint to match against.
+- **`friendly_challenge_squad`** — unique on (`challenge_id`, `side`), one row
+  per participant. Keyed challenger/acceptor rather than home/away, because
+  `FriendlyChallenge::$venue` decides which participant is home and so flips
+  per challenge.
+- **`competition_result_audit`** / **`friendly_challenge_audit`** — unique on
+  `result_id` / `challenge_id`.
+- **`competition_response_cache`** — unique on `active_competition_id`, one
+  prebuilt response document per competition.
 - **`user_device`** — unique on `device_token` (not per-user — a token
   identifies an app installation; re-registering it under a different
   user reassigns rather than duplicates).

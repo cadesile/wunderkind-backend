@@ -19,9 +19,12 @@ use App\Service\Competition\CompetitionLockService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Envelope;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class CompetitionLockServiceTest extends KernelTestCase
 {
+    use EntrantFixtureTrait;
+
     private EntityManagerInterface $em;
     private CompetitionLockService $lockService;
     private CompetitionRoundRepository $roundRepository;
@@ -71,11 +74,10 @@ class CompetitionLockServiceTest extends KernelTestCase
         $entrants = [];
         for ($i = 1; $i <= $capacity; $i++) {
             $club      = $this->createClub("Club {$i}");
-            $entrant   = new CompetitionEntrant($instance, $club, 0, [
+            $entrant   = $this->makeEntrantFromEnvelope($this->em, $instance, $club, 0, [
                 'club'    => ['id' => (string) $club->getId(), 'name' => "Club {$i}"],
                 'players' => [],
             ]);
-            $this->em->persist($entrant);
             $entrants[] = $entrant;
         }
         $this->em->flush();

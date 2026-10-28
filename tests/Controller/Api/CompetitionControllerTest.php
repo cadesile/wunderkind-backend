@@ -20,9 +20,12 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Messenger\Envelope;
+use App\Tests\Support\EntrantFixtureTrait;
 
 class CompetitionControllerTest extends WebTestCase
 {
+    use EntrantFixtureTrait;
+
     private KernelBrowser $client;
     private EntityManagerInterface $em;
     private mixed $currentUserId = null;
@@ -577,7 +580,7 @@ class CompetitionControllerTest extends WebTestCase
             'activeCompetition' => $instance,
             'club'              => $club,
         ]);
-        $snapshot = $entrant->getSnapshotJson();
+        $snapshot = $this->entrantEnvelope($this->em, $entrant);
 
         $this->assertSame(42, $snapshot['club']['reputation']);
         $this->assertSame('regional', $snapshot['club']['tier']);

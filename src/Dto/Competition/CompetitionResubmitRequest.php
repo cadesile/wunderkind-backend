@@ -25,8 +25,5 @@ class CompetitionResubmitRequest
     #[Assert\Type('array')]
     public array $staff = [];
 
-    #[Assert\Type('array')]
-    public array $facilities = [];
-
     public ?string $clientSnapshotAt = null;
 }
