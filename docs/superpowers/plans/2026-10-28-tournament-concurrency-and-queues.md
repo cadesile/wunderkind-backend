@@ -264,16 +264,46 @@ cache row itself.
 
 ---
 
-## 4. Phase 3 — hygiene (the review's nits)
+## 4. Phase 3 — hygiene (the review's nits) — DONE
 
-1. `prewarmResponse()` is byte-identical in `CompetitionDrawService` and
-   `CompetitionResultsService`, with a third variant in the warm command. Folds naturally
-   into `CompetitionResponseCacheService::prewarm()` once §3.4 lands.
-2. `FriendlyChallengeService::splitSnapshot()` duplicates
-   `CompetitionRegistrationService::splitSnapshot()` (private static). Share one.
-3. `FriendlyChallengeSquadRepository::deleteForChallenge()` has no production caller, so
-   friendly squads are never pruned after resolution — unlike competition squads. Wire it
-   after `recordResult()`, or delete the method.
+1. **`prewarmResponse()` duplication — resolved by §3.4.** No occurrence of the method
+   remains in `src/`; the three copies collapsed into the queued
+   `WarmCompetitionResponseMessage` path when prewarm became a message.
+
+2. **The duplicated snapshot split — one shared method now.**
+   `CompetitionRegistrationService::splitSnapshot()` is public and returns `ovr` alongside
+   the rest; `FriendlyChallengeService` calls it from both `postChallenge()` and
+   `acceptChallenge()` and its own copy is gone, as is the third copy in
+   `tests/Support/FriendlyFixtureTrait`, which had been splitting by its own rules in a
+   trait whose whole purpose is to seed what the real write path produces.
+
+   **The duplication was hiding a behavioural divergence, which is the part worth
+   recording.** The friendly copy called `computeStartingXiOvr()` unconditionally, so a
+   device-supplied `club.ovr` was recomputed away; the competition copy honoured it. The
+   same envelope therefore rated a club differently depending on which domain it was
+   submitted to. Unified on the competition rule — a numeric `club.ovr` wins, else derive
+   from the XI — because that is the one consistent with the device being the master for
+   club data. Pinned by `tests/Service/Competition/SubmittedSnapshotSplitTest.php`, which
+   asserts the rule rather than either call site.
+
+   Also removed two now-dead `$display['ovr'] = $ovr` reassignments: the split already
+   freezes OVR into the display block.
+
+3. **Friendly squads are pruned at full-time.** `deleteForChallenge()` is called from
+   `resolveSingleMatch()`, after the flush and guarded on the status actually being
+   `COMPLETE` — the same ordering, and for the same reason, as the competition side's prune
+   in `publishRoundResults()`: the call is raw SQL that commits on its own, so running it
+   before the flush would turn a failed flush into an unplayable challenge rather than
+   merely an unpruned one. Safe because nothing reads those rows afterwards —
+   `MatchQueryService` skips the squad lookup entirely once both lineup blocks exist, which
+   is exactly the condition `recordResult()` establishes.
+
+   Two follow-ons: `FriendlyChallengeCrudController`'s two squad fields now carry help text
+   saying the rows are pruned at full-time, because a bare `—` where a submitted XI used to
+   be reads as a bug worth chasing rather than as the intended archive behaviour; and
+   `FriendlyResolveSingleMatchTest` asserts both halves — that the rows go, and that the
+   match detail the client fetches is unaffected. It was the absence of that assertion that
+   let the method sit uncalled in the first place.
 
 ---
 

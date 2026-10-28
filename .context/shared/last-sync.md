@@ -635,3 +635,21 @@
   reader meets `balance`, and `architecture-notes.md` gains an "Authority" section listing what
   the device owns versus what the backend owns, including the split inside competitions (the
   backend owns the bracket; each entrant's squad is a client snapshot it stores verbatim).
+
+- **`04_interfaces/output/services.md` — `splitSnapshot()` is now shared (2026-10-28).**
+  Phase 3 of the concurrency plan (the review's hygiene nits) is done. The friendly copy of
+  the split is gone, along with a third copy in `tests/Support/FriendlyFixtureTrait`; the
+  duplication had been hiding a real divergence in the OVR rule, recorded in `services.md`.
+  Friendly squad rows are now pruned at full-time in `resolveSingleMatch()`, the same way
+  and in the same order as competition squads on completion, so the friendly admin detail
+  page shows `—` for both squad fields on a COMPLETE challenge by design (its help text says
+  so). `prewarmResponse()` had already gone when prewarm became a queued message.
+
+- **`03_data/output/migrations.md` — `Version20261028141656` (2026-10-28), comments only.**
+  Drops the leftover `(DC2Type:...)` column comments on `friendly_challenge` and
+  `idempotency_record`, written by pre-DBAL-4 migrations. No column, index or data touched.
+  Worth doing because those eleven empty strings were the whole reason
+  `doctrine:schema:validate` reported the schema out of sync — a red that hides real
+  structural drift, which is exactly the signal that caught an entity silently losing its
+  `use Doctrine\ORM\Mapping as ORM` import earlier in this work. Round-trips: down restores
+  all eleven, up clears them, validate green either side.

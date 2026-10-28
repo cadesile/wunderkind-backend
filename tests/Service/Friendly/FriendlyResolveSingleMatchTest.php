@@ -207,4 +207,36 @@ class FriendlyResolveSingleMatchTest extends KernelTestCase
         self::assertNotEmpty($item['challenger']['clubName']);
         self::assertNotEmpty($item['acceptor']['clubName'], 'an accepted challenge must still name its acceptor');
     }
+
+    /**
+     * Resolution prunes both squad rows, and the played match still serializes without them.
+     *
+     * Wiring the prune was the last of the review's hygiene items: the repository method
+     * existed, was tested in isolation, and had no production caller, so friendly squads
+     * accumulated forever while competition squads were pruned on completion. Asserted in
+     * both halves on purpose — that the rows are gone, and that the match detail the client
+     * actually fetches is unaffected, which is only true because a played friendly's lineups
+     * are written onto the challenge itself.
+     */
+    public function testResolvingPrunesBothSquadRowsAndTheMatchStillSerializes(): void
+    {
+        $challenge = $this->seedAcceptedChallenge();
+        $squadRepo = self::getContainer()->get(FriendlyChallengeSquadRepository::class);
+
+        self::assertCount(2, $squadRepo->findBothSides($challenge), 'both sides submit a squad on acceptance');
+
+        $this->service->resolveSingleMatch($challenge);
+        $this->em->flush();
+
+        self::assertSame(FriendlyChallengeStatus::COMPLETE, $challenge->getStatus());
+        self::assertSame([], $squadRepo->findBothSides($challenge), 'full-time must prune the engine inputs');
+
+        // The read path the client uses for a played friendly, with the rows gone.
+        $detail = self::getContainer()->get(\App\Service\Competition\MatchQueryService::class)
+            ->serializeFriendlyMatchDetail($challenge);
+
+        self::assertNotEmpty($detail['homeLineup'], 'a played friendly keeps its lineup on the challenge');
+        self::assertNotEmpty($detail['awayLineup']);
+        self::assertSame('complete', $detail['status']);
+    }
 }

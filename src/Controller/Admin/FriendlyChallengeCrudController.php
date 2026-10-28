@@ -155,16 +155,23 @@ class FriendlyChallengeCrudController extends AbstractCrudController
         // The submitted XIs, from friendly_challenge_squad. Detail-only, like every field
         // built by jsonField(): these two are the only ones here that load extra rows, and
         // the public challenge board must never touch them.
+        //
+        // Both read '—' for a COMPLETE challenge, and that is the prune, not missing data:
+        // the rows are dropped at full-time once nothing can resolve the match again. The
+        // help text says so on the page, because a dash where a squad used to be otherwise
+        // reads as a bug worth chasing.
+        $squadHelp = 'Dropped at full-time — the engine inputs are pruned once the match is COMPLETE. A played match\'s lineups, ratings and derivation live on the audit row and in the result below.';
+
         yield $this->jsonField(
             'challengerSquadPretty',
             'Challenger squad (XI + staff)',
             fn (FriendlyChallenge $c): ?array => $this->squadPayload($c, FriendlySide::CHALLENGER),
-        );
+        )->setHelp($squadHelp);
         yield $this->jsonField(
             'acceptorSquadPretty',
             'Acceptor squad (XI + staff)',
             fn (FriendlyChallenge $c): ?array => $this->squadPayload($c, FriendlySide::ACCEPTOR),
-        );
+        )->setHelp($squadHelp);
         yield $this->jsonField('homeClubPretty', 'Home club (result)', static fn (FriendlyChallenge $c): ?array => $c->getHomeClubJson());
         yield $this->jsonField('awayClubPretty', 'Away club (result)', static fn (FriendlyChallenge $c): ?array => $c->getAwayClubJson());
         yield $this->jsonField('homeLineupPretty', 'Home lineup', static fn (FriendlyChallenge $c): ?array => $c->getHomeLineupJson());

@@ -165,12 +165,18 @@ class CompetitionRegistrationService
      *
      * One place decides what lands where, so register() and resubmit() cannot drift — which
      * matters because they write through raw SQL and so get no help from the ORM in keeping
-     * the two tables consistent.
+     * the two tables consistent. Friendlies store the same submitted envelope across the
+     * same two shapes, so FriendlyChallengeService calls this too rather than keeping its
+     * own copy; it reads `ovr` back out because FriendlyChallenge persists that as a column
+     * of its own for matchmaking. That shared call is also what stops the OVR rule itself
+     * from differing per domain — the friendly side used to recompute from the XI
+     * unconditionally and so ignored a client-supplied `club.ovr` that a competition
+     * registration of the identical envelope would have honoured.
      *
      * @param array<string, mixed> $snapshotJson
-     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>, clientSnapshotAt: ?string, playerCount: int}
+     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>, clientSnapshotAt: ?string, playerCount: int, ovr: int}
      */
-    private static function splitSnapshot(array $snapshotJson, Club $club): array
+    public static function splitSnapshot(array $snapshotJson, Club $club): array
     {
         $clubData = is_array($snapshotJson['club'] ?? null) ? $snapshotJson['club'] : [];
         $players  = array_values(array_filter(is_array($snapshotJson['players'] ?? null) ? $snapshotJson['players'] : [], 'is_array'));
@@ -191,6 +197,7 @@ class CompetitionRegistrationService
             'staff'            => $staff,
             'clientSnapshotAt' => CompetitionEntrant::sanitizeClientSnapshotAt(is_string($rawClientSnapshotAt) ? $rawClientSnapshotAt : null),
             'playerCount'      => count($players),
+            'ovr'              => $ovr,
         ];
     }
 

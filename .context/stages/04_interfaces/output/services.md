@@ -169,6 +169,14 @@ filename alone.
   (`CLUB_ENGINE_KEYS`), `splitSnapshot()` is the one place deciding what lands
   where, and `snapshotEnvelopeFrom()` reassembles the old envelope for the two
   callers that genuinely want it (spoof cloning, the admin viewer).
+  **`splitSnapshot()` is public and serves both domains** — `FriendlyChallengeService`
+  calls it from `postChallenge()`/`acceptChallenge()` and reads `ovr` back out of the
+  result, because `FriendlyChallenge` stores that as a matchmaking column of its own.
+  It had its own copy until 2026-10-28, and the copies had drifted: the friendly one
+  recomputed OVR from the XI unconditionally, so a device-supplied `club.ovr` was
+  honoured on a competition registration and discarded on a friendly post of the
+  identical envelope. The shared rule is: a numeric `club.ovr` wins, else derive from
+  the XI.
   `normalizeClubData()` itself is untouched — the pickers front it — which is
   why `FriendlyChallengeService` keeps using it exactly as before.
   `repointClubData()` moves **both** `id` and `clubId` when a snapshot is
