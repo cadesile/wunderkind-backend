@@ -761,6 +761,17 @@ class CompetitionControllerTest extends WebTestCase
 
             // And this is the handle for everything the bracket no longer carries.
             $this->assertNotNull($fixture['matchId'], 'a completed fixture must expose a matchId to fetch detail with');
+
+            // A cup fixture's own id IS its match id, and the app depends on that beyond the
+            // bracket: a MATCH_RESULT push carries fixtureId and the client routes it straight
+            // to GET /api/matches/{id} without fetching a bracket to look a matchId up in. If
+            // these two ever diverge, every result push stops resolving — so assert the
+            // equality here rather than only that the endpoint answers for `matchId`.
+            $this->assertSame(
+                $fixture['fixtureId'],
+                $fixture['matchId'],
+                'a completed fixture\'s matchId must be its own fixtureId — MATCH_RESULT pushes are routed on it',
+            );
             $matchIds[] = $fixture['matchId'];
         }
 

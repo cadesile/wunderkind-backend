@@ -653,3 +653,19 @@
   structural drift, which is exactly the signal that caught an entity silently losing its
   `use Doctrine\ORM\Mapping as ORM` import earlier in this work. Round-trips: down restores
   all eleven, up clears them, validate green either side.
+
+- **Note (2026-10-28), no stage change — the bracket contract is closed client-side.** The
+  removal of `fixtures[].result` needed **no behavioural app change**: the tournament hub
+  already rendered a tie from `score`/`winnerEntrantId`/`entrants[]` and passed `matchId`
+  onward, its `Fixture` type never declared `result`, and the `MATCH_RESULT` push already
+  routed to the match href. What the change invalidated was documentation and an
+  already-dead type block. So the last outstanding cross-repo item from the tournament work
+  is resolved, and `docs/api/competition-bracket-no-embedded-result.md` is now a reference
+  rather than a migration task.
+
+  Worth keeping: **a cup fixture's own id is its match id** —
+  `MatchQueryService::findMatchDetail()` resolves the id against
+  `CompetitionFixtureRepository` (falling through to `FriendlyChallengeRepository` for a
+  friendly; distinct UUIDs, so that is a cheap miss, not an ambiguity). App routing sends a
+  push's `fixtureId` straight to `GET /api/matches/{id}` on that basis, so the invariant to
+  preserve is that a fixture id is accepted there at all.

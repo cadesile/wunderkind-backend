@@ -1,7 +1,8 @@
 # `GET /api/competitions/{id}` no longer embeds per-fixture match detail
 
 **Date:** 2026-10-28
-**Status:** backend change shipped; **the app must be updated** (see "What the client must do").
+**Status:** shipped, **and closed on the client side with no behavioural change required** —
+the app was already reading the match endpoint. See "What the client actually had to do".
 
 ## What changed
 
@@ -36,15 +37,40 @@ shipping up to 63 copies of a payload a client needs one of at a time.
 (Worth noting the measurement corrected an assumption: the narrative was *not* the dominant
 component. The lineups were.)
 
-## What the client must do
+## What the client actually had to do
 
-Where it previously read `fixtures[].result`, fetch the match instead:
+**Nothing behavioural.** The app side was checked against the live path before any change was
+made, and it already matched this contract:
+
+- `tournamentHubLogic.ts`'s `tiesForRound` → `TournamentInstanceScreen` renders a tie from
+  `score`, `winnerEntrantId` and the `entrants[]` lookup alone, and passes `matchId` onward.
+  `src/types/tournamentHub.ts`'s `Fixture` never declared `result`.
+- The `MATCH_RESULT` push already routed to `matchHref(fixtureId)`.
+- The local archive that once consumed the embedded payload was retired when
+  `GET /api/matches/{id}` landed.
+
+So no screen broke and no fetch was added. What the change *did* invalidate was documentation
+and a block of already-dead types in `src/types/tournament.ts` (the detail family and the
+`TournamentMatchResult` family), which went from dead-but-accurate to dead-and-wrong — removed
+in one pass, keeping the parts still live (`TournamentMatchNarrativeEvent`,
+`TournamentMatchSide`, the registration-snapshot contract, `TournamentEntrantRef`). Three
+app-side instructions that described the old re-fetch-the-bracket flow were corrected to point
+at `GET /api/matches/{fixtureId}`.
+
+The contract below is therefore the reference, not a migration task.
+
+Where a client would previously read `fixtures[].result`, it fetches the match instead:
 
 ```
 GET /api/matches/{fixtureId}
 ```
 
-`matchId` on a completed fixture is that id. The match payload is a superset of what `result`
+`matchId` on a completed fixture is that id — a **cup fixture's own id is its match id**,
+which is why a push's `fixtureId` is directly fetchable. `MatchQueryService::findMatchDetail()`
+resolves the id against `CompetitionFixtureRepository`, falling through to
+`FriendlyChallengeRepository` for a friendly; ids are distinct UUIDs, so the fall-through is a
+cheap miss rather than an ambiguity. The invariant the app depends on is that a fixture id is
+accepted there at all — keep it when touching that resolver. The match payload is a superset of what `result`
 carried, with different key names — it is the first-class match shape documented in
 `docs/api/match-detail-club-fields.md`:
 
@@ -61,6 +87,10 @@ carried, with different key names — it is the first-class match shape document
 `fixtureId` and `link: { kind: 'match', id: <fixtureId> }`. Previously the documented
 instruction was to re-fetch the bracket and read that fixture's `result`; fetch the match
 endpoint with that id instead.
+
+Both clubs' `homeKitConfig`/`awayKitConfig`/`badgeConfig` come back per side on the match
+payload, so a kit or badge preview for a played fixture needs the match endpoint and never
+needed a `result` block.
 
 ## Server-side notes
 
