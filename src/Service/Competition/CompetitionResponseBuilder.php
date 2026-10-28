@@ -195,24 +195,21 @@ class CompetitionResponseBuilder
     }
 
     /**
-     * A single integer standing for every piece of state this response depends on — the
-     * freshness key for the cached document, and the body of the ETag.
+     * Fingerprint of every piece of state this response depends on — the freshness key for
+     * the cached document, and the body of the ETag.
      */
-    public function stateVersion(ActiveCompetition $activeCompetition): int
+    public function stateFingerprint(ActiveCompetition $activeCompetition): string
     {
-        return $this->computeInstanceVersion(
-            $activeCompetition,
-            $this->entrantRepository->countForCompetition($activeCompetition),
-        );
+        return $this->computeStateFingerprint($activeCompetition);
     }
 
     /**
-     * `$stateVersion` is accepted so a caller that already has it — the request path, which
-     * needs it for the cache lookup anyway — does not pay for the aggregate twice.
+     * `$stateFingerprint` is accepted so a caller that already has it — the request path,
+     * which needs it for the cache lookup anyway — does not recompute it.
      */
-    public function etagFor(ActiveCompetition $activeCompetition, ?Club $club, ?int $stateVersion = null): string
+    public function etagFor(ActiveCompetition $activeCompetition, ?Club $club, ?string $stateFingerprint = null): string
     {
-        return $this->computeEtag($activeCompetition, $club, $stateVersion);
+        return $this->computeEtag($activeCompetition, $club, $stateFingerprint);
     }
 
 
@@ -239,7 +236,9 @@ class CompetitionResponseBuilder
             }
         }
 
-        $version = $this->computeInstanceVersion($instance, $registeredCount);
+        // Client-facing counter, not the cache key — kept additive so an existing client
+        // comparing it numerically is unaffected by the fingerprint change.
+        $version = 1 + $registeredCount + count($this->roundRepository->findByCompetitionOrderedByIndex($instance));
 
         return [
             'instanceId'            => (string) $instance->getId(),
@@ -323,36 +322,75 @@ class CompetitionResponseBuilder
     }
 
     /**
-     * A single integer standing for "everything in this competition that the response
-     * depends on". Used for the ETag and as the freshness key for the prebuilt response
-     * document.
+     * Fingerprints every input the cached document reads.
      *
-     * The snapshot-version sum is load-bearing, not decoration. Without it a resubmission
-     * moved nothing: the entrant count and every round status stay put while a squad is
-     * swapped, so the version — and therefore a cached document keyed on it — would not
-     * change even though the response had. The ETag papered over that for the viewing club
-     * only, by separately folding in that club's own snapshot version, which is why another
-     * club's resubmission already failed to invalidate your ETag.
+     * This replaced an additive integer (`1 + registeredCount + roundState +
+     * snapshotVersionSum`), which failed in two independent ways:
+     *
+     *  - **It collided.** `countForCompetition()` excludes withdrawn entrants while
+     *    `sumSnapshotVersions()` includes them, so a withdrawal netted -1 and another club's
+     *    resubmission netted +1. They cancelled, the cached row still matched, and a stale
+     *    bracket was served — behind a 304, since the anonymous ETag was also unchanged.
+     *  - **It was incomplete.** It omitted the competition's own status, cancellation and
+     *    completion, and every template field the document embeds. Cancelling a REGISTERING
+     *    competition changes no round and no entrant count, so the body stayed stale
+     *    indefinitely; a template edit never reached a running competition at all.
+     *
+     * Every component below is therefore something the document actually renders. Counts are
+     * kept as separate labelled components rather than summed, so no two different states can
+     * produce the same string.
      */
-    private function computeInstanceVersion(ActiveCompetition $instance, int $registeredCount): int
+    private function computeStateFingerprint(ActiveCompetition $instance): string
     {
-        $rounds     = $this->roundRepository->findByCompetitionOrderedByIndex($instance);
-        $roundState = 0;
-        foreach ($rounds as $r) {
-            $roundState += match ($r->getStatus()) {
-                CompetitionRoundStatus::DRAW_PENDING      => 1,
-                CompetitionRoundStatus::DRAWN             => 2,
-                CompetitionRoundStatus::RESULTS_PUBLISHED => 3,
-                CompetitionRoundStatus::CANCELLED         => 4,
-            };
+        $template = $instance->getTemplate();
+
+        $roundStates = [];
+        foreach ($this->roundRepository->findByCompetitionOrderedByIndex($instance) as $r) {
+            $roundStates[] = $r->getRoundIndex() . ':' . $r->getStatus()->value
+                . ':' . ($r->getScheduledAt()?->getTimestamp() ?? 0)
+                . ':' . ($r->getMatchesResolveAt()?->getTimestamp() ?? 0)
+                . ':' . ($r->getStartedAt()?->getTimestamp() ?? 0);
         }
 
-        return 1 + $registeredCount + $roundState + $this->entrantRepository->sumSnapshotVersions($instance);
+        // Template fields are hashed rather than versioned because CompetitionTemplate
+        // carries no updatedAt: what matters is that the values the document embeds are the
+        // ones it was built from.
+        $templatePart = json_encode([
+            'name'              => $template->getName(),
+            'trophy'            => $template->getTrophy(),
+            'entrantCapacity'   => $instance->getEntrantCapacity(),
+            'entryFeePence'     => $template->getEntryFeePence(),
+            'victorPrize'       => $template->getVictorPrize(),
+            'minClubReputation' => $template->getMinClubReputation(),
+            'minClubAgeSeasons' => $template->getMinClubAgeSeasons(),
+            'allowedTiers'      => $template->getAllowedTiers(),
+            'rewards'           => array_map(
+                static fn (RewardTemplate $reward) => [$reward->getSlug(), $reward->getName(), $reward->getDescription(), $reward->getEffects()],
+                $template->getRewardTemplates()->toArray(),
+            ),
+        ], JSON_THROW_ON_ERROR);
+
+        $components = [
+            'competition'      => (string) $instance->getId(),
+            'status'           => $instance->getStatus()->value,
+            'startsAt'         => $instance->getStartsAt()?->getTimestamp() ?? 0,
+            'endsAt'           => $instance->getEndsAt()?->getTimestamp() ?? 0,
+            'completedAt'      => $instance->getCompletedAt()?->getTimestamp() ?? 0,
+            'cancelledAt'      => $instance->getCancelledAt()?->getTimestamp() ?? 0,
+            'cancelReason'     => $instance->getCancellationReason(),
+            'activeEntrants'   => $this->entrantRepository->countForCompetition($instance),
+            'snapshotVersions' => $this->entrantRepository->sumSnapshotVersions($instance),
+            'entrantRows'      => $this->entrantRepository->countAllForCompetition($instance),
+            'rounds'           => $roundStates,
+            'template'         => $templatePart,
+        ];
+
+        return substr(hash('sha256', json_encode($components, JSON_THROW_ON_ERROR)), 0, 32);
     }
 
-    private function computeEtag(ActiveCompetition $instance, ?Club $club, ?int $stateVersion = null): string
+    private function computeEtag(ActiveCompetition $instance, ?Club $club, ?string $stateFingerprint = null): string
     {
-        $version = $stateVersion ?? $this->stateVersion($instance);
+        $version = $stateFingerprint ?? $this->stateFingerprint($instance);
         $clubPart        = $club !== null ? (string) $club->getId() : 'anon';
         $entrantVersion  = 0;
         if ($club !== null) {

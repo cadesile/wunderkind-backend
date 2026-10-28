@@ -196,6 +196,14 @@ filename alone.
 - **`Competition/MatchEngineSideFactory`** — builds `MatchEngineSide` inputs
   from whatever a domain stores. It lives in `Service/Competition`, not beside
   the value object, precisely so the engines import no entities.
+- **Round claims are leases** (both `CompetitionDrawService` and
+  `CompetitionResultsService`). `drawLockedAt`/`resolveLockedAt` are reclaimable after
+  `CompetitionRound::CLAIM_LEASE_SECONDS` and released on success in the same flush as the
+  terminal status, so `*_locked_at IS NOT NULL AND status = <pre-work status>` means "in
+  progress, or a tick died mid-round". They were one-way flags, which made any mid-round
+  exception strand the round permanently. Relatedly, `claimDraw()` no longer sets
+  `status = DRAWN` — that used to commit before `drawRound()` created any fixture, and a
+  failed flush then orphaned the round from both due-round queries at once.
 - **`Competition/CompetitionResultsService`** — owns the resolve +
   finalization phase (`DRAWN` → `RESULTS_PUBLISHED`) behind
   `app:competition:resolve-rounds` (every 1 min). Atomically claims (via

@@ -543,3 +543,13 @@
   admin-authored template catalogue was not touched. New `schema.md` section "The split
   rows" states the two rules that keep this from regressing — no inverse `OneToOne`
   association, and batch-fetch wherever more than one row is on screen.
+
+- **New pass (2026-10-28), on top of commit e96f791** (uncommitted).
+  **Stages touched:** 04_interfaces (`services.md`). Phase 1 §2.1 of
+  `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md`: round claims are
+  now leases rather than one-way flags, and a round's status transition commits with the work
+  it describes. The second half was not in the plan — implementing the lease surfaced that
+  `claimDraw()` committed `status = DRAWN` before `drawRound()` created any fixture, so a
+  failed flush orphaned the round from `findDueForDraw()` *and* `findDueForResults()` at once
+  (the latter because `matches_resolve_at` stayed NULL). No schema change: the lock columns
+  were already mapped.

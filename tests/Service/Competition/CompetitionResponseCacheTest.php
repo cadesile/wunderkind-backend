@@ -96,7 +96,7 @@ class CompetitionResponseCacheTest extends KernelTestCase
     {
         return $this->cache->getOrBuild(
             $competition,
-            $this->builder->stateVersion($competition),
+            $this->builder->stateFingerprint($competition),
             fn (): array => $this->builder->sharedDocument($competition),
         );
     }
@@ -108,16 +108,16 @@ class CompetitionResponseCacheTest extends KernelTestCase
         $first = $this->warm($competition);
         self::assertNotEmpty($first['entrants']);
 
-        $row = $this->cacheRepository->findForCompetition($competition);
+        $row = $this->cacheRepository->findRow($competition);
         self::assertNotNull($row, 'the first read must store a document');
-        self::assertSame(CompetitionResponseCache::PAYLOAD_VERSION, $row->getPayloadVersion());
+        self::assertSame(CompetitionResponseCache::PAYLOAD_VERSION, (int) $row['payload_version']);
 
         // A second read must not call the builder at all. If it does, the closure throws and
         // the assertion below never runs — which is the point of asserting it this way
         // rather than comparing two payloads that would match either way.
         $second = $this->cache->getOrBuild(
             $competition,
-            $this->builder->stateVersion($competition),
+            $this->builder->stateFingerprint($competition),
             fn (): array => throw new \LogicException('the builder must not run for a cache hit'),
         );
 
@@ -143,7 +143,7 @@ class CompetitionResponseCacheTest extends KernelTestCase
         $competition = $this->competitionWithTwoEntrants();
         $this->warm($competition);
 
-        $before = $this->builder->stateVersion($competition);
+        $before = $this->builder->stateFingerprint($competition);
 
         // Resubmit one entrant's squad — changing neither the entrant count nor any round
         // status, which is exactly the shape that used to leave the version untouched.
@@ -157,9 +157,9 @@ class CompetitionResponseCacheTest extends KernelTestCase
         );
         $this->em->refresh($entrant);
 
-        self::assertNotSame($before, $this->builder->stateVersion($competition), 'a resubmission must move the state version');
+        self::assertNotSame($before, $this->builder->stateFingerprint($competition), 'a resubmission must move the state fingerprint');
         self::assertFalse(
-            $this->cache->isCached($competition, $this->builder->stateVersion($competition)),
+            $this->cache->isCached($competition, $this->builder->stateFingerprint($competition)),
             'the stored document must no longer be considered fresh',
         );
     }
@@ -169,15 +169,16 @@ class CompetitionResponseCacheTest extends KernelTestCase
         $competition = $this->competitionWithTwoEntrants();
         $this->warm($competition);
 
-        $row = $this->cacheRepository->findForCompetition($competition);
-        self::assertNotNull($row);
+        self::assertNotNull($this->cacheRepository->findRow($competition));
 
-        // Simulate a deploy that changed the response shape.
-        $version = new \ReflectionProperty(CompetitionResponseCache::class, 'payloadVersion');
-        $version->setValue($row, CompetitionResponseCache::PAYLOAD_VERSION + 1);
-        $this->em->flush();
+        // Simulate a deploy that changed the response shape. Written through DBAL because
+        // nothing hydrates this table any more — see CompetitionResponseCacheRepository.
+        $this->em->getConnection()->executeStatement(
+            'UPDATE competition_response_cache SET payload_version = :v WHERE active_competition_id = :id',
+            ['v' => CompetitionResponseCache::PAYLOAD_VERSION + 1, 'id' => $competition->getId()->toRfc4122()],
+        );
 
-        self::assertFalse($this->cache->isCached($competition, $this->builder->stateVersion($competition)));
+        self::assertFalse($this->cache->isCached($competition, $this->builder->stateFingerprint($competition)));
         self::assertContains(
             (string) $competition->getId(),
             $this->cacheRepository->findStalePayloadVersionIds(CompetitionResponseCache::PAYLOAD_VERSION),
@@ -214,5 +215,42 @@ class CompetitionResponseCacheTest extends KernelTestCase
         $document = $this->builder->sharedDocument($competition);
         self::assertNotEmpty($document['entrants']);
         self::assertNotEmpty($document['entrants'][0]['clubName']);
+    }
+
+    /**
+     * A withdrawal and another club's resubmission must not cancel out.
+     *
+     * This is the exact collision the fingerprint replaced an additive integer to kill: the
+     * entrant count excluded withdrawn rows while the snapshot sum included them, so -1 and
+     * +1 summed to zero, the cached row still matched, and a stale bracket was served behind
+     * a 304.
+     */
+    public function testAWithdrawalAndAnotherClubsResubmissionDoNotCancelOut(): void
+    {
+        $competition = $this->competitionWithTwoEntrants();
+        $before      = $this->builder->stateFingerprint($competition);
+
+        $entrants = $this->em->getRepository(\App\Entity\Competition\CompetitionEntrant::class)
+            ->findBy(['activeCompetition' => $competition], ['seed' => 'ASC']);
+        self::assertCount(2, $entrants);
+
+        [$withdrawer, $resubmitter] = $entrants;
+
+        self::getContainer()->get(CompetitionRegistrationService::class)
+            ->withdraw($competition, $withdrawer->getClub());
+
+        self::getContainer()->get(CompetitionRegistrationService::class)->resubmit(
+            $resubmitter,
+            $this->envelope($resubmitter->getClub(), 'Beta Reshuffled'),
+        );
+
+        $this->em->clear();
+        $competition = $this->em->getRepository(ActiveCompetition::class)->find($competition->getId());
+
+        self::assertNotSame(
+            $before,
+            $this->builder->stateFingerprint($competition),
+            'a withdrawal plus a resubmission must not fingerprint the same as neither happening',
+        );
     }
 }

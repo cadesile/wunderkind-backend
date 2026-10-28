@@ -63,13 +63,21 @@ class CompetitionResponseCache
     private array $payload;
 
     /**
-     * The state version the document was built from — CompetitionController's own instance
-     * version. A request recomputes this cheaply (one aggregate query) and compares; a
-     * mismatch is a miss. That makes the cache self-validating rather than dependent on
-     * every writer remembering to invalidate it.
+     * Fingerprint of the state the document was built from. A request recomputes it cheaply
+     * and compares; a mismatch is a miss, which is what makes the cache self-validating
+     * rather than dependent on every writer remembering to invalidate.
+     *
+     * A hash, not a number, and deliberately so. This was an additive integer
+     * (`1 + count + roundStates + snapshotVersionSum`) and that **collided**: the entrant
+     * count excludes withdrawn rows while the snapshot sum includes them, so a withdrawal
+     * netted -1 and another club's resubmission netted +1 — they cancelled, the row still
+     * looked fresh, and a stale bracket was served behind a 304. It was also incomplete,
+     * omitting the competition's status, cancellation and completion, and every template
+     * field the document embeds. Hashing an explicit tuple removes the whole class of
+     * arithmetic coincidence rather than patching one instance of it.
      */
-    #[ORM\Column(type: 'integer')]
-    private int $stateVersion;
+    #[ORM\Column(type: 'string', length: 64)]
+    private string $stateFingerprint;
 
     #[ORM\Column(type: 'smallint')]
     private int $payloadVersion;
@@ -80,12 +88,12 @@ class CompetitionResponseCache
     /**
      * @param array<string, mixed> $payload
      */
-    public function __construct(ActiveCompetition $activeCompetition, array $payload, int $stateVersion)
+    public function __construct(ActiveCompetition $activeCompetition, array $payload, string $stateFingerprint)
     {
         $this->id                = new UuidV7();
         $this->activeCompetition = $activeCompetition;
         $this->payload           = $payload;
-        $this->stateVersion      = $stateVersion;
+        $this->stateFingerprint  = $stateFingerprint;
         $this->payloadVersion    = self::PAYLOAD_VERSION;
         $this->generatedAt       = new \DateTimeImmutable();
     }
@@ -97,7 +105,7 @@ class CompetitionResponseCache
     /** @return array<string, mixed> */
     public function getPayload(): array { return $this->payload; }
 
-    public function getStateVersion(): int { return $this->stateVersion; }
+    public function getStateFingerprint(): string { return $this->stateFingerprint; }
 
     public function getPayloadVersion(): int { return $this->payloadVersion; }
 
@@ -106,10 +114,10 @@ class CompetitionResponseCache
     /**
      * @param array<string, mixed> $payload
      */
-    public function replace(array $payload, int $stateVersion): static
+    public function replace(array $payload, string $stateFingerprint): static
     {
-        $this->payload        = $payload;
-        $this->stateVersion   = $stateVersion;
+        $this->payload          = $payload;
+        $this->stateFingerprint = $stateFingerprint;
         $this->payloadVersion = self::PAYLOAD_VERSION;
         $this->generatedAt    = new \DateTimeImmutable();
 
@@ -117,8 +125,8 @@ class CompetitionResponseCache
     }
 
     /** A row is usable only if both the document shape and the state it was built from still match. */
-    public function isFreshFor(int $stateVersion): bool
+    public function isFreshFor(string $stateFingerprint): bool
     {
-        return $this->payloadVersion === self::PAYLOAD_VERSION && $this->stateVersion === $stateVersion;
+        return $this->payloadVersion === self::PAYLOAD_VERSION && $this->stateFingerprint === $stateFingerprint;
     }
 }

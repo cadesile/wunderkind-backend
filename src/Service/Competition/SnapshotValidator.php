@@ -51,12 +51,6 @@ class SnapshotValidator
      */
     public const MAX_SNAPSHOT_BYTES = 262144;
 
-    /**
-     * Staff is a free-form list with no documented length. Eleven players is exact, but a
-     * club's backroom is open-ended, so this is a generous sanity bound rather than a
-     * contract — it exists so the count cannot be the thing that blows the size cap.
-     */
-    public const MAX_STAFF = 20;
 
     /**
      * @var list<string> Numeric player attributes checked for range, when present.
@@ -129,10 +123,11 @@ class SnapshotValidator
             }
         }
 
-        if (count($staff) > self::MAX_STAFF) {
-            $violations[] = sprintf('staff must hold at most %d entries, got %d', self::MAX_STAFF, count($staff));
-        }
-
+        // No count cap on staff. One was added here and removed again: the backroom is
+        // open-ended (an admin can raise the per-club staff limits, and the client may put
+        // scouts in `staff[]`), and MAX_SNAPSHOT_BYTES already bounds the payload — so a
+        // count cap only turned legitimate squads into 422s on register, resubmit, friendly
+        // create/accept and spoof cloning without adding any protection.
         foreach ($staff as $i => $member) {
             if (!is_array($member)) {
                 $violations[] = "staff[$i] must be an object";

@@ -91,16 +91,16 @@ class WarmCompetitionResponseCacheCommand extends Command
             $label = sprintf('%s (%s)', $competition->getTemplate()->getName(), $competition->getId());
 
             try {
-                $stateVersion = $this->responseBuilder->stateVersion($competition);
+                $fingerprint = $this->responseBuilder->stateFingerprint($competition);
 
-                if (!$force && $this->responseCache->isCached($competition, $stateVersion)) {
+                if (!$force && $this->responseCache->isCached($competition, $fingerprint)) {
                     $skipped++;
                     continue;
                 }
 
                 $this->responseCache->rebuild(
                     $competition,
-                    $stateVersion,
+                    $fingerprint,
                     fn (): array => $this->responseBuilder->sharedDocument($competition),
                 );
                 $built++;

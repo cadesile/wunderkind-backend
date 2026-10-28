@@ -270,6 +270,15 @@ committing it before a failed flush would leave a live bracket unresolvable. `*_
 are deliberately **not** pruned: an audit answers "how was this result derived" about a
 match already played, which is exactly when someone asks.
 
+**Round claims are leases, and a status transition must commit with its own work.**
+`claimDraw()`/`claimResults()` set `drawLockedAt`/`resolveLockedAt`, reclaimable after
+`CompetitionRound::CLAIM_LEASE_SECONDS` (15 min) and cleared on success. They used to be
+one-way flags, so any exception mid-round stranded it forever. Worse, `claimDraw()` also
+committed `status = DRAWN` by raw SQL **before** `drawRound()` built any fixture — a failed
+flush then left a round DRAWN with no fixtures and `matchesResolveAt` NULL, invisible to
+`findDueForDraw()` *and* `findDueForResults()`. **Never commit a round's status ahead of the
+work it describes**; set it on the entity so it lands in the same flush.
+
 Other things worth knowing:
 - **`clubDisplayJson` is a picked key set, not the normaliser's output.**
   `normalizeClubData()` ends in `array_merge($clubData, ...)` and forwards every
@@ -287,8 +296,15 @@ Other things worth knowing:
   client still sending it is unaffected.
 - **`GET /api/competitions/{id}` serves a prebuilt document** from
   `competition_response_cache`; only the `viewer` key and `serverTime` are composed per
-  request. The cache is self-validating against the competition's state version, so the
-  cron prewarm hooks are an optimisation, not what correctness rests on.
+  request. The cache is self-validating against a **state fingerprint** — a hash over an
+  explicit tuple, because an additive integer collided (a withdrawal and another club's
+  resubmission cancelled out) and omitted status/cancellation/template inputs. It is read
+  and written through **DBAL, never the ORM**: a failed ORM `flush()` closes the shared
+  EntityManager, and in a cron tick that stranded the next claimed round permanently.
+  **Prewarming is not done inline in a cron tick** — the tick has already loaded the
+  entrants and Doctrine will not re-hydrate them, so it could store a stale document under a
+  fresh fingerprint. It belongs off-tick as a queued message; see
+  `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md`.
 - **The match engines take no entities.** `resolve(MatchEngineSide, MatchEngineSide,
   MatchEngineContext)`. `resolveFriendly()` is gone — a friendly is `allowDraws: true` on
   the context. Resolving one used to fabricate five entities and reflect over a private id

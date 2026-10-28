@@ -2,7 +2,6 @@
 
 namespace App\Service\Competition;
 
-use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionResult;
@@ -13,13 +12,11 @@ use App\Enum\Competition\CompetitionEntrantStatus;
 use App\Enum\Competition\CompetitionFixtureStatus;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\MessageSenderType;
-use App\Enum\Tier;
 use App\Repository\Competition\CompetitionEntrantSquadRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultRepository;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Appearance\SeededRng;
-use App\Service\ClubInitializationService;
 use App\Service\InboxService;
 use App\Service\MatchEngine\MatchEngineContext;
 use App\Service\MatchEngine\MatchEngineInterface;
@@ -27,7 +24,6 @@ use App\Service\MatchEngine\MatchEngineRegistry;
 use App\Service\MatchEngine\MatchEngineResult;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
-use Psr\Log\LoggerInterface;
 
 /**
  * Owns the entire resolution + finalization phase (DRAWN -> RESULTS_PUBLISHED), and, for
@@ -45,6 +41,28 @@ use Psr\Log\LoggerInterface;
  */
 class CompetitionResultsService
 {
+    /**
+     * Prewarming the bracket response is deliberately NOT done here.
+     *
+     * It used to be, and it was wrong twice over:
+     *
+     *  - The cache write went through the shared EntityManager, and a failed `flush()` closes
+     *    it. The `catch (\Throwable)` around the prewarm logged and continued, but the next
+     *    due round in this loop was then claimed by raw SQL and died on
+     *    `EntityManagerClosed` — leaving `*_locked_at` set with nothing able to reclaim it,
+     *    so that round was stuck permanently.
+     *  - Even on success it could store a stale document as fresh. The state version comes
+     *    from live SQL aggregates, but this tick has already loaded the competition's
+     *    entrants, and Doctrine does not re-hydrate an already-managed entity. A resubmission
+     *    committing mid-tick is counted in the version and absent from the document.
+     *
+     * There is no safe way to get fresh reads from inside this loop: `em->clear()` would
+     * detach the round the loop is still iterating, which `claim*()` refreshes. So the
+     * prewarm belongs off the tick entirely, as a queued message — see
+     * `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md` §3.4. Until
+     * then the next reader builds it, in its own request, from fresh state.
+     */
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionRoundRepository $roundRepository,
@@ -55,10 +73,7 @@ class CompetitionResultsService
         private readonly MatchEngineRegistry $matchEngineRegistry,
         private readonly RewardApplierService $rewardApplierService,
         private readonly PushNotificationService $pushNotificationService,
-        private readonly CompetitionResponseBuilder $responseBuilder,
-        private readonly CompetitionResponseCacheService $responseCache,
         private readonly ?InboxService $inboxService = null,
-        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     /** @return int Number of rounds this call actually published results for. */
@@ -68,7 +83,6 @@ class CompetitionResultsService
         foreach ($this->roundRepository->findDueForResults($now) as $round) {
             if ($this->claimResults($round, $now)) {
                 $this->publishResults($round, $now);
-                $this->prewarmResponse($round->getActiveCompetition());
                 $published++;
             }
         }
@@ -130,8 +144,6 @@ class CompetitionResultsService
             $this->finalizeRound($round, $now, $winners);
         }
 
-        $this->prewarmResponse($round->getActiveCompetition());
-
         return $this->resultRepository->findOneBy(['fixture' => $fixture])
             ?? throw new \RuntimeException('Fixture was resolved but no result was recorded — this should never happen.');
     }
@@ -139,6 +151,20 @@ class CompetitionResultsService
     /**
      * Claim-lock: an atomic conditional UPDATE, not ORM flush+catch. Deliberately leaves
      * `status` at DRAWN — see class docblock.
+     */
+    /**
+     * Takes the resolve lease for this round, or reports that someone else holds it.
+     *
+     * `resolve_locked_at IS NULL` used to make a claim unreleasable: the claim commits here
+     * through raw SQL, so **any** later failure — a DB error, a timeout, anything thrown
+     * between here and the end of the round — left the lock set with no predicate that could
+     * ever match it again. The round stayed DRAWN and claimed, every later tick skipped it,
+     * and the only recovery was an admin force-resolving each fixture by hand.
+     *
+     * A claim older than CompetitionRound::CLAIM_LEASE_SECONDS is now reclaimable. Retrying
+     * is safe: publishResults() skips any fixture that already carries `processedAt`, and a
+     * round's work lands in one flush, so a reclaimed round either continues from where the
+     * last attempt stopped or redoes work that was never committed.
      */
     private function claimResults(CompetitionRound $round, \DateTimeImmutable $now): bool
     {
@@ -148,12 +174,13 @@ class CompetitionResultsService
                SET resolve_locked_at = :now
              WHERE id = :id
                AND status = :drawn
-               AND resolve_locked_at IS NULL
+               AND (resolve_locked_at IS NULL OR resolve_locked_at < :reclaimBefore)
             SQL,
             [
-                'now'   => $now->format('Y-m-d H:i:s'),
-                'id'    => $round->getId()->toRfc4122(),
-                'drawn' => CompetitionRoundStatus::DRAWN->value,
+                'now'           => $now->format('Y-m-d H:i:s'),
+                'id'            => $round->getId()->toRfc4122(),
+                'drawn'         => CompetitionRoundStatus::DRAWN->value,
+                'reclaimBefore' => $now->modify(sprintf('-%d seconds', CompetitionRound::CLAIM_LEASE_SECONDS))->format('Y-m-d H:i:s'),
             ],
         );
 
@@ -197,6 +224,11 @@ class CompetitionResultsService
         $activeCompetition = $round->getActiveCompetition();
 
         $round->setStatus(CompetitionRoundStatus::RESULTS_PUBLISHED);
+        // Released in the same flush as the status, so
+        // `resolve_locked_at IS NOT NULL AND status = 'drawn'` means exactly "being resolved
+        // right now, or a tick died mid-round" — which is monitorable, and is what the lease
+        // in claimResults() reclaims.
+        $round->setResolveLockedAt(null);
         $round->setCompletedAt($now);
 
         if ($this->isFinalRound($round)) {
@@ -574,31 +606,4 @@ class CompetitionResultsService
         return $audit;
     }
 
-    /**
-     * Rebuilds this competition's prebuilt bracket response.
-     *
-     * Called after a pass that changed the bracket, so the next reader finds the document
-     * ready instead of paying to assemble it. Strictly an optimisation: the cache validates
-     * itself against the competition's state version, so skipping this costs one rebuild on
-     * the next read and can never serve a stale bracket.
-     *
-     * Failures are swallowed deliberately. A tick that published a result has already
-     * committed real game state; letting a cache rebuild turn that into a failed tick would
-     * be strictly worse than serving the next request from a cold cache.
-     */
-    private function prewarmResponse(ActiveCompetition $activeCompetition): void
-    {
-        try {
-            $this->responseCache->rebuild(
-                $activeCompetition,
-                $this->responseBuilder->stateVersion($activeCompetition),
-                fn (): array => $this->responseBuilder->sharedDocument($activeCompetition),
-            );
-        } catch (\Throwable $e) {
-            $this->logger?->warning('Failed to prewarm the competition response cache.', [
-                'competitionId' => (string) $activeCompetition->getId(),
-                'exception'     => $e->getMessage(),
-            ]);
-        }
-    }
 }

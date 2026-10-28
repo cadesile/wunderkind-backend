@@ -43,6 +43,24 @@ class CompetitionEntrantRepository extends ServiceEntityRepository
     }
 
     /**
+     * Every entrant row, withdrawn included.
+     *
+     * Paired with countForCompetition() (which excludes withdrawn) in the response
+     * fingerprint, so a withdrawal moves one component without being cancelled out by
+     * another club's resubmission moving a different one. Summing them into a single number
+     * is exactly the bug the fingerprint replaced.
+     */
+    public function countAllForCompetition(ActiveCompetition $activeCompetition): int
+    {
+        return (int) $this->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->where('e.activeCompetition = :competition')
+            ->setParameter('competition', $activeCompetition->getId())
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Sum of every entrant's snapshotVersion for this competition.
      *
      * Feeds the instance state version, which previously counted only entrants and round

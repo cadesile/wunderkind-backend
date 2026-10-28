@@ -384,8 +384,8 @@ class CompetitionController extends AbstractController
         }
 
         $club         = $this->resolveOptionalClub();
-        $stateVersion = $this->responseBuilder->stateVersion($activeCompetition);
-        $etag         = $this->responseBuilder->etagFor($activeCompetition, $club, $stateVersion);
+        $fingerprint  = $this->responseBuilder->stateFingerprint($activeCompetition);
+        $etag         = $this->responseBuilder->etagFor($activeCompetition, $club, $fingerprint);
 
         $ifNone = $request->headers->get('If-None-Match');
         if ($ifNone !== null && trim($ifNone) === $etag) {
@@ -398,7 +398,7 @@ class CompetitionController extends AbstractController
         // rebuild this, so a request normally finds it ready; a miss just builds it here.
         $document = $this->responseCache->getOrBuild(
             $activeCompetition,
-            $stateVersion,
+            $fingerprint,
             fn (): array => $this->responseBuilder->sharedDocument($activeCompetition),
         );
 

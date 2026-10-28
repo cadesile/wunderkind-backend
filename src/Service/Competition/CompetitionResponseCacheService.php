@@ -12,17 +12,23 @@ use Doctrine\ORM\EntityManagerInterface;
 /**
  * Serves and maintains the prebuilt, viewer-independent body of GET /api/competitions/{id}.
  *
- * Shaped after WorldPackCacheService, which solves the same problem for world packs: an
- * expensive payload, a database-backed row rather than a Symfony pool (see
- * CompetitionResponseCache's docblock for why `var/cache` cannot hold this), and an advisory
- * lock so a cold competition under concurrent load is built once rather than once per
- * request.
+ * Shaped after WorldPackCacheService — an expensive payload, a database-backed row rather
+ * than a Symfony pool (see CompetitionResponseCache's docblock for why `var/cache` cannot
+ * hold this), and an advisory lock so a cold competition under concurrent load is built once
+ * rather than once per request.
  *
  * The cache is **self-validating**. Every read recomputes the competition's state version —
  * one cheap aggregate, against reassembling 64 entrants and 63 fixtures — and treats a
- * mismatch as a miss. Explicit invalidation after a write is therefore an optimisation that
- * keeps the request path from paying for a rebuild, never the thing correctness depends on.
- * A writer that forgets to call invalidate() costs one rebuild; it cannot serve stale data.
+ * mismatch as a miss. Explicit invalidation after a write is therefore an optimisation, not
+ * what correctness depends on: a writer that forgets costs one rebuild and cannot serve
+ * stale data.
+ *
+ * **Everything here reads and writes through DBAL, never the ORM.** Both reasons are
+ * concrete bugs, documented on CompetitionResponseCacheRepository: a failed ORM `flush()`
+ * closes the shared EntityManager (which stranded the next round of a cron tick
+ * permanently), and the identity map returned a stale managed row from the re-check inside
+ * the lock (which made the stampede guard a no-op, so every queued request rebuilt the whole
+ * bracket in turn).
  */
 class CompetitionResponseCacheService
 {
@@ -37,42 +43,51 @@ class CompetitionResponseCacheService
      * @param callable(): array<string, mixed> $builder
      * @return array<string, mixed>
      */
-    public function getOrBuild(ActiveCompetition $activeCompetition, int $stateVersion, callable $builder): array
+    public function getOrBuild(ActiveCompetition $activeCompetition, string $stateFingerprint, callable $builder): array
     {
-        $existing = $this->cacheRepository->findForCompetition($activeCompetition);
-        if ($existing !== null && $existing->isFreshFor($stateVersion)) {
-            return $existing->getPayload();
+        $hit = $this->readFresh($activeCompetition, $stateFingerprint);
+        if ($hit !== null) {
+            return $hit;
         }
 
-        return $this->withCompetitionLock($activeCompetition, function () use ($activeCompetition, $stateVersion, $builder): array {
-            // Re-read inside the lock. Whoever held it before us may have just built exactly
-            // the document we were about to build.
-            $row = $this->cacheRepository->findForCompetition($activeCompetition);
-            if ($row !== null && $row->isFreshFor($stateVersion)) {
-                return $row->getPayload();
+        return $this->withCompetitionLock($activeCompetition, function () use ($activeCompetition, $stateFingerprint, $builder): array {
+            // Re-read inside the lock, from the table rather than from Doctrine. Whoever held
+            // the lock before us may have just built exactly the document we were about to.
+            // This only works because readFresh() goes through DBAL — the ORM would have
+            // handed back the same stale managed instance we already saw above, and every
+            // request queued here would rebuild the bracket again.
+            $hit = $this->readFresh($activeCompetition, $stateFingerprint);
+            if ($hit !== null) {
+                return $hit;
             }
 
-            return $this->store($activeCompetition, $stateVersion, $builder(), $row)->getPayload();
+            $payload = $builder();
+            $this->cacheRepository->upsert($activeCompetition, $payload, $stateFingerprint);
+
+            return $payload;
         });
     }
 
     /**
-     * Builds and stores unconditionally — the prewarm entry point.
+     * Builds and stores unconditionally.
      *
-     * Called after the cron passes that change a bracket (a round drawn, results published,
-     * a competition completed) so the next reader finds the document already built. Takes
-     * the same lock as a request-path rebuild, so a warm landing mid-request cannot produce
-     * two concurrent builds.
+     * Used by `app:competition:cache:warm`. **Only call this where the caller's in-memory
+     * state cannot be stale** — a fresh process, or a message handler that loaded nothing
+     * else. Calling it from inside a cron tick that has already loaded a competition's
+     * entrants will store a document built from those stale entities while stamping it with
+     * a freshly-aggregated version, which is precisely the "fresh" stale document this cache
+     * must never hold.
      *
      * @param callable(): array<string, mixed> $builder
      * @return array<string, mixed>
      */
-    public function rebuild(ActiveCompetition $activeCompetition, int $stateVersion, callable $builder): array
+    public function rebuild(ActiveCompetition $activeCompetition, string $stateFingerprint, callable $builder): array
     {
-        return $this->withCompetitionLock($activeCompetition, function () use ($activeCompetition, $stateVersion, $builder): array {
-            $row = $this->cacheRepository->findForCompetition($activeCompetition);
+        return $this->withCompetitionLock($activeCompetition, function () use ($activeCompetition, $stateFingerprint, $builder): array {
+            $payload = $builder();
+            $this->cacheRepository->upsert($activeCompetition, $payload, $stateFingerprint);
 
-            return $this->store($activeCompetition, $stateVersion, $builder(), $row)->getPayload();
+            return $payload;
         });
     }
 
@@ -80,51 +95,57 @@ class CompetitionResponseCacheService
      * Drops the cached document.
      *
      * Not needed for correctness — the state-version check already makes a superseded row a
-     * miss — but it keeps a competition from carrying a document nobody will ever read, and
-     * it is the honest thing to do when a competition is deleted or reset.
+     * miss — but it keeps a competition from carrying a document nobody will read, and it is
+     * the honest thing to do when a competition is deleted or reset.
      */
     public function invalidate(ActiveCompetition $activeCompetition): void
     {
         $this->cacheRepository->deleteForCompetition($activeCompetition);
     }
 
-    public function isCached(ActiveCompetition $activeCompetition, int $stateVersion): bool
+    public function isCached(ActiveCompetition $activeCompetition, string $stateFingerprint): bool
     {
-        $row = $this->cacheRepository->findForCompetition($activeCompetition);
-
-        return $row !== null && $row->isFreshFor($stateVersion);
+        return $this->readFresh($activeCompetition, $stateFingerprint) !== null;
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * The stored document if it is usable for this state version, else null.
+     *
+     * A row is usable only when both the document shape and the state it was built from
+     * still match.
+     *
+     * @return array<string, mixed>|null
      */
-    private function store(
-        ActiveCompetition $activeCompetition,
-        int $stateVersion,
-        array $payload,
-        ?CompetitionResponseCache $existing,
-    ): CompetitionResponseCache {
-        $row = $existing !== null
-            ? $existing->replace($payload, $stateVersion)
-            : new CompetitionResponseCache($activeCompetition, $payload, $stateVersion);
+    private function readFresh(ActiveCompetition $activeCompetition, string $stateFingerprint): ?array
+    {
+        $row = $this->cacheRepository->findRow($activeCompetition);
 
-        if ($existing === null) {
-            $this->em->persist($row);
+        if ($row === null
+            || $row['payload_version'] !== CompetitionResponseCache::PAYLOAD_VERSION
+            || $row['state_fingerprint'] !== $stateFingerprint
+        ) {
+            return null;
         }
 
-        $this->em->flush();
+        try {
+            $payload = json_decode($row['payload'], true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            // An unreadable row is a miss, not a 500. The caller rebuilds and overwrites it.
+            return null;
+        }
 
-        return $row;
+        return is_array($payload) ? $payload : null;
     }
 
     /**
      * Serializes rebuilds for one competition.
      *
      * A Postgres advisory lock rather than a row lock, because the row may not exist yet —
-     * which is precisely the cold-start case where a stampede hurts most. Failure to take
-     * the lock falls through and proceeds anyway: a duplicate build wastes work but produces
-     * the same document, and the unique index on active_competition_id still prevents two
-     * rows. Same trade-off, and the same reasoning, as WorldPackCacheService::withTierLock().
+     * which is exactly the cold-start case where a stampede hurts most. Failing to take the
+     * lock falls through and proceeds anyway: a duplicate build wastes work but produces the
+     * same document, and the write is an `ON CONFLICT` upsert, so a concurrent writer
+     * collapses into an update rather than erroring. Same trade-off and reasoning as
+     * WorldPackCacheService::withTierLock().
      *
      * @template T
      * @param  callable(): T $work
@@ -140,7 +161,7 @@ class CompetitionResponseCacheService
             $connection->executeStatement('SELECT pg_advisory_lock(hashtext(:key))', ['key' => $key]);
             $locked = true;
         } catch (\Throwable) {
-            // Fall through unlocked.
+            // Fall through unlocked — see the docblock.
         }
 
         try {
