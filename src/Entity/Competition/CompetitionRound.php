@@ -53,14 +53,25 @@ class CompetitionRound
      * tournaments running concurrently that is a steady leak of dead brackets rather than a
      * rare manual fix.
      *
-     * 15 minutes is chosen to sit well clear of real processing time (a 32-fixture round
-     * runs the match engine and narrative generation per fixture) while still self-healing
-     * within one or two cron periods. Overlap is safe if it ever happens: `publishResults()`
-     * skips fixtures that already carry `processedAt`, and a round's work lands in a single
-     * flush, so a reclaimed round either continues where the last attempt stopped or redoes
-     * work that was never committed.
+     * **5 minutes, set from measurement rather than reasoning.** It was 15 minutes, chosen
+     * to "sit well clear of real processing time" before that time had ever been measured.
+     * `app:competition:benchmark` at capacity 64 puts the slowest full round at ~8.4s
+     * (a 32-fixture round resolving in 3.2–7.5s plus a draw of up to 1.0s), so 15 minutes was
+     * ~107x the worst case and cost 15 minutes of downtime to recover a crashed tick. 300s
+     * keeps ~36x headroom over the measured worst round while recovering within about five
+     * cron periods.
+     *
+     * The headroom is deliberately generous rather than tight: the measurement is one machine
+     * with three concurrent competitions, and a contended database would make a round slower
+     * than anything seen here. Overlap is safe even so — `publishResults()` skips fixtures
+     * that already carry `processedAt`, and a round's work lands in a single flush, so a
+     * reclaimed round either continues where the last attempt stopped or redoes work that was
+     * never committed.
+     *
+     * Re-measure with `app:competition:benchmark` if the match engine or narrative generation
+     * gets materially slower.
      */
-    public const CLAIM_LEASE_SECONDS = 900;
+    public const CLAIM_LEASE_SECONDS = 300;
 
     #[ORM\Column(type: 'string', enumType: CompetitionRoundStatus::class)]
     private CompetitionRoundStatus $status;

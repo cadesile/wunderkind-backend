@@ -288,7 +288,9 @@ drivers over the same per-round methods the handlers call, for tests and as a fa
 
 **Round claims are leases, and a status transition must commit with its own work.**
 `claimDraw()`/`claimResults()` set `drawLockedAt`/`resolveLockedAt`, reclaimable after
-`CompetitionRound::CLAIM_LEASE_SECONDS` (15 min) and cleared on success. They used to be
+`CompetitionRound::CLAIM_LEASE_SECONDS` (300s) and cleared on success. That window is set from
+`app:competition:benchmark`, not guessed — the slowest measured full round is ~8.4s at
+capacity 64, so it keeps ~36x headroom; re-measure if the match engine gets slower. They used to be
 one-way flags, so any exception mid-round stranded it forever. Worse, `claimDraw()` also
 committed `status = DRAWN` by raw SQL **before** `drawRound()` built any fixture — a failed
 flush then left a round DRAWN with no fixtures and `matchesResolveAt` NULL, invisible to

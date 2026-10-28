@@ -307,7 +307,82 @@ cache row itself.
 
 ---
 
-## 7. Phase 4 — measurement (not started, and the real remaining gap)
+## 7. Phase 4 — measurement — DONE
+
+`app:competition:benchmark` drives the real services — registration including the
+capacity-fill lock, draw, resolve, and the bracket document build — and reports wall-clock,
+peak memory and payload composition per stage. It creates and deletes its own data and
+refuses to run with `APP_ENV=prod`.
+
+Two measurement artefacts had to be removed before any number meant anything, and both would
+have produced confidently wrong conclusions:
+
+1. **Filling via `spoofAllEntrants()` conflated club creation with registration.** It mints a
+   User and Club per entrant (name and appearance generation) before registering, reading as
+   "~612ms per registration". Separated: club creation is ~15ms each, registration is **~35ms
+   median**. A ~25x overstatement of the one path players actually wait on.
+2. **Cold start dominated every "worst" figure** — the first draw measured 526ms against 59ms
+   for identical work on the next round. Since the slowest-round figure drives the lease
+   recommendation, the harness now runs a discarded warm-up pass (`--no-warmup` keeps the
+   cold-start cost observable).
+
+### Measured, capacity 64, three concurrent competitions
+
+| Stage | Measured |
+|---|---|
+| registration | **~35ms median** (189 samples), worst 712ms |
+| capacity-fill lock (final registrant) | **871ms** — seeding, 6 rounds, 64 inbox messages |
+| draw per round | 333ms – 952ms |
+| resolve, 32-fixture round | **3,185 – 7,451ms** |
+| resolve, 16-fixture round | 1,762 – 4,518ms |
+| peak memory per resolve | **14 – 16MB** |
+| bracket document build | 127 – 2,959ms |
+| **bracket payload** | **~805KB** |
+
+### What it changed
+
+- **`CLAIM_LEASE_SECONDS` 900 → 300.** The worst full round is ~8.4s, so 15 minutes was ~107x
+  the worst case and cost 15 minutes to recover a crashed tick. 300s keeps ~36x headroom and
+  recovers within about five cron periods. Headroom deliberately generous: one machine, three
+  competitions, uncontended database.
+- **`competition-consume.sh`: `--limit=10` removed, `--memory-limit=256M` added.** The count
+  could never bind — ten worst-case resolves are ~75s against a 50s `--time-limit` — so it was
+  documenting a bound it did not enforce. The bounds are now on the two things that actually
+  vary, time and memory, with 256M sitting an order of magnitude above the measured 16MB peak.
+- **The `--limit` conclusion from the capacity-8 run was wrong**, and only the capacity-64 run
+  caught it: at capacity 8 the harness suggested ~267 messages would fit in the window, at
+  capacity 64 it is ~6. Small-bracket measurement would have justified *raising* the limit.
+
+### The payload finding, which corrected an assumption
+
+I had assumed `narrativePayload` dominated the bracket response. It does not. At capacity 32:
+
+| component | share |
+|---|---|
+| result lineups (all fixtures) | **41.5%** |
+| `result.narrativePayload` | 32.6% |
+| everything else | 21.7% |
+| `entrants[]` | 4.3% |
+
+So **~74% of the response is per-fixture match detail** — lineups and commentary — and
+`GET /api/matches/{id}` already serves exactly that per match, with the bracket already
+handing out `matchId` for every completed fixture. The recommendation is therefore stronger
+and different from the one I had been making: the bracket should not embed `result` detail at
+all, not merely drop the narrative. That is an app-side contract change and remains the
+largest single win available on this endpoint.
+
+### Still not measured
+
+The harness is single-process. It bounds work per message, which is what the lease and the
+consumer bounds need, but it demonstrates **nothing about contention**: nothing runs two
+consumers against one competition, so the advisory lock and the claim lease remain argued for
+rather than shown. There is also still no production instrumentation — no metric on build
+time, cache hit rate, queue depth or consumer lag — so a mis-tuning in prod would still
+surface first as a log entry.
+
+---
+
+## 8. Original Phase 4 notes (superseded by the measurements above)
 
 Everything above rests on **reading the code and on unit tests that simulate contention** — a
 stale lease, a duplicate delivery, a deleted round, a locked competition. Nothing has run two

@@ -587,3 +587,18 @@
   acceptable and deliberately not queued, because splitting it would leave a SCHEDULED
   competition with no rounds — the orphaning shape §2.1 removed. Plan gains a Phase 4:
   nothing in it has been load-tested, and the 15-minute lease window is a guess.
+
+- **New pass (2026-10-28), on top of commit 0e26e97** (uncommitted).
+  **Stages touched:** none (new command, tuning, plan doc). Phase 4 of the concurrency plan:
+  `app:competition:benchmark` times the real pipeline and reports payload composition.
+  Two settings that were guesses are now measured — `CLAIM_LEASE_SECONDS` 900 → 300 (slowest
+  full round ~8.4s at capacity 64, so 15 min was ~107x and cost 15 min to recover a crashed
+  tick), and `competition-consume.sh`'s `--limit=10` replaced by `--memory-limit=256M` because
+  ten worst-case resolves are ~75s against a 50s time limit, so the count never bound.
+  Two of my own assumptions were corrected by the numbers: filling via `spoofAllEntrants()`
+  conflated club creation with registration (a ~25x overstatement — registration is ~35ms
+  median), and `narrativePayload` is **not** the dominant share of the bracket payload —
+  lineups are (41.5% vs 32.6% at capacity 32). Together ~74% of the ~805KB response is
+  per-fixture detail that `GET /api/matches/{id}` already serves, which makes the case for the
+  bracket not embedding `result` at all rather than merely dropping narrative. Still not
+  measured: contention (single-process harness) and production instrumentation.
