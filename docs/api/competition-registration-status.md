@@ -1,9 +1,11 @@
 # Competition registration status — pending vs confirmed
 
 **Audience:** `wunderkind-app`.
-**Status:** backend shipped 2026-10-28. **Additive only — no existing field changed, no
-existing value changed.** An app that ignores everything below keeps working exactly as it
-does today.
+**Status:** backend shipped 2026-10-28.
+
+**One breaking change, deliberately taken while tournaments are not yet player-facing:**
+`POST /resubmit`'s `status` no longer returns the literal `"accepted"`. Everything else here
+is additive. Details under that endpoint below.
 
 ---
 
@@ -27,7 +29,7 @@ is still being written. `submissionStatus` is how you can see that window.
 
 Two places expose it. Both are additive.
 
-### `POST /api/competitions/{id}/register` and `/resubmit` → `entrant.submissionStatus`
+### `POST /api/competitions/{id}/register` → `entrant.submissionStatus`
 
 ```jsonc
 {
@@ -42,6 +44,37 @@ Two places expose it. Both are additive.
   }
 }
 ```
+
+### `POST /api/competitions/{id}/resubmit` → `entrant.submissionStatus`
+
+Same place as register, read the same way:
+
+```jsonc
+{
+  "entrantId": "01a17fe9-…",
+  "snapshotVersion": 2,
+  "status": "active",              // CHANGED — see below
+  "locksAt": "2031-10-11T18:00:00+00:00",
+  "entrant": {                     // NEW — the same object register returns
+    "entrantId": "01a17fe9-…",
+    "status": "active",
+    "submissionStatus": "confirmed"
+  }
+}
+```
+
+**⚠️ Breaking change to `status` on this endpoint.** It used to be the literal string
+`"accepted"`, describing the resubmission rather than the entry — a second vocabulary under a
+key that means something else on `/register`. It now carries the **entrant's standing**
+(`registered` / `active` / …), identical in meaning to register's.
+
+Nothing is lost: acceptance is already the `200`, and the refusals are `404 not_registered` /
+`409 resubmission_window_closed`. **If your code checks `status === "accepted"`, it must
+change** — check the HTTP status instead.
+
+Resubmit writes inline rather than queueing, so `entrant.submissionStatus` is always
+`confirmed` on success. It is stated rather than implied, because this is how a client
+confirms a `failed` entry actually recovered.
 
 ### `GET /api/competitions/{id}` → `viewer.snapshot`
 
@@ -70,8 +103,9 @@ watch someone else's write land.
 | `failed` | The write exhausted its retries. The slot is still held and the fee is still paid. | Offer **Withdraw** (full refund) or **Resubmit**. Don't auto-retry. |
 
 `settled` is `true` for both `confirmed` and `failed`, and `false` only for `pending`. Use it
-as the "stop polling" signal: `failed` is terminal without operator action, so a client that
-kept polling it would poll forever.
+as the **stop-polling** signal, not as a success signal: polling will never move a `failed`
+entry, because only an action changes it — see below. A client that kept polling `failed`
+would poll forever.
 
 ## Rules
 
@@ -102,16 +136,19 @@ entry, and neither needs a backend operator:
 | Action | Endpoint | Result |
 |---|---|---|
 | **Withdraw** | `POST /api/competitions/{id}/withdraw` | Slot released, **entry fee refunded in full**. Ordinary refund path — `failed` is not special-cased. |
-| **Resubmit** | `POST /api/competitions/{id}/resubmit` | Writes the squad synchronously and clears the failure. On success `submissionStatus` is `confirmed` in the same response. |
+| **Resubmit** | `POST /api/competitions/{id}/resubmit` | Writes the squad synchronously and clears the failure. On success `entrant.submissionStatus` is `confirmed` in the same response. |
 
 Resubmit is the better first offer — it keeps the player in the competition. Withdraw is the
 exit if resubmitting fails too.
 
-**Why withdrawal is always available here:** a competition will not lock while any entrant is
-unstored, even when every slot is taken. Locking sets the competition to SCHEDULED and every
-entrant to ACTIVE, and withdrawal requires neither — so locking over a `failed` entry would
-trap the player with no way out. The backend defers the lock until the last squad lands, which
-means a `failed` entry *always* leaves its competition in a state where withdrawal works.
+**Why withdrawal is always available here:** withdrawal needs the competition to still be
+open and the entry to still be `registered`. Locking a competition ends both at once — it
+moves the competition on and flips every entry to `active` — so a competition that locked
+while one entry was still unstored would trap that player with no way out.
+
+The backend therefore will not lock while **any** entrant is unstored, even when every slot is
+taken. A `failed` entry consequently *always* leaves its competition in a state where
+withdrawal works, by construction rather than by luck.
 
 The visible consequence: a competition can sit full without starting for a moment. That is the
 mechanism working, not a stall. Don't show it as an error.
@@ -139,7 +176,7 @@ and nothing to show as an error — it clears when they act or when the backend 
 
 ## Not changing
 
-- `status` values and meanings.
+- `status` on `/register`, `GET /{id}` and everywhere else — only `/resubmit`'s changed.
 - The `201`/`200` response shape and codes for register/resubmit.
 - `seed` — still `0` until the competition fills, exactly as before.
 - Every other field on `viewer` and on entrant summaries.
