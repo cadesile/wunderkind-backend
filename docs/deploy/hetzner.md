@@ -289,6 +289,46 @@ It is now `pm = static`, `pm.max_children = 12`, sized against this specific box
 binding constraint (~456 MB steady-state in use), and PHP here is CPU-bound. **Raise this when
 the box gains cores, not when a queue looks slow.**
 
+### Sizing table — what to set after a resize
+
+Derived from a measured competition registration: ~22 ms of pure JSON work for a 1.4 MB
+payload, ~20 MB peak, plus DB time. Registration is the heaviest request the API serves, so
+sizing to it sizes everything.
+
+| Box | Sustained registrations/sec | `pm.max_children` | Notes |
+|---|---|---|---|
+| **2 vCPU / 3.8 GB** (today, dev co-resident) | ~10–20 | **12** | prod splits 2 cores with `wunderkind-dev`, `postgres-dev`, `caddy` |
+| 2 vCPU, **dev moved off** | ~20–40 | 12 | **the planned first step** — no purchase, roughly doubles prod's cores |
+| 4 vCPU / 8 GB | ~40–80 | 24 | |
+| 8 vCPU / 16 GB | ~80–160 | 48 | past here, measure Postgres before PHP |
+
+**The rule, not the row:** `pm.max_children ≈ 6 × vCPU`. PHP here is CPU-bound, so beyond
+that more runnable workers buy context switches rather than throughput. Memory is not the
+binding constraint at any of these sizes — a realistic worker working set is ~60 MB (the
+512 MB `memory_limit` is a ceiling, not an allocation), so even 48 workers is ~2.9 GB, and
+Hetzner's tiers scale RAM with vCPU anyway.
+
+**Where to change it:** `docker/www.conf`, committed in this repo and baked into the image at
+`/usr/local/etc/php-fpm.d/zz-pool.conf`. It is a literal, not an env var, on purpose — a new
+env var has to land in three places (see the `TRUSTED_PROXIES` note above) and a box resize is
+already a deploy-level event, so a normal CI build from `master` picks the change up anyway.
+
+**The intended order is: move dev off first, then resize.** Splitting the dev stack
+(`wunderkind-dev`, `postgres-dev`) onto its own box is a decided plan, not a suggestion — it
+roughly doubles prod's effective CPU for no new spend, and removes the case where a dev deploy
+or an admin-triggered country regenerate competes with live registrations. Do that before
+paying for cores, and re-measure after: the table's first two rows differ by 2x on the same
+hardware.
+
+**Two things a resize does not fix:**
+
+- **Postgres shares the box.** Past ~8 vCPU the write path (a TOASTed ~1.4 MB row per
+  registration, plus WAL) is the next thing to measure, not PHP.
+- **The payload grows on its own.** `club.cupTrophies` and `club.facilityUpgrades` are
+  append-only client history: ~1.4 MB at five in-game years, and on track to hit
+  `SnapshotValidator::MAX_SNAPSHOT_BYTES` (4 MB) at around ten. That one is a client-side fix,
+  not a knob here.
+
 ## Cron
 
 The image bakes a crontab (busybox `crond` under supervisord) running

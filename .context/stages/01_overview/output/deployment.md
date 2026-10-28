@@ -5,6 +5,31 @@ server setup, verifying a deploy): `docs/deploy/hetzner.md` — not restated her
 This file covers the **git branching/merge policy** that decides what lands on
 `dev` and `master` in the first place, which `hetzner.md` doesn't document.
 
+## Capacity — read before answering "will this scale?"
+
+The production box is **2 vCPU / 3.8 GB**, and it hosts *five* containers:
+`wunderkind-prod`, `wunderkind-dev`, `postgres-prod`, `postgres-dev` and `caddy`.
+So prod does not have 2 cores; it shares them with the dev stack. Steady-state
+memory is ~456 MB, which means **CPU is the binding constraint, not RAM** — the
+opposite of what the 3.8 GB figure suggests at a glance.
+
+Two always-on things beyond `php-fpm`/`nginx`/`crond` live here:
+`registration-consume` (Messenger worker — if it stops, registrations silently
+never complete) and the baked crontab.
+
+**`pm.max_children` is sized to the box, not left at the image default**, which was
+5 — five concurrent PHP requests for the entire API. `docker/www.conf` sets 12.
+The rule is `≈ 6 × vCPU`; the per-box table, what each upgrade actually buys, and
+the two things a resize does *not* fix are in **`docs/deploy/hetzner.md` →
+"PHP-FPM sizing"**. Don't re-derive those numbers — they come from a measured
+registration (~22 ms of JSON for a 1.4 MB payload), and the table records it.
+
+**The decided plan when scale demands it: move the dev API and its Postgres off
+this box first, then resize.** That roughly doubles prod's effective CPU for no new
+spend, so it comes before paying for cores — and it means the "2 vCPU" figure above
+is temporary. Re-measure after the split rather than carrying today's
+registrations/sec forward.
+
 ## Three branches, not two
 
 - **`master`** — live production. Pushing here deploys the production release
