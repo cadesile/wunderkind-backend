@@ -270,6 +270,15 @@ committing it before a failed flush would leave a live bracket unresolvable. `*_
 are deliberately **not** pruned: an audit answers "how was this result derived" about a
 match already played, which is exactly when someone asks.
 
+**Round claims are leases, and a status transition must commit with its own work.**
+`claimDraw()`/`claimResults()` set `drawLockedAt`/`resolveLockedAt`, reclaimable after
+`CompetitionRound::CLAIM_LEASE_SECONDS` (15 min) and cleared on success. They used to be
+one-way flags, so any exception mid-round stranded it forever. Worse, `claimDraw()` also
+committed `status = DRAWN` by raw SQL **before** `drawRound()` built any fixture — a failed
+flush then left a round DRAWN with no fixtures and `matchesResolveAt` NULL, invisible to
+`findDueForDraw()` *and* `findDueForResults()`. **Never commit a round's status ahead of the
+work it describes**; set it on the entity so it lands in the same flush.
+
 Other things worth knowing:
 - **`clubDisplayJson` is a picked key set, not the normaliser's output.**
   `normalizeClubData()` ends in `array_merge($clubData, ...)` and forwards every

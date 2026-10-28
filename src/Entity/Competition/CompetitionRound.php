@@ -43,6 +43,25 @@ class CompetitionRound
     #[ORM\Column(length: 20)]
     private string $label;
 
+    /**
+     * How long a draw or resolve claim is honoured before another tick may take it over.
+     *
+     * `drawLockedAt`/`resolveLockedAt` are a **lease**, not a one-way flag. They used to be
+     * set and never cleared, so any exception between claiming a round and finishing it left
+     * the round unprocessable forever — `claim*()`'s `IS NULL` predicate never matched again
+     * and the only recovery was an admin resolving each fixture by hand. With many
+     * tournaments running concurrently that is a steady leak of dead brackets rather than a
+     * rare manual fix.
+     *
+     * 15 minutes is chosen to sit well clear of real processing time (a 32-fixture round
+     * runs the match engine and narrative generation per fixture) while still self-healing
+     * within one or two cron periods. Overlap is safe if it ever happens: `publishResults()`
+     * skips fixtures that already carry `processedAt`, and a round's work lands in a single
+     * flush, so a reclaimed round either continues where the last attempt stopped or redoes
+     * work that was never committed.
+     */
+    public const CLAIM_LEASE_SECONDS = 900;
+
     #[ORM\Column(type: 'string', enumType: CompetitionRoundStatus::class)]
     private CompetitionRoundStatus $status;
 

@@ -112,16 +112,36 @@ docblock calls "open-ended". **Fix:** drop the count cap; keep the byte cap.
 
 The review only saw the diff. These are pre-existing and matter more at scale.
 
-### 2.1 Claims are acquired but never released — the biggest scaling risk
+### 2.1 Claims are acquired but never released — DONE
 
-`claimDraw()` and `claimResults()` set `*_locked_at` and **nothing ever clears it**. §1.1 is
+`claimDraw()` and `claimResults()` set `*_locked_at` and nothing ever cleared it. §1.1 was
 one way to strand a round; *any* uncaught exception between the claim and the end of
-processing does the same. With one tournament that is a rare manual fix. With many rolling
-concurrently it is a steady leak of permanently stuck rounds.
+processing did the same.
 
-**Fix:** make the claim a lease, not a one-way flag — reclaim a claim older than a threshold
-(`resolve_locked_at < now - interval`), so a crashed tick self-heals. This is the single
-highest-value change in the plan for the stated goal.
+**Implementing this turned up something worse on the draw side, which this plan had not
+spotted.** `claimDraw()` also committed `status = DRAWN` through raw SQL *before*
+`drawRound()` created a single fixture. A failure in that flush therefore left a round marked
+DRAWN with no fixtures and `matches_resolve_at` still NULL — skipped by `findDueForDraw()`
+(which wants DRAW_PENDING) **and** by `findDueForResults()` (`matches_resolve_at <= now` is
+never true for NULL). The round was **orphaned from both ticks**, permanently, with no lock
+involved at all. A lease alone would not have fixed it.
+
+**Shipped:**
+1. `claimDraw()` takes the lease only. `drawRound()` sets `DRAWN` in the same flush as the
+   fixtures, `startedAt` and `matchesResolveAt`, so the status and the work it describes
+   commit together. A crash leaves the round DRAW_PENDING and reclaimable.
+2. Both claims are leases, reclaimable after `CompetitionRound::CLAIM_LEASE_SECONDS` (15
+   minutes), and **released on success** in the same flush as the terminal status — so
+   `*_locked_at IS NOT NULL AND status = <pre-work status>` is a precise, monitorable "in
+   progress or died mid-round" signal.
+
+Retrying is safe for reasons that already held: `publishResults()` skips fixtures carrying
+`processedAt`, and a round's work lands in one flush, so a reclaimed round either continues
+from where the last attempt stopped or redoes work that was never committed.
+
+Covered by `tests/Service/Competition/CompetitionRoundClaimLeaseTest.php`, which drives the
+private claims by reflection on purpose: the property under test is the state a claim leaves
+*before* any work runs, which no public entry point exposes.
 
 ### 2.2 The advisory lock falls through unlocked
 
@@ -212,7 +232,7 @@ shares a request or tick with game-state mutation at all, so it cannot affect ei
 | Phase | Blocks | Why in this order |
 |---|---|---|
 | 0 (§1) | `master` | Correctness. §1.1 can permanently stall a live bracket. |
-| 1 (§2.1) | nothing, but highest value | Claims-as-leases is what makes concurrent rolling tournaments survivable. |
+| 1 (§2.1) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
 | 2 (§3) | nothing | Bounds the work per tick. Needs Phase 0 first, since §3.4 depends on §1.1's DBAL write. |
 | 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
 | §5 | `master` | A data decision, not an engineering one. |

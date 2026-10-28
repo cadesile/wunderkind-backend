@@ -101,21 +101,39 @@ class CompetitionDrawService
      * the same statement as the old fused claimRound() did with RUNNING — if 0 rows are
      * affected, another overlapping tick already claimed this round.
      */
+    /**
+     * Takes the draw lease for this round, or reports that someone else holds it.
+     *
+     * Two deliberate changes from how this used to work, both of which were causing rounds
+     * to become permanently unprocessable:
+     *
+     *  - **It no longer flips the status to DRAWN.** That flip was committed here, by raw
+     *    SQL, *before* drawRound() created a single fixture — so a failure in drawRound()'s
+     *    flush left a round marked DRAWN with no fixtures and `matches_resolve_at` still
+     *    NULL. `findDueForDraw()` then skipped it (it wants DRAW_PENDING) and
+     *    `findDueForResults()` skipped it too (`matches_resolve_at <= now` is never true for
+     *    NULL), so the round was invisible to **both** ticks, forever. The transition now
+     *    happens inside drawRound()'s own flush, atomically with the fixtures it describes.
+     *  - **The claim is a lease.** `draw_locked_at IS NULL` meant a claim was never
+     *    releasable: any exception after claiming stranded the round. A claim older than
+     *    CompetitionRound::CLAIM_LEASE_SECONDS is now reclaimable, so a crashed tick
+     *    self-heals.
+     */
     private function claimDraw(CompetitionRound $round, \DateTimeImmutable $now): bool
     {
         $affected = $this->em->getConnection()->executeStatement(
             <<<'SQL'
             UPDATE competition_round
-               SET status = :drawn, draw_locked_at = :now
+               SET draw_locked_at = :now
              WHERE id = :id
                AND status = :draw_pending
-               AND draw_locked_at IS NULL
+               AND (draw_locked_at IS NULL OR draw_locked_at < :reclaimBefore)
             SQL,
             [
-                'drawn'        => CompetitionRoundStatus::DRAWN->value,
-                'now'          => $now->format('Y-m-d H:i:s'),
-                'id'           => $round->getId()->toRfc4122(),
-                'draw_pending' => CompetitionRoundStatus::DRAW_PENDING->value,
+                'now'           => $now->format('Y-m-d H:i:s'),
+                'id'            => $round->getId()->toRfc4122(),
+                'draw_pending'  => CompetitionRoundStatus::DRAW_PENDING->value,
+                'reclaimBefore' => $now->modify(sprintf('-%d seconds', CompetitionRound::CLAIM_LEASE_SECONDS))->format('Y-m-d H:i:s'),
             ],
         );
 
@@ -148,6 +166,12 @@ class CompetitionDrawService
             }
         }
 
+        // DRAWN is set here, not in claimDraw(), so the status and the fixtures it refers to
+        // commit together — see claimDraw()'s docblock. Clearing the lease in the same flush
+        // makes `draw_locked_at IS NOT NULL AND status = 'draw_pending'` mean exactly "being
+        // drawn right now, or a tick died mid-draw", which is monitorable.
+        $round->setStatus(CompetitionRoundStatus::DRAWN);
+        $round->setDrawLockedAt(null);
         $round->setStartedAt($now);
         $round->setMatchesResolveAt($this->resolveDueAt($round, $now));
 

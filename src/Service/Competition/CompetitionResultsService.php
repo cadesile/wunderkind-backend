@@ -152,6 +152,20 @@ class CompetitionResultsService
      * Claim-lock: an atomic conditional UPDATE, not ORM flush+catch. Deliberately leaves
      * `status` at DRAWN — see class docblock.
      */
+    /**
+     * Takes the resolve lease for this round, or reports that someone else holds it.
+     *
+     * `resolve_locked_at IS NULL` used to make a claim unreleasable: the claim commits here
+     * through raw SQL, so **any** later failure — a DB error, a timeout, anything thrown
+     * between here and the end of the round — left the lock set with no predicate that could
+     * ever match it again. The round stayed DRAWN and claimed, every later tick skipped it,
+     * and the only recovery was an admin force-resolving each fixture by hand.
+     *
+     * A claim older than CompetitionRound::CLAIM_LEASE_SECONDS is now reclaimable. Retrying
+     * is safe: publishResults() skips any fixture that already carries `processedAt`, and a
+     * round's work lands in one flush, so a reclaimed round either continues from where the
+     * last attempt stopped or redoes work that was never committed.
+     */
     private function claimResults(CompetitionRound $round, \DateTimeImmutable $now): bool
     {
         $affected = $this->em->getConnection()->executeStatement(
@@ -160,12 +174,13 @@ class CompetitionResultsService
                SET resolve_locked_at = :now
              WHERE id = :id
                AND status = :drawn
-               AND resolve_locked_at IS NULL
+               AND (resolve_locked_at IS NULL OR resolve_locked_at < :reclaimBefore)
             SQL,
             [
-                'now'   => $now->format('Y-m-d H:i:s'),
-                'id'    => $round->getId()->toRfc4122(),
-                'drawn' => CompetitionRoundStatus::DRAWN->value,
+                'now'           => $now->format('Y-m-d H:i:s'),
+                'id'            => $round->getId()->toRfc4122(),
+                'drawn'         => CompetitionRoundStatus::DRAWN->value,
+                'reclaimBefore' => $now->modify(sprintf('-%d seconds', CompetitionRound::CLAIM_LEASE_SECONDS))->format('Y-m-d H:i:s'),
             ],
         );
 
@@ -209,6 +224,11 @@ class CompetitionResultsService
         $activeCompetition = $round->getActiveCompetition();
 
         $round->setStatus(CompetitionRoundStatus::RESULTS_PUBLISHED);
+        // Released in the same flush as the status, so
+        // `resolve_locked_at IS NOT NULL AND status = 'drawn'` means exactly "being resolved
+        // right now, or a tick died mid-round" — which is monitorable, and is what the lease
+        // in claimResults() reclaims.
+        $round->setResolveLockedAt(null);
         $round->setCompletedAt($now);
 
         if ($this->isFinalRound($round)) {
