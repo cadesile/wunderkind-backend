@@ -384,7 +384,18 @@ class CompetitionResultsServiceTest extends KernelTestCase
 
         // Admin accessors expose the audit, while client summary keeps it internal
         $this->assertNotNull($auditRow->getComputationAuditJsonPretty());
-        $this->assertNotEmpty($auditRow->getEventLogJson(), 'the event log moved to the audit row with it');
+        // The event log moved to the audit row with the audit. Asserted as an invariant
+        // against the audit's own outcome rather than as "not empty": the log is goals plus
+        // cards, both rolled, and a scoreless cardless tie decided on penalties legitimately
+        // logs nothing. The seed comes from freshly generated fixture UUIDs, so a non-empty
+        // assertion is a coin flip that eventually fails in CI for no real reason.
+        $eventLog   = $auditRow->getEventLogJson();
+        $goalEvents = array_values(array_filter($eventLog, static fn (array $e) => ($e['type'] ?? null) === 'goal'));
+        $this->assertCount(
+            $audit['outcome']['homeScore'] + $audit['outcome']['awayScore'],
+            $goalEvents,
+            'every goal in the outcome must appear in the audit row\'s event log (shootout goals excluded)',
+        );
         $fullPayload = json_decode($result->getFullPayloadPretty($auditRow), true);
         $this->assertIsArray($fullPayload['computationAuditJson'] ?? null);
         // Asserted against the payload the client now actually receives. This used to check

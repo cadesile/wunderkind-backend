@@ -277,21 +277,33 @@ cache row itself.
 
 ---
 
-## 5. Decision required before `development → master`
+## 5. Entry fees and the truncate — resolved, no decision required
 
-> [!WARNING]
-> `Version20261028001500` truncates the ten competition/friendly **instance** tables. The
-> clear was explicitly authorised and `dev` has already taken it. Production has **not**.
->
-> The review surfaced a consequence that was not weighed when it was authorised:
-> **`register()` deducts `entryFeePence` from `club.balance`, and the truncate refunds
-> nothing.** `entrant_reward_claim` rows go too, and `InboxMessage` rows that link to a
-> competition are left pointing at deleted rows. `down()` restores none of it.
->
-> Options, in increasing effort: accept it (tournaments were never player-facing, so the fees
-> may be test data only); refund `entryFeePence` to every non-withdrawn entrant in the
-> migration before truncating; or gate the truncate on the environment genuinely having no
-> live instances and backfill instead, as `Version20261027230000` does for entrants.
+**RESOLVED — moot. No decision needed, and the concern was mine to have caught earlier.**
+
+The review flagged that `Version20261028001500`'s truncate deletes entrants whose
+`entryFeePence` was already deducted from `club.balance`, refunding nothing, and I carried
+that as a blocker on `master` across several messages.
+
+It does not hold, because of the hybrid model this codebase is built on. `club.balance` in
+the backend is a **mirror, not the source of truth**. `SyncService` says so explicitly at the
+point of assignment — *"The client is the game engine. balance, totalCareerEarnings, and
+reputation are accepted as authoritative snapshots from the device"* — and the assignment is
+an absolute overwrite, `$club->setBalance($request->balance)`, not a delta. So the backend
+never held the authoritative balance, and truncating competitions cannot lose player money:
+the next sync reasserts whatever the device says.
+
+Two things worth keeping from the investigation anyway:
+
+1. **The fee default is 0 and nothing in the codebase ever sets it.** `entryFeePerRound` is
+   `default => 0`, and no seeder or fixture calls `setEntryFeePence()` — it is admin-set only.
+   So even under the wrong model, the exposure was whatever an admin had configured.
+2. **The server-side fee deduction is transient, and that may be worth a look on the client
+   side.** `register()` deducts, `withdraw()` and `cancel()` refund, and the next sync
+   overwrites all of it. The `balance >= :fee` guard is still meaningful as an affordability
+   check against the last-synced balance, but the deduction does not persist. If the client
+   does not also deduct locally, an entry fee is effectively free. That is in
+   `wunderkind-app`'s domain, not this repo's, so it is recorded here rather than acted on.
 
 ---
 
@@ -303,7 +315,7 @@ cache row itself.
 | 1 (§2.1, §2.2, §2.3) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
 | 2 (§3) | §3.1/§3.2/§3.4 **done**; §3.3 open | Bounds the work per tick, and restores prewarming in the form it should have had. |
 | 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
-| §5 | `master` | A data decision, not an engineering one. |
+| §5 | **nothing** | Resolved as moot: the backend's `club.balance` is a sync mirror, not the source of truth. |
 
 ---
 

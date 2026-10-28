@@ -614,3 +614,24 @@
   table in `docs/api/competition-bracket-no-embedded-result.md`; the `MATCH_RESULT` push
   already carries the `fixtureId` to fetch with. Test coverage moved rather than deleted: the
   payload-shape assertions now run against the match endpoint.
+
+- **Note (2026-10-28), no stage change.** §5 of the concurrency plan is closed as **moot**.
+  The cloud review flagged, and I repeated, that the competition truncate destroys entry fees
+  already deducted from `club.balance` with no refund. It does not: the backend's
+  `club.balance` is a sync mirror, overwritten absolutely from the device
+  (`SyncService::process()` — *"The client is the game engine… accepted as authoritative
+  snapshots from the device"*), so the backend never held the authoritative value. Recorded
+  for the next reader because the same mistake is easy to make: a balance column in this
+  schema does not imply the backend owns that balance. Side observation left in the plan: the
+  server-side fee deduction in `register()` is transient for the same reason, so if the client
+  does not deduct locally an entry fee is effectively free — an app-side question, not this
+  repo's.
+
+- **`01_overview/tribal-knowledge.md`, `03_data/entities.md`, `07_synthesis/architecture-notes.md`
+  — the authority boundary is now written down (2026-10-28).** Stated by the human: the device
+  is the master for club data, and the backend only learns per-club state through sync data.
+  `tribal-knowledge.md` gains a section (its first real entry — it previously held only the
+  "nothing to add" placeholder), `entities.md`'s `Club` entry gains the note at the point a
+  reader meets `balance`, and `architecture-notes.md` gains an "Authority" section listing what
+  the device owns versus what the backend owns, including the split inside competitions (the
+  backend owns the bracket; each entrant's squad is a client snapshot it stores verbatim).
