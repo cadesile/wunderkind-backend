@@ -312,4 +312,12 @@ was not safe to retry:
   listed. No backfill — the clearing migration above runs first. These rows are deliberately
   **not** pruned on completion, unlike entrant squads: an audit exists to answer "how was
   this result derived" about a match already played, which is when anyone asks.
+- `Version20261028023000` — replaces `competition_response_cache.state_version` (INT) with
+  `state_fingerprint` (VARCHAR(64)). The integer was additive and **collided**: the entrant
+  count excludes withdrawn rows while the snapshot-version sum includes them, so a withdrawal
+  netted -1 and another club's resubmission +1, they cancelled, the cached row still looked
+  fresh, and a stale bracket was served behind a 304. It also omitted the competition's
+  status, cancellation and completion plus every template field the document embeds. The
+  table is a cache, so existing rows are truncated rather than converted — a miss is already
+  the correct behaviour, which is why the new column can be NOT NULL with no default.
 

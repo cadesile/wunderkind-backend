@@ -460,10 +460,18 @@ migrations are the change log (see `migrations.md`).
   completion, unlike squads.
 - **`CompetitionResponseCache`** (table `competition_response_cache`) — the
   prebuilt viewer-independent body of `GET /api/competitions/{id}`: `payload`,
-  `stateVersion:int`, `payloadVersion:smallint`, `generatedAt`. `OneToOne` →
-  `activeCompetition` (unique, `CASCADE`). Self-validating: a read recomputes
-  the competition's state version and treats a mismatch as a miss, so the cron
-  prewarm hooks are an optimisation rather than what correctness depends on. For
+  `stateFingerprint:string(64)`, `payloadVersion:smallint`, `generatedAt`.
+  `OneToOne` → `activeCompetition` (unique, `CASCADE`). Self-validating: a read
+  recomputes the fingerprint and treats a mismatch as a miss. **The fingerprint
+  is a hash over an explicit labelled tuple, not a number** — it was an additive
+  integer and that collided (the entrant count excludes withdrawn rows while the
+  snapshot-version sum includes them, so a withdrawal netted -1 and another
+  club's resubmission +1, they cancelled, and a stale bracket was served behind a
+  304) as well as omitting the competition's status/cancellation/completion and
+  every template field the document embeds. **Read and written through DBAL, never
+  the ORM**: a failed ORM `flush()` closes the shared EntityManager, which in a
+  cron tick stranded the next claimed round permanently, and the identity map hid
+  other writers' rebuilds from the re-check inside the advisory lock. For
   a COMPLETED competition this row *is* the archive — its document can never
   change again. Database-backed rather than a Symfony cache pool because only
   Postgres has a volume and `up -d` recreates the app container on every deploy,

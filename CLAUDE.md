@@ -287,8 +287,15 @@ Other things worth knowing:
   client still sending it is unaffected.
 - **`GET /api/competitions/{id}` serves a prebuilt document** from
   `competition_response_cache`; only the `viewer` key and `serverTime` are composed per
-  request. The cache is self-validating against the competition's state version, so the
-  cron prewarm hooks are an optimisation, not what correctness rests on.
+  request. The cache is self-validating against a **state fingerprint** — a hash over an
+  explicit tuple, because an additive integer collided (a withdrawal and another club's
+  resubmission cancelled out) and omitted status/cancellation/template inputs. It is read
+  and written through **DBAL, never the ORM**: a failed ORM `flush()` closes the shared
+  EntityManager, and in a cron tick that stranded the next claimed round permanently.
+  **Prewarming is not done inline in a cron tick** — the tick has already loaded the
+  entrants and Doctrine will not re-hydrate them, so it could store a stale document under a
+  fresh fingerprint. It belongs off-tick as a queued message; see
+  `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md`.
 - **The match engines take no entities.** `resolve(MatchEngineSide, MatchEngineSide,
   MatchEngineContext)`. `resolveFriendly()` is gone — a friendly is `allowDraws: true` on
   the context. Resolving one used to fabricate five entities and reflect over a private id

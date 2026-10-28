@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Service\Competition;
 
-use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionRound;
@@ -28,6 +27,28 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class CompetitionDrawService
 {
+    /**
+     * Prewarming the bracket response is deliberately NOT done here.
+     *
+     * It used to be, and it was wrong twice over:
+     *
+     *  - The cache write went through the shared EntityManager, and a failed `flush()` closes
+     *    it. The `catch (\Throwable)` around the prewarm logged and continued, but the next
+     *    due round in this loop was then claimed by raw SQL and died on
+     *    `EntityManagerClosed` — leaving `*_locked_at` set with nothing able to reclaim it,
+     *    so that round was stuck permanently.
+     *  - Even on success it could store a stale document as fresh. The state version comes
+     *    from live SQL aggregates, but this tick has already loaded the competition's
+     *    entrants, and Doctrine does not re-hydrate an already-managed entity. A resubmission
+     *    committing mid-tick is counted in the version and absent from the document.
+     *
+     * There is no safe way to get fresh reads from inside this loop: `em->clear()` would
+     * detach the round the loop is still iterating, which `claim*()` refreshes. So the
+     * prewarm belongs off the tick entirely, as a queued message — see
+     * `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md` §3.4. Until
+     * then the next reader builds it, in its own request, from fresh state.
+     */
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionRoundRepository $roundRepository,
@@ -35,10 +56,7 @@ class CompetitionDrawService
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionScheduleCalculator $scheduleCalculator,
         private readonly PushNotificationService $pushNotificationService,
-        private readonly CompetitionResponseBuilder $responseBuilder,
-        private readonly CompetitionResponseCacheService $responseCache,
         private readonly ?InboxService $inboxService = null,
-        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     /** @return int Number of rounds this call actually drew (0 if none were due, or all were claimed by an overlapping tick). */
@@ -48,7 +66,6 @@ class CompetitionDrawService
         foreach ($this->roundRepository->findDueForDraw($now) as $round) {
             if ($this->claimDraw($round, $now)) {
                 $this->drawRound($round, $now);
-                $this->prewarmResponse($round->getActiveCompetition());
                 $drawn++;
             }
         }
@@ -77,7 +94,6 @@ class CompetitionDrawService
         }
 
         $this->drawRound($round, $now);
-        $this->prewarmResponse($round->getActiveCompetition());
     }
 
     /**
@@ -259,31 +275,4 @@ class CompetitionDrawService
         return array_values(array_unique($userIds));
     }
 
-    /**
-     * Rebuilds this competition's prebuilt bracket response.
-     *
-     * Called after a pass that changed the bracket, so the next reader finds the document
-     * ready instead of paying to assemble it. Strictly an optimisation: the cache validates
-     * itself against the competition's state version, so skipping this costs one rebuild on
-     * the next read and can never serve a stale bracket.
-     *
-     * Failures are swallowed deliberately. A cron tick that drew a round or published a
-     * result has already committed real game state; letting a cache rebuild turn that into a
-     * failed tick would be strictly worse than serving the next request from a cold cache.
-     */
-    private function prewarmResponse(ActiveCompetition $activeCompetition): void
-    {
-        try {
-            $this->responseCache->rebuild(
-                $activeCompetition,
-                $this->responseBuilder->stateVersion($activeCompetition),
-                fn (): array => $this->responseBuilder->sharedDocument($activeCompetition),
-            );
-        } catch (\Throwable $e) {
-            $this->logger?->warning('Failed to prewarm the competition response cache.', [
-                'competitionId' => (string) $activeCompetition->getId(),
-                'exception'     => $e->getMessage(),
-            ]);
-        }
-    }
 }
