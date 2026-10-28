@@ -669,3 +669,25 @@
   friendly; distinct UUIDs, so that is a cheap miss, not an ambiguity). App routing sends a
   push's `fixtureId` straight to `GET /api/matches/{id}` on that basis, so the invariant to
   preserve is that a fixture id is accepted there at all.
+
+- **`04_interfaces/output/services.md` — the competition pipeline now reports on itself
+  (2026-10-28).** New `CompetitionHealthService` + `app:competition:health`
+  (`--json`/`--strict`), scheduled every 5 minutes by `docker/competition-health.sh`: queue
+  depth, consumer lag, round claims held vs past the lease, rounds overdue past a 180s grace,
+  and response-cache coverage — all read-only DBAL derived from existing rows, so there is no
+  metrics store to keep. `CompetitionResponseCacheService` additionally logs each build as
+  `competition.cache.build` with `elapsedMs` and `bytes`; hit rate is deliberately derived from
+  builds against access-log request counts rather than by logging every hit on the hottest read
+  path. This closes the last real gap in the concurrency plan — every bound in the pipeline came
+  from a benchmark on one box and nothing in production said whether it still held.
+
+  Two findings worth carrying forward. **Writing the check found a bug in the check**:
+  `messenger_messages` is created lazily by the Doctrine transport, so on a fresh database it
+  does not exist and the first suite run errored on every case — the absence is now reported
+  rather than swallowed into a zero, because a health check must never be the thing that fails.
+  And **§3.3 (inline provisioning) is audited rather than outstanding**:
+  `CompetitionProvisionInstancesCommand`'s work is bounded by the admin-authored template
+  catalogue, not by load — one `INSERT … ON CONFLICT DO NOTHING` per active template, no
+  hydration beyond the templates — and the one part that scales with club count
+  (`ResolveNewCompetitionAudienceForPushMessage`) is already routed to `async`. Left inline
+  deliberately; don't re-open it as unfinished.

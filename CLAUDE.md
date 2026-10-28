@@ -297,6 +297,17 @@ dispatch is therefore **not** gated on an undrained queue; gating would stall ot
 competitions for no gain. `drawDueRounds()`/`publishDueResults()` remain as synchronous
 drivers over the same per-round methods the handlers call, for tests and as a fallback.
 
+**The pipeline reports on itself — `app:competition:health`.** Read-only DBAL
+(`CompetitionHealthService`): `competition` queue depth and consumer lag, round claims held vs
+past the lease, rounds due and unclaimed past a 180s grace, response-cache coverage. Runs every
+5 minutes (`docker/competition-health.sh`), `--strict` exits 1 on any warning, `--json` for
+scraping. It exists because every bound below came from `app:competition:benchmark` on one box
+and nothing in production said whether those settings still held. Thresholds are first guesses
+— the cron logs and pages nobody on purpose. Cache **builds** are logged
+(`competition.cache.build`, with `elapsedMs` and `bytes`) and hits are not: hit rate is a ratio
+over requests, so derive it from builds against access-log counts rather than logging the
+hottest read path in the domain.
+
 **Round claims are leases, and a status transition must commit with its own work.**
 `claimDraw()`/`claimResults()` set `drawLockedAt`/`resolveLockedAt`, reclaimable after
 `CompetitionRound::CLAIM_LEASE_SECONDS` (300s) and cleared on success. That window is set from

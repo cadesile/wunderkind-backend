@@ -228,12 +228,26 @@ and there is a working fallback if the consumer is ever not running.
 
 Covered by `tests/Service/Competition/CompetitionRoundQueueTest.php`.
 
-### 3.3 Provisioning — NOT DONE
+### 3.3 Provisioning — AUDITED, no change needed
 
-`CompetitionProvisionInstancesCommand` still provisions inline, with its wrapper pinned at
-`memory_limit=128M`. Lower priority than 3.2: provisioning is driven by template schedules
-rather than by how many tournaments are mid-flight, so it does not scale with concurrency the
-way round processing does. Same treatment when it matters.
+Read properly rather than deferred on a hunch, and the hunch was right for a better reason
+than the one first given. `CompetitionProvisionInstancesCommand` provisions inline under
+`memory_limit=128M` and should stay that way:
+
+- **Its work is bounded by the admin-authored catalogue, not by load.** The loop is over
+  `findAllActive()` — active `CompetitionTemplate` rows, a handful of operator-authored
+  records — and does **one** `INSERT … ON CONFLICT DO NOTHING` per template. No entity
+  hydration beyond the templates, no flush, nothing per entrant or per fixture. Running 3
+  tournaments or 300 does not change what this tick does.
+- **The one expensive follow-on is already queued.** When a row is actually inserted it
+  dispatches `ResolveNewCompetitionAudienceForPushMessage`, routed to `async`
+  (`config/packages/messenger.yaml`) — so audience resolution, the part that scales with the
+  number of clubs, never runs in this 128M process. That was the thing worth checking, and it
+  was already right.
+
+So queueing this would add a transport, a handler and a failure mode to a tick that is three
+SQL statements on a quiet day. Left inline deliberately; the reasoning is recorded here so the
+next reader does not re-open it as unfinished work.
 
 ### 3.4 Prewarm becomes a queued message — DONE
 
@@ -337,15 +351,22 @@ Two things worth keeping from the investigation anyway:
 
 ---
 
-## 6. Sequencing
+## 6. Sequencing — complete
 
-| Phase | Blocks | Why in this order |
+| Phase | State | Why in this order |
 |---|---|---|
-| 0 (§1) | `master` | Correctness. §1.1 can permanently stall a live bracket. |
+| 0 (§1) | **done** | Correctness. §1.1 could permanently stall a live bracket. |
 | 1 (§2.1, §2.2, §2.3) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
-| 2 (§3) | §3.1/§3.2/§3.4 **done**; §3.3 open | Bounds the work per tick, and restores prewarming in the form it should have had. |
-| 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
-| §5 | **nothing** | Resolved as moot: the backend's `club.balance` is a sync mirror, not the source of truth. |
+| 2 (§3) | **done** | §3.1/§3.2/§3.4 shipped; §3.3 audited and deliberately left inline, with the reasoning recorded. |
+| 3 (§4) | **done** | Fell out of Phase 2 cheaply, and the duplication turned out to be hiding a divergence. |
+| 4 (§7) | **done** | Replaced three guessed settings with measured ones, and corrected three of my own conclusions. |
+| §5 | **moot** | The backend's `club.balance` is a sync mirror, not the source of truth. |
+
+**Nothing in this plan is open.** What remains is a judgement to make with data rather than
+work to schedule: the health check's thresholds (180s overdue grace, 120s queue lag) are first
+guesses, and the 300s claim lease and the consumer's 50s/256M bounds came from a benchmark on
+one box. A week of `/var/log/competition-health-cron.log` under real load is what would justify
+changing any of them — or leaving them alone.
 
 ---
 
@@ -413,24 +434,60 @@ and different from the one I had been making: the bracket should not embed `resu
 all, not merely drop the narrative.
 
 **Done.** The `result` block is removed, and re-measuring the same capacity-32 bracket puts
-the response at **59KB against 397KB — an 85% reduction**. Client contract and migration
-table: `docs/api/competition-bracket-no-embedded-result.md`. **The app must be updated**: where
-it read `fixtures[].result` it needs `GET /api/matches/{matchId}`, which the push payload
-already carries the id for.
+the response at **59KB against 397KB — an 85% reduction**. Client contract:
+`docs/api/competition-bracket-no-embedded-result.md`. **Closed app-side with no behavioural
+change**: the tournament hub already rendered a tie from `score`/`winnerEntrantId`/`entrants[]`
+and passed `matchId` onward, its `Fixture` type never declared `result`, and the `MATCH_RESULT`
+push already routed to the match href. Only documentation and an already-dead type block needed
+touching. `CompetitionControllerTest` now also pins `fixtureId === matchId`, which is what the
+push routing actually relies on and was previously unasserted.
 
 `CompetitionResult::toClientSummary()` is deleted with it — it had no callers once the bracket
 stopped embedding it, since `MatchQueryService::serializeCupMatchDetail()` was already the
 real client shape. The two were a duplicated payload that tests had to cross-check against
 each other; that cross-check is gone because the duplication is.
 
-### Still not measured
+### What the benchmark could not show — both now closed
 
 The harness is single-process. It bounds work per message, which is what the lease and the
-consumer bounds need, but it demonstrates **nothing about contention**: nothing runs two
-consumers against one competition, so the advisory lock and the claim lease remain argued for
-rather than shown. There is also still no production instrumentation — no metric on build
-time, cache hit rate, queue depth or consumer lag — so a mis-tuning in prod would still
-surface first as a log entry.
+consumer bounds need, but it demonstrated **nothing about contention** and left the settings
+it produced unobserved in production. Both gaps are closed:
+
+**Contention is now shown, not argued.** `tests/Service/Competition/CompetitionContentionTest.php`
+runs against **two genuinely separate DBAL connections**
+(`DriverManager::getConnection($em->getConnection()->getParams())`), not one session
+pretending to be two, and asserts: a second session cannot steal a live claim (0 rows
+affected); the rebuild advisory lock excludes another session *while a build is in flight*,
+asserted from inside the builder callback via `pg_try_advisory_lock` returning false and then
+shown released afterwards; and a second session's `FOR UPDATE` read already sees the committed
+status.
+
+**The pipeline now reports on itself.** `app:competition:health` (read-only, DBAL, `--json`,
+`--strict`) reports queue depth, consumer lag from the oldest undrained message, round claims
+held versus past the 300s lease, rounds due and unclaimed past a 180s grace, and response-cache
+coverage — scheduled every 5 minutes by `docker/competition-health.sh`. All of it is derived
+from rows that already exist, so there is no metrics store to keep and nothing to drift.
+
+Two things are deliberately *not* derived from state:
+- **Build time and payload size** are logged instead, as `competition.cache.build` at info with
+  `elapsedMs` and `bytes`, from the single place a document is written. Payload size in prod is
+  the one signal that would catch per-fixture match detail being re-embedded in a release — the
+  thing `app:competition:benchmark` guards locally and nothing watched in production.
+- **Cache hit rate** is a ratio over requests, not a fact about the present, so it is
+  `1 - (builds / GET /api/competitions/{id} requests)` over the same window, taking builds from
+  the log line above and requests from the access log. Logging every *hit* to recompute it would
+  put a log line on the hottest read path in the domain.
+
+The thresholds are first guesses measured against nothing, which is why the cron logs and pages
+nobody — see `docker/competition-health.sh`'s own header. Watch the log before wiring it to
+anything that wakes someone up.
+
+Writing the health check found a bug in itself, worth recording: `messenger_messages` is created
+lazily by the Doctrine transport, so on a fresh database — or a new deploy before the first
+dispatch — it does not exist, and the first run of the test suite errored on every case with
+"relation does not exist". A health check must never be the thing that fails, so the absence is
+now reported rather than swallowed into a zero: "no table" and "nothing queued" are different
+facts to an operator.
 
 ---
 

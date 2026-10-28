@@ -8,6 +8,8 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionResponseCache;
 use App\Repository\Competition\CompetitionResponseCacheRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Serves and maintains the prebuilt, viewer-independent body of GET /api/competitions/{id}.
@@ -23,6 +25,16 @@ use Doctrine\ORM\EntityManagerInterface;
  * what correctness depends on: a writer that forgets costs one rebuild and cannot serve
  * stale data.
  *
+ * **Builds are logged; hits are not.** A build is the expensive event and the rare one, so
+ * each one emits `competition.cache.build` at info with the competition id, the elapsed
+ * milliseconds and the payload size. That is the half of the picture state cannot give:
+ * CompetitionHealthService can report queue depth, lag and cache coverage from rows that
+ * already exist, but a hit *rate* is a ratio over requests, and counting requests is what
+ * the access log already does — so hit rate is `1 - (builds / GET /api/competitions/{id}
+ * requests)` over the same window, with no metrics store to keep. Logging every hit instead
+ * would put a log line on the hottest read path in the domain to re-derive a number the
+ * access log already carries half of.
+ *
  * **Everything here reads and writes through DBAL, never the ORM.** Both reasons are
  * concrete bugs, documented on CompetitionResponseCacheRepository: a failed ORM `flush()`
  * closes the shared EntityManager (which stranded the next round of a cron tick
@@ -35,6 +47,7 @@ class CompetitionResponseCacheService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionResponseCacheRepository $cacheRepository,
+        private readonly LoggerInterface $logger = new NullLogger(),
     ) {}
 
     /**
@@ -58,13 +71,19 @@ class CompetitionResponseCacheService
             // request queued here would rebuild the bracket again.
             $hit = $this->readFresh($activeCompetition, $stateFingerprint);
             if ($hit !== null) {
+                // Someone else built it while we waited for the lock. Logged distinctly from
+                // a plain hit because it is the stampede guard doing its job, and a rising
+                // count here is the signal that a competition is being read faster than it
+                // can be built.
+                $this->logger->info('competition.cache.build', [
+                    'competitionId' => (string) $activeCompetition->getId(),
+                    'outcome'       => 'won_by_other',
+                ]);
+
                 return $hit;
             }
 
-            $payload = $builder();
-            $this->cacheRepository->upsert($activeCompetition, $payload, $stateFingerprint);
-
-            return $payload;
+            return $this->buildAndStore($activeCompetition, $stateFingerprint, $builder, 'on_demand');
         });
     }
 
@@ -83,12 +102,41 @@ class CompetitionResponseCacheService
      */
     public function rebuild(ActiveCompetition $activeCompetition, string $stateFingerprint, callable $builder): array
     {
-        return $this->withCompetitionLock($activeCompetition, function () use ($activeCompetition, $stateFingerprint, $builder): array {
-            $payload = $builder();
-            $this->cacheRepository->upsert($activeCompetition, $payload, $stateFingerprint);
+        return $this->withCompetitionLock(
+            $activeCompetition,
+            fn (): array => $this->buildAndStore($activeCompetition, $stateFingerprint, $builder, 'forced'),
+        );
+    }
 
-            return $payload;
-        });
+    /**
+     * Builds, stores and reports. The one place a document is written, so the timing cannot
+     * be measured on one path and missed on the other.
+     *
+     * @param callable(): array<string, mixed> $builder
+     * @return array<string, mixed>
+     */
+    private function buildAndStore(ActiveCompetition $activeCompetition, string $stateFingerprint, callable $builder, string $outcome): array
+    {
+        $startedAt = microtime(true);
+        $payload   = $builder();
+        $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+        $this->cacheRepository->upsert($activeCompetition, $payload, $stateFingerprint);
+
+        // A second encode (upsert() does its own), accepted deliberately: it is sub-millisecond
+        // against a build measured in hundreds, and payload size in prod is the one signal that
+        // would catch per-fixture match detail being re-embedded in a release — the thing
+        // app:competition:benchmark guards locally and nothing watched in production.
+        $encoded = json_encode($payload);
+
+        $this->logger->info('competition.cache.build', [
+            'competitionId' => (string) $activeCompetition->getId(),
+            'outcome'       => $outcome,
+            'elapsedMs'     => $elapsedMs,
+            'bytes'         => $encoded === false ? null : strlen($encoded),
+        ]);
+
+        return $payload;
     }
 
     /**
