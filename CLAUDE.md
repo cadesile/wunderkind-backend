@@ -292,8 +292,18 @@ submission write happens in the handler, in its own transaction, contending with
 
 - **`entrant.squadState` (`EntrantSquadState`) is a separate axis from `status`**, not a new
   case on it. `status` is serialized straight to a client already live in production, so a
-  `pending` case there would be a contract break for a fact the client has no use for. A
-  reserved entrant genuinely *is* REGISTERED — it holds a slot and has paid.
+  `pending` case there would be a contract break. A reserved entrant genuinely *is*
+  REGISTERED — it holds a slot and has paid.
+- **Clients see it as `submissionStatus` / `viewer.snapshot.status`, with `stored` mapped to
+  `confirmed`** by `EntrantSquadState::clientValue()` — the one boundary that owns the
+  mapping, so renaming a case cannot silently change a published contract. Additive; client
+  contract: `docs/api/competition-registration-status.md`. **It is exposed only on the
+  register/resubmit response and in `viewer`, never in `serializeEntrantSummary()`** — and
+  that restriction is load-bearing, not a product call. `viewer` is composed per request,
+  while entrant summaries are served from `competition_response_cache`, whose fingerprint
+  does not include `squad_state`; putting it there would serve a value that goes stale
+  seconds after every registration. Adding it to a cached path means adding it to the
+  fingerprint first.
 - **The HTTP response is unchanged.** It reads only `clubDisplayJson`, which lands at
   reservation, and `seed` is always 0 at registration (`setSeed()` is called once, by
   `CompetitionLockService`, when the competition fills). So the synchronous 201 still carries
