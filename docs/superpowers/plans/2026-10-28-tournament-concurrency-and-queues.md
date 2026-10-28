@@ -209,10 +209,32 @@ Covered by `tests/Service/Competition/CompetitionRoundQueueTest.php`.
 rather than by how many tournaments are mid-flight, so it does not scale with concurrency the
 way round processing does. Same treatment when it matters.
 
-### 3.4 Prewarm becomes a queued message
+### 3.4 Prewarm becomes a queued message — DONE
 
-Dispatch rather than rebuild inline. This makes §1.1 structural: the cache rebuild no longer
-shares a request or tick with game-state mutation at all, so it cannot affect either.
+`WarmCompetitionResponseMessage`, dispatched by the draw and resolve handlers once their work
+has **committed**, on the same `competition` transport so a warm naturally orders behind the
+round it describes.
+
+A separate message rather than a tail call on those handlers, and that is the substance of
+the fix rather than a packaging choice: a round handler has the round's entrants in its
+identity map, and Doctrine will not re-hydrate them, so building the document there while
+fingerprinting fresh SQL is exactly how Phase 0's stale-stamping bug happened. Symfony's
+`DoctrineClearEntityManagerWorkerSubscriber` clears the EntityManager before each message, so
+the warm handler reads clean — verified in the container, not assumed.
+
+Not dispatched on register/withdraw/resubmit. Those happen while the bracket is still filling,
+when no rounds or fixtures exist and the document is cheap to build; dispatching there would
+queue one full-document rebuild per registration — 64 for a filling bracket — to warm
+something that costs almost nothing on demand. The self-validating fingerprint already covers
+it.
+
+Warm failures are swallowed rather than sent to `failed`: a warm is pure optimisation, a miss
+self-heals on the next read, and a retry storm on a genuinely broken competition would keep
+rebuilding a 64-entrant document for nobody.
+
+Covered by `tests/Service/Competition/CompetitionRoundQueueTest.php`, including that a
+*skipped* (no-op) delivery queues no warm, and that the round handler does not write the
+cache row itself.
 
 ---
 
@@ -253,6 +275,6 @@ shares a request or tick with game-state mutation at all, so it cannot affect ei
 |---|---|---|
 | 0 (§1) | `master` | Correctness. §1.1 can permanently stall a live bracket. |
 | 1 (§2.1) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
-| 2 (§3) | §3.1/§3.2 **done**; §3.3 and §3.4 open | Bounds the work per tick. §3.4 (queued prewarm) still depends on §1.1's DBAL write, which has landed. |
+| 2 (§3) | §3.1/§3.2/§3.4 **done**; §3.3 open | Bounds the work per tick, and restores prewarming in the form it should have had. |
 | 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
 | §5 | `master` | A data decision, not an engineering one. |

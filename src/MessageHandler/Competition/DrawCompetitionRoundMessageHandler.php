@@ -10,6 +10,8 @@ use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Competition\CompetitionDrawService;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use App\Message\Competition\WarmCompetitionResponseMessage;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Draws one round.
@@ -36,6 +38,7 @@ final class DrawCompetitionRoundMessageHandler
     public function __construct(
         private readonly CompetitionRoundRepository $roundRepository,
         private readonly CompetitionDrawService $drawService,
+        private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger,
     ) {}
 
@@ -55,6 +58,17 @@ final class DrawCompetitionRoundMessageHandler
                 'competitionId' => (string) $round->getActiveCompetition()->getId(),
                 'status'        => $round->getStatus()->value,
             ]);
+
+            return;
         }
+
+        // The bracket response changed, so queue a rebuild. A separate message rather than a
+        // call here: this handler has the round's entrants in its identity map, and building
+        // the document from those while fingerprinting fresh SQL is exactly how a stale
+        // bracket used to get stored under a fresh key. The worker clears the EntityManager
+        // between messages, so the warm handler reads clean.
+        $this->messageBus->dispatch(new WarmCompetitionResponseMessage(
+            (string) $round->getActiveCompetition()->getId(),
+        ));
     }
 }

@@ -317,10 +317,14 @@ Other things worth knowing:
   resubmission cancelled out) and omitted status/cancellation/template inputs. It is read
   and written through **DBAL, never the ORM**: a failed ORM `flush()` closes the shared
   EntityManager, and in a cron tick that stranded the next claimed round permanently.
-  **Prewarming is not done inline in a cron tick** — the tick has already loaded the
-  entrants and Doctrine will not re-hydrate them, so it could store a stale document under a
-  fresh fingerprint. It belongs off-tick as a queued message; see
-  `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md`.
+  **Prewarming is a queued message, never inline in a cron tick.** A tick has already
+  loaded the round's entrants and Doctrine will not re-hydrate them, so building the
+  document there while fingerprinting fresh SQL stores a stale bracket under a fresh key.
+  `WarmCompetitionResponseMessage` is dispatched by the draw and resolve handlers once their
+  work has committed, and Symfony's `DoctrineClearEntityManagerWorkerSubscriber` clears the
+  EntityManager before each message — which is what makes the warm handler's reads clean and
+  is the reason it is a separate message rather than a tail call. Warm failures are
+  swallowed: the cache self-validates, so a miss just means the next reader rebuilds.
 - **The match engines take no entities.** `resolve(MatchEngineSide, MatchEngineSide,
   MatchEngineContext)`. `resolveFriendly()` is gone — a friendly is `allowDraws: true` on
   the context. Resolving one used to fabricate five entities and reflect over a private id
