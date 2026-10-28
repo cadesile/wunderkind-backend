@@ -146,4 +146,58 @@ class SubmittedSnapshotSplitTest extends TestCase
             'stored as the client wrote it, so the API echo keeps its original offset',
         );
     }
+
+    /**
+     * The whole point of the submission row: the display block is a picked key set, so a
+     * client key outside it is invisible in every other part of the split. A real submission
+     * is ~1.4MB of exactly such keys (cupTrophies, facilityUpgrades, financials), and before
+     * this they were decoded and dropped.
+     */
+    public function testTheEnvelopeIsCarriedThroughVerbatim(): void
+    {
+        $envelope = $this->envelope(60);
+        $envelope['club']['cupTrophies']      = [['prizePence' => 250000, 'season' => 2]];
+        $envelope['club']['facilityUpgrades'] = [['slug' => 'north_stand', 'level' => 4, 'week' => 51]];
+        $envelope['club']['seasonTickets']    = ['sold' => 3100, 'pricePence' => 32000];
+        $envelope['facilities']               = ['north_stand' => 4, 'museum' => 0];
+
+        $parts = CompetitionRegistrationService::splitSnapshot($envelope, $this->club());
+
+        self::assertSame($envelope, $parts['envelope'], 'stored exactly as posted, with nothing picked or normalised');
+    }
+
+    public function testKeysTheDisplayBlockDropsSurviveOnlyOnTheEnvelope(): void
+    {
+        $envelope = $this->envelope(60);
+        $envelope['club']['cupTrophies'] = [['prizePence' => 250000]];
+        $envelope['club']['balance']     = 4250000;
+
+        $parts = CompetitionRegistrationService::splitSnapshot($envelope, $this->club());
+
+        // The display block stays bounded — that is what keeps a public bracket render cheap,
+        // and it must not quietly widen just because the data is now kept somewhere.
+        self::assertArrayNotHasKey('cupTrophies', $parts['display']);
+        self::assertArrayNotHasKey('balance', $parts['display']);
+        self::assertArrayNotHasKey('cupTrophies', $parts['engine']);
+
+        self::assertSame([['prizePence' => 250000]], $parts['envelope']['club']['cupTrophies']);
+        self::assertSame(4250000, $parts['envelope']['club']['balance']);
+    }
+
+    /**
+     * `facilities` is accepted again purely so it reaches this row. It must not come back on
+     * the display block or the engine inputs, which is where it was costing every bracket
+     * render a decode for data nothing read.
+     */
+    public function testFacilitiesReachTheEnvelopeAndNothingElse(): void
+    {
+        $envelope               = $this->envelope(60);
+        $envelope['facilities'] = ['north_stand' => 4, 'museum' => 0, 'training_pitch' => 3];
+
+        $parts = CompetitionRegistrationService::splitSnapshot($envelope, $this->club());
+
+        self::assertSame(['north_stand' => 4, 'museum' => 0, 'training_pitch' => 3], $parts['envelope']['facilities']);
+        self::assertArrayNotHasKey('facilities', $parts['display']);
+        self::assertArrayNotHasKey('facilities', $parts['engine']);
+    }
 }

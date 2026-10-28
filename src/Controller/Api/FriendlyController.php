@@ -141,6 +141,10 @@ class FriendlyController extends AbstractController
             'club'             => $clubArr,
             'players'          => $playersArr,
             'staff'            => $staffArr,
+            // Carried for the verbatim submission row only. It is not put on the challenge
+            // or the squad row: the public challenge board decodes those, and nothing reads
+            // facilities back.
+            'facilities'       => is_array($snapshot['facilities'] ?? null) ? $snapshot['facilities'] : [],
             'clientSnapshotAt' => is_string($snapshot['clientSnapshotAt'] ?? null) ? $snapshot['clientSnapshotAt'] : null,
         ];
 
@@ -249,6 +253,10 @@ class FriendlyController extends AbstractController
             'club'             => $clubArr,
             'players'          => $playersArr,
             'staff'            => $staffArr,
+            // Carried for the verbatim submission row only. It is not put on the challenge
+            // or the squad row: the public challenge board decodes those, and nothing reads
+            // facilities back.
+            'facilities'       => is_array($snapshot['facilities'] ?? null) ? $snapshot['facilities'] : [],
             'clientSnapshotAt' => is_string($snapshot['clientSnapshotAt'] ?? null) ? $snapshot['clientSnapshotAt'] : null,
         ];
 

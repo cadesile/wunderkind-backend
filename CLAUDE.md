@@ -248,6 +248,7 @@ display data public endpoints read. Full detail:
 | `competition_entrant_squad` | XI, staff, engine-only club keys | resolve, one match detail, admin |
 | `friendly_challenge.{challenger,acceptor}ClubDisplayJson` | same, per side | the public challenge board |
 | `friendly_challenge_squad` | XI, staff, engine keys, keyed by `FriendlySide` | resolve, one match detail, admin |
+| `competition_entrant_submission` / `friendly_challenge_submission` | the posted envelope **verbatim** | nothing on a schedule — admin, forensics, future features |
 | `competition_result_audit` / `friendly_challenge_audit` | event log, derivation audit | admin detail pages only |
 
 This exists because ORM 3 removed `PARTIAL`, so **every mapped column is decoded on
@@ -327,13 +328,28 @@ Other things worth knowing:
   `SnapshotValidator` checks `club.id` specifically. Re-pointing a snapshot at another club
   must move **both** via `repointClubData()` — identity resolves as `clubId ?? id ??
   fallback`, so setting one leaves the stale other winning.
-- **`SnapshotValidator` caps a submitted snapshot at 256KB** (~10x a real one) plus staff
-  ≤ 20. Before that, `club`/`staff`/`facilities` had no bound at all and nginx's
-  `client_max_body_size 5m` was the only ceiling — so one registrant could make a public,
-  unauthenticated bracket unservable for everyone else in it.
-- **`facilities` is gone from both contracts.** Accepted, stored on every row, decoded on
-  every read, never read back. `MapRequestPayload` ignores undeclared properties, so a
-  client still sending it is unaffected.
+- **`SnapshotValidator` caps a submitted snapshot at 4MB** — and that number came from
+  measuring a real client payload, which is the only way it should ever be set. It was
+  originally 256KB, justified as "~10x a real one" against an *estimated* 25KB snapshot. A
+  real 2026 submission is **1,408,914 bytes**, so the cap 422'd ordinary registrations on a
+  live tournament until 2026-10-28. (The staff ≤ 20 cap added in the same commit was reverted
+  a day later for the identical failure mode — twice now, an invented bound has rejected real
+  traffic. Measure, don't estimate.) The ceiling above it is nginx's `client_max_body_size
+  5m`; the ~1MB gap is deliberate, so an oversized body is a legible 422 and not a bare 413.
+  Almost all of that 1.4MB is `club` history the client spreads in — `cupTrophies`,
+  `facilityUpgrades`, financials, season tickets — while the XI and staff together are ~7KB.
+- **Everything submitted is now stored, verbatim, on a row nothing hot reads.** `club` is
+  still picked down to `clubDisplayBlock()` for the bracket and the engine keys still go to
+  the squad row — those projections are unchanged and must stay bounded. The full envelope
+  goes to `*_submission` alongside them. It is **deliberately never pruned**, unlike `*_squad`:
+  a finished tournament is exactly when someone asks what a club looked like when it entered,
+  and the consumers (tournament features still in development) don't exist yet. Treat the
+  contents as untrusted client data, never as game truth.
+- **`facilities` is accepted again, for the submission row only.** It must not go back on the
+  entrant, the challenge or a squad row — it was removed from those because every bracket
+  render decoded it and nothing read it, and that is still true. Note it has to be *declared*
+  on the DTO to be stored at all: `MapRequestPayload` drops undeclared properties, so an
+  undeclared key never reaches the service even to be kept verbatim.
 - **`GET /api/competitions/{id}` serves a prebuilt document** from
   `competition_response_cache`; only the `viewer` key and `serverTime` are composed per
   request. The cache is self-validating against a **state fingerprint** — a hash over an

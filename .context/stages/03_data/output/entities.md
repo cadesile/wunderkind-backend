@@ -462,6 +462,22 @@ migrations are the change log (see `migrations.md`).
   `entrant:CompetitionEntrant` (not nullable, `CASCADE`), unique on
   `entrant_id`. Nothing on a client read path may load this. Pruned when a
   competition completes, since no further fixture can resolve.
+- **`CompetitionEntrantSubmission`** (table `competition_entrant_submission`) —
+  the registration envelope exactly as the client posted it: `envelopeJson`
+  (`club`, `players`, `staff`, `facilities`, `clientSnapshotAt`, and whatever
+  the client adds next without a contract change) plus `submittedAt` (server
+  clock, distinct from the client's own `clientSnapshotAt` inside it).
+  `OneToOne` owning side → `entrant:CompetitionEntrant` (not nullable,
+  `CASCADE`), unique on `entrant_id`; no inverse, as above. **Not pruned on
+  completion** — unlike the squad row, which is the reason it is a separate
+  table. These are the largest rows in the domain (a measured submission is
+  ~1.4MB, nearly all of it `club` history): never load them on a page that
+  renders many entrants. Contents are untrusted client data.
+- **`FriendlyChallengeSubmission`** (table `friendly_challenge_submission`) —
+  the friendly twin, keyed by `side:FriendlySide` rather than venue, unique on
+  (`challenge_id`, `side`). Written through
+  `FriendlyChallengeSubmissionRepository::upsertSide()`, mirroring the squad
+  repository's own method. Same retention and same cautions.
 - **`CompetitionResultAudit`** (table `competition_result_audit`) — the
   forensic half of a result: `eventLogJson`, `computationAuditJson:?array`.
   Between them these had exactly one reader in the repository (the admin

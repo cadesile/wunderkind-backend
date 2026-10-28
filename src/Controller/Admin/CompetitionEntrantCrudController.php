@@ -10,6 +10,7 @@ use App\Exception\SpoofSnapshotValidationException;
 use App\Repository\Competition\ActiveCompetitionRepository;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionEntrantSquadRepository;
+use App\Repository\Competition\CompetitionEntrantSubmissionRepository;
 use App\Service\Competition\CompetitionRegistrationService;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -61,6 +62,7 @@ class CompetitionEntrantCrudController extends AbstractCrudController
         private readonly ActiveCompetitionRepository $activeCompetitionRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionEntrantSquadRepository $squadRepository,
+        private readonly CompetitionEntrantSubmissionRepository $submissionRepository,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -162,6 +164,24 @@ class CompetitionEntrantCrudController extends AbstractCrudController
             ->formatValue(fn ($value, ?CompetitionEntrant $entrant): string => $entrant === null
                 ? '{}'
                 : ($this->squadRepository->findForEntrant($entrant)?->getSquadJsonPretty() ?? '{}'));
+
+        // The posted body as the client sent it, which the two fields above cannot show
+        // between them: one is a picked ~22-key display block and the other is the engine's
+        // inputs, so every other club key the client sends is absent from both. Same
+        // dummy-setValue() placeholder as above, for the same CommonPreConfigurator reason.
+        //
+        // Loaded only here, on one entrant's detail page. Never add this to the index — these
+        // are the largest rows in the domain and the index renders every entrant.
+        yield CodeEditorField::new('submittedEnvelope', 'Submitted Envelope (verbatim)')
+            ->setLanguage('js')
+            ->setNumOfRows(28)
+            ->onlyOnDetail()
+            ->setValue('')
+            ->setHelp('Exactly what the client posted, stored unmodified and never pruned. Nothing reads it at runtime; it is kept for forensics and for tournament features still in development.')
+            ->formatValue(fn ($value, ?CompetitionEntrant $entrant): string => $entrant === null
+                ? '{}'
+                : ($this->submissionRepository->findForEntrant($entrant)?->getEnvelopeJsonPretty()
+                    ?? '// No submission row. Registered before this was stored, or built by the spoof path.'));
     }
 
     /**

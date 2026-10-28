@@ -411,6 +411,18 @@ class CompetitionResultsService
             MatchEngineContext::forCupTie((string) $fixture->getId(), $round->getMatchEngineIdentifier()),
         );
 
+        // Detached the moment the engine has run, because nothing below this line reads them
+        // again. Left managed, each squad is held twice for the rest of the round — the
+        // entity, plus the UnitOfWork's original-data copy of its decoded players/staff JSON
+        // — so a 32-fixture pass ends up holding 64 of them at once. That accumulation, not
+        // any single fixture, is what a snapshot near SnapshotValidator::MAX_SNAPSHOT_BYTES
+        // would turn into an OOM in a consumer bounded at 256M, so this is the counterpart
+        // to that cap rather than an optimisation. em->clear() is not available here: it
+        // would detach the round the caller is still iterating (see processRound's note).
+        foreach ($squads as $squad) {
+            $this->em->detach($squad);
+        }
+
         $usedTiebreak = false;
         $winner       = match (true) {
             $matchResult->homeScore > $matchResult->awayScore => $home,

@@ -45,11 +45,32 @@ class SnapshotValidator
      * endpoint — so a single registrant could make a competition unservable for everyone
      * else in it. That is an availability bug, not a validation preference.
      *
-     * 256KB is roughly ten times a real snapshot (eleven players with full attributes,
-     * personality and appearance, plus club identity and staff, measures around 25KB), so it
-     * rejects abuse without being anywhere near legitimate traffic.
+     * **The original 256KB was sized against a snapshot that does not exist.** It was set at
+     * "roughly ten times a real snapshot", on an estimate of ~25KB for eleven players with
+     * full attributes, personality and appearance. A real 2026 client submission measures
+     * 1,408,914 bytes — about 56x that estimate — so the cap rejected ordinary registrations
+     * rather than abuse, with a 422 on a live tournament. (The staff<=20 cap added in the same
+     * commit was reverted a day later for the same failure mode; this is that mistake's twin.)
+     * Do not re-derive this constant from an estimate again; derive it from a measured payload.
+     *
+     * Virtually all of that 1.4MB is `club`: unbounded append-only history the client spreads
+     * in (`cupTrophies`, `facilityUpgrades`, financials, season tickets, stadium). The XI and
+     * staff together measure ~7KB. So this bound is, in practice, a bound on club history.
+     *
+     * 4MB is set from that measurement and bounded above by nginx's `client_max_body_size 5m`.
+     * The gap is deliberate: a body allowed to reach nginx's own limit fails as a bare 413 at
+     * the proxy, with no violation list and nothing in the application log. Leaving ~1MB of
+     * headroom keeps an oversized submission a legible 422 that names what was wrong.
+     *
+     * What makes a cap this size affordable is where the bytes land. The split puts them on
+     * rows no hot path reads: `club` is reduced to the bounded `clubDisplayBlock()` for the
+     * bracket, `players`/`staff` go to `*_squad` (two rows per fixture at resolve), and the
+     * verbatim envelope goes to `*_submission`, which nothing loads on a schedule at all.
+     * The matching requirement on the resolve side is that squad rows are detached once the
+     * engine has run, so a round's cost stays per-fixture rather than accumulating across 32
+     * of them; see CompetitionResultsService::resolveFixture().
      */
-    public const MAX_SNAPSHOT_BYTES = 262144;
+    public const MAX_SNAPSHOT_BYTES = 4194304;
 
 
     /**

@@ -331,3 +331,16 @@ was not safe to retry:
   data-model work was the signal that caught an entity silently losing its
   `use Doctrine\ORM\Mapping as ORM` import, with `php -l` passing and the suite green.
   `down()` restores all eleven exactly as they were.
+
+- `Version20261028193420` — **additive only: two new tables**,
+  `competition_entrant_submission` and `friendly_challenge_submission`, each holding
+  `envelope_json` (the client's posted registration body, verbatim) and `submitted_at`,
+  FK'd `ON DELETE CASCADE` to `competition_entrant` / `friendly_challenge`. Nothing already
+  stored moves or changes, so the split's existing read profiles are untouched and there is
+  **no backfill** — rows begin at the next registration, and submissions for entrants that
+  registered before this are simply absent (the admin field says so rather than showing
+  `{}`). Deliberately **not** added to the completion prune that drops `*_squad`. Paired
+  with raising `SnapshotValidator::MAX_SNAPSHOT_BYTES` from 256KB to 4MB, which is what the
+  tables are for: the old cap was derived from an estimated 25KB snapshot and 422'd real
+  1.4MB registrations. `down()` drops both tables cleanly.
+

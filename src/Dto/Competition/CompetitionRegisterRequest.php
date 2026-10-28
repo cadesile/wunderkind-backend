@@ -9,10 +9,12 @@ use Symfony\Component\Validator\Constraints as Assert;
  * SnapshotValidator does the deep structural pass in the controller, including the total
  * size bound.
  *
- * `facilities` is gone. It was accepted here and persisted on every entrant, but nothing in
- * the codebase ever read it back, and it was decoded on every bracket render. A client that
- * still sends the key is unaffected: MapRequestPayload ignores properties the DTO does not
- * declare, so this is not a breaking change for callers.
+ * `facilities` is accepted again, but it does NOT go back onto the entrant. It was removed
+ * because it was persisted on every entrant and decoded on every bracket render while
+ * nothing ever read it; it is declared here solely so it reaches the verbatim submission
+ * row, which no hot path loads. Declaring it is required, not cosmetic — MapRequestPayload
+ * drops undeclared properties, so an undeclared key never reaches the service at all and
+ * could not be stored even verbatim.
  */
 class CompetitionRegisterRequest
 {
@@ -26,6 +28,15 @@ class CompetitionRegisterRequest
 
     #[Assert\Type('array')]
     public array $staff = [];
+
+    /**
+     * Every facility the client knows about, including level-0 ones — a `slug => int` map.
+     * Stored verbatim and read by nothing; see the class docblock.
+     *
+     * @var array<string, mixed>
+     */
+    #[Assert\Type('array')]
+    public array $facilities = [];
 
     public ?string $clientSnapshotAt = null;
 }
