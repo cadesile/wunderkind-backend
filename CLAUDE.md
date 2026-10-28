@@ -308,6 +308,19 @@ submission write happens in the handler, in its own transaction, contending with
   reservation, and `seed` is always 0 at registration (`setSeed()` is called once, by
   `CompetitionLockService`, when the competition fills). So the synchronous 201 still carries
   everything it always did — no polling, no client change.
+- **A competition does not LOCK while any entrant is unstored**, even at full capacity —
+  `lockIfComplete()`, called when a submission stores, not from `register()` (where the new
+  entrant is always PENDING, so a capacity check there could never see a complete field).
+  This is a correctness requirement, not tidiness: locking sets the competition SCHEDULED and
+  entrants ACTIVE, while `withdraw()` requires REGISTERING + REGISTERED — so locking over an
+  unstored entrant wedges the competition permanently, with the draw deferring forever and the
+  affected club unable to withdraw to release its slot. Deferring the lock means a FAILED entry
+  always leaves its competition withdrawable, so the stuck state stops existing rather than
+  being documented. Visible effect: a full competition can sit un-started for a moment.
+- **`resubmit()` writes inline and sets `squadState = STORED`.** It is rare and deliberate, not
+  a burst, so it does not queue — and it is how a FAILED entrant recovers. Omitting the state
+  flip would write good rows and leave the entrant FAILED, blocking its competition over a flag
+  describing data that is no longer missing.
 - **`CompetitionDrawService` refuses to draw a competition with any non-`stored` entrant**,
   checked in `drawRoundIfClaimable()` **before** `claimDraw()`. After would park a 300s lease
   on a round that was never drawn, turning seconds of queue latency into a five-minute stall.

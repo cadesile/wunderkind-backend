@@ -331,6 +331,74 @@ class CompetitionRegistrationService
         }
 
         $entrant->setSquadState(EntrantSquadState::STORED);
+
+        // Only now can the field be complete. See lockIfComplete().
+        $this->lockIfComplete($entrant->getActiveCompetition());
+    }
+
+    /**
+     * Locks a competition once every slot is filled AND every squad is stored.
+     *
+     * The second condition is the point, and it is what keeps a failed submission
+     * recoverable by the player rather than only by an operator.
+     *
+     * Locking is a one-way door: it sets the competition SCHEDULED and every entrant ACTIVE,
+     * while withdraw() requires REGISTERING + REGISTERED. So a competition locked while one
+     * entrant was still unstored would wedge permanently — the draw defers forever waiting on
+     * a squad, and the affected club cannot withdraw to release the slot, because both of
+     * withdrawal's gates closed the moment the lock landed. No player-side remedy exists from
+     * that state, and no automatic one either.
+     *
+     * Deferring the lock instead means an unstored entrant always leaves the competition in
+     * REGISTERING — exactly the state where withdrawal works and refunds normally. The stuck
+     * case stops existing rather than being documented.
+     *
+     * Takes the same `FOR UPDATE` on the competition row as register(), because two
+     * submissions storing concurrently would otherwise both see a full, fully-stored field and
+     * both try to lock it.
+     *
+     * @return bool True if this call locked it.
+     */
+    public function lockIfComplete(ActiveCompetition $activeCompetition): bool
+    {
+        $connection = $this->em->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $connection->executeStatement(sprintf("SET LOCAL lock_timeout = '%ds'", self::LOCK_TIMEOUT_SECONDS));
+
+            $lockedRow = $connection->fetchAssociative(
+                'SELECT id, status, entrant_capacity FROM active_competition WHERE id = :id FOR UPDATE',
+                ['id' => $activeCompetition->getId()->toRfc4122()],
+            );
+
+            if (($lockedRow['status'] ?? null) !== ActiveCompetitionStatus::REGISTERING->value) {
+                $connection->commit();
+
+                return false;
+            }
+
+            $capacity = (int) ($lockedRow['entrant_capacity'] ?? $activeCompetition->getEntrantCapacity());
+
+            if ($this->entrantRepository->countForCompetition($activeCompetition) < $capacity
+                || $this->entrantRepository->countUnstoredForCompetition($activeCompetition) > 0) {
+                $connection->commit();
+
+                return false;
+            }
+
+            $this->em->refresh($activeCompetition);
+            $this->lockService->lock($activeCompetition);
+            $this->em->flush();
+
+            $connection->commit();
+
+            return true;
+        } catch (\Throwable $e) {
+            $connection->rollBack();
+
+            throw $e;
+        }
     }
 
     /**
@@ -859,11 +927,11 @@ class CompetitionRegistrationService
                 $this->em->refresh($entrant);
             }
 
-            $count = $this->entrantRepository->countForCompetition($activeCompetition);
-            if ($count >= $activeCompetition->getEntrantCapacity() && $activeCompetition->getStatus() === ActiveCompetitionStatus::REGISTERING) {
-                $this->lockService->lock($activeCompetition);
-                $this->em->flush();
-            }
+            // Locking does NOT happen here any more, and could not: the entrant this call
+            // just created is PENDING until its queued write lands, so a capacity check at
+            // this point can never see a complete field. lockIfComplete() is called once the
+            // submission is stored instead — see its docblock for why that ordering is a
+            // correctness requirement and not merely a consequence of queueing.
 
             $connection->commit();
 
@@ -1088,11 +1156,29 @@ class CompetitionRegistrationService
 
             $this->writeSquad($connection, $entrant->getId()->toRfc4122(), $parts);
             $this->writeSubmission($connection, $entrant->getId()->toRfc4122(), $parts);
+
+            // Resubmission writes both rows inline rather than queueing — it is a rare,
+            // deliberate action, not the burst registration is — so the squad genuinely IS
+            // stored when this commits, and the state must say so. Without this, a resubmit
+            // after a failed registration would write perfectly good rows and leave the
+            // entrant marked FAILED, blocking its competition over a flag describing data
+            // that is no longer missing.
+            $connection->executeStatement(
+                'UPDATE competition_entrant SET squad_state = :state WHERE id = :id',
+                ['state' => EntrantSquadState::STORED->value, 'id' => $entrant->getId()->toRfc4122()],
+            );
+
             $connection->commit();
         } catch (\Throwable $e) {
             $connection->rollBack();
 
             throw $e;
         }
+
+        $entrant->setSquadState(EntrantSquadState::STORED);
+
+        // A resubmission can be the thing that completes the field — specifically when it is
+        // how a failed entrant recovers.
+        $this->lockIfComplete($entrant->getActiveCompetition());
     }
 }

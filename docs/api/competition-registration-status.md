@@ -67,7 +67,7 @@ watch someone else's write land.
 |---|---|---|
 | `pending` | Slot is held and the fee is paid, but the squad is still being written. | Show the entry as in-progress. Expect it to flip within a second. |
 | `confirmed` | Squad stored. This is the steady state for every healthy registration. | Normal "you're in" UI. |
-| `failed` | The write exhausted its retries. The slot is still held; a human has to resolve it. | Tell the player their entry needs attention. **Do not auto-retry** — see below. |
+| `failed` | The write exhausted its retries. The slot is still held and the fee is still paid. | Offer **Withdraw** (full refund) or **Resubmit**. Don't auto-retry. |
 
 `settled` is `true` for both `confirmed` and `failed`, and `false` only for `pending`. Use it
 as the "stop polling" signal: `failed` is terminal without operator action, so a client that
@@ -87,12 +87,34 @@ before it appears or it will flicker on every registration.
 
 **Do not re-POST `/register` to resolve a `pending` or `failed` entry.** Re-registering does
 not re-run the stored write — it creates a fresh reservation and a fresh queued write, which
-on `failed` means the same payload failing the same way while the player is charged nothing
-extra but gains nothing either. `failed` needs a backend operator; surface it, don't retry it.
+on `failed` means the same payload failing the same way. Use one of the two actions below
+instead.
 
 **Treat an unknown value as `confirmed`.** If this list ever grows, the safe default for an
 older build is to let the player through rather than block them out of a competition they are
 actually in.
+
+## What the player can do about `failed`
+
+**The panel can offer actions, not just an explanation.** Both of these work on a `failed`
+entry, and neither needs a backend operator:
+
+| Action | Endpoint | Result |
+|---|---|---|
+| **Withdraw** | `POST /api/competitions/{id}/withdraw` | Slot released, **entry fee refunded in full**. Ordinary refund path — `failed` is not special-cased. |
+| **Resubmit** | `POST /api/competitions/{id}/resubmit` | Writes the squad synchronously and clears the failure. On success `submissionStatus` is `confirmed` in the same response. |
+
+Resubmit is the better first offer — it keeps the player in the competition. Withdraw is the
+exit if resubmitting fails too.
+
+**Why withdrawal is always available here:** a competition will not lock while any entrant is
+unstored, even when every slot is taken. Locking sets the competition to SCHEDULED and every
+entrant to ACTIVE, and withdrawal requires neither — so locking over a `failed` entry would
+trap the player with no way out. The backend defers the lock until the last squad lands, which
+means a `failed` entry *always* leaves its competition in a state where withdrawal works.
+
+The visible consequence: a competition can sit full without starting for a moment. That is the
+mechanism working, not a stall. Don't show it as an error.
 
 ## Polling, if you want it
 
@@ -107,11 +129,13 @@ for a state that resolved before the first poll returned.
 
 ## One thing worth knowing about draws
 
-A competition will not be drawn while **any** entrant is still `pending` — the squad row is the
-match engine's only input, so drawing early would resolve a real fixture against an empty XI.
-In practice this is invisible. But if a competition ever sits full without drawing, an entrant
-stuck on `pending` or `failed` is the first thing to suspect, and that is a backend problem,
-not something the app can fix.
+A competition will not **lock or draw** while any entrant is `pending` or `failed` — the squad
+row is the match engine's only input, so starting early would resolve a real fixture against an
+empty XI. In practice this is invisible, because storing takes milliseconds.
+
+If a competition does sit full without starting, one entrant is unstored. If it's yours, the
+two actions above resolve it. If it's someone else's, there is nothing for your client to do
+and nothing to show as an error — it clears when they act or when the backend operator does.
 
 ## Not changing
 

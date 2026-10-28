@@ -6,6 +6,7 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Club;
 use App\Enum\Competition\CompetitionEntrantStatus;
+use App\Enum\Competition\EntrantSquadState;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -28,6 +29,35 @@ class CompetitionEntrantRepository extends ServiceEntityRepository
             ->setParameter('club', $club->getId())
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Entrants still holding a slot whose squad row has not landed (pending or failed).
+     *
+     * Lives here rather than on either service because two of them need the same answer for
+     * two different decisions, and the two must not drift: a competition may not be LOCKED
+     * while this is non-zero (CompetitionRegistrationService::lockIfComplete) and may not be
+     * DRAWN while it is (CompetitionDrawService::drawRoundIfClaimable).
+     *
+     * Withdrawn entrants are excluded: a withdrawn club's unstored squad blocks nothing, and
+     * counting it would make withdrawal useless as the recovery it is meant to be.
+     */
+    public function countUnstoredForCompetition(ActiveCompetition $activeCompetition): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne(
+            <<<'SQL'
+            SELECT COUNT(*)
+              FROM competition_entrant
+             WHERE active_competition_id = :competitionId
+               AND status <> :withdrawn
+               AND squad_state <> :stored
+            SQL,
+            [
+                'competitionId' => $activeCompetition->getId()->toRfc4122(),
+                'withdrawn'     => CompetitionEntrantStatus::WITHDRAWN->value,
+                'stored'        => EntrantSquadState::STORED->value,
+            ],
+        );
     }
 
     public function countForCompetition(ActiveCompetition $activeCompetition): int
