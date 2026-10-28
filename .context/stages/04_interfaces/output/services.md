@@ -189,10 +189,14 @@ filename alone.
   `rebuild()` / `invalidate()` over `competition_response_cache`, with a
   Postgres advisory lock so a cold competition under load builds once. Shaped
   after `WorldPackCacheService`, and database-backed for the same reason: see
-  that entity in `03_data/output/entities.md`. Prewarmed from
-  `CompetitionDrawService` and `CompetitionResultsService` after every pass that
-  changes a bracket; those hooks log and swallow failures, because a tick that
-  already committed game state must not fail over a cache rebuild.
+  that entity in `03_data/output/entities.md`. Prewarmed by
+  `WarmCompetitionResponseMessage`, dispatched by the draw and resolve message handlers
+  once their work has committed — **never inline in a cron tick**. That distinction is
+  load-bearing: a tick holds the round's entrants in its identity map and Doctrine will
+  not re-hydrate them, so building the document there while fingerprinting fresh SQL
+  stored a stale bracket under a fresh key. The worker clears the EntityManager between
+  messages, which is what makes the warm handler read clean. Warm failures are swallowed:
+  the cache self-validates, so a miss means the next reader rebuilds.
 - **`Competition/MatchEngineSideFactory`** — builds `MatchEngineSide` inputs
   from whatever a domain stores. It lives in `Service/Competition`, not beside
   the value object, precisely so the engines import no entities.

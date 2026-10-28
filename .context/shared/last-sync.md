@@ -563,3 +563,14 @@
   keeps the lease from expiring while a message waits in the queue — and is why, unlike
   `app:starter-pool:audit`, dispatch is not gated on an undrained queue. §3.3 (inline
   provisioning) and §3.4 (queued cache prewarm) remain open.
+
+- **New pass (2026-10-28), on top of commit 8efc555** (uncommitted).
+  **Stages touched:** 04_interfaces (`services.md`). Phase 2 §3.4: response-cache prewarming
+  is back, as `WarmCompetitionResponseMessage` on the `competition` transport dispatched by
+  the draw and resolve handlers after their work commits. Phase 0 had removed the inline
+  prewarm because a cron tick cannot read fresh state; a message can, since
+  `DoctrineClearEntityManagerWorkerSubscriber` clears the EntityManager between messages
+  (verified in the container rather than assumed). Deliberately not dispatched on
+  register/withdraw/resubmit — the document is cheap before any round exists, and that would
+  queue one rebuild per registration. §3.3 (inline provisioning) is the only open Phase 2
+  item.

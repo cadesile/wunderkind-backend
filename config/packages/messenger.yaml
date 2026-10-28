@@ -59,6 +59,11 @@ framework:
             # re-reads the round and takes the claim, so a duplicate dispatch is a no-op.
             'App\Message\Competition\DrawCompetitionRoundMessage': competition
             'App\Message\Competition\ResolveCompetitionRoundMessage': competition
+            # Response-cache warm, dispatched by the two handlers above once their work has
+            # committed. Same transport on purpose: a warm is only worth doing after the round
+            # it describes has landed, and ordering behind that round on one queue is exactly
+            # the behaviour wanted.
+            'App\Message\Competition\WarmCompetitionResponseMessage': competition
 
 when@test:
     framework:

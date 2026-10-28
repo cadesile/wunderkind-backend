@@ -24,6 +24,11 @@ use App\Tests\Support\EntrantFixtureTrait;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
+use App\Message\Competition\WarmCompetitionResponseMessage;
+use App\MessageHandler\Competition\WarmCompetitionResponseMessageHandler;
+use App\Repository\Competition\CompetitionResponseCacheRepository;
+use App\Service\Competition\CompetitionResponseBuilder;
+use App\Service\Competition\CompetitionResponseCacheService;
 
 /**
  * Round processing is queued, and the queue is safe to over-dispatch into.
@@ -207,5 +212,94 @@ class CompetitionRoundQueueTest extends KernelTestCase
         $handler($message);
         $this->em->refresh($round);
         self::assertSame(CompetitionRoundStatus::RESULTS_PUBLISHED, $round->getStatus());
+    }
+
+    /**
+     * A successful draw must queue a response-cache warm, and must not warm inline.
+     *
+     * Inline is the thing that was wrong before: this handler has the round's entrants in its
+     * identity map, and Doctrine will not re-hydrate them, so building the document here
+     * while fingerprinting fresh SQL stored a stale bracket under a fresh key. The warm is a
+     * separate message precisely so the worker's EntityManager clear happens in between.
+     */
+    public function testASuccessfulDrawQueuesAResponseWarm(): void
+    {
+        $instance = $this->lockedCompetition();
+        $round    = $this->firstRound($instance);
+
+        self::getContainer()->get(DrawCompetitionRoundMessageHandler::class)(
+            new DrawCompetitionRoundMessage((string) $round->getId()),
+        );
+
+        $warms = array_filter(
+            $this->transport()->getSent(),
+            static fn ($envelope) => $envelope->getMessage() instanceof WarmCompetitionResponseMessage,
+        );
+
+        self::assertCount(1, $warms, 'a committed draw must queue exactly one warm');
+        self::assertSame(
+            (string) $instance->getId(),
+            array_values($warms)[0]->getMessage()->competitionId,
+        );
+
+        // And nothing was written to the cache by this handler itself.
+        self::assertNull(
+            self::getContainer()->get(CompetitionResponseCacheRepository::class)->findRow($instance),
+            'the round handler must not write the cache row — the warm handler does, on a clean EntityManager',
+        );
+    }
+
+    public function testASkippedDrawQueuesNoWarm(): void
+    {
+        $instance = $this->lockedCompetition();
+        $round    = $this->firstRound($instance);
+        $handler  = self::getContainer()->get(DrawCompetitionRoundMessageHandler::class);
+        $message  = new DrawCompetitionRoundMessage((string) $round->getId());
+
+        $handler($message);
+        $afterFirst = count(array_filter(
+            $this->transport()->getSent(),
+            static fn ($envelope) => $envelope->getMessage() instanceof WarmCompetitionResponseMessage,
+        ));
+
+        // Second delivery does no work, so it must not queue a warm either.
+        $handler($message);
+
+        self::assertCount(
+            $afterFirst,
+            array_filter(
+                $this->transport()->getSent(),
+                static fn ($envelope) => $envelope->getMessage() instanceof WarmCompetitionResponseMessage,
+            ),
+            'a no-op delivery must not queue a redundant rebuild',
+        );
+    }
+
+    public function testTheWarmHandlerStoresAUsableDocument(): void
+    {
+        $instance = $this->lockedCompetition();
+        $round    = $this->firstRound($instance);
+        $this->drawService->forceDrawRound($round);
+
+        self::getContainer()->get(WarmCompetitionResponseMessageHandler::class)(
+            new WarmCompetitionResponseMessage((string) $instance->getId()),
+        );
+
+        $builder = self::getContainer()->get(CompetitionResponseBuilder::class);
+        $cache   = self::getContainer()->get(CompetitionResponseCacheService::class);
+
+        self::assertTrue(
+            $cache->isCached($instance, $builder->stateFingerprint($instance)),
+            'the warm must store a document the current fingerprint accepts',
+        );
+    }
+
+    public function testTheWarmHandlerToleratesADeletedCompetition(): void
+    {
+        self::getContainer()->get(WarmCompetitionResponseMessageHandler::class)(
+            new WarmCompetitionResponseMessage('01a17f00-0000-7000-8000-000000000000'),
+        );
+
+        $this->expectNotToPerformAssertions();
     }
 }
