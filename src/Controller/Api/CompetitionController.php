@@ -380,11 +380,24 @@ class CompetitionController extends AbstractController
             ? $currentRound->getScheduledAt()->format(DATE_ATOM)
             : null;
 
+        // $entrant is current here: resubmit() refreshes it after its raw-SQL writes, which is
+        // also what retires the `getSnapshotVersion() + 1` this used to return — the stored
+        // value is now the true one rather than a stale read with the increment reapplied.
         return $this->json([
             'entrantId'       => (string) $entrant->getId(),
-            'snapshotVersion' => $entrant->getSnapshotVersion() + 1,
-            'status'          => 'accepted',
+            'snapshotVersion' => $entrant->getSnapshotVersion(),
+            // Same meaning as register()'s `status`: the entry's standing in the competition.
+            // It used to be the string 'accepted', about the resubmission rather than the
+            // entry — two different vocabularies under one key across two endpoints a client
+            // calls in sequence. Acceptance is already carried by the 200 (the refusals are
+            // 404/409), so nothing was lost in making this consistent.
+            'status'          => $entrant->getStatus()->value,
             'locksAt'         => $locksAt,
+            // Nested, exactly as register() returns it, so `entrant.submissionStatus` is read
+            // the same way from both. Always 'confirmed' here — resubmit writes inline rather
+            // than queueing — but stated rather than implied, since this is how a client
+            // confirms a FAILED entry actually recovered.
+            'entrant'         => $this->responseBuilder->serializeEntrantPreview($entrant),
         ]);
     }
 

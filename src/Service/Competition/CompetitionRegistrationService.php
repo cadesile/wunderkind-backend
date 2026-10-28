@@ -1175,7 +1175,11 @@ class CompetitionRegistrationService
             throw $e;
         }
 
-        $entrant->setSquadState(EntrantSquadState::STORED);
+        // Everything above went in through raw SQL, so the managed entity still holds the
+        // pre-write club_display_json, snapshot_version and snapshot_locked_at. Refreshed here
+        // rather than at the call site because this method is what made it stale — a caller
+        // serializing the entrant afterwards should not have to know that.
+        $this->em->refresh($entrant);
 
         // A resubmission can be the thing that completes the field — specifically when it is
         // how a failed entrant recovers.

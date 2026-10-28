@@ -375,5 +375,8 @@ class RegistrationQueueingTest extends KernelTestCase
 
         $entrant = $this->entrantRepository->find($bus->dispatched[0]->entrantId);
         self::assertSame(EntrantSquadState::STORED, $entrant->getSquadState(), 'the rows are written, so the flag must say so');
+
+        // And the client is told, which is the whole point of resubmitting a failed entry.
+        self::assertSame('confirmed', $entrant->getSquadState()->clientValue());
     }
 }

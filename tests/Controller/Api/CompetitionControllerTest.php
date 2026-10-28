@@ -440,8 +440,16 @@ class CompetitionControllerTest extends WebTestCase
             )),
         );
         $this->assertResponseStatusCodeSame(200);
-        $this->assertSame('accepted', $this->responseJson()['status']);
         $this->assertSame(2, $this->responseJson()['snapshotVersion']);
+
+        // `status` carries the entrant's standing, the same as register()'s does — it used to
+        // be the string 'accepted', a second vocabulary under a shared key. Acceptance is the
+        // 200 itself; the refusals are 404/409.
+        $this->assertSame('active', $this->responseJson()['status']);
+
+        // And `entrant.submissionStatus` is read identically on both endpoints. 'confirmed'
+        // because a resubmit writes inline instead of queueing.
+        $this->assertSame('confirmed', $this->responseJson()['entrant']['submissionStatus']);
     }
 
     /**
