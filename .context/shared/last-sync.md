@@ -574,3 +574,120 @@
   register/withdraw/resubmit — the document is cheap before any round exists, and that would
   queue one rebuild per registration. §3.3 (inline provisioning) is the only open Phase 2
   item.
+
+- **New pass (2026-10-28), on top of commit 883922b** (uncommitted).
+  **Stages touched:** none (test-only plus the plan doc). §2.3 audited: the capacity-fill →
+  lock transition is correctly serialized and atomic — `register()` takes
+  `SELECT ... FOR UPDATE` on the competition row first and calls
+  `CompetitionLockService::lock()` inside that transaction, and `lock()` only persists, so
+  seeds/rounds/inbox messages commit with the entrant insert and the fee. No bug. One real gap
+  closed: `registration_closed` had no coverage, and the meaningful path is the
+  *in-transaction* check rather than the controller's (possibly stale) pre-flight read. Also
+  recorded in the plan: the final registrant pays the latency of locking the whole bracket,
+  acceptable and deliberately not queued, because splitting it would leave a SCHEDULED
+  competition with no rounds — the orphaning shape §2.1 removed. Plan gains a Phase 4:
+  nothing in it has been load-tested, and the 15-minute lease window is a guess.
+
+- **New pass (2026-10-28), on top of commit 0e26e97** (uncommitted).
+  **Stages touched:** none (new command, tuning, plan doc). Phase 4 of the concurrency plan:
+  `app:competition:benchmark` times the real pipeline and reports payload composition.
+  Two settings that were guesses are now measured — `CLAIM_LEASE_SECONDS` 900 → 300 (slowest
+  full round ~8.4s at capacity 64, so 15 min was ~107x and cost 15 min to recover a crashed
+  tick), and `competition-consume.sh`'s `--limit=10` replaced by `--memory-limit=256M` because
+  ten worst-case resolves are ~75s against a 50s time limit, so the count never bound.
+  Two of my own assumptions were corrected by the numbers: filling via `spoofAllEntrants()`
+  conflated club creation with registration (a ~25x overstatement — registration is ~35ms
+  median), and `narrativePayload` is **not** the dominant share of the bracket payload —
+  lineups are (41.5% vs 32.6% at capacity 32). Together ~74% of the ~805KB response is
+  per-fixture detail that `GET /api/matches/{id}` already serves, which makes the case for the
+  bracket not embedding `result` at all rather than merely dropping narrative. Still not
+  measured: contention (single-process harness) and production instrumentation.
+
+- **New pass (2026-10-28), on top of commit 3ff2159** (uncommitted).
+  **Stages touched:** 04_interfaces (`routes.md`). Acted on Phase 4's payload finding:
+  `GET /api/competitions/{id}` no longer embeds a per-fixture `result` block. Measured 397KB →
+  **59KB** on the same capacity-32 bracket (85%). `CompetitionResult::toClientSummary()` and
+  its private helpers are deleted — no callers once the bracket stopped embedding them, and
+  `MatchQueryService::serializeCupMatchDetail()` was always the real client shape. The admin
+  "what the device receives" panel now links `/api/matches/{id}` instead of inlining a payload
+  the device no longer gets. **Requires an app change** — client contract and key-mapping
+  table in `docs/api/competition-bracket-no-embedded-result.md`; the `MATCH_RESULT` push
+  already carries the `fixtureId` to fetch with. Test coverage moved rather than deleted: the
+  payload-shape assertions now run against the match endpoint.
+
+- **Note (2026-10-28), no stage change.** §5 of the concurrency plan is closed as **moot**.
+  The cloud review flagged, and I repeated, that the competition truncate destroys entry fees
+  already deducted from `club.balance` with no refund. It does not: the backend's
+  `club.balance` is a sync mirror, overwritten absolutely from the device
+  (`SyncService::process()` — *"The client is the game engine… accepted as authoritative
+  snapshots from the device"*), so the backend never held the authoritative value. Recorded
+  for the next reader because the same mistake is easy to make: a balance column in this
+  schema does not imply the backend owns that balance. Side observation left in the plan: the
+  server-side fee deduction in `register()` is transient for the same reason, so if the client
+  does not deduct locally an entry fee is effectively free — an app-side question, not this
+  repo's.
+
+- **`01_overview/tribal-knowledge.md`, `03_data/entities.md`, `07_synthesis/architecture-notes.md`
+  — the authority boundary is now written down (2026-10-28).** Stated by the human: the device
+  is the master for club data, and the backend only learns per-club state through sync data.
+  `tribal-knowledge.md` gains a section (its first real entry — it previously held only the
+  "nothing to add" placeholder), `entities.md`'s `Club` entry gains the note at the point a
+  reader meets `balance`, and `architecture-notes.md` gains an "Authority" section listing what
+  the device owns versus what the backend owns, including the split inside competitions (the
+  backend owns the bracket; each entrant's squad is a client snapshot it stores verbatim).
+
+- **`04_interfaces/output/services.md` — `splitSnapshot()` is now shared (2026-10-28).**
+  Phase 3 of the concurrency plan (the review's hygiene nits) is done. The friendly copy of
+  the split is gone, along with a third copy in `tests/Support/FriendlyFixtureTrait`; the
+  duplication had been hiding a real divergence in the OVR rule, recorded in `services.md`.
+  Friendly squad rows are now pruned at full-time in `resolveSingleMatch()`, the same way
+  and in the same order as competition squads on completion, so the friendly admin detail
+  page shows `—` for both squad fields on a COMPLETE challenge by design (its help text says
+  so). `prewarmResponse()` had already gone when prewarm became a queued message.
+
+- **`03_data/output/migrations.md` — `Version20261028141656` (2026-10-28), comments only.**
+  Drops the leftover `(DC2Type:...)` column comments on `friendly_challenge` and
+  `idempotency_record`, written by pre-DBAL-4 migrations. No column, index or data touched.
+  Worth doing because those eleven empty strings were the whole reason
+  `doctrine:schema:validate` reported the schema out of sync — a red that hides real
+  structural drift, which is exactly the signal that caught an entity silently losing its
+  `use Doctrine\ORM\Mapping as ORM` import earlier in this work. Round-trips: down restores
+  all eleven, up clears them, validate green either side.
+
+- **Note (2026-10-28), no stage change — the bracket contract is closed client-side.** The
+  removal of `fixtures[].result` needed **no behavioural app change**: the tournament hub
+  already rendered a tie from `score`/`winnerEntrantId`/`entrants[]` and passed `matchId`
+  onward, its `Fixture` type never declared `result`, and the `MATCH_RESULT` push already
+  routed to the match href. What the change invalidated was documentation and an
+  already-dead type block. So the last outstanding cross-repo item from the tournament work
+  is resolved, and `docs/api/competition-bracket-no-embedded-result.md` is now a reference
+  rather than a migration task.
+
+  Worth keeping: **a cup fixture's own id is its match id** —
+  `MatchQueryService::findMatchDetail()` resolves the id against
+  `CompetitionFixtureRepository` (falling through to `FriendlyChallengeRepository` for a
+  friendly; distinct UUIDs, so that is a cheap miss, not an ambiguity). App routing sends a
+  push's `fixtureId` straight to `GET /api/matches/{id}` on that basis, so the invariant to
+  preserve is that a fixture id is accepted there at all.
+
+- **`04_interfaces/output/services.md` — the competition pipeline now reports on itself
+  (2026-10-28).** New `CompetitionHealthService` + `app:competition:health`
+  (`--json`/`--strict`), scheduled every 5 minutes by `docker/competition-health.sh`: queue
+  depth, consumer lag, round claims held vs past the lease, rounds overdue past a 180s grace,
+  and response-cache coverage — all read-only DBAL derived from existing rows, so there is no
+  metrics store to keep. `CompetitionResponseCacheService` additionally logs each build as
+  `competition.cache.build` with `elapsedMs` and `bytes`; hit rate is deliberately derived from
+  builds against access-log request counts rather than by logging every hit on the hottest read
+  path. This closes the last real gap in the concurrency plan — every bound in the pipeline came
+  from a benchmark on one box and nothing in production said whether it still held.
+
+  Two findings worth carrying forward. **Writing the check found a bug in the check**:
+  `messenger_messages` is created lazily by the Doctrine transport, so on a fresh database it
+  does not exist and the first suite run errored on every case — the absence is now reported
+  rather than swallowed into a zero, because a health check must never be the thing that fails.
+  And **§3.3 (inline provisioning) is audited rather than outstanding**:
+  `CompetitionProvisionInstancesCommand`'s work is bounded by the admin-authored template
+  catalogue, not by load — one `INSERT … ON CONFLICT DO NOTHING` per active template, no
+  hydration beyond the templates — and the one part that scales with club count
+  (`ResolveNewCompetitionAudienceForPushMessage`) is already routed to `async`. Left inline
+  deliberately; don't re-open it as unfinished.

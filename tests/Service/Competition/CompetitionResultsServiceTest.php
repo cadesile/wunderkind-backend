@@ -26,6 +26,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Envelope;
 use App\Tests\Support\EntrantFixtureTrait;
 use App\Repository\Competition\CompetitionResultAuditRepository;
+use App\Service\Competition\MatchQueryService;
 
 class CompetitionResultsServiceTest extends KernelTestCase
 {
@@ -383,16 +384,32 @@ class CompetitionResultsServiceTest extends KernelTestCase
 
         // Admin accessors expose the audit, while client summary keeps it internal
         $this->assertNotNull($auditRow->getComputationAuditJsonPretty());
-        $this->assertNotEmpty($auditRow->getEventLogJson(), 'the event log moved to the audit row with it');
+        // The event log moved to the audit row with the audit. Asserted as an invariant
+        // against the audit's own outcome rather than as "not empty": the log is goals plus
+        // cards, both rolled, and a scoreless cardless tie decided on penalties legitimately
+        // logs nothing. The seed comes from freshly generated fixture UUIDs, so a non-empty
+        // assertion is a coin flip that eventually fails in CI for no real reason.
+        $eventLog   = $auditRow->getEventLogJson();
+        $goalEvents = array_values(array_filter($eventLog, static fn (array $e) => ($e['type'] ?? null) === 'goal'));
+        $this->assertCount(
+            $audit['outcome']['homeScore'] + $audit['outcome']['awayScore'],
+            $goalEvents,
+            'every goal in the outcome must appear in the audit row\'s event log (shootout goals excluded)',
+        );
         $fullPayload = json_decode($result->getFullPayloadPretty($auditRow), true);
         $this->assertIsArray($fullPayload['computationAuditJson'] ?? null);
-        $clientSummary = $result->toClientSummary();
-        $this->assertArrayNotHasKey('computationAudit', $clientSummary);
-        $this->assertArrayNotHasKey('computationAuditJson', $clientSummary);
+        // Asserted against the payload the client now actually receives. This used to check
+        // CompetitionResult::toClientSummary(), which was the bracket's per-fixture `result`
+        // block; the bracket no longer carries one, so the client-facing shape for a played
+        // fixture is the match detail endpoint's.
+        $clientPayload = self::getContainer()->get(MatchQueryService::class)->serializeCupMatchDetail($fixture);
+        $this->assertArrayNotHasKey('computationAudit', $clientPayload);
+        $this->assertArrayNotHasKey('computationAuditJson', $clientPayload);
+        $this->assertArrayNotHasKey('eventLogJson', $clientPayload);
     }
 
     /**
-     * The client summary of a result must build with no audit row present at all.
+     * A played fixture's client payload must build with no audit row present at all.
      *
      * This is the invariant the audit split protects, and the only way to prove it: an
      * assertion that `computationAudit` is absent from the payload passes whether or not the
@@ -416,8 +433,8 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $result = $this->em->getRepository(\App\Entity\Competition\CompetitionResult::class)->find($result->getId());
         $this->assertNotNull($result);
 
-        $summary = $result->toClientSummary();
-        $this->assertSame($result->getHomeScore(), $summary['homeScore']);
+        $summary = self::getContainer()->get(MatchQueryService::class)->serializeCupMatchDetail($fixture);
+        $this->assertSame($result->getHomeScore(), $summary['score']['home']);
         // Counted against the stored lineup rather than a fixed number: this fixture seeds a
         // minimal squad, and the point is that the lineup survives the audit row's absence,
         // not how big it is.

@@ -321,3 +321,13 @@ was not safe to retry:
   table is a cache, so existing rows are truncated rather than converted — a miss is already
   the correct behaviour, which is why the new column can be NOT NULL with no default.
 
+- `Version20261028141656` — **comments only, no structural change.** Drops the eleven
+  leftover `(DC2Type:uuid)`/`(DC2Type:datetime_immutable)` column comments on
+  `friendly_challenge` and `idempotency_record`, written by migrations predating the DBAL 4
+  upgrade (DBAL 4 no longer annotates these types, so the current mapping emits none).
+  Nothing about any column, index, constraint or row changes. It exists because those empty
+  strings were the entire reason `doctrine:schema:validate` reported the schema out of sync,
+  and a permanently red validate hides real structural drift — which during the tournament
+  data-model work was the signal that caught an entity silently losing its
+  `use Doctrine\ORM\Mapping as ORM` import, with `php -l` passing and the suite green.
+  `down()` restores all eleven exactly as they were.

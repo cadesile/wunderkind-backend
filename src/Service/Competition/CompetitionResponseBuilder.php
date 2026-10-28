@@ -8,7 +8,6 @@ use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
-use App\Entity\Competition\CompetitionResult;
 use App\Entity\Competition\CompetitionRound;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\Competition\RewardTemplate;
@@ -120,8 +119,7 @@ class CompetitionResponseBuilder
             } else {
                 $fixtures = array_map(
                     function (CompetitionFixture $f) use ($resultsByFixtureId): array {
-                        $resultEntity  = $resultsByFixtureId[(string) $f->getId()] ?? null;
-                        $resultSummary = $this->serializeResultSummary($resultEntity);
+                        $resultEntity = $resultsByFixtureId[(string) $f->getId()] ?? null;
 
                         $score = null;
                         if ($resultEntity !== null) {
@@ -146,7 +144,15 @@ class CompetitionResponseBuilder
                             'matchId'         => $f->getStatus() === CompetitionFixtureStatus::COMPLETE ? (string) $f->getId() : null,
                             'home'            => $this->serializeEntrantSummary($f->getHomeEntrant()),
                             'away'            => $this->serializeEntrantSummary($f->getAwayEntrant()),
-                            'result'          => $resultSummary,
+                            // No `result` block. Per-fixture match detail — both lineups, the
+                            // commentary timeline and the frozen club copies — was embedded
+                            // here for every fixture, and `app:competition:benchmark` measured
+                            // it at ~74% of an 805KB response at capacity 64 (lineups 41.5%,
+                            // narrative 32.6%). GET /api/matches/{id} already serves exactly
+                            // that per match, and `matchId` above is the handle for it, so the
+                            // bracket was carrying a second copy of a payload nobody needed
+                            // 63 of at once. Scores stay here in `score`, so a bracket still
+                            // renders without a single extra request.
                         ];
                     },
                     $existingFixtures,
@@ -458,11 +464,6 @@ class CompetitionResponseBuilder
         ];
     }
 
-    private function serializeResultSummary(?CompetitionResult $result): ?array
-    {
-        return $result?->toClientSummary();
-    }
-
     private function buildTbdFixture(int $slotIndex): array
     {
         return [
@@ -476,7 +477,7 @@ class CompetitionResponseBuilder
             'matchId'         => null,
             'home'            => null,
             'away'            => null,
-            'result'          => null,
+            // No `result` key, matching a real fixture's shape — see the note there.
         ];
     }
 

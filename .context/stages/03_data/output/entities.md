@@ -156,6 +156,17 @@ migrations are the change log (see `migrations.md`).
   persist/remove), `leaderboardEntries` (cascade persist/remove),
   `investors`, `sponsors`, `inboxMessages` (cascade persist/remove);
   `ManyToOne` → `currentLeague:?League` (nullable).
+  > **The device owns this row's game state; the backend only mirrors it.**
+  > Everything per-club reaches the backend through `POST /api/sync` and is
+  > overwritten absolutely from the device's own value — `balance`,
+  > `totalCareerEarnings` and `reputation` are assigned, not accumulated
+  > (`SyncService::process()`: *"The client is the game engine… accepted as
+  > authoritative snapshots from the device"*). So a server-side write to any of
+  > them lasts only until the next sync, and the backend has no authority to
+  > correct a club's state — a wrong value has to be fixed on the device. Do not
+  > read a column here as something the backend owns just because it is stored
+  > here; see `01_overview/output/tribal-knowledge.md` for the mistake this
+  > caused once already.
 - **`ClubFacility`** — a club's built facility instance. `facilitySlug`,
   `level`, `updatedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`).
 - **`FacilityTemplate`** — facility catalog (not a relation target of

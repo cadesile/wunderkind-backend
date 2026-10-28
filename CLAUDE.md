@@ -270,6 +270,17 @@ committing it before a failed flush would leave a live bracket unresolvable. `*_
 are deliberately **not** pruned: an audit answers "how was this result derived" about a
 match already played, which is exactly when someone asks.
 
+**The bracket does not embed per-fixture match detail.** `rounds[].fixtures[]` carries
+`score`, `matchId`, `home`, `away` and the winner — no `result` block. It used to carry both
+lineups, the commentary timeline and frozen club copies per fixture, which
+`app:competition:benchmark` measured at ~74% of a 397KB capacity-32 response (lineups 41.5%,
+narrative 32.6%); removing it took that response to 59KB. `GET /api/matches/{id}` already
+served exactly the same thing, and `matchId` is the handle. `CompetitionResult::toClientSummary()`
+is gone with it — `MatchQueryService::serializeCupMatchDetail()` was always the real client
+shape. Client contract: `docs/api/competition-bracket-no-embedded-result.md`. **Do not
+re-embed match detail here**; the benchmark's payload breakdown reports 0 bytes for narrative
+and lineups specifically so a regression shows up.
+
 **Round processing is queued, not inline.** `competition-draw-rounds` and
 `competition-resolve-rounds` only *dispatch* now — one `DrawCompetitionRoundMessage` /
 `ResolveCompetitionRoundMessage` per due round onto the **`competition`** transport, drained
@@ -286,9 +297,22 @@ dispatch is therefore **not** gated on an undrained queue; gating would stall ot
 competitions for no gain. `drawDueRounds()`/`publishDueResults()` remain as synchronous
 drivers over the same per-round methods the handlers call, for tests and as a fallback.
 
+**The pipeline reports on itself — `app:competition:health`.** Read-only DBAL
+(`CompetitionHealthService`): `competition` queue depth and consumer lag, round claims held vs
+past the lease, rounds due and unclaimed past a 180s grace, response-cache coverage. Runs every
+5 minutes (`docker/competition-health.sh`), `--strict` exits 1 on any warning, `--json` for
+scraping. It exists because every bound below came from `app:competition:benchmark` on one box
+and nothing in production said whether those settings still held. Thresholds are first guesses
+— the cron logs and pages nobody on purpose. Cache **builds** are logged
+(`competition.cache.build`, with `elapsedMs` and `bytes`) and hits are not: hit rate is a ratio
+over requests, so derive it from builds against access-log counts rather than logging the
+hottest read path in the domain.
+
 **Round claims are leases, and a status transition must commit with its own work.**
 `claimDraw()`/`claimResults()` set `drawLockedAt`/`resolveLockedAt`, reclaimable after
-`CompetitionRound::CLAIM_LEASE_SECONDS` (15 min) and cleared on success. They used to be
+`CompetitionRound::CLAIM_LEASE_SECONDS` (300s) and cleared on success. That window is set from
+`app:competition:benchmark`, not guessed — the slowest measured full round is ~8.4s at
+capacity 64, so it keeps ~36x headroom; re-measure if the match engine gets slower. They used to be
 one-way flags, so any exception mid-round stranded it forever. Worse, `claimDraw()` also
 committed `status = DRAWN` by raw SQL **before** `drawRound()` built any fixture — a failed
 flush then left a round DRAWN with no fixtures and `matchesResolveAt` NULL, invisible to

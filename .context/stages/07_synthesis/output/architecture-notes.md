@@ -65,3 +65,38 @@ normally Lando-local-only, so this being checked into a template that
 ships to production is unresolved and worth a human decision — noted
 here again since it's the kind of thing a future agent touching the
 admin layout should see before assuming it's intentional.
+
+## Authority: the device owns club state, the backend owns the world
+
+The single most load-bearing boundary in this codebase, and the easiest to
+misread from the schema alone.
+
+**Device-owned, mirrored into the backend by `POST /api/sync` only.** A club's
+`balance`, `totalCareerEarnings`, `reputation`, squad, staff, facilities and
+weekly progression. `SyncService::process()` assigns these from the request
+absolutely rather than applying deltas, so the backend's copy is a snapshot of
+what a device last reported — never a value the backend computed or can repair.
+Two consequences:
+
+- A server-side write to a mirrored field is **transient**. It is replaced on
+  the next sync. Anything that must stick has to be enforced on the device.
+- Deleting backend club-scoped rows loses history and derived artefacts, **not**
+  the player's game.
+
+**Backend-owned.** World data (leagues, NPC clubs, market pools, world packs),
+cross-club aggregates no single device could compute (`LeaderboardEntry`,
+`UserLedger`, `SeasonRecord`, transfer leaderboards), operator-authored content
+(`AdminMessage`, narrative templates, excursions), and competition/friendly
+*structure* — brackets, fixtures, results, rounds. Note the split inside
+competitions: the backend owns the bracket and resolves matches, but each
+entrant's submitted squad is a client snapshot it stores verbatim and never
+recomputes.
+
+**Why this is stated here rather than inferred:** during the 2026-10-28
+tournament work a code review flagged that truncating competition entrants
+destroyed entry fees "already deducted from `club.balance`", and that was
+carried as a release blocker until the human pointed out that club balance only
+matters on the device. The reasoning looked sound and was wrong at the premise —
+a `balance` column in this schema does not imply the backend owns that balance.
+Check which side of this boundary a field sits on before reasoning about losing
+or correcting it.

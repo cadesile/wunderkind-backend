@@ -169,6 +169,14 @@ filename alone.
   (`CLUB_ENGINE_KEYS`), `splitSnapshot()` is the one place deciding what lands
   where, and `snapshotEnvelopeFrom()` reassembles the old envelope for the two
   callers that genuinely want it (spoof cloning, the admin viewer).
+  **`splitSnapshot()` is public and serves both domains** — `FriendlyChallengeService`
+  calls it from `postChallenge()`/`acceptChallenge()` and reads `ovr` back out of the
+  result, because `FriendlyChallenge` stores that as a matchmaking column of its own.
+  It had its own copy until 2026-10-28, and the copies had drifted: the friendly one
+  recomputed OVR from the XI unconditionally, so a device-supplied `club.ovr` was
+  honoured on a competition registration and discarded on a friendly post of the
+  identical envelope. The shared rule is: a numeric `club.ovr` wins, else derive from
+  the XI.
   `normalizeClubData()` itself is untouched — the pickers front it — which is
   why `FriendlyChallengeService` keeps using it exactly as before.
   `repointClubData()` moves **both** `id` and `clubId` when a snapshot is
@@ -197,6 +205,25 @@ filename alone.
   stored a stale bracket under a fresh key. The worker clears the EntityManager between
   messages, which is what makes the warm handler read clean. Warm failures are swallowed:
   the cache self-validates, so a miss means the next reader rebuilds.
+  **Builds are logged; hits are not.** `buildAndStore()` is the single place a document is
+  written and emits `competition.cache.build` at info with `elapsedMs` and `bytes` — the
+  expensive, rare event. Payload size in prod is the one signal that would catch per-fixture
+  match detail being re-embedded in a release. Hit *rate* is deliberately not counted here: it
+  is a ratio over requests, so it is `1 - (builds / GET /api/competitions/{id} requests)` with
+  requests from the access log, rather than a log line on the hottest read path in the domain.
+- **`Competition/CompetitionHealthService`** — one read-only snapshot of whether round
+  processing is keeping up: `competition` queue depth and consumer lag from the oldest
+  undrained message, round claims held vs past the 300s lease, rounds due and unclaimed past a
+  180s grace (three cron ticks), and response-cache coverage. All DBAL, read-only, no locks —
+  safe to run against production while rounds resolve, and it can never be the reason one
+  fails. Exposed as `app:competition:health` (`--json`, `--strict`) and scheduled every 5
+  minutes by `docker/competition-health.sh`.
+  It reports **state**, never counters, so there is no metrics store to drift. Two details
+  worth keeping: an absent `messenger_messages` is reported rather than read as an empty queue
+  (the Doctrine transport creates it lazily, so on a fresh database it does not exist — and a
+  health check must not be the thing that fails); and a *claimed* round is never counted
+  overdue however late, since it is being worked on and double-reporting it would send an
+  operator chasing a backlog that is one round in progress.
 - **`Competition/MatchEngineSideFactory`** — builds `MatchEngineSide` inputs
   from whatever a domain stores. It lives in `Service/Competition`, not beside
   the value object, precisely so the engines import no entities.

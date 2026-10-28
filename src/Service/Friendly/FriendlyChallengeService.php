@@ -65,17 +65,22 @@ class FriendlyChallengeService
             $snapshotJson['club'] = [];
         }
 
-        $ovr            = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
         $reputation     = $club->getReputation();
         $reputationTier = Tier::fromScore($reputation)->value;
 
+        // Split by the same rules a competition registration uses — the envelope and the two
+        // shapes it lands in are identical, only the write path differs (ORM here, raw SQL
+        // there). `ovr` comes back out of the split because FriendlyChallenge stores it as a
+        // column for matchmaking.
+        $parts          = CompetitionRegistrationService::splitSnapshot($snapshotJson, $club);
+        $ovr            = $parts['ovr'];
+
         // Reputation is taken from the live Club rather than from whatever the client sent,
-        // which is why these three are reasserted after the normaliser runs.
-        $parts            = $this->splitSnapshot($snapshotJson, $club, $ovr);
-        $display          = $parts['display'];
+        // which is why these two are reasserted after the normaliser runs. `ovr` needs no
+        // such reassertion: the split already froze it into the display block.
+        $display                   = $parts['display'];
         $display['reputation']     = $reputation;
         $display['reputationTier'] = $reputationTier;
-        $display['ovr']            = $ovr;
 
         $now        = new \DateTimeImmutable();
         $expiresAt  = $now->modify(sprintf('+%d hours', $expiresInHours));
@@ -208,15 +213,14 @@ class FriendlyChallengeService
             $snapshotJson['club'] = [];
         }
 
-        $ovr                  = CompetitionRegistrationService::computeStartingXiOvr($snapshotJson);
-        $acceptorParts        = null;
-        $reputation           = $acceptorClub->getReputation();
-        $reputationTier       = Tier::fromScore($reputation)->value;
-        $acceptorParts                       = $this->splitSnapshot($snapshotJson, $acceptorClub, $ovr);
-        $acceptorDisplay                     = $acceptorParts['display'];
-        $acceptorDisplay['reputation']       = $reputation;
-        $acceptorDisplay['reputationTier']   = $reputationTier;
-        $acceptorDisplay['ovr']              = $ovr;
+        $reputation     = $acceptorClub->getReputation();
+        $reputationTier = Tier::fromScore($reputation)->value;
+
+        $acceptorParts                     = CompetitionRegistrationService::splitSnapshot($snapshotJson, $acceptorClub);
+        $ovr                               = $acceptorParts['ovr'];
+        $acceptorDisplay                   = $acceptorParts['display'];
+        $acceptorDisplay['reputation']     = $reputation;
+        $acceptorDisplay['reputationTier'] = $reputationTier;
 
         $now        = new \DateTimeImmutable();
         $kickoffAt  = $now->modify(sprintf('+%d seconds', self::KICKOFF_DELAY_SECONDS));
@@ -488,6 +492,20 @@ class FriendlyChallengeService
 
         $this->em->flush();
 
+        // Prune the engine inputs only once COMPLETE is actually committed — the same
+        // ordering, and for the same reason, as the competition side's own prune in
+        // CompetitionResultsService::publishRoundResults(). These two rows are the engine's
+        // only source for each side's XI, staff and club tuning keys, so dropping them is
+        // safe exactly when the match can no longer be resolved again. deleteForChallenge()
+        // is raw SQL and commits on its own, so running it before the flush above would, on
+        // a failed flush, leave an ACCEPTED challenge with nothing to play with — stuck, not
+        // merely unpruned. Nothing reads them afterwards: a played friendly's lineups are
+        // written onto the challenge itself, which is why MatchQueryService skips the squad
+        // lookup entirely once both lineup blocks exist.
+        if ($challenge->getStatus() === FriendlyChallengeStatus::COMPLETE) {
+            $this->squadRepository->deleteForChallenge($challenge);
+        }
+
         $this->pushNotificationService->notifyUsers(
             array_values(array_unique([
                 (string) $homeClub->getUser()->getId(),
@@ -653,28 +671,5 @@ class FriendlyChallengeService
         $this->em->refresh($challenge);
 
         return true;
-    }
-
-    /**
-     * Splits a submitted friendly envelope into the two rows it is stored across.
-     *
-     * The competition side has its own copy of this because its write path is raw SQL inside
-     * a locking transaction; this one goes through the ORM. What they share — which keys are
-     * display and which are engine-only — lives in CompetitionRegistrationService, so the two
-     * cannot disagree about that.
-     *
-     * @param array<string, mixed> $snapshotJson
-     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>}
-     */
-    private function splitSnapshot(array $snapshotJson, Club $club, int $ovr): array
-    {
-        $clubData = is_array($snapshotJson['club'] ?? null) ? $snapshotJson['club'] : [];
-
-        return [
-            'display' => CompetitionRegistrationService::clubDisplayBlock($clubData, $club, (string) $club->getId(), $ovr),
-            'engine'  => CompetitionRegistrationService::clubEngineBlock($clubData),
-            'players' => array_values(array_filter(is_array($snapshotJson['players'] ?? null) ? $snapshotJson['players'] : [], 'is_array')),
-            'staff'   => array_values(array_filter(is_array($snapshotJson['staff'] ?? null) ? $snapshotJson['staff'] : [], 'is_array')),
-        ];
     }
 }

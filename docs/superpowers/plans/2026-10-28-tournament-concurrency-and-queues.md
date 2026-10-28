@@ -150,11 +150,37 @@ unique index to prevent duplicate rows. That turns a lock failure into a unique-
 `flush()` — which, until §1.1 lands, closes the EntityManager. Decide deliberately: either
 fail the rebuild, or make the write idempotent (which §1.1's `ON CONFLICT` does).
 
-### 2.3 Capacity-fill → lock transition under concurrent registration
+### 2.3 Capacity-fill → lock transition — AUDITED, no bug
 
-`register()` serializes last-slot registrations with `SELECT … FOR UPDATE` on the competition
-row, which is sound. The subsequent transition to `scheduled` via `CompetitionLockService`
-needs the same audit under genuine concurrency; not yet verified.
+`register()` takes `SELECT … FOR UPDATE` on the ActiveCompetition row as its **first**
+statement and calls `CompetitionLockService::lock()` inside that same transaction. Three
+properties follow, all verified by reading the code:
+
+- **Serialization.** A concurrent last-slot registration blocks on the row lock, then reads
+  the now-SCHEDULED status and is rejected. Two clubs cannot fill the same final slot.
+- **Atomicity.** `lock()` only persists — `InboxService::createMessage()` deliberately does
+  not flush, and nothing pushes — so the seeds, the rounds and the per-entrant inbox messages
+  all land on `register()`'s single flush inside the transaction, together with the entrant
+  insert and the fee deduction. A failure anywhere rolls back all of it, fee included.
+- **`withdraw()` serializes against it**, taking the same `FOR UPDATE`.
+
+**One real gap found and closed: `registration_closed` had no test coverage at all.** That
+matters more than it looks, because there are two paths to it — the controller's pre-flight
+status check, whose read can be stale by the time the transaction opens, and the
+in-transaction check against the `FOR UPDATE`-read row. The second is the one that actually
+handles the race, and it was the untested one. Covered now by
+`tests/Service/Competition/CompetitionRegistrationCapacityTest.php`, including that a
+rejected registration does not charge the entry fee and does not re-lock the competition.
+
+**One characteristic recorded, deliberately not fixed.** The final registrant's request
+performs the whole bracket lock while holding that row lock: N seed updates, log2(N) round
+inserts and N inbox messages (64 for a full bracket). Every other registration for *that*
+competition blocks for the duration. It happens once per competition and does not
+cross-contaminate tournaments, so it is acceptable — and queueing it would be worse: the
+status transition has to stay transactional with the capacity check, and splitting it leaves
+a window where a SCHEDULED competition has no rounds, which `findDueForDraw()` would silently
+not find. That is the orphaning shape §2.1 just removed, and it is not worth reintroducing for
+a latency win on one request per tournament.
 
 ---
 
@@ -202,12 +228,26 @@ and there is a working fallback if the consumer is ever not running.
 
 Covered by `tests/Service/Competition/CompetitionRoundQueueTest.php`.
 
-### 3.3 Provisioning — NOT DONE
+### 3.3 Provisioning — AUDITED, no change needed
 
-`CompetitionProvisionInstancesCommand` still provisions inline, with its wrapper pinned at
-`memory_limit=128M`. Lower priority than 3.2: provisioning is driven by template schedules
-rather than by how many tournaments are mid-flight, so it does not scale with concurrency the
-way round processing does. Same treatment when it matters.
+Read properly rather than deferred on a hunch, and the hunch was right for a better reason
+than the one first given. `CompetitionProvisionInstancesCommand` provisions inline under
+`memory_limit=128M` and should stay that way:
+
+- **Its work is bounded by the admin-authored catalogue, not by load.** The loop is over
+  `findAllActive()` — active `CompetitionTemplate` rows, a handful of operator-authored
+  records — and does **one** `INSERT … ON CONFLICT DO NOTHING` per template. No entity
+  hydration beyond the templates, no flush, nothing per entrant or per fixture. Running 3
+  tournaments or 300 does not change what this tick does.
+- **The one expensive follow-on is already queued.** When a row is actually inserted it
+  dispatches `ResolveNewCompetitionAudienceForPushMessage`, routed to `async`
+  (`config/packages/messenger.yaml`) — so audience resolution, the part that scales with the
+  number of clubs, never runs in this 128M process. That was the thing worth checking, and it
+  was already right.
+
+So queueing this would add a transport, a handler and a failure mode to a tick that is three
+SQL statements on a quiet day. Left inline deliberately; the reasoning is recorded here so the
+next reader does not re-open it as unfinished work.
 
 ### 3.4 Prewarm becomes a queued message — DONE
 
@@ -238,43 +278,238 @@ cache row itself.
 
 ---
 
-## 4. Phase 3 — hygiene (the review's nits)
+## 4. Phase 3 — hygiene (the review's nits) — DONE
 
-1. `prewarmResponse()` is byte-identical in `CompetitionDrawService` and
-   `CompetitionResultsService`, with a third variant in the warm command. Folds naturally
-   into `CompetitionResponseCacheService::prewarm()` once §3.4 lands.
-2. `FriendlyChallengeService::splitSnapshot()` duplicates
-   `CompetitionRegistrationService::splitSnapshot()` (private static). Share one.
-3. `FriendlyChallengeSquadRepository::deleteForChallenge()` has no production caller, so
-   friendly squads are never pruned after resolution — unlike competition squads. Wire it
-   after `recordResult()`, or delete the method.
+1. **`prewarmResponse()` duplication — resolved by §3.4.** No occurrence of the method
+   remains in `src/`; the three copies collapsed into the queued
+   `WarmCompetitionResponseMessage` path when prewarm became a message.
+
+2. **The duplicated snapshot split — one shared method now.**
+   `CompetitionRegistrationService::splitSnapshot()` is public and returns `ovr` alongside
+   the rest; `FriendlyChallengeService` calls it from both `postChallenge()` and
+   `acceptChallenge()` and its own copy is gone, as is the third copy in
+   `tests/Support/FriendlyFixtureTrait`, which had been splitting by its own rules in a
+   trait whose whole purpose is to seed what the real write path produces.
+
+   **The duplication was hiding a behavioural divergence, which is the part worth
+   recording.** The friendly copy called `computeStartingXiOvr()` unconditionally, so a
+   device-supplied `club.ovr` was recomputed away; the competition copy honoured it. The
+   same envelope therefore rated a club differently depending on which domain it was
+   submitted to. Unified on the competition rule — a numeric `club.ovr` wins, else derive
+   from the XI — because that is the one consistent with the device being the master for
+   club data. Pinned by `tests/Service/Competition/SubmittedSnapshotSplitTest.php`, which
+   asserts the rule rather than either call site.
+
+   Also removed two now-dead `$display['ovr'] = $ovr` reassignments: the split already
+   freezes OVR into the display block.
+
+3. **Friendly squads are pruned at full-time.** `deleteForChallenge()` is called from
+   `resolveSingleMatch()`, after the flush and guarded on the status actually being
+   `COMPLETE` — the same ordering, and for the same reason, as the competition side's prune
+   in `publishRoundResults()`: the call is raw SQL that commits on its own, so running it
+   before the flush would turn a failed flush into an unplayable challenge rather than
+   merely an unpruned one. Safe because nothing reads those rows afterwards —
+   `MatchQueryService` skips the squad lookup entirely once both lineup blocks exist, which
+   is exactly the condition `recordResult()` establishes.
+
+   Two follow-ons: `FriendlyChallengeCrudController`'s two squad fields now carry help text
+   saying the rows are pruned at full-time, because a bare `—` where a submitted XI used to
+   be reads as a bug worth chasing rather than as the intended archive behaviour; and
+   `FriendlyResolveSingleMatchTest` asserts both halves — that the rows go, and that the
+   match detail the client fetches is unaffected. It was the absence of that assertion that
+   let the method sit uncalled in the first place.
 
 ---
 
-## 5. Decision required before `development → master`
+## 5. Entry fees and the truncate — resolved, no decision required
 
-> [!WARNING]
-> `Version20261028001500` truncates the ten competition/friendly **instance** tables. The
-> clear was explicitly authorised and `dev` has already taken it. Production has **not**.
->
-> The review surfaced a consequence that was not weighed when it was authorised:
-> **`register()` deducts `entryFeePence` from `club.balance`, and the truncate refunds
-> nothing.** `entrant_reward_claim` rows go too, and `InboxMessage` rows that link to a
-> competition are left pointing at deleted rows. `down()` restores none of it.
->
-> Options, in increasing effort: accept it (tournaments were never player-facing, so the fees
-> may be test data only); refund `entryFeePence` to every non-withdrawn entrant in the
-> migration before truncating; or gate the truncate on the environment genuinely having no
-> live instances and backfill instead, as `Version20261027230000` does for entrants.
+**RESOLVED — moot. No decision needed, and the concern was mine to have caught earlier.**
+
+The review flagged that `Version20261028001500`'s truncate deletes entrants whose
+`entryFeePence` was already deducted from `club.balance`, refunding nothing, and I carried
+that as a blocker on `master` across several messages.
+
+It does not hold, because of the hybrid model this codebase is built on. `club.balance` in
+the backend is a **mirror, not the source of truth**. `SyncService` says so explicitly at the
+point of assignment — *"The client is the game engine. balance, totalCareerEarnings, and
+reputation are accepted as authoritative snapshots from the device"* — and the assignment is
+an absolute overwrite, `$club->setBalance($request->balance)`, not a delta. So the backend
+never held the authoritative balance, and truncating competitions cannot lose player money:
+the next sync reasserts whatever the device says.
+
+Two things worth keeping from the investigation anyway:
+
+1. **The fee default is 0 and nothing in the codebase ever sets it.** `entryFeePerRound` is
+   `default => 0`, and no seeder or fixture calls `setEntryFeePence()` — it is admin-set only.
+   So even under the wrong model, the exposure was whatever an admin had configured.
+2. **The server-side fee deduction is transient, and that may be worth a look on the client
+   side.** `register()` deducts, `withdraw()` and `cancel()` refund, and the next sync
+   overwrites all of it. The `balance >= :fee` guard is still meaningful as an affordability
+   check against the last-synced balance, but the deduction does not persist. If the client
+   does not also deduct locally, an entry fee is effectively free. That is in
+   `wunderkind-app`'s domain, not this repo's, so it is recorded here rather than acted on.
 
 ---
 
-## 6. Sequencing
+## 6. Sequencing — complete
 
-| Phase | Blocks | Why in this order |
+| Phase | State | Why in this order |
 |---|---|---|
-| 0 (§1) | `master` | Correctness. §1.1 can permanently stall a live bracket. |
-| 1 (§2.1) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
-| 2 (§3) | §3.1/§3.2/§3.4 **done**; §3.3 open | Bounds the work per tick, and restores prewarming in the form it should have had. |
-| 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
-| §5 | `master` | A data decision, not an engineering one. |
+| 0 (§1) | **done** | Correctness. §1.1 could permanently stall a live bracket. |
+| 1 (§2.1, §2.2, §2.3) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
+| 2 (§3) | **done** | §3.1/§3.2/§3.4 shipped; §3.3 audited and deliberately left inline, with the reasoning recorded. |
+| 3 (§4) | **done** | Fell out of Phase 2 cheaply, and the duplication turned out to be hiding a divergence. |
+| 4 (§7) | **done** | Replaced three guessed settings with measured ones, and corrected three of my own conclusions. |
+| §5 | **moot** | The backend's `club.balance` is a sync mirror, not the source of truth. |
+
+**Nothing in this plan is open.** What remains is a judgement to make with data rather than
+work to schedule: the health check's thresholds (180s overdue grace, 120s queue lag) are first
+guesses, and the 300s claim lease and the consumer's 50s/256M bounds came from a benchmark on
+one box. A week of `/var/log/competition-health-cron.log` under real load is what would justify
+changing any of them — or leaving them alone.
+
+---
+
+## 7. Phase 4 — measurement — DONE
+
+`app:competition:benchmark` drives the real services — registration including the
+capacity-fill lock, draw, resolve, and the bracket document build — and reports wall-clock,
+peak memory and payload composition per stage. It creates and deletes its own data and
+refuses to run with `APP_ENV=prod`.
+
+Two measurement artefacts had to be removed before any number meant anything, and both would
+have produced confidently wrong conclusions:
+
+1. **Filling via `spoofAllEntrants()` conflated club creation with registration.** It mints a
+   User and Club per entrant (name and appearance generation) before registering, reading as
+   "~612ms per registration". Separated: club creation is ~15ms each, registration is **~35ms
+   median**. A ~25x overstatement of the one path players actually wait on.
+2. **Cold start dominated every "worst" figure** — the first draw measured 526ms against 59ms
+   for identical work on the next round. Since the slowest-round figure drives the lease
+   recommendation, the harness now runs a discarded warm-up pass (`--no-warmup` keeps the
+   cold-start cost observable).
+
+### Measured, capacity 64, three concurrent competitions
+
+| Stage | Measured |
+|---|---|
+| registration | **~35ms median** (189 samples), worst 712ms |
+| capacity-fill lock (final registrant) | **871ms** — seeding, 6 rounds, 64 inbox messages |
+| draw per round | 333ms – 952ms |
+| resolve, 32-fixture round | **3,185 – 7,451ms** |
+| resolve, 16-fixture round | 1,762 – 4,518ms |
+| peak memory per resolve | **14 – 16MB** |
+| bracket document build | 127 – 2,959ms |
+| **bracket payload** | **~805KB** |
+
+### What it changed
+
+- **`CLAIM_LEASE_SECONDS` 900 → 300.** The worst full round is ~8.4s, so 15 minutes was ~107x
+  the worst case and cost 15 minutes to recover a crashed tick. 300s keeps ~36x headroom and
+  recovers within about five cron periods. Headroom deliberately generous: one machine, three
+  competitions, uncontended database.
+- **`competition-consume.sh`: `--limit=10` removed, `--memory-limit=256M` added.** The count
+  could never bind — ten worst-case resolves are ~75s against a 50s `--time-limit` — so it was
+  documenting a bound it did not enforce. The bounds are now on the two things that actually
+  vary, time and memory, with 256M sitting an order of magnitude above the measured 16MB peak.
+- **The `--limit` conclusion from the capacity-8 run was wrong**, and only the capacity-64 run
+  caught it: at capacity 8 the harness suggested ~267 messages would fit in the window, at
+  capacity 64 it is ~6. Small-bracket measurement would have justified *raising* the limit.
+
+### The payload finding, which corrected an assumption
+
+I had assumed `narrativePayload` dominated the bracket response. It does not. At capacity 32:
+
+| component | share |
+|---|---|
+| result lineups (all fixtures) | **41.5%** |
+| `result.narrativePayload` | 32.6% |
+| everything else | 21.7% |
+| `entrants[]` | 4.3% |
+
+So **~74% of the response is per-fixture match detail** — lineups and commentary — and
+`GET /api/matches/{id}` already serves exactly that per match, with the bracket already
+handing out `matchId` for every completed fixture. The recommendation was therefore stronger
+and different from the one I had been making: the bracket should not embed `result` detail at
+all, not merely drop the narrative.
+
+**Done.** The `result` block is removed, and re-measuring the same capacity-32 bracket puts
+the response at **59KB against 397KB — an 85% reduction**. Client contract:
+`docs/api/competition-bracket-no-embedded-result.md`. **Closed app-side with no behavioural
+change**: the tournament hub already rendered a tie from `score`/`winnerEntrantId`/`entrants[]`
+and passed `matchId` onward, its `Fixture` type never declared `result`, and the `MATCH_RESULT`
+push already routed to the match href. Only documentation and an already-dead type block needed
+touching. `CompetitionControllerTest` now also pins `fixtureId === matchId`, which is what the
+push routing actually relies on and was previously unasserted.
+
+`CompetitionResult::toClientSummary()` is deleted with it — it had no callers once the bracket
+stopped embedding it, since `MatchQueryService::serializeCupMatchDetail()` was already the
+real client shape. The two were a duplicated payload that tests had to cross-check against
+each other; that cross-check is gone because the duplication is.
+
+### What the benchmark could not show — both now closed
+
+The harness is single-process. It bounds work per message, which is what the lease and the
+consumer bounds need, but it demonstrated **nothing about contention** and left the settings
+it produced unobserved in production. Both gaps are closed:
+
+**Contention is now shown, not argued.** `tests/Service/Competition/CompetitionContentionTest.php`
+runs against **two genuinely separate DBAL connections**
+(`DriverManager::getConnection($em->getConnection()->getParams())`), not one session
+pretending to be two, and asserts: a second session cannot steal a live claim (0 rows
+affected); the rebuild advisory lock excludes another session *while a build is in flight*,
+asserted from inside the builder callback via `pg_try_advisory_lock` returning false and then
+shown released afterwards; and a second session's `FOR UPDATE` read already sees the committed
+status.
+
+**The pipeline now reports on itself.** `app:competition:health` (read-only, DBAL, `--json`,
+`--strict`) reports queue depth, consumer lag from the oldest undrained message, round claims
+held versus past the 300s lease, rounds due and unclaimed past a 180s grace, and response-cache
+coverage — scheduled every 5 minutes by `docker/competition-health.sh`. All of it is derived
+from rows that already exist, so there is no metrics store to keep and nothing to drift.
+
+Two things are deliberately *not* derived from state:
+- **Build time and payload size** are logged instead, as `competition.cache.build` at info with
+  `elapsedMs` and `bytes`, from the single place a document is written. Payload size in prod is
+  the one signal that would catch per-fixture match detail being re-embedded in a release — the
+  thing `app:competition:benchmark` guards locally and nothing watched in production.
+- **Cache hit rate** is a ratio over requests, not a fact about the present, so it is
+  `1 - (builds / GET /api/competitions/{id} requests)` over the same window, taking builds from
+  the log line above and requests from the access log. Logging every *hit* to recompute it would
+  put a log line on the hottest read path in the domain.
+
+The thresholds are first guesses measured against nothing, which is why the cron logs and pages
+nobody — see `docker/competition-health.sh`'s own header. Watch the log before wiring it to
+anything that wakes someone up.
+
+Writing the health check found a bug in itself, worth recording: `messenger_messages` is created
+lazily by the Doctrine transport, so on a fresh database — or a new deploy before the first
+dispatch — it does not exist, and the first run of the test suite errored on every case with
+"relation does not exist". A health check must never be the thing that fails, so the absence is
+now reported rather than swallowed into a zero: "no table" and "nothing queued" are different
+facts to an operator.
+
+---
+
+## 8. Original Phase 4 notes (superseded by the measurements above)
+
+Everything above rests on **reading the code and on unit tests that simulate contention** — a
+stale lease, a duplicate delivery, a deleted round, a locked competition. Nothing has run two
+tournaments in parallel against a real queue and a real consumer.
+
+That is a genuine limit on how much the rest of this plan should be trusted, and it is worth
+saying plainly rather than leaving implied by a green suite:
+
+1. **Nothing here is load-tested.** The claim "this scales to concurrent rolling tournaments"
+   is an argument, not a measurement.
+2. **No metric exists for the thing that started this.** There is no instrumentation on
+   bracket-document build time, cache hit rate, queue depth or consumer lag — so the first
+   signal that any of it is wrong would again be a 500 in a log.
+3. **The lease window (15 minutes) is a guess.** It was chosen to sit clear of observed
+   per-round work, but per-round work has not been timed.
+
+Worth doing before trusting this under real load: provision several concurrent competitions on
+dev, let them roll through their rounds, and watch `messenger_messages` depth for the
+`competition` queue, consumer wall-clock per message, and `competition_response_cache` hit
+rate. The lease window and the consumer's `--limit`/`--time-limit` should then be set from
+those numbers rather than from reasoning.

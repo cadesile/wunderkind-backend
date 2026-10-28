@@ -56,6 +56,7 @@ COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
 COPY docker/pool-consume.sh /usr/local/bin/pool-consume.sh
 COPY docker/competition-consume.sh /usr/local/bin/competition-consume.sh
+COPY docker/competition-health.sh /usr/local/bin/competition-health.sh
 COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
@@ -129,10 +130,21 @@ COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 #     tournament's next round is scheduled against wall-clock time, so a backlog
 #     here reads to players as a late draw rather than a slow background job, and
 #     must not queue behind an overnight pool top-up or a country regenerate.
-#     --limit is 10 because resolving one round runs the match engine plus
-#     narrative generation for up to 32 fixtures. The two competition-*-rounds
-#     ticks above only *queue* now, so they stay cheap however many tournaments
-#     are running concurrently; this is where that work actually happens.
+#     Bounded by --time-limit=50 and --memory-limit=256M, not a message count:
+#     app:competition:benchmark puts the slowest resolve at ~7.5s for a 32-fixture
+#     round, so the --limit=10 this used to carry could never bind (ten worst-case
+#     messages are ~75s, well past the time limit) — it documented a bound it did
+#     not enforce. The two competition-*-rounds ticks above only *queue* now, so
+#     they stay cheap however many tournaments are running concurrently; this is
+#     where that work actually happens.
+#   every 5 min — competition-health: runs app:competition:health --strict, a
+#     read-only report of queue depth, consumer lag, stale round claims and
+#     overdue rounds. Every bound in the competition pipeline came from a
+#     benchmark on one box and nothing in production checked whether those
+#     settings still held, so this is what notices a mis-tuning instead of a
+#     player noticing a late draw. Writes nothing and takes no locks, so it
+#     cannot itself break round processing. Logs only — see the script's own
+#     header for why it deliberately does not page anyone yet.
 #   hourly at :35 — starter-pool-audit: runs app:starter-pool:audit, which checks
 #     every enabled country's starter-pack supply (the same verdict
 #     app:starter-pack:check reports) and queues top-up chunks for any that fall
@@ -157,11 +169,12 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '* * * * *    /usr/local/bin/worldpack-consume.sh                >> /var/log/worldpack-consume-cron.log    2>&1' \
     '* * * * *    /usr/local/bin/pool-consume.sh                     >> /var/log/pool-consume-cron.log         2>&1' \
     '* * * * *    /usr/local/bin/competition-consume.sh              >> /var/log/competition-consume-cron.log  2>&1' \
+    '*/5 * * * *  /usr/local/bin/competition-health.sh               >> /var/log/competition-health-cron.log   2>&1' \
     '35 * * * *   /usr/local/bin/starter-pool-audit.sh               >> /var/log/starter-pool-audit-cron.log   2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/starter-pool-audit.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

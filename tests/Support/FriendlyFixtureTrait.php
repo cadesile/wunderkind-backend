@@ -48,25 +48,23 @@ trait FriendlyFixtureTrait
     }
 
     /**
+     * Splits exactly as the service does, by calling the same method rather than
+     * reimplementing it — a fixture that split by its own rules could seed a challenge the
+     * real write path cannot produce, which is the whole hazard this trait exists to avoid.
+     * Only the two fields postChallenge()/acceptChallenge() reassert from the live Club are
+     * reasserted here too.
+     *
      * @param array<string, mixed> $envelope
-     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>}
+     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>, clientSnapshotAt: ?string, playerCount: int, ovr: int}
      */
     private function splitFriendlyEnvelope(array $envelope, Club $club): array
     {
-        $clubData = is_array($envelope['club'] ?? null) ? $envelope['club'] : [];
-        $ovr      = CompetitionRegistrationService::computeStartingXiOvr($envelope);
+        $parts = CompetitionRegistrationService::splitSnapshot($envelope, $club);
 
-        $display                   = CompetitionRegistrationService::clubDisplayBlock($clubData, $club, (string) $club->getId(), $ovr);
-        $display['reputation']     = $club->getReputation();
-        $display['reputationTier'] = Tier::fromScore($club->getReputation())->value;
-        $display['ovr']            = $ovr;
+        $parts['display']['reputation']     = $club->getReputation();
+        $parts['display']['reputationTier'] = Tier::fromScore($club->getReputation())->value;
 
-        return [
-            'display' => $display,
-            'engine'  => CompetitionRegistrationService::clubEngineBlock($clubData),
-            'players' => array_values(array_filter(is_array($envelope['players'] ?? null) ? $envelope['players'] : [], 'is_array')),
-            'staff'   => array_values(array_filter(is_array($envelope['staff'] ?? null) ? $envelope['staff'] : [], 'is_array')),
-        ];
+        return $parts;
     }
 
     /**
