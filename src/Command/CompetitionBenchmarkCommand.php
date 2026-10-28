@@ -249,9 +249,14 @@ class CompetitionBenchmarkCommand extends Command
         $io->table(['comp', 'entrants', 'build ms', 'fingerprint ms', 'payload', 'peak MB'], $docRows);
 
         // Attribute the payload, because "the response is large" is not actionable but "this
-        // key is most of it" is. narrativePayload is embedded per fixture even though
-        // GET /api/matches/{id} already serves it per match, so this says what dropping it
-        // from the bracket would actually buy.
+        // key is most of it" is. This is what drove removing the per-fixture `result` block:
+        // at capacity 32 the lineups were 41.5% and the narrative 32.6% of a 397KB response,
+        // ~74% between them, all of it already served by GET /api/matches/{id}. Removing it
+        // took the same response to 59KB.
+        //
+        // The narrative and lineup rows now report 0, and that is the point — they are a
+        // regression signal. If either grows again, something has re-embedded match detail in
+        // the bracket.
         $last = end($competitions);
         if ($last !== false) {
             $doc   = $this->responseBuilder->sharedDocument($last);
@@ -434,8 +439,10 @@ class CompetitionBenchmarkCommand extends Command
                 $suggestedLease,
                 $worstRound > 0 ? (int) (($suggestedLease * 1000) / $worstRound) : 0,
             )],
-            ['competition-consume --limit' => sprintf(
-                'currently 10 — at the measured worst resolve, ~%d messages fit in the 50s time limit',
+            ['competition-consume bounds' => sprintf(
+                '--time-limit=50 and --memory-limit=256M. At the measured worst resolve ~%d messages fit the time limit, '
+                . 'which is why the old --limit=10 was replaced: a count either never binds or binds arbitrarily. '
+                . 'Peak memory per resolve above is what --memory-limit is sized against.',
                 $suggestedLimit,
             )],
         );

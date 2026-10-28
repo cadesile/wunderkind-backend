@@ -26,6 +26,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Envelope;
 use App\Tests\Support\EntrantFixtureTrait;
 use App\Repository\Competition\CompetitionResultAuditRepository;
+use App\Service\Competition\MatchQueryService;
 
 class CompetitionResultsServiceTest extends KernelTestCase
 {
@@ -386,13 +387,18 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertNotEmpty($auditRow->getEventLogJson(), 'the event log moved to the audit row with it');
         $fullPayload = json_decode($result->getFullPayloadPretty($auditRow), true);
         $this->assertIsArray($fullPayload['computationAuditJson'] ?? null);
-        $clientSummary = $result->toClientSummary();
-        $this->assertArrayNotHasKey('computationAudit', $clientSummary);
-        $this->assertArrayNotHasKey('computationAuditJson', $clientSummary);
+        // Asserted against the payload the client now actually receives. This used to check
+        // CompetitionResult::toClientSummary(), which was the bracket's per-fixture `result`
+        // block; the bracket no longer carries one, so the client-facing shape for a played
+        // fixture is the match detail endpoint's.
+        $clientPayload = self::getContainer()->get(MatchQueryService::class)->serializeCupMatchDetail($fixture);
+        $this->assertArrayNotHasKey('computationAudit', $clientPayload);
+        $this->assertArrayNotHasKey('computationAuditJson', $clientPayload);
+        $this->assertArrayNotHasKey('eventLogJson', $clientPayload);
     }
 
     /**
-     * The client summary of a result must build with no audit row present at all.
+     * A played fixture's client payload must build with no audit row present at all.
      *
      * This is the invariant the audit split protects, and the only way to prove it: an
      * assertion that `computationAudit` is absent from the payload passes whether or not the
@@ -416,8 +422,8 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $result = $this->em->getRepository(\App\Entity\Competition\CompetitionResult::class)->find($result->getId());
         $this->assertNotNull($result);
 
-        $summary = $result->toClientSummary();
-        $this->assertSame($result->getHomeScore(), $summary['homeScore']);
+        $summary = self::getContainer()->get(MatchQueryService::class)->serializeCupMatchDetail($fixture);
+        $this->assertSame($result->getHomeScore(), $summary['score']['home']);
         // Counted against the stored lineup rather than a fixed number: this fixture seeds a
         // minimal squad, and the point is that the lineup survives the audit row's absence,
         // not how big it is.

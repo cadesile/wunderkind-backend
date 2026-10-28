@@ -337,19 +337,19 @@ class MatchControllerTest extends WebTestCase
         $this->assertCount(11, $completedMatch['homeLineup']);
         $this->assertSame('curly', $completedMatch['homeLineup'][0]['appearance']['hair'] ?? null);
 
+        // The bracket is checked here for what it does NOT carry. Every club field asserted
+        // above used to be cross-checked against the bracket's per-fixture `result` block,
+        // because the same payload existed in both places and could drift. The bracket no
+        // longer embeds match detail — it carries the scoreline and a `matchId` — so there is
+        // nothing left to keep in sync, and the assertions above already cover the shape at
+        // the endpoint that serves it.
         $this->authenticatedRequest('GET', '/api/competitions/' . $instanceId);
         $this->assertResponseIsSuccessful();
-        $compDetail = json_decode((string) $this->client->getResponse()->getContent(), true);
-        $firstFixtureResult = $compDetail['rounds'][0]['fixtures'][0]['result'];
-        $this->assertNotNull($firstFixtureResult);
-        $this->assertSame('stripes', $firstFixtureResult['homeClub']['homeKitConfig']['kit'] ?? null);
-        $this->assertSame('plain', $firstFixtureResult['homeClub']['awayKitConfig']['kit'] ?? null);
-        $this->assertSame('crest', $firstFixtureResult['homeClub']['badgeConfig']['badgeShape'] ?? null);
-        $this->assertSame('crest', $firstFixtureResult['homeClub']['badgeShape'] ?? null);
-        $this->assertSame('crest', $firstFixtureResult['homeClub']['identity']['badgeShape'] ?? null);
-        $this->assertSame(4, $firstFixtureResult['homeClub']['stadium']['north'] ?? null);
-        $this->assertIsInt($firstFixtureResult['homeClub']['reputation']);
-        $this->assertIsString($firstFixtureResult['homeClub']['tier']);
-        $this->assertSame('curly', $firstFixtureResult['homeLineup'][0]['appearance']['hair'] ?? null);
+        $compDetail   = json_decode((string) $this->client->getResponse()->getContent(), true);
+        $firstFixture = $compDetail['rounds'][0]['fixtures'][0];
+
+        $this->assertArrayNotHasKey('result', $firstFixture, 'the bracket must not re-embed match detail');
+        $this->assertNotNull($firstFixture['matchId'], 'the bracket must hand out the handle to fetch detail with');
+        $this->assertIsInt($firstFixture['score']['home'], 'the scoreline stays in the bracket so it renders unaided');
     }
 }

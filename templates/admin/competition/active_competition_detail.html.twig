@@ -372,12 +372,28 @@
                                                         <div class="text-muted small fw-semibold mb-1">
                                                             <i class="fa fa-mobile-screen me-1"></i>What the device receives
                                                         </div>
-                                                        <pre class="small bg-body p-2 mb-0" style="max-height: 320px; overflow:auto;">{{ result.clientSummaryPretty }}</pre>
-                                                        <p class="text-muted small mb-0 mt-1">
-                                                            The event log, starting XI, ratings, engine, and timestamp
-                                                            above are admin-only — the device gets the score plus each
-                                                            club's display data (name, kit colours, badge, stadium)
-                                                            so it can render kits and names for this result.
+                                                        {#
+                                                            This used to inline CompetitionResult::toClientSummary(),
+                                                            which was also the bracket's per-fixture `result` block. The
+                                                            bracket no longer carries that — match detail is served by
+                                                            GET /api/matches/{id} — so inlining it here would have shown
+                                                            a payload the device does not actually receive. Linking the
+                                                            real endpoint keeps the panel's promise without this screen
+                                                            serialising every fixture in the bracket to do it.
+                                                        #}
+                                                        <a class="btn btn-sm btn-outline-secondary"
+                                                           href="/api/matches/{{ fixture.id|ea_as_string }}"
+                                                           target="_blank" rel="noopener">
+                                                            <i class="fa fa-arrow-up-right-from-square me-1"></i>GET /api/matches/{{ fixture.id|ea_as_string|slice(0, 8) }}…
+                                                        </a>
+                                                        <p class="text-muted small mb-0 mt-2">
+                                                            The event log, derivation audit, starting XI with ratings,
+                                                            engine and timestamp above are admin-only. The device gets
+                                                            the score in the bracket, and fetches full match detail —
+                                                            both lineups, the commentary timeline and each club's
+                                                            display data — from the match endpoint above. The bracket
+                                                            stopped embedding that per fixture because it measured at
+                                                            ~74% of an 805KB response at capacity 64.
                                                         </p>
                                                     </div>
                                                 </div>

@@ -388,9 +388,11 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $this->assertStringContainsString('"eventLogJson"', $crawler->html());
         $this->assertStringContainsString('"engineIdentifier"', $crawler->html());
 
-        // The client-summary block is exactly toClientSummary()'s output — score only.
-        $this->assertStringContainsString($firstResult->getClientSummaryPretty(), $crawler->html());
-        $this->assertStringNotContainsString('"eventLogJson"', $firstResult->getClientSummaryPretty());
+        // The "what the device receives" panel links the real client endpoint rather than
+        // inlining a payload. It used to inline CompetitionResult::toClientSummary(), which
+        // was also the bracket's per-fixture `result` block; the bracket no longer carries
+        // that, so inlining it here would have displayed something the device never receives.
+        $this->assertStringContainsString('/api/matches/', $crawler->html());
     }
 
     public function testIndexPageRowClicksThroughToDetail(): void

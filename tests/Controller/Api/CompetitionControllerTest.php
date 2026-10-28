@@ -666,11 +666,13 @@ class CompetitionControllerTest extends WebTestCase
     }
 
     /**
-     * Regression test: show() used to hardcode 'result' => null for every fixture
-     * regardless of whether CompetitionRoundProcessorService had already produced a
-     * CompetitionResult — round 1 would complete and advance a winner into round 2, but
-     * the client-facing bracket view still showed "result not yet available" for it
-     * forever. Fixed by batch-fetching CompetitionResult rows in show().
+     * The bracket exposes played scores, and match detail lives behind `matchId`.
+     *
+     * Originally a regression test for show() hardcoding `result => null` so a completed
+     * round showed "result not yet available" forever. The bracket no longer carries a
+     * `result` block at all — detail is served per match — so the test now asserts both
+     * halves of that split: the bracket carries enough to draw itself with no further
+     * request, and GET /api/matches/{id} carries everything that moved.
      */
     public function testShowIncludesResultsOnceRoundsAreProcessed(): void
     {
@@ -733,30 +735,56 @@ class CompetitionControllerTest extends WebTestCase
         $this->assertSame('FINAL', $runningEntry['nextRoundLabel']);
         $this->assertSame($body['nextRoundAt'], $runningEntry['nextRoundAt']);
 
+        // --- Bracket level: scores and a handle, no embedded match detail ---------------
+        //
+        // The bracket used to carry a full `result` block per fixture — both lineups, the
+        // commentary timeline and the frozen club copies. app:competition:benchmark measured
+        // that at ~74% of an 805KB response at capacity 64, and GET /api/matches/{id} already
+        // served exactly the same thing, so the bracket now carries the scoreline and the
+        // `matchId` to fetch detail with. These assertions are the contract: enough to draw a
+        // bracket with no further request, and nothing more.
         $round1Fixtures = $body['rounds'][0]['fixtures'];
         $this->assertNotEmpty($round1Fixtures);
+
+        $matchIds = [];
         foreach ($round1Fixtures as $fixture) {
             $this->assertSame('complete', strtolower($fixture['status']));
-            $this->assertNotNull($fixture['result'], 'A completed fixture must expose its result, not null.');
-            $this->assertIsInt($fixture['result']['homeScore']);
-            $this->assertIsInt($fixture['result']['awayScore']);
+            $this->assertArrayNotHasKey('result', $fixture, 'the bracket must not embed per-fixture match detail');
 
-            // Club data must mirror exactly what was stored, so the client can render
-            // kits/badges/names without a second lookup.
-            $this->assertSame($fixture['home']['clubName'], $fixture['result']['homeClub']['name']);
-            $this->assertSame($fixture['away']['clubName'], $fixture['result']['awayClub']['name']);
+            // A bracket is renderable from this alone.
+            $this->assertIsInt($fixture['score']['home']);
+            $this->assertIsInt($fixture['score']['away']);
+            $this->assertArrayHasKey('extraTime', $fixture['score']);
+            $this->assertNotNull($fixture['winnerEntrantId']);
+            $this->assertNotEmpty($fixture['home']['clubName']);
+            $this->assertNotEmpty($fixture['away']['clubName']);
 
-            // No club id in the client-facing payload — a tournament opponent may not exist
-            // in any local store, so an id would be dead weight at best (see
-            // docs/api/tournament-match-result-payload.md).
-            $this->assertArrayNotHasKey('id', $fixture['result']['homeClub']);
-            $this->assertArrayNotHasKey('id', $fixture['result']['awayClub']);
+            // And this is the handle for everything the bracket no longer carries.
+            $this->assertNotNull($fixture['matchId'], 'a completed fixture must expose a matchId to fetch detail with');
+            $matchIds[] = $fixture['matchId'];
+        }
 
-            $this->assertArrayHasKey('narrativePayload', $fixture['result']);
-            $this->assertNotEmpty($fixture['result']['narrativePayload'], 'A freshly generated result must carry a non-empty narrative timeline.');
+        // --- Match level: the detail that moved, asserted where it now lives --------------
+        foreach ($matchIds as $matchId) {
+            $this->authenticatedRequest('GET', '/api/matches/' . $matchId);
+            $this->assertResponseIsSuccessful();
+            $match = $this->responseJson();
 
-            foreach ($fixture['result']['narrativePayload'] as $item) {
-                $this->assertArrayHasKey('side', $item, 'Narrative events identify a side (HOME/AWAY/null), never a club id.');
+            $this->assertSame('cup', $match['kind']);
+            $this->assertIsInt($match['score']['home']);
+            $this->assertIsInt($match['score']['away']);
+
+            // Club display data, so the client renders kits/badges/names without a further
+            // lookup — and with no club id, because a tournament opponent may not exist in
+            // any local store (see docs/api/tournament-match-result-payload.md).
+            $this->assertNotEmpty($match['home']['clubName']);
+            $this->assertNotEmpty($match['away']['clubName']);
+            $this->assertArrayNotHasKey('id', $match['home']);
+            $this->assertArrayNotHasKey('id', $match['away']);
+
+            $this->assertNotEmpty($match['narrativePayload'], 'a freshly generated result must carry a non-empty narrative timeline');
+            foreach ($match['narrativePayload'] as $item) {
+                $this->assertArrayHasKey('side', $item, 'narrative events identify a side (HOME/AWAY/null), never a club id');
                 $this->assertArrayNotHasKey('teamId', $item);
                 if ($item['side'] !== null) {
                     $this->assertContains($item['side'], ['HOME', 'AWAY']);
@@ -764,9 +792,9 @@ class CompetitionControllerTest extends WebTestCase
             }
 
             // The starting XI, with this match's goals/assists/cards/rating, no player id.
-            $this->assertCount(11, $fixture['result']['homeLineup']);
-            $this->assertCount(11, $fixture['result']['awayLineup']);
-            foreach (array_merge($fixture['result']['homeLineup'], $fixture['result']['awayLineup']) as $player) {
+            $this->assertCount(11, $match['homeLineup']);
+            $this->assertCount(11, $match['awayLineup']);
+            foreach (array_merge($match['homeLineup'], $match['awayLineup']) as $player) {
                 $this->assertArrayNotHasKey('id', $player);
                 $this->assertArrayHasKey('name', $player);
                 $this->assertArrayHasKey('position', $player);
@@ -781,21 +809,11 @@ class CompetitionControllerTest extends WebTestCase
                 $this->assertLessThanOrEqual(10.0, $player['rating']);
             }
 
-            // Self-contained: a result handed to MatchUX on its own (not walked down from
-            // this same /api/competitions/{id} response) still knows what it's a result of.
-            // tournament/round mirror this endpoint's own top-level/round-level fields exactly.
-            $this->assertSame((string) $instance->getId(), $fixture['result']['tournament']['instanceId']);
-            $this->assertSame($body['templateName'], $fixture['result']['tournament']['templateName']);
-            $this->assertSame($body['status'], $fixture['result']['tournament']['status']);
-            $this->assertSame($body['startsAt'], $fixture['result']['tournament']['startsAt']);
-            $this->assertSame($body['endsAt'], $fixture['result']['tournament']['endsAt']);
-
-            $this->assertSame($body['rounds'][0]['roundIndex'], $fixture['result']['round']['roundIndex']);
-            $this->assertSame($body['rounds'][0]['label'], $fixture['result']['round']['label']);
-            $this->assertSame($body['rounds'][0]['status'], $fixture['result']['round']['status']);
-            $this->assertSame($body['rounds'][0]['scheduledAt'], $fixture['result']['round']['scheduledAt']);
-
-            $this->assertSame($fixture['fixtureId'], $fixture['result']['fixtureId']);
+            // Self-contained: a match handed to MatchUX on its own still knows what it is a
+            // match of, without walking back up to the bracket.
+            $this->assertSame((string) $instance->getId(), $match['competition']['instanceId']);
+            $this->assertSame($body['templateName'], $match['competition']['templateName']);
+            $this->assertArrayHasKey('roundLabel', $match['competition']);
         }
     }
 

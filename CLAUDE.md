@@ -270,6 +270,17 @@ committing it before a failed flush would leave a live bracket unresolvable. `*_
 are deliberately **not** pruned: an audit answers "how was this result derived" about a
 match already played, which is exactly when someone asks.
 
+**The bracket does not embed per-fixture match detail.** `rounds[].fixtures[]` carries
+`score`, `matchId`, `home`, `away` and the winner — no `result` block. It used to carry both
+lineups, the commentary timeline and frozen club copies per fixture, which
+`app:competition:benchmark` measured at ~74% of a 397KB capacity-32 response (lineups 41.5%,
+narrative 32.6%); removing it took that response to 59KB. `GET /api/matches/{id}` already
+served exactly the same thing, and `matchId` is the handle. `CompetitionResult::toClientSummary()`
+is gone with it — `MatchQueryService::serializeCupMatchDetail()` was always the real client
+shape. Client contract: `docs/api/competition-bracket-no-embedded-result.md`. **Do not
+re-embed match detail here**; the benchmark's payload breakdown reports 0 bytes for narrative
+and lineups specifically so a regression shows up.
+
 **Round processing is queued, not inline.** `competition-draw-rounds` and
 `competition-resolve-rounds` only *dispatch* now — one `DrawCompetitionRoundMessage` /
 `ResolveCompetitionRoundMessage` per due round onto the **`competition`** transport, drained

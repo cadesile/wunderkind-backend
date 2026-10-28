@@ -4,7 +4,6 @@ namespace App\Entity\Competition;
 
 use App\Enum\Competition\MatchEngineIdentifier;
 use App\Repository\Competition\CompetitionResultRepository;
-use App\Service\Competition\CompetitionRegistrationService;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
@@ -43,7 +42,7 @@ class CompetitionResult
      * a historical record (same reasoning as CompetitionFixture's SET NULL entrant FKs),
      * so it must not depend on the entrant/club rows still existing or being unchanged
      * later, and it's exactly the shape the client needs to render kits/names for this
-     * match without a second lookup — see toClientSummary().
+     * match without a second lookup.
      *
      * @var array<string, mixed>
      */
@@ -56,9 +55,10 @@ class CompetitionResult
 
     /**
      * The starting XI as fielded, each with this match's goals/assists/cards/rating —
-     * see DeterministicEngine::buildLineup(). Sent to clients via toClientSummary()
-     * (id stripped there — see stripPlayerId()); stored here with id intact for the
-     * admin-only "full stored payload" debug view.
+     * see DeterministicEngine::buildLineup(). Served to clients by
+     * MatchQueryService::serializeCupMatchDetail() behind GET /api/matches/{id} — no longer
+     * embedded per fixture in the bracket response, which carried 63 of them at capacity 64.
+     * Stored with id intact for the admin-only "full stored payload" view.
      *
      * @var list<array{id: ?string, name: ?string, position: ?string, goals: int, assists: int, yellowCards: int, redCards: int, rating: float}>
      */
@@ -72,7 +72,6 @@ class CompetitionResult
     /** @var array|null Full generated commentary timeline — see MatchNarrativeGeneratorService. Null for results generated before this feature existed. */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $narrativePayload = null;
-
 
     /**
      * Every Competition fixture is a knockout-bracket match and can never end level — these
@@ -169,118 +168,6 @@ class CompetitionResult
         return $this->narrativePayload === null
             ? null
             : (json_encode($this->narrativePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
-    }
-
-    /**
-     * The exact shape CompetitionController::show() sends to a real client for this
-     * fixture's "result" field — single source of truth so the admin "what the device
-     * receives" view and the public API can never drift apart (see the show() bug where
-     * this was hardcoded to null and silently never matched what was actually stored).
-     * homeClub/awayClub mirror what's stored (see $homeClubJson's docblock) minus `id` — see
-     * stripClubId() — so the client can render kits/badges/names without a second lookup, and
-     * without an unresolvable UUID sitting in the payload inviting a future maintainer to use
-     * it as a matching key (a tournament opponent may not exist in any local store; the only
-     * safe way to say "which club" in narrativePayload is `side`, not an id — see
-     * MatchNarrativeGeneratorService and wunderkind-app's docs/api/tournament-match-result-payload.md,
-     * which this shape is contracted against (this repo's own push-notification spec lives at
-     * .context/stages/04_interfaces/output/push-notifications.md).
-     * narrativePayload is the full generated commentary timeline — null for results generated
-     * before this field existed, which the client should treat as an absent/optional feature,
-     * not an error.
-     *
-     * wentToExtraTime/wentToPenalties/penaltyHomeScore/penaltyAwayScore record how a level
-     * scoreline was actually settled — see this entity's field docblock. penaltyHomeScore/
-     * penaltyAwayScore are null unless wentToPenalties is true.
-     *
-     * homeLineup/awayLineup are the starting XI as fielded, each with this match's
-     * goals/assists/cards/rating — same id-stripping treatment as homeClub/awayClub (a
-     * tournament opponent's players aren't in any local store either, so a player `id` is the
-     * same dead weight an unresolvable club `id` would be).
-     *
-     * tournament/round/fixtureId make this payload self-contained: a result handed to
-     * `MatchUX` on its own (not walked down from `GET /api/competitions/{id}`'s nested
-     * rounds/fixtures tree) still knows what it's a result *of*. `tournament`/`round` mirror
-     * CompetitionController::show()'s own top-level/round-level field names and shapes
-     * exactly — same values, same keys, no separate vocabulary to keep in sync by hand.
-     *
-     * @return array{homeScore: int, awayScore: int, homeClub: array<string, mixed>, awayClub: array<string, mixed>, homeLineup: list<array<string, mixed>>, awayLineup: list<array<string, mixed>>, narrativePayload: ?array, wentToExtraTime: bool, wentToPenalties: bool, penaltyHomeScore: ?int, penaltyAwayScore: ?int, tournament: array<string, mixed>, round: array<string, mixed>, fixtureId: string}
-     */
-    public function toClientSummary(): array
-    {
-        $round             = $this->fixture->getRound();
-        $activeCompetition = $round->getActiveCompetition();
-        $homeEntrant       = $this->fixture->getHomeEntrant();
-        $awayEntrant       = $this->fixture->getAwayEntrant();
-
-        // The entrant's stored display block is read only as a base layer, exactly as its
-        // snapshot's `club` object used to be, with this result's own frozen copy winning on
-        // every key. That ordering is what lets a result outlive its entrant: when the
-        // fixture's SET NULL entrant FK is already null, the frozen copy stands alone.
-        $homeSnapshotClub = $homeEntrant?->getClubDisplayJson() ?? [];
-        $awaySnapshotClub = $awayEntrant?->getClubDisplayJson() ?? [];
-
-        $homeClub = $this->stripClubId(CompetitionRegistrationService::normalizeClubData(array_merge($homeSnapshotClub, $this->homeClubJson), $homeEntrant?->getClub()));
-        $awayClub = $this->stripClubId(CompetitionRegistrationService::normalizeClubData(array_merge($awaySnapshotClub, $this->awayClubJson), $awayEntrant?->getClub()));
-
-        return [
-            'homeScore'        => $this->homeScore,
-            'awayScore'        => $this->awayScore,
-            'homeClub'         => $homeClub,
-            'awayClub'         => $awayClub,
-            // No snapshot backfill: the engine writes each player's `appearance` straight
-            // into the lineup row (DeterministicEngine::calculatePerformance), so a stored
-            // lineup is already complete. Reading the entrant's squad to re-fill a key that
-            // is present is what made a bracket decode every squad it rendered.
-            'homeLineup'       => CompetitionRegistrationService::formatLineupForClient($this->homeLineupJson),
-            'awayLineup'       => CompetitionRegistrationService::formatLineupForClient($this->awayLineupJson),
-            'narrativePayload' => $this->narrativePayload,
-            'wentToExtraTime'  => $this->wentToExtraTime,
-            'wentToPenalties'  => $this->wentToPenalties,
-            'penaltyHomeScore' => $this->penaltyHomeScore,
-            'penaltyAwayScore' => $this->penaltyAwayScore,
-            'tournament'       => [
-                'instanceId'   => (string) $activeCompetition->getId(),
-                'templateName' => $activeCompetition->getTemplate()->getName(),
-                'status'       => $activeCompetition->getStatus()->value,
-                'startsAt'     => $activeCompetition->getStartsAt()?->format(DATE_ATOM),
-                'endsAt'       => $activeCompetition->getEndsAt()?->format(DATE_ATOM),
-            ],
-            'round' => [
-                'roundIndex'  => $round->getRoundIndex(),
-                'label'       => $round->getLabel(),
-                'status'      => $round->getStatus()->value,
-                'scheduledAt' => $round->getScheduledAt()->format(DATE_ATOM),
-            ],
-            'fixtureId' => (string) $this->fixture->getId(),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $player
-     * @return array<string, mixed>
-     */
-    private function stripPlayerId(array $player): array
-    {
-        unset($player['id']);
-
-        return $player;
-    }
-
-    /**
-     * @param array<string, mixed> $club
-     * @return array<string, mixed>
-     */
-    private function stripClubId(array $club): array
-    {
-        unset($club['id']);
-
-        return $club;
-    }
-
-    /** Read-only virtual accessor for the admin detail view: exactly what toClientSummary() returns, pretty-printed. */
-    public function getClientSummaryPretty(): string
-    {
-        return json_encode($this->toClientSummary(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 
     /**

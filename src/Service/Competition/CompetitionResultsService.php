@@ -479,9 +479,12 @@ class CompetitionResultsService
         // `data` payload for both, so client-side handling (fetch by fixtureId) is unaffected by
         // which side received it. FCM data values must be strings and the message has a hard
         // ~4KB size cap, so (unlike this method's other side effects) the full result payload
-        // isn't embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT: the
-        // client re-fetches via GET /api/competitions/{id}, whose result field is exactly
-        // CompetitionResult::toClientSummary()'s shape.
+        // isn't embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT. The
+        // client re-fetches with the `fixtureId` below, from **GET /api/matches/{fixtureId}**.
+        // It used to be told to re-fetch GET /api/competitions/{id} and read that fixture's
+        // `result` block; the bracket no longer carries one, because per-fixture match detail
+        // measured at ~74% of an 805KB response at capacity 64 and the match endpoint already
+        // served the same thing.
         $scoreline     = sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName());
         $competitionId = (string) $round->getActiveCompetition()->getId();
         $fixtureId     = (string) $fixture->getId();

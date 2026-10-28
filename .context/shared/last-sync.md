@@ -602,3 +602,15 @@
   per-fixture detail that `GET /api/matches/{id}` already serves, which makes the case for the
   bracket not embedding `result` at all rather than merely dropping narrative. Still not
   measured: contention (single-process harness) and production instrumentation.
+
+- **New pass (2026-10-28), on top of commit 3ff2159** (uncommitted).
+  **Stages touched:** 04_interfaces (`routes.md`). Acted on Phase 4's payload finding:
+  `GET /api/competitions/{id}` no longer embeds a per-fixture `result` block. Measured 397KB →
+  **59KB** on the same capacity-32 bracket (85%). `CompetitionResult::toClientSummary()` and
+  its private helpers are deleted — no callers once the bracket stopped embedding them, and
+  `MatchQueryService::serializeCupMatchDetail()` was always the real client shape. The admin
+  "what the device receives" panel now links `/api/matches/{id}` instead of inlining a payload
+  the device no longer gets. **Requires an app change** — client contract and key-mapping
+  table in `docs/api/competition-bracket-no-embedded-result.md`; the `MATCH_RESULT` push
+  already carries the `fixtureId` to fetch with. Test coverage moved rather than deleted: the
+  payload-shape assertions now run against the match endpoint.

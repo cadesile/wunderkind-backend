@@ -366,10 +366,20 @@ I had assumed `narrativePayload` dominated the bracket response. It does not. At
 
 So **~74% of the response is per-fixture match detail** — lineups and commentary — and
 `GET /api/matches/{id}` already serves exactly that per match, with the bracket already
-handing out `matchId` for every completed fixture. The recommendation is therefore stronger
+handing out `matchId` for every completed fixture. The recommendation was therefore stronger
 and different from the one I had been making: the bracket should not embed `result` detail at
-all, not merely drop the narrative. That is an app-side contract change and remains the
-largest single win available on this endpoint.
+all, not merely drop the narrative.
+
+**Done.** The `result` block is removed, and re-measuring the same capacity-32 bracket puts
+the response at **59KB against 397KB — an 85% reduction**. Client contract and migration
+table: `docs/api/competition-bracket-no-embedded-result.md`. **The app must be updated**: where
+it read `fixtures[].result` it needs `GET /api/matches/{matchId}`, which the push payload
+already carries the id for.
+
+`CompetitionResult::toClientSummary()` is deleted with it — it had no callers once the bracket
+stopped embedding it, since `MatchQueryService::serializeCupMatchDetail()` was already the
+real client shape. The two were a duplicated payload that tests had to cross-check against
+each other; that cross-check is gone because the duplication is.
 
 ### Still not measured
 
