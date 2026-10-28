@@ -245,20 +245,7 @@ class CompetitionDrawService
      */
     private function hasUnstoredSubmissions(ActiveCompetition $activeCompetition): bool
     {
-        return (int) $this->em->getConnection()->fetchOne(
-            <<<'SQL'
-            SELECT COUNT(*)
-              FROM competition_entrant
-             WHERE active_competition_id = :competitionId
-               AND status <> :withdrawn
-               AND squad_state <> :stored
-            SQL,
-            [
-                'competitionId' => $activeCompetition->getId()->toRfc4122(),
-                'withdrawn'     => CompetitionEntrantStatus::WITHDRAWN->value,
-                'stored'        => EntrantSquadState::STORED->value,
-            ],
-        ) > 0;
+        return $this->entrantRepository->countUnstoredForCompetition($activeCompetition) > 0;
     }
 
     private function drawRound(CompetitionRound $round, \DateTimeImmutable $now): void

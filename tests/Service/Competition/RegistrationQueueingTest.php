@@ -270,4 +270,110 @@ class RegistrationQueueingTest extends KernelTestCase
 
         self::assertSame('failed', EntrantSquadState::FAILED->clientValue());
     }
+
+    /**
+     * The question the failed-state UI hangs on: can the player act, or only be told?
+     *
+     * They can. A failed submission leaves `status` at REGISTERED — squadState is a separate
+     * axis — so withdraw()'s own guard matches and the entry fee refunds down the ordinary
+     * path, with no special-casing for this state.
+     */
+    public function testAFailedEntryCanBeWithdrawnAndIsRefunded(): void
+    {
+        $bus      = $this->spyBus();
+        $instance = $this->competition();
+        $club     = $this->club('Doomed FC');
+        $service  = $this->serviceWith($bus);
+
+        $instance->getTemplate()->setEntryFeePence(50_000);
+        $this->em->flush();
+        $balanceBefore = $club->getBalance();
+
+        $service->register($instance, $club, $this->envelope($club, 'Doomed FC'));
+        $service->markSubmissionFailed($bus->dispatched[0]->entrantId);
+        $this->em->clear();
+
+        $club     = $this->em->getRepository(Club::class)->find($club->getId());
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+
+        $entrant = $service->withdraw($instance, $club);
+
+        self::assertSame(\App\Enum\Competition\CompetitionEntrantStatus::WITHDRAWN, $entrant->getStatus());
+        self::assertSame($balanceBefore, $club->getBalance(), 'the entry fee comes back exactly as for any other withdrawal');
+
+        // And withdrawing actually clears the blockage, rather than leaving a dead row that
+        // still holds the competition hostage.
+        self::assertSame(0, $this->entrantRepository->countUnstoredForCompetition($instance));
+    }
+
+    /**
+     * The reason the above is reachable at all: a competition must not lock while any entrant
+     * is unstored.
+     *
+     * Locking sets the competition SCHEDULED and entrants ACTIVE, and withdraw() requires
+     * REGISTERING + REGISTERED — so locking over an unstored entrant would wedge the
+     * competition permanently with no player-side remedy. Deferring the lock is what keeps a
+     * failure recoverable.
+     */
+    public function testAFullCompetitionDoesNotLockWhileAnEntrantIsUnstored(): void
+    {
+        $bus      = $this->spyBus();
+        $instance = $this->competition(4);
+        $service  = $this->serviceWith($bus);
+
+        foreach (['Lock A', 'Lock B', 'Lock C', 'Lock D'] as $name) {
+            $club = $this->club($name);
+            $service->register($instance, $club, $this->envelope($club, $name));
+        }
+        $this->em->clear();
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+
+        self::assertSame(
+            \App\Enum\Competition\ActiveCompetitionStatus::REGISTERING,
+            $instance->getStatus(),
+            'full on slots, but every squad is still pending — locking here would strand them',
+        );
+
+        // Store three of the four: still not lockable.
+        foreach (array_slice($bus->dispatched, 0, 3) as $message) {
+            $service->storeSubmission($this->entrantRepository->find($message->entrantId), $message->envelope);
+        }
+        $this->em->clear();
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+        self::assertSame(\App\Enum\Competition\ActiveCompetitionStatus::REGISTERING, $instance->getStatus());
+
+        // The last one completes the field, and the lock lands with it.
+        $last = $bus->dispatched[3];
+        $service->storeSubmission($this->entrantRepository->find($last->entrantId), $last->envelope);
+        $this->em->clear();
+
+        $instance = $this->em->getRepository(ActiveCompetition::class)->find($instance->getId());
+        self::assertSame(
+            \App\Enum\Competition\ActiveCompetitionStatus::SCHEDULED,
+            $instance->getStatus(),
+            'the final stored submission is what locks the competition',
+        );
+    }
+
+    /** A resubmit writes its rows inline, so it must clear a FAILED flag rather than leave it describing data that now exists. */
+    public function testResubmittingClearsAFailedState(): void
+    {
+        $bus      = $this->spyBus();
+        $instance = $this->competition();
+        $club     = $this->club('Recovered FC');
+        $service  = $this->serviceWith($bus);
+
+        $service->register($instance, $club, $this->envelope($club, 'Recovered FC'));
+        $service->markSubmissionFailed($bus->dispatched[0]->entrantId);
+        $this->em->clear();
+
+        $entrant = $this->entrantRepository->find($bus->dispatched[0]->entrantId);
+        self::assertSame(EntrantSquadState::FAILED, $entrant->getSquadState());
+
+        $service->resubmit($entrant, $this->envelope($entrant->getClub(), 'Recovered FC'));
+        $this->em->clear();
+
+        $entrant = $this->entrantRepository->find($bus->dispatched[0]->entrantId);
+        self::assertSame(EntrantSquadState::STORED, $entrant->getSquadState(), 'the rows are written, so the flag must say so');
+    }
 }
