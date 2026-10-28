@@ -526,3 +526,20 @@
 - **Commit:** dfc8035a8cb9f014abcf5777da6840bc1f18f7ef
 - **Date:** 2026-09-18
 - **Stages touched this pass:** 01_overview, 02_architecture, 03_data, 04_interfaces, 05_ui, 06_documentation, 07_synthesis (full warm — rebuilt from scratch after retiring the old generator-script-based `.context/`, previous content preserved in this repo's `git stash`)
+
+- **New pass (2026-10-28), on top of commit 8b0403a** (step 3 uncommitted).
+  **Stages touched:** 03_data (`schema.md`, `entities.md`, `migrations.md`),
+  04_interfaces (`services.md`, `routes.md`).
+  Competition and friendly snapshot restructure, prompted by
+  `GET /api/competitions/{id}` dying with an `OutOfMemoryError` in Doctrine's json
+  hydration on dev. Root cause was a data-model fault, not tuning: single JSON columns
+  holding several concerns with unrelated read profiles, which ORM 3 cannot narrow since it
+  removed `PARTIAL`. Five new tables (`competition_entrant_squad`,
+  `competition_result_audit`, `competition_response_cache`, `friendly_challenge_squad`,
+  `friendly_challenge_audit`), the match engines decoupled from entities behind
+  `MatchEngineSide`/`MatchEngineContext`, a size cap at the registration door, and the
+  bracket response prebuilt rather than reassembled per request. Instance data for both
+  domains was cleared by explicit authorisation to keep the migrations simple; the
+  admin-authored template catalogue was not touched. New `schema.md` section "The split
+  rows" states the two rules that keep this from regressing — no inverse `OneToOne`
+  association, and batch-fetch wherever more than one row is on screen.

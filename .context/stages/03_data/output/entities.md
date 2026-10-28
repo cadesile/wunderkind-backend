@@ -350,7 +350,7 @@ migrations are the change log (see `migrations.md`).
   `status:MessageStatus(enum: UNREAD, READ, ACCEPTED, REJECTED, DISMISSED)`, `relatedEntityType/Id:?string`,
   `respondedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`).
 - **`IdempotencyRecord`** (table `idempotency_record`) — 24h idempotency cache for club-scoped write endpoints (`POST /api/competitions/*`, `POST /api/friendlies/*`, `POST /api/inbox/*`). `clubId:string`, `idempotencyKey:string`, `endpoint:string`, `requestHash:string` (SHA-256 of request body), `statusCode:int`, `responseBody:string`, `createdAt`, `expiresAt`. Unique index `uq_idempotency_club_key_endpoint` on `(club_id, idempotency_key, endpoint)`.
-- **`FriendlyChallenge`** (table `friendly_challenge`) — a friendly match challenge on the challenge board (`App\Entity\Friendly\FriendlyChallenge`). Viewable in the admin under **Competitions -> Challenges** (`FriendlyChallengeCrudController`, read-only — see `04_interfaces/output/controllers.md`). `challengerClub:?Club` (`ON DELETE SET NULL`), `challengerClubId:string` (column `challenger_club_uuid`), `challengerSnapshotJson:array`, `acceptorClub:?Club` (`ON DELETE SET NULL`), `acceptorClubId:?string` (column `acceptor_club_uuid`), `acceptorSnapshotJson:?array`, `venue:string` (`'home'|'away'` from the poster's perspective), `stakePence:int`, `status:FriendlyChallengeStatus(enum: OPEN, ACCEPTED, COMPLETE, CANCELLED, EXPIRED)`, `createdAt`, `expiresAt`, `acceptedAt`, `kickoffAt`, `completedAt`, `homeScore/awayScore:?int`, `resultJson:?array` (stores `homeClubJson`, `awayClubJson`, `homeLineupJson`, `awayLineupJson`, `eventLogJson`, `narrativePayload`, `winnerClubId`).
+- **`FriendlyChallenge`** (table `friendly_challenge`) — a friendly match challenge on the challenge board (`App\Entity\Friendly\FriendlyChallenge`). Viewable in the admin under **Competitions -> Challenges** (`FriendlyChallengeCrudController`, read-only — see `04_interfaces/output/controllers.md`). `challengerClub:?Club` (`ON DELETE SET NULL`), `challengerClubId:string` (column `challenger_club_uuid`), `challengerClubDisplayJson:array`, `acceptorClub:?Club` (`ON DELETE SET NULL`), `acceptorClubId:?string` (column `acceptor_club_uuid`), `acceptorClubDisplayJson:?array` (null means **not yet accepted** — load-bearing, checked in three places; do not default it to `[]`), `venue:string` (`'home'|'away'` from the poster's perspective), `stakePence:int`, `status:FriendlyChallengeStatus(enum: OPEN, ACCEPTED, COMPLETE, CANCELLED, EXPIRED)`, `createdAt`, `expiresAt`, `acceptedAt`, `kickoffAt`, `completedAt`, `homeScore/awayScore:?int`, `resultJson:?array` (stores `homeClubJson`, `awayClubJson`, `homeLineupJson`, `awayLineupJson`, `narrativePayload`, `winnerClubId`). Squads live in `friendly_challenge_squad` (keyed by `FriendlySide`, one row per participant — *not* home/away, since `venue` flips which side is home per challenge) and the event log in `friendly_challenge_audit`, both for the reasons in `schema.md`'s "The split rows": `GET /api/friendlies/challenges` is public and decoded two whole squads per listed challenge.
 - **`GameEventTemplate`** — a random-event definition. `slug`,
   `category:EventCategory(enum)`, `weight`, `title`, `bodyTemplate`,
   `impacts:array`, `firingConditions:?array`, `severity`, `noInteract`,
@@ -418,26 +418,56 @@ migrations are the change log (see `migrations.md`).
   (`uq_active_competition_one_open_per_template`, `WHERE status =
   'registering'`) — only one open competition per template at a time.
 - **`CompetitionEntrant`** (table `competition_entrant`) — a club's
-  registration. **`snapshotJson` is the heavy column in this schema** — a full
-  squad, staff, tactics and every player's attributes and appearance, one per
-  entrant. Doctrine hydrates every mapped column of a root entity, so listing N
-  entrants decodes N whole snapshots whether or not a column renders them; that
-  is what made the admin's Club Snapshots index time out (504) in production.
-  There is no narrowing available: ORM 3 removed `PARTIAL`, and 25 call sites
-  across the match engine and results services read the property, so it cannot
-  be unmapped. The guard in place is a small page size on
-  `CompetitionEntrantCrudController` (10), which is proportional relief only —
-  **the permanent fix is to move the column into its own table behind a lazy
-  one-to-one**, which also means changing the raw-SQL writes in
-  `CompetitionRegistrationService`. Deliberately not done blind: it needs a real
-  measurement of production snapshot sizes, and no environment outside
-  production has representative rows.
-  `seed`, `status:CompetitionEntrantStatus(enum)`,
-  `snapshotJson:array`, `snapshotLockedAt`, `snapshotVersion:int(1)`,
-  `registeredAt`. `ManyToOne` → `activeCompetition`, `club` (both not
-  nullable, `CASCADE`); `eliminatedInRound:?CompetitionRound` (nullable,
-  `SET NULL`). Unique index on (`active_competition_id`, `club_id`) —
-  one entry per club per competition.
+  registration, display half only. It used to carry the whole submitted
+  snapshot — squad, staff, tactics, facilities, every player's attributes and
+  appearance — in one `snapshotJson` column, which was the heaviest column in
+  this schema. That column had four readers with four unrelated read profiles
+  and ORM 3 removed `PARTIAL`, so every reader decoded all of it: a single
+  public `GET /api/competitions/{id}` decoded up to 64 whole squads and
+  exhausted the request memory limit, and the admin's Club Snapshots index had
+  already timed out (504) in production for the same reason.
+  **Now split by who reads what** (see `schema.md`'s "The split rows"):
+  `clubDisplayJson:array` is a bounded, picked key set from
+  `CompetitionRegistrationService::clubDisplayBlock()` — deliberately *not*
+  the normaliser's raw output, which forwards every unrecognised client key
+  verbatim and so would let one registration inflate every later read.
+  `clientSnapshotAt:?string(64)` is stored as the string the client sent, not
+  parsed, because the API echoes it back and a DateTimeImmutable round-trip
+  could change the rendered offset. `squadPlayerCount:smallint` is denormalised
+  so the admin index can show it without touching a squad row.
+  `facilities` is gone entirely — accepted, stored on every entrant, decoded on
+  every read, and never read back by anything.
+  Plus `seed`, `status:CompetitionEntrantStatus(enum)`, `snapshotLockedAt`,
+  `snapshotVersion:int(1)`, `registeredAt`. `ManyToOne` → `activeCompetition`,
+  `club` (both not nullable, `CASCADE`); `eliminatedInRound:?CompetitionRound`
+  (nullable, `SET NULL`). Unique index on (`active_competition_id`, `club_id`) —
+  one entry per club per competition. **No association to
+  `CompetitionEntrantSquad`** — see the two rules in `schema.md`.
+- **`CompetitionEntrantSquad`** (table `competition_entrant_squad`) — the
+  match-engine half: `playersJson` (the XI, exactly
+  `SnapshotValidator::REQUIRED_PLAYERS`), `staffJson`, and `clubEngineJson`
+  holding the three club keys only `DeterministicEngine` reads (`cohesion`,
+  `managerMotivation`, `lowUrgency`). `OneToOne` owning side →
+  `entrant:CompetitionEntrant` (not nullable, `CASCADE`), unique on
+  `entrant_id`. Nothing on a client read path may load this. Pruned when a
+  competition completes, since no further fixture can resolve.
+- **`CompetitionResultAudit`** (table `competition_result_audit`) — the
+  forensic half of a result: `eventLogJson`, `computationAuditJson:?array`.
+  Between them these had exactly one reader in the repository (the admin
+  competition detail page) while being decoded on every public bracket read,
+  every `GET /api/matches/{id}` and every club-hub query. `OneToOne` owning side
+  → `result:CompetitionResult` (not nullable, `CASCADE`). **Not** pruned on
+  completion, unlike squads.
+- **`CompetitionResponseCache`** (table `competition_response_cache`) — the
+  prebuilt viewer-independent body of `GET /api/competitions/{id}`: `payload`,
+  `stateVersion:int`, `payloadVersion:smallint`, `generatedAt`. `OneToOne` →
+  `activeCompetition` (unique, `CASCADE`). Self-validating: a read recomputes
+  the competition's state version and treats a mismatch as a miss, so the cron
+  prewarm hooks are an optimisation rather than what correctness depends on. For
+  a COMPLETED competition this row *is* the archive — its document can never
+  change again. Database-backed rather than a Symfony cache pool because only
+  Postgres has a volume and `up -d` recreates the app container on every deploy,
+  so `var/cache` does not survive one.
 - **`CompetitionRound`** (table `competition_round`) — one round of a
   competition. `roundIndex`, `label`,
   `status:CompetitionRoundStatus(enum: DRAW_PENDING|DRAWN|
@@ -466,7 +496,7 @@ migrations are the change log (see `migrations.md`).
   nullable, `SET NULL`).
 - **`CompetitionResult`** (table `competition_result`) — a fixture's
   outcome. `homeScore/awayScore` (the true final score, including extra
-  time if played — never affected by a shootout), `eventLogJson:array`,
+  time if played — never affected by a shootout),
   `homeClubJson/awayClubJson:array` (denormalized club display data —
   kit colours, badge, stadium — copied from the entrant snapshot so a
   client can render kits without a second lookup),

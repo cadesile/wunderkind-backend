@@ -6,6 +6,7 @@ use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionResult;
+use App\Entity\Competition\CompetitionResultAudit;
 use App\Entity\Competition\CompetitionRound;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
@@ -347,7 +348,6 @@ class CompetitionResultsService
             $fixture,
             $matchResult->homeScore,
             $matchResult->awayScore,
-            $matchResult->eventLog,
             $round->getMatchEngineIdentifier(),
             $homeClubJson,
             $awayClubJson,
@@ -356,17 +356,28 @@ class CompetitionResultsService
         );
         $result->setNarrativePayload($matchResult->narrativePayload);
         $result->setShootoutInfo($matchResult->wentToExtraTime, $matchResult->wentToPenalties, $matchResult->penaltyHomeScore, $matchResult->penaltyAwayScore);
-        $result->setComputationAuditJson($this->buildComputationAudit(
-            $fixture,
-            $round,
-            $home,
-            $away,
-            $winner,
-            $engine,
-            $matchResult,
-            $usedTiebreak,
-        ));
+
+        // The event log and the derivation audit go to their own row. Both are admin-only,
+        // and holding them on the result meant every public bracket read, every
+        // GET /api/matches/{id} and every club-hub query decoded them. Persisted in the same
+        // flush as the result, so Doctrine orders the inserts by the association and the
+        // audit cannot land before the row it points at.
+        $audit = new CompetitionResultAudit(
+            $result,
+            $matchResult->eventLog,
+            $this->buildComputationAudit(
+                $fixture,
+                $round,
+                $home,
+                $away,
+                $winner,
+                $engine,
+                $matchResult,
+                $usedTiebreak,
+            ),
+        );
         $this->em->persist($result);
+        $this->em->persist($audit);
 
         $fixture->setStatus(CompetitionFixtureStatus::COMPLETE);
         $fixture->setWinnerEntrant($winner);

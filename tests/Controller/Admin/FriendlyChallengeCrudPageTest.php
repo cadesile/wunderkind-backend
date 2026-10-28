@@ -7,6 +7,7 @@ namespace App\Tests\Controller\Admin;
 use App\Entity\Admin;
 use App\Entity\Club;
 use App\Entity\Friendly\FriendlyChallenge;
+use App\Entity\Friendly\FriendlyChallengeAudit;
 use App\Entity\User;
 use App\Enum\Friendly\FriendlyChallengeStatus;
 use Doctrine\ORM\EntityManagerInterface;
@@ -76,16 +77,19 @@ class FriendlyChallengeCrudPageTest extends WebTestCase
 
         $this->acceptChallengeFixture($em, $challenge, $acceptor, $this->friendlyEnvelope('Acceptor Athletic'));
         $challenge->recordResult(
-                3,
-                1,
-                ['name' => 'Challenger Rovers'],
-                ['name' => 'Acceptor Athletic'],
-                [['id' => 'p1', 'position' => 'ST', 'rating' => 8.4]],
-                [['id' => 'p2', 'position' => 'GK', 'rating' => 5.9]],
-                [['minute' => 12, 'type' => 'GOAL']],
-                ['timeline' => [['minute' => 12, 'text' => 'A fine finish.']]],
-                new \DateTimeImmutable('-10 minutes'),
-            );
+            3,
+            1,
+            ['name' => 'Challenger Rovers'],
+            ['name' => 'Acceptor Athletic'],
+            [['id' => 'p1', 'position' => 'ST', 'rating' => 8.4]],
+            [['id' => 'p2', 'position' => 'GK', 'rating' => 5.9]],
+            ['timeline' => [['minute' => 12, 'text' => 'A fine finish.']]],
+            new \DateTimeImmutable('-10 minutes'),
+        );
+
+        // The event log is admin-only and lives in its own row now, so the detail page can
+        // only render it if one was actually written.
+        $em->persist(new FriendlyChallengeAudit($challenge, [['minute' => 12, 'type' => 'GOAL']]));
 
         $em->flush();
 

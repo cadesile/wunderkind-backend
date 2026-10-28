@@ -130,10 +130,6 @@ class FriendlyChallenge
 
     /** @var list<array<string, mixed>>|null */
     #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $eventLogJson = null;
-
-    /** @var list<array<string, mixed>>|null */
-    #[ORM\Column(type: 'json', nullable: true)]
     private ?array $narrativePayload = null;
 
     public function __construct(
@@ -209,9 +205,16 @@ class FriendlyChallenge
     public function getAwayClubJson(): ?array { return $this->awayClubJson; }
     public function getHomeLineupJson(): ?array { return $this->homeLineupJson; }
     public function getAwayLineupJson(): ?array { return $this->awayLineupJson; }
-    public function getEventLogJson(): ?array { return $this->eventLogJson; }
     public function getNarrativePayload(): ?array { return $this->narrativePayload; }
 
+    /**
+     * Records the played result.
+     *
+     * No `$eventLogJson`: the minute-by-minute log is admin-only and now lives in
+     * FriendlyChallengeAudit, written by FriendlyChallengeService::resolveSingleMatch()
+     * alongside this call. It used to sit here, on an entity the public challenge board
+     * hydrates for every COMPLETE challenge it lists.
+     */
     public function recordResult(
         int $homeScore,
         int $awayScore,
@@ -219,7 +222,6 @@ class FriendlyChallenge
         array $awayClubJson,
         array $homeLineupJson,
         array $awayLineupJson,
-        array $eventLogJson,
         array $narrativePayload,
         \DateTimeImmutable $resolvedAt,
     ): static {
@@ -229,7 +231,6 @@ class FriendlyChallenge
         $this->awayClubJson     = $awayClubJson;
         $this->homeLineupJson   = $homeLineupJson;
         $this->awayLineupJson   = $awayLineupJson;
-        $this->eventLogJson     = $eventLogJson;
         $this->narrativePayload = $narrativePayload;
         $this->resolvedAt       = $resolvedAt;
         $this->status           = FriendlyChallengeStatus::COMPLETE;

@@ -27,11 +27,16 @@ class CompetitionResult
     #[ORM\Column(type: 'smallint')]
     private int $awayScore;
 
-    /** @var list<array{minute: int, type: string, team?: string, scorer?: ?string, assist?: ?string, player?: ?string}> */
-    #[ORM\Column(type: 'json')]
-    private array $eventLogJson;
-
     /**
+ * The client-facing half of a played fixture: scores, the frozen club copies, the lineups as
+ * fielded, the commentary timeline and how a tie was settled.
+ *
+ * The forensic half — the minute-by-minute event log and the derivation audit — lives in
+ * CompetitionResultAudit. Both had exactly one reader between them (the admin competition
+ * detail page) while being decoded on every public bracket read, every GET
+ * /api/matches/{id} and every club-hub query, because a mapped column is always hydrated.
+ * There is no association to it from here on purpose; see that entity's docblock.
+ *
      * Snapshot of each side's club display data (name, kit colours, badge, stadium,
      * playing style, etc.) at the moment this result was generated — copied verbatim from
      * CompetitionEntrant::getClubDisplayJson(). Denormalized deliberately: a result is
@@ -68,16 +73,6 @@ class CompetitionResult
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $narrativePayload = null;
 
-    /**
-     * Engine-agnostic audit trail detailing how this result was derived (inputs, dominance
-     * breakdown, tactical/manager/personality/cohesion multipliers, RNG seed, Poisson xG,
-     * extra-time/penalty shootout rolls, goal/assist/card weights, and player rating math,
-     * or delegation/fallback notes for AI engines). Admin-only — never sent in toClientSummary().
-     *
-     * @var array<string, mixed>|null
-     */
-    #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $computationAuditJson = null;
 
     /**
      * Every Competition fixture is a knockout-bracket match and can never end level — these
@@ -113,7 +108,6 @@ class CompetitionResult
         CompetitionFixture $fixture,
         int $homeScore,
         int $awayScore,
-        array $eventLogJson,
         MatchEngineIdentifier $engineIdentifier,
         array $homeClubJson,
         array $awayClubJson,
@@ -124,7 +118,6 @@ class CompetitionResult
         $this->fixture         = $fixture;
         $this->homeScore       = $homeScore;
         $this->awayScore       = $awayScore;
-        $this->eventLogJson    = $eventLogJson;
         $this->engineIdentifier = $engineIdentifier;
         $this->homeClubJson    = $homeClubJson;
         $this->awayClubJson    = $awayClubJson;
@@ -141,8 +134,6 @@ class CompetitionResult
 
     public function getAwayScore(): int { return $this->awayScore; }
 
-    public function getEventLogJson(): array { return $this->eventLogJson; }
-
     public function getHomeClubJson(): array { return $this->homeClubJson; }
 
     public function getAwayClubJson(): array { return $this->awayClubJson; }
@@ -153,17 +144,6 @@ class CompetitionResult
 
     public function getNarrativePayload(): ?array { return $this->narrativePayload; }
     public function setNarrativePayload(?array $narrativePayload): static { $this->narrativePayload = $narrativePayload; return $this; }
-
-    /** @return array<string, mixed>|null */
-    public function getComputationAuditJson(): ?array { return $this->computationAuditJson; }
-
-    /** @param array<string, mixed>|null $computationAuditJson */
-    public function setComputationAuditJson(?array $computationAuditJson): static
-    {
-        $this->computationAuditJson = $computationAuditJson;
-
-        return $this;
-    }
 
     public function setShootoutInfo(bool $wentToExtraTime, bool $wentToPenalties, ?int $penaltyHomeScore, ?int $penaltyAwayScore): static
     {
@@ -184,24 +164,11 @@ class CompetitionResult
 
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
 
-    /** Read-only virtual accessor for the admin detail view — see CompetitionEntrant::getClubDisplayJsonPretty(). */
-    public function getEventLogJsonPretty(): string
-    {
-        return json_encode($this->eventLogJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '[]';
-    }
-
     public function getNarrativePayloadPretty(): ?string
     {
         return $this->narrativePayload === null
             ? null
             : (json_encode($this->narrativePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
-    }
-
-    public function getComputationAuditPretty(): ?string
-    {
-        return $this->computationAuditJson === null
-            ? null
-            : (json_encode($this->computationAuditJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}');
     }
 
     /**
@@ -316,8 +283,17 @@ class CompetitionResult
         return json_encode($this->toClientSummary(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 
-    /** Read-only virtual accessor for the admin detail view: every stored field, raw, as JSON. */
-    public function getFullPayloadPretty(): string
+    /**
+     * Read-only view for the admin detail page: every stored field, raw, as JSON.
+     *
+     * Takes the audit rather than reaching for it, because this entity deliberately holds no
+     * association to CompetitionResultAudit — see that class. The caller already has it
+     * (batch-fetched for the whole bracket), so passing it in costs nothing and keeps the
+     * forensic halves off this entity's own read path. A null audit means none was stored,
+     * and the two keys render as empty rather than silently disappearing, so the view still
+     * shows the shape of what a result holds.
+     */
+    public function getFullPayloadPretty(?CompetitionResultAudit $audit = null): string
     {
         return json_encode([
             'id'               => (string) $this->id,
@@ -328,14 +304,14 @@ class CompetitionResult
             'awayClub'         => $this->awayClubJson,
             'homeLineup'       => $this->homeLineupJson,
             'awayLineup'       => $this->awayLineupJson,
-            'eventLogJson'     => $this->eventLogJson,
+            'eventLogJson'     => $audit?->getEventLogJson() ?? [],
             'narrativePayload' => $this->narrativePayload,
             'wentToExtraTime'  => $this->wentToExtraTime,
             'wentToPenalties'  => $this->wentToPenalties,
             'penaltyHomeScore'     => $this->penaltyHomeScore,
             'penaltyAwayScore'     => $this->penaltyAwayScore,
             'engineIdentifier'     => $this->engineIdentifier->value,
-            'computationAuditJson' => $this->computationAuditJson,
+            'computationAuditJson' => $audit?->getComputationAuditJson(),
             'generatedAt'          => $this->generatedAt->format(DATE_ATOM),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '{}';
     }

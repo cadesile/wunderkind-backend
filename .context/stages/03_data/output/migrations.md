@@ -276,3 +276,40 @@ was not safe to retry:
   must not be confused. `stadium_config` is left exactly as it was; `landing.js` consumes it.
   Same pre-existing `COMMENT ON COLUMN` churn was stripped from the generated diff as for
   `Version20261024222441`.
+- `Version20261027230000` — splits `competition_entrant.snapshot_json` into a bounded
+  `club_display_json` plus `competition_entrant_squad` (XI, staff, engine-only club keys),
+  and adds `client_snapshot_at` / `squad_player_count`. `facilities` is dropped outright:
+  accepted from clients, stored on every entrant, read by nothing. Carries existing rows
+  across in SQL, with every `jsonb` extraction `jsonb_typeof`-guarded because the column is
+  unvalidated client JSON at the section level and `jsonb_array_length()` raises rather than
+  returning NULL on a non-array — one malformed historical row would otherwise abort the
+  whole migration. The unique index on `entrant_id` is named explicitly on the entity rather
+  than left to `unique: true` on the join column, or `migrations:diff` proposes renaming it
+  to Doctrine's generated name forever.
+- `Version20261027234500` — adds `competition_response_cache`, the prebuilt
+  viewer-independent `GET /api/competitions/{id}` document. No backfill: an absent row is a
+  miss and the first reader builds it.
+- `Version20261028001500` — splits `friendly_challenge`'s two inline snapshots into
+  `challenger_club_display_json` / `acceptor_club_display_json` plus
+  `friendly_challenge_squad`. **Deletes data by explicit authorisation**: tournaments and
+  friendlies were not live, and clearing them was approved specifically so this migration
+  needs no backfill and the new NOT NULL column needs no synthetic default. It truncates
+  *instance* data only — `active_competition`, `competition_entrant`,
+  `competition_entrant_squad`, `competition_fixture`, `competition_response_cache`,
+  `competition_result`, `competition_round`, `entrant_reward_claim`, `friendly_challenge`,
+  `friendly_challenge_squad`. The admin-authored catalogue (`competition_template`,
+  `reward_template` and their join table) is configuration, not data, and is untouched.
+  Tables are named explicitly rather than using `CASCADE`, so a table added later that
+  references one of these fails the migration loudly instead of having its rows silently
+  cascaded away — and `friendly_challenge_squad` is created *before* the truncate and named
+  in it, because it already exists wherever `schema:update` built it from the entity (as on
+  the test database), where the other order failed on the very FK the truncate respects.
+- `Version20261028010000` — moves the admin-only forensics off rows public endpoints read:
+  `competition_result_audit` (`event_log_json`, `computation_audit_json`) and
+  `friendly_challenge_audit` (`event_log_json`). Between them those columns had one reader in
+  the repository while being decoded on every public bracket read, every
+  `GET /api/matches/{id}`, every club-hub query and every COMPLETE challenge the public board
+  listed. No backfill — the clearing migration above runs first. These rows are deliberately
+  **not** pruned on completion, unlike entrant squads: an audit exists to answer "how was
+  this result derived" about a match already played, which is when anyone asks.
+

@@ -22,6 +22,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\DateTimeFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\NumericFilter;
 use App\Enum\Friendly\FriendlySide;
+use App\Repository\Friendly\FriendlyChallengeAuditRepository;
 use App\Repository\Friendly\FriendlyChallengeSquadRepository;
 
 /**
@@ -46,6 +47,7 @@ class FriendlyChallengeCrudController extends AbstractCrudController
 {
     public function __construct(
         private readonly FriendlyChallengeSquadRepository $squadRepository,
+        private readonly FriendlyChallengeAuditRepository $auditRepository,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -167,7 +169,13 @@ class FriendlyChallengeCrudController extends AbstractCrudController
         yield $this->jsonField('awayClubPretty', 'Away club (result)', static fn (FriendlyChallenge $c): ?array => $c->getAwayClubJson());
         yield $this->jsonField('homeLineupPretty', 'Home lineup', static fn (FriendlyChallenge $c): ?array => $c->getHomeLineupJson());
         yield $this->jsonField('awayLineupPretty', 'Away lineup', static fn (FriendlyChallenge $c): ?array => $c->getAwayLineupJson());
-        yield $this->jsonField('eventLogPretty', 'Event log', static fn (FriendlyChallenge $c): ?array => $c->getEventLogJson());
+        // From friendly_challenge_audit. Detail-only, like the squad fields above — the
+        // public board must not pull this.
+        yield $this->jsonField(
+            'eventLogPretty',
+            'Event log',
+            fn (FriendlyChallenge $c): ?array => $this->auditRepository->findForChallenge($c)?->getEventLogJson(),
+        );
         yield $this->jsonField('narrativePretty', 'Narrative', static fn (FriendlyChallenge $c): ?array => $c->getNarrativePayload());
     }
 

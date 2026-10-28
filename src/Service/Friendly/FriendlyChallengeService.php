@@ -21,6 +21,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\Friendly\FriendlyChallengeSquad;
 use App\Enum\Friendly\FriendlySide;
 use App\Repository\Friendly\FriendlyChallengeSquadRepository;
+use App\Repository\Friendly\FriendlyChallengeAuditRepository;
 
 class FriendlyChallengeService
 {
@@ -46,6 +47,7 @@ class FriendlyChallengeService
         private readonly EntityManagerInterface $em,
         private readonly FriendlyChallengeRepository $repository,
         private readonly FriendlyChallengeSquadRepository $squadRepository,
+        private readonly FriendlyChallengeAuditRepository $auditRepository,
         private readonly MatchQueryService $matchQueryService,
         private readonly DeterministicEngine $deterministicEngine,
         private readonly InboxService $inboxService,
@@ -384,6 +386,11 @@ class FriendlyChallengeService
         $homeClubIdentity = $this->matchQueryService->normalizeClubIdentityArray($homeDisplay ?? [], $homeClub);
         $awayClubIdentity = $this->matchQueryService->normalizeClubIdentityArray($awayDisplay ?? [], $awayClub);
 
+        // Admin-only forensics to their own row, for the same reason the competition side
+        // split them out: the public challenge board hydrates this entity for every COMPLETE
+        // challenge it lists.
+        $this->auditRepository->upsertForChallenge($challenge, $engineResult->eventLog);
+
         $challenge->recordResult(
             homeScore: $engineResult->homeScore,
             awayScore: $engineResult->awayScore,
@@ -391,7 +398,6 @@ class FriendlyChallengeService
             awayClubJson: $awayClubIdentity,
             homeLineupJson: $engineResult->homeLineup,
             awayLineupJson: $engineResult->awayLineup,
-            eventLogJson: $engineResult->eventLog,
             narrativePayload: $engineResult->narrativePayload,
             resolvedAt: $now,
         );

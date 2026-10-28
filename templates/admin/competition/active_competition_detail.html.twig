@@ -108,6 +108,8 @@
                         <tbody>
                             {% for fixture in fixtures %}
                                 {% set result = resultsByFixtureId[fixture.id|ea_as_string] ?? null %}
+                                {# Admin-only forensics, batch-fetched by the controller — never reached through the result. #}
+                                {% set resultAudit = result is null ? null : (auditsByResultId[result.id|ea_as_string] ?? null) %}
                                 {% set rowId = 'fixture-' ~ fixture.id %}
                                 <tr>
                                     <td class="ps-3">
@@ -166,7 +168,7 @@
                                                     <span><i class="fa fa-microchip me-1"></i>{{ result.engineIdentifier.value }}</span>
                                                     <span><i class="fa fa-clock me-1"></i>{{ result.generatedAt|date('Y-m-d H:i:s') }}</span>
                                                 </div>
-                                                {% if result.eventLogJson is not empty %}
+                                                {% if resultAudit is not null and resultAudit.eventLogJson is not empty %}
                                                     <table class="table table-sm mb-2">
                                                         <thead>
                                                             <tr class="text-muted small">
@@ -178,7 +180,7 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {% for event in result.eventLogJson %}
+                                                            {% for event in resultAudit.eventLogJson %}
                                                                 {% set eventLineup = event.team == 'home' ? homeLineup : awayLineup %}
                                                                 <tr>
                                                                     <td>{{ event.minute ?? '' }}'</td>
@@ -256,8 +258,8 @@
                                                     </div>
                                                 </div>
 
-                                                {% if result.computationAuditJson %}
-                                                    {% set audit = result.computationAuditJson %}
+                                                {% if resultAudit is not null and resultAudit.computationAuditJson %}
+                                                    {% set audit = resultAudit.computationAuditJson %}
                                                     <div class="card border-secondary-subtle mb-2 mt-2">
                                                         <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center small">
                                                             <span class="fw-semibold">
@@ -353,7 +355,7 @@
                                                             {% endif %}
                                                             <details class="small">
                                                                 <summary class="text-muted fw-semibold" style="cursor: pointer;">Raw Computation Audit JSON (per-player weights, RNG rolls &amp; rating math)</summary>
-                                                                <pre class="small bg-body p-2 mt-1 mb-0" style="max-height: 280px; overflow:auto;">{{ result.computationAuditPretty }}</pre>
+                                                                <pre class="small bg-body p-2 mt-1 mb-0" style="max-height: 280px; overflow:auto;">{{ resultAudit.computationAuditJsonPretty }}</pre>
                                                             </details>
                                                         </div>
                                                     </div>
@@ -364,7 +366,7 @@
                                                         <div class="text-muted small fw-semibold mb-1">
                                                             <i class="fa fa-database me-1"></i>Full stored payload (CompetitionResult, raw)
                                                         </div>
-                                                        <pre class="small bg-body p-2 mb-0" style="max-height: 320px; overflow:auto;">{{ result.fullPayloadPretty }}</pre>
+                                                        <pre class="small bg-body p-2 mb-0" style="max-height: 320px; overflow:auto;">{{ result.getFullPayloadPretty(resultAudit) }}</pre>
                                                     </div>
                                                     <div class="col-12 col-lg-4">
                                                         <div class="text-muted small fw-semibold mb-1">

@@ -139,7 +139,8 @@ filename alone.
   visible pre-match by explicit product decision** — note this is live
   information, not merely stale, and **the draw does not freeze it**: a round
   resolves against whatever snapshot the entrant holds at resolve time
-  (`DeterministicEngine::playersOf()` reads the live `snapshotJson`), and
+  (`DeterministicEngine::playersOf()` reads the side built from the entrant's live
+  `competition_entrant_squad` row), and
   `resubmit` stays open while any round is `DRAW_PENDING`. Since every round
   but the last has a later `DRAW_PENDING` round behind it, resubmit remains
   open through that round's draw and up to its resolution — a club can change
@@ -161,6 +162,40 @@ filename alone.
   into the round. `forceDrawRound()` is an admin-only bypass of a round's
   `scheduledAt` wait (mirrors `CompetitionResultsService::
   forceResolveFixture()` below).
+- **`CompetitionRegistrationService` also owns the split**, as of the snapshot
+  restructure (see `03_data/output/schema.md`'s "The split rows"):
+  `clubDisplayBlock()` picks the bounded display key set,
+  `clubEngineBlock()` lifts out the three keys only the match engine reads
+  (`CLUB_ENGINE_KEYS`), `splitSnapshot()` is the one place deciding what lands
+  where, and `snapshotEnvelopeFrom()` reassembles the old envelope for the two
+  callers that genuinely want it (spoof cloning, the admin viewer).
+  `normalizeClubData()` itself is untouched — the pickers front it — which is
+  why `FriendlyChallengeService` keeps using it exactly as before.
+  `repointClubData()` moves **both** `id` and `clubId` when a snapshot is
+  re-pointed at a different club: the normaliser resolves identity as
+  `clubId ?? id ?? fallback`, so setting only one leaves the stale other
+  winning and a spoof clone keeps pointing at the club it was copied from.
+- **`Competition/CompetitionResponseBuilder`** — builds the body of
+  `GET /api/competitions/{id}`. Lifted out of `CompetitionController` because
+  the cron passes that change a bracket need to prebuild the document and
+  cannot reach a controller action, and because `ClubHubController` was
+  injecting `CompetitionController` purely to reuse
+  `serializeInstanceSummary()`. `sharedDocument()` returns the
+  viewer-independent part (carrying `viewer => null`, so the request path
+  *overwrites* rather than appends and key order does not depend on a cache
+  hit); `viewerBlock()` composes the one key that varies per caller;
+  `stateVersion()` is the freshness key and the ETag body.
+- **`Competition/CompetitionResponseCacheService`** — `getOrBuild()` /
+  `rebuild()` / `invalidate()` over `competition_response_cache`, with a
+  Postgres advisory lock so a cold competition under load builds once. Shaped
+  after `WorldPackCacheService`, and database-backed for the same reason: see
+  that entity in `03_data/output/entities.md`. Prewarmed from
+  `CompetitionDrawService` and `CompetitionResultsService` after every pass that
+  changes a bracket; those hooks log and swallow failures, because a tick that
+  already committed game state must not fail over a cache rebuild.
+- **`Competition/MatchEngineSideFactory`** — builds `MatchEngineSide` inputs
+  from whatever a domain stores. It lives in `Service/Competition`, not beside
+  the value object, precisely so the engines import no entities.
 - **`Competition/CompetitionResultsService`** — owns the resolve +
   finalization phase (`DRAWN` → `RESULTS_PUBLISHED`) behind
   `app:competition:resolve-rounds` (every 1 min). Atomically claims (via
@@ -427,9 +462,19 @@ filename alone.
   Competition fixture can never end level — a 90' draw triggers a real
   extra-time simulation, and only falls to a coin-flip penalty shootout
   (fabricated but plausible scoreline) if still level after that. Also
-  provides `resolveFriendly()` for `FriendlyChallengeService` (90-minute
-  regulation match where draws stand). Hands off to
-  `MatchNarrativeGeneratorService` for `narrativePayload`.
+  Hands off to `MatchNarrativeGeneratorService` for `narrativePayload`.
+  **The engines take no entities.** `resolve()` is
+  `(MatchEngineSide, MatchEngineSide, MatchEngineContext)`: the sides carry the
+  XI, staff, engine club keys and display name; the context carries the id the
+  RNG is seeded from, which engine was requested, and `allowDraws`. `resolveFriendly()`
+  is gone — a friendly is simply `allowDraws: true` on the context, so it goes
+  through `MatchEngineInterface` and the registry like anything else instead of
+  reaching past both. That boundary exists because the real input surface was
+  only five entrant getters and one fixture getter, while resolving one friendly
+  previously fabricated a `CompetitionTemplate`, `ActiveCompetition`,
+  `CompetitionRound`, two `CompetitionEntrant`s and a `CompetitionFixture` and
+  then used reflection to overwrite the fixture's private id — all to supply one
+  UUID as a seed. Seeds are unchanged by the move, so results are bit-identical.
 - **`MatchEngine/MatchNarrativeGeneratorService`** — walks the
   `EventCategory::MATCH_NARRATIVE` chain-graph (ported from
   `wunderkind-app`'s `narrativeEngine.ts`/`matchTimelineGenerator.ts`)
