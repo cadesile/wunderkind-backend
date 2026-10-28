@@ -24,14 +24,20 @@ It now splits in two:
 1. **Reserve** — under the lock: capacity check, entry fee, entrant row. ~1ms.
 2. **Store** — outside the lock, on a queue: the squad and the verbatim submission.
 
-**Your request still returns the same synchronous `201` it always did**, with the same body.
-Nothing was removed and nothing became asynchronous from your side. But for a short window
+**Your request still returns the same synchronous `201` it always did.** Nothing was removed,
+nothing became asynchronous from your side, and no existing field changed value — the body
+only gained `entrant.submissionStatus`. But for a short window
 after that 201 — normally milliseconds — the entry exists and holds its slot while its squad
 is still being written. `submissionStatus` is how you can see that window.
 
 ## The field
 
-Two places expose it. Both are additive.
+Four places expose it: the three write endpoints below, and `viewer.snapshot` on
+`GET /api/competitions/{id}`. All additive except `/resubmit`'s `status`, flagged above.
+
+The response examples are **abbreviated to the keys this document is about** — every endpoint
+also returns the fields it always did (`instanceId`, `seed`, `competition`, `club`, …), none
+of which changed.
 
 ### `POST /api/competitions/{id}/register` → `entrant.submissionStatus`
 
@@ -116,6 +122,11 @@ gets `"failed"` back. That is deliberate: it confirms you withdrew the thing you
 
 Only ever your own. Another club's `submissionStatus` is not exposed — you do not need to
 watch someone else's write land.
+
+**`viewer.snapshot` is `null`** when you have no entry in this competition, and when your
+entry is withdrawn. `viewer` itself is `null` for an unauthenticated read. So reach it
+defensively — `viewer?.snapshot?.status` — rather than assuming it is there whenever
+`viewer.relation` is set.
 
 ```jsonc
 "viewer": {
