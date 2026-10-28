@@ -8,6 +8,7 @@ use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionEntrantSquad;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
+use App\Enum\Competition\EntrantSquadState;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\MessageSenderType;
 use App\Enum\PlayingStyle;
@@ -18,6 +19,8 @@ use App\Service\ClubInitializationService;
 use App\Service\InboxService;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Message\Competition\StoreEntrantSubmissionMessage;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\UuidV7;
 
 /**
@@ -41,6 +44,17 @@ class CompetitionRegistrationService
      */
     public const CLUB_ENGINE_KEYS = ['cohesion', 'managerMotivation', 'lowUrgency'];
 
+    /**
+     * How long a registration will wait on the competition's row lock before giving up.
+     *
+     * Short on purpose. The locked section is now a count and an insert, so a wait longer
+     * than this means something is genuinely wrong rather than merely busy, and waiting it
+     * out costs an FPM worker the whole time. The caller turns the resulting driver
+     * exception into a 503 the client can retry, which is a far better outcome than a
+     * request that hangs until nginx times it out.
+     */
+    public const LOCK_TIMEOUT_SECONDS = 5;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompetitionEntrantRepository $entrantRepository,
@@ -48,6 +62,7 @@ class CompetitionRegistrationService
         private readonly ?CompetitionRoundRepository $roundRepository = null,
         private readonly ?InboxService $inboxService = null,
         private readonly ?PushNotificationService $pushNotificationService = null,
+        private readonly ?MessageBusInterface $submissionBus = null,
     ) {}
 
     /**
@@ -264,6 +279,71 @@ class CompetitionRegistrationService
                 'envelope'    => json_encode($parts['envelope'] ?? [], JSON_THROW_ON_ERROR),
                 'submittedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
             ],
+        );
+    }
+
+    /**
+     * Writes the bulky half of a registration — squad row, submission row, state flip —
+     * for an entrant whose slot is already reserved.
+     *
+     * This is the work that used to sit inside register()'s `FOR UPDATE` transaction. It is
+     * out here because none of it contends: every statement is keyed to one `entrant_id`, so
+     * two entrants storing concurrently touch disjoint rows, while the capacity decision they
+     * both had to serialise on has already committed. Moving it out took the locked section
+     * from ~50ms to ~1ms, which is what multiplies how many clubs can register to one
+     * competition per second.
+     *
+     * Idempotent by construction: both writes are `ON CONFLICT (entrant_id) DO UPDATE`, so a
+     * replayed message, a retry after a partial failure, or a resubmission arriving first all
+     * converge on the same rows instead of duplicating them.
+     *
+     * Runs in its own transaction so a failure leaves the entrant PENDING with its slot
+     * intact — recoverable by replaying the message — rather than rolling back a reservation
+     * another club has since been refused for.
+     *
+     * @param array<string, mixed> $snapshotJson The posted envelope.
+     */
+    public function storeSubmission(CompetitionEntrant $entrant, array $snapshotJson): void
+    {
+        $parts      = self::splitSnapshot($snapshotJson, $entrant->getClub());
+        $entrantId  = $entrant->getId()->toRfc4122();
+        $connection = $this->em->getConnection();
+
+        $connection->beginTransaction();
+
+        try {
+            $this->writeSquad($connection, $entrantId, $parts);
+            $this->writeSubmission($connection, $entrantId, $parts);
+
+            // Written by raw SQL alongside the two above rather than through the entity, so
+            // the three land in one transaction without depending on a flush of an entity the
+            // handler may have loaded before the worker cleared the EntityManager.
+            $connection->executeStatement(
+                'UPDATE competition_entrant SET squad_state = :state WHERE id = :id',
+                ['state' => EntrantSquadState::STORED->value, 'id' => $entrantId],
+            );
+
+            $connection->commit();
+        } catch (\Throwable $e) {
+            $connection->rollBack();
+
+            throw $e;
+        }
+
+        $entrant->setSquadState(EntrantSquadState::STORED);
+    }
+
+    /**
+     * Marks an entrant's submission as permanently unstored, after the handler's retries are
+     * spent. The slot is deliberately left held: deciding between replaying the envelope off
+     * the `failed` transport and withdrawing the club is an operator's call, not something to
+     * guess at by silently freeing a paid-for place mid-competition.
+     */
+    public function markSubmissionFailed(string $entrantId): void
+    {
+        $this->em->getConnection()->executeStatement(
+            'UPDATE competition_entrant SET squad_state = :state WHERE id = :id',
+            ['state' => EntrantSquadState::FAILED->value, 'id' => $entrantId],
         );
     }
 
@@ -665,6 +745,14 @@ class CompetitionRegistrationService
         $connection->beginTransaction();
 
         try {
+            // Fail fast instead of occupying an FPM worker indefinitely. With
+            // pm.max_children small, a handful of requests parked on one competition's row
+            // lock is not a slow registration — it is the whole API refusing to serve,
+            // because every other endpoint shares the same worker pool. SET LOCAL so the
+            // bound reverts on commit/rollback and cannot leak into the cron jobs and
+            // Messenger workers that legitimately run long statements on this connection.
+            $connection->executeStatement(sprintf("SET LOCAL lock_timeout = '%ds'", self::LOCK_TIMEOUT_SECONDS));
+
             // Lock the instance row first so two simultaneous "last slot" registrations
             // can't both believe they filled it.
             $lockedRow = $connection->fetchAssociative(
@@ -713,10 +801,11 @@ class CompetitionRegistrationService
             $entrantId = $connection->fetchOne(
                 <<<'SQL'
                 INSERT INTO competition_entrant
-                    (id, active_competition_id, club_id, seed, status, club_display_json, client_snapshot_at, squad_player_count, snapshot_locked_at, snapshot_version, registered_at, eliminated_in_round_id)
-                VALUES (:id, :competitionId, :clubId, 0, :status, :clubDisplay, :clientSnapshotAt, :playerCount, NULL, 1, :registeredAt, NULL)
+                    (id, active_competition_id, club_id, seed, status, club_display_json, client_snapshot_at, squad_player_count, snapshot_locked_at, snapshot_version, registered_at, eliminated_in_round_id, squad_state)
+                VALUES (:id, :competitionId, :clubId, 0, :status, :clubDisplay, :clientSnapshotAt, :playerCount, NULL, 1, :registeredAt, NULL, :squadState)
                 ON CONFLICT (active_competition_id, club_id) DO UPDATE
                     SET status = EXCLUDED.status,
+                        squad_state = EXCLUDED.squad_state,
                         club_display_json = EXCLUDED.club_display_json,
                         client_snapshot_at = EXCLUDED.client_snapshot_at,
                         squad_player_count = EXCLUDED.squad_player_count,
@@ -736,6 +825,10 @@ class CompetitionRegistrationService
                     'playerCount'      => $parts['playerCount'],
                     'registeredAt'     => $now->format('Y-m-d H:i:s'),
                     'withdrawnStatus'  => CompetitionEntrantStatus::WITHDRAWN->value,
+                    // A re-registration after withdrawal goes back to PENDING too: its old
+                    // squad row belongs to the previous submission and is about to be
+                    // replaced by the queued write.
+                    'squadState'       => EntrantSquadState::PENDING->value,
                 ],
             );
 
@@ -748,8 +841,10 @@ class CompetitionRegistrationService
                 return ['entrant' => $existing, 'wasNewRegistration' => false];
             }
 
-            $this->writeSquad($connection, (string) $entrantId, $parts);
-            $this->writeSubmission($connection, (string) $entrantId, $parts);
+            // The squad and submission rows are NOT written here. They are the slow part
+            // (~1.4MB encode plus a TOASTed insert) and they contend with nothing, so doing
+            // them under this lock made every other club registering to this competition wait
+            // on one club's payload. Queued below, once the reservation has committed.
 
             if ($entryFeePence > 0) {
                 $this->em->refresh($club);
@@ -771,6 +866,25 @@ class CompetitionRegistrationService
             }
 
             $connection->commit();
+
+            // Dispatched only after the reservation has committed. Before the commit the
+            // entrant may still vanish on rollback, and the worker is fast enough to pick the
+            // message up before this request has even returned — which would have it look for
+            // a row that does not exist yet.
+            if ($entrant !== null) {
+                $this->submissionBus?->dispatch(new StoreEntrantSubmissionMessage(
+                    $entrant->getId()->toRfc4122(),
+                    $snapshotJson,
+                ));
+
+                // No bus wired (unit tests, and any caller constructing this service by hand)
+                // means there is nothing to drain the queue, so storing inline is the only
+                // correct fallback — a reservation that never gets a squad is worse than a
+                // slow one.
+                if ($this->submissionBus === null) {
+                    $this->storeSubmission($entrant, $snapshotJson);
+                }
+            }
 
             return ['entrant' => $entrant, 'wasNewRegistration' => true];
         } catch (\Throwable $e) {

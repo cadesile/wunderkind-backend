@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Service\Competition;
 
+use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
 use App\Entity\Competition\CompetitionRound;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionEntrantStatus;
+use App\Enum\Competition\EntrantSquadState;
 use App\Enum\Competition\CompetitionRoundStatus;
 use App\Enum\MessageSenderType;
 use App\Repository\Competition\CompetitionEntrantRepository;
@@ -18,6 +20,7 @@ use App\Service\InboxService;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Message\Competition\DrawCompetitionRoundMessage;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -60,6 +63,7 @@ class CompetitionDrawService
         private readonly PushNotificationService $pushNotificationService,
         private readonly MessageBusInterface $messageBus,
         private readonly ?InboxService $inboxService = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     /**
@@ -101,6 +105,19 @@ class CompetitionDrawService
      */
     public function drawRoundIfClaimable(CompetitionRound $round, \DateTimeImmutable $now): bool
     {
+        // Checked BEFORE claiming, not after. Taking the lease first and then bailing would
+        // park a 300-second claim on a round that was never drawn, so every retry for the
+        // next five minutes would find it claimed and skip — turning a few seconds of queue
+        // latency into a five-minute stall.
+        if ($this->hasUnstoredSubmissions($round->getActiveCompetition())) {
+            $this->logger?->info('competition.draw.deferred', [
+                'roundId' => (string) $round->getId(),
+                'reason'  => 'entrant submissions still pending',
+            ]);
+
+            return false;
+        }
+
         if (!$this->claimDraw($round, $now)) {
             return false;
         }
@@ -144,6 +161,14 @@ class CompetitionDrawService
     {
         if ($round->getStatus() !== CompetitionRoundStatus::DRAW_PENDING) {
             throw new \RuntimeException('This round has already been drawn or is no longer draw-pending.');
+        }
+
+        if ($this->hasUnstoredSubmissions($round->getActiveCompetition())) {
+            throw new \RuntimeException(
+                'One or more entrants are still storing their submitted squad. Drawing now would '
+                . 'seed a fixture against an empty XI. Wait a moment and retry; if it persists, check '
+                . 'app:competition:health for a failed submission.',
+            );
         }
 
         $now = new \DateTimeImmutable();
@@ -202,6 +227,38 @@ class CompetitionDrawService
         $this->em->refresh($round);
 
         return true;
+    }
+
+    /**
+     * Refuses to draw while any entrant's squad row is still being written.
+     *
+     * Registration reserves a slot and queues the squad write, so an entrant can hold a place
+     * in a full competition for the moment before its XI lands. The squad row is the match
+     * engine's only input: drawing against a PENDING entrant would not fail, it would resolve
+     * a real fixture against an empty XI and publish the result. Returning false leaves the
+     * round due and unclaimed, so the next tick retries — the queue is drained by an always-on
+     * worker, so "next tick" is normally within seconds.
+     *
+     * FAILED is deliberately **not** treated as drawable-after-all. A submission whose retries
+     * are spent needs an operator, and quietly drawing around it would turn a visible stall
+     * into a silently wrong bracket. `app:competition:health` is what surfaces both.
+     */
+    private function hasUnstoredSubmissions(ActiveCompetition $activeCompetition): bool
+    {
+        return (int) $this->em->getConnection()->fetchOne(
+            <<<'SQL'
+            SELECT COUNT(*)
+              FROM competition_entrant
+             WHERE active_competition_id = :competitionId
+               AND status <> :withdrawn
+               AND squad_state <> :stored
+            SQL,
+            [
+                'competitionId' => $activeCompetition->getId()->toRfc4122(),
+                'withdrawn'     => CompetitionEntrantStatus::WITHDRAWN->value,
+                'stored'        => EntrantSquadState::STORED->value,
+            ],
+        ) > 0;
     }
 
     private function drawRound(CompetitionRound $round, \DateTimeImmutable $now): void

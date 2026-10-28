@@ -454,6 +454,14 @@ migrations are the change log (see `migrations.md`).
   (nullable, `SET NULL`). Unique index on (`active_competition_id`, `club_id`) —
   one entry per club per competition. **No association to
   `CompetitionEntrantSquad`** — see the two rules in `schema.md`.
+  `squadState:EntrantSquadState` (`pending`/`stored`/`failed`, default `stored`) records
+  whether the queued squad/submission write has landed — registration reserves the slot
+  and queues the bulky write, so an entrant briefly holds a capacity place with no XI.
+  **A separate axis from `status`, deliberately**: `status` is serialized to clients, and
+  a reserved entrant really is REGISTERED. `CompetitionDrawService` refuses to draw a
+  competition holding any non-`stored` entrant. Capacity needed no change —
+  `countForCompetition()` counts everything but WITHDRAWN, so a pending entrant holds its
+  slot for free.
 - **`CompetitionEntrantSquad`** (table `competition_entrant_squad`) — the
   match-engine half: `playersJson` (the XI, exactly
   `SnapshotValidator::REQUIRED_PLAYERS`), `staffJson`, and `clubEngineJson`

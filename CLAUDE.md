@@ -282,6 +282,59 @@ shape. Client contract: `docs/api/competition-bracket-no-embedded-result.md`. **
 re-embed match detail here**; the benchmark's payload breakdown reports 0 bytes for narrative
 and lineups specifically so a regression shows up.
 
+**Registration reserves a slot, then queues the payload.** `POST /register` does only the
+contended part under `SELECT … FOR UPDATE` on `active_competition` — status check, capacity
+count, entry fee, `INSERT competition_entrant` — then commits and dispatches
+`StoreEntrantSubmissionMessage` onto the **`registration`** transport. The ~1.4MB squad and
+submission write happens in the handler, in its own transaction, contending with nothing
+(every statement is keyed to one `entrant_id`). That took the locked section from ~50ms to
+~1ms, which is what multiplies registrations-per-second on one competition.
+
+- **`entrant.squadState` (`EntrantSquadState`) is a separate axis from `status`**, not a new
+  case on it. `status` is serialized straight to a client already live in production, so a
+  `pending` case there would be a contract break for a fact the client has no use for. A
+  reserved entrant genuinely *is* REGISTERED — it holds a slot and has paid.
+- **The HTTP response is unchanged.** It reads only `clubDisplayJson`, which lands at
+  reservation, and `seed` is always 0 at registration (`setSeed()` is called once, by
+  `CompetitionLockService`, when the competition fills). So the synchronous 201 still carries
+  everything it always did — no polling, no client change.
+- **`CompetitionDrawService` refuses to draw a competition with any non-`stored` entrant**,
+  checked in `drawRoundIfClaimable()` **before** `claimDraw()`. After would park a 300s lease
+  on a round that was never drawn, turning seconds of queue latency into a five-minute stall.
+  A squad row is the engine's only input: drawing against a PENDING entrant would not error,
+  it would resolve a real fixture against an empty XI. `FAILED` is deliberately not drawn
+  around either — it needs an operator, and `app:competition:health` reports both.
+- **`StoreEntrantSubmissionMessage` is the one message carrying a payload, not an id.** Every
+  other one re-reads its subject from a table; here the envelope is precisely what has not
+  been stored yet, so parking it first to keep the message small would write the same 1.4MB
+  twice. Consequence: `messenger_messages` rows are large, and this transport is drained by an
+  **always-on supervisord worker**, not a once-a-minute cron — a competition can fill and
+  become drawable seconds after its last registration.
+- **`registration` is its own transport, never shared with `competition`.** Round draws are
+  latency-sensitive and must not queue behind a registration burst — and the dependency runs
+  both ways (a draw waits on pending submissions), so sharing could deadlock a round behind
+  work it is itself blocking.
+- **In `test`, `registration` is `sync://`, not `in-memory://`** — alone among the transports.
+  The others are fire-and-forget side effects a test asserts were dispatched; this one is the
+  second half of registration, so in-memory would leave every functional test asserting
+  against an entrant with no squad. The queueing itself is covered by `RegistrationQueueingTest`
+  with a spy bus.
+- **Registration sets `SET LOCAL lock_timeout`** (`LOCK_TIMEOUT_SECONDS`, 5s) and the
+  controller turns SQLSTATE `55P03` into a **503 + `Retry-After`**, not a 500. With a small
+  FPM pool, requests parked indefinitely on one row lock is the whole API refusing to serve,
+  not a slow registration. `SET LOCAL` so it reverts on commit and cannot leak into the cron
+  jobs and workers that legitimately run long statements.
+
+**Capacity, FPM and the box.** The server is **2 vCPU / 3.8GB**, shared by `wunderkind-prod`,
+`wunderkind-dev`, `postgres-prod`, `postgres-dev` and `caddy`. The image default was
+`pm.max_children = 5` — five concurrent PHP requests for the *entire* API, not five
+registrations — so a burst was an outage for every other endpoint. `docker/www.conf` sets
+`pm = static`, `pm.max_children = 12` (~6x cores; PHP here is CPU-bound, so more runnable
+workers buy context switches, not throughput) and nginx gets `client_body_buffer_size 2m` so a
+1.4MB body stops spilling to a temp file on every registration. **Raise `max_children` when
+the box grows cores, not when a queue looks slow** — and re-measure, since a 1.4MB
+registration is only ~22ms of JSON work and ~20MB peak.
+
 **Round processing is queued, not inline.** `competition-draw-rounds` and
 `competition-resolve-rounds` only *dispatch* now — one `DrawCompetitionRoundMessage` /
 `ResolveCompetitionRoundMessage` per due round onto the **`competition`** transport, drained

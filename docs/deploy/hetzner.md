@@ -249,6 +249,46 @@ docker logs --tail 50 caddy
 Logging in at `/admin` is the specific check that `trusted_proxies` is working — without
 it the post-login redirect drops to `http://`.
 
+## Always-on workers (not cron)
+
+Supervisord runs `php-fpm`, `nginx`, `crond` — and, since competition registration was
+queued, **`registration-consume`**: a long-lived `messenger:consume registration` worker.
+
+It is the only Messenger consumer not paced by crond, and the distinction matters
+operationally. Every other queue tolerates up to 60s of pickup latency because nothing waits
+on it inside a user-visible window. This one is load-bearing in both directions: a club's
+squad is not stored until its message is handled, and `CompetitionDrawService` **refuses to
+draw a competition with unstored submissions** — so a cron-paced consumer would routinely
+stall the first round of a competition that just filled.
+
+**If this worker is not running, registrations silently stop completing.** Clubs still get
+their 201 and still hold their slot, but no squad is written and no round is ever drawn.
+`app:competition:health` reports it (`submissions.stalePending`, and a warning naming this
+program by name). To check and recover:
+
+```bash
+docker exec wunderkind-prod supervisorctl status registration-consume
+docker exec wunderkind-prod supervisorctl restart registration-consume
+docker exec wunderkind-prod php bin/console app:competition:health --strict
+```
+
+A submission whose retries are spent lands on the `failed` transport with its payload intact
+and the entrant marked `failed` — replay it with `messenger:failed:retry`, or withdraw the
+club. The slot is deliberately left held rather than freed automatically; that is an
+operator's call mid-competition.
+
+## PHP-FPM sizing
+
+`docker/www.conf` (copied to `/usr/local/etc/php-fpm.d/zz-pool.conf`) overrides the image
+default of `pm.max_children = 5` — which was a hard ceiling of five concurrent PHP requests
+for the **entire API**, shared with `/api/sync` and everything else, so one burst of
+tournament registrations starved every other endpoint.
+
+It is now `pm = static`, `pm.max_children = 12`, sized against this specific box: **2 vCPU /
+3.8 GB**, also hosting the dev stack and both Postgres instances. CPU, not memory, is the
+binding constraint (~456 MB steady-state in use), and PHP here is CPU-bound. **Raise this when
+the box gains cores, not when a queue looks slow.**
+
 ## Cron
 
 The image bakes a crontab (busybox `crond` under supervisord) running
