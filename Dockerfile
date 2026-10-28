@@ -55,6 +55,7 @@ COPY docker/competition-auto-fill-spoof-entrants.sh /usr/local/bin/competition-a
 COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
 COPY docker/pool-consume.sh /usr/local/bin/pool-consume.sh
+COPY docker/competition-consume.sh /usr/local/bin/competition-consume.sh
 COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
@@ -122,6 +123,16 @@ COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 #     every enabled country queues hundreds of generation chunks, and an admin
 #     waiting on a country regenerate should not sit behind a routine overnight
 #     top-up. --limit is low (20) because each chunk is up to 100 players.
+#   every 1 min — competition-consume: drains the separate `competition` Messenger
+#     transport (per-round draw and resolve messages). Fourth transport, because
+#     round processing is latency-sensitive in a way the others are not: a
+#     tournament's next round is scheduled against wall-clock time, so a backlog
+#     here reads to players as a late draw rather than a slow background job, and
+#     must not queue behind an overnight pool top-up or a country regenerate.
+#     --limit is 10 because resolving one round runs the match engine plus
+#     narrative generation for up to 32 fixtures. The two competition-*-rounds
+#     ticks above only *queue* now, so they stay cheap however many tournaments
+#     are running concurrently; this is where that work actually happens.
 #   hourly at :35 — starter-pool-audit: runs app:starter-pool:audit, which checks
 #     every enabled country's starter-pack supply (the same verdict
 #     app:starter-pack:check reports) and queues top-up chunks for any that fall
@@ -145,11 +156,12 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '* * * * *    /usr/local/bin/messenger-consume.sh               >> /var/log/messenger-consume-cron.log     2>&1' \
     '* * * * *    /usr/local/bin/worldpack-consume.sh                >> /var/log/worldpack-consume-cron.log    2>&1' \
     '* * * * *    /usr/local/bin/pool-consume.sh                     >> /var/log/pool-consume-cron.log         2>&1' \
+    '* * * * *    /usr/local/bin/competition-consume.sh              >> /var/log/competition-consume-cron.log  2>&1' \
     '35 * * * *   /usr/local/bin/starter-pool-audit.sh               >> /var/log/starter-pool-audit-cron.log   2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/starter-pool-audit.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/starter-pool-audit.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

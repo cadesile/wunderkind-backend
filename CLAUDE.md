@@ -270,6 +270,22 @@ committing it before a failed flush would leave a live bracket unresolvable. `*_
 are deliberately **not** pruned: an audit answers "how was this result derived" about a
 match already played, which is exactly when someone asks.
 
+**Round processing is queued, not inline.** `competition-draw-rounds` and
+`competition-resolve-rounds` only *dispatch* now — one `DrawCompetitionRoundMessage` /
+`ResolveCompetitionRoundMessage` per due round onto the **`competition`** transport, drained
+every minute by `docker/competition-consume.sh`. They used to draw and resolve every due
+round inline, and a resolve runs the match engine plus narrative generation for up to 32
+fixtures, so several tournaments hitting a round boundary in the same minute was unbounded
+work in one 256M process.
+
+**The claim is taken by the handler, not the dispatcher**, and that is load-bearing: claiming
+at dispatch would start the lease ticking while the message waited in the queue, and a lost
+message would leave a round claimed by nobody. It also means dispatch needs no deduplication
+— a duplicate delivery just fails its claim and returns. Unlike `app:starter-pool:audit`,
+dispatch is therefore **not** gated on an undrained queue; gating would stall other
+competitions for no gain. `drawDueRounds()`/`publishDueResults()` remain as synchronous
+drivers over the same per-round methods the handlers call, for tests and as a fallback.
+
 **Round claims are leases, and a status transition must commit with its own work.**
 `claimDraw()`/`claimResults()` set `drawLockedAt`/`resolveLockedAt`, reclaimable after
 `CompetitionRound::CLAIM_LEASE_SECONDS` (15 min) and cleared on success. They used to be

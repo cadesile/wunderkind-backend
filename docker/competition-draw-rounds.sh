@@ -1,12 +1,18 @@
 #!/bin/sh
-# Draws every CompetitionRound whose scheduledAt is due. Matches must fire
-# near their scheduled timestamp, so this runs every minute (see the Dockerfile
-# crontab) — cheap since the due-row query is an indexed, normally-empty scan.
+# QUEUES every CompetitionRound whose scheduledAt is due, one message each onto the
+# `competition` transport — it no longer draws them. Rounds must fire near their scheduled
+# timestamp, so this runs every minute (see the Dockerfile crontab), and the tick is now
+# cheap regardless of how many tournaments are running: an indexed, normally-empty due-row
+# scan plus one INSERT per due round. The drawing itself happens on competition-consume.sh.
 #
-# A flock guard is defense-in-depth alongside the DB-level claim-lock
-# (CompetitionDrawService::claimDraw) against crond starting a new instance of
-# this script before the prior one has exited; the DB lock alone is sufficient
-# for correctness, this just avoids piling up redundant processes.
+# The split exists because a draw is not cheap — it writes an inbox message per entrant and
+# a push per fixture — and doing that for every due round inline, in one process, is what
+# would not hold with several tournaments rolling at once.
+#
+# A flock guard is defense-in-depth alongside the DB-level claim lease
+# (CompetitionDrawService::claimDraw) against crond starting a new instance of this script
+# before the prior one has exited; the lease alone is sufficient for correctness, this just
+# avoids piling up redundant processes.
 
 CONSOLE=/var/www/html/bin/console
 LOCKFILE=/tmp/competition-draw-rounds.lock

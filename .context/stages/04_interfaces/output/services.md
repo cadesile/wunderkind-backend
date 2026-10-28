@@ -196,6 +196,17 @@ filename alone.
 - **`Competition/MatchEngineSideFactory`** — builds `MatchEngineSide` inputs
   from whatever a domain stores. It lives in `Service/Competition`, not beside
   the value object, precisely so the engines import no entities.
+- **Round processing is queued.** `CompetitionDrawService::dispatchDueDraws()` and
+  `CompetitionResultsService::dispatchDueResults()` are what the cron calls: one
+  `DrawCompetitionRoundMessage`/`ResolveCompetitionRoundMessage` per due round onto the
+  **`competition`** transport (its own, because a round is latency-sensitive against
+  wall-clock time and must not queue behind a pool top-up or a world-pack regenerate),
+  drained by `docker/competition-consume.sh`. The handlers take the claim themselves, so a
+  duplicate dispatch is a no-op and the dispatcher needs no dedup guard — a deliberate
+  divergence from `StarterPoolAuditService`, whose queue depth genuinely stacks.
+  `drawRoundIfClaimable()`/`publishResultsIfClaimable()` are the shared per-round
+  implementation; `drawDueRounds()`/`publishDueResults()` remain as synchronous drivers over
+  them for tests and as a fallback.
 - **Round claims are leases** (both `CompetitionDrawService` and
   `CompetitionResultsService`). `drawLockedAt`/`resolveLockedAt` are reclaimable after
   `CompetitionRound::CLAIM_LEASE_SECONDS` and released on success in the same flush as the

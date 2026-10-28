@@ -166,28 +166,48 @@ script, and the three guards in `StarterPoolAuditService` — never queue work g
 cannot finish, never stack a sweep on an undrained queue, and let each chunk re-check its own
 target so a replay costs nothing.
 
-### 3.1 New `competition` transport
+### 3.1 New `competition` transport — DONE
 
 `competition: 'doctrine://default?queue_name=competition'` plus
-`docker/competition-consume.sh`, exactly as `pool` and `worldpack` are set up. Separate from
-both for their own stated reason: a round resolution must not queue behind an overnight pool
-top-up or an admin-triggered world-pack regenerate.
+`docker/competition-consume.sh` (flock, `--time-limit=50`, `--limit=10`), a `Dockerfile`
+COPY, chmod and a per-minute crontab entry. A fourth transport rather than a fourth user of
+an existing one, because round processing is **latency-sensitive in a way the others are
+not**: a tournament's next round is scheduled against wall-clock time, so a backlog here
+reads to players as a late draw rather than as a slow background job, and must not queue
+behind an overnight pool top-up or a country regenerate.
 
-### 3.2 Draw and resolve become per-round messages
+### 3.2 Draw and resolve become per-round messages — DONE
 
-Today `drawDueRounds()` and `publishDueResults()` process **every** due round synchronously
-in one tick, and each round resolves up to 32 fixtures inline — each running the full match
-engine plus narrative generation. With N rolling tournaments that is unbounded work in a
-single cron tick, which is the exact shape `app:starter-pool:audit` had to stop doing.
+`DrawCompetitionRoundMessage` / `ResolveCompetitionRoundMessage`, carrying a round id and
+nothing else. The cron commands call new `dispatchDueDraws()` / `dispatchDueResults()`, so a
+tick is one indexed due-row scan plus one INSERT per due round.
 
-The cron commands become *dispatchers*: find due rounds, claim them, dispatch one message per
-round (or per fixture, if a single round proves too coarse). Adopt the three guards above;
-`queueIsBusy()` has a direct analogue here.
+**The claim is taken by the handler, not the dispatcher** — the design decision the rest
+rests on. Claiming at dispatch would start the lease
+(`CompetitionRound::CLAIM_LEASE_SECONDS`) counting down while the message sat in the queue,
+so a backlog would silently expire its own claims, and a message lost before delivery would
+leave a round claimed by nobody. Claiming in the handler keeps the claim adjacent to the work
+it protects and makes a duplicate delivery free.
 
-### 3.3 Provisioning
+**Deliberate divergence from `StarterPoolAuditService`: dispatch is not gated on an undrained
+queue.** That guard exists there because its queue depth scales with how far a pool has
+drifted, so a second sweep genuinely stacks. Here a dispatch is one row per due round and a
+duplicate is a no-op, so gating would stall *other* competitions' progress for no benefit.
+Throughput is bounded at the consumer, where the expensive work is.
 
-`CompetitionProvisionInstancesCommand` provisions inline too, and `docker/`'s wrapper pins it
-at `memory_limit=128M`. Same treatment.
+`drawDueRounds()` / `publishDueResults()` survive as the synchronous drivers over the same
+extracted per-round methods (`drawRoundIfClaimable()` / `publishResultsIfClaimable()`), so
+the queued and inline paths cannot drift, the existing tests keep exercising the real logic,
+and there is a working fallback if the consumer is ever not running.
+
+Covered by `tests/Service/Competition/CompetitionRoundQueueTest.php`.
+
+### 3.3 Provisioning — NOT DONE
+
+`CompetitionProvisionInstancesCommand` still provisions inline, with its wrapper pinned at
+`memory_limit=128M`. Lower priority than 3.2: provisioning is driven by template schedules
+rather than by how many tournaments are mid-flight, so it does not scale with concurrency the
+way round processing does. Same treatment when it matters.
 
 ### 3.4 Prewarm becomes a queued message
 
@@ -233,6 +253,6 @@ shares a request or tick with game-state mutation at all, so it cannot affect ei
 |---|---|---|
 | 0 (§1) | `master` | Correctness. §1.1 can permanently stall a live bracket. |
 | 1 (§2.1) | **done** | Claims-as-leases, plus making the draw's status transition atomic — which is what actually kept a crashed draw recoverable. |
-| 2 (§3) | nothing | Bounds the work per tick. Needs Phase 0 first, since §3.4 depends on §1.1's DBAL write. |
+| 2 (§3) | §3.1/§3.2 **done**; §3.3 and §3.4 open | Bounds the work per tick. §3.4 (queued prewarm) still depends on §1.1's DBAL write, which has landed. |
 | 3 (§4) | nothing | Falls out of Phase 2 cheaply. |
 | §5 | `master` | A data decision, not an engineering one. |

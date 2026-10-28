@@ -1,13 +1,20 @@
 #!/bin/sh
-# Publishes results for every CompetitionRound whose matchesResolveAt is due.
-# Matches must fire near their scheduled timestamp, so this runs every minute
-# (see the Dockerfile crontab) — cheap since the due-row query is an indexed,
-# normally-empty scan.
+# QUEUES every CompetitionRound whose matchesResolveAt is due, one message each onto the
+# `competition` transport — it no longer resolves them. Results must land near their
+# scheduled timestamp, so this runs every minute (see the Dockerfile crontab), and the tick
+# is now cheap regardless of how many tournaments are running: an indexed, normally-empty
+# due-row scan plus one INSERT per due round. The resolving happens on
+# competition-consume.sh.
 #
-# A flock guard is defense-in-depth alongside the DB-level claim-lock
-# (CompetitionResultsService::claimResults) against crond starting a new
-# instance of this script before the prior one has exited; the DB lock alone
-# is sufficient for correctness, this just avoids piling up redundant processes.
+# This is the split that mattered most. Resolving one round runs the match engine and
+# narrative generation for every fixture in it — up to 32 — and this tick used to do that
+# for every due round inline, in a single process with a 256M limit. Several tournaments
+# reaching a round boundary in the same minute was unbounded work in one tick.
+#
+# A flock guard is defense-in-depth alongside the DB-level claim lease
+# (CompetitionResultsService::claimResults) against crond starting a new instance of this
+# script before the prior one has exited; the lease alone is sufficient for correctness,
+# this just avoids piling up redundant processes.
 
 CONSOLE=/var/www/html/bin/console
 LOCKFILE=/tmp/competition-resolve-rounds.lock
