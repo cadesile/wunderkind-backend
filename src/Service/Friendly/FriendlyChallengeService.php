@@ -19,8 +19,10 @@ use App\Service\MatchEngine\MatchEngineContext;
 use App\Service\Notification\PushNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\Friendly\FriendlyChallengeSquad;
+use App\Entity\Friendly\FriendlyChallengeSubmission;
 use App\Enum\Friendly\FriendlySide;
 use App\Repository\Friendly\FriendlyChallengeSquadRepository;
+use App\Repository\Friendly\FriendlyChallengeSubmissionRepository;
 use App\Repository\Friendly\FriendlyChallengeAuditRepository;
 
 class FriendlyChallengeService
@@ -47,6 +49,7 @@ class FriendlyChallengeService
         private readonly EntityManagerInterface $em,
         private readonly FriendlyChallengeRepository $repository,
         private readonly FriendlyChallengeSquadRepository $squadRepository,
+        private readonly FriendlyChallengeSubmissionRepository $submissionRepository,
         private readonly FriendlyChallengeAuditRepository $auditRepository,
         private readonly MatchQueryService $matchQueryService,
         private readonly DeterministicEngine $deterministicEngine,
@@ -133,6 +136,14 @@ class FriendlyChallengeService
                 $parts['players'],
                 $parts['staff'],
                 $parts['engine'],
+            ));
+
+            // The posted body verbatim, beside the engine inputs derived from it. Kept after
+            // the match is played, unlike the squad row — see FriendlyChallengeSubmission.
+            $this->em->persist(new FriendlyChallengeSubmission(
+                $challenge,
+                FriendlySide::CHALLENGER,
+                $parts['envelope'],
             ));
 
             $this->em->flush();
@@ -267,6 +278,7 @@ class FriendlyChallengeService
                 $acceptorParts['staff'],
                 $acceptorParts['engine'],
             );
+            $this->submissionRepository->upsertSide($challenge, FriendlySide::ACCEPTOR, $acceptorParts['envelope']);
             $challenge->setStatus(FriendlyChallengeStatus::ACCEPTED);
             $challenge->setAcceptedAt($now);
             $challenge->setKickoffAt($kickoffAt);
@@ -386,6 +398,16 @@ class FriendlyChallengeService
             $awaySide,
             MatchEngineContext::forFriendly((string) $challenge->getId()),
         );
+
+        // Same reasoning as CompetitionResultsService::resolveFixture(): both squad rows are
+        // read-only engine input, nothing below reads them again, and resolveDueMatches()
+        // loops over every due challenge — so leaving them managed accumulates a decoded
+        // XI per challenge for the length of the run.
+        foreach ([$challengerSquad, $acceptorSquad] as $squad) {
+            if ($squad !== null) {
+                $this->em->detach($squad);
+            }
+        }
 
         $homeClubIdentity = $this->matchQueryService->normalizeClubIdentityArray($homeDisplay ?? [], $homeClub);
         $awayClubIdentity = $this->matchQueryService->normalizeClubIdentityArray($awayDisplay ?? [], $awayClub);

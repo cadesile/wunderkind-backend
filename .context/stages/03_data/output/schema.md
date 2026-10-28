@@ -11,15 +11,15 @@ constraints. Don't restate field lists here.
 - **Player/squad:** `player` (embeds `PersonalityProfile` — no separate table), `player_archetype`, `player_career_stat`, `player_career_stat_snapshot`, `staff_career_profile` (sync v2 — staff identity/avatar, no stats), `agent`, `scout`, `staff`, `player_siblings` (self-referential join table)
 - **Sponsorship/finance:** `sponsor`, `investor`
 - **Messaging/admin comms:** `admin_message`, `admin_message_audience_group` (join table), `message_delivery`, `audience_group`, `audience_group_member`, `inbox_message`, `game_event_template`, `social_account_connection`, `social_post_template`
-- **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_entrant_squad`, `competition_round`, `competition_fixture`, `competition_result`, `competition_result_audit`, `competition_response_cache`, `reward_template`, `entrant_reward_claim`
-- **Friendlies:** `friendly_challenge`, `friendly_challenge_squad`, `friendly_challenge_audit`
+- **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_entrant_squad`, `competition_entrant_submission`, `competition_round`, `competition_fixture`, `competition_result`, `competition_result_audit`, `competition_response_cache`, `reward_template`, `entrant_reward_claim`
+- **Friendlies:** `friendly_challenge`, `friendly_challenge_squad`, `friendly_challenge_submission`, `friendly_challenge_audit`
 - **Config/singleton:** `game_config`, `pool_config`, `starter_config`
 - **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
 - **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table, shared by the `async` and `failed` transports (differentiated by `queue_name`, not by table — see `config/packages/messenger.yaml`); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
 
-## The split rows (`*_squad`, `*_audit`, `*_response_cache`)
+## The split rows (`*_squad`, `*_submission`, `*_audit`, `*_response_cache`)
 
-Five of the tables above exist because a single column cannot express two
+Seven of the tables above exist because a single column cannot express two
 different read profiles. ORM 3 removed PARTIAL hydration, so **every mapped
 column is decoded on every read of its row** — and the competition and friendly
 domains both stored client-submitted squads and admin-only forensics on rows
@@ -34,6 +34,8 @@ timed out in production for the same reason; and
 |---|---|---|
 | `competition_entrant_squad` | XI, staff, engine-only club keys (`cohesion`, `managerMotivation`, `lowUrgency`) | round resolution; one match detail; admin viewer |
 | `friendly_challenge_squad` | the same, per side | friendly resolution; one match detail; admin viewer |
+| `competition_entrant_submission` | `envelope_json` — the posted body verbatim, `submitted_at` | nothing on a schedule; admin entrant detail, forensics |
+| `friendly_challenge_submission` | the same, per side | nothing on a schedule; admin |
 | `competition_result_audit` | `event_log_json`, `computation_audit_json` | the admin competition detail page, and nothing else |
 | `friendly_challenge_audit` | `event_log_json` | the admin challenge detail page, and nothing else |
 | `competition_response_cache` | the prebuilt viewer-independent bracket response | every read of `GET /api/competitions/{id}` |
@@ -54,6 +56,33 @@ Two rules keep this from regressing:
 resolve, so they are dead). `*_audit` rows are **not** — an audit exists to
 answer "how was this result derived" about a match already played, which is
 exactly when someone asks. Ageing them out is a retention policy, undecided.
+
+`*_submission` rows are **not pruned either**, and that is the whole reason they
+are a third table rather than a column on `*_squad`, which is pruned and which
+round resolution decodes twice per fixture. They hold the registration envelope
+exactly as the client posted it — every key, including the ones no backend code
+reads yet.
+
+They exist because `clubDisplayBlock()` is a picked ~22-key set, which is what
+keeps a bracket render bounded, but which meant everything outside it was
+decoded and discarded. A measured 2026 submission is **1,408,914 bytes**, of
+which the XI and staff are ~7KB: nearly all of it is `club` history the client
+spreads in (`cupTrophies`, `facilityUpgrades`, financials, season tickets,
+stadium). Keeping it costs the hot paths nothing.
+
+Three things to know before touching them:
+
+- **Contents are untrusted.** Structural validation is `SnapshotValidator`'s
+  pass and nothing more. Never read game truth from here; the normalised
+  projections are the display block and the squad row.
+- **Never load them in bulk on a page that renders many entrants.** They are
+  the largest rows in the domain.
+  `CompetitionEntrantSubmissionRepository::findByEntrants()` exists for the
+  cases that legitimately need several, before anything needed it.
+- **A write goes through `splitSnapshot()`'s `envelope` key**, which both
+  domains share, so the competition and friendly sides cannot drift about what
+  "the submission" means. `facilities` reaches it only because the DTO declares
+  it — `MapRequestPayload` drops undeclared properties.
 
 ## Notable constraints (beyond ordinary FKs — see `entities.md` for those)
 

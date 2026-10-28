@@ -336,4 +336,33 @@ class SnapshotValidatorTest extends TestCase
 
         $this->assertSame([], $violations);
     }
+
+    /**
+     * The size cap had no test at all, which is how it stayed at a value derived from an
+     * estimate (~25KB) rather than a measurement while real client submissions were ~1.4MB.
+     * These two pin the boundary so the next change to it has to be deliberate.
+     */
+    public function testAcceptsASnapshotTheSizeOfARealClientSubmission(): void
+    {
+        // Padding on the club object rather than the players, so the players stay a valid
+        // XI and the only thing under test is total serialized size.
+        $club = ['id' => 'club-1', 'name' => 'Test FC', 'notes' => str_repeat('a', 1_500_000)];
+
+        $violations = $this->validator->validate($club, $this->validPlayers(), [], 'club-1');
+
+        $this->assertSame([], $violations);
+    }
+
+    public function testRejectsASnapshotOverTheSizeCap(): void
+    {
+        $club = ['id' => 'club-1', 'name' => 'Test FC', 'notes' => str_repeat('a', SnapshotValidator::MAX_SNAPSHOT_BYTES)];
+
+        $violations = $this->validator->validate($club, $this->validPlayers(), [], 'club-1');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringStartsWith(
+            sprintf('snapshot must be at most %d bytes, got ', SnapshotValidator::MAX_SNAPSHOT_BYTES),
+            $violations[0],
+        );
+    }
 }

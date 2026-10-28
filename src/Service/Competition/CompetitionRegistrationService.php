@@ -174,7 +174,7 @@ class CompetitionRegistrationService
      * registration of the identical envelope would have honoured.
      *
      * @param array<string, mixed> $snapshotJson
-     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>, clientSnapshotAt: ?string, playerCount: int, ovr: int}
+     * @return array{display: array<string, mixed>, engine: array<string, mixed>, players: list<mixed>, staff: list<mixed>, envelope: array<string, mixed>, clientSnapshotAt: ?string, playerCount: int, ovr: int}
      */
     public static function splitSnapshot(array $snapshotJson, Club $club): array
     {
@@ -195,6 +195,11 @@ class CompetitionRegistrationService
             'engine'           => self::clubEngineBlock($clubData),
             'players'          => $players,
             'staff'            => $staff,
+            // The posted body untouched, for the submission row. Everything above this line
+            // is a derived, bounded projection of it; this is the original. Carried here
+            // rather than re-threaded through each caller so the competition and friendly
+            // write sites cannot disagree about what "the submission" means.
+            'envelope'         => $snapshotJson,
             'clientSnapshotAt' => CompetitionEntrant::sanitizeClientSnapshotAt(is_string($rawClientSnapshotAt) ? $rawClientSnapshotAt : null),
             'playerCount'      => count($players),
             'ovr'              => $ovr,
@@ -228,6 +233,36 @@ class CompetitionRegistrationService
                 'players'   => json_encode($parts['players'], JSON_THROW_ON_ERROR),
                 'staff'     => json_encode($parts['staff'], JSON_THROW_ON_ERROR),
                 'engine'    => json_encode($parts['engine'], JSON_THROW_ON_ERROR),
+            ],
+        );
+    }
+
+    /**
+     * Writes (or replaces) the verbatim-submission row for one entrant.
+     *
+     * Upserted on the same `entrant_id` key as writeSquad(), and called next to it, so a
+     * resubmission replaces both or neither. Raw SQL for the same reason: these two write
+     * sites bypass the ORM to get ON CONFLICT, and splitting the style between them would
+     * mean a failed flush could leave the squad replaced and the submission stale.
+     *
+     * @param array<string, mixed> $parts Output of splitSnapshot().
+     */
+    private function writeSubmission(\Doctrine\DBAL\Connection $connection, string $entrantId, array $parts): void
+    {
+        $connection->executeStatement(
+            <<<'SQL'
+            INSERT INTO competition_entrant_submission
+                (id, entrant_id, envelope_json, submitted_at)
+            VALUES (:id, :entrantId, :envelope, :submittedAt)
+            ON CONFLICT (entrant_id) DO UPDATE
+                SET envelope_json = EXCLUDED.envelope_json,
+                    submitted_at  = EXCLUDED.submitted_at
+            SQL,
+            [
+                'id'          => (new UuidV7())->toRfc4122(),
+                'entrantId'   => $entrantId,
+                'envelope'    => json_encode($parts['envelope'] ?? [], JSON_THROW_ON_ERROR),
+                'submittedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
             ],
         );
     }
@@ -714,6 +749,7 @@ class CompetitionRegistrationService
             }
 
             $this->writeSquad($connection, (string) $entrantId, $parts);
+            $this->writeSubmission($connection, (string) $entrantId, $parts);
 
             if ($entryFeePence > 0) {
                 $this->em->refresh($club);
@@ -937,6 +973,7 @@ class CompetitionRegistrationService
             );
 
             $this->writeSquad($connection, $entrant->getId()->toRfc4122(), $parts);
+            $this->writeSubmission($connection, $entrant->getId()->toRfc4122(), $parts);
             $connection->commit();
         } catch (\Throwable $e) {
             $connection->rollBack();

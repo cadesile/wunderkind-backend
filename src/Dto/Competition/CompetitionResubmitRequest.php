@@ -25,5 +25,14 @@ class CompetitionResubmitRequest
     #[Assert\Type('array')]
     public array $staff = [];
 
+    /**
+     * Stored verbatim on the submission row and read by nothing — see
+     * CompetitionRegisterRequest, which declares it for the same reason.
+     *
+     * @var array<string, mixed>
+     */
+    #[Assert\Type('array')]
+    public array $facilities = [];
+
     public ?string $clientSnapshotAt = null;
 }

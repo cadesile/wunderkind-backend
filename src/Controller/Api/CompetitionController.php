@@ -221,7 +221,7 @@ class CompetitionController extends AbstractController
             $result = $this->registrationService->register(
                 $activeCompetition,
                 $club,
-                $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->clientSnapshotAt),
+                $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->clientSnapshotAt, $dto->facilities),
             );
         } catch (\DomainException $e) {
             return match ($e->getMessage()) {
@@ -356,7 +356,7 @@ class CompetitionController extends AbstractController
             return $this->json(['error' => 'invalid_snapshot', 'violations' => $violations], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $this->registrationService->resubmit($entrant, $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->clientSnapshotAt));
+        $this->registrationService->resubmit($entrant, $this->buildSnapshotArray($dto->club, $dto->players, $dto->staff, $dto->clientSnapshotAt, $dto->facilities));
 
         $currentRound = $this->roundRepository->findCurrentRound($activeCompetition);
         $locksAt      = $currentRound !== null && $currentRound->getStatus() === CompetitionRoundStatus::DRAW_PENDING
@@ -451,14 +451,21 @@ class CompetitionController extends AbstractController
 
     /**
      * The envelope handed to the registration service, which splits it across the entrant's
-     * display block and its squad row. No `facilities`: nothing ever read it back.
+     * display block, its squad row, and its verbatim submission row.
+     *
+     * `facilities` rides along for the submission row only. It is deliberately NOT put back
+     * on the entrant or the squad — it was removed from both because every bracket render
+     * decoded it and nothing read it, and that is still true.
+     *
+     * @param array<string, mixed> $facilities
      */
-    private function buildSnapshotArray(array $club, array $players, array $staff, ?string $clientSnapshotAt): array
+    private function buildSnapshotArray(array $club, array $players, array $staff, ?string $clientSnapshotAt, array $facilities = []): array
     {
         return [
             'club'             => $club,
             'players'          => $players,
             'staff'            => $staff,
+            'facilities'       => $facilities,
             'clientSnapshotAt' => $clientSnapshotAt,
         ];
     }
