@@ -213,13 +213,12 @@ distinct is load-bearing:
   (it is built from an older facility engine), and `window.BMC_ISO` is replaced
   by the real `compose*Svg`.
 
-**The landing page loads `facility-compositor.js`, not `stadium-compositor.js`**
-(changed 2026-10). One bundle, all four sites, and `composeStadiumSvg` is
-byte-identical between the two, so the switch in `base.html.twig` needed no call-site
-edits. **Nothing in the repo loads `stadium-compositor.js` any more** — it, its
-build script and its `entry.ts` are candidates for retirement, which the
-facility entry's own docblock says is the landing task's call; it was left in
-place because deleting it is a build-script change.
+**The landing page loads `facility-compositor.js`** — one bundle, all four sites
+(changed 2026-10). `composeStadiumSvg` was byte-identical between it and the old
+stadium-only bundle, so the switch in `base.html.twig` needed no call-site edits.
+**The stadium-only pair was deleted on 2026-10-31**, once that had been true
+through a second sprite drop: one compositor and one build script now cover all
+four sites.
 
 **Every sprite mounts through `IntersectionObserver`** (`mountWhenVisible()` in
 `landing.js`). A full facility site is ~200KB of path data and the page draws
@@ -264,9 +263,9 @@ Shared conventions worth knowing before adding a section:
 - **Pixel sprites are composed client-side from `data-*` attributes**, never
   server-rendered as markup. `public/assets/kit-compositor.js`
   (`composeKitSvg()` — club kits/badges), `avatar-compositor.js`
-  (`composePlayerSpriteSvg()` — people), `stadium-compositor.js`
-  (`composeStadiumSvg()`) and `trophy-compositor.js` (`composeTrophySvg()`) all
-  load before `landing.js` (see `templates/landing/base.html.twig`). All four
+  (`composePlayerSpriteSvg()` — people), `facility-compositor.js`
+  (`composeStadiumSvg()` and the other three sites) and `trophy-compositor.js`
+  (`composeTrophySvg()`) all load before `landing.js` (see `templates/landing/base.html.twig`). All four
   are verbatim ports of the client's own sprite code — and all four are
   GENERATED, so you never port one by hand; see the build-rule bullet below.
 - **`clubBadgeIconsHtml()` in `landing.js` is the one club-identity renderer**,
@@ -318,10 +317,13 @@ Shared conventions worth knowing before adding a section:
   cases across two fixtures — the stadium has its own from v3, carrying both the
   v3 look and the previous drop's 63 hashes re-rendered with `STADIUM_V2_LOOK` —
   and now also deep-checks the exported geometry constants.
-  `build-stadium-compositor.sh` and `public/assets/stadium-compositor.js` still
-  exist but nothing loads them — that pair bundled the stadium alone, back when
-  nothing here rendered the other three sites. It is now pure maintenance cost
-  (two scripts and two entry files per drop) and rotted once already.
+  **The stadium-only pair was deleted on 2026-10-31** —
+  `build-stadium-compositor.sh`, `scripts/stadium-compositor/entry.ts` and
+  `public/assets/stadium-compositor.js`. It bundled the stadium alone, back when
+  nothing here rendered the other three sites; nothing had loaded it since the
+  landing moved to the four-site bundle, and the two emitted byte-identical
+  `composeStadiumSvg` output. There is now one compositor and one build script
+  for all four sites.
 - **Stadium v3 changes the look, and the options are pinned at one seam.**
   Arched floodlights (shorter, curving over the bowl corners) and the scoreboard
   on the back stand's roof instead of the north-west corner — which stand
