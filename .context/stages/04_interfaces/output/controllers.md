@@ -191,6 +191,40 @@ edit path. Covered by `FriendlyChallengeCrudPageTest`, which loads both an
 OPEN row (null acceptor, null scores, all result blobs null) and a COMPLETE
 one.
 
+**`LeaderboardAwardDefinitionCrudController`** — **full CRUD**, the thing operators
+actually configure: which chart awards, at what cadence, to how many places. `category`
+and `cadence` use `ChoiceField` + `EnumType` rather than a string-valued choice list —
+the entity properties hold enum instances, and strings make the form page 500 with
+"Object of class … could not be converted to string" (a real failure here, not a
+precaution). Placements are a `CollectionField` of `LeaderboardAwardPlacementType`, which
+is deliberately a child entity + plain `FormType` rather than a json column with
+`setFormType()` — the latter hits the documented injected-`CollectionType`-options trap.
+`lastClosedPeriodKey`/`lastClosedAt` are `->hideOnForm()`: an editable monotonic anchor
+re-opens closed periods when moved back and silently skips them when moved forward, and
+`LeaderboardAwardAdminTest` asserts they are absent from the form.
+`persistEntity()`/`updateEntity()` refuse a duplicate `(category, cadence)` with a flash
+**before** flushing, because letting the unique throw out of `flush()` closes the
+EntityManager. Its detail page is overridden
+(`admin/leaderboard_award_definition_detail.html.twig`, overriding
+`content_header_wrapper` with `{{ parent() }}` first) to add a **Close now** panel —
+there is no crontab under Lando, so this is how the close job is exercised by hand. That
+panel posts to `LeaderboardAwardCloseController` (`admin_leaderboard_award_close_now`),
+**POST-only and CSRF-guarded**, with a "close the current, still-open period early"
+checkbox for the `--force` path; closing a period prunes live rows, pays prizes and sends
+inbox mail, so a stray GET returns 405 rather than doing any of that.
+
+**`LeaderboardPeriodArchiveCrudController`** — read-only (new/edit/delete disabled),
+sorted `closedAt DESC`. An archive is immutable history written by the close job. A row
+sitting at `pending` past its 300s claim lease is the operational signal that a close died
+part-way — its archive is incomplete and its live `leaderboard_entry` rows are
+deliberately unpruned.
+
+**`LeaderboardPeriodArchiveEntryCrudController`** — read-only, and **this is the "awards
+won by this account" screen**: filterable on `userId` and `awarded`, which is exactly why
+those are a denormalised indexed string and a plain boolean rather than an association.
+Account erasure nulls `user_id` and keeps the row, so this screen stops returning rows for
+a deleted account — correct, and documented in `docs/api/account-delete.md`.
+
 **`UserLedgerCrudController`** — read-only (new/edit/delete disabled), same
 `NotificationLogCrudController`/`DeletionRequestCrudController` pattern — an
 audit trail of `UserLedger` rows, filterable by `user`/`club`

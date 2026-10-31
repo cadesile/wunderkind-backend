@@ -344,3 +344,37 @@ was not safe to retry:
   tables are for: the old cap was derived from an estimated 25KB snapshot and 422'd real
   1.4MB registrations. `down()` drops both tables cleanly.
 
+
+- `Version20261031010000` — **two nullable columns on `leaderboard_entry`
+  (`baseline_score`, `cumulative_score`), plus a one-off reset of in-flight period boards.**
+  Turns every non-`'all-time'` row into a GROWTH row. `score` has never been an accumulator
+  — every writer re-reads a cumulative total and stores it absolutely — so deleting rows at
+  a period boundary resets nothing; the existing weekly board is the proof, getting a fresh
+  key every ISO week and still showing all-time career goals. Only a baseline resets a
+  score, and this is where one starts being kept. Both columns are nullable because
+  `'all-time'` rows are standings and are never growth-scored, and because a baseline is
+  stamped lazily at a club's first observation inside a period.
+  **There is nothing to backfill** — a baseline is a statement about when a period started
+  observing a club, and for every period already underway that was never recorded. The
+  `UPDATE … SET baseline_score = score, cumulative_score = score, score = 0 WHERE period <>
+  'all-time'` instead makes the discontinuity explicit and one-off: every in-flight row is
+  declared to start measuring growth at its current cumulative. Without it those rows would
+  sit at a stale cumulative with a NULL baseline and `assignRanks()` would rank the whole
+  board on it. **Visible effect on deploy: the current ISO week's boards read zero and climb
+  from there**, which is the intended semantics arriving a few days early. The statement is a
+  constant on the migration class (`RESET_IN_FLIGHT_PERIODS_SQL`) so
+  `LeaderboardGrowthResetTest` exercises the shipped SQL rather than a paraphrase.
+  `down()` restores the cumulative into `score` before dropping the columns, so a rollback
+  leaves period rows holding a standing rather than a zeroed growth.
+
+- `Version20261031020000` — **additive only: four new tables**,
+  `leaderboard_award_definition`, `leaderboard_award_placement`,
+  `leaderboard_period_archive` and `leaderboard_period_archive_entry`. One migration because
+  they are one feature and a half-applied set is useless. Nothing already stored moves or
+  changes, and there is **no backfill of any kind**: an archive is a record of a *close*, and
+  nothing has ever closed a period, so the first close of each enabled definition writes the
+  first row. See `schema.md`'s "Notable constraints" for why
+  `uq_leaderboard_period_archive_category_period` can be a plain unique (and why `category`
+  and `cadence` are therefore denormalised onto the header), and why
+  `uq_lpae_archive_place` is the one partial index here. `down()` drops all four in
+  dependency order.

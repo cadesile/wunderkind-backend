@@ -241,8 +241,113 @@ migrations are the change log (see `migrations.md`).
   awayGoals`, `round`, `playedAt`, `yellowCards/redCards`. `ManyToOne` →
   `Club` (not nullable).
 - **`LeaderboardEntry`** — one club's score in one leaderboard category.
-  `category:LeaderboardCategory(enum)`, `score`, `period`, `rank`,
-  `displayLabel`. `ManyToOne` → `Club` (not nullable).
+  `category:LeaderboardCategory(enum)`, `score`, `period` (`'all-time'`, or a period key
+  from `LeaderboardPeriod` — `2026-W44` / `2026-M10` / `2026-Q4`), `rank` (column
+  `rank_position`, since `rank` is reserved SQL), `displayLabel`,
+  **`baselineScore:?int`** and **`cumulativeScore:?int`** (both `bigint`, nullable).
+  `ManyToOne` → `Club` (not nullable).
+
+  **`'all-time'` is a standing; every other period is a GROWTH board**, and the two columns
+  above are the whole mechanism. `score` has never been an accumulator — every writer
+  re-reads a cumulative total and stores it absolutely — so deleting rows at a period
+  boundary resets nothing. Only a baseline does.
+  `LeaderboardEntry::observeCumulative()` is the single writer for a period row: it stamps
+  `baselineScore` on first sighting, records the truthful `cumulativeScore`, and stores
+  `score = max(0, cumulative - baseline)`. `setScore()` is for `'all-time'` only, and leaves
+  both new columns NULL.
+
+  Three numbers, not one, and **only the cumulative chains between periods**, so growth can
+  never compound its own clamping. The `max(0, …)` is a product rule, not a safety net:
+  `score` is `bigint unsigned` and growth genuinely goes negative (`club_reputation` decays
+  daily), and keeping `cumulativeScore` separate is exactly what stops the clamp corrupting
+  the next period's baseline.
+
+  The baseline lives **here**, on the live period row, rather than in a baseline table or on
+  the archive: this table already holds exactly one row per `(club, category, period)`, so
+  two columns add **zero rows**. The archive would be wrong — it is bounded to a display
+  top-N, while a baseline is needed for every eligible club. Baselines are stamped lazily,
+  at first observation inside the period, which is what removes the pre-seeding pass, the
+  "first period has no baseline" case, and the disable→re-enable hazard.
+- **`LeaderboardAwardDefinition`** (table `leaderboard_award_definition`) — admin config:
+  which chart awards, how often, to how many places. `name` (frozen onto each archive, used
+  in the winner's inbox subject and the landing card), `category:LeaderboardCategory(enum)`,
+  `cadence:AwardCadence(enum: WEEKLY, MONTHLY, QUARTERLY)`, `minimumScore:int` (don't pay a
+  growth of 0 — otherwise a dead chart pays an idle club), `isEnabled:bool` (**default
+  false**, so nothing awards by accident), `lastClosedPeriodKey:?string` +
+  `lastClosedAt:?DateTimeImmutable` (runtime state, hidden on the admin form — an editable
+  monotonic anchor re-opens closed periods when moved back and silently skips them when
+  moved forward), `createdAt/updatedAt`. `OneToMany` → `placements`
+  (`cascade: persist+remove`, `orphanRemoval`, so EasyAdmin's `CollectionField` works).
+  `UNIQUE(category, cadence)` — **load-bearing**: it is what makes `(category, period_key)` a
+  sound non-nullable claim key on the archive, since two definitions on one category but
+  different cadences produce different period keys. `INDEX(is_enabled)`.
+  **There is no placements-count column** — top N is the highest `place` among the child
+  rows, one source of truth instead of two that can disagree.
+- **`LeaderboardAwardPlacement`** (table `leaderboard_award_placement`) — one prize place.
+  `place:smallint` (1-based), `prizePence:bigint`, `reputationDelta:int`. `ManyToOne` →
+  `definition:LeaderboardAwardDefinition` (not nullable, **`CASCADE`** — a placement is
+  config, meaningless without its definition), `rewardTemplate:?RewardTemplate`
+  (`SET NULL` — deleting a template must not silently delete a prize place).
+  `UNIQUE(definition_id, place)`. `toEffects()` synthesizes `ledger_delta` +
+  `reputation_delta` from the two scalars (the `CompetitionTemplate::$victorPrize`
+  precedent: the common cash case needs no `RewardTemplate` row) and appends the attached
+  template's effects **only when it `isActive()`**, so deactivating a template stops it
+  paying out without unwiring every definition. A real child entity rather than a json
+  place→reward map on the definition, for three reasons: referential integrity to
+  `RewardTemplate`, `CollectionField` + a plain `FormType` being EasyAdmin's native idiom
+  (a json column with `setFormType()` hits the documented injected-`CollectionType`-options
+  trap), and consistency with `CompetitionTemplate`'s own `RewardTemplate` FK.
+- **`LeaderboardPeriodArchive`** (table `leaderboard_period_archive`) — immutable header,
+  one per closed period. The `SeasonRecord`/`SeasonSnapshot` shape, and **it carries the
+  close job's claim**. `category:LeaderboardCategory(enum)` and
+  `cadence:AwardCadence(enum)` (**denormalised**), `definitionName` (frozen admin label),
+  `periodKey`, `periodStartsAt`/`periodEndsAt` (**frozen instants**, end exclusive, so
+  nothing downstream re-parses a period key), `baselinePeriodKey:?string` (which close last
+  supplied the baselines this one consumed), `entryCount:int` (**integer, not smallint** —
+  the eligible club count can exceed 32767), `archivedEntryCount:smallint`,
+  `placementsAwarded:smallint`, `status:PeriodArchiveStatus(enum: PENDING, ARCHIVED,
+  SKIPPED)`, `claimedAt` (the lease clock), `closedAt:?DateTimeImmutable`. `ManyToOne` →
+  `definition:?LeaderboardAwardDefinition` (**nullable, `SET NULL`** — the archive must
+  outlive an admin deleting the definition, the `UserLedger::$sourceSyncRecord` precedent;
+  the link is admin convenience, never identity).
+  `UNIQUE(category, period_key)` is the claim gate, and **both columns are NOT NULL so it is
+  a plain unique, not a partial one** — which is the entire reason `category` and `cadence`
+  are denormalised here instead of keying on the nullable FK. No `options: ['where' => …]`,
+  so neither the `pg_get_expr` predicate-churn trap nor the `EntrantRewardClaim`
+  two-partial-index dance applies. Plus `INDEX(status, period_ends_at)` and
+  `INDEX(cadence, closed_at)` (the "last month's winners" read).
+  `CLAIM_LEASE_SECONDS = 300` — the same constant name and value as `CompetitionRound`, so
+  the two are recognisably one pattern. Constructor-only for every identity field, with
+  exactly three mutators: `markArchived()`, `markSkipped()`, `reclaim()`.
+  `ARCHIVED_ENTRY_LIMIT = 100`.
+- **`LeaderboardPeriodArchiveEntry`** (table `leaderboard_period_archive_entry`) — one
+  frozen row of a closed board, and, when it placed, **the award record itself**.
+  `rank` (column `rank_position`), `clubId:string(36)` and `clubName` (**denormalised, no
+  FK** — the `SeasonRatingsSnapshot`/`ClubSpotlight` precedent, so the row survives club
+  deletion), `userId:?string(36)` (the credited account, denormalised and indexed so
+  "awards won by this account" is one query; **nulled, not deleted, on account erasure**),
+  `score:bigint` (the growth as ranked), `cumulativeScore:bigint`, `baselineScore:bigint`,
+  `baselineMissing:bool`, `awardEligible:bool` (so **the archive explains its own
+  exclusions**), `displayLabel:?string` (**frozen** — names the player who scored *in that
+  period*; the live row overwrites it next week, which is the point of freezing),
+  `homeKitConfig`/`awayKitConfig`/`badgeConfig:?array` + `countryCode:?string(2)` (frozen
+  club identity, so the landing page's "any club listed anywhere shows at least its badge"
+  rule keeps holding for a deleted club), `awarded:bool`, `place:?smallint`,
+  `appliedEffectsJson:?array` (frozen effects, the `EntrantRewardClaim::$appliedEffectsJson`
+  precedent), `inboxMessageId:?string(36)` (**a plain string, NOT a FK** — inbox messages
+  cascade-delete with the club, and an award must not vanish with its delivery receipt;
+  admin forensics only). `ManyToOne` → `archive` (not nullable, `CASCADE`),
+  `rewardTemplate:?RewardTemplate` (`SET NULL`).
+  `UNIQUE(archive_id, club_id)`, `UNIQUE(archive_id, rank_position)`, and
+  `UNIQUE(archive_id, place) WHERE (place IS NOT NULL)` — **the one partial index in the
+  feature**, because `place` is nullable and PostgreSQL treats NULLs as distinct. Its
+  predicate is declared on the entity exactly as `pg_get_expr(indpred, indrelid)` reports
+  it, so `schema:create` builds it on a fresh `wunderkind_test` and `migrations:diff` does
+  not churn. Plus `INDEX(club_id)` and `INDEX(user_id)`.
+  Folding the award into this row rather than a separate `leaderboard_award` table is
+  deliberate: that table would buy a `UNIQUE(archive, place)` idempotency key, but the
+  header's own unique is already the claim gate and the partial index above gives the
+  per-place guarantee anyway. Two tables describing the same fact is worse.
 - **`TacticalAdvantage`** — lookup table of style×style multipliers.
   `style/opponentStyle:PlayingStyle(enum)`, `multiplier:float`. No
   relations.
@@ -357,7 +462,20 @@ migrations are the change log (see `migrations.md`).
   join. `joinedAt`. `ManyToOne` → `Club`, `group:AudienceGroup` (both not
   nullable, `CASCADE`).
 - **`InboxMessage`** — a club's inbox item. `senderType:
-  MessageSenderType(enum: AGENT, GUARDIAN, STAFF, BOARD, COMPETITION, FRIENDLY)`, `senderName/subject/body`, `offerData:?array` (carries `type`, `competitionId`, `matchId`, `challengeId` metadata for tournament/friendly messages), `effects:?array` (actionable reward effects applied on accept: `ledger_delta`, `reputation_delta`, `hall_of_fame_points`),
+  MessageSenderType(enum: AGENT, SPONSOR, INVESTOR, SYSTEM, COMPETITION, FRIENDLY)` —
+  **corrected 2026-10-31**: this previously listed `GUARDIAN`/`STAFF`/`BOARD`, which have
+  never existed, and omitted the real `SPONSOR`/`INVESTOR`/`SYSTEM`. The distinction is
+  load-bearing, not cosmetic: `InboxService::acceptMessage()` routes **only** `COMPETITION`
+  and `FRIENDLY` to the effects applier, so a reward message sent as `SYSTEM` renders as
+  claimable and then applies nothing, silently (see `LeaderboardAwardDeliveryService`'s
+  docblock). `senderName/subject/body`, `offerData:?array` (carries `type`,
+  `competitionId`, `matchId`, `challengeId` metadata for tournament/friendly messages, and
+  **the reward effects themselves** — `offerData.effects`, a list of `ledger_delta` /
+  `reputation_delta` / `unique_asset_grant` payloads. There is **no `effects` column**; this
+  doc previously listed one, and also listed a `hall_of_fame_points` effect type that no
+  code has ever handled. `offerData.effects` being non-empty is also what
+  `InboxController::serializeMessage()` derives `requiresAccept` from, so its position at the
+  top level of `offerData` is load-bearing),
   `status:MessageStatus(enum: UNREAD, READ, ACCEPTED, REJECTED, DISMISSED)`, `relatedEntityType/Id:?string`,
   `respondedAt`. `ManyToOne` → `Club` (not nullable, `CASCADE`).
 - **`IdempotencyRecord`** (table `idempotency_record`) — 24h idempotency cache for club-scoped write endpoints (`POST /api/competitions/*`, `POST /api/friendlies/*`, `POST /api/inbox/*`). `clubId:string`, `idempotencyKey:string`, `endpoint:string`, `requestHash:string` (SHA-256 of request body), `statusCode:int`, `responseBody:string`, `createdAt`, `expiresAt`. Unique index `uq_idempotency_club_key_endpoint` on `(club_id, idempotency_key, endpoint)`.

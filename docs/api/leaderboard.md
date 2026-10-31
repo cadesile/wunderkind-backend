@@ -76,19 +76,83 @@ GET /api/leaderboard/{category}?period=all-time&page=1&pageSize=20
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `category` | path, string | — | One of the 12 slugs above |
-| `period` | query, string | `all-time` | `all-time`, or a specific ISO week string e.g. `2026-W09` |
+| `period` | query, string | `all-time` | `all-time`, or a period key — ISO week `2026-W44`, month `2026-M10`, quarter `2026-Q4` |
 | `page` | query, int | `1` | 1-indexed |
 | `pageSize` | query, int | `20` | Clamped to `[1, 100]` |
 
 ### Period semantics
 
-- `all-time` — cumulative/lifetime, no time bound.
-- An ISO week string (`YYYY-Www`, e.g. `2026-W30`) — that week's snapshot,
-  computed server-side using the **server's** current week at generation time
-  (not client-reported week numbers). In practice only `all-time` and the
-  *current* server week actually have data populated — arbitrary past weeks
-  are not backfilled. Default to `all-time` unless you specifically need the
-  current week's board.
+- `all-time` — cumulative/lifetime, no time bound. A **standing**.
+- A period key — that period's board. Three formats, all server-derived (never from
+  client-reported week numbers):
+
+  | Cadence | Format | Example |
+  |---|---|---|
+  | weekly | `YYYY-Www` | `2026-W44` |
+  | monthly | `YYYY-Mmm` | `2026-M10` |
+  | quarterly | `YYYY-Qq` | `2026-Q4` |
+
+Which keys actually hold data: `all-time` and the current ISO week, always. A monthly or
+quarterly key exists only while an operator has an award configured for that category at
+that cadence — see **Periodic awards** below. Arbitrary past periods are not backfilled.
+Default to `all-time` unless you specifically want a period board.
+
+**An unrecognised `period` returns a normal `200` with `entries: []` and `total: 0`** —
+not a `400`. So does a well-formed key naming a period that does not exist (`2025-W53`,
+in a year with 52 ISO weeks). Render the empty state; don't treat it as an error.
+
+### A period board is a GROWTH board, not a standing
+
+**This is the single most important thing to know when reading a period board.**
+
+`all-time` ranks a cumulative total. Every other period ranks what a club **gained during
+that period** — `score = cumulative_now − cumulative_at_the_club's_first_sighting_in_the_period`.
+
+Consequences for a client:
+
+- A period board does **not** agree with `all-time`, and is not meant to. The all-time
+  leader is routinely nowhere near the top of the current month.
+- A period board starts at **zero** for everyone when the period begins and climbs.
+  All-zero is a real, common state early in a period, not a loading failure.
+- `score` never goes negative, even where the underlying value can fall (`club_reputation`
+  decays daily). A club that went backwards reads `0`, not a negative number.
+- Label it as a gain — "goals this month", not "goals". `transfer_record` growth reads as
+  "biggest fee beaten this period".
+
+## Periodic awards & period archives
+
+An operator can configure a leaderboard to **award a prize** at the end of each period —
+weekly, monthly or quarterly, to a configurable number of places. Nothing awards unless
+configured, so on any given deployment this may apply to no category at all.
+
+Three things follow that a client needs to know.
+
+**The prize arrives through the inbox you already have.** There is **no new endpoint**. A
+win becomes an ordinary `InboxMessage` with `requiresAccept: true`, delivered by
+`GET /api/inbox` and claimed by `POST /api/inbox/{id}/accept`, both unchanged. Its
+`offerData.type` is `LEADERBOARD_AWARD`. Full contract:
+[`docs/api/leaderboard-awards.md`](leaderboard-awards.md).
+
+**A closed period's live rows are pruned, and the board is served from an immutable
+archive.** Once a period is closed:
+
+- `GET /api/leaderboard/{category}?period=<closed key>` keeps working and returns the
+  board **exactly as it stood at close** — frozen club name, kit, badge, country,
+  `displayLabel` and rank. It will never change again, which makes it safely cacheable
+  client-side for as long as you like.
+- `displayLabel` on an archived board names the player who scored **in that period**, not
+  the club's current top scorer. That is the point of freezing it.
+- **Archive depth is capped at the top 100** (plus every club that won a prize, whatever
+  its rank). A club that finished 400th in a closed period is not retained and will not
+  appear. `total` reflects the archived rows, while the board's own "clubs competed" figure
+  is larger — don't derive one from the other.
+- The **next** period's board then starts from zeros, as described above.
+
+**A club may appear on a period board without being able to win it.** A club that arrived
+on the board part-way through a period has no baseline for it, so its cumulative is partly
+pre-period. It is still listed — it genuinely did arrive — but it is excluded from prizes.
+Nothing in the API response marks this; it only matters if you are explaining why the
+visible leader did not receive the award.
 
 ## Response
 
@@ -140,6 +204,10 @@ the cache; a cold cache falls back to computing fresh on that request. In
 practice: **don't poll faster than every ~30–60s**, and expect the board to
 lag live gameplay by up to ~5–10 minutes. Good candidates for polling on an
 interval or refetch-on-focus, not a live/websocket feed.
+
+**A closed period is the exception, and it is a useful one.** Its rows are pruned and the
+response is projected from the immutable archive, so it is recomputed by nothing and
+changes never again. Cache a closed period's board as aggressively as you like.
 
 ## Example
 

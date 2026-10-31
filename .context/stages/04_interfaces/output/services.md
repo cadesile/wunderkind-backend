@@ -335,6 +335,75 @@ filename alone.
 - **`LeaderboardCalculationService`** — computes and caches (via
   `TagAwareCacheInterface`, `app.leaderboard_cache` pool) leaderboard
   entries from career stats/transfers.
+  **A CLOSED period is read-only**: `getLeaderboard()`'s cold callback checks
+  `LeaderboardPeriodArchiveRepository::findClosed()` first and projects the frozen archive
+  entries, and `recalculate()` returns 0 early. Not an optimisation — the close job prunes
+  a closed period's live rows while this method's cold path *writes*
+  (`computeAggregateScores()` will upsert rows for any period string), so without the guard
+  one public GET would resurrect a whole pruned board as junk rows. A `pending` archive
+  deliberately does **not** make a period read-only: the close is in flight or failed
+  part-way, the live rows are unpruned, and the live board is still the truthful answer.
+- **`App\Service\Leaderboard\LeaderboardPeriod`** — the one place a period key is
+  produced, parsed, labelled or walked. All-static and dependency-free (the
+  `TrophyConfigFactory`/`CountryContentRegistry` precedent), because entities, commands and
+  services all need it and an entity cannot be injected. Weekly `2026-W44`, monthly
+  `2026-M10`, quarterly `2026-Q4`; the weekly key is **byte-identical** to the ISO-week key
+  the game has always written, pinned by `LeaderboardPeriodTest` against the raw
+  `format('o-\WW')` it replaced at four call sites. Zero-padding is load-bearing — the close
+  job's monotonic anchor compares keys as strings. `cadenceOf()` round-trips through
+  `boundsOf()` rather than only pattern-matching, which is what rejects a well-formed key
+  naming a period that does not exist (`2025-W53` in a 52-week ISO year; `setISODate()`
+  would silently roll it into 2026-W01).
+  Deliberately **not** `App\Enum\StatsPeriod`/`PeriodResolver` — that is a *rolling-window*
+  vocabulary for `/api/stats/*` where `month` means "-30 days".
+- **`App\Service\Leaderboard\ActivePeriodService`** — which periods get
+  `leaderboard_entry` rows written right now: `'all-time'` and the current ISO week always,
+  plus the current key of every **enabled** `LeaderboardAwardDefinition`. Asked by
+  `SyncService` and `app:leaderboards:generate` instead of each hardcoding a list. The
+  gating is not thrift: while a definition is disabled its key is not emitted, so no rows
+  exist for it, so a later re-enable measures growth from the re-enable and **cannot
+  retro-award the all-time leader**. Memoised per instance.
+- **`App\Service\Leaderboard\LeaderboardPeriodCloseService`** — closes an ended period:
+  claim, final score and rank, freeze the board, award each place, one flush, then prune.
+  Driven by `app:leaderboards:close-periods` (cron, every 10 min at :04) and by the admin's
+  **Close now** panel. Runs **inline, with no Messenger transport** — per definition the work
+  is one indexed read, ≤100 inserts and ≤N messages, and the due count is bounded by the
+  enabled definitions, nothing like the 32-fixture round that justified the `competition`
+  transport. Three things are load-bearing and easy to undo by accident:
+  the claim is **raw DBAL** `ON CONFLICT DO NOTHING`, auto-committed on its own outside any
+  wrapping transaction (a unique violation out of `flush()` closes the shared EntityManager
+  and would strand every remaining definition in the tick; and the claim must survive a
+  later failure rather than silently re-opening the period); the archive's terminal status
+  and the definition's anchor are set **on the entity, in the same flush as the work they
+  describe**, per "never commit a status ahead of the work"; and the prune runs **only after
+  that flush has committed** (the `*_squad` precedent — the other way round, a failed flush
+  clears the board with nothing archived). Due-ness is two parts, both required: catch-up
+  from the anchor **oldest first, one period per pass** so a cron outage settles missed
+  periods in order, *and* the chosen period must actually have ended, so clock skew or a
+  stray `--force` cannot close an open one.
+- **`App\Service\Leaderboard\LeaderboardAwardDeliveryService`** — turns a frozen archive
+  row into a claimable prize. **No new claim mechanism, no new apply path, no new client
+  endpoint**: an award becomes an ordinary `InboxMessage` whose top-level
+  `offerData.effects` the existing accept path applies, so `GET /api/inbox` and
+  `POST /api/inbox/{id}/accept` are untouched. `senderType` is **`COMPETITION`, and must
+  stay so** — `InboxService::acceptMessage()` routes only `COMPETITION`/`FRIENDLY` to the
+  applier, so a `SYSTEM` message carrying effects renders `requiresAccept: true` and then
+  applies nothing, silently. (And no new `MessageSenderType` case: the cost is contract, not
+  schema. The discriminator is `offerData.type = 'LEADERBOARD_AWARD'`.) Never mutates
+  `Club` — `SyncService` does an absolute `setBalance()` from the client, so a server-side
+  credit on the cron's schedule would just be overwritten. **Writes no `UserLedger` row**:
+  that ledger's before/after chain is a club→owner dividend record, and inserting a club
+  prize would corrupt `getCurrentBalance()` and the Rich List. Pushes go out after the
+  commit, `type = 'LEADERBOARD_AWARD'` (uppercase, matching `ROUND_DRAWN`/`MATCH_RESULT`).
+- **`App\Service\Leaderboard\PeriodAwardsBoardService`** — the landing page's
+  `#period-awards` rows, ready to render. **No snapshot entity and no cache**, deliberately:
+  `ClubSpotlight` is a snapshot row because its source is an aggregate over sync payloads,
+  and `OwnerSpotlightService` is live-behind-a-short-cache because a snapshot would mean a
+  migration and a cron entry to forget — but here the **archive already IS** the
+  cron-written denormalised row, carrying frozen club name, kit, badge and country, and it
+  never changes once written. Two indexed reads, with the entry fetch **batched**
+  (`findTopEntriesForArchives()`) for the same reason `findByEntrants()`/`findBothSides()`
+  exist: don't trade a snapshot for an N+1 of the same size.
 - **`LeagueImportExportService`** — imports/exports league/NPC-club
   config (formations, reputation tiers, the league `trophy` sprite config,
   city sizes, kit+badge `identity`). On import, a row carrying the retired
