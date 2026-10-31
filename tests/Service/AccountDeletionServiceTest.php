@@ -5,6 +5,8 @@ namespace App\Tests\Service;
 use App\Entity\Club;
 use App\Entity\Investor;
 use App\Entity\League;
+use App\Entity\Leaderboard\LeaderboardPeriodArchive;
+use App\Entity\Leaderboard\LeaderboardPeriodArchiveEntry;
 use App\Entity\LeaderboardEntry;
 use App\Entity\MatchResult;
 use App\Entity\RefreshToken;
@@ -16,10 +18,12 @@ use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use App\Entity\User;
 use App\Entity\UserLedger;
+use App\Enum\Leaderboard\AwardCadence;
 use App\Enum\LeaderboardCategory;
 use App\Enum\UserLedgerEntryType;
 use App\Enum\TransferType;
 use App\Service\AccountDeletionService;
+use App\Service\Leaderboard\LeaderboardPeriod;
 use App\Service\LeaderboardCalculationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -221,6 +225,81 @@ class AccountDeletionServiceTest extends KernelTestCase
         }
 
         return false;
+    }
+
+    /**
+     * The one leaderboard table that is RETAINED on erasure, with its user_id nulled.
+     *
+     * An archive row records a rank in a period that has already been played and settled,
+     * held alongside every other club that competed in it — deleting one club's row would
+     * leave a board whose ranks skip a number and whose entry_count no longer matches its
+     * rows. So the rank stays and the account identity goes, exactly as the competition
+     * *_audit rows are deliberately not pruned.
+     *
+     * The consequence, stated here so it is a decision and not a later bug report: the
+     * admin's "awards won by this account" screen stops returning rows for a deleted
+     * account.
+     */
+    public function testArchiveRowsAreRetainedWithTheAccountIdentityRemoved(): void
+    {
+        $user = new User('archive-retain-' . uniqid() . '@example.com');
+        $user->setPassword('x');
+        $user->setRoles([User::ROLE_CLUB]);
+        $this->persist($user);
+
+        $club = new Club('Archive Retain FC', $user);
+        $this->persist($club);
+        $this->em->flush();
+
+        $bounds = LeaderboardPeriod::boundsOf('2012-M01');
+        self::assertNotNull($bounds);
+
+        $archive = new LeaderboardPeriodArchive(
+            null,
+            LeaderboardCategory::CLUB_GOALS,
+            AwardCadence::MONTHLY,
+            'Retention Test Award',
+            '2012-M01',
+            $bounds[0],
+            $bounds[1],
+            null,
+            new \DateTimeImmutable(),
+        );
+        $this->persist($archive);
+
+        $entry = new LeaderboardPeriodArchiveEntry(
+            $archive,
+            1,
+            (string) $club->getId(),
+            $club->getName(),
+            (string) $user->getId(),
+            120,
+            620,
+            500,
+            false,
+            true,
+            'Retained Striker',
+            ['kit' => 'stripes'],
+            null,
+            ['badgeShape' => 'shield'],
+            'EN',
+        );
+        $this->persist($entry);
+        $this->em->flush();
+
+        $entryId = $entry->getId();
+
+        self::getContainer()->get(AccountDeletionService::class)->deleteAccount($user);
+        $this->em->clear();
+
+        $retained = $this->em->find(LeaderboardPeriodArchiveEntry::class, $entryId);
+
+        self::assertNotNull($retained, 'the rank happened and the row must survive the erasure');
+        self::assertNull($retained->getUserId(), 'but the account identity must be gone');
+        self::assertSame('Archive Retain FC', $retained->getClubName(), 'an invented club name is not personal data');
+        self::assertSame(['badgeShape' => 'shield'], $retained->getBadgeConfig(), 'and the landing page still needs the badge');
+        self::assertSame(1, $retained->getRank(), 'the board\'s ranks must not develop a hole');
+        self::assertSame(120, $retained->getScore());
     }
 
     public function testDeletesUserWithNoClubs(): void
