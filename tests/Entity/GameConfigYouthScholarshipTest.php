@@ -10,11 +10,24 @@ use PHPUnit\Framework\TestCase;
  */
 class GameConfigYouthScholarshipTest extends TestCase
 {
-    public function testDefaultIsTwoHundredAndFiftyPoundsInPence(): void
+    /**
+     * The figure itself, pinned ONCE. Everything else on the backend reads the constant —
+     * the column default, SyncService's no-config branch, the admin form's POST default —
+     * so this is the only assertion that should ever need changing to reprice the default.
+     */
+    public function testTheDefaultIsTwoHundredAndFiftyPoundsInPence(): void
     {
-        // 25000 PENCE. The client falls back to this exact figure when the field is absent —
-        // an older backend, or a config cached before it shipped — so the two must not drift.
-        $this->assertSame(25000, (new GameConfig())->getYouthScholarshipWagePence());
+        // The client falls back to this exact figure when the field is absent (an older
+        // backend, or a config cached before it shipped), so the two must not drift.
+        $this->assertSame(25000, GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE);
+    }
+
+    public function testAFreshConfigStartsOnThatDefault(): void
+    {
+        $this->assertSame(
+            GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE,
+            (new GameConfig())->getYouthScholarshipWagePence(),
+        );
     }
 
     public function testFloorsAtZeroRatherThanAcceptingANegativeWage(): void
@@ -47,7 +60,7 @@ class GameConfigYouthScholarshipTest extends TestCase
         $config = new GameConfig();
         $config->setYouthScholarshipWagePence($poundsEnteredByAdmin * 100); // DashboardController
 
-        $this->assertSame(25000, $config->getYouthScholarshipWagePence());
+        $this->assertSame(GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE, $config->getYouthScholarshipWagePence());
         $this->assertSame($poundsEnteredByAdmin, intdiv($config->getYouthScholarshipWagePence(), 100)); // the Twig input
     }
 }

@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\Club;
 use App\Entity\SyncRecord;
 use App\Entity\User;
+use App\Entity\GameConfig;
 use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\PlayerRepository;
@@ -440,8 +441,15 @@ class DashboardController extends AbstractDashboardController
         }
 
         // League finances — form submits pounds; multiply by 100 to store pence
-        // Pounds in the form, pence in the column — the same * 100 the sponsor bands do.
-        $config->setYouthScholarshipWagePence((int) $request->request->get('youthScholarshipWagePence', 250) * 100);
+        // Pounds in the form, pence in the column — the same * 100 the sponsor bands do. The
+        // "field missing from the POST" default is derived from the entity's own constant
+        // rather than a second literal 250, so there is one figure to change.
+        $config->setYouthScholarshipWagePence(
+            (int) $request->request->get(
+                'youthScholarshipWagePence',
+                intdiv(GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE, 100),
+            ) * 100,
+        );
         $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0) * 100);
         $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0) * 100);
         $config->setMediumSponsorMin((int) $request->request->get('mediumSponsorMin', 0) * 100);

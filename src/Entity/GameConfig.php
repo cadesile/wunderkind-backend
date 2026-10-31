@@ -11,6 +11,15 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: GameConfigRepository::class)]
 class GameConfig
 {
+    /**
+     * £250/week, in PENCE — the academy scholarship wage when nothing has set one.
+     *
+     * The single home for this figure on the backend: the column default, `SyncService`'s
+     * no-config branch and the admin form's fallback all read it. Mirrored on the client as
+     * `YOUTH_SCHOLARSHIP_WAGE_PENCE`, which is its pre-sync fallback.
+     */
+    public const DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE = 25000;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -846,9 +855,14 @@ class GameConfig
      *
      * Default mirrors the app's own DEFAULT_GAME_CONFIG, which is what clients use until this
      * field reaches them; the two must not drift.
+     *
+     * The default lives in DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE and every other place that
+     * needs it READS it — the column default, SyncService's no-config branch, the admin
+     * form's fallback. It cannot be restated, because 0 is a legitimate setting here and so
+     * a wrong default does not announce itself: it just makes scholars cheap or free.
      */
-    #[ORM\Column(type: 'integer', options: ['default' => 25000])]
-    private int $youthScholarshipWagePence = 25000;
+    #[ORM\Column(type: 'integer', options: ['default' => self::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE])]
+    private int $youthScholarshipWagePence = self::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE;
 
     #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $smallSponsorMax = 0;
