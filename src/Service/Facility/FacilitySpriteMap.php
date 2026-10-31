@@ -8,7 +8,7 @@ namespace App\Service\Facility;
  * Which game facility slug draws as which sprite id — GENERATED, DO NOT EDIT BY HAND.
  *
  * Regenerate:  bash scripts/build-facility-compositor.sh
- * Source sha:  a26bf1f78e170f3f
+ * Source sha:  0d5b65c38fefcd22
  *
  * The sprite drop authors a `slug` on every facility (and STADIUM_SLUGS for the
  * stadium), so the mapping is stated once, upstream, in the same file that draws

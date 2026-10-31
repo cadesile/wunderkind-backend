@@ -526,9 +526,11 @@ ClubController → ClubInitializationService::initializeClub()
 - `AppearanceGeneratorService` produces the 15-key config from `(id, role, age, nationality?)`, deterministic by id. **No cross-repo RNG-stream bit-parity is preserved with any frontend generator** — unlike the design this replaced, the sprite's own drawing logic (`sprite.ts`/`PlayerSprite.tsx`, from `wunderkind-app`) is pure rendering with no generation/RNG code, so there is currently no frontend counterpart to stay bit-identical with.
 - **Every entity stores all 15 keys, regardless of role** — Player gets meaningful `kit`/`shorts`/`socks` and fixed defaults for `outfit`/`trousers`/`glasses`; Staff/Scout/Agent (all three render as the sprite's `'staff'` body shape) get the reverse. This mirrors the sprite's own documented convention that a saved config may hold both groups' keys harmlessly, since each `type` ignores the other's.
 - **Skin is an id, not a hex.** `App\Enum\Appearance\SkinId` (`s1`..`s6`, lightest→darkest) carries two hex shades per case (`baseColor()`/`shadeColor()`) — the sprite draws a base fill plus a darker shade for ears/neck/brows, unlike the old single-hex `SkinTone`. `App\Enum\Appearance\WorldRegion::skinWeights()` is nationality-weighted exactly as before, just re-keyed to `SkinId` values (same 9 regions, same weight numbers — the light→dark ordering carried over 1:1).
+- **The three sprite-vocabulary enums are exact mirrors of the sprite's own lists, in the sprite's own order** — `HairStyle` (16), `Face` (15), `Outfit` (8), all extended by the V4 drop (2026-10-31) from 9/9/4. Order is load-bearing, not cosmetic: `hairStyleWeights()`, `faceWeights()` and `outfitWeights()` are **positional arrays** combined with `::cases()`, so a case added out of order silently re-labels every weight after it, and a case added without extending the array is an `array_combine()` count error. That is deliberate — it makes a drifting enum fail loudly. `AvatarSpriteOptionParityTest` reads the sprite's `HAIR_STYLES`/`FACES`/`OUTFITS` out of `window.AVATAR_SPRITE_OPTIONS` on the generated bundle and asserts membership **and** order (skipping when `node` is absent, like `TrophyConfigFactoryTest`), so the next drop that adds a hairstyle cannot leave the backend unable to generate it. **V4's `AvatarExtras` (earrings, armband, wristband, snood, cap/beanie, lanyard/whistle/scarf, six tattoos) has no backend enum on purpose** — it is a render option this backend never passes; the vocabulary is exposed on the bundle so wiring it later needs no archaeology.
 - **`hair` is weighted by age band, not uniform.** `AppearanceGeneratorService::hairStyleWeights(int $age)` returns a `HairStyle`-keyed percentage table (three bands: ≤35, 36–45, 46+), same shape/style as `WorldRegion::skinWeights()` — `mohawk`/`afro`/`cornrows` stay low (≤7%) at every band and taper further with age, in favour of practical short styles; every style keeps a nonzero chance rather than being excluded outright past a cutoff. `facial` (facial hair) is age-gated per role via `rollFacialHair()`: staff/scout/agent unchanged (20+, 60% chance of stubble/beard); **players are newly eligible too** (25+, 35% chance) — previously hardcoded to `'none'` unconditionally. `headband` is role-split too: staff/scout/agent keep the base 20% chance, but **players roll it at 1-in-1000** — a deliberately vanishing-rare cosmetic, not an even split.
+- - **`outfit` (staff/scout/agent only) is weighted too** (`outfitWeights()`): the original four read as more "club official", so V4's `polo`/`shirt`/`gilet`/`rain` are additions rather than an even eighth each. Two of them change what skin the sprite leaves bare — `polo` and `shirt` show the forearms, `shirt` and `rain` hide the neck — which is the only reason that matters backend-side.
 - `hairColor`, `lip`, and `primary`/`secondary` (`KitColor`, one shared 12-color palette for both player kits and staff outfits — no more vibrant-player-vs-muted-staff split) are hex-backed enums, same pattern as `SkinId`'s predecessor. **`hairColor` is weighted** (`AppearanceGeneratorService::hairColorWeights()`, same `HairColor`-keyed-percentage-table style as `hairStyleWeights()`) — `GINGER` (orange) is deliberately rare (5%); the age>45 grey-forcing chance still runs first and short-circuits this entirely. **`lip` is skin-linked, not independent:** `SkinId::S5`/`S6` (dark skin) always get the reserved `LipColor::DEEP_BROWN` (`#5c3822`) — every other skin tone picks uniformly from the rest of the palette, and never draws `DEEP_BROWN` via generation (it's still a valid manual admin choice for any entity).
-- `face` is a fixed, generated-once expression (`App\Enum\Appearance\Face`, 9 cases) — a pure cosmetic pick, **not** tied to morale or personality. This is a deliberate simplification versus the old design, where eyes/mouth were computed live from morale at render time; the sprite has no such live coupling. **Players always default to `neutral`** — only staff/scout/agent get a varied pick — in both the generator and the admin widget's Randomise button.
+- `face` is a fixed, generated-once expression (`App\Enum\Appearance\Face`, **15 cases** since the sprite's V4 drop) — a pure cosmetic pick, **not** tied to morale or personality. This is a deliberate simplification versus the old design, where eyes/mouth were computed live from morale at render time. **V4 reintroduces a `morale` render option (1–100) that overrides `config.face` across ten bands, and this backend deliberately does not pass it** — a stored identity sprite is not a live mood readout, and `Club.morale` is fan morale rather than a person's. `AvatarSpriteOptionParityTest` asserts that omission is a decision rather than an oversight. **Players always default to `neutral`** — only staff/scout/agent get a varied pick — in both the generator and the admin widget's Randomise button. That pick is **weighted, not uniform** (`AppearanceGeneratorService::faceWeights()`): six of V4's new faces are the unhappy end of the sprite's own morale ladder, and a uniform pick over fifteen would leave roughly a fifth of every staff pool looking miserable or distraught. `GLUM`/`MISERABLE`/`DISTRAUGHT` sit at 1% each — reachable, since the admin picker offers them, but never the norm. Same reasoning as `GINGER`'s 5% in `hairColorWeights()`.
 - `AppearanceLifecycleSubscriber` (Doctrine `prePersist`) auto-fills `appearance` for any of the five entity types persisted without one, passing `getNationality()` through, so **every** creation path is covered centrally (don't hook individual construction sites). For `User` this only ever gives a default staff-shaped avatar at registration (see Owner Identity below for how the real account holder customizes it afterward). `app:backfill-appearances` fills pre-existing null rows; `app:backfill-appearances --force` additionally **unconditionally regenerates every row**, overwriting whatever it had — this is the one-time migration mechanism when the Appearance shape itself changes (as it did here), not a targeted single-field refresh. Both passes stream via `Query::toIterable()` with periodic `$em->clear()` rather than loading the full table at once (this command previously OOM'd production on ~36.5k rows via `findBy`/`findAll()` and is deliberately excluded from the post-deploy sequence — see `docs/deploy/hetzner.md`; run it manually).
 - `appearance` is emitted verbatim (a passthrough of `getAppearance()`) in every player/staff/scout/agent serializer — `buildPlayerSnapshot`/`buildStaffSnapshot`/`buildScoutSnapshot`, `MarketDataService::serialize{Coach,Scout,Agent}`, and `ScoutSearchController::serializePlayer`. All four are schema-agnostic passthroughs of the whole JSON blob — none of them needed to change for this rewrite, and none would need to change for a future one either.
 - The admin edit form (`AppearanceType`) renders identically for all 15 keys on every entity type, but takes a `person_type` (`'player'`|`'staff'`) form-type option — set per CrudController via `->setFormType(AppearanceType::class)->setFormTypeOptions(['person_type' => ...])` (this EasyAdmin version's `setFormType()` takes only the class name; options are a separate chained call) — that only decides which body shape the live preview draws and which of the kit/shorts/socks vs outfit/trousers/glasses sections the widget shows; it does not change what's stored. **`public/assets/avatar-compositor.js` is GENERATED — do not edit it by hand.** `bash scripts/build-avatar-compositor.sh` rebuilds it from the app's `src/components/avatar-sprite/avatar16.ts` (the 16-bit sprite, which replaced the 8-bit `sprite.ts` on 2026-10-13) by running it through esbuild — type-stripping only, no other transformation. That IS the "port it verbatim" rule, now mechanised: ~480 lines of pixel maths cannot be hand-transcribed twice and still be credibly verbatim. The build gates on the sprite's own pixel-hash parity fixture (12 cases) and fails rather than shipping a drifted port. The only hand-written part is `scripts/avatar-compositor/entry.ts`, which adapts the renderer to the `window` API that already existed. `composePlayerSpriteSvg(config, type, crop, scale, opts)` keeps its old signature — including the `'small'`/`'large'` crop names, now aliases for `'head'`/`'full'` — so every existing caller works untouched; `scale` is halved internally because the new grid is 2x per axis (38x68 full, 28x30 head, against 18x31 / 14x17). **`opts.outline` defaults to `false`**, even though `avatar16.ts`'s own `renderAvatar` defaults it to `true` — the admin previews and the landing page both want the unoutlined look, matching `composeKitSvg`'s own no-outline default; pass `{outline: true}` to opt back in. **Build tier is an `opts.height`/`opts.weight` prop on the compose call**, taking either a tier (`'small'|'medium'|'large'`, what the sprite itself expects) or a raw cm/kg number mapped through the bands below (`heightCm`/`weightKg` remain as aliases for older call sites). Also exposes `window.SKIN_SHADES`, `window.AVATAR_BODY_SIZE` and `window.DEFAULT_AVATAR_CONFIG`. **Build tiers are derived, never stored:** the sprite takes `height`/`weight` as `'small'|'medium'|'large'`, and `Player` already owns real cm/kg columns, so the admin preview maps them at render time (`AppearanceType`'s `height_cm`/`weight_kg` options, set from the entity in `PlayerCrudController`). Copying a derived tier into the `appearance` JSON would be a second source of truth that goes stale the moment a player's height changes. Entities with no measurements (Staff/Scout/Agent/User) pass null and draw the neutral medium build. The bands are **height (cm)** small 145–169 / medium 170–184 / large 185–200, **weight (kg)** small 58–69 / medium 70–84 / large 85–100. Out-of-band values clamp rather than defaulting — real data has 464 players above the 200cm ceiling.
@@ -643,10 +645,54 @@ dividend draw against the syncing club.
 
 - **`public/assets/facility-compositor.js` is GENERATED — do not edit it by hand.**
   `bash scripts/build-facility-compositor.sh` rebuilds it from
-  `assets/Components/facilitiesV2/facilities/{isoEngine,plotSite,stadiumSprite,trainingGroundSprite,medicalCentreSprite,scoutingSprite}.ts`
-  through esbuild (type-stripping only), gated on that drop's 301-case pixel-hash parity
-  fixture. The one hand-written part is `scripts/facility-compositor/entry.ts`. Same
-  mechanised-verbatim rule as the avatar/kit/trophy compositors.
+  `wunderkind-app/src/components/facility-sprites/{isoEngine,plotSite,stadiumConfig,stadiumSurrounds,trainingGroundConfig,medicalCentreConfig,scoutingConfig}.ts`
+  through esbuild (type-stripping only). The one hand-written part is
+  `scripts/facility-compositor/entry.ts`. Same mechanised-verbatim rule as the
+  avatar/kit/trophy compositors.
+  **The source moved and was renamed by the stadium v3 drop (2026-10-31):**
+  `assets/Components/facilitiesV2/` no longer exists, every `*Sprite.ts` became
+  `*Config.ts`, and `stadiumSurrounds.ts` is new — so the default source is now the app's
+  own copy (read-only), the convention `build-avatar-compositor.sh` already used. A drop
+  whose files are renamed again will fail the script's existence check rather than
+  silently rebuild from nothing.
+  **The gate reads two fixtures and 432 cases:** `parity.json` for training/medical/
+  scouting, and `stadium-v3.parity.json` for the stadium — 131 `cases` (the v3 look) plus
+  63 `v2Look` re-rendered with `STADIUM_V2_LOOK`, which is what proves v3 did not move
+  anything it claimed to leave alone. The four-site fixture's own `stadium` map is skipped
+  deliberately: it **is** `v2Look`, verified key-for-key and hash-for-hash. It also
+  deep-checks the exported geometry against `stadium-v3.geometry.json` — a different class
+  of drift from the pixel hashes, since those are the numbers a host sizes containers from.
+  **Two fixture generations shape options differently** and the difference is invisible
+  until a cropped facility tile silently renders as the whole site: the four-site fixture
+  puts `rotation`/`time`/`selected`/`facility` FLAT on the case, stadium-v3 nests
+  everything under `options`. The gate reads both and forwards whatever is there
+  wholesale.
+- **The stadium's look-affecting options are set EXPLICITLY at one seam**,
+  `composeStadiumSvg()` in the two entry files — v3's contract requires it, because an
+  option left implicit lets a future drop change what this backend renders without a line
+  of this repo changing. `floodlightStyle: 'arch'` and `scoreboardPlacement: 'stand'` are
+  v3's own defaults, deliberately restated. **They are a visible change from v2**: the
+  pylons curve in over the corners and are shorter, and the scoreboard moves from the
+  north-west corner onto the back stand's roof — which stand depends on `rotation`, so the
+  stadium's geometry now depends on rotation and not just the camera. Spread
+  `STADIUM_V2_LOOK` into `opts` at a call site to pin the old look for one surface.
+- **`surrounds` is a render OPTION that travels as a config key, and exactly one place
+  resolves that.** `StadiumConfig` is frozen in v3, so the five surroundings variants
+  (parkland / suburban / terraces / city / industrial) arrive as an option — but the
+  backend still has to get a per-club value to the browser.
+  `FacilityConfigBuilder::surroundsFor()` therefore puts it **inside the stadium json
+  blob** (no column, no migration, since the value is derived rather than authored), and
+  `composeStadiumSvg()` lifts it out into the options and deletes it from the config, so
+  what reaches the renderer is exactly a `StadiumConfig`. An explicit `opts.surrounds`
+  wins; a payload without the key — every `ClubSpotlight` row written before v3 — falls
+  through to `parkland`, which **is** the previous drop's trees-only look, so an old row
+  renders as it always did rather than as someone else's city.
+  **It is derived from the club's LEAGUE TIER**, the one signal the backend already holds
+  that says anything about a club's setting: 1–2 `city`, 3–4 `suburban`, 5–6 `terraces`,
+  7–8 `industrial`, no league `parkland`. Note tier 1 is the TOP division and 8 is where
+  new clubs start, so the ladder reads downwards — inverting it would put brand-new clubs
+  in a city centre and champions on an industrial estate. Only applies while
+  `config.trees` is on; `trees: false` hides every variant.
 - **All four sites live in ONE bundle** because `isoEngine` is ~32KB and every site imports
   it — four per-site bundles would ship four copies to a browser needing one. Exposes
   `composeStadiumSvg` / `composeTrainingGroundSvg` / `composeMedicalCentreSvg` /
@@ -655,8 +701,11 @@ dividend draw against the syncing club.
   `facility`, `rotation` and `time`, which is what makes single-facility tiles possible.
 - **`scripts/build-stadium-compositor.sh` and `public/assets/stadium-compositor.js` still
   exist** and still ship the stadium alone. `composeStadiumSvg` has a byte-identical
-  signature *and output* in both, so `landing.js` works untouched and switching its
-  `<script>` tag is a one-line change — retiring the old pair is the landing task's call.
+  signature *and output* in both (re-verified after the v3 drop), but the landing page now
+  loads the four-site bundle and **nothing references the stadium-only pair** — so it is
+  pure maintenance cost: every sprite drop has to be applied to two scripts and two entry
+  files, and this pair silently rotted once already (its default source path pointed at a
+  directory that no longer exists). Retiring it is still an open call.
 - **`src/Service/Facility/FacilitySpriteMap.php` is GENERATED by the same script.** The
   sprite drop authors a `slug` on every facility (plus `STADIUM_SLUGS`), so which game
   facility draws as which sprite id is stated once, upstream, in the file that draws it —

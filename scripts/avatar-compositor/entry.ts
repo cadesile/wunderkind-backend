@@ -15,6 +15,13 @@ import {
   renderAvatar,
   SKINS,
   DEFAULT_AVATAR_CONFIG,
+  HAIR_STYLES,
+  FACES,
+  OUTFITS,
+  HEADWEAR,
+  NECKWEAR,
+  TATTOOS,
+  MORALE_FACES,
   type AvatarConfig,
   type BodySize,
   type Crop,
@@ -152,3 +159,27 @@ window.SKIN_SHADES = Object.fromEntries(SKINS.map((s) => [s.id, { c: s.c, d: s.d
 // real player's build without re-deriving the bands.
 window.AVATAR_BODY_SIZE = { heightToBodySize, weightToBodySize };
 window.DEFAULT_AVATAR_CONFIG = DEFAULT_AVATAR_CONFIG;
+
+// The sprite's own option lists, in the sprite's own order — the same thing
+// kit-compositor exposes as KIT_SPRITE_OPTIONS and trophy-compositor as
+// TROPHY_SPRITE_OPTIONS.
+//
+// The point is not the widget (which builds its grids from the PHP enums, since
+// those carry the hex values the swatches need). It is AvatarSpriteOptionParityTest,
+// which asserts App\Enum\Appearance\{HairStyle,Face,Outfit} against these lists
+// so a future drop that adds a hairstyle cannot leave the backend silently unable
+// to generate it. Order matters as well as membership: hairStyleWeights() is a
+// POSITIONAL array combined with HairStyle::cases().
+//
+// headwear/neckwear/tattoos have no backend counterpart — they belong to the
+// AvatarExtras render option, which this backend deliberately does not use. They
+// are exposed anyway so that stays a visible choice rather than an omission.
+window.AVATAR_SPRITE_OPTIONS = {
+  hair:     HAIR_STYLES.map((o) => o.id),
+  face:     FACES.map((o) => o.id),
+  outfit:   OUTFITS.map((o) => o.id),
+  headwear: HEADWEAR.map((o) => o.id),
+  neckwear: NECKWEAR.map((o) => o.id),
+  tattoos:  TATTOOS.map((o) => o.id),
+  moraleFaces: MORALE_FACES,
+};

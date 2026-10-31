@@ -18,4 +18,13 @@ enum Face: string
     case FRUSTRATED = 'frustrated';
     case ANGRY      = 'angry';
     case COOL       = 'cool';
+    // Added by the sprite's V4 drop (2026-10-31). Six of these are the ends of
+    // the sprite's own morale ladder (MORALE_FACES), but the backend does NOT
+    // couple face to morale — see the class note below and CLAUDE.md.
+    case CONTENT    = 'content';
+    case CHEERFUL   = 'cheerful';
+    case ELATED     = 'elated';
+    case GLUM       = 'glum';
+    case MISERABLE  = 'miserable';
+    case DISTRAUGHT = 'distraught';
 }
