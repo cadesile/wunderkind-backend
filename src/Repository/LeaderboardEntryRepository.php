@@ -6,6 +6,7 @@ use App\Entity\Club;
 use App\Entity\LeaderboardEntry;
 use App\Enum\LeaderboardCategory;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 class LeaderboardEntryRepository extends ServiceEntityRepository
@@ -35,74 +36,103 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
 
     /**
      * All entries for a category/period, ordered by score descending (full result — used for ranking passes and cache hydration).
-     * Only clubs that have concluded at least one full season are surfaced.
+     * Only eligible clubs are surfaced — see applyEligibility().
      */
     public function findAllOrderedByScore(LeaderboardCategory $category, string $period): array
     {
-        return $this->createQueryBuilder('e')
+        $qb = $this->createQueryBuilder('e')
             ->join('e.club', 'c')
             ->addSelect('c')
             ->where('e.category = :category')
             ->andWhere('e.period = :period')
-            ->andWhere('c.currentSeason > 1')
             ->setParameter('category', $category)
             ->setParameter('period', $period)
-            ->orderBy('e.score', 'DESC')
-            ->getQuery()
-            ->getResult();
+            ->orderBy('e.score', 'DESC');
+
+        return self::applyEligibility($qb)->getQuery()->getResult();
     }
 
     /**
+     * The ranked, eligible board for one category/period — the close job's read.
+     *
+     * score DESC, club_id ASC: deterministic, so a reclaimed retry re-reading the same data
+     * produces the same places. A tie therefore goes to the lower UUID, which is arbitrary
+     * but stable, and stability is the property that matters for an award.
+     *
+     * addSelect on the club AND its user, so the award's frozen user_id and the inbox
+     * message's club both arrive in one query rather than one lazy-load per rank.
+     *
      * @return LeaderboardEntry[]
-     * Only clubs that have concluded at least one full season are surfaced.
      */
-    public function findTopByPeriod(LeaderboardCategory $category, string $period, int $limit = 50): array
+    public function findRankedForAward(LeaderboardCategory $category, string $period, int $limit): array
     {
-        return $this->createQueryBuilder('e')
-            ->join('e.club', 'a')
-            ->addSelect('a')
+        $qb = $this->createQueryBuilder('e')
+            ->join('e.club', 'c')
+            ->addSelect('c')
+            ->leftJoin('c.user', 'u')
+            ->addSelect('u')
             ->where('e.category = :category')
             ->andWhere('e.period = :period')
-            ->andWhere('a.currentSeason > 1')
             ->setParameter('category', $category)
             ->setParameter('period', $period)
             ->orderBy('e.score', 'DESC')
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
+            ->addOrderBy('c.id', 'ASC')
+            ->setMaxResults($limit);
+
+        return self::applyEligibility($qb)->getQuery()->getResult();
+    }
+
+    /** How many eligible clubs are on this board — reported on the archive as entry_count. */
+    public function countEligible(LeaderboardCategory $category, string $period): int
+    {
+        $qb = $this->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->join('e.club', 'c')
+            ->where('e.category = :category')
+            ->andWhere('e.period = :period')
+            ->setParameter('category', $category)
+            ->setParameter('period', $period);
+
+        return (int) self::applyEligibility($qb)->getQuery()->getSingleScalarResult();
     }
 
     /**
-     * Returns ['entry' => LeaderboardEntry, 'rank' => int] or null if the club
-     * has no entry for this category/period.
+     * Drops a closed period's live rows. Raw SQL, and called only AFTER the flush that
+     * commits the archive has succeeded: committing a delete before a failed flush would
+     * clear the board with nothing archived — the *_squad-prune precedent.
      */
-    public function findWithRankForClub(Club $club, LeaderboardCategory $category, string $period): ?array
+    public function deleteForPeriod(LeaderboardCategory $category, string $period): int
     {
-        $entry = $this->findOneBy([
-            'club'  => $club,
-            'category' => $category,
-            'period'   => $period,
-        ]);
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            'DELETE FROM leaderboard_entry WHERE category = :category AND period = :period',
+            ['category' => $category->value, 'period' => $period],
+        );
+    }
 
-        if ($entry === null) {
-            return null;
-        }
-
-        $higherCount = (int) $this->createQueryBuilder('e')
-            ->select('COUNT(e.id)')
-            ->where('e.category = :category')
-            ->andWhere('e.period = :period')
-            ->andWhere('e.score > :myScore')
-            ->setParameter('category', $category)
-            ->setParameter('period', $period)
-            ->setParameter('myScore', $entry->getScore())
-            ->getQuery()
-            ->getSingleScalarResult();
-
-        return [
-            'entry' => $entry,
-            'rank'  => $higherCount + 1,
-        ];
+    /**
+     * THE definition of "may appear on, and may win, a leaderboard". Hoisted into one
+     * place because the award path and the public board must agree: a prize paid to a
+     * club the board does not list is indefensible either way round.
+     *
+     * Two predicates, both on the already-joined club alias 'c':
+     *
+     *  - currentSeason > 1 — a club still on its first season has no completed body of
+     *    work to compare. Pre-existing behaviour, unchanged.
+     *  - isSpoof = false — admin-generated spoof clubs (CompetitionSpoofEntrantService).
+     *    NEW, and a visible behaviour change: spoof clubs disappear from live public
+     *    boards, shifting `total` and every rank below them. Only ClubRepository had ever
+     *    filtered them; the board never did. Paying a bot a real cash prize is the actual
+     *    bug this closes, and once the predicate is shared, leaving the public board
+     *    inconsistent with the award path is the worse outcome. LeaderboardEligibilityTest
+     *    is the record of the change.
+     *
+     * The caller owns the join and the alias; this only adds the WHERE clauses.
+     */
+    public static function applyEligibility(QueryBuilder $qb, string $clubAlias = 'c'): QueryBuilder
+    {
+        return $qb
+            ->andWhere("{$clubAlias}.currentSeason > 1")
+            ->andWhere("{$clubAlias}.isSpoof = false");
     }
 
     /**

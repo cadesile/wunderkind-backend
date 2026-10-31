@@ -24,6 +24,12 @@
             {% if spotlight.isLive %}
                 <li><a href="#spotlight" class="nav-spotlight-cta pixel">CLUB SPOTLIGHT</a></li>
             {% endif %}
+            {# Gated on the same emptiness the section itself is gated on, exactly as
+               .nav-spotlight-cta is gated on spotlight.isLive — a jump link to a section
+               that rendered nothing is a dead anchor. #}
+            {% if periodAwards is not empty %}
+                <li><a href="#period-awards">Awards</a></li>
+            {% endif %}
             <li><a href="#role">Your role</a></li>
             <li><a href="#facilities">Facilities</a></li>
             <li><a href="#leagues">Leagues</a></li>

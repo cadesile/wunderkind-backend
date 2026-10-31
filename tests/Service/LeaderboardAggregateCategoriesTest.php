@@ -29,6 +29,14 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Every board is computed into a per-run unique period so pre-existing rows in
  * wunderkind_test can't contaminate the assertions, and so tearDown can sweep the
  * entries created for *other* clubs that happen to hold stats in the shared DB.
+ *
+ * These tests are about SOURCE DERIVATION — which table feeds which board, with what
+ * number — so a period row is asserted on getCumulativeScore(), the truthful cumulative
+ * the derivation produced. getScore() on a period row is now period GROWTH
+ * (max(0, cumulative - baseline)), which reads 0 on a club's first observation inside a
+ * period by design; that rule has its own cases below and in
+ * tests/Entity/LeaderboardEntryGrowthTest.php. 'all-time' rows are standings and keep
+ * being asserted on getScore().
  */
 class LeaderboardAggregateCategoriesTest extends KernelTestCase
 {
@@ -105,23 +113,63 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $soloId = (string) $oneManTeam->getId();
 
         // Squad totals sum the whole roster...
-        $this->assertSame(15, $goals[$deepId]->getScore());
-        $this->assertSame(11, $assists[$deepId]->getScore());
-        $this->assertSame(20, $goals[$soloId]->getScore());
-        $this->assertSame(0,  $assists[$soloId]->getScore());
+        $this->assertSame(15, $goals[$deepId]->getCumulativeScore());
+        $this->assertSame(11, $assists[$deepId]->getCumulativeScore());
+        $this->assertSame(20, $goals[$soloId]->getCumulativeScore());
+        $this->assertSame(0,  $assists[$soloId]->getCumulativeScore());
 
         // ...while iron_man takes only the single most-capped player, and names them.
-        $this->assertSame(30, $ironMan[$deepId]->getScore());
+        $this->assertSame(30, $ironMan[$deepId]->getCumulativeScore());
         $this->assertSame('Ade Fixture', $ironMan[$deepId]->getDisplayLabel());
-        $this->assertSame(5, $ironMan[$soloId]->getScore());
+        $this->assertSame(5, $ironMan[$soloId]->getCumulativeScore());
 
-        // A one-man team out-scoring a whole squad still ranks above it — the board is a total,
-        // not an average, and rank_position is written by the same assignRanks() pass.
-        $this->assertLessThan($goals[$deepId]->getRank(), $goals[$soloId]->getRank());
+        // Every club was seen for the first time in this period, so each baselined on its
+        // own cumulative and has grown by nothing — the period board is a growth board.
+        $this->assertSame(15, $goals[$deepId]->getBaselineScore());
+        $this->assertSame(0, $goals[$deepId]->getScore());
+        $this->assertSame(0, $goals[$soloId]->getScore());
 
         // Squad totals carry no player name — they are not individual-best boards.
         $this->assertNull($goals[$deepId]->getDisplayLabel());
         $this->assertNull($assists[$deepId]->getDisplayLabel());
+    }
+
+    /**
+     * The period board ranks GROWTH, not the total — so a club that gains more during the
+     * period outranks a club with the larger career total. That is the whole point of the
+     * baseline, and it is what makes a period winnable by someone who is not the all-time
+     * leader.
+     */
+    public function testPeriodBoardRanksGrowthNotTheCareerTotal(): void
+    {
+        $bigTotal = $this->persistClub('Agg Big Total FC');
+        $climber  = $this->persistClub('Agg Climber FC');
+
+        $bigStat     = $this->persistStat($bigTotal, 'big', 'Big Fixture', appearances: 50, goals: 100, assists: 0);
+        $climberStat = $this->persistStat($climber, 'climb', 'Climb Fixture', appearances: 5, goals: 5, assists: 0);
+        $this->em->flush();
+
+        // First observation inside the period stamps both baselines: 100 and 5.
+        $this->recalculateAndIndex(LeaderboardCategory::CLUB_GOALS);
+
+        // During the period the smaller club scores 10 and the bigger club scores 1.
+        $bigStat->applySnapshot(51, 101, 0, 'Big Fixture');
+        $climberStat->applySnapshot(10, 15, 0, 'Climb Fixture');
+        $this->em->flush();
+
+        $board = $this->recalculateAndIndex(LeaderboardCategory::CLUB_GOALS);
+
+        $bigId     = (string) $bigTotal->getId();
+        $climberId = (string) $climber->getId();
+
+        $this->assertSame(1, $board[$bigId]->getScore(), 'grew by one');
+        $this->assertSame(10, $board[$climberId]->getScore(), 'grew by ten');
+        $this->assertSame(101, $board[$bigId]->getCumulativeScore(), 'the truthful total is still kept');
+        $this->assertLessThan(
+            $board[$bigId]->getRank(),
+            $board[$climberId]->getRank(),
+            'the club that grew more ranks above the club with the larger total',
+        );
     }
 
     public function testTransferBoardsSplitOnDirectionAndRankGrossFee(): void
@@ -143,14 +191,14 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $buyerId  = (string) $buyer->getId();
 
         // Records, not totals: the single biggest deal on each side.
-        $this->assertSame(5_000_000, $record[$traderId]->getScore(), 'gross fee, not net proceeds');
+        $this->assertSame(5_000_000, $record[$traderId]->getCumulativeScore(), 'gross fee, not net proceeds');
         $this->assertSame('Sold Star', $record[$traderId]->getDisplayLabel());
-        $this->assertSame(9_000_000, $spend[$traderId]->getScore());
+        $this->assertSame(9_000_000, $spend[$traderId]->getCumulativeScore());
         $this->assertSame('Bought Star', $spend[$traderId]->getDisplayLabel());
 
         // A club that has only ever bought never appears on the fee-received board.
         $this->assertArrayNotHasKey($buyerId, $record);
-        $this->assertSame(100, $spend[$buyerId]->getScore());
+        $this->assertSame(100, $spend[$buyerId]->getCumulativeScore());
     }
 
     public function testAllTimeSurvivesASeasonResetWhileOtherPeriodsDoNot(): void
@@ -176,7 +224,15 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         // Career total = 10 (season 1 peak) + 3 (season 2 to date) = 13, not just the
         // current season-to-date value of 3.
         $this->assertSame(13, $allTime->getScore(), 'all-time must reconstruct across the season reset');
-        $this->assertSame(3, $other[(string) $club->getId()]->getScore(), 'other periods still read the live current-season value');
+        $this->assertSame(
+            3,
+            $other[(string) $club->getId()]->getCumulativeScore(),
+            'other periods still read the live current-season value',
+        );
+        // Growth makes the reset-aware distinction moot for period boards anyway: a delta of
+        // a live cumulative is the gain during the period either way.
+        $this->assertSame(3, $other[(string) $club->getId()]->getBaselineScore());
+        $this->assertSame(0, $other[(string) $club->getId()]->getScore());
     }
 
     public function testTopCareerPerformerUsesResetAwareTotalsAndLatestName(): void
@@ -217,7 +273,7 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
 
         $board = $this->recalculateAndIndex(LeaderboardCategory::CAREER_EARNINGS);
 
-        $this->assertSame(1_000_000, $board[(string) $drawer->getId()]->getScore(), 'draws are summed');
+        $this->assertSame(1_000_000, $board[(string) $drawer->getId()]->getCumulativeScore(), 'draws are summed');
         $this->assertArrayNotHasKey(
             (string) $hoarder->getId(),
             $board,

@@ -122,6 +122,11 @@ lando php bin/console app:starter-pool:audit --dry-run   # sweep every enabled c
 lando php bin/console app:starter-pool:audit             # ...and queue it onto the `pool` transport
 lando php bin/console messenger:consume pool -vv         # drain it locally (no crontab under Lando)
 
+# Periodic leaderboard awards (no crontab under Lando — the cron runs this every 10 min at :04)
+lando php bin/console app:leaderboards:close-periods --force --dry-run -v   # what would close
+lando php bin/console app:leaderboards:close-periods --force -v             # close the CURRENT open period
+lando php bin/console app:leaderboards:close-periods --at=<ISO8601>         # pin "now"
+
 # Admin
 lando php bin/console app:admin:create            # create a backend admin user
 
@@ -869,6 +874,119 @@ them:
   link is by slug *string*, not a DB foreign key to the (truncated, re-autoincremented)
   `PlayerArchetype` row, so a reseed never orphans them.
 
+### Periodic Leaderboard Awards (backend-owned)
+
+An operator-configured prize for topping a leaderboard over a period — weekly, monthly or
+quarterly, to a configurable number of places — plus an immutable archive of every closed
+period. Client contract: `docs/api/leaderboard-awards.md`; the reading side is in
+`docs/api/leaderboard.md`. **No new API endpoint**, and both inbox endpoints are unchanged.
+
+- **A period board is a GROWTH board, not a standing**, and that is the whole design.
+  `LeaderboardEntry.score` has never been an accumulator: every writer re-reads a cumulative
+  total and stores it absolutely (`SyncService` writes `Club::getReputation()`,
+  `computeAggregateScores()` writes career totals). So **deleting rows at a period boundary
+  resets nothing** — the next sync and the next five-minute cron tick put the identical
+  numbers straight back. The existing weekly board is the proof: it has always got a fresh
+  ISO-week key and always shown all-time career goals. Only a baseline resets a score.
+- **`LeaderboardEntry::observeCumulative()` is the single writer for every non-`all-time`
+  row**, and keeps three numbers: `baselineScore` (the cumulative at first sighting in this
+  period), `cumulativeScore` (the truthful cumulative) and `score = max(0, cumulative -
+  baseline)` (the growth the board ranks). `setScore()` is for `all-time` only. **Only the
+  cumulative chains between periods**, so growth never compounds its own clamping, and the
+  `max(0, …)` is a product rule rather than a safety net — `score` is `bigint unsigned` and
+  growth genuinely goes negative, because `club_reputation` decays daily. Keeping the
+  cumulative separately is exactly what stops the clamp corrupting the next baseline.
+  Converting a new writer and forgetting one is the live hazard here:
+  `DecayReputationCommand::syncLeaderboardScore()` touches **every** existing period row for
+  a club, so left on `setScore()` it writes a standing where a growth belongs.
+- **The baseline lives on the live period row**, not in a baseline table and not on the
+  archive. `leaderboard_entry` already holds exactly one row per `(club, category, period)`
+  — the right grain — so two columns add **zero rows**. The archive would be wrong: it is
+  bounded to a display top-N, while a baseline is needed for every eligible club.
+- **Baselines are stamped lazily**, at first observation inside the period (so up to one
+  cron tick or one sync of drift at a boundary — ~0.01% of a month, accepted). That is what
+  removes the pre-seeding pass, the baseline table, the seed archive and the "first period
+  has no baseline" case. It also closes the disable→re-enable hazard **structurally**:
+  `ActivePeriodService` stops emitting a disabled definition's key, so no rows exist, so on
+  re-enable growth is measured from the re-enable and **a long-disabled definition cannot
+  retro-award the all-time leader**.
+- **`senderType` on the award's inbox message must stay `COMPETITION`.** It reads like
+  system mail and it is not. `InboxService::acceptMessage()` routes **only** `COMPETITION`
+  and `FRIENDLY` to `acceptCompetitionReward()`; a `SYSTEM` message carrying
+  `offerData.effects` renders `requiresAccept: true` in
+  `InboxController::serializeMessage()` and then hits `default => null` — **the player taps
+  Accept and gets nothing, with no error anywhere.** And do **not** add a new
+  `MessageSenderType` case: it needs no migration, so the cost is not schema, it is
+  contract — a case a shipped client has never seen changes how the message renders. The
+  discriminator is `offerData.type = 'LEADERBOARD_AWARD'`, which is the field clients key
+  off anyway. `LeaderboardAwardDeliveryServiceTest` pins this **end to end**, by feeding the
+  delivered message through the real `acceptMessage()` and asserting the balance moved — a
+  `senderType` assertion alone would pass a rename to `SYSTEM`.
+- **`effects` sits at the TOP level of `offerData`**, load-bearing twice over:
+  `acceptCompetitionReward()` reads `$offerData['effects']`, and `serializeMessage()`
+  derives `requiresAccept` from its non-emptiness.
+- **No `UserLedger` row, ever.** That ledger's before/after chain is a dividend-draw
+  (club→user transfer) record; a prize paid into a club balance is not a user-level balance
+  change, and inserting one would corrupt `UserLedgerRepository::getCurrentBalance()` and
+  the landing page's Rich List. The delivery test counts rows before and after to pin it.
+- **Nothing mutates `Club` server-side.** Same reason as `RewardApplierService`:
+  `SyncService::process()` does an absolute `Club::setBalance($request->balance)`, so a
+  server-side `addFunds()` on the cron's schedule would just be overwritten by the next
+  sync. The accept path is what makes that overwrite correct.
+- **The archive header carries the claim, and the claim is raw.**
+  `uq_leaderboard_period_archive_category_period` is a **plain** unique (both columns NOT
+  NULL — which is why `category`/`cadence` are denormalised onto the header rather than
+  keying on the nullable `definition_id`), and `LeaderboardPeriodCloseService::claim()`
+  inserts `pending` through raw DBAL with an un-targeted `ON CONFLICT DO NOTHING`. Raw
+  specifically because a `UniqueConstraintViolationException` out of `flush()` **closes the
+  EntityManager**, which in a cron tick would strand every remaining definition. It
+  auto-commits on its own, deliberately **outside** any wrapping transaction, so the claim
+  survives a later failure rather than silently re-opening the period.
+- **`claimedAt` is a lease, not a flag** — `CLAIM_LEASE_SECONDS = 300`, the same constant
+  name and value as `CompetitionRound`. Reclaimed by a conditional `UPDATE … WHERE status =
+  'pending' AND claimed_at < :reclaimBefore`, after which the abandoned attempt's partial
+  entries are deleted wholesale (they are incomplete by definition, and discarding them is
+  what lets the entry rewrite use the plain ORM without tripping `uq_lpae_archive_rank`).
+- **Never commit a status ahead of the work it describes.** The archive's terminal status
+  *and* the definition's `lastClosedPeriodKey` anchor are set on the entity, in the one
+  flush that also writes every entry and every inbox message. The claim row is the gate; the
+  anchor is the record. `LeaderboardPeriodCloseServiceTest` asserts that a failure during
+  delivery leaves the archive `pending`, the anchor unmoved **and the live rows unpruned**.
+- **The prune runs only after that flush has committed** — the `*_squad` precedent.
+  Committing a delete before a failed flush would clear the board with nothing archived.
+- **A closed period is read-only, and this must never be removed.**
+  `LeaderboardCalculationService::getLeaderboard()`'s cold callback *writes* (it calls
+  `recalculate()`, and `computeAggregateScores()` will upsert rows for any period string at
+  all), so after a close prunes `period = '2026-M10'`, one public
+  `GET /api/leaderboard/golden_boot?period=2026-M10` would resurrect the entire pruned board
+  plus a junk row per club. Both doors are shut: the cold callback projects the archive
+  instead, and `recalculate()` returns 0 early so neither the admin button nor the cron can
+  resurrect one. A `pending` archive deliberately does **not** make a period read-only — its
+  live rows are unpruned and still the truthful answer.
+- **Due-ness is two parts, both required.** Catch-up from the anchor, **oldest first, one
+  period per pass**, so a cron outage settles each missed period in order rather than
+  silently skipping two months — *and* the chosen period must actually have ended, so clock
+  skew or a stray `--force` cannot close a period that is still open.
+- **Inline in the cron tick: no Messenger transport, no message class.** Per due definition
+  the work is one indexed read, ≤100 entry inserts and ≤N messages, and the due count is
+  bounded by the enabled definitions (≤12 categories × 3 cadences). That is nothing like a
+  32-fixture match-engine round, which is what justified the `competition` transport. If the
+  archive write ever has to cover tens of thousands of rows per definition per tick, split
+  it onto its own message with a re-read clamp (the `TopUpStarterPoolMessageHandler`
+  pattern). The only queued part is the push.
+- **Spoof clubs are excluded from leaderboards as of this work** —
+  `LeaderboardEntryRepository::applyEligibility()`, shared by the board read and the award
+  read. A visible public behaviour change (spoof clubs vanish from live boards, shifting
+  `total` and every rank below them), taken because paying a bot real money is the actual
+  bug and because a prize paid to a club the board does not list is indefensible either way
+  round. `findAllForCategoryAndPeriod()` stays deliberately unfiltered — the stale-score
+  zeroing pass must see every stored row.
+- **Cron: `docker/leaderboards-close-periods.sh`, every 10 minutes at :04.** Its schedule is
+  the **tick granularity, not the award cadence** — cadence is per-definition and set in the
+  admin. No crontab under Lando, so locally use
+  `app:leaderboards:close-periods --force [--dry-run]`, or the **Close now** panel on a
+  definition's detail page.
+
 ### Two Firewalls
 - **`api`** — stateless JWT, covers `/api/*`; role `ROLE_CLUB` for game clients
 - **`admin`** — session form_login, covers `/admin`; role `ROLE_ADMIN`
@@ -897,6 +1015,7 @@ directory): custom admin routes must always redirect through EasyAdmin's entry p
 - **Adding a persisted field is not done until it round-trips through Import/Export.** Three admin screens back up and restore domain data, and a field the service doesn't carry is silently lost on restore — the import reports no error, the value just comes back at its entity default. `ConfigImportExportService` (`GameConfig`, `StarterConfig`, `PoolConfig`) is **reflection-driven**: it walks every `#[ORM\Column]` property, so a new config field is covered automatically and the only decision is whether it belongs on `ConfigImportExportService::DENIED_PROPERTIES` (secrets and runtime state — the export file is documented to admins as safe to commit). `NarrativeImportExportService` and `LeagueImportExportService` are still hand-maintained lists that must be edited on **both** sides. All three are guarded by coverage tests (`tests/Service/ConfigImportExportCoverageTest.php`, `NarrativeFacilityTemplateRoundTripTest.php`, `LeagueImportExportRoundTripTest.php`) that fail when an entity gains a column the service doesn't handle — so a red build here means the export needs updating, not the test. `NarrativeTranslationRoundTripTest.php` guards the newer `translations` section the same way, but narrower — it only asserts every field named in `NarrativeTranslationService::TRANSLATABLE_FIELDS` has a working getter/setter, not a full column sweep (most columns on those three entities are deliberately not translatable).
 - **`GameEventTemplate` JSON is client-interpreted, and the client is fussy.** The backend stores and serves `impacts`, `firingConditions`, `chainedEvents` and `severity` verbatim — nothing validates them, so a wrong key is not an error, it is an event that quietly does nothing. Three traps: `impacts` has **two shapes**, and the `player_reputation`/`player_milestone`/`player_morale`/`player_form` categories read **only** `{"stat_changes": [...]}` (a flat `[{target, delta}]` array on those fires the message and applies nothing); a legacy target **must carry its slot number** (`player_1.morale`, never `player.morale` — the client's entity map has no bare `player` key); and setting `firingConditions` at all **removes the template from the weekly random roll**, so a shape no evaluator claims makes the event permanently dead. Only eight personality traits exist (`determination, professionalism, ambition, loyalty, adaptability, pressure, temperament, consistency`, 1–20) — any other name is silently dropped. Full reference: `docs/event-guide.md`, mirrored in the admin help on `GameEventTemplateCrudController`. `app:events:repair` fixes existing rows; the seeders skip existing slugs unless you pass `--update`.
 - **EasyAdmin custom form type on a `json`/array column** — a `Field::new('col')->setFormType(MyType::class)` where `col` is a Doctrine `json` type gets auto-configured by EasyAdmin as a collection, which injects `CollectionType` options (`allow_add`, `entry_type`, …) onto your form type and throws `The options ... do not exist`. Tolerate them in the type's `configureOptions()`: `$resolver->setDefined(['allow_add','allow_delete','delete_empty','entry_options','entry_type'])`. To render a fully custom widget for such a compound type, register a form theme via `$crud->addFormTheme(...)` (singular) and define a `{% block <blockPrefix>_widget %}` block (block prefix = the type class minus `Type`, snake_cased; `AppearanceType` → `appearance`). See `AppearanceType` + `templates/admin/form/appearance_theme.html.twig`.
+- **A public GET on `/api/leaderboard/{category}` can WRITE, and is guarded in two places.** `getLeaderboard()`'s cold-cache callback calls `recalculate()`, and `computeAggregateScores()` will upsert rows for *any* period string — so an arbitrary `?period=` would mint a cache key and populate a whole junk board. The controller short-circuits anything failing `LeaderboardPeriod::isValidKey()` to the **same empty 200** it already returned (permissive by design — strict validation would be a contract change and could 400 a live client), and a **closed** period is projected from its archive instead of recomputed. Removing either guard lets one request resurrect a pruned board.
 - **EasyAdmin virtual/computed index columns (a field with no real getter) need a dummy `->setValue(...)` placeholder, or `formatValue()` is silently ignored.** `CommonPreConfigurator` tries `PropertyAccessor::getValue()` for any field whose `getValue()` is still `null`; on failure it renders the "inaccessible" error template *regardless* of what `formatValue()` later computes — the check is "does `field.value` happen to be non-null already," not "is there a formatValue callable." Give the field any non-null placeholder (`->setValue('')`/`->setValue(false)`) to skip that path, then compute the real per-row value in `formatValue(fn ($value, $entity) => ...)`. Separately: **`BooleanField`'s own index/detail template reads `field.value` directly, never `field.formattedValue`** — unlike most fields (`TextField` renders `{{ field.formattedValue|raw }}`), so a virtual `BooleanField` can never show a computed value no matter how it's wired; use `TextField` instead and return icon HTML (`<i class="fa fa-check-circle text-success">`) from `formatValue()` — a string return is auto-wrapped in `Twig\Markup`, so it renders unescaped. See `TranslationKeyCrudController`'s per-language presence columns.
 
 ## API Endpoints
@@ -940,6 +1059,11 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 | `NarrativeTranslationService` | Find-or-create `TranslationKey`s for narrative fields; builds the per-language localization map the `?lang=` endpoints read; EN is always read live off the entity, never stored — see Languages & Translations above |
 | `TranslationCatalogueService` | Builds the generic UI-copy `{_meta, entries}` catalogue (`/api/translations/{code}`), shared by the public endpoint and the admin bulk-export |
 | `TranslationCatalogueImportExportService` | Bulk import/export of the generic UI-copy catalogue, one language at a time — a separate domain from `NarrativeImportExportService`'s own `translations` section |
+| `LeaderboardPeriod` | The one place a leaderboard period key is produced, parsed, labelled or walked (all-static, like `TrophyConfigFactory`). Weekly/monthly/quarterly; the weekly key is byte-identical to the ISO-week key the game has always written — see Periodic Leaderboard Awards above |
+| `ActivePeriodService` | Which periods get `leaderboard_entry` rows written right now: `all-time` + the current ISO week always, plus each **enabled** award definition's current key. The gating is what makes a disable→re-enable unable to retro-award |
+| `LeaderboardPeriodCloseService` | Closes an ended period: claim (raw `ON CONFLICT`, leased), freeze the board, award each place, one flush, then prune. Never commits a status ahead of its work |
+| `LeaderboardAwardDeliveryService` | Turns a frozen archive row into a claimable inbox prize via the unchanged accept path. **`senderType` must stay `COMPETITION`** — see Periodic Leaderboard Awards above |
+| `PeriodAwardsBoardService` | The landing page's `#period-awards` rows. No snapshot row and no cache, because the archive already *is* the cron-written denormalised row |
 
 ## Key Entities (non-obvious fields)
 
@@ -955,7 +1079,9 @@ Admin UI is at `/admin` (session-based, `ROLE_ADMIN`).
 - **FacilityTemplate** — canonical slug shared with frontend; `category` (TRAINING/MEDICAL/SCOUTING), `baseCost`, `weeklyUpkeepBase`, `matchdayIncome`, `matchdayIncomeMultiplier`; seeded via admin
 - **GameConfig** — singleton row; all global gameplay constants (XP rates, injury chances, wage multipliers, attendance formulas, `leagueTierDefaults` — whose rows normalise through `normaliseTierRow()` on read and write, see Trophy Identity above — etc.); every `#[ORM\Column]` is exported by `ConfigImportExportService` unless denied
 - **StarterConfig** — singleton row; league player ability ranges + fan base growth curves; JSON dirty-check workaround applies here; covered by `ConfigImportExportService` reflection
-- **LeaderboardEntry** — UNIQUE(club, category, period); `rank_position` column (not `rank`)
+- **LeaderboardEntry** — UNIQUE(club, category, period); `rank_position` column (not `rank`). `baselineScore`/`cumulativeScore` (both nullable) make every non-`all-time` period a **growth** board via `observeCumulative()` — see Periodic Leaderboard Awards above. `all-time` keeps `setScore()` and leaves both NULL
+- **LeaderboardAwardDefinition / LeaderboardAwardPlacement** — admin config: which chart awards, at what cadence, to how many places, with what prize. `isEnabled` defaults **false**; UNIQUE(category, cadence) is load-bearing (it is what makes the archive's claim key sound); there is no placements-count column because the highest configured `place` *is* the depth. `lastClosedPeriodKey` is a monotonic runtime anchor, hidden on the admin form
+- **LeaderboardPeriodArchive / LeaderboardPeriodArchiveEntry** — immutable history, one header per closed period plus its frozen board. The header **carries the close claim** (plain UNIQUE(category, period_key), which is why category/cadence are denormalised) and `claimedAt` is a 300s lease. The entry row doubles as the award record, denormalises `club_id`/`user_id` with **no FK** so it survives club and account deletion, and freezes kit/badge/country/`displayLabel` so the landing page still renders a deleted club. `inbox_message_id` is a plain string, not a FK
 - **GameEventTemplate** — narrative event definitions; `impacts`/`firingConditions`/`chainedEvents` are client-interpreted JSON edited as raw JSON in the admin (see Key Gotchas and `docs/event-guide.md`); `severity` is only read on the `NPC_INTERACTION` path
 - **InboxMessage** — `senderType` (MessageSenderType), `offerData` (json), `status` (MessageStatus)
 - **Transfer** — fee + agentCommission in pence/cents; `getNetProceeds()` helper; `occurredAt` (client) + `syncedAt` (server); `player_id` is `ON DELETE SET NULL`

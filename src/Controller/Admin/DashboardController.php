@@ -1503,6 +1503,9 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy'),
             MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check'),
             MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera'),
+            MenuItem::linkTo(LeaderboardAwardDefinitionCrudController::class, 'Award Definitions', 'fa fa-medal'),
+            MenuItem::linkTo(LeaderboardPeriodArchiveCrudController::class, 'Period Archives', 'fa fa-box-archive'),
+            MenuItem::linkTo(LeaderboardPeriodArchiveEntryCrudController::class, 'Awards', 'fa fa-gift'),
         ]);
         yield MenuItem::subMenu('Clubs & Leagues', 'fa fa-table-list')->setSubItems([
             MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview'),

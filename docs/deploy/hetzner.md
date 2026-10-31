@@ -387,6 +387,54 @@ One thing the audit covers that `app:pool:warm` does not: warm only ever generat
 `FACILITY_MANAGER` stays short no matter how often it is warmed by hand. The audit is driven
 by the starter pack's own requirements, so it covers all five roles.
 
+**Periodic leaderboard awards: `docker/leaderboards-close-periods.sh`, every 10 minutes at
+:04.** It runs `app:leaderboards:close-periods`, which for every enabled
+`LeaderboardAwardDefinition` whose configured period has ended freezes that period's board
+into an immutable `LeaderboardPeriodArchive`, pays the configured places as inbox prizes,
+and prunes the live `leaderboard_entry` rows for it.
+
+**This entry's own schedule is the tick granularity, not the award cadence.** The cadence —
+weekly, monthly or quarterly — is per-definition and configured in the admin under
+*Sync & Leaderboards → Award Definitions*, the same relationship `post-community-stat-tick`
+has with its admin-editable posting schedule. Changing this crontab line changes how
+promptly an ended period is noticed, never how often anything awards.
+
+Ten minutes rather than one: a period boundary is a calendar instant and nothing downstream
+is minute-sensitive (the prize is inbox mail the player reads whenever), and staying off the
+5-minute `leaderboards-generate` tick means the two never contend on the same rows in the
+same minute. The :04 offset lands it on no other job's minute.
+
+Two things to know when something looks wrong:
+
+* **A row stuck at status `pending` past its 300-second claim lease is the signal.** Closing
+  a period takes a claim by inserting the archive header `pending`, and sets the terminal
+  status only in the same flush as the work it describes. So a `pending` row past its lease
+  means a close died part-way: its archive is incomplete, and its live `leaderboard_entry`
+  rows are deliberately **not** pruned, so the live board is still the truthful answer for
+  that period. The next tick reclaims it, discards the partial archive rows and rewrites the
+  board. Check `/var/log/leaderboards-close-cron.log` and the admin's *Period Archives*
+  screen. A row that keeps returning to `pending` is a real fault, not a slow close.
+* **A closed period is read-only and its live rows are gone.** `GET /api/leaderboard/{category}?period=<closed key>`
+  is served from the archive, and neither the admin "generate leaderboards" button nor the
+  5-minute cron will recompute it. That is load-bearing: the public read path writes on a
+  cold cache, so without it one request would resurrect a whole pruned board as junk rows.
+
+`flock` guards the script, unlike the daily `reputation-decay.sh`: this is sub-hourly, and a
+slow close over a large club table is exactly the shape that stacks. The archive claim
+already makes re-entry harmless, so `flock` is the cheap outer guard rather than the
+correctness mechanism.
+
+There is no crontab under Lando, so locally:
+
+```bash
+lando php bin/console app:leaderboards:close-periods --force --dry-run -v
+lando php bin/console app:leaderboards:close-periods --force -v
+```
+
+`--force` closes the **current, still-open** period, which is the only way to exercise the
+job without waiting for a real boundary. `--at=<ISO8601>` pins "now" for tests, and
+`--definition=<uuid|category>` scopes a run.
+
 Also every 1 minute: `docker/messenger-consume.sh` drains the `async` Messenger transport
 (push notifications — see `src/Service/Notification/PushNotificationService.php`), and
 `docker/worldpack-consume.sh` separately drains the `worldpack` transport (World Pack Cache

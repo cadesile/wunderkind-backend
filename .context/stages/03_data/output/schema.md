@@ -7,7 +7,7 @@ constraints. Don't restate field lists here.
 ## Table index (by domain, matches `entities.md` grouping)
 
 - **Auth/user:** `user`, `admin`, `guardian`, `email_verification`, `refresh_tokens`, `beta_request`, `deletion_request`, `user_device` (FCM push tokens), `notification_log` (push-pipeline audit trail), `user_ledger` (centralized cross-club dividend-draw audit trail)
-- **Core game/club:** `club`, `club_facility`, `facility_template`, `league`, `league_sponsor_income`, `npc_club`, `transfer`, `sync_record`, `season_record`, `season_snapshot`, `season_ratings_snapshot`, `match_result`, `leaderboard_entry`, `tactical_advantage`
+- **Core game/club:** `club`, `club_facility`, `facility_template`, `league`, `league_sponsor_income`, `npc_club`, `transfer`, `sync_record`, `season_record`, `season_snapshot`, `season_ratings_snapshot`, `match_result`, `leaderboard_entry`, `leaderboard_award_definition`, `leaderboard_award_placement`, `leaderboard_period_archive`, `leaderboard_period_archive_entry`, `tactical_advantage`
 - **Player/squad:** `player` (embeds `PersonalityProfile` — no separate table), `player_archetype`, `player_career_stat`, `player_career_stat_snapshot`, `staff_career_profile` (sync v2 — staff identity/avatar, no stats), `agent`, `scout`, `staff`, `player_siblings` (self-referential join table)
 - **Sponsorship/finance:** `sponsor`, `investor`
 - **Messaging/admin comms:** `admin_message`, `admin_message_audience_group` (join table), `message_delivery`, `audience_group`, `audience_group_member`, `inbox_message`, `game_event_template`, `social_account_connection`, `social_post_template`
@@ -125,6 +125,44 @@ Three things to know before touching them:
   window is a small slice of a pool spanning every age, so it is by far the
   most selective of the three. Non-unique; declared in the ORM mapping so it
   round-trips through `schema:create`/`migrations:diff`.
+- **`leaderboard_award_definition`** — unique index
+  `uq_leaderboard_award_definition_category_cadence` on (`category`, `cadence`).
+  **Load-bearing rather than tidy:** it is what makes (`category`, `period_key`) a sound
+  non-nullable claim key on `leaderboard_period_archive`, since two definitions on one
+  category but different cadences produce different period keys and so cannot collide.
+  `LeaderboardAwardDefinitionCrudController` guards it with a flash *before* flushing — a
+  `UniqueConstraintViolationException` out of `flush()` closes the EntityManager.
+- **`leaderboard_award_placement`** — unique on (`definition_id`, `place`). The FK to the
+  definition is `CASCADE` (config, meaningless alone); the FK to `reward_template` is
+  `SET NULL` (deleting a template must not silently delete a prize place).
+- **`leaderboard_period_archive`** — unique index
+  `uq_leaderboard_period_archive_category_period` on (`category`, `period_key`). **This is
+  the close job's claim.** `LeaderboardPeriodCloseService::claim()` inserts the header
+  `pending` with a raw, un-targeted `ON CONFLICT DO NOTHING` (the
+  `RewardApplierService::recordClaim()` idiom — raw specifically because a unique violation
+  out of `flush()` closes the shared EntityManager and would strand every remaining
+  definition in the same cron tick), and whoever wins the insert owns the close. **Both
+  columns are NOT NULL, so this is a PLAIN unique, not a partial one** — which is the entire
+  reason `category` and `cadence` are denormalised onto the header instead of keying on the
+  nullable `definition_id`. No `where` option, so neither the `pg_get_expr` churn trap above
+  nor the `entrant_reward_claim` two-partial-index dance applies here.
+  `definition_id` is `ON DELETE SET NULL`, not `CASCADE` — the archive must outlive an admin
+  deleting the definition. `claimed_at` is a **lease** (300s, `CLAIM_LEASE_SECONDS`, the same
+  constant name and value as `CompetitionRound`), reclaimed by a conditional `UPDATE … WHERE
+  status = 'pending' AND claimed_at < :reclaimBefore`. A row stuck `pending` past its lease
+  means a close died part-way: its archive is incomplete and its live `leaderboard_entry`
+  rows are deliberately **unpruned**.
+- **`leaderboard_period_archive_entry`** — unique on (`archive_id`, `club_id`) and on
+  (`archive_id`, `rank_position`), plus the **one partial unique in this feature**:
+  `uq_lpae_archive_place` on (`archive_id`, `place`) `WHERE (place IS NOT NULL)`, because
+  `place` is nullable and PostgreSQL treats NULLs as distinct. Declared on the entity with
+  the predicate exactly as `pg_get_expr` reports it, per the note above — verified: a fresh
+  `wunderkind_test` builds it via `schema:create` and `migrations:diff` reports no changes.
+  `club_id` and `user_id` are denormalised `varchar(36)` with **no FK** at all, so the row
+  survives club and account deletion; account erasure nulls `user_id` and keeps the row (see
+  `AccountDeletionService::forgetUserInArchives()`). `inbox_message_id` is likewise a plain
+  string, because inbox messages cascade-delete with the club and an award must not vanish
+  with its delivery receipt.
 - **`user_ledger`** — unique index `uq_user_ledger_source_entry` on
   (`source_sync_record_id`, `source_ledger_index`) — the idempotency guard
   for `app:backfill-user-ledger`/`UserLedgerService` (see `entities.md`).

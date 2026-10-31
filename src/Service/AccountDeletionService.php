@@ -115,6 +115,14 @@ final class AccountDeletionService
                     $deletedClubs += count($clubs);
                 }
 
+                // Retained, not deleted — see forgetUserInArchives()'s docblock. One
+                // statement for the whole chunk, like every other table on this path.
+                $this->em->getConnection()->executeStatement(
+                    'UPDATE leaderboard_period_archive_entry SET user_id = NULL WHERE user_id IN (:userIds)',
+                    ['userIds' => array_map(static fn (User $u): string => (string) $u->getId(), $chunk)],
+                    ['userIds' => \Doctrine\DBAL\ArrayParameterType::STRING],
+                );
+
                 $this->em->createQuery('DELETE FROM App\Entity\RefreshToken t WHERE t.username IN (:emails)')
                     ->setParameter('emails', array_map(static fn (User $u): string => $u->getUserIdentifier(), $chunk))
                     ->execute();
@@ -134,6 +142,39 @@ final class AccountDeletionService
         }
 
         return ['users' => count($users), 'clubs' => $deletedClubs];
+    }
+
+    /**
+     * Two leaderboard tables, treated differently on purpose.
+     *
+     * `leaderboard_entry` is in BLOCKING_CLUB_DEPENDENTS above and goes with the club, like
+     * every other per-club row.
+     *
+     * `leaderboard_period_archive_entry` is DELIBERATELY RETAINED, with its `user_id` nulled
+     * instead — the role the "*_audit rows are deliberately not pruned" note plays for
+     * competitions. An archive row is a record of a rank in a period that has already been
+     * played and settled, held alongside every other club that competed in it; removing one
+     * club's row would leave a board whose ranks skip a number and whose entry_count no
+     * longer matches its rows. So the rank stays and the account identity goes.
+     *
+     * `club_name` and the frozen kit/badge configs are retained too: an invented club name is
+     * not personal data, and the landing page needs the badge to keep rendering a historical
+     * board (its rule is that any club listed anywhere shows at least its badge).
+     *
+     * Consequence to state plainly, because someone will file it as a bug: the admin's
+     * "awards won by this account" screen stops returning rows for a deleted account. That is
+     * correct — the account is gone. docs/api/account-delete.md says so too.
+     *
+     * The club_id on those rows is also left alone: it has no FK (that is why the archive
+     * survives a club delete at all), so nothing blocks on it, and it is a generated
+     * identifier rather than personal data.
+     */
+    private function forgetUserInArchives(string $userId): int
+    {
+        return (int) $this->em->getConnection()->executeStatement(
+            'UPDATE leaderboard_period_archive_entry SET user_id = NULL WHERE user_id = :userId',
+            ['userId' => $userId],
+        );
     }
 
     public function deleteAccount(User $user): void
@@ -177,6 +218,11 @@ final class AccountDeletionService
             $this->em->createQuery('DELETE FROM App\Entity\RefreshToken t WHERE t.username = :username')
                 ->setParameter('username', $user->getUserIdentifier())
                 ->execute();
+
+            // Retained, not deleted — see forgetUserInArchives()'s docblock. Raw SQL rather
+            // than a DQL UPDATE because user_id carries no association mapping: it is a
+            // denormalised string precisely so the row outlives the account.
+            $this->forgetUserInArchives((string) $user->getId());
 
             // DB cascade: InboxMessage (ON DELETE CASCADE on club) and email_verification
             // (ON DELETE CASCADE on user); DB SET NULL: transfer.club_id/player_id.

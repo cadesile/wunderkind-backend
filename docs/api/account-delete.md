@@ -34,6 +34,14 @@ any "are you sure?" confirmation in the client UI).
   results, season records/snapshots, sponsors, investors, sync records, leaderboard
   entries, inbox messages). This is a **hard delete** — there is no undo and no
   recovery.
+- **One thing is retained, with the account identity removed:** a club's rows in a
+  closed leaderboard period's archive (`leaderboard_period_archive_entry`). The row
+  records a rank in a period that has already been played and settled, held alongside
+  every other club that competed in it, so removing it would leave a historical board
+  whose ranks skip a number. The `user_id` is nulled instead, so nothing links the row
+  to the erased account; the club's generated name and its kit/badge colours stay, which
+  is what lets the public honours board keep rendering that period. Consequence: an
+  account's award history stops being queryable once the account is deleted.
 - **On `200`, the client must:** discard the stored JWT, clear all local/cached
   state for the user, and route to the logged-out (login/landing) screen. Do not
   reuse the token.

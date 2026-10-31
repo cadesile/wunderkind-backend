@@ -67,7 +67,7 @@ serve these paths identically; see `01_overview/output/environment.md`.
 | `GameConfigController` | `/api` | `GET /game-config` (optional `?lang=` localizes each `facilityTemplates[]` entry's `label`/`description` in place). **Public, but one key is account-dependent:** `debugLoggingEnabled` is served as `global GameConfig switch || the requesting User's own debugLoggingEnabled` (`resolveDebugLoggingEnabled()`) — same key, same boolean shape as before, so no client change was needed. The response is `Cache-Control: private` for that reason; nothing caches this endpoint today and that header is what keeps a future CDN from serving one account's flag to another. The per-user half needs a Bearer token on the request, so an anonymous call gets the global value only — which is why `GET /api/club/status` mirrors the same key for signed-in clients (see `ClubController` above). Both endpoints go through `DebugLoggingResolver`; `GameConfigDebugFlagTest` asserts they agree for the same account. Client contract: `docs/api/debug-logging.md` |
 | `InboxController` | `/api/inbox` | `GET ''`, `GET /{id}`, `POST /{id}/accept`, `POST /{id}/reject`, `POST /{id}/read`, `POST /{id}/dismiss` |
 | `LanguageController` | `/api/languages` | `GET` — enabled languages, public, no auth |
-| `LeaderboardController` | `/api` | `GET /leaderboard/{category}` |
+| `LeaderboardController` | `/api` | `GET /leaderboard/{category}` — `?period=` accepts `all-time` plus a recognised period key (`2026-W44`/`2026-M10`/`2026-Q4`); **anything else returns the same empty 200**, short-circuited before the database so an arbitrary string cannot mint a cache key and trigger a `recalculate()` *write*. A closed period is served from its archive. **Periodic leaderboard awards add NO new API route** — the prize arrives through the unchanged `GET /api/inbox` + `POST /api/inbox/{id}/accept`. |
 | `LeagueController` | `/api/league` | `POST /conclude-season`, `GET /season-history`, `GET /season-history/{season}` |
 | `MarketController` | `/api/market` | `GET /data`, `POST /assign`, `POST /consume`, `GET /legacy` |
 | `OwnerAvatarController` | `/api/owner-avatar` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the account holder's owner identity (name/nationality/gender/dob) + avatar; see "Owner Identity" in CLAUDE.md |
@@ -83,6 +83,15 @@ serve these paths identically; see `01_overview/output/environment.md`.
 
 ## `src/Controller/Admin/` — custom (non-CRUD) admin actions
 
+- **`LeaderboardAwardCloseController`** — `POST
+  /admin/leaderboard-award/{definition}/close-now` (`admin_leaderboard_award_close_now`),
+  CSRF-guarded, posted by the **Close now** panel on an award definition's detail page.
+  POST-only on purpose: closing a period prunes live rows, pays prizes and sends inbox
+  mail, so a crawler or a link-prefetcher must not be able to trigger it — a GET returns
+  405. There is no crontab under Lando, so this is how the close job is exercised by hand.
+  Redirects to EasyAdmin's own `admin_leaderboard_award_definition_detail` route, which
+  already builds the crud context on a direct match (only this action's own route needs the
+  `/admin?routeName=…` forwarding rule from `src/Controller/Admin/CLAUDE.md`).
 - **`DashboardController`** — the EasyAdmin dashboard root, plus ~25
   bespoke routes: `/admin/app-links[/save]`, `/admin/social`,
   `/admin/social/schedule/save`, `/admin/social/test/preview`,
@@ -206,7 +215,9 @@ controller per entity, each mapping via `getEntityFqcn()`:
 `BetaRequest`, `Club`, `CompetitionEntrant`, `CompetitionRound`,
 `CompetitionTemplate`, `DeletionRequest`, `Excursion`,
 `FacilityTemplate`, `FriendlyChallenge`, `GameEventTemplate`, `Guardian`, `Investor`,
-`Language`, `LeaderboardEntry`, `League`, `NotificationLog`, `NpcClub`,
+`Language`, `LeaderboardAwardDefinition`, `LeaderboardEntry`,
+`LeaderboardPeriodArchive`, `LeaderboardPeriodArchiveEntry`, `League`,
+`NotificationLog`, `NpcClub`,
 `PlayerArchetype`, `Player`, `RewardTemplate`, `Scout`, `SeasonRecord`,
 `SeasonSnapshot`, `SocialPostTemplate`, `Sponsor`, `Staff`, `SyncRecord`,
 `TacticalAdvantage`, `Transfer`, `Translation`, `TranslationKey`, `User`,

@@ -60,6 +60,7 @@ COPY docker/pool-consume.sh /usr/local/bin/pool-consume.sh
 COPY docker/competition-consume.sh /usr/local/bin/competition-consume.sh
 COPY docker/competition-health.sh /usr/local/bin/competition-health.sh
 COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
+COPY docker/leaderboards-close-periods.sh /usr/local/bin/leaderboards-close-periods.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   every 5 min — leaderboards-generate: recompute scores/ranks + invalidate leaderboard cache
@@ -155,6 +156,22 @@ COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 #     skips a sweep while the previous one's chunks are still undrained, and
 #     because pool stock moves at the rate clubs are created. Offset off :00 to
 #     miss the spotlight-generate cluster.
+#   every 10 min at :04 — leaderboards-close-periods: runs
+#     app:leaderboards:close-periods, which closes any LeaderboardAwardDefinition
+#     whose configured period has ended — freezing that period's board into an
+#     immutable LeaderboardPeriodArchive, paying the configured places as inbox
+#     prizes, and pruning the live leaderboard_entry rows for it. THIS ENTRY'S OWN
+#     SCHEDULE IS JUST THE TICK GRANULARITY, NOT THE AWARD CADENCE, which is
+#     per-definition (weekly/monthly/quarterly) and configured at
+#     /admin -> Sync & Leaderboards -> Award Definitions — the same relationship
+#     post-community-stat-tick has with its admin-editable posting schedule.
+#     Ten minutes rather than one: a period boundary is a calendar instant and
+#     nothing downstream is minute-sensitive (the prize is inbox mail the player
+#     reads whenever), and staying off the 5-minute leaderboards-generate tick
+#     means the two never contend on the same rows in the same minute. Offset to
+#     :04 so it lands on no other job's minute. A period left at status `pending`
+#     past its 300s claim lease means a close is failing part-way: its archive is
+#     incomplete and its live rows are deliberately NOT pruned.
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
@@ -173,10 +190,11 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '* * * * *    /usr/local/bin/competition-consume.sh              >> /var/log/competition-consume-cron.log  2>&1' \
     '*/5 * * * *  /usr/local/bin/competition-health.sh               >> /var/log/competition-health-cron.log   2>&1' \
     '35 * * * *   /usr/local/bin/starter-pool-audit.sh               >> /var/log/starter-pool-audit-cron.log   2>&1' \
+    '4,14,24,34,44,54 * * * * /usr/local/bin/leaderboards-close-periods.sh >> /var/log/leaderboards-close-cron.log 2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh
+RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 
