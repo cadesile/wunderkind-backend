@@ -158,6 +158,60 @@ class LeaderboardAwardAdminTest extends WebTestCase
         self::assertSelectorTextContains('body', 'ledger_delta', 'the frozen effects must be readable on the detail page');
     }
 
+    // ── Close now ───────────────────────────────────────────────────────────────────────
+
+    public function testTheDefinitionDetailPageOffersACloseNowButton(): void
+    {
+        $client     = $this->loggedInClient();
+        $definition = $this->persistDefinition();
+        $this->em->flush();
+
+        $crawler = $client->request('GET', $this->url('admin_leaderboard_award_definition_detail', ['entityId' => (string) $definition->getId()]));
+        self::assertResponseIsSuccessful();
+
+        self::assertSelectorTextContains('body', 'Close a period now');
+        self::assertSelectorTextContains('body', 'Close now');
+
+        $form = $crawler->filter('form[action*="close-now"]');
+        self::assertGreaterThan(0, $form->count(), 'the close action must be a POST form, not a link');
+        self::assertSame('post', strtolower((string) $form->attr('method')));
+        self::assertGreaterThan(0, $form->filter('input[name="_token"]')->count(), 'and it must carry a CSRF token');
+    }
+
+    /**
+     * Closing a period prunes live rows, pays prizes and sends inbox mail. A missing or
+     * wrong token must change nothing.
+     */
+    public function testCloseNowRejectsAMissingCsrfToken(): void
+    {
+        $client     = $this->loggedInClient();
+        $definition = $this->persistDefinition();
+        $this->em->flush();
+
+        $before = $this->archiveCount();
+
+        $client->request('POST', '/admin/leaderboard-award/' . $definition->getId() . '/close-now', ['_token' => 'nonsense']);
+
+        self::assertResponseRedirects();
+        self::assertSame($before, $this->archiveCount(), 'a bad token must archive nothing');
+    }
+
+    public function testCloseNowIsPostOnly(): void
+    {
+        $client     = $this->loggedInClient();
+        $definition = $this->persistDefinition();
+        $this->em->flush();
+
+        $client->request('GET', '/admin/leaderboard-award/' . $definition->getId() . '/close-now');
+
+        self::assertSame(405, $client->getResponse()->getStatusCode(), 'a stray GET must not be able to close a period');
+    }
+
+    private function archiveCount(): int
+    {
+        return (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM leaderboard_period_archive');
+    }
+
     private function loggedInClient(): KernelBrowser
     {
         self::ensureKernelShutdown();

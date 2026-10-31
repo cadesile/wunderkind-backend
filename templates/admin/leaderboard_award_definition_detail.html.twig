@@ -1,0 +1,83 @@
+{% extends '@EasyAdmin/crud/detail.html.twig' %}
+
+{# Overriding content_header_wrapper (not main) means the detail panel below is untouched — #}
+{# the "override one block, call parent() first" technique UserCrudController's own edit    #}
+{# page uses. See LeaderboardAwardDefinitionCrudController::configureCrud().                #}
+
+{% block content_header_wrapper %}
+    {{ parent() }}
+
+    {% set definition = entity.instance %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3 px-4">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fa fa-box-archive text-muted" aria-hidden="true"></i>
+                        <span class="fw-semibold">Close a period now</span>
+                    </div>
+
+                    <p class="text-muted small mb-3">
+                        The cron tick (<code>leaderboards-close-periods</code>, every 10 minutes at :04) does this
+                        automatically once a period ends. Use this to exercise it by hand — there is no crontab under
+                        Lando. Closing a period freezes its board into an immutable archive, pays the configured
+                        places as inbox prizes, and <strong>prunes the live leaderboard rows for that period</strong>.
+                    </p>
+
+                    <dl class="row small mb-3">
+                        <dt class="col-sm-3">Current open period</dt>
+                        <dd class="col-sm-9"><code>{{ currentPeriodKey }}</code></dd>
+
+                        <dt class="col-sm-3">Last closed</dt>
+                        <dd class="col-sm-9">
+                            {% if definition.lastClosedPeriodKey %}
+                                <code>{{ definition.lastClosedPeriodKey }}</code>
+                                {% if definition.lastClosedAt %}
+                                    <span class="text-muted">&middot; {{ definition.lastClosedAt|date('Y-m-d H:i:s') }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">never</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Next due</dt>
+                        <dd class="col-sm-9">
+                            {% if dueKey %}
+                                <code>{{ dueKey }}</code> <span class="text-muted">&middot; ready to close</span>
+                            {% else %}
+                                <span class="text-muted">nothing due — the current period has not ended</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Prize places</dt>
+                        <dd class="col-sm-9">{{ definition.depth }}</dd>
+                    </dl>
+
+                    <form method="post" action="{{ path('admin_leaderboard_award_close_now', {definition: definition.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('leaderboard_award_close_now') }}">
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" value="1" name="force" id="lbawCloseForce">
+                            <label class="form-check-label small" for="lbawCloseForce">
+                                Close the <strong>current, still-open</strong> period early
+                                (<code>{{ currentPeriodKey }}</code>) — for testing
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-box-archive" aria-hidden="true"></i>
+                            Close now
+                        </button>
+
+                        {% if not definition.isEnabled %}
+                            <span class="text-muted small ms-2">
+                                This definition is disabled — the cron will not close it, but this button still will.
+                            </span>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

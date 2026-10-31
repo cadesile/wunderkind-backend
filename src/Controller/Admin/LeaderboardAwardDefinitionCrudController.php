@@ -12,7 +12,10 @@ use App\Repository\Leaderboard\LeaderboardAwardDefinitionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use App\Service\Leaderboard\LeaderboardPeriodCloseService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
@@ -21,6 +24,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 
 /**
@@ -40,6 +44,7 @@ class LeaderboardAwardDefinitionCrudController extends AbstractCrudController
 {
     public function __construct(
         private readonly LeaderboardAwardDefinitionRepository $definitions,
+        private readonly LeaderboardPeriodCloseService $closeService,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -59,7 +64,12 @@ class LeaderboardAwardDefinitionCrudController extends AbstractCrudController
             ->setEntityLabelInPlural('Award Definitions')
             ->setDefaultSort(['category' => 'ASC', 'cadence' => 'ASC'])
             ->setHelp('index', 'Which leaderboards award a prize, how often, and to how many places. A period board scores GROWTH during the period, not the all-time standing — so a period is winnable by a club that is not the all-time leader. Nothing awards until it is enabled.')
-            ->setHelp('new', 'One definition per (category, cadence). Add one placement row per prize place — the highest place configured IS the depth.');
+            ->setHelp('new', 'One definition per (category, cadence). Add one placement row per prize place — the highest place configured IS the depth.')
+            // A "Close now" panel above the detail fields, because there is no crontab
+            // under Lando and this is how the close job gets exercised by hand. The
+            // template overrides one block and calls parent() first, so the detail panel
+            // itself is untouched.
+            ->overrideTemplate('crud/detail', 'admin/leaderboard_award_definition_detail.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
@@ -114,6 +124,26 @@ class LeaderboardAwardDefinitionCrudController extends AbstractCrudController
 
         yield DateTimeField::new('createdAt')->onlyOnDetail();
         yield DateTimeField::new('updatedAt')->onlyOnDetail();
+    }
+
+    /**
+     * Supplies the "Close now" panel its own facts. Added onto EasyAdmin's own KeyValueStore
+     * rather than rendering directly, so the stock detail page still builds — the technique
+     * UserCrudController::edit() and PlayerCrudController::index() use.
+     */
+    public function detail(AdminContext $context): KeyValueStore|Response
+    {
+        $definition = $context->getEntity()->getInstance();
+        $now        = new \DateTimeImmutable();
+
+        $responseParameters = parent::detail($context);
+
+        if ($definition instanceof LeaderboardAwardDefinition && $responseParameters instanceof KeyValueStore) {
+            $responseParameters->set('currentPeriodKey', $definition->currentPeriodKey($now));
+            $responseParameters->set('dueKey', $this->closeService->dueKeyFor($definition, $now));
+        }
+
+        return $responseParameters;
     }
 
     /**
