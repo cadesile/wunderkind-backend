@@ -692,6 +692,35 @@ var FacilitySites = (function () {
     });
 }());
 
+// ── Period Awards (#period-awards): last period's winners ────────────────────
+//
+// Every row's identity was FROZEN onto the archive at close, so this draws a club
+// that may no longer exist — which is exactly why the kit and badge configs live
+// on the archive row rather than being read off the live Club. The page's rule
+// that any club listed anywhere shows at least its badge has to keep holding for
+// a deleted club, and clubBadgeIconsHtml() falls back to composeKitSvg()'s own
+// defaults for a club that never customised its identity.
+//
+// Mounted through mountWhenVisible() like every other sprite surface on this
+// page: the section sits late in the document, so composing its badges at parse
+// time would push out first paint for sprites nobody has scrolled to.
+//
+// The hook is `.lbaw-row`, then `.lbaw-club-badge` within it — keep both classes
+// on whatever wraps a single archived rank.
+(function () {
+    var rows = document.querySelectorAll('.lbaw-row');
+    if (!rows.length) return;
+
+    Array.prototype.forEach.call(rows, function (row) {
+        var badgeSlot = row.querySelector('.lbaw-club-badge');
+        if (!badgeSlot) return;
+
+        mountWhenVisible(badgeSlot, function () {
+            badgeSlot.innerHTML = clubBadgeIconsHtml(jsonAttr(row, 'data-club-badge', null));
+        });
+    });
+}());
+
 // ── Boardroom Incident & Consequence Feed (terminal + incident inspector modal) ──
 (function () {
     var feed = document.querySelector('.terminal-feed');

@@ -27,6 +27,14 @@
    strategy (sprites, no screenshots), and restoring any one of them is a single
    include line. Nothing else references them; _shot is now used only by the
    orphaned _screens.
+
+   _period_awards (#period-awards, after #owner-spotlight) is a LATER addition and
+   is NOT the orphaned _leaderboards coming back. _leaderboards is a 12-tab,
+   JS-fetched widget over /api/leaderboard/{category} — current standings, live.
+   _period_awards is who WON a period that has ended: frozen at close,
+   server-rendered, no API endpoint. Restoring _leaderboards is still a one-line
+   include and the two do not conflict — but anyone restoring it expecting the
+   awards feature has the wrong file.
 #}
 
 {% block body %}
@@ -43,6 +51,7 @@
     {% include 'landing/sections/_scouting.html.twig' %}
     {% include 'landing/sections/_no_pay_to_win.html.twig' %}
     {% include 'landing/sections/_owner_spotlight.html.twig' %}
+    {% include 'landing/sections/_period_awards.html.twig' %}
     {% include 'landing/sections/_testers.html.twig' %}
     {% include 'landing/sections/_cta.html.twig' %}
     {% include 'landing/sections/_footer.html.twig' %}

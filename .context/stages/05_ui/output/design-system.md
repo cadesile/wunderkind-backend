@@ -177,6 +177,22 @@ restoring one is a single include line, and `_shot`/`public/screenshots/*` are
 still referenced by the orphans. `_story` became `_journey` and
 `_chairmans_terminal` became `_telemetry`.
 
+**Added after that redesign: `_period_awards` (`#period-awards`), between
+`#owner-spotlight` and `#testers`.** Last period's winners on each awarding
+leaderboard, server-rendered from `LeaderboardPeriodArchive` with no API endpoint
+behind it. Own `.lbaw-*` prefix, borrowing the gold-ringed panel family from
+`.ospot-*`/`.spotlight-*` without sharing a class with either — the same
+precedent that keeps those two from restyling each other. Renders nothing when
+nothing has been archived, and `_nav` gates its jump link on the same emptiness
+check (as `.nav-spotlight-cta` is gated on `spotlight.isLive`).
+
+**It is NOT the orphaned `_leaderboards` returning.** That file is a 12-tab,
+JS-fetched widget over `/api/leaderboard/{category}` — *current standings, live*.
+`_period_awards` is *who won a period that has ended* — frozen at close, no
+fetch. Restoring `_leaderboards` is still a one-line include and the two do not
+conflict, but anyone restoring it expecting the awards feature has the wrong
+file.
+
 **No screenshots anywhere on the page.** Every image is now a sprite drawn by a
 compositor — that is the redesign's central rule. `images/match-ticker.gif` (a
 capture of the matchday ticker, previously in `_leagues`) went with them and is

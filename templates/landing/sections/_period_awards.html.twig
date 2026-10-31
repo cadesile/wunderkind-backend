@@ -1,0 +1,113 @@
+{#
+   Period Awards (#period-awards) — who WON last period on each awarding leaderboard.
+
+   This is NOT a revival of the orphaned _leaderboards.html.twig. That file is a
+   12-tab, JS-fetched widget over /api/leaderboard/{category}: current standings,
+   client-fetched, live. This is the opposite — who won a period that has ENDED,
+   frozen at close, server-rendered, with no API endpoint behind it. Restoring the
+   orphan stays a one-line include and the two do not conflict; see
+   index.html.twig's own header comment.
+
+   Placed between _owner_spotlight and _testers deliberately: the Rich List
+   already establishes the leaderboard reading mode there, and two ranked boards
+   back to back is the design's own grouping.
+
+   A period board scores GROWTH during the period, not the all-time total — which
+   is why a club nobody has heard of can top one, and why the sub-label says
+   "gained" rather than "total". The score is already the growth value; nothing
+   here recomputes it.
+
+   Every value is frozen on the archive row: club name, kit, badge, country, the
+   named performer, and the period's own start/end instants. Nothing is read off
+   the live Club, which is what lets a club that has since been DELETED still
+   render its badge — the page's "any club listed anywhere shows at least its
+   badge" rule.
+
+   Own .lbaw-* namespace, borrowing the gold-ringed panel family from
+   .ospot-*/.spotlight-* without sharing their classes — the same precedent that
+   keeps those two from silently restyling each other.
+
+   Sprites are composed CLIENT-SIDE from data-club-badge, by landing.js's
+   mountPeriodAwards() through the shared clubBadgeIconsHtml(). The JS hooks are
+   load-bearing: it walks `.lbaw-row`, then `.lbaw-club-badge` within it.
+
+   Renders nothing when periodAwards is empty, which is the real state until an
+   admin enables an award definition and a period ends. _nav.html.twig gates its
+   jump link on the same emptiness check, exactly as .nav-spotlight-cta is gated
+   on spotlight.isLive.
+#}
+{% if periodAwards is not empty %}
+<section class="lbaw-section" id="period-awards" aria-labelledby="lbaw-title">
+    <div class="wrap">
+        <div class="section-label">Period Awards</div>
+        <div class="lbaw-board-head">
+            <h2 class="pixel" id="lbaw-title">LAST PERIOD'S WINNERS</h2>
+            <span class="lbaw-header-sub vt">Closed and settled — the prize is already in the winner's inbox</span>
+        </div>
+
+        <div class="lbaw-grid">
+            {% for board in periodAwards %}
+                <article class="lbaw-board">
+                    <header class="lbaw-board-title">
+                        <h3 class="lbaw-name pixel">{{ board.name }}</h3>
+                        <span class="lbaw-period vt">
+                            {# The frozen instants, never re-derived from the period key. #}
+                            {{ board.cadenceLabel|upper }} &middot; {{ board.periodLabel }}
+                        </span>
+                    </header>
+
+                    {# <ol>: the ranking is the content, so it lives in the markup and not
+                       only in the rendered rank glyph. #}
+                    <ol class="lbaw-rows">
+                        {% for entry in board.entries %}
+                            <li class="lbaw-row{{ entry.awarded ? ' lbaw-row-awarded' : '' }}"
+                                data-club-badge="{{ {home: entry.homeKitConfig, away: entry.awayKitConfig, badge: entry.badgeConfig}|json_encode|e('html_attr') }}">
+
+                                <span class="lbaw-rank pixel">
+                                    <span class="visually-hidden">Rank </span>{{ '%02d'|format(entry.rank) }}
+                                </span>
+
+                                <span class="lbaw-club-badge" aria-hidden="true"></span>
+
+                                <span class="lbaw-club">
+                                    <span class="lbaw-club-name">{{ entry.clubName }}</span>
+                                    {% if entry.displayLabel %}
+                                        {# The performer who scored IN THAT PERIOD, frozen —
+                                           the live row overwrites it next week, which is the
+                                           whole point of freezing it. #}
+                                        <span class="lbaw-performer vt">{{ entry.displayLabel }}</span>
+                                    {% endif %}
+                                </span>
+
+                                <span class="lbaw-score">
+                                    <span class="lbaw-score-val pixel">{{ entry.score|number_format }}</span>
+                                    <span class="lbaw-score-lbl vt">GAINED</span>
+                                </span>
+
+                                {% if entry.awarded %}
+                                    <span class="lbaw-prize pixel" title="Prize delivered to this club's inbox">
+                                        <span class="visually-hidden">Prize place </span>&#9733;
+                                    </span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ol>
+
+                    <footer class="lbaw-board-foot vt">
+                        {{ board.entryCount|number_format }} {{ board.entryCount == 1 ? 'club' : 'clubs' }} competed
+                        {% if board.awardCount > 0 %}
+                            &middot; {{ board.awardCount }} {{ board.awardCount == 1 ? 'prize' : 'prizes' }} paid
+                        {% endif %}
+                    </footer>
+                </article>
+            {% endfor %}
+        </div>
+
+        <p class="lbaw-note">
+            Each board is a closed period, scored on what a club <strong>gained</strong> during it
+            rather than on its all-time total — so a period is winnable by a club that is not the
+            all-time leader. Archived at close and never recalculated.
+        </p>
+    </div>
+</section>
+{% endif %}

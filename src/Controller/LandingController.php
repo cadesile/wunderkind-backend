@@ -8,6 +8,7 @@ use App\Repository\ExcursionRepository;
 use App\Repository\GameConfigRepository;
 use App\Service\ArchetypeShowcaseService;
 use App\Service\ClubSpotlightService;
+use App\Service\Leaderboard\PeriodAwardsBoardService;
 use App\Service\LiveTelemetryService;
 use App\Service\OwnerSpotlightService;
 use App\Service\WorldOverviewService;
@@ -40,6 +41,7 @@ class LandingController extends AbstractController
         private readonly LiveTelemetryService $liveTelemetryService,
         private readonly ClubSpotlightService $clubSpotlightService,
         private readonly OwnerSpotlightService $ownerSpotlightService,
+        private readonly PeriodAwardsBoardService $periodAwardsBoardService,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -65,6 +67,12 @@ class LandingController extends AbstractController
             // Live query behind a short cache, unlike the two cron-fed aggregates
             // above — see OwnerSpotlightService for why it isn't a snapshot row.
             'ownerSpotlight' => $this->ownerSpotlightService->getTopOwners(),
+            // Two indexed reads, no cache and no snapshot row — the archive already IS the
+            // cron-written denormalised row, carrying frozen club name, kit, badge and
+            // country. See PeriodAwardsBoardService for why that beats both of the patterns
+            // above rather than copying either. Empty until a definition is enabled and a
+            // period ends, which hides both the section and its nav link.
+            'periodAwards' => $this->periodAwardsBoardService->getBoards(),
         ]);
     }
 
