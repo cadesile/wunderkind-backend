@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Enum\LeaderboardCategory;
 use App\Service\HallOfFameScoreService;
+use App\Service\Leaderboard\LeaderboardPeriod;
 use App\Service\LeaderboardCalculationService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -53,9 +54,9 @@ class GenerateLeaderboardsCommand extends Command
         }
 
         $periods = match ($input->getOption('period')) {
-            'all-time'     => ['all-time'],
-            'current-week' => [(new \DateTimeImmutable())->format('o-\WW')],
-            'both'         => ['all-time', (new \DateTimeImmutable())->format('o-\WW')],
+            'all-time'     => [LeaderboardPeriod::ALL_TIME],
+            'current-week' => [LeaderboardPeriod::currentWeekKey()],
+            'both'         => [LeaderboardPeriod::ALL_TIME, LeaderboardPeriod::currentWeekKey()],
             default        => null,
         };
 
