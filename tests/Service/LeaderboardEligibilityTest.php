@@ -114,6 +114,97 @@ class LeaderboardEligibilityTest extends KernelTestCase
     }
 
     /**
+     * The award read must agree with the board read — that is the whole reason the
+     * predicate was hoisted. Paying a bot real money is the bug this closes.
+     */
+    public function testTheAwardReadExcludesSpoofAndFirstSeasonClubs(): void
+    {
+        $period = 'test-' . bin2hex(random_bytes(4));
+
+        $spoof   = $this->persistClub('Spoof Award', currentSeason: 9, isSpoof: true);
+        $rookie  = $this->persistClub('Rookie Award', currentSeason: 1);
+        $winner  = $this->persistClub('Winner Award', currentSeason: 9);
+
+        $this->persistEntry($spoof, $period, 999_999);
+        $this->persistEntry($rookie, $period, 888_888);
+        $this->persistEntry($winner, $period, 10);
+        $this->em->flush();
+
+        $ranked = $this->repo()->findRankedForAward(LeaderboardCategory::CLUB_REPUTATION, $period, 50);
+        $clubIds = array_map(static fn (LeaderboardEntry $e) => (string) $e->getClub()->getId(), $ranked);
+
+        self::assertNotContains((string) $spoof->getId(), $clubIds, 'a spoof club must never win a prize');
+        self::assertNotContains((string) $rookie->getId(), $clubIds, 'a first-season club must never win a prize');
+        self::assertSame([(string) $winner->getId()], $clubIds);
+    }
+
+    /**
+     * score DESC, club_id ASC — deterministic, so a reclaimed retry re-reading the same
+     * data produces the same places. A tie goes to the lower UUID: arbitrary, but stable,
+     * and stability is the property an award needs.
+     */
+    public function testTheAwardReadIsDeterministicOnATie(): void
+    {
+        $period = 'test-' . bin2hex(random_bytes(4));
+
+        $clubs = [];
+        for ($i = 0; $i < 5; $i++) {
+            $club    = $this->persistClub('Tie FC ' . $i, currentSeason: 9);
+            $clubs[] = $club;
+            $this->persistEntry($club, $period, 100);
+        }
+        $this->em->flush();
+
+        $first = $this->awardOrder($period);
+        $again = $this->awardOrder($period);
+
+        self::assertSame($first, $again, 'the same data must produce the same places');
+
+        $sorted = $first;
+        sort($sorted);
+        self::assertSame($sorted, $first, 'a tie is broken by the lower club id');
+    }
+
+    /** @return string[] */
+    private function awardOrder(string $period): array
+    {
+        return array_map(
+            static fn (LeaderboardEntry $e) => (string) $e->getClub()->getId(),
+            $this->repo()->findRankedForAward(LeaderboardCategory::CLUB_REPUTATION, $period, 50),
+        );
+    }
+
+    public function testCountEligibleMatchesTheBoard(): void
+    {
+        $period = 'test-' . bin2hex(random_bytes(4));
+
+        $this->persistEntry($this->persistClub('Counted A', currentSeason: 9), $period, 5);
+        $this->persistEntry($this->persistClub('Counted B', currentSeason: 9), $period, 4);
+        $this->persistEntry($this->persistClub('Spoof C', currentSeason: 9, isSpoof: true), $period, 3);
+        $this->persistEntry($this->persistClub('Rookie D', currentSeason: 1), $period, 2);
+        $this->em->flush();
+
+        self::assertSame(2, $this->repo()->countEligible(LeaderboardCategory::CLUB_REPUTATION, $period));
+    }
+
+    public function testDeleteForPeriodClearsOnlyThatPeriod(): void
+    {
+        $doomed   = 'test-' . bin2hex(random_bytes(4));
+        $survivor = 'test-' . bin2hex(random_bytes(4));
+
+        $club = $this->persistClub('Prune FC', currentSeason: 9);
+        $this->persistEntry($club, $doomed, 10);
+        $this->persistEntry($club, $survivor, 20);
+        $this->em->flush();
+
+        $deleted = $this->repo()->deleteForPeriod(LeaderboardCategory::CLUB_REPUTATION, $doomed);
+
+        self::assertSame(1, $deleted);
+        self::assertSame([], $this->orderedClubIds($doomed));
+        self::assertSame([(string) $club->getId()], $this->orderedClubIds($survivor));
+    }
+
+    /**
      * findAllForCategoryAndPeriod() is the deliberate exception — its docblock says
      * "regardless of club eligibility", because the stale-score zeroing pass has to see
      * every stored row including the ones no board surfaces.

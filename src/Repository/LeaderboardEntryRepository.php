@@ -53,6 +53,63 @@ class LeaderboardEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * The ranked, eligible board for one category/period — the close job's read.
+     *
+     * score DESC, club_id ASC: deterministic, so a reclaimed retry re-reading the same data
+     * produces the same places. A tie therefore goes to the lower UUID, which is arbitrary
+     * but stable, and stability is the property that matters for an award.
+     *
+     * addSelect on the club AND its user, so the award's frozen user_id and the inbox
+     * message's club both arrive in one query rather than one lazy-load per rank.
+     *
+     * @return LeaderboardEntry[]
+     */
+    public function findRankedForAward(LeaderboardCategory $category, string $period, int $limit): array
+    {
+        $qb = $this->createQueryBuilder('e')
+            ->join('e.club', 'c')
+            ->addSelect('c')
+            ->leftJoin('c.user', 'u')
+            ->addSelect('u')
+            ->where('e.category = :category')
+            ->andWhere('e.period = :period')
+            ->setParameter('category', $category)
+            ->setParameter('period', $period)
+            ->orderBy('e.score', 'DESC')
+            ->addOrderBy('c.id', 'ASC')
+            ->setMaxResults($limit);
+
+        return self::applyEligibility($qb)->getQuery()->getResult();
+    }
+
+    /** How many eligible clubs are on this board — reported on the archive as entry_count. */
+    public function countEligible(LeaderboardCategory $category, string $period): int
+    {
+        $qb = $this->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->join('e.club', 'c')
+            ->where('e.category = :category')
+            ->andWhere('e.period = :period')
+            ->setParameter('category', $category)
+            ->setParameter('period', $period);
+
+        return (int) self::applyEligibility($qb)->getQuery()->getSingleScalarResult();
+    }
+
+    /**
+     * Drops a closed period's live rows. Raw SQL, and called only AFTER the flush that
+     * commits the archive has succeeded: committing a delete before a failed flush would
+     * clear the board with nothing archived — the *_squad-prune precedent.
+     */
+    public function deleteForPeriod(LeaderboardCategory $category, string $period): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            'DELETE FROM leaderboard_entry WHERE category = :category AND period = :period',
+            ['category' => $category->value, 'period' => $period],
+        );
+    }
+
+    /**
      * THE definition of "may appear on, and may win, a leaderboard". Hoisted into one
      * place because the award path and the public board must agree: a prize paid to a
      * club the board does not list is indefensible either way round.
