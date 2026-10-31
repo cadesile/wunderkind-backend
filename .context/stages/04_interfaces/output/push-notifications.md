@@ -64,10 +64,14 @@ A push notification's payload has two parts, same as any FCM message:
 |---|---|---|
 | `ROUND_DRAWN` | `competitionId`, `roundId` | Fixtures for a round are seeded — round 1 or any later round, all drawn the same way now (`CompetitionDrawService::drawRound()`), decoupled from that round's own resolution. Sent only to the entrants placed into that specific round. |
 | `NEW_REGISTRANT` | `competitionId` | A new club registers into a competition you're already registered in. Sent to every other currently-registered entrant, not the new joiner. |
-| `MATCH_RESULT` | `competitionId`, `roundId`, `fixtureId` | A single fixture's result has just been generated (`CompetitionResultsService::resolveFixture()` — the scheduled cron path and the admin "Generate Result" force-resolve path both go through this). Sent to **both** sides of that one fixture as two separate, personalized pushes — winner gets `notification.title` `"Victory!"`, loser gets `"Eliminated"` — but with an **identical** `data` payload and `notification.body` (the same plain-text scoreline, e.g. `"Oxford Harriers 0-1 Bristol Wednesday"`) either way, so client-side handling (fetch by `fixtureId`) doesn't need to branch on which side it landed on. Unlike `ROUND_DRAWN`, this fires per fixture, not per round. |
-| `COMPETITION_COMPLETED` | `competitionId`, `result` (`"WON"` or `"RUNNER_UP"`) | The tournament's final round has just had its results published (`CompetitionResultsService::finalizeRound()`). Sent as two separate pushes: the champion(s) get `result: "WON"` (`notification.title` `"Champions!"`), the final's loser(s) get `result: "RUNNER_UP"` (`notification.title` `"Tournament complete"`). Distinct from — and in addition to — the `MATCH_RESULT` push both sides already got for that same final fixture; this one specifically marks the *tournament* ending, not just that one match. |
+| `MATCH_RESULT` | `competitionId`, `roundId`, `fixtureId` | A single fixture's result has just been generated (`CompetitionResultsService::resolveFixture()` — the scheduled cron path and the admin "Generate Result" force-resolve path both go through this). **One** push, addressed to both sides of that fixture, with **outcome-neutral** copy: `notification.title` `"Full time"` and `notification.body` `"Your <round label> result is in — tap to reveal."`. **The result is not in this push, by design** — a cup tie of the player's own is sealed until they reveal it in MatchUX, and every push is sent via `withNotification(...)`, so the OS renders title and body on a locked screen before any client code runs; a scoreline or a per-outcome title (this used to be two pushes titled `"Victory!"` / `"Eliminated"` with the scoreline as the body) would break the seal where no client-side suppression can reach. Fetch by `fixtureId` as before. Unlike `ROUND_DRAWN`, this fires per fixture, not per round. |
+| `COMPETITION_COMPLETED` | `competitionId`, `result` (`"WON"` or `"RUNNER_UP"`) | The tournament's final round has just had its results published (`CompetitionResultsService::finalizeRound()`). Still **two** pushes — champions carry `result: "WON"`, the final's loser(s) `result: "RUNNER_UP"` — but their `notification.title` and `notification.body` are now **identical**: `"Tournament complete"` / `"The final has been played — tap to reveal the result."`. The old `"Champions!"` title gave a sealed final away on the lock screen exactly as a scoreline would; the outcome still reaches you in `data.result`, which the OS never renders. It stays two calls precisely so that key can differ per side. Distinct from — and in addition to — the `MATCH_RESULT` push both sides already got for that same final fixture; this one specifically marks the *tournament* ending, not just that one match. |
 | `NEW_COMPETITION_OPEN` | `competitionId` | A new instance was just provisioned for a `CompetitionTemplate` (`app:competition:provision-instances`, run every 10 min — only fires when a **new** instance is actually created, not on every tick that finds one still open). Sent only to clubs the template's own entry constraints would actually let register (`EligibilityEvaluator`, the same check `POST /api/competitions/{id}/register` itself enforces) — a club outside the template's tier/country/etc. restrictions never sees this. |
 | `ROUND_RESOLVING_SOON` | `competitionId`, `roundId` | A round you're still in (already drawn — `DRAWN` status) is due to have its results published within 15 minutes (`app:competition:send-round-reminders`, run every 5 min; `CompetitionRoundReminderService`). Sent once per round, only to that round's actual participants (the entrants with a fixture seeded into it) — a `DRAW_PENDING` round has no fixtures yet, so it's never eligible for this reminder. |
+| `COMPETITION_CANCELLED` | `competitionId` | A competition instance was cancelled before it could run (`CompetitionRegistrationService`, e.g. an under-subscribed instance at its deadline). Sent to every registered entrant; entry fees are refunded through the inbox, not this push. |
+| `FRIENDLY_RESULT` | `challengeId`, `matchId` (same value) | An accepted challenge friendly resolved (`FriendlyChallengeService::resolveSingleMatch()`). One push to both clubs, with **outcome-neutral** copy for the same reason as `MATCH_RESULT`: title `"Friendly match full-time"`, body `"Your friendly result is in — tap to reveal."`. The score is served by `GET /api/matches/{challengeId}`. |
+| `CHALLENGE_EXPIRED` | `challengeId` | An open friendly challenge reached `expiresAt` without an opponent (`FriendlyChallengeService::expireStaleChallenges()`). Sent to the challenger only. |
+| `club_spotlight` | — | The Club Spotlight rotated (`ClubSpotlightService`). Note the lower-cased `type`, unlike every other value here. |
 | `ADMIN_MESSAGE` | `adminMessageId` | An operator-authored broadcast (`/admin/admin-messages`) was published with its "Also send as push" option checked. `notification.body` is the message's `bodyHtml` with tags stripped to plain text — if you want to render rich text, poll `GET /api/messages/pending` for the full `bodyHtml` using `adminMessageId` (this push is a nudge to check the inbox, not a replacement for polling it). |
 
 | `LEADERBOARD_AWARD` | `category`, `period`, `place`, `archiveEntryId` | A leaderboard award period ended and this club placed in it (`LeaderboardAwardDeliveryService::notifyWinners()`, driven by `app:leaderboards:close-periods`). Sent once per winning club, **after the close has committed** — a push for an award that was rolled back cannot be unsent. `place` is a string (`"1"`), as FCM requires of every `data` value. The prize itself is an inbox message, not this push: it arrives through the unchanged `GET /api/inbox` with `offerData.type = 'LEADERBOARD_AWARD'`, and `archiveEntryId` is the handle that correlates the two. Nothing is claimed from the leaderboard screen. Full contract: `docs/api/leaderboard-awards.md`. |
@@ -83,12 +87,16 @@ without a client update if a graceful unknown-type fallback exists.
   data (fixtures, round state, the new registrant's identity, or — for
   `MATCH_RESULT` — the match itself) — the payload is exactly the table
   above, nothing more. On tap (or on receipt, if you want to refresh
-  proactively), re-fetch `GET /api/competitions/{id}` for the current
-  bracket/round/result state, the same endpoint the client already polls;
-  its per-fixture `result` field is exactly
-  `CompetitionResult::toClientSummary()`'s shape (score, clubs, lineups,
-  narrativePayload, tournament/round context — see the sibling
-  `wunderkind-app` doc `docs/api/tournament-match-result-payload.md`).
+  proactively), re-fetch **`GET /api/matches/{fixtureId}`** for the match
+  itself — score, clubs, lineups, narrativePayload, tournament/round context
+  (`MatchQueryService::serializeCupMatchDetail()`; the sibling
+  `wunderkind-app` doc is `docs/api/tournament-match-result-payload.md`).
+  `GET /api/competitions/{id}` is still the call for current
+  bracket/round state, but **it carries no per-fixture `result` block** — that
+  was removed along with `CompetitionResult::toClientSummary()`, because
+  embedded match detail measured ~74% of a capacity-64 response and the match
+  endpoint already served the same thing. `rounds[].fixtures[].matchId` is the
+  handle. See `docs/api/competition-bracket-no-embedded-result.md`.
 - **Why `MATCH_RESULT` doesn't embed the full result payload directly, even
   though it would be convenient:** FCM's `data` payload (a) requires every
   value to already be a string — the result payload is deeply nested
@@ -112,4 +120,15 @@ without a client update if a graceful unknown-type fallback exists.
   (`NEW_COMPETITION_OPEN`'s eligibility-filtered audience resolution, mirroring
   `ResolveAdminMessageAudienceForPushMessageHandler`'s pattern via the shared
   `App\Message\AudienceResolutionMessage` interface), `src/Service/Competition/
-  CompetitionRoundReminderService.php` (`ROUND_RESOLVING_SOON`).
+  CompetitionRoundReminderService.php` (`ROUND_RESOLVING_SOON`),
+  `src/Service/Competition/CompetitionRegistrationService.php`
+  (`COMPETITION_CANCELLED`), `src/Service/Friendly/FriendlyChallengeService.php`
+  (`FRIENDLY_RESULT`/`CHALLENGE_EXPIRED`), `src/Service/ClubSpotlightService.php`
+  (`club_spotlight`).
+- **Sealed results.** `MATCH_RESULT`, `COMPETITION_COMPLETED` and
+  `FRIENDLY_RESULT` are deliberately outcome-neutral in both `title` and
+  `body`, because a played tie of the player's own stays sealed until they
+  reveal it in MatchUX and these are display notifications the OS renders
+  itself. The outcome travels in `data` only (`result` on
+  `COMPETITION_COMPLETED`; otherwise fetch the match). Do not reintroduce
+  per-outcome copy on any of the three.

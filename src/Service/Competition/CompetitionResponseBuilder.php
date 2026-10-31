@@ -39,6 +39,20 @@ use App\Repository\Competition\CompetitionRoundRepository;
  */
 class CompetitionResponseBuilder
 {
+    /**
+     * Shape version of the prebuilt `GET /api/competitions/{id}` document.
+     *
+     * Part of the state fingerprint, so bumping it invalidates every stored
+     * `competition_response_cache` row AND every client ETag at once. Bump it in the same
+     * commit as any change to the keys `sharedDocument()` emits — adding a field is not a
+     * state change, so nothing else in the fingerprint would move and clients would keep
+     * being served the old shape from cache, indefinitely for a competition that has already
+     * COMPLETED.
+     *
+     * 2: `rounds[].roundId` added.
+     */
+    private const DOCUMENT_SCHEMA_VERSION = 2;
+
     public function __construct(
         private readonly CompetitionEntrantRepository $entrantRepository,
         private readonly CompetitionRoundRepository $roundRepository,
@@ -97,6 +111,9 @@ class CompetitionResponseBuilder
 
                 $rounds[] = [
                     'roundIndex'       => $roundIndex,
+                    // Null, not absent: a `future` round has no CompetitionRound row yet, and
+                    // a client that reads `roundId` must see the same key shape on every round.
+                    'roundId'          => null,
                     'key'              => $key,
                     'label'            => $label,
                     'status'           => 'future',
@@ -168,6 +185,10 @@ class CompetitionResponseBuilder
 
             $rounds[] = [
                 'roundIndex'       => $round->getRoundIndex(),
+                // The handle a ROUND_DRAWN / ROUND_RESOLVING_SOON push is resolved by: those
+                // payloads carry `competitionId` + `roundId` and no fixture, so without this
+                // the client cannot tell which round a notification is about.
+                'roundId'          => (string) $round->getId(),
                 'key'              => $key,
                 'label'            => $round->getLabel(),
                 'status'           => $round->getStatus()->value,
@@ -385,6 +406,11 @@ class CompetitionResponseBuilder
         ], JSON_THROW_ON_ERROR);
 
         $components = [
+            // Bumped whenever the SHAPE of the built document changes, not its data. Nothing
+            // else here would move: a new key is not new state, so every stored row and every
+            // client ETag would still validate and clients would keep the old shape
+            // indefinitely (a COMPLETED competition's state never changes again).
+            'schema'           => self::DOCUMENT_SCHEMA_VERSION,
             'competition'      => (string) $instance->getId(),
             'status'           => $instance->getStatus()->value,
             'startsAt'         => $instance->getStartsAt()?->getTimestamp() ?? 0,
@@ -412,7 +438,13 @@ class CompetitionResponseBuilder
             $entrantVersion = $entrant !== null ? $entrant->getSnapshotVersion() : 0;
         }
 
-        return sprintf('W/"%s-%s-%d-%s-%d"', $instance->getId(), $instance->getStatus()->value, $version, $clubPart, $entrantVersion);
+        // `%s`, not `%d`: $version is a 32-character hex hash, and `%d` parsed only its
+        // leading decimal run — 42% of fingerprints collapsed to `0` and two different states
+        // projected to the same integer about 18% of the time, so roughly one real bracket
+        // change in five was served to a polling client as a 304 with the previous bracket
+        // behind it. The `%d` was correct when this was an additive integer; it was not updated
+        // when the fingerprint became a hash.
+        return sprintf('W/"%s-%s-%s-%s-%d"', $instance->getId(), $instance->getStatus()->value, $version, $clubPart, $entrantVersion);
     }
 
     public function serializeEntrantSummary(?CompetitionEntrant $entrant): ?array

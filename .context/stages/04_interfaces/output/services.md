@@ -192,7 +192,17 @@ filename alone.
   viewer-independent part (carrying `viewer => null`, so the request path
   *overwrites* rather than appends and key order does not depend on a cache
   hit); `viewerBlock()` composes the one key that varies per caller;
-  `stateVersion()` is the freshness key and the ETag body.
+  `stateFingerprint()` is the freshness key and the ETag body.
+  **`DOCUMENT_SCHEMA_VERSION` is a component of that fingerprint, and must be bumped in the
+  same commit as any change to the document's shape.** Adding a key is not a state change,
+  so nothing else in the fingerprint moves: every stored `competition_response_cache` row and
+  every client ETag would keep validating, and a COMPLETED competition's state never changes
+  again, so its clients would be served the old shape indefinitely. (Currently `2` —
+  `rounds[].roundId` added; `null` on a `future` placeholder. See
+  `docs/api/competition-round-id.md`.) The ETag formats the fingerprint with `%s`: it was
+  `%d`, which parsed only the hex hash's leading decimal run, so 42% of fingerprints
+  collapsed to `0` and about one real state change in five did not move the ETag at all —
+  a polling client got a 304 with the previous bracket behind it.
 - **`Competition/CompetitionResponseCacheService`** — `getOrBuild()` /
   `rebuild()` / `invalidate()` over `competition_response_cache`, with a
   Postgres advisory lock so a cold competition under load builds once. Shaped

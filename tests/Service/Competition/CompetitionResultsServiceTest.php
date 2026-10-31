@@ -111,7 +111,17 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $this->assertSame(CompetitionRoundStatus::DRAWN, $round1->getStatus());
     }
 
-    public function testPublishingResultsSendsMatchResultPushToBothSides(): void
+    /**
+     * One push per fixture, addressed to both sides, carrying no result.
+     *
+     * It used to be two pushes per fixture, titled `Victory!` and `Eliminated`, with the
+     * scoreline as the body of both. A cup tie of the player's own is now sealed until they
+     * reveal it in MatchUX, and `SendPushNotificationMessageHandler` sends every push as a
+     * display notification (`withNotification(...)`), so the OS renders title and body on a
+     * locked screen before any client code runs. Neutral copy here is the only place that
+     * seal can hold, which is why this test asserts the strings and not just the count.
+     */
+    public function testPublishingResultsSendsOneNeutralMatchResultPushPerFixture(): void
     {
         $instance = $this->buildDrawnCompetition(capacity: 4);
         $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
@@ -122,13 +132,69 @@ class CompetitionResultsServiceTest extends KernelTestCase
         $published = $this->resultsService->publishDueResults(new \DateTimeImmutable());
         $this->assertSame(1, $published);
 
-        $matchResultMessages = array_filter(array_map(
+        $matchResultMessages = array_values(array_filter(array_map(
             static fn (Envelope $e) => $e->getMessage(),
             $this->transport()->getSent(),
-        ), static fn ($m) => $m instanceof SendPushNotificationMessage && ($m->data['type'] ?? null) === 'MATCH_RESULT');
+        ), static fn ($m) => $m instanceof SendPushNotificationMessage && ($m->data['type'] ?? null) === 'MATCH_RESULT'));
 
-        // 2 fixtures x 2 sides = 4 pushes.
-        $this->assertCount(4, $matchResultMessages);
+        // 2 fixtures, one push each — not one per side.
+        $this->assertCount(2, $matchResultMessages);
+
+        foreach ($matchResultMessages as $message) {
+            $this->assertCount(2, $message->userIds, 'both sides must be on the one push');
+            $this->assertSame('Full time', $message->title);
+            $this->assertStringContainsString('tap to reveal', $message->body);
+            $this->assertDoesNotMatchRegularExpression(
+                '/\d+\s*-\s*\d+/',
+                $message->title . ' ' . $message->body,
+                'the push must not carry a scoreline — the OS renders this on a locked screen',
+            );
+            foreach (['Victory', 'Eliminated', 'won', 'lost'] as $spoiler) {
+                $this->assertStringNotContainsStringIgnoringCase($spoiler, $message->title . ' ' . $message->body);
+            }
+        }
+    }
+
+    /**
+     * The tournament-completion push says the same thing to champions and runners-up.
+     *
+     * `Champions!` gave a sealed final away on the lock screen exactly as a scoreline would.
+     * It stays two calls, though: the `result` key differs per side and is published
+     * contract, and `data` is never rendered by the OS.
+     */
+    public function testCompetitionCompletedPushIsIdenticalForBothSides(): void
+    {
+        $instance = $this->buildDrawnCompetition(capacity: 4);
+        $round1   = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[0];
+
+        foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round1) as $fixture) {
+            $this->resultsService->forceResolveFixture($fixture);
+        }
+
+        $round2 = $this->roundRepository->findByCompetitionOrderedByIndex($instance)[1];
+        $this->em->refresh($round2);
+        $this->drawService->forceDrawRound($round2);
+
+        $this->transport()->reset();
+        foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round2) as $fixture) {
+            $this->resultsService->forceResolveFixture($fixture);
+        }
+
+        $completed = array_values(array_filter(array_map(
+            static fn (Envelope $e) => $e->getMessage(),
+            $this->transport()->getSent(),
+        ), static fn ($m) => $m instanceof SendPushNotificationMessage && ($m->data['type'] ?? null) === 'COMPETITION_COMPLETED'));
+
+        $this->assertNotEmpty($completed, 'a final must announce the tournament ending');
+
+        $titles  = array_unique(array_map(static fn ($m) => $m->title, $completed));
+        $bodies  = array_unique(array_map(static fn ($m) => $m->body, $completed));
+        $results = array_map(static fn ($m) => $m->data['result'] ?? null, $completed);
+
+        $this->assertCount(1, $titles, 'winner and runner-up must get the same title');
+        $this->assertCount(1, $bodies, 'winner and runner-up must get the same body');
+        $this->assertStringNotContainsStringIgnoringCase('champion', reset($titles) . ' ' . reset($bodies));
+        $this->assertContains('WON', $results, 'the outcome must still ride in the data payload');
     }
 
     /**
