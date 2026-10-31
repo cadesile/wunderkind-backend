@@ -44,6 +44,16 @@ use Symfony\Component\Messenger\MessageBusInterface;
 class CompetitionResultsService
 {
     /**
+     * Sealed-results copy for the tournament's own completion push.
+     *
+     * Deliberately identical for champions and runners-up, and deliberately saying nothing
+     * about who won: the final is a sealed tie like any other, and this push is rendered by
+     * the OS. The outcome still reaches the client, in the `result` key of the `data` payload.
+     */
+    private const COMPETITION_COMPLETED_TITLE = 'Tournament complete';
+    private const COMPETITION_COMPLETED_BODY  = 'The final has been played — tap to reveal the result.';
+
+    /**
      * Prewarming the bracket response is deliberately NOT done here.
      *
      * It used to be, and it was wrong twice over:
@@ -307,17 +317,21 @@ class CompetitionResultsService
             $activeCompetition->setStatus(ActiveCompetitionStatus::COMPLETED);
             $activeCompetition->setCompletedAt($now);
 
+            // Both sides get IDENTICAL neutral copy — the winners' old "Champions!" gave a
+            // sealed final away on the lock screen just as plainly as a scoreline would. Still
+            // two calls rather than one, because the `result` key differs per side and is part
+            // of the published contract; it rides in `data`, which the OS never renders.
             $this->pushNotificationService->notifyUsers(
                 array_map(static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(), $winners),
-                'Champions!',
-                'You won the tournament! Check your inbox for your prize.',
+                self::COMPETITION_COMPLETED_TITLE,
+                self::COMPETITION_COMPLETED_BODY,
                 ['type' => 'COMPETITION_COMPLETED', 'competitionId' => (string) $activeCompetition->getId(), 'result' => 'WON'],
             );
             if ($runnersUp !== []) {
                 $this->pushNotificationService->notifyUsers(
                     array_map(static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(), $runnersUp),
-                    'Tournament complete',
-                    'The final has been played — the tournament has ended.',
+                    self::COMPETITION_COMPLETED_TITLE,
+                    self::COMPETITION_COMPLETED_BODY,
                     ['type' => 'COMPETITION_COMPLETED', 'competitionId' => (string) $activeCompetition->getId(), 'result' => 'RUNNER_UP'],
                 );
             }
@@ -485,11 +499,18 @@ class CompetitionResultsService
         $loser->setStatus(CompetitionEntrantStatus::ELIMINATED);
         $loser->setEliminatedInRound($round);
 
-        // Every fixture's result — not just when a round completes — gets its own push, to
-        // both sides, each with a title reflecting their own outcome (a distinct "Eliminated"
-        // signal rather than the same neutral wording both sides used to get) — but an identical
-        // `data` payload for both, so client-side handling (fetch by fixtureId) is unaffected by
-        // which side received it. FCM data values must be strings and the message has a hard
+        // Every fixture's result — not just when a round completes — gets its own push, as a
+        // SINGLE call to both sides with copy that reveals nothing: no scoreline, no outcome in
+        // the title. This reverses a deliberate September decision to send two pushes titled
+        // "Victory!"/"Eliminated", and it is not a style preference — a cup tie of the player's
+        // own is sealed until they reveal it in MatchUX, and `SendPushNotificationMessageHandler`
+        // sends every push via `withNotification(...)`, so the OS renders the title and body
+        // itself on a locked screen. The client can suppress its own foreground banner but not
+        // the notification shade, so neutral copy here is the only place the seal can hold.
+        // **Do not restore per-outcome titles, and do not put the scoreline in the body.**
+        // One call rather than two because the `data` payload is identical for both sides, so
+        // client-side handling (fetch by fixtureId) is unaffected by which side received it.
+        // FCM data values must be strings and the message has a hard
         // ~4KB size cap, so (unlike this method's other side effects) the full result payload
         // isn't embedded here — same notify-only contract as ROUND_DRAWN/NEW_REGISTRANT. The
         // client re-fetches with the `fixtureId` below, from **GET /api/matches/{fixtureId}**.
@@ -548,15 +569,12 @@ class CompetitionResultsService
         ];
 
         $this->pushNotificationService->notifyUsers(
-            [(string) $winner->getClub()->getUser()->getId()],
-            'Victory!',
-            $scoreline,
-            $resultData,
-        );
-        $this->pushNotificationService->notifyUsers(
-            [(string) $loser->getClub()->getUser()->getId()],
-            'Eliminated',
-            $scoreline,
+            array_values(array_unique([
+                (string) $winner->getClub()->getUser()->getId(),
+                (string) $loser->getClub()->getUser()->getId(),
+            ])),
+            'Full time',
+            sprintf('Your %s result is in — tap to reveal.', $round->getLabel()),
             $resultData,
         );
 

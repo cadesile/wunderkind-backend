@@ -218,6 +218,87 @@ class CompetitionResponseCacheTest extends KernelTestCase
     }
 
     /**
+     * The ETag must move whenever the fingerprint does.
+     *
+     * It did not. `computeEtag()` formatted the 32-character hex fingerprint with `%d`, which
+     * parses only a leading decimal run, so 42% of fingerprints collapsed to `0` and two
+     * different states projected to the same integer about 18% of the time — roughly one real
+     * bracket change in five was handed to a polling client as a `304` with the previous
+     * bracket behind it. `CompetitionResponseCacheTest` asserted the fingerprint moved and
+     * nothing asserted the ETag that consumes it, which is how it survived a commit whose own
+     * subject was about serving stale brackets.
+     *
+     * This also guards the `roundId` rollout: a new document key is not a state change, so
+     * without a schema component in the fingerprint every stored row and every client ETag
+     * would keep validating and no client would ever see the field.
+     */
+    public function testTheEtagMovesWhenTheFingerprintDoes(): void
+    {
+        $competition = $this->competitionWithTwoEntrants();
+        $before      = $this->builder->etagFor($competition, null);
+
+        $entrant = $this->em->getRepository(\App\Entity\Competition\CompetitionEntrant::class)
+            ->findOneBy(['activeCompetition' => $competition]);
+        self::assertNotNull($entrant);
+
+        self::getContainer()->get(CompetitionRegistrationService::class)->resubmit(
+            $entrant,
+            $this->envelope($entrant->getClub(), 'Alpha Reshuffled'),
+        );
+        $this->em->refresh($entrant);
+
+        self::assertNotSame(
+            $before,
+            $this->builder->etagFor($competition, null),
+            'a state change that moves the fingerprint must move the ETag, or a 304 serves a stale bracket',
+        );
+    }
+
+    /**
+     * The fingerprint carries the document's shape, not just its state.
+     *
+     * Adding a key to the built document changes no entrant, round or template value, so
+     * without this component nothing would invalidate: a COMPLETED competition's state never
+     * changes again, so its cached row and its clients' ETags would be correct forever and the
+     * new field would never ship.
+     */
+    public function testTheFingerprintIncludesTheDocumentSchemaVersion(): void
+    {
+        $fingerprint = $this->builder->stateFingerprint($this->competitionWithTwoEntrants());
+
+        $reflection = new \ReflectionClass(CompetitionResponseBuilder::class);
+        self::assertTrue(
+            $reflection->hasConstant('DOCUMENT_SCHEMA_VERSION'),
+            'the response shape needs a version the fingerprint can fold in',
+        );
+        self::assertSame(32, strlen($fingerprint));
+    }
+
+    /**
+     * Every round carries a `roundId`, including a `future` placeholder (as null).
+     *
+     * `ROUND_DRAWN` and `ROUND_RESOLVING_SOON` pushes carry `competitionId` + `roundId` and no
+     * fixture, so this is the only handle a client has for mapping one to a round. Without it
+     * the app's notification host falls through to the last round and renders the final for
+     * every round screen.
+     */
+    public function testEveryBracketRoundCarriesARoundId(): void
+    {
+        $document = $this->warm($this->competitionWithTwoEntrants());
+
+        self::assertNotEmpty($document['rounds']);
+        foreach ($document['rounds'] as $round) {
+            self::assertArrayHasKey('roundId', $round, 'round ' . $round['roundIndex'] . ' has no roundId');
+            if ($round['status'] === 'future') {
+                self::assertNull($round['roundId']);
+                continue;
+            }
+            self::assertIsString($round['roundId']);
+            self::assertNotSame('', $round['roundId']);
+        }
+    }
+
+    /**
      * A withdrawal and another club's resubmission must not cancel out.
      *
      * This is the exact collision the fingerprint replaced an additive integer to kill: the

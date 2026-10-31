@@ -45,6 +45,26 @@ class FriendlyChallengeService
         25_000_000,
     ];
 
+    /**
+     * Sealed-results copy for a resolved friendly.
+     *
+     * A played challenge friendly of the player's own is sealed until they reveal it in
+     * MatchUX, exactly like a cup tie, so every surface a resolution writes must be
+     * outcome-free: these three notes previously led with `Friendly Draw:`/`Friendly Victory:`/
+     * `Friendly Result:` plus the scoreline, and the push body was the bare scoreline. The
+     * draw and win notes are deliberately **identical** to the loss note — a different
+     * subject per outcome gives the result away in the inbox list without anyone opening
+     * anything. The score itself is served by `GET /api/matches/{challengeId}`, which is what
+     * the reveal reads.
+     *
+     * Do not reintroduce per-outcome wording here. The push body matters most: every push goes
+     * out through `withNotification(...)`, so the OS renders it on a locked screen and no
+     * client-side suppression can reach it.
+     */
+    private const RESULT_SUBJECT   = 'Friendly Result';
+    private const RESULT_BODY      = 'Your friendly match has been played — reveal it to see the result.';
+    private const RESULT_PUSH_BODY = 'Your friendly result is in — tap to reveal.';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly FriendlyChallengeRepository $repository,
@@ -430,20 +450,27 @@ class FriendlyChallengeService
 
         $stakePence  = $challenge->getStakePence();
         $challengeId = (string) $challenge->getId();
-        $scoreline   = sprintf('%s %d-%d %s', $homeClub->getName(), $engineResult->homeScore, $engineResult->awayScore, $awayClub->getName());
 
         if ($engineResult->homeScore === $engineResult->awayScore) {
+            // A drawn stake is returned as a `ledger_delta` on the note, NOT by writing
+            // `club.balance` here. The client is authoritative for the balance —
+            // `SyncService::process()` does an absolute `Club::setBalance($request->balance)`
+            // — so a server-side credit on resolution's own schedule is silently overwritten
+            // by the next sync and the refund is simply lost. Riding on `offerData.effects`
+            // makes that overwrite correct instead: the player accepts, the client applies the
+            // delta to its own state, and reports it back up (see
+            // `InboxService::acceptCompetitionReward()`). This is exactly how the win payout
+            // below has always worked — the two branches were inconsistent, not the design.
+            $drawOfferData = [
+                'type'        => 'FRIENDLY_RESULT',
+                'link'        => ['kind' => 'match', 'id' => $challengeId],
+                'challengeId' => $challengeId,
+                'matchId'     => $challengeId,
+            ];
             if ($stakePence > 0) {
-                $this->em->getConnection()->executeStatement(
-                    'UPDATE club SET balance = balance + :stake WHERE id IN (:homeId, :awayId)',
-                    [
-                        'stake'  => $stakePence,
-                        'homeId' => $homeClub->getId()->toRfc4122(),
-                        'awayId' => $awayClub->getId()->toRfc4122(),
-                    ],
-                );
-                $this->em->refresh($homeClub);
-                $this->em->refresh($awayClub);
+                $drawOfferData['effects'] = [
+                    ['type' => 'ledger_delta', 'amountPence' => $stakePence],
+                ];
             }
 
             foreach ([$homeClub, $awayClub] as $sideClub) {
@@ -451,16 +478,9 @@ class FriendlyChallengeService
                     club: $sideClub,
                     senderType: MessageSenderType::FRIENDLY,
                     senderName: 'Friendly Match',
-                    subject: sprintf('Friendly Draw: %s', $scoreline),
-                    body: $stakePence > 0
-                        ? sprintf('Full-time: %s. The match ended in a draw — your stake has been returned to your club balance.', $scoreline)
-                        : sprintf('Full-time: %s.', $scoreline),
-                    offerData: [
-                        'type'        => 'FRIENDLY_RESULT',
-                        'link'        => ['kind' => 'match', 'id' => $challengeId],
-                        'challengeId' => $challengeId,
-                        'matchId'     => $challengeId,
-                    ],
+                    subject: self::RESULT_SUBJECT,
+                    body: self::RESULT_BODY,
+                    offerData: $drawOfferData,
                     relatedEntityType: 'friendly_challenge',
                     relatedEntityId: $challengeId,
                 );
@@ -486,10 +506,8 @@ class FriendlyChallengeService
                 club: $winnerClub,
                 senderType: MessageSenderType::FRIENDLY,
                 senderName: 'Friendly Match',
-                subject: sprintf('Friendly Victory: %s', $scoreline),
-                body: $payout > 0
-                    ? sprintf('Full-time: %s. Congratulations! Accept to claim your friendly match winnings.', $scoreline)
-                    : sprintf('Full-time: %s. Congratulations on the win!', $scoreline),
+                subject: self::RESULT_SUBJECT,
+                body: self::RESULT_BODY,
                 offerData: $winnerOfferData,
                 relatedEntityType: 'friendly_challenge',
                 relatedEntityId: $challengeId,
@@ -499,8 +517,8 @@ class FriendlyChallengeService
                 club: $loserClub,
                 senderType: MessageSenderType::FRIENDLY,
                 senderName: 'Friendly Match',
-                subject: sprintf('Friendly Result: %s', $scoreline),
-                body: sprintf('Full-time: %s.', $scoreline),
+                subject: self::RESULT_SUBJECT,
+                body: self::RESULT_BODY,
                 offerData: [
                     'type'        => 'FRIENDLY_RESULT',
                     'link'        => ['kind' => 'match', 'id' => $challengeId],
@@ -534,7 +552,7 @@ class FriendlyChallengeService
                 (string) $awayClub->getUser()->getId(),
             ])),
             'Friendly match full-time',
-            $scoreline,
+            self::RESULT_PUSH_BODY,
             [
                 'type'        => 'FRIENDLY_RESULT',
                 'challengeId' => $challengeId,
