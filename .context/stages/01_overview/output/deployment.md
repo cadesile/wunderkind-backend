@@ -17,6 +17,14 @@ Two always-on things beyond `php-fpm`/`nginx`/`crond` live here:
 `registration-consume` (Messenger worker — if it stops, registrations silently
 never complete) and the baked crontab.
 
+The crontab's full schedule stays in the `Dockerfile`'s own comment block and in
+`docs/deploy/hetzner.md` → "Cron", not here. One thing worth knowing at this level:
+several entries' crontab cadence is only a *tick granularity*, with the real cadence
+configured by an admin — `post-community-stat-tick` (posting schedule) and
+`leaderboards-close-periods` (per-definition weekly/monthly/quarterly award cadence).
+Changing those crontab lines changes how promptly work is noticed, never how often it
+happens.
+
 **`pm.max_children` is sized to the box, not left at the image default**, which was
 5 — five concurrent PHP requests for the entire API. `docker/www.conf` sets 12.
 The rule is `≈ 6 × vCPU`; the per-box table, what each upgrade actually buys, and
