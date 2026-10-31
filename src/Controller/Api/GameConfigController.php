@@ -253,6 +253,7 @@ class GameConfigController extends AbstractController
             'staffMeetingCooldownWeeks'      => $config->getStaffMeetingCooldownWeeks(),
 
             // League finances
+            'youthScholarshipWagePence'     => $config->getYouthScholarshipWagePence(),
             'smallSponsorMin'               => $config->getSmallSponsorMin(),
             'smallSponsorMax'               => $config->getSmallSponsorMax(),
             'mediumSponsorMin'              => $config->getMediumSponsorMin(),

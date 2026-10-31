@@ -440,6 +440,8 @@ class DashboardController extends AbstractDashboardController
         }
 
         // League finances — form submits pounds; multiply by 100 to store pence
+        // Pounds in the form, pence in the column — the same * 100 the sponsor bands do.
+        $config->setYouthScholarshipWagePence((int) $request->request->get('youthScholarshipWagePence', 250) * 100);
         $config->setSmallSponsorMin((int) $request->request->get('smallSponsorMin', 0) * 100);
         $config->setSmallSponsorMax((int) $request->request->get('smallSponsorMax', 0) * 100);
         $config->setMediumSponsorMin((int) $request->request->get('mediumSponsorMin', 0) * 100);

@@ -985,6 +985,30 @@
                 </div>
             </div>
 
+            {# ── Youth Academy ────────────────────────────────────────────────────── #}
+            <div class="card mb-4 cfg-section" data-section-id="youth-academy" data-group="league-config">
+                <div class="card-header fw-semibold">Youth Academy</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Terms for a player <strong>signed</strong> below the first-team age — an academy
+                        scholarship. This does not affect academy <strong>intake</strong> players, who
+                        join on no wage and are only put on a real one when they turn 16.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="youthScholarshipWagePence" class="form-label fw-semibold small">Scholarship Wage</label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" id="youthScholarshipWagePence" name="youthScholarshipWagePence"
+                                       value="{{ config.youthScholarshipWagePence / 100 }}"
+                                       min="0" step="1" class="form-control">
+                            </div>
+                            <div class="form-text">Flat weekly wage for every signed scholar, in pounds. Default: 250</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {# ── Financial Penalties ──────────────────────────────────────────────── #}
             <div class="card mb-4 cfg-section" data-section-id="financial-penalties" data-group="league-config">
                 <div class="card-header fw-semibold">Financial Penalties</div>

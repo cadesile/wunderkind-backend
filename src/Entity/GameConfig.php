@@ -834,6 +834,22 @@ class GameConfig
     #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $smallSponsorMin = 0;
 
+    /**
+     * Flat weekly wage for a player SIGNED below the first-team age — an academy scholarship.
+     *
+     * PENCE, like the sponsor bands above: the admin panel labels it "£" and multiplies by
+     * 100 on save, so never convert at the read. 25000 = £250/week.
+     *
+     * Does NOT apply to academy INTAKE players, who arrive on wage 0 and only reach a real
+     * wage when they turn 16. A scholar is paid from day one because the club went and got
+     * them. Flat on purpose — a club does not bid against itself for a thirteen-year-old.
+     *
+     * Default mirrors the app's own DEFAULT_GAME_CONFIG, which is what clients use until this
+     * field reaches them; the two must not drift.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 25000])]
+    private int $youthScholarshipWagePence = 25000;
+
     #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $smallSponsorMax = 0;
 
@@ -857,6 +873,10 @@ class GameConfig
      */
     #[ORM\Column(type: 'smallint', options: ['default' => 5])]
     private int $leaguePositionDecreasePercent = 5;
+
+    public function getYouthScholarshipWagePence(): int { return $this->youthScholarshipWagePence; }
+    /** Floored at 0: a negative wage would pay the club to sign a child. */
+    public function setYouthScholarshipWagePence(int $v): static { $this->youthScholarshipWagePence = max(0, $v); return $this; }
 
     public function getSmallSponsorMin(): int { return $this->smallSponsorMin; }
     public function setSmallSponsorMin(int $v): static { $this->smallSponsorMin = $v; return $this; }

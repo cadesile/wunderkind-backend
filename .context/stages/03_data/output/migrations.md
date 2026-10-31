@@ -378,3 +378,19 @@ was not safe to retry:
   and `cadence` are therefore denormalised onto the header), and why
   `uq_lpae_archive_place` is the one partial index here. `down()` drops all four in
   dependency order.
+
+- `Version20261031214540` — **one column, additive**:
+  `game_config.youth_scholarship_wage_pence INT NOT NULL DEFAULT 25000`. The flat weekly wage
+  (PENCE) for a player SIGNED below the first-team age, so the academy scholarship can be
+  repriced from the admin panel instead of an app release.
+
+  **An unmigrated database is safe**, which is why this needs no backfill beyond the column
+  default: the app reads `config.youthScholarshipWagePence ?? YOUTH_SCHOLARSHIP_WAGE_PENCE`
+  and its own fallback is the same 25000. ⚠️ Note that the guard is `??`, not falsiness — a
+  **0** sent from here would NOT fall back and would make scholars free. That is why the
+  column is `NOT NULL DEFAULT 25000` rather than nullable, why the setter floors at 0 rather
+  than defaulting to it, and why this field is deliberately **absent from
+  `SyncService`'s config payload**: that payload has a hardcoded no-config fallback block
+  where the sponsor bands sit at 0, and a copy of this field there would have had to be
+  maintained in two places with 0 as the cost of getting it wrong. The app's config store
+  3-way merges, so a sync piggyback that omits the key cannot clobber the fetched value.

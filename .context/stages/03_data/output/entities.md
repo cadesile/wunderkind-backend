@@ -694,8 +694,17 @@ Each is effectively a single global-config row.
 
 - **`GameConfig`** — very large singleton (~100+ scalar/array fields)
   covering clique, bond/morale, injury, coaching, facility, transfer,
-  sponsor/investor, cooldown, squad-role, and social-post tuning
-  constants. Notable array fields: `bankruptcyDeductionTiers`,
+  sponsor/investor, youth, cooldown, squad-role, and social-post tuning
+  constants. **Money fields are PENCE in the column and POUNDS in the admin
+  form** — the Twig input divides by 100 and `DashboardController` multiplies
+  by 100 on save (`smallSponsorMin`, `youthScholarshipWagePence`, …). Never
+  convert at the read; the client treats these as pence.
+  `youthScholarshipWagePence` (added 2026-10-31, default 25000 = £250/wk) is
+  the flat weekly wage for a player SIGNED below the first-team age, and does
+  not touch academy INTAKE players, who join on no wage. Its default mirrors
+  the app's own `DEFAULT_GAME_CONFIG`, which is what clients use until this
+  field reaches them — the two must not drift, and the app pins them equal in
+  a test. Notable array fields: `bankruptcyDeductionTiers`,
   `maxSponsorsByTier`, `maxInvestorsByTier`, `npcClubBalanceRanges`,
   `npcFacilityLevelRanges`, `npcClubSizeWeights`,
   `squadRoleAppearanceExpectations/MoraleDecayPerWeek/
