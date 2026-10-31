@@ -5,12 +5,15 @@ use App\Enum\Appearance\AppearanceRole;
 use App\Enum\Appearance\Face;
 use App\Enum\Appearance\HairColor;
 use App\Enum\Appearance\HairStyle;
+use App\Enum\Appearance\Headwear;
+use App\Enum\Appearance\Neckwear;
 use App\Enum\Appearance\KitColor;
 use App\Enum\Appearance\KitPart;
 use App\Enum\Appearance\KitStyle;
 use App\Enum\Appearance\LipColor;
 use App\Enum\Appearance\Outfit;
 use App\Enum\Appearance\SkinId;
+use App\Enum\Appearance\Tattoo;
 use App\Enum\Appearance\WorldRegion;
 
 /**
@@ -130,6 +133,8 @@ final class AppearanceGeneratorService
             $glasses  = false;
         }
 
+        $extras = $this->rollExtras($rng, $age, $isPlayer, $outfit);
+
         return [
             'hair'      => $hair,
             'hairColor' => $hairColor,
@@ -146,7 +151,81 @@ final class AppearanceGeneratorService
             'outfit'    => $outfit,
             'trousers'  => $trousers,
             'glasses'   => $glasses,
+        ] + $extras;
+    }
+
+    /**
+     * AvatarExtras — accessories and tattoos, stored FLAT beside the fifteen config
+     * keys because that is the shape the sprite's own splitAvatarConfig() consumes.
+     *
+     * Role-gating is the sprite's job (it ignores an armband on staff and headwear on
+     * a player), so this only rolls what the role can actually show, to keep stored
+     * data honest rather than full of values that draw nothing.
+     *
+     * ── The age gate is the important part ──────────────────────────────────────
+     *
+     * The web builder's own rates (earring 25%, armband 10%, wristband 20%, snood 10%,
+     * headwear 30%, neckwear 50%, each tattoo 15%) assume an adult. PoolConfig
+     * generates players at 12-13 by default — this is a youth-academy game — and six
+     * independent 15% rolls would ink roughly 62% of them. Tattooed twelve-year-olds
+     * is not a look to ship, so tattoos and earrings are gated to 18+, the same shape
+     * of rule rollFacialHair() already applies.
+     *
+     * Staff/scout/agent are adults, so they take the builder's rates as published.
+     *
+     * @return array<string, bool|string|list<string>>
+     */
+    private function rollExtras(SeededRng $rng, int $age, bool $isPlayer, string $outfit): array
+    {
+        $adult = $age >= 18;
+
+        $extras = [
+            'earring'   => $adult && $rng->chance(0.25),
+            'armband'   => false,
+            'wristband' => false,
+            'snood'     => false,
+            'headwear'  => Headwear::NONE->value,
+            'neckwear'  => Neckwear::NONE->value,
+            'tattoos'   => [],
         ];
+
+        if ($isPlayer) {
+            // Kit accessories are not age-gated: a wristband on a youth player is
+            // ordinary, unlike ink.
+            $extras['armband']   = $rng->chance(0.10);
+            $extras['wristband'] = $rng->chance(0.20);
+            $extras['snood']     = $rng->chance(0.10);
+        } else {
+            // array_values(), because array_filter() PRESERVES KEYS and pick() indexes
+            // from 0 — filtering NONE out of a cases() list leaves a gap at index 0.
+            $extras['headwear'] = $rng->chance(0.30)
+                ? $rng->pick(array_values(array_map(
+                    static fn (Headwear $h): string => $h->value,
+                    array_filter(Headwear::cases(), static fn (Headwear $h): bool => $h !== Headwear::NONE),
+                )))
+                : Headwear::NONE->value;
+
+            $extras['neckwear'] = $rng->chance(0.50)
+                ? $rng->pick(array_values(array_map(
+                    static fn (Neckwear $n): string => $n->value,
+                    array_filter(Neckwear::cases(), static fn (Neckwear $n): bool => $n !== Neckwear::NONE),
+                )))
+                : Neckwear::NONE->value;
+        }
+
+        if ($adult) {
+            // Only ink that this role and outfit actually leave on show — the same
+            // rule the sprite draws by and the admin widget offers by.
+            $visible = Tattoo::visibleFor($isPlayer, Outfit::tryFrom($outfit));
+
+            foreach ($visible as $tattoo) {
+                if ($rng->chance(0.15)) {
+                    $extras['tattoos'][] = $tattoo->value;
+                }
+            }
+        }
+
+        return $extras;
     }
 
     /**
