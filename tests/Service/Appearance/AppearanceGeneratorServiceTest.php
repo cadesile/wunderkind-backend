@@ -18,10 +18,21 @@ class AppearanceGeneratorServiceTest extends TestCase
 {
     private AppearanceGeneratorService $svc;
 
-    private const KEYS = [
+    /** The frozen fifteen AvatarConfig keys, in order. */
+    private const CONFIG_KEYS = [
         'hair', 'hairColor', 'headband', 'skin', 'face', 'facial', 'lip',
         'primary', 'secondary', 'kit', 'shorts', 'socks', 'outfit', 'trousers', 'glasses',
     ];
+
+    /**
+     * AvatarExtras, stored FLAT after the config keys — the shape the sprite's own
+     * splitAvatarConfig() consumes, so a stored blob can go straight to the renderer.
+     */
+    private const EXTRA_KEYS = [
+        'earring', 'armband', 'wristband', 'snood', 'headwear', 'neckwear', 'tattoos',
+    ];
+
+    private const KEYS = [...self::CONFIG_KEYS, ...self::EXTRA_KEYS];
 
     protected function setUp(): void
     {
@@ -48,6 +59,63 @@ class AppearanceGeneratorServiceTest extends TestCase
         $this->assertSame(self::KEYS, array_keys($a));
         $this->assertIsBool($a['headband']);
         $this->assertIsBool($a['glasses']);
+
+        foreach (['earring', 'armband', 'wristband', 'snood'] as $flag) {
+            $this->assertIsBool($a[$flag]);
+        }
+        $this->assertIsString($a['headwear']);
+        $this->assertIsString($a['neckwear']);
+        $this->assertIsArray($a['tattoos']);
+        $this->assertSame(array_values($a['tattoos']), $a['tattoos'], 'must encode as a JSON list, not an object');
+    }
+
+    /**
+     * THE age gate. PoolConfig generates players at 12-13 by default — this is a
+     * youth-academy game — and the web builder's six independent 15% tattoo rolls
+     * would ink roughly 62% of them. Tattooed twelve-year-olds is not a look to ship.
+     */
+    public function testYouthPlayersNeverGetTattoosOrEarrings(): void
+    {
+        for ($i = 0; $i < 300; $i++) {
+            foreach ([12, 13, 17] as $age) {
+                $a = $this->svc->generate("youth-{$i}-{$age}", AppearanceRole::PLAYER, $age);
+
+                $this->assertSame([], $a['tattoos'], "age {$age} must have no tattoos");
+                $this->assertFalse($a['earring'], "age {$age} must have no earring");
+            }
+        }
+    }
+
+    public function testAdultsDoGetInkSometimes(): void
+    {
+        $inked = 0;
+        for ($i = 0; $i < 300; $i++) {
+            if ($this->svc->generate("adult-{$i}", AppearanceRole::PLAYER, 24)['tattoos'] !== []) {
+                $inked++;
+            }
+        }
+
+        $this->assertGreaterThan(0, $inked, 'adults should sometimes be inked');
+        $this->assertLessThan(300, $inked, 'but not always');
+    }
+
+    /**
+     * Staff-only and player-only extras are not rolled for the wrong role. The sprite
+     * ignores them either way, so this is about not storing values that draw nothing.
+     */
+    public function testExtrasAreRolledForTheRightRoleOnly(): void
+    {
+        for ($i = 0; $i < 120; $i++) {
+            $player = $this->svc->generate("p-{$i}", AppearanceRole::PLAYER, 24);
+            $this->assertSame('none', $player['headwear']);
+            $this->assertSame('none', $player['neckwear']);
+
+            $staff = $this->svc->generate("s-{$i}", AppearanceRole::COACH, 40);
+            $this->assertFalse($staff['armband']);
+            $this->assertFalse($staff['wristband']);
+            $this->assertFalse($staff['snood']);
+            $this->assertNotContains('leg', $staff['tattoos'], 'a calf tattoo is players-only');
+        }
     }
 
     public function testValuesAreInAllowedSets(): void

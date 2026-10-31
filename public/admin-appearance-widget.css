@@ -108,6 +108,23 @@
     margin-bottom: 8px;
 }
 
+/* A row of toggles under one section label (Accessories). Wraps, so the
+   player's five and the staff's three both lay out without their own rule. */
+.appearance-editor-v2 .ap-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 6px 16px;
+}
+
+/* "Pick any" beside the Tattoos label — the one multi-select group, where the
+   single-select convention of every other grid would otherwise be assumed. */
+.appearance-editor-v2 .ap-section-hint {
+    float: right;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #6b8299;
+}
+
 /* Color-part chips (shorts/socks/trousers) — these reference whichever
    color currently fills that role (primary/secondary/white/black), not a
    fixed color, so unlike a plain swatch they show a label alongside the

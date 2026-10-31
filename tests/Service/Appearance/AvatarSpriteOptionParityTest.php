@@ -6,7 +6,10 @@ namespace App\Tests\Service\Appearance;
 
 use App\Enum\Appearance\Face;
 use App\Enum\Appearance\HairStyle;
+use App\Enum\Appearance\Headwear;
+use App\Enum\Appearance\Neckwear;
 use App\Enum\Appearance\Outfit;
+use App\Enum\Appearance\Tattoo;
 use App\Service\Appearance\AppearanceGeneratorService;
 use PHPUnit\Framework\TestCase;
 
@@ -87,26 +90,66 @@ class AvatarSpriteOptionParityTest extends TestCase
     }
 
     /**
-     * The sprite's AvatarExtras (headwear/neckwear/tattoos) and its morale→face ladder
-     * are deliberately NOT modelled backend-side: `face` is a stored cosmetic pick here,
-     * not a live mood readout (see CLAUDE.md, Avatar Appearance). This asserts the
-     * omission is a decision — the lists are exposed by the bundle, so if someone later
-     * wires them up, the vocabulary is already to hand.
+     * The AvatarExtras vocabulary, which the backend now models — same drift guard as
+     * the three above, membership and order.
      */
-    public function testTheExtrasVocabularyIsExposedButUnmodelled(): void
+    public function testTheExtrasEnumsMatchTheSpriteLists(): void
     {
         $sprite = $this->spriteOptions();
 
-        self::assertSame(['none', 'cap', 'beanie'], $sprite['headwear']);
-        self::assertSame(['none', 'lanyard', 'whistle', 'scarf'], $sprite['neckwear']);
-        self::assertSame(['sleeve', 'band', 'hand', 'leg', 'neck', 'face'], $sprite['tattoos']);
-        self::assertCount(10, $sprite['moraleFaces'], 'ten equal morale bands');
+        self::assertSame(
+            $sprite['headwear'],
+            array_map(static fn (Headwear $h): string => $h->value, Headwear::cases()),
+        );
+        self::assertSame(
+            $sprite['neckwear'],
+            array_map(static fn (Neckwear $n): string => $n->value, Neckwear::cases()),
+        );
+        self::assertSame(
+            $sprite['tattoos'],
+            array_map(static fn (Tattoo $t): string => $t->value, Tattoo::cases()),
+        );
+    }
 
-        foreach (['headwear', 'neckwear', 'tattoos'] as $group) {
-            self::assertFalse(
-                enum_exists('App\\Enum\\Appearance\\' . ucfirst($group)),
-                "There is no backend enum for {$group} on purpose — the backend does not pass AvatarExtras.",
+    /**
+     * The morale→face ladder is still deliberately NOT modelled: `face` is a stored
+     * cosmetic pick here, not a live mood readout (see CLAUDE.md). Unlike the extras,
+     * which are now wired, this omission stands — so it is asserted rather than assumed.
+     */
+    public function testTheMoraleLadderIsStillUnmodelled(): void
+    {
+        self::assertCount(10, $this->spriteOptions()['moraleFaces'], 'ten equal morale bands');
+        self::assertFalse(
+            method_exists(AppearanceGeneratorService::class, 'faceForMorale'),
+            'face is a stored cosmetic pick; wiring morale would reverse a documented decision',
+        );
+    }
+
+    /**
+     * Tattoo::visibleFor() is a verbatim port of the sprite's visibleTattoos(): ink lands
+     * only on bare skin, so a staff member shows the arm pair ONLY in the polo or the
+     * rolled-sleeve shirt, and a calf tattoo is players-only.
+     */
+    public function testVisibleTattoosMatchesTheSpriteRule(): void
+    {
+        $ids = static fn (array $ts): array => array_map(static fn (Tattoo $t): string => $t->value, $ts);
+
+        self::assertSame(
+            ['sleeve', 'band', 'hand', 'leg', 'neck', 'face'],
+            $ids(Tattoo::visibleFor(true, null)),
+            'a player shows all six',
+        );
+
+        self::assertSame(['hand', 'neck', 'face'], $ids(Tattoo::visibleFor(false, Outfit::COAT)));
+        self::assertSame(['hand', 'neck', 'face'], $ids(Tattoo::visibleFor(false, Outfit::SUIT)));
+
+        foreach ([Outfit::POLO, Outfit::SHIRT] as $bare) {
+            self::assertSame(
+                ['sleeve', 'band', 'hand', 'neck', 'face'],
+                $ids(Tattoo::visibleFor(false, $bare)),
+                $bare->value . ' leaves the forearms bare',
             );
+            self::assertNotContains('leg', $ids(Tattoo::visibleFor(false, $bare)), 'a calf tattoo is players-only');
         }
     }
 

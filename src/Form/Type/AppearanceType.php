@@ -5,12 +5,15 @@ use App\Enum\Appearance\Face;
 use App\Enum\Appearance\FacialHair;
 use App\Enum\Appearance\HairColor;
 use App\Enum\Appearance\HairStyle;
+use App\Enum\Appearance\Headwear;
 use App\Enum\Appearance\KitColor;
 use App\Enum\Appearance\KitPart;
 use App\Enum\Appearance\KitStyle;
 use App\Enum\Appearance\LipColor;
+use App\Enum\Appearance\Neckwear;
 use App\Enum\Appearance\Outfit;
 use App\Enum\Appearance\SkinId;
+use App\Enum\Appearance\Tattoo;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\DataMapperInterface;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
@@ -22,7 +25,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Compound form for editing an Appearance array (the sprite's 15-key
- * SpriteConfig shape) plus a live SVG preview (see
+ * SpriteConfig shape, plus the seven AvatarExtras keys stored flat beside it) plus a live SVG preview (see
  * templates/admin/field/appearance.html.twig). Every entity stores all 15
  * keys regardless of role — the sprite itself ignores whichever group
  * (kit/shorts/socks vs outfit/trousers/glasses) doesn't apply to its `type` —
@@ -37,6 +40,9 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
         'primary' => '#c8202f', 'secondary' => '#f4f3ee',
         'kit' => 'stripes', 'shorts' => 'black', 'socks' => 'primary',
         'outfit' => 'coat', 'trousers' => 'black', 'glasses' => false,
+        // AvatarExtras, stored FLAT beside the config — see the class docblock.
+        'earring' => false, 'armband' => false, 'wristband' => false, 'snood' => false,
+        'headwear' => 'none', 'neckwear' => 'none', 'tattoos' => [],
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -83,6 +89,32 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
                 'choices' => $this->enumChoices(KitPart::cases()),
             ])
             ->add('glasses', CheckboxType::class, ['required' => false])
+            // ── AvatarExtras ────────────────────────────────────────────────
+            // Every one of these is role-gated by the SPRITE, not here: it ignores
+            // armband/wristband/snood on a staff body and headwear/neckwear on a
+            // player, exactly as it already ignores the kit group on staff. So the
+            // field list stays invariant, like the fifteen above, and the widget
+            // only varies which sections it SHOWS.
+            ->add('earring', CheckboxType::class, ['required' => false])
+            ->add('armband', CheckboxType::class, ['required' => false])
+            ->add('wristband', CheckboxType::class, ['required' => false])
+            ->add('snood', CheckboxType::class, ['required' => false])
+            ->add('headwear', ChoiceType::class, [
+                'choices' => $this->enumChoices(Headwear::cases()),
+            ])
+            ->add('neckwear', ChoiceType::class, [
+                'choices' => $this->enumChoices(Neckwear::cases()),
+            ])
+            // A list, not a single value — any combination is legal. `multiple`
+            // makes Symfony hand back an array, which lands in the json as one.
+            ->add('tattoos', ChoiceType::class, [
+                'choices'  => array_combine(
+                    array_map(static fn (Tattoo $t): string => $t->label(), Tattoo::cases()),
+                    array_map(static fn (Tattoo $t): string => $t->value, Tattoo::cases()),
+                ),
+                'multiple' => true,
+                'required' => false,
+            ])
             ->setDataMapper($this);
     }
 
@@ -169,8 +201,19 @@ final class AppearanceType extends AbstractType implements DataMapperInterface
         foreach ($forms as $name => $form) {
             $result[$name] = $form->getData();
         }
-        $result['headband'] = (bool) $result['headband'];
-        $result['glasses']  = (bool) $result['glasses'];
+        foreach (['headband', 'glasses', 'earring', 'armband', 'wristband', 'snood'] as $flag) {
+            $result[$flag] = (bool) ($result[$flag] ?? false);
+        }
+
+        // Re-indexed and filtered to known values: the json column is read back
+        // verbatim by every serializer, and a sparse array would encode as a JSON
+        // object rather than a list.
+        $tattoos = is_array($result['tattoos'] ?? null) ? $result['tattoos'] : [];
+        $result['tattoos'] = array_values(array_filter(
+            $tattoos,
+            static fn (mixed $t): bool => is_string($t) && Tattoo::tryFrom($t) !== null,
+        ));
+
         $viewData = $result;
     }
 }

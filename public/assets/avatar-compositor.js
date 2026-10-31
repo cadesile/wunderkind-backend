@@ -144,6 +144,14 @@
   };
   var DEFAULT_AVATAR_EXTRAS = { earring: false, armband: false, wristband: false, snood: false, headwear: "none", neckwear: "none", tattoos: [] };
   var EXTRA_KEYS = Object.keys(DEFAULT_AVATAR_EXTRAS);
+  function splitAvatarConfig(o) {
+    const config = {}, extras = {};
+    for (const k of Object.keys(o)) {
+      if (EXTRA_KEYS.includes(k)) extras[k] = o[k];
+      else if (k in DEFAULT_AVATAR_CONFIG) config[k] = o[k];
+    }
+    return { config, extras };
+  }
   var HEIGHT = { small: { torso: 14, knee: 2 }, medium: { torso: 16, knee: 4 }, large: { torso: 18, knee: 6 } };
   var WEIGHT = {
     small: { body: 12, arm: 3, leg: 3, neck: 4 },
@@ -1200,9 +1208,10 @@
     return value === "small" || value === "medium" || value === "large" ? value : void 0;
   }
   function composePlayerSpriteSvg(config, type, crop, scale, opts = {}) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     const resolvedCrop = crop == null ? "full" : (_a = CROP_ALIASES[crop]) != null ? _a : crop;
-    const merged = __spreadValues({}, config);
+    const split = splitAvatarConfig(config != null ? config : {});
+    const merged = __spreadValues({}, split.config);
     if (type) merged.role = type;
     const height = resolveBodySize((_b = opts.height) != null ? _b : opts.heightCm, heightToBodySize);
     const weight = resolveBodySize((_c = opts.weight) != null ? _c : opts.weightKg, weightToBodySize);
@@ -1218,7 +1227,10 @@
       // avatar16.ts's own renderAvatar defaults this to true, but the admin
       // previews and the landing page both want the unoutlined look; the flag is
       // here so a caller can opt back in without a signature change.
-      outline: (_d = opts.outline) != null ? _d : false
+      outline: (_d = opts.outline) != null ? _d : false,
+      // An explicit opts.extras wins over whatever the stored blob carried, so a
+      // caller can preview a change without rewriting the stored config.
+      extras: __spreadValues(__spreadValues({}, split.extras), (_e = opts.extras) != null ? _e : {})
     });
     const px = scale * SCALE_RATIO;
     const paths = image.paths.map((p) => `<path d="${p.d}" fill="${p.color}"></path>`).join("");

@@ -30,7 +30,31 @@
       primary: v('primary'), secondary: v('secondary'),
       kit: v('kit'), shorts: v('shorts'), socks: v('socks'),
       outfit: v('outfit'), trousers: v('trousers'), glasses: !!v('glasses'),
+      // AvatarExtras, stored flat beside the config — composePlayerSpriteSvg()
+      // splits them back apart via the sprite's own splitAvatarConfig(). Without
+      // these the live preview silently ignores every accessory and tattoo.
+      earring: !!v('earring'), armband: !!v('armband'),
+      wristband: !!v('wristband'), snood: !!v('snood'),
+      headwear: v('headwear') || 'none', neckwear: v('neckwear') || 'none',
+      tattoos: multiValues(root, 'tattoos'),
     };
+  }
+
+  /** The selected values of a <select multiple>, which `tattoos` is. */
+  function multiValues(root, name) {
+    var el = fieldEl(root, name);
+    if (!el || !el.options) return [];
+    return Array.from(el.options).filter(function (o) { return o.selected; })
+      .map(function (o) { return o.value; });
+  }
+
+  function setMultiValue(root, name, value, on) {
+    var el = fieldEl(root, name);
+    if (!el || !el.options) return;
+    Array.from(el.options).forEach(function (o) {
+      if (o.value === value) o.selected = on;
+    });
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function setField(root, name, value, opts) {
@@ -143,6 +167,72 @@
   }
 
   /**
+   * Tattoos: a LIST, so each tile toggles independently rather than replacing the
+   * selection. Two things make this different from buildGridGroup():
+   *
+   *  - the backing field is a <select multiple>, so a click flips one option;
+   *  - the sprite draws ink only on BARE SKIN, so a tile whose tattoo this role and
+   *    outfit would cover is not offered at all. That mirrors the sprite's own
+   *    visibleTattoos() and the server-side Tattoo::visibleFor(). Staff keep the
+   *    arm pair only in the polo and the rolled-sleeve shirt, which is why this
+   *    rebuilds when `outfit` changes.
+   *
+   * Each tile previews the tattoo ON its own crop (arm/leg/head), because a
+   * head-and-shoulders thumbnail cannot show a calf.
+   */
+  var TATTOO_CROPS = { sleeve: 'arm', band: 'arm', hand: 'arm', leg: 'leg', neck: 'head', face: 'head' };
+
+  function visibleTattoos(personType, outfit) {
+    if (personType === 'player') return ['sleeve', 'band', 'hand', 'leg', 'neck', 'face'];
+    var bareForearms = outfit === 'polo' || outfit === 'shirt';
+    return ['hand', 'neck', 'face'].concat(bareForearms ? ['sleeve', 'band'] : []);
+  }
+
+  function buildMultiGroup(root, container, name, personType) {
+    var all = selectOptions(root, name);
+    var outfit = (fieldEl(root, 'outfit') || {}).value;
+    var allowed = visibleTattoos(personType, outfit);
+
+    container.innerHTML = '';
+    var grid = document.createElement('div');
+    grid.className = 'ap-grid';
+
+    all.filter(function (o) { return allowed.indexOf(o.value) !== -1; }).forEach(function (o) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ap-grid-btn';
+      btn.setAttribute('data-value', o.value);
+
+      var overrides = { tattoos: [o.value] };
+      var crop = TATTOO_CROPS[o.value] || 'head';
+      var svg = typeof window.composePlayerSpriteSvg === 'function'
+        ? window.composePlayerSpriteSvg(
+            Object.assign(currentAppearance(root), overrides), personType, crop, 56,
+          )
+        : '';
+
+      btn.innerHTML = svg + '<span class="ap-grid-label">' + o.label + '</span>';
+      btn.addEventListener('click', function () {
+        var on = multiValues(root, name).indexOf(o.value) === -1;
+        setMultiValue(root, name, o.value, on);
+      });
+      grid.appendChild(btn);
+    });
+
+    container.appendChild(grid);
+    syncMultiGroup(root, container, name);
+  }
+
+  // aria-pressed, not a class — it is what .ap-grid-btn[aria-pressed="true"] already
+  // styles, so a multi-select tile highlights exactly like a single-select one.
+  function syncMultiGroup(root, container, name) {
+    var selected = multiValues(root, name);
+    container.querySelectorAll('.ap-grid-btn').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String(selected.indexOf(btn.getAttribute('data-value')) !== -1));
+    });
+  }
+
+  /**
    * shorts/socks/trousers are KitPart references ('primary'|'secondary'|
    * 'white'|'black'), not colors themselves — they resolve to whatever the
    * live primary/secondary fields currently hold (or the fixed white/black),
@@ -230,6 +320,8 @@
         buildColorPartGroup(root, section, name);
       } else if (mode === 'toggle') {
         buildToggle(root, section, name, section.getAttribute('data-ap-label') || name);
+      } else if (mode === 'multi') {
+        buildMultiGroup(root, section, name, personType);
       }
       built[name] = true;
     }

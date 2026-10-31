@@ -69,14 +69,50 @@
                 <div class="ap-section-label">Expression</div>
                 <div data-ap-field="face" data-ap-mode="grid"></div>
             </div>
+            {#
+               ACCESSORIES + TATTOOS are AvatarExtras, stored flat beside the fifteen
+               config keys (see AppearanceType). Which ones the SPRITE honours is
+               role-gated by the sprite itself, so the gating below is purely about not
+               offering a control that would visibly do nothing: the sprite's own
+               ACCESSORIES list is player = headband/earring/armband/wristband/snood,
+               staff = headband/glasses/earring.
+            #}
             <div class="ap-section">
-                <div data-ap-field="headband" data-ap-mode="toggle" data-ap-label="Headband"></div>
+                <div class="ap-section-label">Accessories</div>
+                <div class="ap-toggle-grid">
+                    <div data-ap-field="headband" data-ap-mode="toggle" data-ap-label="Headband"></div>
+                    <div data-ap-field="earring" data-ap-mode="toggle" data-ap-label="Earrings"></div>
+                    {% if personType == 'player' %}
+                        <div data-ap-field="armband" data-ap-mode="toggle" data-ap-label="Captain's armband"></div>
+                        <div data-ap-field="wristband" data-ap-mode="toggle" data-ap-label="Wristband"></div>
+                        <div data-ap-field="snood" data-ap-mode="toggle" data-ap-label="Snood"></div>
+                    {% else %}
+                        <div data-ap-field="glasses" data-ap-mode="toggle" data-ap-label="Glasses"></div>
+                    {% endif %}
+                </div>
             </div>
             {% if personType == 'staff' %}
                 <div class="ap-section">
-                    <div data-ap-field="glasses" data-ap-mode="toggle" data-ap-label="Glasses"></div>
+                    <div class="ap-section-label">Headwear</div>
+                    <div data-ap-field="headwear" data-ap-mode="grid"></div>
+                </div>
+                <div class="ap-section">
+                    <div class="ap-section-label">Neckwear</div>
+                    <div data-ap-field="neckwear" data-ap-mode="grid"></div>
                 </div>
             {% endif %}
+            <div class="ap-section">
+                <div class="ap-section-label">
+                    Tattoos
+                    <span class="ap-section-hint">Pick any</span>
+                </div>
+                {#
+                   `multi` rather than `grid`: tattoos are a LIST, and the sprite draws
+                   ink only on bare skin — so the widget hides the ones this role and
+                   outfit would cover, mirroring visibleTattoos()/Tattoo::visibleFor().
+                #}
+                <div data-ap-field="tattoos" data-ap-mode="multi"></div>
+            </div>
         </div>
 
         <div data-appearance-panel="kit" hidden>

@@ -13,6 +13,7 @@
 
 import {
   renderAvatar,
+  splitAvatarConfig,
   SKINS,
   DEFAULT_AVATAR_CONFIG,
   HAIR_STYLES,
@@ -63,6 +64,8 @@ function weightToBodySize(kg: unknown): BodySize {
 }
 
 interface ComposeOptions {
+  /** Partial<AvatarExtras> — accessories and tattoos. */
+  extras?: Record<string, unknown>;
   ball?: boolean;
   shadow?: boolean;
   outline?: boolean;
@@ -115,9 +118,21 @@ function composePlayerSpriteSvg(
     ? 'full'
     : (CROP_ALIASES as Record<string, Crop>)[crop] ?? (crop as Crop);
 
+  // The backend stores AvatarConfig and AvatarExtras FLAT in one json blob —
+  // exactly the shape the web builder's onChange emits, and exactly what
+  // splitAvatarConfig() is built to take apart. Splitting here rather than at
+  // every call site means the admin widget and the landing page both get
+  // accessories and tattoos for free, and a stored blob can be handed straight
+  // to this function without the caller knowing the two contracts exist.
+  //
+  // Unknown keys are dropped by splitAvatarConfig, so a pre-V4 blob (fifteen
+  // config keys, no extras) splits to empty extras and renders exactly as it
+  // always did.
+  const split = splitAvatarConfig((config ?? {}) as Record<string, unknown>);
+
   // A stored config may already carry a tier (the avatar builder writes one).
   // A tier or measurement passed by the caller is better evidence, so it wins.
-  const merged: Partial<AvatarConfig> = { ...config };
+  const merged: Partial<AvatarConfig> = { ...split.config };
   if (type) merged.role = type;
 
   const height = resolveBodySize(opts.height ?? opts.heightCm, heightToBodySize);
@@ -136,6 +151,9 @@ function composePlayerSpriteSvg(
     // previews and the landing page both want the unoutlined look; the flag is
     // here so a caller can opt back in without a signature change.
     outline: opts.outline ?? false,
+    // An explicit opts.extras wins over whatever the stored blob carried, so a
+    // caller can preview a change without rewriting the stored config.
+    extras: { ...split.extras, ...(opts.extras ?? {}) },
   });
 
   const px = scale * SCALE_RATIO;

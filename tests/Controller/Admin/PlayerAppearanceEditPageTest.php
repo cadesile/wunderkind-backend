@@ -104,6 +104,30 @@ class PlayerAppearanceEditPageTest extends WebTestCase
             // nginx static layer and every /admin page 403s. Guard both facts.
             $this->assertStringContainsString('assets/avatar-compositor.js', $html);
             $this->assertStringNotContainsString('admin/avatar-compositor.js', $html);
+            // AvatarExtras — accessories and tattoos. These are stored FLAT beside the
+            // fifteen config keys, so every one of them is a real form field on every
+            // entity type; which ones the WIDGET offers is role-gated in the template,
+            // and which ones the SPRITE honours is role-gated by the sprite itself.
+            foreach (['earring', 'armband', 'wristband', 'snood', 'headwear', 'neckwear', 'tattoos'] as $extra) {
+                $this->assertGreaterThan(
+                    0,
+                    $crawler->filter(sprintf('[id$="_%s"]', $extra))->count(),
+                    "{$extra} field should render on the {$adminSlug} edit page",
+                );
+            }
+
+            // `tattoos` is a LIST — a multi-select, not a single-value dropdown. If this
+            // ever regresses to a plain select, a player can hold exactly one tattoo.
+            $this->assertGreaterThan(
+                0,
+                $crawler->filter('select[id$="_tattoos"][multiple]')->count(),
+                "tattoos should be a multi-select on the {$adminSlug} edit page",
+            );
+
+            $this->assertStringContainsString('data-ap-mode="multi"', $html);
+            $this->assertStringContainsString('Accessories', $html);
+            $this->assertStringContainsString('Tattoos', $html);
+
             $this->assertGreaterThan(
                 0,
                 $crawler->filter('select[id$="_skin"]')->count(),
