@@ -28,6 +28,7 @@ use App\Repository\PlayerCareerStatRepository;
 use App\Repository\StaffCareerProfileRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\TacticalAdvantageRepository;
+use App\Service\Leaderboard\ActivePeriodService;
 use App\Service\Leaderboard\LeaderboardPeriod;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -53,6 +54,7 @@ class SyncService
         private readonly LoggerInterface                 $logger,
         private readonly FacilityImageResolver           $facilityImageResolver,
         private readonly UserLedgerService               $userLedgerService,
+        private readonly ActivePeriodService             $activePeriodService,
     ) {}
 
     /**
@@ -206,7 +208,6 @@ class SyncService
         // Only the "cheap" categories (plain Club scalar reads) are upserted on every
         // sync. empire_index/golden_boot/playmaker/hall_of_fame require cross-table aggregation
         // and are computed only by LeaderboardCalculationService (CLI command / cache-miss path).
-        $isoWeek = LeaderboardPeriod::currentWeekKey();
 
         // career_earnings used to be here, scored from Club::$totalCareerEarnings. It is
         // now an aggregate over UserLedger dividend draws (see LeaderboardCategory::
@@ -223,7 +224,14 @@ class SyncService
                 LeaderboardCategory::FANATICS        => $club->getTotalSeasonAttendance(),
             };
 
-            foreach ([LeaderboardPeriod::ALL_TIME, $isoWeek] as $period) {
+            // Which periods get rows is ActivePeriodService's call, not a hardcoded list
+            // here: 'all-time' and the current ISO week stay on unconditionally (no
+            // regression), and a monthly or quarterly key appears only once an admin has
+            // ENABLED an award definition for this category. While a definition is
+            // disabled, its key is not emitted, so no rows exist for it — which is what
+            // makes a later re-enable measure growth from the re-enable rather than
+            // retro-awarding the all-time leader.
+            foreach ($this->activePeriodService->activePeriodsFor($category) as $period) {
                 $entry = $this->leaderboardEntryRepository->findOrCreate($club, $category, $period);
 
                 // 'all-time' is a standing and scores absolutely; every other period is a

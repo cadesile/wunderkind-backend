@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Enum\LeaderboardCategory;
 use App\Service\HallOfFameScoreService;
+use App\Service\Leaderboard\ActivePeriodService;
 use App\Service\Leaderboard\LeaderboardPeriod;
 use App\Service\LeaderboardCalculationService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -24,6 +25,7 @@ class GenerateLeaderboardsCommand extends Command
     public function __construct(
         private readonly LeaderboardCalculationService $calculationService,
         private readonly HallOfFameScoreService $hallOfFameScoreService,
+        private readonly ActivePeriodService $activePeriodService,
     ) {
         parent::__construct();
     }
@@ -32,7 +34,7 @@ class GenerateLeaderboardsCommand extends Command
     {
         $this
             ->addOption('category', 'c', InputOption::VALUE_OPTIONAL, 'Single category slug to regenerate (default: all)')
-            ->addOption('period', 'p', InputOption::VALUE_OPTIONAL, 'Period to regenerate: all-time | current-week | both', 'both')
+            ->addOption('period', 'p', InputOption::VALUE_OPTIONAL, 'Period to regenerate: all-time | current-week | both (= every active period, including any enabled monthly/quarterly award cadence)', 'both')
             ->addOption('warm-cache', null, InputOption::VALUE_NONE, 'Also populate the cache pool after recalculation (default: invalidate only, let next read populate)');
     }
 
@@ -53,10 +55,14 @@ class GenerateLeaderboardsCommand extends Command
             $categories = LeaderboardCategory::cases();
         }
 
+        // 'both' means every period that should currently hold rows — which is 'all-time'
+        // and the ISO week as before, plus the current key of any ENABLED monthly or
+        // quarterly award definition. The option name is kept for the crontab's sake; the
+        // list behind it is no longer hardcoded here.
         $periods = match ($input->getOption('period')) {
             'all-time'     => [LeaderboardPeriod::ALL_TIME],
             'current-week' => [LeaderboardPeriod::currentWeekKey()],
-            'both'         => [LeaderboardPeriod::ALL_TIME, LeaderboardPeriod::currentWeekKey()],
+            'both'         => $this->activePeriodService->allActivePeriods(),
             default        => null,
         };
 
