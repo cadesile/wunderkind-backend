@@ -6,8 +6,11 @@ use App\Dto\Leaderboard\LeaderboardItemDto;
 use App\Dto\Leaderboard\LeaderboardResponseDto;
 use App\Entity\Club;
 use App\Enum\LeaderboardCategory;
+use App\Entity\Leaderboard\LeaderboardPeriodArchive;
 use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubRepository;
+use App\Repository\Leaderboard\LeaderboardPeriodArchiveEntryRepository;
+use App\Repository\Leaderboard\LeaderboardPeriodArchiveRepository;
 use App\Repository\LeaderboardEntryRepository;
 use App\Repository\PlayerCareerStatRepository;
 use App\Repository\PlayerCareerStatSnapshotRepository;
@@ -30,6 +33,8 @@ class LeaderboardCalculationService
         private readonly ClubRepository $clubRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
         private readonly HallOfFameScoreService $hallOfFameScoreService,
+        private readonly LeaderboardPeriodArchiveRepository $periodArchiveRepository,
+        private readonly LeaderboardPeriodArchiveEntryRepository $periodArchiveEntryRepository,
         private readonly TagAwareCacheInterface $leaderboardCache,
         private readonly int $leaderboardCacheTtl,
     ) {}
@@ -38,6 +43,14 @@ class LeaderboardCalculationService
      * Cache-first read used by the controller. Computes fresh on a cold cache
      * (recalculating aggregate categories, or just re-ranking cheap ones),
      * then slices pagination out of the cached full result set.
+     *
+     * A CLOSED period is served from its archive and never recomputed — see
+     * hydrateFromArchive(). That is not an optimisation: the close job prunes the live rows
+     * for a period it has archived, and this method's cold callback WRITES (it calls
+     * recalculate(), and computeAggregateScores() will upsert rows for any period string).
+     * So without the guard, one public GET for a closed period would resurrect the entire
+     * pruned board with fresh lazy baselines — a near-empty board plus thousands of junk
+     * rows. Pleasant side effect: past periods become permanently cacheable.
      */
     public function getLeaderboard(LeaderboardCategory $category, string $period, int $page, int $pageSize): LeaderboardResponseDto
     {
@@ -47,6 +60,12 @@ class LeaderboardCalculationService
         $allItems = $this->leaderboardCache->get($key, function (ItemInterface $item) use ($category, $period): array {
             $item->tag([$this->categoryTag($category), $this->periodTag($period)]);
             $item->expiresAfter($this->leaderboardCacheTtl);
+
+            $closed = $this->periodArchiveRepository->findClosed($category, $period);
+
+            if ($closed !== null) {
+                return $this->hydrateFromArchive($closed);
+            }
 
             $this->recalculate($category, $period);
 
@@ -79,6 +98,14 @@ class LeaderboardCalculationService
      */
     public function recalculate(LeaderboardCategory $category, string $period): int
     {
+        // A closed period is read-only. This early return is what stops the admin
+        // "generate leaderboards" button and the five-minute cron from resurrecting a
+        // pruned board — the public read is guarded separately in getLeaderboard(), but
+        // both doors have to be shut.
+        if ($this->isClosed($category, $period)) {
+            return 0;
+        }
+
         if ($category->isAggregate()) {
             $this->computeAggregateScores($category, $period);
         }
@@ -237,6 +264,47 @@ class LeaderboardCalculationService
         $this->em->flush();
 
         return count($entries);
+    }
+
+    /** Whether this period has been closed and archived, and so must not be recomputed. */
+    public function isClosed(LeaderboardCategory $category, string $period): bool
+    {
+        if ($period === LeaderboardPeriod::ALL_TIME) {
+            return false;
+        }
+
+        return $this->periodArchiveRepository->findClosed($category, $period) !== null;
+    }
+
+    /**
+     * The archive IS the board for a closed period — it already carries club name, country,
+     * kit/badge configs, score, display label and rank, frozen at close. So this is a
+     * straight projection with no database writes and nothing re-derived.
+     *
+     * Bounded to ARCHIVED_ENTRY_LIMIT by construction, which is also the documented limit
+     * on how deep closed-period history goes.
+     *
+     * @return LeaderboardItemDto[]
+     */
+    private function hydrateFromArchive(LeaderboardPeriodArchive $archive): array
+    {
+        $items = [];
+
+        foreach ($this->periodArchiveEntryRepository->findForArchive($archive) as $entry) {
+            $items[] = new LeaderboardItemDto(
+                rank: $entry->getRank(),
+                clubId: $entry->getClubId(),
+                clubName: $entry->getClubName(),
+                score: $entry->getScore(),
+                displayLabel: $entry->getDisplayLabel(),
+                homeKitConfig: $entry->getHomeKitConfig(),
+                awayKitConfig: $entry->getAwayKitConfig(),
+                badgeConfig: $entry->getBadgeConfig(),
+                country: $entry->getCountryCode(),
+            );
+        }
+
+        return $items;
     }
 
     /** @return LeaderboardItemDto[] */
