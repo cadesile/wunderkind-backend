@@ -378,3 +378,31 @@ was not safe to retry:
   and `cadence` are therefore denormalised onto the header), and why
   `uq_lpae_archive_place` is the one partial index here. `down()` drops all four in
   dependency order.
+
+- `Version20261031214540` — **one column, additive**:
+  `game_config.youth_scholarship_wage_pence INT NOT NULL DEFAULT 25000`. The flat weekly wage
+  (PENCE) for a player SIGNED below the first-team age, so the academy scholarship can be
+  repriced from the admin panel instead of an app release.
+
+  **An unmigrated database is safe**, which is why this needs no backfill beyond the column
+  default: the app reads `config.youthScholarshipWagePence ?? YOUTH_SCHOLARSHIP_WAGE_PENCE`
+  and its own fallback is the same 25000. ⚠️ Note that the guard is `??`, not falsiness — a
+  **0** sent from here would NOT fall back and would make scholars free. That is why the
+  column is `NOT NULL DEFAULT 25000` rather than nullable, and why the setter floors at 0
+  rather than defaulting to it.
+
+  **It IS in `SyncService`'s config payload**, in both branches — and the no-config fallback
+  branch sends the real default, **not 0** like the sponsor bands beside it. That difference
+  is the whole point: `0` has to stay a legitimate admin choice (a club that pays its
+  scholars nothing), so it cannot also mean "unset", and a 0 sent from here would sail past
+  the client's `??` rather than falling back.
+
+  **The default has ONE home on this side: `GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE`.**
+  The column default (via the `#[ORM\Column]` attribute — a class constant is a valid
+  constant expression there, and `doctrine:schema:validate` confirms it maps identically),
+  the property initialiser, `SyncService`'s no-config branch and the admin form's POST
+  fallback all READ it; `GameConfigYouthScholarshipTest` pins the figure itself exactly once.
+  The migration's SQL keeps the literal 25000 on purpose — a migration records the state of
+  the schema on the day it ran and must not change meaning when a constant later does.
+  The app's `YOUTH_SCHOLARSHIP_WAGE_PENCE` is the remaining copy, and it is the client's
+  pre-sync fallback; the app pins it against its own `DEFAULT_GAME_CONFIG` in a test.

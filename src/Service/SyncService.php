@@ -330,6 +330,8 @@ class SyncService
             'guardianIgnoreSiblingMoralePenalty'         => $gameConfig->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => $gameConfig->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
             'debugLoggingEnabled'                        => $gameConfig->isDebugLoggingEnabled(),
+            // Youth
+            'youthScholarshipWagePence'     => $gameConfig->getYouthScholarshipWagePence(),
             // League finances
             'smallSponsorMin'               => $gameConfig->getSmallSponsorMin(),
             'smallSponsorMax'               => $gameConfig->getSmallSponsorMax(),
@@ -396,6 +398,16 @@ class SyncService
             'guardianIgnoreSiblingMoralePenalty'         => 5,
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => 2,
             'debugLoggingEnabled'                        => false,
+            // Youth
+            //
+            // READ from the entity, never restated — and pointedly NOT 0 like the sponsor
+            // bands below. This block is what a client gets when there is no GameConfig row
+            // at all, and the client's guard is `?? fallback`, not falsiness, so a 0 here
+            // would sail past it and scholars would be free. 0 has to stay a legitimate
+            // admin choice (a club that pays its scholars nothing), which is exactly why it
+            // cannot also mean "unset" — and why a wrong default here would not announce
+            // itself the way a wrong probability or threshold would.
+            'youthScholarshipWagePence'     => GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE,
             // League finances
             'smallSponsorMin'               => 0,
             'smallSponsorMax'               => 0,
