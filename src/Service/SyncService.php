@@ -28,6 +28,7 @@ use App\Repository\PlayerCareerStatRepository;
 use App\Repository\StaffCareerProfileRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\TacticalAdvantageRepository;
+use App\Service\Leaderboard\LeaderboardPeriod;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -205,7 +206,7 @@ class SyncService
         // Only the "cheap" categories (plain Club scalar reads) are upserted on every
         // sync. empire_index/golden_boot/playmaker/hall_of_fame require cross-table aggregation
         // and are computed only by LeaderboardCalculationService (CLI command / cache-miss path).
-        $isoWeek = (new \DateTimeImmutable())->format('o-\WW');
+        $isoWeek = LeaderboardPeriod::currentWeekKey();
 
         // career_earnings used to be here, scored from Club::$totalCareerEarnings. It is
         // now an aggregate over UserLedger dividend draws (see LeaderboardCategory::
@@ -222,9 +223,19 @@ class SyncService
                 LeaderboardCategory::FANATICS        => $club->getTotalSeasonAttendance(),
             };
 
-            foreach (['all-time', $isoWeek] as $period) {
+            foreach ([LeaderboardPeriod::ALL_TIME, $isoWeek] as $period) {
                 $entry = $this->leaderboardEntryRepository->findOrCreate($club, $category, $period);
-                $entry->setScore($score);
+
+                // 'all-time' is a standing and scores absolutely; every other period is a
+                // GROWTH board and must go through observeCumulative(), which stamps a
+                // baseline on first sighting and stores (cumulative - baseline). $score
+                // here is a cumulative Club total either way — the distinction is entirely
+                // in which mutator consumes it.
+                if ($period === LeaderboardPeriod::ALL_TIME) {
+                    $entry->setScore($score);
+                } else {
+                    $entry->observeCumulative($score);
+                }
             }
         }
 

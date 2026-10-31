@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Entity\Club;
 use App\Enum\LeaderboardCategory;
 use App\Repository\LeaderboardEntryRepository;
+use App\Service\Leaderboard\LeaderboardPeriod;
 use App\Service\LeaderboardCalculationService;
 use App\Service\ReputationDecayService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -145,7 +146,7 @@ final class DecayReputationCommand extends Command
         if (!$dryRun && $decayed > 0) {
             $this->leaderboardCalculationService->invalidate(LeaderboardCategory::CLUB_REPUTATION);
 
-            foreach (['all-time', (new \DateTimeImmutable())->format('o-\WW')] as $period) {
+            foreach ([LeaderboardPeriod::ALL_TIME, LeaderboardPeriod::currentWeekKey()] as $period) {
                 $this->leaderboardCalculationService->recalculate(LeaderboardCategory::CLUB_REPUTATION, $period);
             }
         }
@@ -183,7 +184,18 @@ final class DecayReputationCommand extends Command
         $score = $club->getReputation();
 
         foreach ($this->leaderboardEntryRepository->findAllForClubAndCategory($club, LeaderboardCategory::CLUB_REPUTATION) as $entry) {
-            $entry->setScore($score);
+            // This method touches EVERY existing period row for the club, which is exactly
+            // why the growth split matters here and is easy to miss: writing the decayed
+            // reputation absolutely into a period row would store a standing value where a
+            // growth belongs. observeCumulative() is also the only correct home for a
+            // DECREASE — it clamps score at 0 (the column is bigint unsigned) while keeping
+            // cumulativeScore truthful, so the next period's baseline is not corrupted by
+            // the clamp. Decay is the whole reason that clamp exists.
+            if ($entry->getPeriod() === LeaderboardPeriod::ALL_TIME) {
+                $entry->setScore($score);
+            } else {
+                $entry->observeCumulative($score);
+            }
         }
     }
 

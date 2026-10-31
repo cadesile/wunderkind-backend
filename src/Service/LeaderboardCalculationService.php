@@ -13,6 +13,7 @@ use App\Repository\PlayerCareerStatRepository;
 use App\Repository\PlayerCareerStatSnapshotRepository;
 use App\Repository\TransferRepository;
 use App\Repository\UserLedgerRepository;
+use App\Service\Leaderboard\LeaderboardPeriod;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
@@ -106,7 +107,7 @@ class LeaderboardCalculationService
         // would otherwise make a club's all-time total silently shrink. Every other
         // period value keeps reading the live PlayerCareerStat snapshot unchanged; see
         // PlayerCareerStatSnapshotRepository for the reset-aware reconstruction.
-        $isAllTime = $period === 'all-time';
+        $isAllTime = $period === LeaderboardPeriod::ALL_TIME;
 
         $rows = match ($category) {
             // Summed UserLedger dividend draws — money the owner actually took out of
@@ -145,7 +146,16 @@ class LeaderboardCalculationService
             }
 
             $entry = $this->leaderboardEntryRepository->findOrCreate($club, $category, $period);
-            $entry->setScore($row['score']);
+
+            // 'all-time' is a standing; every other period is a growth board. $row['score']
+            // is a cumulative total in both cases — observeCumulative() is what turns it
+            // into period growth against a lazily-stamped baseline.
+            if ($isAllTime) {
+                $entry->setScore($row['score']);
+            } else {
+                $entry->observeCumulative($row['score']);
+            }
+
             $entry->setDisplayLabel($row['displayLabel'] ?? null);
         }
 
@@ -170,8 +180,24 @@ class LeaderboardCalculationService
             }
 
             foreach ($this->leaderboardEntryRepository->findAllForCategoryAndPeriod($category, $period) as $entry) {
-                if ($entry->getScore() !== 0 && !isset($scored[(string) $entry->getClub()->getId()])) {
-                    $entry->setScore(0);
+                if (isset($scored[(string) $entry->getClub()->getId()])) {
+                    continue;
+                }
+
+                // A club absent from $rows genuinely has cumulative 0 for this category, so
+                // observeCumulative(0) is the correct statement on a growth board — not
+                // setScore(0), which would leave the baseline untouched and let the next
+                // observation score a full cumulative as if it were growth.
+                if ($isAllTime) {
+                    if ($entry->getScore() !== 0) {
+                        $entry->setScore(0);
+                    }
+
+                    continue;
+                }
+
+                if ($entry->getScore() !== 0 || $entry->getCumulativeScore() !== 0) {
+                    $entry->observeCumulative(0);
                 }
             }
 
