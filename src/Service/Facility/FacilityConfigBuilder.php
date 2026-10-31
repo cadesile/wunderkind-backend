@@ -125,7 +125,48 @@ final class FacilityConfigBuilder
             $config['scoreboard'] = false;
         }
 
+        $config['surrounds'] = self::surroundsFor($club);
+
         return $config;
+    }
+
+    /**
+     * Which `surrounds` variant the stadium's surroundings draw as.
+     *
+     * NOT a StadiumConfig key. The v3 sprite drop freezes StadiumConfig and takes
+     * every new behaviour as a RENDER OPTION, so this rides along in the same json
+     * blob purely as transport and is lifted back out into the options by
+     * composeStadiumSvg() (scripts/{facility,stadium}-compositor/entry.ts). It is in
+     * this array rather than a column of its own because that would be a migration
+     * for a value that is derived, not authored.
+     *
+     * Derived from the club's LEAGUE TIER, which is the one signal the backend
+     * already holds that says anything about a club's setting: climbing the pyramid
+     * moves you from an industrial fringe to a dense city centre. Tier 1 is the top
+     * division and 8 is where new clubs start (the same inversion
+     * AudienceCriteriaEvaluator documents), so the ladder below reads downwards.
+     *
+     * A club with no league keeps 'parkland', which IS the previous drop's
+     * trees-only look — so an unplaced club renders exactly as it did before v3.
+     * Same for a tier outside 1-8, which `league.tier` is constrained to but which
+     * this does not assume.
+     *
+     * Reads the already-hydrated League: OwnerSpotlightService joins it eagerly
+     * (findByUserIds), and ClubSpotlightService runs once per cron tick, so this
+     * adds no query worth the name despite the class note above.
+     */
+    public static function surroundsFor(Club $club): string
+    {
+        $tier = $club->getCurrentLeague()?->getTier();
+
+        return match (true) {
+            $tier === null      => 'parkland',
+            $tier <= 2          => 'city',
+            $tier <= 4          => 'suburban',
+            $tier <= 6          => 'terraces',
+            $tier <= 8          => 'industrial',
+            default             => 'parkland',
+        };
     }
 
     /**

@@ -4,7 +4,7 @@
 //
 // Source:      assets/Components/facilitiesV2/facilities/{isoEngine,plotSite,
 //              stadiumSprite,trainingGroundSprite,medicalCentreSprite,scoutingSprite}.ts
-// Source sha:  a26bf1f78e170f3f
+// Source sha:  0d5b65c38fefcd22
 //
 // No build timestamp on purpose: the output is then byte-identical when
 // the source has not changed, so a rebuild produces an empty diff and
@@ -48,6 +48,7 @@
 
   // isoEngine.ts (from the shared assets, see header)
   var BACKDROP = { day: "#ebe7de", night: "#1f2438" };
+  var APP_BACKDROP = { day: "#2d3568", night: BACKDROP.night };
   var DIM = { owned: 0.64, unowned: 0.44 };
   var colCache = /* @__PURE__ */ new Map();
   var hex2 = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
@@ -303,7 +304,7 @@
   function plotConstruction(w, x0, y0, pw, pd) {
     const P = "#9aa0a6", Wd = "#c9a063", Cn = "#b8b3a8", Y = "#f2c230", Yd = "#b88a12", Dk = "#3b3831", glass = "#a9d6e6";
     const solid = /* @__PURE__ */ new Set();
-    const at = (dx, dy, z0, z1, top2, sd, flag) => {
+    const at2 = (dx, dy, z0, z1, top2, sd, flag) => {
       if (dx < 0 || dy < 0 || dx >= pw || dy >= pd) return;
       w.add(x0 + dx, y0 + dy, z0, z1, top2, sd, flag);
       if (z0 < 1) solid.add(dx + "," + dy);
@@ -314,41 +315,41 @@
       if (dx > 0 && dy > 0 && dx < pw - 1 && dy < pd - 1) continue;
       if (dy === pd - 1 && Math.abs(dx - gate) <= 1) continue;
       const k = dy === 0 || dy === pd - 1 ? dx : dy;
-      at(dx, dy, 0, 1.5, Math.floor(k / 2) % 2 ? "#f07a1a" : "#f4f3ee");
+      at2(dx, dy, 0, 1.5, Math.floor(k / 2) % 2 ? "#f07a1a" : "#f4f3ee");
     }
     const cw = Math.max(3, Math.round(pw * 0.4)), cd = Math.max(2, Math.min(pd - 5, Math.round(pd * 0.55))), ex = 3 + cw, ey = 3 + cd;
     for (let dx = 2; dx <= ex; dx++) for (let dy = 2; dy <= ey; dy++) {
       if (dx > 2 && dy > 2 && dx < ex && dy < ey) {
-        at(dx, dy, 0, dx % 3 === 0 && dy % 3 === 0 ? 7 : 4, Cn, "#8f8a80");
+        at2(dx, dy, 0, dx % 3 === 0 && dy % 3 === 0 ? 7 : 4, Cn, "#8f8a80");
         continue;
       }
       const k = dx === 2 || dx === ex ? dy : dx;
-      if (k % 3 === 2) at(dx, dy, 0, 8.5, P, P);
-      else for (const z of [2.5, 5, 8]) at(dx, dy, z, z + 0.5, Wd, Wd);
+      if (k % 3 === 2) at2(dx, dy, 0, 8.5, P, P);
+      else for (const z of [2.5, 5, 8]) at2(dx, dy, z, z + 0.5, Wd, Wd);
     }
     const fx = ex + 2, mx = pw - 3, top = Math.min(22, 12 + Math.round(Math.max(pw, pd) * 0.25));
     if (mx >= fx) {
-      for (let z = 0; z < top; z += 2) at(mx, 2, z, z + 2, Y, z / 2 % 2 ? Yd : Y);
-      at(mx, 3, top - 2, top, Y, glass);
+      for (let z = 0; z < top; z += 2) at2(mx, 2, z, z + 2, Y, z / 2 % 2 ? Yd : Y);
+      at2(mx, 3, top - 2, top, Y, glass);
       const jl = Math.min(mx - 1, 12), hk = Math.max(mx - jl, fx - 1);
-      for (let dx = mx - jl; dx <= Math.min(pw - 1, mx + 2); dx++) at(dx, 2, top, top + 1, Y, Y);
-      at(Math.min(pw - 1, mx + 2), 2, top - 1.5, top, Cn, Cn);
+      for (let dx = mx - jl; dx <= Math.min(pw - 1, mx + 2); dx++) at2(dx, 2, top, top + 1, Y, Y);
+      at2(Math.min(pw - 1, mx + 2), 2, top - 1.5, top, Cn, Cn);
       if (hk < mx) {
-        at(hk, 2, top - 8, top, Dk, Dk);
-        at(hk, 2, top - 9.5, top - 8, Wd, Wd);
+        at2(hk, 2, top - 8, top, Dk, Dk);
+        at2(hk, 2, top - 9.5, top - 8, Wd, Wd);
       }
     }
     if (fx + 4 <= pw - 2) {
       const r0 = pd - 4;
       for (let dx = 0; dx < 3; dx++) for (let r = 0; r < 2; r++) {
-        at(fx + dx, r0 + r, 0, 0.5, Dk, Dk);
-        at(fx + dx, r0 + r, 0.5, 2, Y, Y);
+        at2(fx + dx, r0 + r, 0, 0.5, Dk, Dk);
+        at2(fx + dx, r0 + r, 0.5, 2, Y, Y);
       }
-      at(fx, r0 + 1, 2, 3.5, Y, glass);
-      at(fx + 3, r0, 1.5, 2.5, Y, Y);
-      at(fx + 4, r0, 0.5, 1.5, Dk, Dk);
+      at2(fx, r0 + 1, 2, 3.5, Y, glass);
+      at2(fx + 3, r0, 1.5, 2.5, Y, Y);
+      at2(fx + 4, r0, 0.5, 1.5, Dk, Dk);
     }
-    if (fx + 2 < mx) for (let dx = 0; dx < 3; dx++) for (let r = 2; r <= 3; r++) at(fx + dx, r, 0, 1.5, "#8f8a80", "#f07a1a");
+    if (fx + 2 < mx) for (let dx = 0; dx < 3; dx++) for (let r = 2; r <= 3; r++) at2(fx + dx, r, 0, 1.5, "#8f8a80", "#f07a1a");
     const piles = [[Math.round((fx + pw) / 2), Math.round(pd / 2), 2.2], [Math.max(fx, pw - 4), pd - 2, 1.8], [Math.round(cw / 2) + 3, pd - 2, 1.5]];
     const rub = ["#8f8a80", "#a3927a", "#77705f"];
     for (let dy = 1; dy < pd - 1; dy++) for (let dx = 1; dx < pw - 1; dx++) {
@@ -356,7 +357,7 @@
       let h = 0;
       for (const [pi, pr, phh] of piles) h = Math.max(h, phh - Math.hypot(dx - pi, (dy - pr) * 1.3) * 0.7);
       h = Math.round(h * 2) / 2;
-      if (h > 0) at(dx, dy, 0, h, rub[(dx * 31 + dy * 17) % 3], "#6f675c");
+      if (h > 0) at2(dx, dy, 0, h, rub[(dx * 31 + dy * 17) % 3], "#6f675c");
     }
   }
   function field(w, x0, y0, fw, fh, pattern, gh, gz) {
@@ -427,7 +428,7 @@
     w.add(x, y, 0.8, 2.2, "#9aa0a6", "#9aa0a6");
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) w.add(x + dx, y + dy, 2.2, 2.5, (dx + dy) % 2 ? "#f4f3ee" : a, a);
   }
-  function cage(w, x, y, fw, fh, pattern, z, lamps) {
+  function cage(w, x, y, fw, fh, pattern, z, lamps2) {
     const my = Math.floor(fh / 2), F = "#3c5a44", P = "#7d8288";
     const put = (X, Y, z0, z1, t, s, f) => z ? w.add(X, Y, z + z0, z + z1, t, s, f) : z0 === 0 && z1 === 0 ? w.ground(X, Y, t, f) : w.add(X, Y, z0, z1, t, s, f);
     for (let py = 0; py < fh; py++) for (let px = 0; px < fw; px++) {
@@ -446,7 +447,7 @@
         continue;
       }
       put(x + px, y + py, z ? 0.3 : 0, corner2 ? 3 : 1.6, corner2 ? P : F, corner2 ? P : F);
-      if (lamps && corner2) {
+      if (lamps2 && corner2) {
         put(x + px, y + py, 3, 7, P, P);
         put(x + px, y + py, 7, 8, "#d9dde2", "#fff3b0", "glow");
       }
@@ -454,7 +455,7 @@
   }
   var SEAM = 0.04;
   function paintPixels(w, rot, zmax, night, lit, crop, opts = {}) {
-    var _a, _b;
+    var _a, _b, _c;
     const sel = (_a = opts.selected) != null ? _a : null, selRect = (_b = opts.selectedRect) != null ? _b : null;
     const W = w.W, H = w.H, Wr = rot % 2 ? H : W, Hr = rot % 2 ? W : H;
     const ox = (Hr - 1) * 2, oy = zmax * 2 + 2;
@@ -464,7 +465,7 @@
       for (let yy = Math.max(0, y); yy < Math.min(chh, y + rh); yy++)
         for (let xx = Math.max(0, x); xx < Math.min(cw, x + rw); xx++) px[yy * cw + xx] = c;
     };
-    const bg = night ? BACKDROP.night : BACKDROP.day;
+    const bg = (_c = opts.backdrop) != null ? _c : night ? BACKDROP.night : BACKDROP.day;
     let dk = 0;
     const col = (c, f) => {
       const v = !night || f === "glow" || f === "win" ? c : mix(c, "#141a33", f === "pitch" && lit ? 0.25 : 0.62);
@@ -555,7 +556,302 @@
     return toImage(paintPixels(w, rot, zmax, night, lit, crop, opts));
   }
 
-  // stadiumSprite.ts (from the shared assets, see header)
+  // stadiumSurrounds.ts (from the shared assets, see header)
+  var SURROUNDS = ["parkland", "suburban", "terraces", "city", "industrial"].map((id) => ({ id, labelKey: `facilities.stadium.surrounds.${id}` }));
+  var SURROUND_TREE_DENSITY = { parkland: 1, suburban: 1, terraces: 0.35, city: 0.5, industrial: 0.25 };
+  var SURROUND_RING = { x0: 10, y0: 9, x1: 76, y1: 65 };
+  var SURROUND_SPURS = {
+    suburban: { top: [40], bottom: [44], left: [36], right: [30] },
+    terraces: { top: [24, 52], bottom: [28, 56], left: [24, 46], right: [24, 46] },
+    city: { top: [26, 52], bottom: [30, 56], left: [36], right: [36] },
+    industrial: { top: [44], bottom: [40], left: [30], right: [40] }
+  };
+  var SURROUND_THUMB = { W: 26, H: 21 };
+  var PAVE = "#d4cfc3";
+  var CAR_COLS = ["#c8202f", "#f4f3ee", "#1f4fb8", "#1a1a1a", "#f2c230", "#1f8a4c", "#7fb8e6"];
+  var isBuiltUp = (v) => !!v && v !== "parkland" && v in SURROUND_SPURS;
+  var at = (b, a, c) => b.ax === "x" ? [a, c] : [c, a];
+  function clearGround(w, x, y) {
+    if (x < 0 || y < 0 || x >= w.W || y >= w.H) return false;
+    const i = y * w.W + x;
+    return !w.gt[i] && !w.cells[i].some((s) => s[0] < 0.6);
+  }
+  function empty(w, x0, y0, x1, y1) {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (x < 0 || y < 0 || x >= w.W || y >= w.H || w.cells[y * w.W + x].length) return false;
+    return true;
+  }
+  var asphalt = (x, y) => hash(x * 3 + 7, y * 5 + 1) % 6 ? "#5d6066" : "#575a60";
+  function roads(w, v) {
+    const R = SURROUND_RING, S2 = SURROUND_SPURS[v], lanes = /* @__PURE__ */ new Set();
+    const lane = (x, y) => {
+      if (clearGround(w, x, y)) {
+        w.ground(x, y, asphalt(x, y), null);
+        lanes.add(cellKey(x, y));
+      }
+    };
+    const pave = (x, y) => {
+      if (clearGround(w, x, y)) w.ground(x, y, PAVE, null);
+    };
+    const spurs = (fn) => {
+      for (const a of S2.top) for (let y = 0; y < R.y0; y++) fn(a, y, "v");
+      for (const a of S2.bottom) for (let y = R.y1 + 1; y < w.H; y++) fn(a, y, "v");
+      for (const a of S2.left) for (let x = 0; x < R.x0; x++) fn(x, a, "h");
+      for (const a of S2.right) for (let x = R.x1 + 1; x < w.W; x++) fn(x, a, "h");
+    };
+    spurs((x, y, d) => {
+      lane(x, y);
+      if (d === "v") lane(x + 1, y);
+      else lane(x, y + 1);
+    });
+    for (let y = R.y0; y <= R.y1; y++) for (let x = R.x0; x <= R.x1; x++) if (x <= R.x0 + 1 || x >= R.x1 - 1 || y <= R.y0 + 1 || y >= R.y1 - 1) lane(x, y);
+    spurs((x, y, d) => {
+      if (d === "v") {
+        pave(x - 1, y);
+        pave(x + 2, y);
+      } else {
+        pave(x, y - 1);
+        pave(x, y + 2);
+      }
+    });
+    for (let y = R.y0 - 1; y <= R.y1 + 1; y++) for (let x = R.x0 - 1; x <= R.x1 + 1; x++) {
+      const outer = x === R.x0 - 1 || x === R.x1 + 1 || y === R.y0 - 1 || y === R.y1 + 1;
+      const inner = x >= R.x0 + 2 && x <= R.x1 - 2 && y >= R.y0 + 2 && y <= R.y1 - 2 && (x === R.x0 + 2 || x === R.x1 - 2 || y === R.y0 + 2 || y === R.y1 - 2);
+      if (outer || inner) pave(x, y);
+    }
+    return lanes;
+  }
+  function car2(w, x, y, horiz, col) {
+    for (const [cx, cy] of [[x, y], horiz ? [x + 1, y] : [x, y + 1]]) {
+      w.add(cx, cy, 0, 0.9, col, col);
+      w.add(cx, cy, 0.9, 1.5, shade(col, 1.08), "#2b3440");
+    }
+  }
+  function cars(w, lanes) {
+    const has = (x, y) => lanes.has(cellKey(x, y)), ok = (x, y) => has(x, y) && !w.cells[y * w.W + x].length;
+    for (const k of [...lanes]) {
+      const x = k % 4096, y = k / 4096 | 0, r = hash(x * 7 + 3, y * 13 + 5);
+      if (r % 31) continue;
+      const col = CAR_COLS[(r >>> 5) % 7];
+      if (ok(x, y) && ok(x + 1, y) && has(x - 1, y) && has(x + 2, y) && !(has(x, y - 1) && has(x, y + 1))) car2(w, x, y, true, col);
+      else if (ok(x, y) && ok(x, y + 1) && has(x, y - 1) && has(x, y + 2) && !(has(x - 1, y) && has(x + 1, y))) car2(w, x, y, false, col);
+    }
+  }
+  function lamp(w, x, y) {
+    w.add(x, y, 0, 4, "#5a5d63", "#5a5d63");
+    w.add(x, y, 4, 4.6, "#f4f1e6", "#fff3b0", "glow");
+  }
+  function lamps(w) {
+    const R = SURROUND_RING, pts = [];
+    for (let x = R.x0 + 3; x <= R.x1 - 3; x += 8) pts.push([x, R.y0 - 1], [x, R.y1 + 1]);
+    for (let y = R.y0 + 4; y <= R.y1 - 3; y += 8) pts.push([R.x0 - 1, y], [R.x1 + 1, y]);
+    for (const [x, y] of pts) {
+      const i = y * w.W + x, g = w.gt[i];
+      if (g && g[0] === PAVE && !w.cells[i].length) lamp(w, x, y);
+    }
+  }
+  function bands(w, deep) {
+    const R = SURROUND_RING, W = w.W, H = w.H;
+    return [
+      { ax: "x", a0: 0, a1: W - 1, c0: deep ? 1 : 3, c1: R.y0 - 3, face: 1, back: 0, front: R.y0 - 2 },
+      { ax: "x", a0: 0, a1: W - 1, c0: R.y1 + 3, c1: deep ? H - 2 : R.y1 + 6, face: -1, back: H - 1, front: R.y1 + 2 },
+      { ax: "y", a0: R.y0 - 1, a1: R.y1 + 1, c0: deep ? 1 : 4, c1: R.x0 - 3, face: 1, back: 0, front: R.x0 - 2 },
+      { ax: "y", a0: R.y0 - 1, a1: R.y1 + 1, c0: R.x1 + 3, c1: deep ? W - 2 : R.x1 + 6, face: -1, back: W - 1, front: R.x1 + 2 }
+    ];
+  }
+  function lots(w, b, lenFn, gap, fn) {
+    for (let p = b.a0; p <= b.a1; ) {
+      const len = lenFn(p), e = p + len - 1, [x0, y0] = at(b, p, b.c0), [x1, y1] = at(b, e, b.c1);
+      if (e <= b.a1 && w.free(x0, y0, x1, y1)) {
+        fn({ x: x0, y: y0, w: x1 - x0 + 1, d: y1 - y0 + 1 }, p, len);
+        p = e + 1 + gap;
+      } else p++;
+    }
+  }
+  function plot(w, b, a0, a1, colorFn) {
+    const c0 = Math.min(b.back, b.front), c1 = Math.max(b.back, b.front);
+    for (let a = a0; a <= a1; a++) for (let c = c0; c <= c1; c++) {
+      const [x, y] = at(b, a, c);
+      if (x < 0 || y < 0 || x >= w.W || y >= w.H || w.occ[y * w.W + x]) continue;
+      w.ground(x, y, colorFn(x, y, c, a - a0), null);
+    }
+  }
+  function pitched(w, R, ax, face, o) {
+    const along = ax === "x" ? R.w : R.d, across = ax === "x" ? R.d : R.w, fh = o.hw / o.floors, mid = across - 1 >> 1, glass = o.glass || "#86a6b8";
+    const xy = (a, b) => ax === "x" ? [R.x + a, R.y + b] : [R.x + b, R.y + a];
+    let ridge = 0;
+    for (let a = 0; a < along; a++) for (let b = 0; b < across; b++) {
+      const [x, y] = xy(a, b), wall = typeof o.wall === "function" ? o.wall(a) : o.wall;
+      const fb = face > 0 ? b === across - 1 : b === 0, end = a === 0 || a === along - 1, edge = end || b === 0 || b === across - 1;
+      if (!edge) w.add(x, y, 0, o.hw, wall, wall);
+      else for (let f = 0; f < o.floors; f++) {
+        const zb = f * fh, door = f === 0 && fb && !end && !!o.doors && o.doors(a);
+        const win = !door && (end ? f === o.floors - 1 && (b === mid || b === across - 1 - mid) && b > 0 && b < across - 1 : o.win ? o.win(a, f, fb) : a % 2 === 1);
+        if (door) {
+          w.add(x, y, zb, zb + fh * 0.8, "#4a3a2c", "#4a3a2c");
+          w.add(x, y, zb + fh * 0.8, zb + fh, wall, wall);
+        } else if (win) {
+          w.add(x, y, zb, zb + 0.6, wall, wall);
+          w.add(x, y, zb + 0.6, zb + fh - 0.4, glass, glass, "win");
+          w.add(x, y, zb + fh - 0.4, zb + fh, wall, wall);
+        } else w.add(x, y, zb, zb + fh, wall, wall);
+      }
+      const rz = o.hw + 0.5 + Math.min(b, across - 1 - b) * (o.pitch || 0.9);
+      ridge = Math.max(ridge, rz);
+      w.add(x, y, o.hw, rz, o.roof, end ? wall : shade(o.roof, 0.8));
+    }
+    for (const a of o.chim || []) {
+      const [x, y] = xy(a, mid);
+      w.add(x, y, ridge, ridge + 1.4, "#94503a", "#7d4130");
+      w.add(x, y, ridge + 1.4, ridge + 1.7, "#5b4a42", "#5b4a42");
+    }
+  }
+  function house(w, R, b, p, len, gap) {
+    const h = hash(R.x * 5 + 1, R.y * 7 + 3), door = len >> 1;
+    plot(w, b, p, p + len - 1 + gap, (x, y, c, a) => c === b.front && a === door ? PAVE : hash(x, y) % 5 ? "#86b356" : "#7aa64b");
+    pitched(w, R, b.ax, b.face, {
+      hw: 5,
+      floors: 2,
+      wall: ["#efe6d6", "#e6d3b3", "#f3efe7", "#d9c4a2", "#c98f6b"][h % 5],
+      roof: ["#a9533c", "#8c4a3a", "#5d6670", "#9a6a44"][(h >>> 3) % 4],
+      doors: (a) => a === door,
+      win: (a, f) => a % 2 === 1 || f > 0 && a === door,
+      chim: [(h >>> 6) % 2 ? 1 : len - 2]
+    });
+    for (let a = 0; a < len; a++) if (a !== door) {
+      const [x, y] = at(b, p + a, b.front);
+      if (empty(w, x, y, x, y)) w.add(x, y, 0, 0.9, "#5f9a46", "#3f7a33");
+    }
+    const e = b.face > 0 ? b.c0 : b.c1;
+    if (Math.abs(e - b.back) >= 3 && (h >>> 9) % 3) {
+      const [x, y] = at(b, p + 1 + h % Math.max(1, len - 2), Math.round((b.back + e - b.face) / 2));
+      if (empty(w, x - 1, y - 1, x + 1, y + 1)) tree(w, x, y, "bush");
+    }
+  }
+  function terrace(w, R, b, p, len, gap) {
+    const h = hash(R.x * 3 + 2, R.y * 11 + 5), bricks = ["#a4563f", "#984a36", "#ae6249", "#8f4a3a"], e = b.face > 0 ? b.c0 : b.c1;
+    plot(w, b, p, p + len - 1 + gap, (x, y, c, a) => a >= len ? "#bdb7aa" : c === b.front ? PAVE : "#b9ae9a");
+    const chim = [];
+    for (let a = 3; a < len - 1; a += 3) chim.push(a);
+    pitched(w, R, b.ax, b.face, {
+      hw: 5,
+      floors: 2,
+      wall: (a) => bricks[(Math.floor(a / 3) + h) % 4],
+      roof: "#59606b",
+      pitch: 0.8,
+      chim,
+      doors: (a) => a % 3 === 1,
+      win: (a, f, fb) => a % 3 === 2 || a % 3 === 1 && (f > 0 || !fb)
+    });
+    for (let a = 3; a < len; a += 3) for (let c = b.back; c !== e; c += b.face) {
+      const [x, y] = at(b, p + a, c);
+      if (empty(w, x, y, x, y)) w.add(x, y, 0, 1, "#9a4c37", "#86412f");
+    }
+  }
+  function cityBlock(w, R, b, p, len, gap) {
+    const h = hash(R.x * 7 + 5, R.y * 3 + 9), floors = 2 + h % 4, ribbon = (h >>> 4) % 2 === 1, wall = ["#dcd8cf", "#c3c8ce", "#e9e3d6", "#b4bac2"][(h >>> 2) % 4];
+    plot(w, b, p, p + len - 1 + gap, (x, y) => hash(x, y) % 7 ? "#cfcabe" : "#c4bfb3");
+    const door = at(b, p + (len >> 1), b.face > 0 ? b.c1 : b.c0);
+    const top = volume(w, rectMask(R.x, R.y, R.w, R.d), 0, floors, { wall, glass: ribbon ? "#8fb8cc" : "#a9d6e6", ribbon, roof: "#9b978f", trim: shade(wall, 0.86), door });
+    const [ux, uy] = at(b, p + 1 + (h >>> 7) % Math.max(1, len - 3), b.c0 + b.c1 >> 1);
+    for (let k = 0; k < 2; k++) {
+      const [x, y] = b.ax === "x" ? [ux + k, uy] : [ux, uy + k];
+      w.add(x, y, top + 0.5, top + 1.7, "#c9ccd0", "#a3a8ae");
+    }
+  }
+  function works(w, R, b, p, len, gap) {
+    const h = hash(R.x * 9 + 4, R.y * 5 + 7), across = b.ax === "x" ? R.d : R.w;
+    const cell = (a, c) => b.ax === "x" ? [R.x + a, R.y + c] : [R.x + c, R.y + a];
+    plot(w, b, p, p + len - 1 + gap, (x, y) => hash(x, y) % 6 ? "#a9a497" : "#a19c8f");
+    if (len <= 4) {
+      const cols = ["#c8502f", "#2f6db0", "#2f8a5a", "#d8a63a", "#8a8f96"];
+      for (let c = 0; c < across; c += 2) {
+        const n = 1 + hash(p + c, R.x + R.y) % 3;
+        for (let k = 0; k < n; k++) {
+          const col = cols[hash(p * 3 + k, c * 7 + 1) % 5];
+          for (let a = 0; a < 3; a++) {
+            const [x, y] = cell(a, c);
+            w.add(x, y, k * 1.4, k * 1.4 + 1.3, col, a % 2 ? col : shade(col, 0.86));
+          }
+        }
+      }
+      return;
+    }
+    const pal = [["#aeb5bc", "#9ea6ae"], ["#7f93a8", "#72869b"], ["#c2b08a", "#b3a17c"]][h % 3];
+    for (let a = 0; a < len; a++) for (let c = 0; c < across; c++) {
+      const [x, y] = cell(a, c), fb = b.face > 0 ? c === across - 1 : c === 0, end = a === 0 || a === len - 1, edge = end || c === 0 || c === across - 1, col = pal[a % 2];
+      if (fb && !end && a % 4 === 2) {
+        w.add(x, y, 0, 2.8, "#6b7076", "#62676d");
+        w.add(x, y, 2.8, 4, col, col);
+      } else if (edge && !end && a % 2 === 0) {
+        w.add(x, y, 0, 3, col, col);
+        w.add(x, y, 3, 3.6, "#a9d6e6", "#a9d6e6", "win");
+        w.add(x, y, 3.6, 4, col, col);
+      } else w.add(x, y, 0, 4, "#8d949b", col);
+      const hi = c % 2 === 1;
+      w.add(x, y, 4, hi ? 5.4 : 4.5, "#8d949b", hi ? "#a9d6e6" : "#7b8288", hi ? "win" : null);
+    }
+    if (h % 4 === 0) {
+      const [x, y] = cell(1, b.face > 0 ? 0 : across - 1);
+      w.add(x, y, 5.4, 13, "#9a4c37", "#86412f");
+      w.add(x, y, 13, 14, "#e8e2d6", "#e8e2d6");
+      w.add(x, y, 14, 16, "#9a4c37", "#86412f");
+    }
+  }
+  function surroundLots(w, v, bs) {
+    for (const b of bs) {
+      const H = (p) => hash(p * 31 + b.c0 * 3, b.face * 7 + 11);
+      if (v === "suburban") lots(w, b, (p) => 5 + H(p) % 2, 1, (R, p, len) => house(w, R, b, p, len, 1));
+      else if (v === "terraces") lots(w, b, (p) => [9, 12, 15][H(p) % 3], 2, (R, p, len) => terrace(w, R, b, p, len, 2));
+      else if (v === "city") lots(w, b, (p) => 6 + H(p) % 4, 2, (R, p, len) => cityBlock(w, R, b, p, len, 2));
+      else lots(w, b, (p) => H(p) % 3 === 0 ? 4 : 10 + H(p) % 3, 1, (R, p, len) => works(w, R, b, p, len, 1));
+    }
+  }
+  function scatterTreesThinned(w, p) {
+    for (let y = 2, row = 0; y < w.H - 2; y += 5, row++) for (let x = 2 + row % 2 * 2; x < w.W - 2; x += 5) {
+      if (p < 1 && hash(x * 13 + 1, y * 17 + 3) % 100 >= p * 100) continue;
+      const r = hash(x * 7, y * 11), jx = x + r % 3 - 1, jy = y + (r >>> 2) % 3 - 1;
+      if (w.free(jx - 2, jy - 2, jx + 2, jy + 2)) tree(w, jx, jy);
+      else if (w.free(x - 2, y - 2, x + 2, y + 2)) tree(w, x, y);
+    }
+  }
+  function drawSurrounds(w, v) {
+    if (isBuiltUp(v)) {
+      const lanes = roads(w, v);
+      surroundLots(w, v, bands(w, v === "city" || v === "industrial"));
+      cars(w, lanes);
+      lamps(w);
+    }
+    scatterTreesThinned(w, SURROUND_TREE_DENSITY[isBuiltUp(v) ? v : "parkland"]);
+  }
+  function buildSurroundThumb(v, base) {
+    if (!isBuiltUp(v)) {
+      const w2 = makeWorld(14, 13);
+      tree(w2, 3, 3, "oak");
+      tree(w2, 9, 3, "conifer");
+      tree(w2, 3, 9, "round");
+      tree(w2, 9, 10, "bush");
+      tree(w2, 11, 7, "poplar");
+      return finalize(w2, base);
+    }
+    const w = makeWorld(SURROUND_THUMB.W, SURROUND_THUMB.H), lanes = /* @__PURE__ */ new Set(), deep = v === "city" || v === "industrial";
+    for (let x = 0; x < SURROUND_THUMB.W; x++) {
+      for (const y of [11, 12]) {
+        w.ground(x, y, asphalt(x, y), null);
+        lanes.add(cellKey(x, y));
+      }
+      w.ground(x, 10, PAVE, null);
+      w.ground(x, 13, PAVE, null);
+    }
+    surroundLots(w, v, [{ ax: "x", a0: 1, a1: 24, c0: deep ? 3 : 5, c1: 8, face: 1, back: 0, front: 9 }]);
+    car2(w, 7, 12, true, "#c8202f");
+    car2(w, 17, 11, true, "#1f4fb8");
+    lamp(w, 3, 13);
+    lamp(w, 21, 13);
+    scatterTreesThinned(w, Math.max(0.5, SURROUND_TREE_DENSITY[v]));
+    return finalize(w, base);
+  }
+
+  // stadiumConfig.ts (from the shared assets, see header)
   var DEFAULT_STADIUM_CONFIG = {
     north: 7,
     east: 3,
@@ -601,6 +897,8 @@
     museum: 7e6,
     carpark: 53e5
   };
+  var FLOODLIGHT_ARCH = { base: 8, perLevel: 0.8, reach: 6 };
+  var SCOREBOARD_STAND = { 0: "north", 1: "west", 2: "south", 3: "east" };
   var STADIUM_GEOMETRY = { M: 23, FW: 37, FH: 25, IW: 41, IH: 29, W: 87, H: 75, ZMAX: 34, THUMB_ZMAX: 20 };
   var S = STADIUM_GEOMETRY;
   var GLYPHS = {
@@ -639,7 +937,7 @@
   }
   function standConstruction(w, side) {
     const { len, pos } = standFrame(side), D = 8, solid = /* @__PURE__ */ new Set();
-    const at = (i, r, z0, z1, top2, sd, flag) => {
+    const at2 = (i, r, z0, z1, top2, sd, flag) => {
       if (i < 0 || i >= len || r < 0 || r >= D) return;
       const [x, y] = pos(i, r);
       w.add(x, y, z0, z1, top2, sd, flag);
@@ -650,34 +948,34 @@
       const [x, y] = pos(i, r);
       w.ground(x, y, (i * 73 + r * 151) % 7 === 0 ? "#8a6c48" : "#9c7d56", null);
     }
-    for (let i = 0; i < len; i++) if (i % 6 !== 5) at(i, 0, 0, 1.2, Math.floor(i / 2) % 2 ? "#f07a1a" : "#f4f3ee");
+    for (let i = 0; i < len; i++) if (i % 6 !== 5) at2(i, 0, 0, 1.2, Math.floor(i / 2) % 2 ? "#f07a1a" : "#f4f3ee");
     const s0 = Math.round(len * 0.3), s1 = s0 + (len > 30 ? 14 : 11);
     for (let i = s0; i <= s1; i++) {
-      at(i, 4, 0, 1, Cn, "#8f8a80");
-      at(i, 5, 0, 4, Cn, "#8f8a80");
+      at2(i, 4, 0, 1, Cn, "#8f8a80");
+      at2(i, 5, 0, 4, Cn, "#8f8a80");
       for (const r of [3, 6]) {
-        if ((i - s0) % 3 === 0) at(i, r, 0, 9.5, P, P);
-        else for (const z of [3, 6, 9]) at(i, r, z, z + 0.5, Wd, Wd);
+        if ((i - s0) % 3 === 0) at2(i, r, 0, 9.5, P, P);
+        else for (const z of [3, 6, 9]) at2(i, r, z, z + 0.5, Wd, Wd);
       }
     }
     const ic = Math.min(len - 2, s1 + 3), top = 22, hi = Math.min(len - 1, ic + 8);
-    for (let z = 0; z < top; z += 2) at(ic, 5, z, z + 2, Y, z / 2 % 2 ? Yd : Y);
-    at(ic, 4, top - 2, top, Y, glass);
-    for (let i = ic - 3; i <= Math.min(len - 1, ic + 9); i++) at(i, 5, top, top + 1, Y, Y);
-    at(ic - 3, 5, top - 1.5, top, Cn, Cn);
-    at(ic - 2, 5, top - 1.5, top, Cn, Cn);
-    at(hi, 5, 12, top, Dk, Dk);
-    at(hi, 5, 10.5, 12, Wd, Wd);
+    for (let z = 0; z < top; z += 2) at2(ic, 5, z, z + 2, Y, z / 2 % 2 ? Yd : Y);
+    at2(ic, 4, top - 2, top, Y, glass);
+    for (let i = ic - 3; i <= Math.min(len - 1, ic + 9); i++) at2(i, 5, top, top + 1, Y, Y);
+    at2(ic - 3, 5, top - 1.5, top, Cn, Cn);
+    at2(ic - 2, 5, top - 1.5, top, Cn, Cn);
+    at2(hi, 5, 12, top, Dk, Dk);
+    at2(hi, 5, 10.5, 12, Wd, Wd);
     const di = 2;
     for (let dx = 0; dx < 3; dx++) for (let r = 5; r <= 6; r++) {
-      at(di + dx, r, 0, 0.5, Dk, Dk);
-      at(di + dx, r, 0.5, 2, Y, Y);
+      at2(di + dx, r, 0, 0.5, Dk, Dk);
+      at2(di + dx, r, 0.5, 2, Y, Y);
     }
-    at(di, 6, 2, 3.5, Y, glass);
-    at(di + 1, 4, 2, 2.5, Y, Y);
-    at(di + 1, 3, 1.5, 2.5, Y, Y);
-    at(di + 1, 2, 0.5, 1.5, Dk, Dk);
-    for (let dx = 0; dx < 3; dx++) for (let r = 2; r <= 3; r++) at(len - 5 + dx, r, 0, 1.5, "#8f8a80", "#f07a1a");
+    at2(di, 6, 2, 3.5, Y, glass);
+    at2(di + 1, 4, 2, 2.5, Y, Y);
+    at2(di + 1, 3, 1.5, 2.5, Y, Y);
+    at2(di + 1, 2, 0.5, 1.5, Dk, Dk);
+    for (let dx = 0; dx < 3; dx++) for (let r = 2; r <= 3; r++) at2(len - 5 + dx, r, 0, 1.5, "#8f8a80", "#f07a1a");
     const piles = [[Math.round(len * 0.2), 2, 2.5], [Math.round(len * 0.55), 1.5, 2], [len - 8, 5, 2.2]];
     const rub = ["#8f8a80", "#a3927a", "#77705f"];
     for (let i = 0; i < len; i++) for (let r = 1; r < D; r++) {
@@ -685,7 +983,7 @@
       let h = 0;
       for (const [pi, pr, ph] of piles) h = Math.max(h, ph - Math.hypot(i - pi, (r - pr) * 1.3) * 0.7);
       h = Math.round(h * 2) / 2;
-      if (h > 0) at(i, r, 0, h, rub[(i * 31 + r * 17) % 3], "#6f675c");
+      if (h > 0) at2(i, r, 0, h, rub[(i * 31 + r * 17) % 3], "#6f675c");
     }
   }
   function backWall(w, x, y, hb, L) {
@@ -725,25 +1023,41 @@
       if (r >= rs) w.add(x, y, hb, hb + 1, c.roof, c.roof);
     }
   }
-  function scoreboard(w, x0, y0, home, away) {
-    const B = "#17181c", Y = "#ffd23a", G = "#8a9096";
-    const digits = (n2) => {
+  function scoreCols(home, away) {
+    const digits = (n) => {
       const out = [];
-      String(n2).split("").forEach((chr, i) => {
+      String(n).split("").forEach((chr, i) => {
         if (i) out.push(null);
         out.push([chr, 0], [chr, 1], [chr, 2]);
       });
       return out;
     };
-    const cols = [null, ...digits(home), null, "dash", null, ...digits(away), null], n = cols.length;
-    w.add(x0 + 1, y0, 0, 5, G, G);
-    w.add(x0 + n - 2, y0, 0, 5, G, G);
-    for (let c = 0; c < n; c++) for (let z = 5; z < 12; z++) {
-      const j = 10 - z, cc = cols[c];
+    return [null, ...digits(home), null, "dash", null, ...digits(away), null];
+  }
+  var scoreboardWidth = (home, away) => scoreCols(home, away).length;
+  function scoreboard(w, x0, y0, home, away, zb = 0, lift = 5, rev = false, alongY = false) {
+    const B = "#17181c", Y = "#ffd23a", G = "#8a9096";
+    const cols = scoreCols(home, away), n = cols.length, at2 = (c) => alongY ? [x0, y0 + c] : [x0 + c, y0];
+    if (rev) cols.reverse();
+    w.add(...at2(1), zb, zb + lift, G, G);
+    w.add(...at2(n - 2), zb, zb + lift, G, G);
+    for (let c = 0; c < n; c++) for (let z = zb + lift; z < zb + lift + 7; z++) {
+      const j = zb + lift + 5 - z, cc = cols[c];
       let lit = false;
       if (j >= 0 && j < 5 && cc) lit = cc === "dash" ? j === 2 : GLYPHS[cc[0]][j * 3 + cc[1]] === "1";
-      w.add(x0 + c, y0, z, z + 1, B, lit ? Y : B, lit ? "glow" : null);
+      w.add(...at2(c), z, z + 1, B, lit ? Y : B, lit ? "glow" : null);
     }
+  }
+  function archMast(w, x, y, dx, dy, h, reach) {
+    let pk = 0;
+    for (let z = 0; z < h; z++) {
+      const k = reach ? Math.round(reach * ((z + 1) / h) ** 2) : 0;
+      w.add(x + dx * k, y + dy * k, z, z + 1, "#a3a8ae", "#a3a8ae");
+      if (k !== pk) w.add(x + dx * pk, y + dy * pk, z, z + 0.5, "#a3a8ae", "#a3a8ae");
+      pk = k;
+    }
+    const hx = x + dx * pk, hy = y + dy * pk;
+    for (const [a, b] of [[0, 0], [dx, 0], [0, dy], [dx, dy]]) w.add(hx + a, hy + b, h, h + (reach ? 1.5 : 2), "#d9dde2", "#fff3b0", "glow");
   }
   function shop(w, ax, ay, seat, L) {
     const s = sizeFactor("shop"), Bw = Math.round(17 * s), Bd = Math.round(10 * s);
@@ -837,7 +1151,9 @@
     const cf = (a, b) => live(a) && live(b) && c[a] >= 9 && c[b] >= 9 ? Math.min(D(a), D(b)) : 0;
     return { nw: cf("north", "west"), ne: cf("north", "east"), sw: cf("south", "west"), se: cf("south", "east") };
   }
-  function buildStadium(c) {
+  function buildStadium(c, o = {}) {
+    var _a, _b, _c, _d;
+    const rot = (_a = o.rotation) != null ? _a : 0;
     const { M, W, H, IW, IH } = S, w = makeWorld(W, H);
     const fx = M + 2, fy = M + 2;
     w.owner = "pitch";
@@ -871,14 +1187,24 @@
     for (const [k, sx, sy] of CORNERS) if (K[k]) corner(w, sx, sy, K[k], Math.min(c[sy < 0 ? "north" : "south"], c[sx < 0 ? "west" : "east"]), c);
     if (c.floodlights) {
       w.owner = "floodlights";
-      const h = Math.round((14 + maxL * 1.6) * 0.7);
+      const arch = ((_b = o.floodlightStyle) != null ? _b : "arch") === "arch", A = FLOODLIGHT_ARCH;
+      const h = arch ? Math.round(A.base + maxL * A.perLevel) : Math.round((14 + maxL * 1.6) * 0.7);
       for (const [k, sx, sy] of CORNERS) {
-        const off = K[k] ? Math.ceil(K[k] * 0.75) + 1 : 1;
-        mast(w, sx < 0 ? M - 1 - off : M + IW + off, sy < 0 ? M - 1 - off : M + IH + off, -sx, -sy, h);
+        const off = K[k] ? Math.ceil(K[k] * 0.75) + 1 : 1, x = sx < 0 ? M - 1 - off : M + IW + off, y = sy < 0 ? M - 1 - off : M + IH + off;
+        if (arch) archMast(w, x, y, -sx, -sy, h, A.reach);
+        else mast(w, x, y, -sx, -sy, h);
       }
     }
     w.owner = "scoreboard";
-    if (c.scoreboard) scoreboard(w, 5, 1, c.home, c.away);
+    if (c.scoreboard) {
+      if (((_c = o.scoreboardPlacement) != null ? _c : "stand") === "corner") scoreboard(w, 5, 1, c.home, c.away);
+      else {
+        const side = SCOREBOARD_STAND[rot], L = c[side], con = c[`${side}Construction`], alongY = rot % 2 === 1;
+        const D = con ? 8 : standDepth(side, L), r = con ? D : D - 1, n = scoreboardWidth(c.home, c.away);
+        const zb = con ? 0 : L >= 4 ? D + 3 : L >= 3 ? D + 2 : D, { pos } = standFrame(side), [x, y] = pos((alongY ? IH : IW) - n >> 1, r);
+        scoreboard(w, x, y, c.home, c.away, zb, con ? 5 : 1, rot === 1 || rot === 2, alongY);
+      }
+    }
     w.owner = "museum";
     if (c.museum) museum(w, W - 2, 1, c.museumLevel);
     w.owner = "shop";
@@ -886,23 +1212,17 @@
     w.owner = "carpark";
     if (c.carpark) carpark(w, W - 2, H - 2, c.carparkLevel);
     w.owner = null;
-    if (c.trees) scatterTrees(w);
+    if (c.trees) drawSurrounds(w, (_d = o.surrounds) != null ? _d : "parkland");
     return finalize(w, c.base);
   }
-  function buildStadiumFacility(id, c) {
-    if (id === "trees") {
-      const w2 = makeWorld(14, 13);
-      tree(w2, 3, 3, "oak");
-      tree(w2, 9, 3, "conifer");
-      tree(w2, 3, 9, "round");
-      tree(w2, 9, 10, "bush");
-      tree(w2, 11, 7, "poplar");
-      return finalize(w2, c.base);
-    }
+  function buildStadiumFacility(id, c, o = {}) {
+    var _a, _b;
+    if (id === "trees") return buildSurroundThumb((_a = o.surrounds) != null ? _a : "parkland", c.base);
     const w = makeWorld(26, 24);
     switch (id) {
       case "floodlights":
-        mast(w, 12, 11, 1, 1, 14);
+        if (((_b = o.floodlightStyle) != null ? _b : "arch") === "arch") archMast(w, 18, 4, -1, 1, 12, FLOODLIGHT_ARCH.reach);
+        else mast(w, 12, 11, 1, 1, 14);
         break;
       case "scoreboard":
         scoreboard(w, 1, 10, c.home, c.away);
@@ -926,8 +1246,8 @@
   function renderStadium(c, opts = {}) {
     var _a;
     const rot = (_a = opts.rotation) != null ? _a : 0, night = opts.time === "night";
-    if (opts.facility) return paint(buildStadiumFacility(opts.facility, c), rot, S.THUMB_ZMAX, night, false, true);
-    return paint(buildStadium(c), rot, S.ZMAX, night, c.floodlights, false, { selected: resolveStadiumSelected(opts.selected) });
+    if (opts.facility) return paint(buildStadiumFacility(opts.facility, c, opts), rot, S.THUMB_ZMAX, night, false, true);
+    return paint(buildStadium(c, opts), rot, S.ZMAX, night, c.floodlights, false, { selected: resolveStadiumSelected(opts.selected), backdrop: opts.backdrop });
   }
 
   // plotSite.ts (from the shared assets, see header)
@@ -1076,10 +1396,10 @@
     const rot = (_a = opts.rotation) != null ? _a : 0, night = opts.time === "night";
     if (opts.facility) return paint(buildPlotFacility(def, opts.facility, c), rot, FACILITY_ZMAX, night, false, true);
     const sel = resolveSelected(def, opts.selected);
-    return paint(buildPlotSite(def, c), rot, def.zmax, night, def.lit(c), false, { selected: sel, selectedRect: sel ? plotsFor(def)[sel] : null });
+    return paint(buildPlotSite(def, c), rot, def.zmax, night, def.lit(c), false, { selected: sel, selectedRect: sel ? plotsFor(def)[sel] : null, backdrop: opts.backdrop });
   }
 
-  // trainingGroundSprite.ts (from the shared assets, see header)
+  // trainingGroundConfig.ts (from the shared assets, see header)
   var DEFAULT_TRAINING_GROUND_CONFIG = {
     accent: "#c8202f",
     base: "grass",
@@ -1200,7 +1520,7 @@
   var TRAINING_PLOTS = plotsFor(TRAINING_SITE);
   var renderTrainingGround = (c, opts = {}) => renderPlotSite(TRAINING_SITE, c, opts);
 
-  // medicalCentreSprite.ts (from the shared assets, see header)
+  // medicalCentreConfig.ts (from the shared assets, see header)
   var DEFAULT_MEDICAL_CENTRE_CONFIG = {
     accent: "#1f4fb8",
     base: "grass",
@@ -1366,7 +1686,7 @@
   var MEDICAL_PLOTS = plotsFor(MEDICAL_SITE);
   var renderMedicalCentre = (c, opts = {}) => renderPlotSite(MEDICAL_SITE, c, opts);
 
-  // scoutingSprite.ts (from the shared assets, see header)
+  // scoutingConfig.ts (from the shared assets, see header)
   var DEFAULT_SCOUTING_CONFIG = {
     accent: "#1b2a4a",
     base: "concrete",
@@ -1486,7 +1806,14 @@
     return __spreadValues(__spreadValues({}, defaults), config != null ? config : {});
   }
   function composeStadiumSvg(config, opts, scale = 2) {
-    return toSvg(renderStadium(merge(DEFAULT_STADIUM_CONFIG, config), opts != null ? opts : {}), scale);
+    const merged = merge(DEFAULT_STADIUM_CONFIG, config);
+    const carried = merged.surrounds;
+    delete merged.surrounds;
+    const options = __spreadValues(__spreadValues({
+      floodlightStyle: "arch",
+      scoreboardPlacement: "stand"
+    }, typeof carried === "string" ? { surrounds: carried } : {}), opts != null ? opts : {});
+    return toSvg(renderStadium(merged, options), scale);
   }
   function composeTrainingGroundSvg(config, opts, scale = 2) {
     return toSvg(renderTrainingGround(merge(DEFAULT_TRAINING_GROUND_CONFIG, config), opts != null ? opts : {}), scale);

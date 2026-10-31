@@ -21,25 +21,25 @@ import {
   STADIUM_FACILITIES,
   STADIUM_SLUGS,
   type StadiumConfig,
-} from './stadiumSprite';
+} from './stadiumConfig';
 import {
   renderTrainingGround,
   DEFAULT_TRAINING_GROUND_CONFIG,
   TRAINING_FACILITIES,
   type TrainingGroundConfig,
-} from './trainingGroundSprite';
+} from './trainingGroundConfig';
 import {
   renderMedicalCentre,
   DEFAULT_MEDICAL_CENTRE_CONFIG,
   MEDICAL_FACILITIES,
   type MedicalCentreConfig,
-} from './medicalCentreSprite';
+} from './medicalCentreConfig';
 import {
   renderScouting,
   DEFAULT_SCOUTING_CONFIG,
   SCOUTING_FACILITIES,
   type ScoutingConfig,
-} from './scoutingSprite';
+} from './scoutingConfig';
 import type { IsoImage } from './isoEngine';
 
 /**
@@ -86,12 +86,56 @@ function merge<T>(defaults: T, config: Partial<T> | null | undefined): T {
   return { ...defaults, ...(config ?? {}) };
 }
 
+/**
+ * The stadium, and the ONE seam where its look-affecting options are set.
+ *
+ * ── Why they are set explicitly ─────────────────────────────────────────────
+ *
+ * The v3 drop's contract requires every look-affecting option to be set
+ * explicitly at a single seam, because an option left implicit means a future
+ * drop can change what this backend renders without a line of this repo
+ * changing. Every backend stadium comes through here — the Club Spotlight, the
+ * Rich List leader card and the Facilities section — so this is that seam.
+ *
+ * `arch` + `stand` are v3's own defaults, deliberately restated rather than
+ * inherited. They are a VISIBLE change from the previous drop: the floodlights
+ * curve in over the corners and are shorter, and the scoreboard moves from the
+ * north-west corner onto the back stand's roof (which stand depends on
+ * `rotation`). Spread STADIUM_V2_LOOK into `opts` at a call site to pin the old
+ * look for one surface without moving the others.
+ *
+ * ── `surrounds` arrives as a config key and leaves as a render option ───────
+ *
+ * StadiumConfig is frozen in v3 and `surrounds` is an OPTION, not a config key.
+ * But the backend still has to get a per-club value from PHP to the browser, and
+ * FacilityConfigBuilder::surroundsFor() carries it inside the stadium json blob
+ * so it needs no column of its own. This is the one place that asymmetry is
+ * resolved: the key is lifted out of the config into the options and deleted
+ * from the config, so what reaches the renderer is exactly a StadiumConfig.
+ *
+ * An explicit `opts.surrounds` always wins. A payload without the key — every
+ * ClubSpotlight row written before v3 — falls through to the sprite's own
+ * 'parkland', which is the previous drop's trees-only look, so an old row
+ * renders as it always did rather than as someone else's city.
+ */
 function composeStadiumSvg(
   config: Partial<StadiumConfig> | null | undefined,
   opts: ComposeOptions | null | undefined,
   scale: number = 2,
 ): string {
-  return toSvg(renderStadium(merge(DEFAULT_STADIUM_CONFIG, config), (opts ?? {}) as never), scale);
+  const merged: Record<string, unknown> = merge(DEFAULT_STADIUM_CONFIG, config) as Record<string, unknown>;
+
+  const carried = merged.surrounds;
+  delete merged.surrounds;
+
+  const options: ComposeOptions = {
+    floodlightStyle: 'arch',
+    scoreboardPlacement: 'stand',
+    ...(typeof carried === 'string' ? { surrounds: carried } : {}),
+    ...(opts ?? {}),
+  };
+
+  return toSvg(renderStadium(merged as unknown as StadiumConfig, options as never), scale);
 }
 
 function composeTrainingGroundSvg(

@@ -67,31 +67,48 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP_DIR="${APP_DIR:-../wunderkind-app}"
-SRC_DIR="${1:-${FACILITIES_DIR:-../assets/Components/facilitiesV2/facilities}}"
+# The stadium-v3 drop renamed every site module from *Sprite.ts to *Config.ts and
+# added stadiumSurrounds.ts, and it is integrated into the app rather than living
+# in a standalone drop directory — assets/Components/facilitiesV2/ no longer
+# exists. So the default source is now the app's own copy, the same convention
+# scripts/build-avatar-compositor.sh already uses. Still read-only: nothing is
+# written to that repo.
+SRC_DIR="${1:-${FACILITIES_DIR:-$APP_DIR/src/components/facility-sprites}}"
 FIXTURE="$SRC_DIR/__fixtures__/parity.json"
+# The stadium has its own fixture from v3 onwards, with two case sets: `cases`
+# (the v3 look) and `v2Look` (the previous drop's 63 hashes, re-rendered with
+# STADIUM_V2_LOOK). Verified: v2Look's keys and hashes are identical to the old
+# four-site fixture's `stadium` map, so that map is deliberately skipped below
+# rather than checked twice.
+STADIUM_FIXTURE="$SRC_DIR/__fixtures__/stadium-v3.parity.json"
+STADIUM_GEOMETRY="$SRC_DIR/__fixtures__/stadium-v3.geometry.json"
 OUT="public/assets/facility-compositor.js"
 PHP_OUT="src/Service/Facility/FacilitySpriteMap.php"
 ESBUILD="$APP_DIR/node_modules/.bin/esbuild"
 
-[[ -f "$SRC_DIR/stadiumSprite.ts" ]] || { echo "stadiumSprite.ts not found in $SRC_DIR" >&2; exit 1; }
+[[ -f "$SRC_DIR/stadiumConfig.ts" ]] || { echo "stadiumConfig.ts not found in $SRC_DIR" >&2; exit 1; }
 [[ -f "$FIXTURE" ]] || { echo "parity fixture not found at $FIXTURE" >&2; exit 1; }
+[[ -f "$STADIUM_FIXTURE" ]] || { echo "stadium v3 parity fixture not found at $STADIUM_FIXTURE" >&2; exit 1; }
+[[ -f "$STADIUM_GEOMETRY" ]] || { echo "stadium v3 geometry fixture not found at $STADIUM_GEOMETRY" >&2; exit 1; }
 [[ -x "$ESBUILD" ]] || { echo "esbuild not found at $ESBUILD (run npm install in $APP_DIR)" >&2; exit 1; }
 
 # The parity step runs from a temp dir, so every path handed to it must be
 # absolute — a relative one silently resolves against the wrong base.
 SRC_DIR="$(cd "$SRC_DIR" && pwd)"
 FIXTURE="$SRC_DIR/__fixtures__/parity.json"
+STADIUM_FIXTURE="$SRC_DIR/__fixtures__/stadium-v3.parity.json"
+STADIUM_GEOMETRY="$SRC_DIR/__fixtures__/stadium-v3.geometry.json"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-for f in isoEngine plotSite stadiumSprite trainingGroundSprite medicalCentreSprite scoutingSprite; do
+for f in isoEngine plotSite stadiumConfig stadiumSurrounds trainingGroundConfig medicalCentreConfig scoutingConfig; do
   cp "$SRC_DIR/$f.ts" "$WORK/$f.ts"
 done
 cp scripts/facility-compositor/entry.ts "$WORK/entry.ts"
 
 # ── 1. Parity gate: the source must still match the approved web builders ─────
-for f in isoEngine plotSite stadiumSprite trainingGroundSprite medicalCentreSprite scoutingSprite; do
+for f in isoEngine plotSite stadiumConfig stadiumSurrounds trainingGroundConfig medicalCentreConfig scoutingConfig; do
   "$ESBUILD" "$WORK/$f.ts" --format=esm --target=es2020 --outfile="$WORK/$f.mjs" >/dev/null
 done
 # esbuild leaves the import specifiers as written ('./isoEngine'), which Node's
@@ -101,50 +118,117 @@ sed -i '' -e "s#\(from \"\./[A-Za-z]*\)\"#\1.mjs\"#g" "$WORK"/*.mjs
 cat > "$WORK/parity.mjs" <<'PARITY'
 import { readFileSync } from 'node:fs';
 import { parityHash } from './isoEngine.mjs';
-import { stadiumPixels, DEFAULT_STADIUM_CONFIG } from './stadiumSprite.mjs';
-import { trainingGroundPixels, DEFAULT_TRAINING_GROUND_CONFIG } from './trainingGroundSprite.mjs';
-import { medicalCentrePixels, DEFAULT_MEDICAL_CENTRE_CONFIG } from './medicalCentreSprite.mjs';
-import { scoutingPixels, DEFAULT_SCOUTING_CONFIG } from './scoutingSprite.mjs';
+import {
+  stadiumPixels, DEFAULT_STADIUM_CONFIG, STADIUM_V2_LOOK,
+  STADIUM_GEOMETRY, FLOODLIGHT_ARCH, SCOREBOARD_STAND,
+} from './stadiumConfig.mjs';
+import { SURROUND_RING, SURROUND_SPURS, SURROUND_TREE_DENSITY, SURROUND_THUMB } from './stadiumSurrounds.mjs';
+import { trainingGroundPixels, DEFAULT_TRAINING_GROUND_CONFIG } from './trainingGroundConfig.mjs';
+import { medicalCentrePixels, DEFAULT_MEDICAL_CENTRE_CONFIG } from './medicalCentreConfig.mjs';
+import { scoutingPixels, DEFAULT_SCOUTING_CONFIG } from './scoutingConfig.mjs';
 
 // parityHash() comes from the sprite's own isoEngine rather than being
 // reimplemented here, so the gate cannot drift from the hash the fixture was
 // generated with.
 const sites = {
-  stadium:  [stadiumPixels, DEFAULT_STADIUM_CONFIG],
   training: [trainingGroundPixels, DEFAULT_TRAINING_GROUND_CONFIG],
   medical:  [medicalCentrePixels, DEFAULT_MEDICAL_CENTRE_CONFIG],
   scouting: [scoutingPixels, DEFAULT_SCOUTING_CONFIG],
 };
 
-const fx = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const fx        = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const stadiumFx = JSON.parse(readFileSync(process.argv[3], 'utf8'));
+const geomFx    = JSON.parse(readFileSync(process.argv[4], 'utf8'));
+
 let fail = 0, total = 0;
 
+// The two fixture generations shape their render options differently, and the
+// difference is invisible until a cropped facility tile silently renders as the
+// whole site: the four-site fixture puts rotation/time/selected/facility FLAT on
+// the case, while stadium-v3 nests everything under `options`. Read both, and
+// forward whatever is there WHOLESALE — cherry-picking keys (as this gate used
+// to) collapses v3's surrounds/floodlightStyle/scoreboardPlacement coverage to
+// the defaults.
+const optionsOf = (c) => {
+  if (c.options) return c.options;
+  const { rotation, time, selected, facility } = c;
+  const o = {};
+  if (rotation !== undefined) o.rotation = rotation;
+  if (time !== undefined) o.time = time;
+  if (selected !== undefined) o.selected = selected;
+  if (facility !== undefined) o.facility = facility;
+  return o;
+};
+
+const check = (label, pixels, defaults, c) => {
+  total++;
+  const got = parityHash(pixels({ ...defaults, ...(c.config ?? {}) }, optionsOf(c)));
+  if (got.fnv !== c.fnv || got.opaque !== c.opaque || got.width !== c.width || got.height !== c.height) {
+    fail++;
+    console.error(`  FAIL ${label}: want ${c.fnv}/${c.opaque}/${c.width}x${c.height}, got ${got.fnv}/${got.opaque}/${got.width}x${got.height}`);
+  }
+};
+
+// The three sites whose fixture shape is unchanged. The four-site fixture's own
+// `stadium` map is skipped deliberately — it IS stadium-v3's `v2Look`, verified
+// key-for-key and hash-for-hash, so checking it here would only duplicate work.
 for (const [site, cases] of Object.entries(fx)) {
   if (site.startsWith('_')) continue;
+  if (site === 'stadium') continue;
   const entry = sites[site];
   if (!entry) { console.error(`  FAIL ${site}: fixture has a site this gate does not render`); fail++; continue; }
-  const [pixels, defaults] = entry;
+  for (const [name, c] of Object.entries(cases)) check(`${site}/${name}`, ...entry, c);
+}
 
-  for (const [name, c] of Object.entries(cases)) {
-    total++;
-    // Each case carries its own render options — the fixture covers all four
-    // rotations, day/night, every `selected` slug and per-facility crops.
-    // Dropping them silently collapses that coverage.
-    const got = parityHash(pixels({ ...defaults, ...c.config }, {
-      rotation: c.rotation, time: c.time, selected: c.selected, facility: c.facility,
-    }));
-    if (got.fnv !== c.fnv || got.opaque !== c.opaque || got.width !== c.width || got.height !== c.height) {
-      fail++;
-      console.error(`  FAIL ${site}/${name}: want ${c.fnv}/${c.opaque}/${c.width}x${c.height}, got ${got.fnv}/${got.opaque}/${got.width}x${got.height}`);
+// The stadium, both ways round: the v3 look, and the v2 look restored via
+// STADIUM_V2_LOOK. The second set is what proves v3 did not quietly move
+// anything it claimed to leave alone.
+for (const [name, c] of Object.entries(stadiumFx.cases)) {
+  check(`stadium/${name}`, stadiumPixels, DEFAULT_STADIUM_CONFIG, c);
+}
+for (const [name, c] of Object.entries(stadiumFx.v2Look)) {
+  check(`stadium/v2Look/${name}`, stadiumPixels, DEFAULT_STADIUM_CONFIG, {
+    ...c,
+    options: { ...STADIUM_V2_LOOK, ...optionsOf(c) },
+  });
+}
+
+// Geometry is exported as data and mirrored in the fixture, so a silent change
+// to the ring, the spurs, the arch maths or the scoreboard's stand is caught
+// here rather than by eye. A different class of drift from the pixel hashes:
+// these are the numbers a HOST sizes its containers from.
+const geomChecks = {
+  'image':               [[STADIUM_GEOMETRY.imageWidth, STADIUM_GEOMETRY.imageHeight], [geomFx.image.width, geomFx.image.height]],
+  'surroundRing':        [SURROUND_RING, geomFx.surroundRing],
+  'surroundSpurs':       [SURROUND_SPURS, geomFx.surroundSpurs],
+  'surroundTreeDensity': [SURROUND_TREE_DENSITY, geomFx.surroundTreeDensity],
+  'floodlightArch':      [FLOODLIGHT_ARCH, geomFx.floodlightArch],
+  'scoreboardStand':     [SCOREBOARD_STAND, geomFx.scoreboardStand],
+};
+
+for (const [label, [got, want]] of Object.entries(geomChecks)) {
+  // Subset compare: the fixture entries carry documentation keys the exported
+  // constants do not, so every key the FIXTURE names must match, and extra
+  // exported keys are not a failure.
+  const flat = (v) => JSON.stringify(v);
+  let ok = true;
+  if (Array.isArray(want)) {
+    ok = flat(got) === flat(want);
+  } else if (want && typeof want === 'object') {
+    for (const k of Object.keys(want)) {
+      if (got?.[k] === undefined) continue;
+      if (flat(got[k]) !== flat(want[k])) { ok = false; console.error(`  FAIL geometry/${label}.${k}: want ${flat(want[k])}, got ${flat(got[k])}`); }
     }
   }
+  if (!ok) fail++;
 }
-console.log(`  parity: ${total - fail}/${total} cases match`);
+
+console.log(`  parity: ${total - fail}/${total} cases match (${Object.keys(stadiumFx.cases).length} stadium v3 + ${Object.keys(stadiumFx.v2Look).length} v2-look + the other three sites), geometry checked`);
 process.exit(fail ? 1 : 0);
 PARITY
 
-echo "Checking parity against $FIXTURE"
-( cd "$WORK" && node parity.mjs "$FIXTURE" )
+echo "Checking parity against $FIXTURE + $STADIUM_FIXTURE"
+( cd "$WORK" && node parity.mjs "$FIXTURE" "$STADIUM_FIXTURE" "$STADIUM_GEOMETRY" )
 
 # ── 2. Bundle entry + all four sites + isoEngine into one browser IIFE ───────
 "$ESBUILD" "$WORK/entry.ts" \
@@ -156,7 +240,7 @@ echo "Checking parity against $FIXTURE"
 sed -i '' -e "s#// .*/\([A-Za-z]*\)\.ts\$#// \1.ts (from the shared assets, see header)#" \
           -e "s#// entry\.ts (from the shared assets, see header)\$#// scripts/facility-compositor/entry.ts#" "$WORK/bundle.js"
 
-SRC_HASH="$(cat "$SRC_DIR"/{isoEngine,plotSite,stadiumSprite,trainingGroundSprite,medicalCentreSprite,scoutingSprite}.ts | shasum -a 256 | cut -c1-16)"
+SRC_HASH="$(cat "$SRC_DIR"/{isoEngine,plotSite,stadiumConfig,stadiumSurrounds,trainingGroundConfig,medicalCentreConfig,scoutingConfig}.ts | shasum -a 256 | cut -c1-16)"
 
 {
   echo "// Landing-page facility compositor — GENERATED, DO NOT EDIT BY HAND."

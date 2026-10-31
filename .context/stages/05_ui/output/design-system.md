@@ -306,16 +306,33 @@ Shared conventions worth knowing before adding a section:
   one — the four differ in where their source lives and in how their fixtures
   are shaped.
 - **The facility compositor is the one built from a multi-file drop**, and as of
-  2026-10 it is what the landing page loads. Its source is
-  `assets/Components/facilitiesV2/facilities/` — all four site sprites plus the
+  2026-10 it is what the landing page loads. All four site sprites plus the
   shared `isoEngine.ts` they draw through, bundled together because that engine
   is ~32KB and four per-site bundles would ship four copies of it. The build
-  gates on the drop's 301-case pixel-hash fixture and also generates
-  `src/Service/Facility/FacilitySpriteMap.php`. The drop's `look="v1"` legacy
-  tree is neither checked nor shipped. `build-stadium-compositor.sh` and
-  `public/assets/stadium-compositor.js` still exist but nothing loads them —
-  that pair bundled the stadium alone, back when nothing here rendered the other
-  three sites.
+  also generates `src/Service/Facility/FacilitySpriteMap.php`. The drop's
+  `look="v1"` legacy tree is neither checked nor shipped.
+  **Source moved and renamed by the stadium v3 drop (2026-10-31):**
+  `assets/Components/facilitiesV2/` is gone, every `*Sprite.ts` became
+  `*Config.ts`, `stadiumSurrounds.ts` is new, and the default source is now the
+  app's own `src/components/facility-sprites/` (read-only). The gate grew to 432
+  cases across two fixtures — the stadium has its own from v3, carrying both the
+  v3 look and the previous drop's 63 hashes re-rendered with `STADIUM_V2_LOOK` —
+  and now also deep-checks the exported geometry constants.
+  `build-stadium-compositor.sh` and `public/assets/stadium-compositor.js` still
+  exist but nothing loads them — that pair bundled the stadium alone, back when
+  nothing here rendered the other three sites. It is now pure maintenance cost
+  (two scripts and two entry files per drop) and rotted once already.
+- **Stadium v3 changes the look, and the options are pinned at one seam.**
+  Arched floodlights (shorter, curving over the bowl corners) and the scoreboard
+  on the back stand's roof instead of the north-west corner — which stand
+  depends on `rotation`. Both are set explicitly in `composeStadiumSvg()` rather
+  than inherited, per the drop's own contract. The five `surrounds` variants are
+  derived from the club's league tier (1-2 city, 3-4 suburban, 5-6 terraces, 7-8
+  industrial, unplaced parkland) and travel inside the stadium json blob, which
+  the compositor lifts back out into a render option — no column, and an old
+  payload without the key falls back to `parkland`, the pre-v3 trees-only look.
+  Image size is unchanged at 324x240 for every variant and rotation, so nothing
+  reflows.
 - **Stadium levels are the sprite's 1-10, not the backend's 1-5.** Every
   `*Level` field in `StadiumConfig` — stands and the shop/museum/car park alike
   — runs 1-10, while `FacilityTemplate` levels run 1-5, so

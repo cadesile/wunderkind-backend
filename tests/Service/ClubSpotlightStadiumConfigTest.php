@@ -50,6 +50,59 @@ class ClubSpotlightStadiumConfigTest extends TestCase
         return $club;
     }
 
+    /**
+     * The `surrounds` variant is derived from the club's LEAGUE TIER — the one signal
+     * the backend already holds that says anything about a club's setting. Climbing the
+     * pyramid moves a club from an industrial fringe to a city centre.
+     *
+     * Note tier 1 is the TOP division and 8 is where new clubs start, so the ladder
+     * reads downwards; getting that inversion backwards would put brand-new clubs in a
+     * city centre and champions on an industrial estate.
+     */
+    public function testSurroundsIsDerivedFromLeagueTier(): void
+    {
+        $expected = [
+            1 => 'city',       2 => 'city',
+            3 => 'suburban',   4 => 'suburban',
+            5 => 'terraces',   6 => 'terraces',
+            7 => 'industrial', 8 => 'industrial',
+        ];
+
+        foreach ($expected as $tier => $variant) {
+            $club = $this->club();
+            $club->setCurrentLeague($this->league($tier));
+
+            self::assertSame($variant, FacilityConfigBuilder::surroundsFor($club), "tier {$tier}");
+        }
+    }
+
+    /**
+     * 'parkland' IS the previous drop's trees-only look, so a club with no league
+     * renders exactly as it did before the v3 sprite — not as someone else's city.
+     */
+    public function testAClubWithNoLeagueKeepsTheOldTreesOnlyLook(): void
+    {
+        self::assertSame('parkland', FacilityConfigBuilder::surroundsFor($this->club()));
+    }
+
+    /**
+     * It travels in the stadium json blob because it needs no column of its own, and
+     * composeStadiumSvg() lifts it back out into the render options — `surrounds` is a
+     * render OPTION in v3, not a StadiumConfig key.
+     */
+    public function testTheStadiumPayloadCarriesSurrounds(): void
+    {
+        $config = $this->stadiumConfig(['north_stand' => 3]);
+
+        self::assertArrayHasKey('surrounds', $config);
+        self::assertSame('parkland', $config['surrounds'], 'no league on the stub club');
+    }
+
+    private function league(int $tier): \App\Entity\League
+    {
+        return new \App\Entity\League('EN', $tier, 'Tier ' . $tier . ' League');
+    }
+
     private function matchResult(Club $club, int $for, int $against, ?bool $isHome): MatchResult
     {
         $m = new MatchResult($club, $for, $against, 1, 1);

@@ -18,7 +18,7 @@ import {
   DEFAULT_STADIUM_CONFIG,
   type StadiumConfig,
   type StadiumRenderOptions,
-} from './stadiumSprite';
+} from './stadiumConfig';
 
 /**
  * Builds an SVG string for the landing page's Club Spotlight stadium.
@@ -51,8 +51,23 @@ function composeStadiumSvg(
   opts: StadiumRenderOptions | null | undefined,
   scale: number = 2,
 ): string {
-  const merged: StadiumConfig = { ...DEFAULT_STADIUM_CONFIG, ...(config ?? {}) };
-  const image = renderStadium(merged, opts ?? {});
+  // Both of the look options below are restated explicitly, and `surrounds` is
+  // lifted out of the config blob into the options. See the equivalent block in
+  // scripts/facility-compositor/entry.ts for the full reasoning — these two must
+  // keep emitting byte-identical output, which a test asserts.
+  const merged: Record<string, unknown> = { ...DEFAULT_STADIUM_CONFIG, ...(config ?? {}) };
+
+  const carried = merged.surrounds;
+  delete merged.surrounds;
+
+  const options = {
+    floodlightStyle: 'arch',
+    scoreboardPlacement: 'stand',
+    ...(typeof carried === 'string' ? { surrounds: carried } : {}),
+    ...(opts ?? {}),
+  } as StadiumRenderOptions;
+
+  const image = renderStadium(merged as unknown as StadiumConfig, options);
 
   const paths = image.paths
     .map((p) => `<path d="${p.d}" fill="${p.color}"></path>`)

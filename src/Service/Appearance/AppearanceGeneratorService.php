@@ -63,9 +63,19 @@ final class AppearanceGeneratorService
 
         // Face — pure cosmetic pick, no morale/personality coupling. Players
         // always default to neutral; only staff/scout/agent get a varied expression.
-        $face = $isPlayer
-            ? Face::NEUTRAL->value
-            : $rng->pick(array_map(static fn (Face $f) => $f->value, Face::cases()));
+        //
+        // WEIGHTED rather than uniform since the sprite's V4 drop. Six of the new
+        // faces are the unhappy end of its morale ladder, and a uniform pick over
+        // all fifteen would make roughly a fifth of every staff pool look
+        // miserable or distraught for no reason — these are stored identity
+        // sprites, not a live mood readout. Same reasoning as GINGER's 5% in
+        // hairColorWeights().
+        if ($isPlayer) {
+            $face = Face::NEUTRAL->value;
+        } else {
+            $faceWeights = $this->faceWeights();
+            $face        = $rng->weightedPick(array_keys($faceWeights), array_values($faceWeights));
+        }
 
         // Facial hair — age-gated by role; players skew later/rarer than staff.
         $facial = $this->rollFacialHair($rng, $age, $isPlayer);
@@ -107,7 +117,11 @@ final class AppearanceGeneratorService
 
         // Staff-only fields (also used for Scout/Agent, which render as the staff shape).
         if (!$isPlayer) {
-            $outfit   = $rng->pick(array_map(static fn (Outfit $o) => $o->value, Outfit::cases()));
+            // Weighted, not uniform: the four V4 additions are real staff looks but
+            // the original four read as more "club official", so they stay the
+            // majority rather than being diluted to an eighth each.
+            $outfitWeights = $this->outfitWeights();
+            $outfit        = $rng->weightedPick(array_keys($outfitWeights), array_values($outfitWeights));
             $trousers = $rng->pick(array_map(static fn (KitPart $p) => $p->value, KitPart::cases()));
             $glasses  = $rng->chance(0.30);
         } else {
@@ -141,15 +155,26 @@ final class AppearanceGeneratorService
      * demographic-weighting pattern in WorldRegion::skinWeights()) and taper
      * further as age rises, in favour of practical short styles.
      *
+     * POSITIONAL, and combined with HairStyle::cases() — so this array and that
+     * enum must stay the same length and the same order. A mismatch is an
+     * array_combine() error rather than a silent mislabelling, which is why the
+     * column header below is maintained by hand.
+     *
+     * The seven styles from CURTAINS on arrived with the sprite's V4 drop. They
+     * follow the same shape as the existing tail: SIDEPART is the one that rises
+     * with age (it is the conventional older look), while PONYTAIL, LOCS and BOB
+     * stay rare everywhere and BOB drops to zero in the oldest band — the same
+     * taper MOHAWK already had, for the same reason.
+     *
      * @return array<string, int>
      */
     public function hairStyleWeights(int $age): array
     {
-        // [BALD, BUZZ, CROP, QUIFF, MOHAWK, AFRO, LONG, BUN, CORNROWS]
+        //        BALD BUZZ CROP QUIF MOHA AFRO LONG  BUN CORN CURT SIDE FLAT SPIK PONY LOCS  BOB
         $weights = match (true) {
-            $age > 45 => [30, 28, 22,  8,  1,  3,  3,  3,  2],
-            $age > 35 => [14, 22, 24, 12,  2,  5,  8,  8,  5],
-            default   => [ 8, 18, 20, 16,  4,  7, 14,  8,  5],
+            $age > 45 => [  26,  24,  18,   6,   1,   2,   2,   2,   2,   3,   8,   3,   1,   1,   1,   0],
+            $age > 35 => [  12,  18,  20,  10,   2,   4,   5,   5,   4,   5,   6,   3,   3,   1,   1,   1],
+            default   => [   6,  14,  16,  13,   3,   6,   9,   6,   4,   7,   4,   3,   4,   2,   2,   1],
         };
 
         return array_combine(
@@ -166,6 +191,50 @@ final class AppearanceGeneratorService
      *
      * @return array<string, int>
      */
+    /**
+     * Percentage weights keyed by Face value, in Face enum order. Staff/scout/agent
+     * only — players are always NEUTRAL.
+     *
+     * POSITIONAL against Face::cases(), like hairStyleWeights().
+     *
+     * The six faces from CONTENT on arrived with the sprite's V4 drop, and the
+     * last three of them (GLUM, MISERABLE, DISTRAUGHT) are deliberately rare: a
+     * stored identity sprite that looks distraught forever is a bug report, not
+     * characterisation. They are kept non-zero rather than excluded so an admin
+     * seeing one in the picker knows generation can produce it too.
+     *
+     * @return array<string, int>
+     */
+    public function faceWeights(): array
+    {
+        //         NEUT HAPP WINK FOCU SHOU  SAD FRUS ANGR COOL CONT CHEE ELAT GLUM MISE DIST
+        $weights = [  22,  14,   7,  12,   4,   4,   4,   3,   8,  10,   6,   3,   1,   1,   1];
+
+        return array_combine(
+            array_map(static fn (Face $f) => $f->value, Face::cases()),
+            $weights,
+        );
+    }
+
+    /**
+     * Percentage weights keyed by Outfit value, in Outfit enum order. Staff/scout/
+     * agent only — a player's `outfit` is a fixed default.
+     *
+     * POSITIONAL against Outfit::cases(), like hairStyleWeights().
+     *
+     * @return array<string, int>
+     */
+    public function outfitWeights(): array
+    {
+        //         COAT TRAC SUIT JUMP POLO SHIR GILE RAIN
+        $weights = [  16,  18,  16,  14,  12,  10,   8,   6];
+
+        return array_combine(
+            array_map(static fn (Outfit $o) => $o->value, Outfit::cases()),
+            $weights,
+        );
+    }
+
     public function hairColorWeights(): array
     {
         // [BLACK, DARK_BROWN, BROWN, GINGER, BLONDE, GREY]
