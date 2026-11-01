@@ -67,6 +67,15 @@ actually *does* (which service/repo it calls), not restated route paths.
   summary per club (`SyncRecordRepository::findLatestValid()` for
   `leaguePosition`/`form`), for a save-slot picker. See
   `docs/api/club-list.md`.
+  `GET /check` is the other exception: it is the only action here that is
+  **authentication-only** rather than `ROLE_CLUB`, because its 404 *is* the
+  answer for an account with no club and a role gate made that branch
+  unreachable for exactly those callers. It is also the only caller that
+  catches `ClubMismatchException` instead of letting its 403 stand — a stale
+  `X-Club-Id` is likewise an answer here, not a refusal (`reason:
+  club_not_owned`). Both decisions are load-bearing and explained in
+  `routes.md`; relaxing the attribute without the matching `access_control`
+  entry changes nothing. See `docs/api/role-club-403.md`.
 - **`CommunityStatsController`** — four read-only leaderboard views via
   `CommunityStatsService`.
 - **`CompetitionController`** — competition discovery (`/available`, `/active`, filtered list `GET /api/competitions`, Hall of Fame `GET /api/competitions/champions`), bracket detail (`GET /api/competitions/{id}` with full future rounds, `viewer` block, `serverTime`, and `ETag` / `If-None-Match` 304), registration (`POST /{id}/register` with atomic entry fee deduction), withdrawal (`POST /{id}/withdraw` with entry fee refund while registering), and resubmission (`POST /{id}/resubmit` with stale `snapshotLockedAt` check). Deps: `ClubResolver`, `CompetitionTemplateRepository`,

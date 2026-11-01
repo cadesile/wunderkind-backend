@@ -5,6 +5,29 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-11-01), on top of commit 5333732** (uncommitted).
+  **Stages touched:** 01_overview (`tribal-knowledge.md`), 04_interfaces (`controllers.md`),
+  07_synthesis (`current-focus.md`). Second pass over the `ROLE_CLUB` lockout (commit
+  `5333732`, recorded in the entry below), adding the *reasoning* the first pass only
+  recorded as facts. `tribal-knowledge.md` gains a Q4 entry: a stored role column is not
+  where a role comes from, written up there because the natural assumption is the opposite
+  one and both obvious things to do with `user.roles` — backfilling it, or adding a case and
+  expecting a route to honour it — are now wrong, the latter because there is **no
+  `role_hierarchy` at all**. Same entry records the two traps that look like one-line fixes
+  (a role gate lives in both `#[IsGranted]` and `access_control`, so relaxing one changes
+  nothing; `ClubMismatchException` is a 403 on purpose and wrong on exactly one endpoint) and
+  the generalisable rule — an endpoint whose purpose is to answer about absence must not be
+  gated on the thing being absent.
+  **Also corrected a wrong instruction:** the root pointer's "EasyAdmin admin grant" gotcha
+  said to `UPDATE "user" SET roles = '["ROLE_ADMIN"]'`. The `admin` firewall's provider is
+  `app_admin_provider` (the `Admin` entity), so that cannot grant `/admin` access at all, and
+  before this week's fix it silently removed the account's game access. Fixed in `CLAUDE.md`
+  **and** recorded in `tribal-knowledge.md`, because the claim lived only in the disposable
+  pointer and a regeneration could otherwise bring it back.
+  Counts in `current-focus.md` were measured, not estimated (14 `access_control` rules, 30
+  `#[IsGranted('ROLE_CLUB')]` attributes, 2026-11-01) — an earlier draft guessed "roughly 25"
+  and was wrong.
+
 - **New pass (2026-11-01), on top of commit 75ae1b0** (uncommitted).
   **Stages touched:** 03_data (`entities.md`), 04_interfaces (`routes.md`), 06_documentation
   (`index.md`). Answered `wunderkind-app`'s `docs/backend-notes/2026-11-01-role-club-403.md`:
