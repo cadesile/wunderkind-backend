@@ -8,6 +8,7 @@ use App\Entity\Investor;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Enum\Country;
+use App\Exception\ClubMismatchException;
 use App\Exception\ClubNameTakenException;
 use App\Exception\InvalidCountryCodeException;
 use App\Repository\ClubRepository;
@@ -127,13 +128,35 @@ class ClubController extends AbstractController
         ], Response::HTTP_CREATED);
     }
 
+    /**
+     * Deliberately authentication-only, unlike every other method here — the 404 below IS the
+     * answer for an account with no club, and a role check in front of it makes that branch
+     * unreachable for exactly the callers who need it. The client treats 404 as "no club yet"
+     * and any other failure as "the server refused this account", so a 403 here reads as a
+     * dead account rather than an empty one. security.yaml carries the matching exception
+     * ahead of its ^/api/club/ rule; relaxing only one of the two changes nothing.
+     * See docs/api/role-club-403.md.
+     */
     #[Route('/check', name: 'api_club_check', methods: ['GET'])]
-    #[IsGranted('ROLE_CLUB')]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
     public function check(): JsonResponse
     {
         /** @var User $user */
-        $user    = $this->getUser();
-        $club = $this->clubResolver->resolveFromRequest($user);
+        $user = $this->getUser();
+
+        try {
+            $club = $this->clubResolver->resolveFromRequest($user);
+        } catch (ClubMismatchException) {
+            // An X-Club-Id this account does not own is, on THIS endpoint, just the answer no:
+            // it is asking whether the account has that club. Everywhere else the exception's
+            // own 403 is right (it guards a write against landing on another save's club), but
+            // here it would hand the client the same "the server refused this account" reading
+            // the ROLE_CLUB gate used to, for a client holding nothing worse than a stale id —
+            // which is precisely the state a half-finished club creation leaves behind.
+            // Discloses nothing: ClubResolver throws identically for an unknown id and another
+            // user's, so the body below cannot distinguish the two either.
+            return $this->json(['exists' => false, 'reason' => 'club_not_owned'], Response::HTTP_NOT_FOUND);
+        }
 
         if ($club === null) {
             return $this->json(['exists' => false, 'reason' => 'club_not_found'], Response::HTTP_NOT_FOUND);

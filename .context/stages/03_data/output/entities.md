@@ -8,6 +8,19 @@ migrations are the change log (see `migrations.md`).
 
 - **`User`** — auth identity (`UserInterface`). `email`, `password`,
   `roles:array`, `isVerified`, `verifiedAt`, `lastLoginAt`, `createdAt`.
+  **`roles` is not where `ROLE_CLUB` comes from.** `getRoles()` appends it
+  unconditionally (`Admin::getRoles()` hardcodes `ROLE_ADMIN` the same way), because
+  the column has twice held a value that granted nothing — `[]` before `6dc85ab`
+  (2026-03), the since-deleted `ROLE_ACADEMY` until `2a9e6cd` (2026-04) — and with no
+  `role_hierarchy` either shape 403'd every `roles: ROLE_CLUB` route for an account
+  that had logged in fine (`isVerified()` is the login gate, not roles). A `User` row
+  *is* a game account; admins are a separate entity behind a separate firewall, so the
+  stored array never carried information that could withdraw club access. The
+  guarantee is additive — anything else stored is kept — and the consequence is that
+  club access can no longer be withdrawn by emptying the column; a ban would want its
+  own flag. Deploying fixes every stale row with no backfill, which is why none was
+  run: an `UPDATE` would only hide how the data got that way. See
+  `04_interfaces/output/routes.md` and `docs/api/role-club-403.md`.
   Owner identity (replaces the old `managerProfile:?array` blob):
   `name:?string`, `nationality:?string`, `gender:?string`, `dob:?date`,
   `appearance:?array` (json, 15-key sprite shape — see
