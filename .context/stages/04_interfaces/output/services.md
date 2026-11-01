@@ -429,7 +429,8 @@ filename alone.
   (`admin_leagues_overview` → `LeagueAdminController::bulkEditTierDefaults()`,
   route `admin_league_tier_defaults_bulk_edit`), which can also cascade the
   submitted values onto selected already-existing `League` rows.
-  **`concludeSeason()` is idempotent per club + season** — the client queues
+  **`concludeSeason()` is idempotent per club + season for a RETRY, and
+  overwrites for a CORRECTION** — the client queues
   and retries that POST, and a cancelled request can never be proven not to
   have reached the server. Three guards: `UNIQUE(club, season)` on both
   archive tables; the first call's response body stored on
@@ -448,6 +449,36 @@ filename alone.
   every later one queued behind it. The only 422 left is a season above 1000
   (`SMALLINT` guard — an out-of-range value would be a 500, which the outbox
   retries forever).
+  **A resubmission carrying different figures is a correction, not a retry.**
+  `SeasonRecord::matchesResult()` compares the ten result fields
+  (`finalPosition, gamesPlayed, wins, draws, losses, goalsFor, goalsAgainst,
+  points, promoted, relegated`) and nothing else — the archival blobs are
+  excluded because the retry queue resends a 52KB `seasonFixtures` array and a
+  reordering of it is a retry, so comparing them would log a correction on every
+  flaky connection. Identical figures still write nothing. Differing ones go to
+  `overwriteConcludedSeason()`, which rewrites the `SeasonRecord`'s result (via
+  `SeasonRecord::overwriteWith()`, which bumps `overwriteCount` and files the
+  superseded position and W/D/L on `overwriteAudit` in the same call, since
+  either alone is a lie about the other) and re-archives
+  `season_snapshot.snapshot_data` from the new payload — the latter through the
+  shared `buildSnapshotData()`, passed `SeasonRecord::getLeague()` rather than
+  the club's current league, because the club has already moved on.
+
+  **That overwrite is deliberately narrow, and the narrowness is the design.**
+  It touches those two rows and nothing else: not the club's league, not
+  `currentSeason`, not league sponsors, not fixtures, not
+  `Club::$hallOfFamePoints`. The client owns the league-standing transition now
+  and this payload is purely backend data, so re-running `resolveNewLeague()`
+  here would read the club's *already moved* league and promote it a second
+  tier. The derived Hall of Fame score is the accepted cost: correcting a season
+  into or out of first place leaves the stored mirror stale until the club's
+  next conclude or the next `app:leaderboards:generate`, and a dispute is
+  settled by hand from `overwriteAudit` — which is what it is for. Both writes
+  are raw SQL in one transaction and there is **no `flush()` on that path at
+  all**, which is also why the unpersisted-`LeagueSponsor` hazard below cannot
+  arise there; `replayConcludedSeason()` may roll sponsors, so it runs after the
+  overwrite returns.
+
   `storeConcludeResponse()` writes with raw SQL rather than a flush on purpose:
   `rollLeagueSponsors()` has just mutated managed `LeagueSponsor` rows and
   those re-rolls are deliberately never persisted (they only appear in the

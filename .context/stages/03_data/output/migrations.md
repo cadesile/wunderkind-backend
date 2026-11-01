@@ -406,3 +406,19 @@ was not safe to retry:
   the schema on the day it ran and must not change meaning when a constant later does.
   The app's `YOUTH_SCHOLARSHIP_WAGE_PENCE` is the remaining copy, and it is the client's
   pre-sync fallback; the app pins it against its own `DEFAULT_GAME_CONFIG` in a test.
+
+## Correctable season archives (2026-11-01)
+
+- `Version20261101120000` — `season_record.overwrite_count` (`INT DEFAULT 0 NOT NULL`) and
+  `season_record.overwrite_audit` (`JSON DEFAULT NULL`). Additive, no backfill: `0`/`NULL`
+  is truthful on every existing row, since none has been corrected. It is the schema half
+  of letting `POST /api/league/conclude-season` **overwrite** a season it has already
+  archived instead of silently replaying the first answer — a season filed with wrong
+  figures used to be wrong permanently. Only a resubmission whose *result figures* differ
+  counts; an identical retry still writes nothing, which is what keeps the client's retry
+  queue from inflating the counter. See `entities.md`'s `SeasonRecord` entry and
+  `04_interfaces/output/services.md`'s `LeagueService` entry for what a correction
+  deliberately does **not** touch.
+
+  `INT` rather than `SMALLINT` on the counter so a client stuck in a resubmission loop
+  cannot overflow it into a 500 that the outbox then retries forever.

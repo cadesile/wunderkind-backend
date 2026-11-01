@@ -67,6 +67,20 @@ class SeasonSnapshot
     public function getSeason(): int { return $this->season; }
     public function getCountry(): string { return $this->country; }
     public function getSnapshotData(): array { return $this->snapshotData; }
+
+    /**
+     * Replaces the archived season data. Used when a resubmission corrects an already
+     * concluded season (LeagueService::overwriteConcludedSeason), which rewrites this
+     * column with raw SQL and then sets it here so the managed entity is not left stale.
+     *
+     * @param array<string, mixed> $snapshotData
+     */
+    public function setSnapshotData(array $snapshotData): static
+    {
+        $this->snapshotData = $snapshotData;
+
+        return $this;
+    }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
     public function getResponseJson(): ?array { return $this->responseJson; }
