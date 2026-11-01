@@ -141,7 +141,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getPassword(): string { return $this->password; }
     public function setPassword(string $password): void { $this->password = $password; }
 
-    public function getRoles(): array { return array_unique($this->roles); }
+    /**
+     * ROLE_CLUB is guaranteed here, not read out of the column — the same way Admin::getRoles()
+     * hardcodes ROLE_ADMIN. A User row IS a game account (admins are a separate entity behind a
+     * separate firewall), so the stored array carries no information that could withdraw that:
+     * every creation path grants ROLE_CLUB and nothing has ever revoked it.
+     *
+     * It is guaranteed because the column has twice held something else. Accounts registered
+     * before 6dc85ab (2026-03) stored `[]`, and accounts between 6dc85ab and 2a9e6cd (2026-04)
+     * stored the since-deleted `ROLE_ACADEMY`; there is no role_hierarchy, so either value made
+     * every `roles: ROLE_CLUB` route in security.yaml answer 403 to an account that had just
+     * logged in successfully. That is indistinguishable, client-side, from a refused account —
+     * see docs/api/role-club-403.md. Guaranteeing the role here makes that state stop existing
+     * rather than needing a backfill per stale row.
+     *
+     * Consequence worth knowing: club access can no longer be withdrawn by emptying this column.
+     * Nothing did that, and the login-time gate is isVerified() (see
+     * VerificationAwareAuthenticationSuccessHandler) — a real ban would want its own flag, not a
+     * role deletion. Setting roles to ["ROLE_ADMIN"] by hand (the EasyAdmin grant in CLAUDE.md)
+     * now yields both roles rather than silently locking the account out of the game API.
+     */
+    public function getRoles(): array
+    {
+        return array_values(array_unique([...$this->roles, self::ROLE_CLUB]));
+    }
 
     public function setRoles(array $roles): void { $this->roles = $roles; }
 

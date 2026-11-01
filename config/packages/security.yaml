@@ -104,6 +104,14 @@ security:
         - { path: ^/api/friendlies/,     roles: ROLE_CLUB }
         - { path: ^/api/market/data,     roles: ROLE_CLUB }
         - { path: ^/api/market/assign,   roles: ROLE_CLUB }
+        # Authentication-only, and it must stay ahead of ^/api/club/ below (first match wins).
+        # The whole question this endpoint answers is "does this account have a club?", which an
+        # account that has none has to be able to ask — gating it on ROLE_CLUB would be fine, but
+        # gating it on a role a brand-new account might not carry made its own 404 branch
+        # unreachable and answered 403 instead. The client reads 404 as "no club yet" and
+        # anything else as "the server refused this account", so the two are not interchangeable.
+        # See docs/api/role-club-403.md.
+        - { path: ^/api/club/check$, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/club/,        roles: ROLE_CLUB }
         - { path: ^/api/inbox,           roles: ROLE_CLUB }
         - { path: ^/api/messages,        roles: ROLE_CLUB }

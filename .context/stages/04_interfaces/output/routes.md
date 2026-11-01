@@ -52,7 +52,7 @@ serve these paths identically; see `01_overview/output/environment.md`.
 | `AppLinksController` | `/api` | `GET /app-links` |
 | `ArchetypeController` | `/api/archetypes` | `GET` (single action; optional `?lang=` localizes `name`/`description` in place, falling back to the default language on an unknown/disabled code — see `docs/api/translations.md`) |
 | `BetaRequestController` | `/api` | `POST /beta-request`, `POST /beta-request/verify` |
-| `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check`, `GET /all`, `GET /status`. `GET /status` also carries **`debugLoggingEnabled`** (`global GameConfig switch \|\| the account's own User::$debugLoggingEnabled`, via `DebugLoggingResolver`) — mirrored from `GET /api/game-config` deliberately, because that one is public and so an anonymous cold-boot fetch there can only ever see the global half. This endpoint is `ROLE_CLUB`, so the per-account override always applies: it is the reliable read for a signed-in client. Client contract: `docs/api/debug-logging.md` |
+| `ClubController` | `/api/club` | `GET /foreign`, `GET /name-options`, `POST /initialize`, `GET /check` (**authentication-only, the one exception on this controller** — see below), `GET /all`, `GET /status`. `GET /status` also carries **`debugLoggingEnabled`** (`global GameConfig switch \|\| the account's own User::$debugLoggingEnabled`, via `DebugLoggingResolver`) — mirrored from `GET /api/game-config` deliberately, because that one is public and so an anonymous cold-boot fetch there can only ever see the global half. This endpoint is `ROLE_CLUB`, so the per-account override always applies: it is the reliable read for a signed-in client. Client contract: `docs/api/debug-logging.md` |
 | `ClubHubController` | `/api/club` | `GET /hub`, `GET /competitions` (`IsGranted('ROLE_CLUB')`) — combined Tournament Hub read and club-entered competition history |
 | `ClubKitIdentityController` | `/api/club/kit-identity` | `GET`, `POST` (both `IsGranted('ROLE_CLUB')`) — read/partial-update the real club's own kit+badge identity (`homeKitConfig`/`awayKitConfig`/`badgeConfig`); see `docs/api/club-kit-identity.md` |
 | `CommunityStatsController` | `/api/stats` | `GET /most-transfers`, `/most-wins`, `/most-development`, `/most-seasons`, `/most-trophies` |
@@ -80,6 +80,48 @@ serve these paths identically; see `01_overview/output/environment.md`.
 | `TranslationController` | `/api/translations` | `GET /{code}`, `GET /{code}/version` — generic UI-copy catalogue, public, no auth; unknown/disabled code is a hard 404 (contrast the fallback-to-default behavior of the `?lang=` params above). See `docs/api/translations.md`. |
 | `VideoController` | `/api` | `GET /videos/latest` |
 | `WorldOverviewController` | `/api` | `GET /world/overview` |
+
+### `GET /api/club/check` is authentication-only, and needs two exceptions to stay that way
+
+The endpoint answers "does this account have a club?", so an account with no club has to be
+able to ask it — `404 {"exists": false, "reason": "club_not_found"}` **is** the answer, and
+`200 {"exists": true, "clubId": ...}` the other one. It was gated on `ROLE_CLUB`, which made
+the 404 branch unreachable for exactly those callers: Symfony denies before the controller
+runs, so they got 403. The client reads 404 as "no club yet" and anything else as "the server
+refused this account", so the two are not interchangeable — that 403 is what surfaced as a
+blank sign-in screen (`wunderkind-app/docs/backend-notes/2026-11-01-role-club-403.md`).
+
+**Both gates had to be relaxed and either one alone changes nothing:** the `#[IsGranted]` on
+the method, *and* `access_control`'s `^/api/club/` rule, which also matches
+`/api/club/check`. The `^/api/club/check$` entry therefore sits **ahead** of it (first match
+wins). It also catches `ClubMismatchException` and answers the same 404 (`reason:
+`club_not_owned``), which is the other door to the same unreadable 403: that exception is an
+`AccessDeniedHttpException`, so an `X-Club-Id` naming a club the account does not own was
+refusing the account rather than answering it — for a client holding nothing worse than a
+stale id, which a half-finished club creation leaves behind. Everywhere else the exception's
+403 stays correct; it guards a write against landing on another save's club, and `/check`
+writes nothing. No disclosure either way: `ClubResolver` throws identically for an unknown id
+and another user's, so the response cannot distinguish them.
+
+Scope is `/check` only — every other `/api/club/*` route is still `ROLE_CLUB`, which is
+right: they are about a club, not about whether one exists. Guarded by
+`tests/Controller/Api/ClubCheckAccessTest.php`, whose fixtures deliberately store no roles at
+all, so it covers the firewall half of the `ROLE_CLUB` lockout below as well. Client contract:
+`docs/api/role-club-403.md`.
+
+### `ROLE_CLUB` is guaranteed by the entity, not read from `user.roles`
+
+`User::getRoles()` appends `ROLE_CLUB` unconditionally, the way `Admin::getRoles()` hardcodes
+`ROLE_ADMIN`. This is not cosmetic: there is no `role_hierarchy` in `security.yaml`, and the
+column has twice held something that granted nothing — `[]` for accounts registered before
+`6dc85ab` (2026-03) and the since-deleted `ROLE_ACADEMY` between `6dc85ab` and `2a9e6cd`
+(2026-04). Login is gated on `isVerified()` rather than on roles, so such an account
+authenticated, received a valid JWT, and then got 403 from every `roles: ROLE_CLUB` route in
+`access_control` — indistinguishable, client-side, from a refused account. Roles are resolved
+from the user provider on every request (`JWTAuthenticator::loadUser()` → entity provider's
+`loadUserByIdentifier()`, since `app_user_provider` is not `PayloadAwareUserProviderInterface`),
+so a token minted before the fix starts working without re-authentication. See
+`03_data/output/entities.md` for the entity-side note.
 
 ## `src/Controller/Admin/` — custom (non-CRUD) admin actions
 

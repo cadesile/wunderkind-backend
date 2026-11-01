@@ -5,6 +5,28 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-11-01), on top of commit 75ae1b0** (uncommitted).
+  **Stages touched:** 03_data (`entities.md`), 04_interfaces (`routes.md`), 06_documentation
+  (`index.md`). Answered `wunderkind-app`'s `docs/backend-notes/2026-11-01-role-club-403.md`:
+  an authenticated account 403'd from every `ROLE_CLUB` endpoint. Two independent causes, both
+  fixed. (1) `ROLE_CLUB` was read out of `user.roles`, a column that has twice held a value
+  granting nothing — `[]` before `6dc85ab`, the since-deleted `ROLE_ACADEMY` until `2a9e6cd` —
+  with no `role_hierarchy` to save it; `User::getRoles()` now guarantees the role the way
+  `Admin::getRoles()` hardcodes `ROLE_ADMIN`, so no backfill is needed and existing tokens start
+  working (roles resolve from the user provider per request, verified in
+  `JWTAuthenticator::loadUser()`). (2) `GET /api/club/check` is now authentication-only — its
+  own 404 was the answer for an account with no club and `ROLE_CLUB` made that branch
+  unreachable for exactly those callers. **Both of that endpoint's gates had to move** (the
+  `#[IsGranted]` and `access_control`'s `^/api/club/` rule, which also matches it); either alone
+  changes nothing — **and `/check` now catches `ClubMismatchException` too**, since that is an
+  `AccessDeniedHttpException` and so a stale `X-Club-Id` was the second door to the same
+  unreadable 403 (the app's own report describes the half-finished club creation that leaves
+  one behind). Regressions reproduced before fixing and guarded by
+  `tests/Entity/UserRolesTest.php` + `tests/Controller/Api/ClubCheckAccessTest.php`. The one
+  open question — how that specific guest account came to store the legacy shape, since guest
+  registration postdates both eras — needs a deployed-DB query, which is in
+  `docs/api/role-club-403.md` rather than answered here.
+
 - **New pass (2026-10-24), on top of commit 265c3b0** (uncommitted).
   **Stages touched:** 05_ui (`design-system.md`). Added a live UTC server clock under the
   admin sidebar's "Build My Club" title, via a new `header_logo` override in
