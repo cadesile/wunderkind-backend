@@ -50,6 +50,55 @@ cross-club aggregates derived from sync (`LeaderboardEntry`, `UserLedger`,
 section of the root `CLAUDE.md`, and `03_data/output/entities.md`'s `Club`
 entry.
 
+### A stored role column is not where a role comes from (found fixing the 2026-11-01 lockout)
+
+**`user.roles` does not decide whether an account has `ROLE_CLUB`.**
+`User::getRoles()` appends it unconditionally, the way `Admin::getRoles()` hardcodes
+`ROLE_ADMIN`. The column is still written at registration and still readable, but
+nothing authorises off it.
+
+**Why this is written down here rather than left to the code:** the opposite assumption
+is the natural one — a reader who finds `roles:array` in the schema will take it as the
+authority, and the two obvious things to do with it are both now wrong. Backfilling it
+"to fix" a stale row fixes nothing that is broken. Adding a new role case to it and
+expecting a route to honour it will silently fail, because there is **no
+`role_hierarchy`** in `config/packages/security.yaml` at all — every `roles:` entry in
+`access_control` is an exact-match check.
+
+What that assumption actually cost: the column had held three different things over the
+project's life (`[]` before `6dc85ab`, the since-deleted `ROLE_ACADEMY` until `2a9e6cd`,
+`ROLE_CLUB` after), and because login is gated on `isVerified()` rather than on roles, an
+affected account **authenticated successfully and then got 403 from every `ROLE_CLUB`
+route**. Client-side that is indistinguishable from a refused account, so it reached the
+app team as "sign-in is broken" rather than as an authorisation bug, and three separate
+app-side faults were written to handle it before anyone looked at the column.
+
+Three related traps, each of which looks like a one-line fix and is not:
+
+- **An endpoint's role gate lives in two places.** `#[IsGranted]` on the method *and* the
+  matching prefix rule in `access_control`. `^/api/club/` matches `/api/club/check`, so
+  relaxing only the attribute changes nothing observable — the request never reaches the
+  controller either way. Any narrower exception must also be ordered **ahead** of the
+  prefix rule it is carving out of; first match wins.
+- **`ClubMismatchException` is a 403 on purpose, and that is wrong on exactly one
+  endpoint.** It extends `AccessDeniedHttpException` so an `X-Club-Id` naming someone
+  else's club cannot drive a write onto the wrong save. But on an endpoint whose whole job
+  is to answer *whether* the account has a club, refusing is not an answer — `/check`
+  catches it and returns 404. Any future "does X exist for me?" endpoint has the same
+  shape: a role gate or a resolver refusal in front of a 404 makes the 404 unreachable for
+  precisely the callers who need it.
+- **The "EasyAdmin admin grant" instruction in the root pointer was wrong, and is
+  corrected.** It told you to `UPDATE "user" SET roles = '["ROLE_ADMIN"]'`. The `admin`
+  firewall's provider is `app_admin_provider` — the **`Admin`** entity — so a `User` row
+  cannot authenticate against `^/admin` whatever its roles say; `app:admin:create` is the
+  real path. Recorded here because the root `CLAUDE.md` is disposable and regenerable: the
+  claim existed **only** there and in no stage output, so a regenerated pointer could
+  reintroduce it from nothing. Noted under this heading because the two faults share a
+  cause — treating `user.roles` as the authority for a role.
+
+See `03_data/output/entities.md`'s `User` entry, `04_interfaces/output/routes.md`, and
+`docs/api/role-club-403.md` for the client-facing contract.
+
 ## Canonical existing docs (Q5)
 
 `README.md` and everything under `docs/` are canonical — index them as-is

@@ -51,6 +51,33 @@ From `.context/stages/02_architecture/output/git-activity.md`'s
    grows: landing-page-only aggregates needing a client contract, where the
    stored shape is not the servable shape.
 
+6. **Authorization contracts the app had to infer from a status code
+   (2026-11-01)** — a lockout fix (`ROLE_CLUB` 403s, commit `5333732`,
+   `docs/api/role-club-403.md`), and like item 5 it is more interesting as a
+   pattern than as a feature. Three separate faults all presented to the app as
+   one bare `403`, which it could only read as "this account is refused": a
+   role resolved from a column that had held two obsolete values, an endpoint
+   whose own 404 was shadowed by its role gate, and a resolver exception that
+   is deliberately a 403 everywhere except the one endpoint asking whether a
+   thing exists. None of them were visible from outside without a token, and
+   the suite had no coverage of the *negative* case — an account that is
+   authenticated but not yet entitled — so all three shipped.
+
+   What to expect more of: this API's authorization surface is now broad
+   (14 `roles: ROLE_CLUB` rules in `access_control` and 30 `#[IsGranted(
+   'ROLE_CLUB')]` attributes in `src/`, counted 2026-11-01) and a single status
+   code carries the whole story to a client. Those two layers overlapping is
+   itself the hazard — most endpoints are gated twice, so a gate relaxed in one
+   place is not relaxed. The generalisable rule from this pass is that **an endpoint whose
+   purpose is to answer about absence must not be gated on the thing being
+   absent** — and that any such endpoint needs a test fixture representing the
+   not-yet-entitled caller, not just the happy-path owner. The two new test
+   files (`tests/Entity/UserRolesTest.php`,
+   `tests/Controller/Api/ClubCheckAccessTest.php`) store no roles at all for
+   exactly that reason. Reported by the app team rather than found here, via
+   `wunderkind-app/docs/backend-notes/`, which is becoming the normal inbound
+   channel for this class of issue.
+
 Clusters 1-2 are corroborated by migration history
 (`.context/stages/03_data/output/migrations.md`: the large Competition
 migration is the most structurally significant recent change) and by
