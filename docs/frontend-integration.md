@@ -95,7 +95,7 @@ harmless; it is simply ignored, so no client change is needed.
 
 | Endpoint | Guarantee |
 |---|---|
-| `POST /api/league/conclude-season` | Idempotent per club + season, with or without a key. Send `season` in the payload (see below). A duplicate or late retry replays the first response and writes nothing — no second `SeasonRecord`, no second `SeasonSnapshot`, no second season advance. Order-independent, and a season ahead of the server's count is accepted rather than rejected |
+| `POST /api/league/conclude-season` | Idempotent per club + season for a **retry**, with or without a key. Send `season` in the payload (see below). A duplicate or late retry carrying the same figures replays the first response and writes nothing — no second `SeasonRecord`, no second `SeasonSnapshot`, no second season advance. Order-independent, and a season ahead of the server's count is accepted rather than rejected. A resubmission carrying **different** figures is treated as a correction and overwrites the archive (see below) |
 | `POST /api/initialize/starter` | A club that is already initialized gets its stored starter pack back as `200` with `"replayed": true`, rather than `409`. (Clubs initialized before this shipped have no stored pack and still answer `409 starter_already_initialized` — their squads are genuinely unrecoverable) |
 | `POST /api/initialize/league/{tier}` | Safe to retry. Concurrent calls for the same country+tier are serialized server-side; the second gets the first one's payload rather than triggering a second world generation. Note the league block now carries `trophy` (a `TrophyConfig`) in place of the retired `trophyImage`/`trophyColour` pair — see `docs/api/trophy-config.md` |
 | `POST /api/club/initialize` | **Not** idempotent on its own — a retry creates an additional club for the account (a user may own several; `GET /api/club/all` lists them). Use an `Idempotency-Key` if you need retry safety here. It does *not* fail on the club name: the name-taken check is against NPC clubs only, so retrying with the same name is fine |
@@ -125,6 +125,35 @@ Ordering does not matter, and a gap is not an error:
 
 So a queue can flush in any order, and a dropped entry never poisons the ones
 behind it.
+
+### Resubmitting a season you have already concluded
+
+A season is no longer write-once. If you post the same `(club, season)` again
+with **different figures**, the server overwrites its archive with the new ones
+instead of swallowing them, so a season filed wrongly can be corrected.
+
+"Different" means any of these ten fields: `finalPosition`, `gamesPlayed`,
+`wins`, `draws`, `losses`, `goalsFor`, `goalsAgainst`, `points`, `promoted`,
+`relegated`. Everything else is excluded on purpose — `pyramidSnapshot`,
+`seasonLeaders` and `seasonFixtures` are large and the retry queue resends them,
+so a reordering of a 52 KB fixtures array is a retry, not a correction. **If the
+ten figures are identical, nothing is rewritten**, which is what stops an ordinary
+flaky connection from being recorded as a correction. (The archival blobs *are*
+re-stored as part of an overwrite; they just cannot trigger one on their own.)
+
+Two things to know:
+
+- **The response is unchanged by a correction.** You still get back the body the
+  first conclude answered with — same `seasonRecordId`, same `newLeague`, same
+  `leagues`. The correction rewrites the server's archive only; it does not
+  re-run the league transition, re-roll sponsors or regenerate fixtures, because
+  the client owns all of that now. So nothing on the client needs to change, and
+  you can send a correction freely.
+- **Nothing derived is recomputed.** In particular, correcting a season into or
+  out of first place does not immediately move `hallOfFamePoints` or the Hall of
+  Fame board; those catch up at the club's next conclude. Every superseded result
+  is kept server-side (position and W/D/L, with a timestamp), so a disputed title
+  can be settled from the record.
 
 Server-side cost is ~65 ms for a full eight-tier pyramid with a 52 KB payload, so
 the 30 s client timeout is about the upload, not about server time. A replayed

@@ -9,6 +9,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -16,6 +17,11 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 /**
  * Read-only view of the per-club, per-season league table row written by
  * LeagueService::concludeSeason() on POST /api/league/conclude-season.
+ *
+ * A row can be corrected by a later resubmission, so `overwriteCount` and the
+ * `overwriteAudit` on the detail page are the record of what it used to say. That audit is
+ * the only place a superseded result survives — nothing derived from this row is recomputed
+ * on a correction, so a dispute about a Hall of Fame title is settled from it by hand.
  */
 class SeasonRecordCrudController extends AbstractCrudController
 {
@@ -53,5 +59,14 @@ class SeasonRecordCrudController extends AbstractCrudController
         yield BooleanField::new('promoted');
         yield BooleanField::new('relegated');
         yield DateTimeField::new('createdAt')->setFormat('yyyy-MM-dd HH:mm');
+
+        // How many times a later resubmission corrected this season's result, and what it
+        // replaced. The audit is read through the entity's pretty-printing accessor because
+        // EasyAdmin's code editor needs a string rather than a json array column; detail
+        // only, since it is noise on an index of every season ever concluded.
+        yield IntegerField::new('overwriteCount', 'Overwrites');
+        yield CodeEditorField::new('overwriteAuditPretty', 'Overwrite audit')
+            ->setLanguage('js')
+            ->onlyOnDetail();
     }
 }

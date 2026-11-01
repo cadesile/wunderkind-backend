@@ -232,14 +232,32 @@ migrations are the change log (see `migrations.md`).
   reading or displaying it anywhere.**
 - **`SeasonRecord`** — end-of-season league result. `season/
   finalPosition/gamesPlayed/wins/draws/losses/goalsFor/goalsAgainst/
-  points:int`, `promoted/relegated:bool`. `ManyToOne` → `Club`, `League`
-  (both not nullable). **`UNIQUE(club, season)`**
+  points:int`, `promoted/relegated:bool`, **`overwriteCount:int`** (default 0)
+  and **`overwriteAudit:?array`** (json, both added by `Version20261101120000`).
+  `ManyToOne` → `Club`, `League` (both not nullable). **`UNIQUE(club, season)`**
   (`uq_season_record_club_season`, added by `Version20261024132000`) — one
   concluded season per club, enforced in the DB because `POST /api/league/
   conclude-season` is client-retried and `hallOfFamePoints` is *summed* from
   these rows, so a duplicate double-counted a title permanently.
+
+  **That constraint bounds the number of rows, not the number of writes.** A
+  resubmission for an already-concluded season is a *retry* if its result figures
+  match and a *correction* if they differ: a correction rewrites this row in
+  place, bumps `overwriteCount` and appends the superseded position and W/D/L to
+  `overwriteAudit` (`{overwrittenAt, finalPosition, wins, draws, losses}`,
+  oldest first, null until first corrected, deliberately uncapped). The
+  comparison is `SeasonRecord::matchesResult()` over ten fields only —
+  `SeasonSnapshot`'s bulk blobs are excluded, because the retry queue resends a
+  52KB `seasonFixtures` array and a reordering of it is a retry. `overwriteCount`
+  is the authoritative total if it and the audit ever disagree.
+
+  A correction rewrites this row and `season_snapshot.snapshot_data`, and
+  **nothing else** — not the club's league or `currentSeason`, not sponsors, not
+  fixtures, not the derived `Club::$hallOfFamePoints`. See
+  `04_interfaces/output/services.md`'s `LeagueService` entry.
 - **`SeasonSnapshot`** — season point-in-time snapshot. `season`,
-  `country`, `snapshotData:array`, `responseJson:?array` (added by
+  `country`, `snapshotData:array` (rewritten when a resubmission corrects the
+  season — see `SeasonRecord` above), `responseJson:?array` (added by
   `Version20261024132000`) — the exact conclude-season response body, replayed
   verbatim to a duplicate or late retry rather than recomputed (concluding
   re-rolls sponsors and regenerates fixtures, so a recomputed reply would

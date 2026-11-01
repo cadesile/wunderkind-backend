@@ -17,6 +17,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SeasonSnapshotRepository;
+use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 
 class LeagueService
@@ -213,15 +214,16 @@ class LeagueService
      * NPC club/league structure is static pool data and is never mutated here.
      * Promotion/relegation of NPC clubs is managed entirely on the client.
      *
-     * **Idempotent per club + season.** The client queues this call and retries it on the
-     * next good connection, and a cancelled request can never be proven not to have reached
-     * the server — so a duplicate, or one arriving after the next season has already
-     * started, must be a no-op that answers exactly what the first call answered. That is
-     * why `$dto->season` exists: keying on the club's *current* season would let a late
-     * retry conclude the following season by accident. Three guards together:
+     * **Idempotent per club + season for a RETRY; a CORRECTION overwrites.** The client
+     * queues this call and retries it on the next good connection, and a cancelled request
+     * can never be proven not to have reached the server — so a duplicate, or one arriving
+     * after the next season has already started, must be a no-op that answers exactly what
+     * the first call answered. That is why `$dto->season` exists: keying on the club's
+     * *current* season would let a late retry conclude the following season by accident.
+     * Three guards together:
      *
-     *  1. `SeasonRecord` is unique on (club, season) in the database, so a duplicate row is
-     *     impossible even if two requests race past the check below.
+     *  1. `SeasonRecord` is unique on (club, season) in the database, so a duplicate *row*
+     *     is impossible even if two requests race past the check below.
      *  2. The first call's response body is stored on `SeasonSnapshot::$responseJson` and
      *     replayed verbatim, rather than recomputed — see that property's docblock for why
      *     recomputing would be wrong.
@@ -237,6 +239,15 @@ class LeagueService
      * An absurd season number is caught by `ConcludeSeasonRequest`'s own bound instead,
      * where a 422 is unambiguously right.
      *
+     * **A resubmission carrying different figures is a correction, not a retry**, and
+     * overwrites the archive rather than being swallowed. "Different" means any of the ten
+     * result fields in `SeasonRecord::resultFields()` — the archival blobs are excluded on
+     * purpose, because a reordered 52KB fixtures array is a retry. Identical figures still
+     * write nothing, so a network retry can never inflate `overwrite_count`; the superseded
+     * position and W/D/L are filed on `SeasonRecord::$overwriteAudit`. The overwrite is
+     * narrow by design — see `overwriteConcludedSeason()` for exactly what it does not touch
+     * and why re-running the league transition here would double-promote the club.
+     *
      * @return array{seasonRecordId: string, newLeague: array|null, leagues: array}
      */
     public function concludeSeason(Club $club, ConcludeSeasonRequest $dto): array
@@ -246,6 +257,13 @@ class LeagueService
 
         $alreadyConcluded = $this->seasonRecordRepository->findOneByClubAndSeason($club, $targetSeason);
         if ($alreadyConcluded !== null) {
+            // A retry says the same thing and must write nothing; a correction says
+            // something different and overwrites the archive. Either way the reply is the
+            // body the first conclude committed — see replayConcludedSeason().
+            if (!$alreadyConcluded->matchesResult(self::resultFieldsFrom($dto))) {
+                $this->overwriteConcludedSeason($alreadyConcluded, $dto);
+            }
+
             return $this->replayConcludedSeason($club, $alreadyConcluded, $dto, $targetSeason);
         }
 
@@ -277,26 +295,7 @@ class LeagueService
             club:         $club,
             season:       $targetSeason,
             country:      $country,
-            snapshotData: [
-                'amp' => [
-                    'leagueTier'    => $currentLeague->getTier(),
-                    'leagueName'    => $currentLeague->getName(),
-                    'finalPosition' => $dto->finalPosition,
-                    'gamesPlayed'   => $dto->gamesPlayed,
-                    'wins'          => $dto->wins,
-                    'draws'         => $dto->draws,
-                    'losses'        => $dto->losses,
-                    'goalsFor'      => $dto->goalsFor,
-                    'goalsAgainst'  => $dto->goalsAgainst,
-                    'points'        => $dto->points,
-                    'promoted'      => $dto->promoted,
-                    'relegated'     => $dto->relegated,
-                ],
-                'pyramid' => $dto->pyramidSnapshot,
-                // Archival only — no structured storage/processing yet (see ConcludeSeasonRequest).
-                'seasonLeaders'  => $dto->seasonLeaders,
-                'seasonFixtures' => $dto->seasonFixtures,
-            ],
+            snapshotData: $this->buildSnapshotData($currentLeague, $dto),
         );
         $this->em->persist($snapshot);
 
@@ -342,6 +341,126 @@ class LeagueService
     }
 
     /**
+     * Corrects an already-concluded season from a resubmission carrying different figures.
+     *
+     * Rewrites exactly two rows — the SeasonRecord's result (plus its overwrite counter and
+     * audit) and the SeasonSnapshot's archived season data — and **nothing else**. Not the
+     * club's current league, not its currentSeason, not league sponsors, not fixtures, and
+     * not Club::$hallOfFamePoints. That narrowness is a deliberate decision, not an
+     * oversight:
+     *
+     *  - The client owns the league-standing transition now; this payload is purely backend
+     *    data. Re-running resolveNewLeague() here would read the club's *already moved*
+     *    league and promote it a second tier.
+     *  - hallOfFamePoints is derived from `finalPosition = 1` rows, so a correction into or
+     *    out of first place does leave the stored mirror stale until the club's next
+     *    conclude or the next `app:leaderboards:generate`. Accepted: a dispute is settled by
+     *    hand from $overwriteAudit, which is what it is for.
+     *
+     * Both writes are raw SQL, for the reason storeConcludeResponse() documents — Doctrine's
+     * dirty check silently skips a `json` column holding mixed types — and the increment is
+     * then atomic rather than read-modify-write. One transaction, so a corrected record can
+     * never commit without its matching snapshot. **No flush on this path at all**, which
+     * also means the unpersisted LeagueSponsor re-rolls that forced raw SQL elsewhere cannot
+     * arise here; replayConcludedSeason() may roll sponsors, so it runs after this returns.
+     */
+    private function overwriteConcludedSeason(SeasonRecord $record, ConcludeSeasonRequest $dto): void
+    {
+        $record->overwriteWith(self::resultFieldsFrom($dto), new \DateTimeImmutable());
+
+        // Both read off the record rather than off the club or the payload: the club has
+        // moved on, and the record is what says which season and which league this is.
+        $snapshot     = $this->seasonSnapshotRepository->findByClubAndSeason($record->getClub(), $record->getSeason());
+        $snapshotData = $this->buildSnapshotData($record->getLeague(), $dto);
+
+        $connection = $this->em->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $connection->executeStatement(
+                <<<'SQL'
+                UPDATE season_record
+                   SET final_position  = :finalPosition,
+                       games_played    = :gamesPlayed,
+                       wins            = :wins,
+                       draws           = :draws,
+                       losses          = :losses,
+                       goals_for       = :goalsFor,
+                       goals_against   = :goalsAgainst,
+                       points          = :points,
+                       promoted        = :promoted,
+                       relegated       = :relegated,
+                       overwrite_count = overwrite_count + 1,
+                       overwrite_audit = :audit
+                 WHERE id = :id
+                SQL,
+                [
+                    'finalPosition' => $dto->finalPosition,
+                    'gamesPlayed'   => $dto->gamesPlayed,
+                    'wins'          => $dto->wins,
+                    'draws'         => $dto->draws,
+                    'losses'        => $dto->losses,
+                    'goalsFor'      => $dto->goalsFor,
+                    'goalsAgainst'  => $dto->goalsAgainst,
+                    'points'        => $dto->points,
+                    'promoted'      => $dto->promoted,
+                    'relegated'     => $dto->relegated,
+                    'audit'         => json_encode($record->getOverwriteAudit(), JSON_THROW_ON_ERROR),
+                    'id'            => (string) $record->getId(),
+                ],
+                [
+                    'promoted'  => ParameterType::BOOLEAN,
+                    'relegated' => ParameterType::BOOLEAN,
+                ],
+            );
+
+            if ($snapshot !== null) {
+                $snapshot->setSnapshotData($snapshotData);
+
+                $connection->executeStatement(
+                    'UPDATE season_snapshot SET snapshot_data = :json WHERE id = :id',
+                    [
+                        'json' => json_encode($snapshotData, JSON_THROW_ON_ERROR),
+                        'id'   => (string) $snapshot->getId(),
+                    ],
+                );
+            }
+
+            $connection->commit();
+        } catch (\Throwable $e) {
+            $connection->rollBack();
+
+            throw $e;
+        }
+    }
+
+    /**
+     * The ten fields that define "the result" of a season, lifted off a request payload in
+     * the shape SeasonRecord::matchesResult()/overwriteWith() expect.
+     *
+     * Written out longhand rather than derived from the property names, so renaming either
+     * side is a type error here instead of a silently-skipped comparison that would make
+     * every correction look like a retry.
+     *
+     * @return array{finalPosition: int, gamesPlayed: int, wins: int, draws: int, losses: int, goalsFor: int, goalsAgainst: int, points: int, promoted: bool, relegated: bool}
+     */
+    private static function resultFieldsFrom(ConcludeSeasonRequest $dto): array
+    {
+        return [
+            'finalPosition' => $dto->finalPosition,
+            'gamesPlayed'   => $dto->gamesPlayed,
+            'wins'          => $dto->wins,
+            'draws'         => $dto->draws,
+            'losses'        => $dto->losses,
+            'goalsFor'      => $dto->goalsFor,
+            'goalsAgainst'  => $dto->goalsAgainst,
+            'points'        => $dto->points,
+            'promoted'      => $dto->promoted,
+            'relegated'     => $dto->relegated,
+        ];
+    }
+
+    /**
      * Answers a duplicate or late conclude for a season this club has already finished,
      * without writing anything a second time.
      *
@@ -384,6 +503,41 @@ class LeagueService
         }
 
         return $response;
+    }
+
+    /**
+     * The archived season data: the club's own result, the client's pyramid, and the two
+     * verbatim archival blobs.
+     *
+     * Shared by the fresh conclude and by overwriteConcludedSeason(), so a correction can
+     * only ever archive the same shape the first conclude did. $league is a parameter
+     * rather than read off the club because an overwrite must use the league the season
+     * was *played* in (SeasonRecord::getLeague()), not wherever the club has since moved.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildSnapshotData(League $league, ConcludeSeasonRequest $dto): array
+    {
+        return [
+            'amp' => [
+                'leagueTier'    => $league->getTier(),
+                'leagueName'    => $league->getName(),
+                'finalPosition' => $dto->finalPosition,
+                'gamesPlayed'   => $dto->gamesPlayed,
+                'wins'          => $dto->wins,
+                'draws'         => $dto->draws,
+                'losses'        => $dto->losses,
+                'goalsFor'      => $dto->goalsFor,
+                'goalsAgainst'  => $dto->goalsAgainst,
+                'points'        => $dto->points,
+                'promoted'      => $dto->promoted,
+                'relegated'     => $dto->relegated,
+            ],
+            'pyramid' => $dto->pyramidSnapshot,
+            // Archival only — no structured storage/processing yet (see ConcludeSeasonRequest).
+            'seasonLeaders'  => $dto->seasonLeaders,
+            'seasonFixtures' => $dto->seasonFixtures,
+        ];
     }
 
     /**
