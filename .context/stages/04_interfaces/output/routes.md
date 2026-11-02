@@ -321,8 +321,8 @@ body-hash check could only ever fire as a false positive, and the client drops a
 | `POST /api/club/initialize` | **Not** idempotent alone — creates an additional club. Does *not* collide on the club name (the duplicate check is against `NpcClub` only). Use an `Idempotency-Key` |
 
 Client-facing detail: **Retries and idempotency** in
-`docs/frontend-integration.md`; the full investigation is in
-`docs/2026-10-24-sentry-sweep-backend-answers.md`.
+`docs/frontend-integration.md`; the investigation behind each row is the
+2026-10-24 Sentry sweep, recorded in `shared/last-sync.md`.
 
 **`POST /api/initialize/starter` accepts any `Country` case in `?country=` and
 deliberately does NOT check `StarterConfig::enabledCountries`** — this
@@ -334,7 +334,7 @@ client-side escape. (Which is also the hazard in `enabledCountries` itself —
 it is one admin-editable row, and removing a country strands every save already
 created in it.) If the goal is to stop *new* clubs in an unwarmed country, the
 list the picker reads already does that; the fix for an existing one is to warm
-it. See `docs/2026-10-24-sentry-sweep-frontend-reply.md`.
+it.
 
 `POST /api/initialize/league/{tier}` logs every response as
 `initialize.league_tier.served` (country, tier, cacheHit, durationMs, clubs,

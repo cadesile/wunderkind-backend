@@ -246,7 +246,7 @@ feature + admin panel polish).
 ## Retry-safety migrations (2026-10-24)
 
 Three additive columns and two unique indexes, all from the production Sentry sweep
-(`docs/2026-10-24-sentry-sweep-backend-brief.md` and its answers doc), driven by the
+(recorded in `shared/last-sync.md`), driven by the
 client gaining a retry queue — every one exists because a request the client now retries
 was not safe to retry:
 

@@ -26,23 +26,49 @@ Root `CLAUDE.md` and `AGENTS.md` are excluded — they're the generated
 
 ## Historical design records (not living docs)
 
-Dated plans/specs under `docs/superpowers/plans/` and `docs/superpowers/specs/` —
-one pair per shipped feature (npc-club-generation, initialize-endpoint-redesign,
-worldpack-cache-admin, beta-request-queue, player-generation-pipeline,
-club-init-pool-prewarm, remove-player-staff-club-fk,
-community-stats-landing-page, social-post-templates-and-cron,
-club-name-options-canonical-source, backend-appearance,
-account-deletion-endpoint, npc-club-city-size-weighting). These record the
-design/plan at the time a feature was built; treat as historical context,
-not current-state documentation — cross-check against code/entities for
-anything time-sensitive.
+`docs/superpowers/` held one plan/spec pair per shipped feature. It was pruned
+on 2026-11-02 (see **Pruned** below); three files survive, each because
+something still points at them by name:
 
-## Stale / superseded
+- `docs/superpowers/plans/2026-10-28-tournament-concurrency-and-queues.md` — §3.4
+  is cited from `CompetitionDrawService`, `CompetitionResultsService` and
+  `CompetitionBenchmarkCommand` as the reason round claims and queues are shaped
+  the way they are. Read it before changing either service's locking.
+- `docs/superpowers/plans/2026-10-22-tournament-and-friendlies-api.md` — the
+  7-milestone Tournament/Competition + Friendlies overhaul; cited from
+  `shared/last-sync.md`
+- `docs/superpowers/specs/2026-07-06-club-name-options-canonical-source-design.md`
+  — cited from `docs/world-generation/adding-a-country.md`
 
-- `docs/wunderkind-backend-context.md` — output of the retired, pre-ICM
-  generator script (see repo root README's "Why this exists"); dated
-  2026-06-19, superseded by this `.context/` tree. Not re-indexed as
-  canonical.
+These record the design at the time the feature was built; treat as historical
+context, not current-state documentation — cross-check against code/entities
+for anything time-sensitive.
+
+## Pruned (2026-11-02)
+
+About 1MB of `docs/` was deleted as spent. Nothing here is recoverable from the
+tree, only from git history — listed so a dangling reference (in this repo, in
+`wunderkind-app`, or in an old commit message) can be recognised rather than
+hunted for:
+
+- **23 of the 26 `docs/superpowers/` plans/specs** — features all shipped
+  Apr–Aug 2026, zero inbound references.
+- **`docs/wunderkind-backend-context.md`** — output of the retired, pre-ICM
+  generator script, superseded by this `.context/` tree. Also `context.zip` at
+  the repo root, a stale archive of an older `.context` layout.
+- **`docs/wunderkind-narrative-2026-04-21.json`** — a one-off download from
+  admin's `narrativeExport()`, not a seed or a doc. Narrative rows live in the
+  database; `scripts/reset_and_seed.sh` preserves them.
+- **Closed one-off episodes** — `2026-09-27-competition-master-merge-firebase-prod.md`
+  (both blockers resolved: `PROD_FIREBASE_SERVICE_ACCOUNT_JSON` is wired in
+  `deploy-prod.yml`, competition is on `master`); the three
+  `2026-10-24-sentry-sweep-*.md` docs (conclusions preserved in
+  `shared/last-sync.md`'s 2026-10-24 pass and in `04_interfaces/output/routes.md`'s
+  retry table); `2026-10-28-periodic-leaderboard-awards-plan.md`, which still
+  read "planned, not started" after the feature shipped; the two 2026-10-31
+  avatar16-v4 / stadium-v3 integration reports, both self-declared integrated;
+  and `docs/api/tournament-sealed-results-backend-work.md`, a work log misfiled
+  as an API contract (all four items actioned 2026-10-31).
 
 ## Other
 

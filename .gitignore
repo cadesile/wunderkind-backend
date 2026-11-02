@@ -23,6 +23,9 @@
 # Superpowers brainstorming companion artifacts
 .superpowers/
 
+# macOS Finder metadata
+.DS_Store
+
 # Uploaded facility images (runtime data, not source)
 /public/uploads/facilities/*
 !/public/uploads/facilities/.gitkeep

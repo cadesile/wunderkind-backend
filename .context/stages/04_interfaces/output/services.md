@@ -123,7 +123,7 @@ filename alone.
   client's hardcoded root `club.badgeShape = "shield"` legacy placeholder,
   explicitly validating `playingStyle` against `PlayingStyle` enum, and
   omitting `stadiumName` and `playingStyle` rather than emitting `null`
-  when unset per `docs/api/match-detail-club-fields.md`).
+  when unset per `wunderkind-app/docs/api/match-detail-club-fields.md`).
   **`formatSnapshotXiForClient()` backs the pre-match lineup**: an unplayed
   cup fixture or accepted friendly returns both clubs' registered snapshot
   XIs as `homeLineup`/`awayLineup` instead of two empty arrays, projected
@@ -149,7 +149,7 @@ filename alone.
   there is no "drawn and locked" state to gate on for a non-final round; the
   alternatives are a real squad-lock concept or a viewer-scoped payload (own XI
   only until the result exists). Closes
-  `docs/api/match-detail-club-fields.md` §4a (app repo); its §4 is the product
+  `wunderkind-app/docs/api/match-detail-club-fields.md` §4a; its §4 is the product
   question this answers.
 - **`Competition/CompetitionDrawService`** — owns the draw phase
   (`DRAW_PENDING` → `DRAWN`) behind `app:competition:draw-rounds` (every 1
