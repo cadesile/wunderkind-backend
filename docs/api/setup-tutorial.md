@@ -308,7 +308,7 @@ cleared on logout).
 | Piece | Where |
 |---|---|
 | Column | `StarterConfig::$setupTutorialConfig` — `json`, NOT NULL, PHP-default seeded with the 15 items |
-| Migration | `Version20261102121403` |
+| Migrations | `Version20261102121403` (the column), `Version20261102130000` (owner briefing → `ngs.tut.owner.bodyRole`) |
 | API | `StarterConfigController::index()` → `'tutorial' => $config->getSetupTutorialConfig()` |
 | Admin | `/admin/starter-config` → **Setup Tutorial** (CodeMirror JSON textarea, lint + submit guard) |
 | Validation | `App\Service\SetupTutorialValidator::problems()` — pure, static, no DB |
@@ -381,7 +381,10 @@ pins the five chapter-opening anchors for that reason.
 ## Still owed
 
 1. **The 34 `ngs.tut.*` translation rows.** Import the app's `locales/en/translations.json` at
-   `/admin/translations/import`. **Deliberately not seeded from a PHP array here** — that file is
+   `/admin/translations/import`. **Leave "clear before import" UNTICKED** — ticking it calls
+   `deleteGenericForLanguage()` and wipes every existing generic `en` translation (3,054 of them
+   on dev as of 2026-11-02). Note also that dev's catalogue is ~1,300 entries behind the app's
+   file generally, not just missing these 34; importing the whole file closes that too. **Deliberately not seeded from a PHP array here** — that file is
    the single source of those strings, and re-typing them on this side gives the same copy two
    homes and a drift problem. Without the rows the cards still render (the app's bundled catalogue
    carries them and API translations merge on top); what you cannot do is reword or localise
@@ -394,3 +397,18 @@ pins the five chapter-opening anchors for that reason.
 
 3. **Retire `AudienceCriteriaEvaluator::LEGACY_KEYS` and `Version20261102120000`'s `down()`
    together** — that `down()` is only non-destructive while the alias accepts the old key.
+
+## ⚠️ Changing a copy key is ordered, and the order is not obvious
+
+`parseTutorial` **drops** an item whose copy key it cannot resolve. So serving a key an
+installed app does not carry makes that card silently vanish — and the app's bundled catalogue
+is only updated by a release.
+
+Therefore: **ship the client key first, repoint the payload second.** That is why
+`ngs.tut.owner.body` → `ngs.tut.owner.bodyRole` went out as `wunderkind-app@965aa5f3` before
+`Version20261102130000` repointed the served payload, and not the other way round. The reverse
+order breaks the owner briefing for everyone on the old bundle, with no error anywhere.
+
+The same applies to any future reword: a catalogue value cannot be edited (the merge tool
+refuses a differing value, and hand-editing is banned), so a reword is always a new key, and a
+new key is always client-first.
