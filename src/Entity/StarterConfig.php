@@ -190,7 +190,7 @@ class StarterConfig
                 ],
                 'modes' => ['first'],
                 'titleKey' => 'ngs.tut.owner.title',
-                'bodyKey' => 'ngs.tut.owner.body',
+                'bodyKey' => 'ngs.tut.owner.bodyRole',
                 'pointKeys' => ['ngs.tut.owner.p1', 'ngs.tut.owner.p2'],
                 'ctaKey' => 'ngs.tut.cta.gotIt',
             ],
