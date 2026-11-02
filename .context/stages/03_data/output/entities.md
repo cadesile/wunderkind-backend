@@ -169,6 +169,21 @@ migrations are the change log (see `migrations.md`).
   persist/remove), `leaderboardEntries` (cascade persist/remove),
   `investors`, `sponsors`, `inboxMessages` (cascade persist/remove);
   `ManyToOne` → `currentLeague:?League` (nullable).
+
+  **`tutorialCompletedAt` means new-game SETUP completed, not a tutorial** (corrected
+  2026-11-02; this entry previously listed the column among the field names with no
+  meaning attached, and the entity docblock said "first-launch tutorial"). It is written
+  set-once from `SyncRequest` and read by the `tutorialCompleted` audience criterion
+  (`AudienceCriteriaEvaluator`). The walkthrough that originally wrote it was deleted
+  client-side on 2026-09-29, taking the only writer with it, so the column was null — and
+  the criterion silently false — for every club created between then and 2026-11-02, while
+  `tutorialCompleted: true` remained the worked example in the audience admin's own help
+  text. **A one-off backfill is still owed** for the clubs in that gap: `lastSyncedWeek >= 1`
+  is the sound test, since it only advances through a sync and a sync cannot happen until
+  setup has completed. The column is not vacuous despite every club having finished setup
+  to exist as a *save* — the row is created at FOUND CLUB, with eleven setup steps still to
+  go, so an abandoned setup leaves a club row behind and that is what this distinguishes.
+  See `docs/api/setup-tutorial.md`.
   > **The device owns this row's game state; the backend only mirrors it.**
   > Everything per-club reaches the backend through `POST /api/sync` and is
   > overwritten absolutely from the device's own value — `balance`,

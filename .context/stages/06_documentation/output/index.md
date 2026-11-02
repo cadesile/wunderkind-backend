@@ -126,6 +126,9 @@ claiming canonical status)
   and the `tutorialCompleted` audience criterion had been fed by nothing since 2026-09-29,
   the client half is fixed (`wunderkind-app@fe84d02e`) and a one-off backfill off
   `last_synced_week >= 1` is still owed here — read it in
-  `src/Service/AudienceCriteriaEvaluator.php:31,77` and `SyncService.php:183`;
-  `03_data/output/entities.md` lists the column among `Club`'s fields but does not say
-  what it means, and its docblock on the entity is still the pre-2026-09-29 wording
+  `src/Service/AudienceCriteriaEvaluator.php:31,77` and `SyncService.php:183`, with the
+  column's meaning now written up under `Club` in `03_data/output/entities.md` and on
+  `Club::$tutorialCompletedAt`'s own docblock (both corrected 2026-11-02; they had said
+  "first-launch tutorial", and the admin help text in
+  `AudienceGroupCrudController.php:85` still offers `tutorialCompleted: true` as its
+  worked example without saying what it now measures)
