@@ -140,11 +140,23 @@ Dynamic criteria are a closed whitelist; all keys present must match.
 | `country` | string or list | 2-letter club country code |
 | `leagueTier` | int or list | Club's current league tier |
 | `minWeek` / `maxWeek` | int | Last synced week, inclusive |
-| `tutorialCompleted` | bool | Whether the tutorial is finished |
+| `setupCompleted` | bool | Whether the club finished new-game setup |
 
 ```json
-{ "minReputation": 500, "leagueTier": [7, 8], "tutorialCompleted": true }
+{ "minReputation": 500, "leagueTier": [7, 8], "setupCompleted": true }
 ```
+
+**`setupCompleted` was `tutorialCompleted` until 2026-11-02**, and the old spelling is
+still accepted on stored groups (`AudienceCriteriaEvaluator::LEGACY_KEYS`) though it is
+deprecated — `Version20261102120000` rewrites stored payloads. It was renamed because it
+named a walkthrough the game no longer has: the client deleted that tour on 2026-09-29,
+taking with it the only thing that wrote the column behind this key, so the criterion was
+silently false for every club created between then and 2026-11-02.
+
+It means **setup finished** — badge, kits, ground, boardroom, START GAME — not "has played
+the game". A club row is created the moment the player taps FOUND CLUB with eleven steps
+still to run, so `false` selects players who founded a club and abandoned setup partway.
+For "past the opening weeks", use `minWeek`.
 
 Two things that are easy to get backwards:
 

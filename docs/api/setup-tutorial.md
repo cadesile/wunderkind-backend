@@ -44,12 +44,12 @@ Unrelated to the feature above, but adjacent enough to trip over:
 - `Club::$tutorialCompletedAt` (`src/Entity/Club.php:118`), written set-once from
   `SyncRequest::$tutorialCompletedAt` (`SyncService.php:183`) and echoed back by both the sync
   response and `GET /api/club/status`.
-- Read by `AudienceCriteriaEvaluator` as the `tutorialCompleted` audience criterion
-  (`src/Service/AudienceCriteriaEvaluator.php:31,77`).
+- Read by `AudienceCriteriaEvaluator` as the `setupCompleted` audience criterion — named
+  `tutorialCompleted` until 2026-11-02 (`src/Service/AudienceCriteriaEvaluator.php`).
 
 **The app stopped sending it in `213489f2` (2026-09-29)**, the same commit that deleted the
 13-step walkthrough whose `skipAll()` was the only thing that ever wrote it. So the column went
-null for every club created after that date, and `tutorialCompleted` as a criterion was silently
+null for every club created after that date, and the criterion was silently
 false for all of them — while remaining the worked example in the admin help text
 (`AudienceGroupCrudController.php:85`). An admin following the documentation got a message that
 reached nobody.
@@ -88,11 +88,13 @@ completion the moment it was founded.
    `<marker>` only has to be non-null — the criterion is boolean. Prefer an existing date on the
    row over `NOW()` if one is closer to the truth.
 
-2. **Decide whether the criterion keeps the name.** `tutorialCompleted` now reads as a promise the
-   product no longer makes. Renaming it is a breaking change for any saved `AudienceGroup`
-   criteria JSON, so it may not be worth it — but the admin help text should at least say what it
-   now measures, and `Club::$tutorialCompletedAt`'s docblock still says "completes the first-launch
-   tutorial", which is no longer a thing that exists.
+2. ~~**Decide whether the criterion keeps the name.**~~ **Done 2026-11-02.** Renamed to
+   `setupCompleted`, with `Version20261102120000` rewriting stored payloads and
+   `AudienceCriteriaEvaluator::LEGACY_KEYS` still accepting the old spelling — necessary
+   because that whitelist fails CLOSED, so a bare rename would have made any unmigrated group
+   match **nobody**. Retire the alias and the migration's `down()` together; `down()` is only
+   non-destructive while the alias exists. The admin help text and
+   `Club::$tutorialCompletedAt`'s docblock now both say what the field measures.
 
 3. **Consider whether `minWeek` already serves the intent better.** The help text's example pairs
    it with `leagueTier: [7, 8]` to mean "beginners, but past the start". `minWeek` reads that
@@ -410,4 +412,5 @@ The only lever the server has over an individual is `version`, and it is all-or-
 - `src/Controller/Admin/DashboardController.php:576,598` — the admin screen routes
 - `templates/admin/game_config.html.twig` — the closest real JSON-textarea precedent
 - `docs/api/translations.md` — `GET /api/translations/{code}`, for the rewording half
-- `src/Service/AudienceCriteriaEvaluator.php:31,77` — the stale `tutorialCompleted` criterion
+- `src/Service/AudienceCriteriaEvaluator.php` — the `setupCompleted` criterion and `LEGACY_KEYS`
+- `migrations/Version20261102120000.php` — the stored-payload rename, tested against PG16
