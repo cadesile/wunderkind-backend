@@ -5,7 +5,34 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
-- **New pass (2026-11-02), on top of commit 448a160** (uncommitted).
+- **New pass (2026-11-02), on top of commit `e12738d`** (uncommitted).
+  **Stages touched:** 06_documentation (`index.md`), shared (this file).
+  **No code change** — one doc registered, plus a correction to the entry below.
+
+  Registered `docs/api/setup-tutorial.md`, the work brief for the optional `tutorial`
+  block on `GET /api/starter-config`. It is listed under **New since the last
+  human-confirmed pass** with two explicit exceptions attached, because it breaks the
+  rule the pass below had just established: it is a work log living in `docs/api/`,
+  which is the genre that pass deleted `tournament-sealed-results-backend-work.md` for.
+  It is there because a backend session has to find it, and it is **prunable the moment
+  it is actioned** — the entry and the file's own header both say so.
+
+  Two things worth carrying forward from registering it:
+
+  - **The prune's own criterion has a blind spot for work that has not started.**
+    Inbound references decided what survived, which is right for a contract and wrong
+    for a brief: a brief for unimplemented work cannot be cited from source, because
+    the source does not exist yet. So the genre needs an explicit expiry instead of a
+    reference count, which is what the entry gives it.
+  - **A doc that is not in this index is invisible to the staleness check**, which is
+    how `05_ui`-equivalent drift happens in the app repo. The brief sat unregistered
+    across two commits (`e12738d`, and the `dev` merge `d1a552e`) before this.
+
+  Also corrected the entry below: it still read "(uncommitted)" after being committed
+  as `b1c7da0`, which would have had the next session hunt for uncommitted work that
+  was already in history.
+
+- **Pass (2026-11-02), on top of commit 448a160** — since committed as `b1c7da0`.
   **Stages touched:** 06_documentation (`index.md`), 03_data (`migrations.md`),
   04_interfaces (`routes.md`, `services.md`, `push-notifications.md`), shared
   (`stack.md`, this file). **No code change** — a prune of `docs/`, 1.4MB to 408KB.
