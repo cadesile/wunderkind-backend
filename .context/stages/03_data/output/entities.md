@@ -881,9 +881,11 @@ Each is effectively a single global-config row.
   page's "Boardroom Incident & Consequence Feed" widget. `fixturesSimulated`,
   `capitalDeployedPence`, `resultsWins/Draws/Losses`, `activeClubs`,
   `weeksPlayed`, `recentEvents:array` (enriched per-item shape: `time, text,
-  category, categoryLabel, club, detail, amountExact, timestampIso, meta` —
-  see `LiveTelemetryService`), `communityMoraleDelta:?int`, `totalGoals`,
-  `totalMatches`, `tableTurnover`, `generatedAt`. `formatPenceExact()` is
+  category, categoryLabel, club, detail, amountExact, timestampIso, meta,
+  trophy` — `trophy` is a TrophyConfig set only on `CUP` items; see
+  `LiveTelemetryService`), `communityMoraleDelta:?int`, `totalGoals`,
+  `totalMatches`, `tableTurnover`, `promotions`, `relegations`, `generatedAt`.
+  `formatPenceExact()` is
   a non-compact `£31,000`-style currency formatter alongside the older
   compact `formatPence()` (£K/£M). Built up incrementally across migrations
   `Version20260915213526` → `Version20261014223020` — see `migrations.md`.
@@ -903,6 +905,14 @@ Each is effectively a single global-config row.
   **`tableTurnover` reads the feed's 7-day window, not the 24h stats window**:
   a promotion/relegation only exists once a season concludes, far rarer than a
   sync, so a 24h count would read 0 almost permanently.
+  `promotions`/`relegations` (added `Version20261102160000`) are that same figure
+  split by direction over that same window — the tile now reads "▲ 7 ▼ 4". They are
+  counted by `SeasonRecordRepository::countTurnoverByDirectionSince()`, which counts
+  each direction rather than rows, so a row flagged BOTH promoted and relegated adds
+  one to each and the two can sum above `tableTurnover`'s row count. `tableTurnover`
+  **stays and is still written every refresh**: `GET /api/telemetry` publishes it as
+  `stats.tableTurnover` for app releases already in the wild. The migration backfills
+  `promotions` from it rather than leaving 0/0 for one cron interval.
 
 ## Translations
 

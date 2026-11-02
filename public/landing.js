@@ -2149,3 +2149,57 @@ var Scenes = (function () {
         });
     }
 }());
+
+// ── Telemetry: CUPS band sprites + countdowns ───────────────────────────────
+// Sprites: badges via the shared clubBadgeIconsHtml()/clubBadgeOnlyHtml(), trophies
+// via composeTrophySvg(). A [data-club-badge] element either IS the slot (has the
+// .tcup-badge class) or contains one. A null TrophyConfig leaves the slot empty —
+// a cup may simply have no trophy configured.
+//
+// Countdowns: every [data-countdown-to] (ISO 8601) ticks once a second from ONE
+// interval. Text-only change, so it keeps running under prefers-reduced-motion.
+// Clamped at 00:00:00 — the round resolves on the next cron tick, and the page is
+// not re-fetched, so a negative timer would only ever be a lie.
+(function () {
+    var root = document.getElementById('telemetry');
+    if (!root) return;
+
+    root.querySelectorAll('[data-trophy]').forEach(function (slot) {
+        var cfg = jsonAttr(slot, 'data-trophy', null);
+        if (!cfg || !cfg.style || typeof composeTrophySvg !== 'function') return;
+        mountWhenVisible(slot, function () {
+            slot.innerHTML = composeTrophySvg(cfg, 1, { background: 'none' });
+        });
+    });
+
+    root.querySelectorAll('.tcup-head ~ .tcup-body [data-club-badge]').forEach(function (el) {
+        var slot = el.classList.contains('tcup-badge') ? el : el.querySelector('.tcup-badge');
+        if (!slot) return;
+        mountWhenVisible(slot, function () {
+            var identity = jsonAttr(el, 'data-club-badge', null);
+            slot.innerHTML = slot.classList.contains('tcup-badge--only')
+                ? clubBadgeOnlyHtml(identity)
+                : clubBadgeIconsHtml(identity);
+        });
+    });
+
+    var timers = root.querySelectorAll('[data-countdown-to]');
+    if (!timers.length) return;
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function fmt(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        if (sec >= 86400) return Math.floor(sec / 86400) + 'D ' + pad(Math.floor(sec % 86400 / 3600)) + 'H';
+        return pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor(sec % 3600 / 60)) + ':' + pad(sec % 60);
+    }
+    var targets = Array.prototype.map.call(timers, function (el) {
+        return { el: el, at: Date.parse(el.getAttribute('data-countdown-to')) };
+    }).filter(function (t) { return !isNaN(t.at); });
+
+    function tick() {
+        var now = Date.now();
+        targets.forEach(function (t) { t.el.textContent = fmt((t.at - now) / 1000); });
+    }
+    tick();
+    setInterval(tick, 1000);
+}());

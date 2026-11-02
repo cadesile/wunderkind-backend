@@ -100,6 +100,31 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Cups whose final was settled inside a window, newest first — the telemetry feed's
+     * `CUP // WINNER` lines, which report "a cup was won in the last 7 days" rather than
+     * "the last few cups ever", the way findRecentlyCompletedWithKnownCompletion() does.
+     *
+     * Shares that method's IS NOT NULL guard, and for a second reason here: completedAt is
+     * the only timestamp that can place a cup inside the window at all, so a row without
+     * one cannot be reported as recent.
+     *
+     * @return list<ActiveCompetition>
+     */
+    public function findCompletedSince(\DateTimeImmutable $since, int $limit): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.status = :status')
+            ->andWhere('a.completedAt IS NOT NULL')
+            ->andWhere('a.completedAt >= :since')
+            ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
+            ->setParameter('since', $since)
+            ->orderBy('a.completedAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findLatestCompletedForTemplate(CompetitionTemplate $template): ?ActiveCompetition
     {
         return $this->createQueryBuilder('a')

@@ -26,6 +26,11 @@ serve these paths identically; see `01_overview/output/environment.md`.
   `POST /api/resend-verification`, `POST /api/forgot-password`,
   `POST /api/reset-password`, `POST /api/resend-password-reset`,
   `POST /api/sync`.
+- **`Api\TelemetryController`** `GET /api/telemetry` — also gained
+  `stats.promotions` / `stats.relegations` (the 7-day Table Turnover figure split by
+  direction, `tableTurnoverWindowDays` applies to all three) and a per-feed-item
+  `trophy` (TrophyConfig, set only on `CUP` items). All three are ADDITIVE:
+  `stats.tableTurnover` stays, and equals the two added together.
 - **`LandingController`** — public marketing site (Twig, not API JSON).
   Renders `LiveTelemetryService::getSnapshot()` server-side into the HTML and
   makes no client-side fetch of its own. Until 2026-10-21 it was the ONLY
@@ -36,10 +41,13 @@ serve these paths identically; see `01_overview/output/environment.md`.
   (`landing_delete_account`).
   Section services it renders server-side: `WorldOverviewService`,
   `ArchetypeShowcaseService`, `LiveTelemetryService`, `ClubSpotlightService`,
-  `OwnerSpotlightService`, `PeriodAwardsBoardService` and
-  `CupResultsBoardService` (`#cup-results`). The last three gate their own
-  section AND its nav link on the same emptiness check, so a board with no data
-  leaves no dead anchor in the header.
+  `OwnerSpotlightService`, `PeriodAwardsBoardService`,
+  `CupResultsBoardService` (`#cup-results`) and `CupTelemetryService` (the CUPS
+  band inside `#telemetry`). `PeriodAwardsBoardService` and
+  `CupResultsBoardService` gate their own section AND its nav link on the same
+  emptiness check, so a board with no data leaves no dead anchor in the header.
+  `CupTelemetryService` is the one read that is NOT a cached snapshot — see
+  services.md for why its countdowns cannot be.
 - **`InitializeController`** `#[Route('/api/initialize')]` —
   `POST /starter`, `GET /leagues`, `POST /league/{tier}` (`tier`
   constrained to `\d+`).

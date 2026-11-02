@@ -298,12 +298,15 @@ class LiveTelemetryServiceTest extends TestCase
         // 'clubId' joined this shape with the boardroom overlay's per-club dossier:
         // attachClubDossiers() keys off it, so it has to survive the merge's own
         // key-by-key rebuild. See LiveTelemetryDossierTest for that regression.
+        // 'trophy' joined with the CUP category for the same reason: the feed draws a
+        // trophy sprite from it, and the whitelist would otherwise drop it silently —
+        // see testCupWinsCarryTheirTrophyThroughTheMerge() in LiveTelemetryCupEventsTest.
         // Note this pins the WHITELIST's output, so it can only catch a key that should
         // not be here — a key wrongly *missing* from the whitelist matches it perfectly,
         // which is how `clubs` reached dev silently empty. testMergingKeepsEveryKeyAnEvent
         // Carries() below is the one that compares against what event() actually emits.
         $this->assertSame([
-            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge', 'clubId', 'clubs',
+            'time', 'text', 'category', 'categoryLabel', 'club', 'detail', 'amountExact', 'timestampIso', 'meta', 'clubBadge', 'clubId', 'clubs', 'trophy',
         ], array_keys($merged[0]));
         $this->assertSame('[BOARDROOM // OUTLAY]', $merged[0]['categoryLabel']);
         $this->assertSame('Ledger Club', $merged[0]['club']);

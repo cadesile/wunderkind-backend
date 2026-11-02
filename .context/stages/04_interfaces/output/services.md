@@ -589,7 +589,27 @@ filename alone.
   `weeksPlayed` is an approximation (sync count x `WEEKS_PER_SYNC` = 4), not a
   true weeks-elapsed count. `tableTurnover` also reads the 7-day feed window, not
   the 24h stats window the HUD header advertises — deliberate, since
-  promotions/relegations are far rarer than syncs.
+  promotions/relegations are far rarer than syncs. Since 2026-11-02 the HUD renders
+  that figure as TWO, `promotions` (▲) and `relegations` (▼), counted by
+  `SeasonRecordRepository::countTurnoverByDirectionSince()` over the SAME 7-day
+  window; `tableTurnover` is still written because `GET /api/telemetry` publishes it.
+  The window did NOT move to 24h with the split — measured on the SeasonRecord
+  history to hand, movement lands on 33 of 55 days, so 24h would read ▲0 ▼0 about
+  two days in five, which is twice as visible as one 0 was.
+- **`App\Service\Competition\CupTelemetryService`** — the CUPS band inside the same
+  terminal (`cups`, passed by `LandingController`), plus the rows behind the feed's
+  `CUP // WINNER` lines. **Read LIVE, not from the snapshot**, unlike everything else
+  in that section: the band's countdowns are only honest if the round times are
+  current, and a 15-minute-old "RESULTS IN" is 15 minutes wrong. Bounded by
+  `LIVE_LIMIT`/`OPEN_LIMIT`/`WINNER_LIMIT`; a short cache would still be safe, since
+  the JS counts down client-side. Winners come from the frozen
+  `CompetitionResult::$homeClubJson`/`$awayClubJson`, never the live `Club` — same
+  rule as `CupResultsBoardService`, which is why a cup won by a purged club still
+  renders. Returns `null` when nothing is live, open or ever won, which drops the band
+  entirely. Timer semantics: a `DRAWN` round counts down to `matchesResolveAt`
+  ("RESULTS IN"), a `DRAW_PENDING` one to `scheduledAt` ("DRAW IN"); `matchesResolveAt`
+  is nullable, and both the band's sort and its `nextResultAt` exclude a null rather
+  than let it compare below every real date and read as the most imminent of all.
   `aggregate()` also produces `totalGoals`/`totalMatches` for the HUD's
   "Goals Logged" box, summed from `fixtures[]` and **deduplicated by
   `fixtureId`** — that array carries the syncing club's WHOLE division's

@@ -492,3 +492,21 @@ was not safe to retry:
   is code, not schema: `CompetitionResponseBuilder::serializeFixtureSide()` falls back to
   `competition_result`'s frozen club copy, which survived because that table cascades from the
   FIXTURE rather than the club. See `04_interfaces/output/services.md`.
+
+- `Version20261102160000` — `live_telemetry_snapshot` gains `promotions` and `relegations`
+  (INT NOT NULL DEFAULT 0), the landing page's Table Turnover tile split by direction
+  ("▲ 7 ▼ 4" where it read "11"). Same rows, same 7-day window; see
+  `03_data/output/entities.md` for why the window did NOT move to 24h with the split.
+
+  `table_turnover` **stays, and `app:telemetry:generate` keeps writing it** — it is published
+  as `stats.tableTurnover` on `GET /api/telemetry`, so dropping it would break a field an app
+  release already in the wild reads. It equals promotions + relegations.
+
+  `postUp()` backfills `promotions` from `table_turnover` rather than leaving both at 0. The
+  table holds one snapshot row and the next cron tick overwrites all three anyway, but a
+  landing page rendered in between would otherwise show ▲0 ▼0 beside a live feed. The split
+  cannot be recovered from the total, so the whole of it goes to `promotions`: wrong in detail
+  for at most one interval, where 0/0 would be wrong AND look broken.
+
+  Written with the Schema API (`addColumn`/`dropColumn`) rather than raw DDL, per this
+  codebase's PostgreSQL-only rule.

@@ -3891,3 +3891,172 @@ button:focus-visible,
    .lbaw-board-foot is a <footer>, so it inherits the global site `footer {}`
    rule (dark background, 40px padding). Reset it. */
 .lbaw-board-foot { background: none; border-top: 0; padding: 0; }
+
+/* ── Telemetry: turnover split + CUPS band ───────────────────────────────────
+   Tokens only, no new colours. */
+
+/* Table Turnover: ▲ promotions / ▼ relegations. CSS triangles, not glyphs —
+   Press Start 2P has no ▲▼. */
+.terminal-turnover { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.terminal-turnover-item { display: inline-flex; align-items: center; gap: 8px; }
+.terminal-arrow { width: 0; height: 0; flex: none; border-left: 7px solid transparent; border-right: 7px solid transparent; }
+.terminal-arrow.is-up   { border-bottom: 10px solid var(--mint); }
+.terminal-arrow.is-down { border-top: 10px solid var(--red); }
+.terminal.is-pending .terminal-arrow.is-up   { border-bottom-color: var(--text-muted); }
+.terminal.is-pending .terminal-arrow.is-down { border-top-color: var(--text-muted); }
+
+/* Band header — same rhythm as .terminal-header, one step quieter. */
+.tcup-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding: 12px 24px;
+    background: var(--dark);
+    border-bottom: 2px solid var(--panel);
+}
+.tcup-head-live { display: flex; align-items: center; gap: 12px; }
+.tcup-dot { width: 12px; height: 12px; flex: none; background: var(--text-muted); }
+.tcup-dot.is-live { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.tcup-title { margin: 0; font-size: 10px; line-height: 1.6; font-weight: 400; color: var(--text); }
+.tcup-next { font-size: 20px; line-height: 1.1; color: var(--gold); }
+
+.tcup-body { display: flex; flex-wrap: wrap; border-bottom: 2px solid var(--panel); }
+.terminal-body--after-cups { border-top: 0; }
+
+.tcup-live {
+    flex: 2 1 460px;
+    min-width: 0;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 12px;
+    align-content: start;
+}
+.tcup-empty { grid-column: 1 / -1; margin: 0; padding: 4px 8px; font-size: 21px; line-height: 1.3; color: var(--text); }
+
+/* Sprite slots — filled by landing.js. */
+.tcup-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.tcup-badge svg { display: block; height: 22px; width: auto; image-rendering: pixelated; }
+.tcup-trophy { display: inline-flex; flex: none; }
+.tcup-trophy svg { display: block; height: 40px; width: auto; image-rendering: pixelated; }
+.tcup-trophy--sm svg { height: 36px; }
+
+/* Standard cup tile */
+.tcup-card {
+    background: var(--dark);
+    border: 2px solid var(--panel);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+.tcup-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tcup-card-id { min-width: 0; flex: 1 1 auto; }
+.tcup-card-name { font-size: 8px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
+.tcup-card-meta { font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.tcup-chip {
+    flex: none;
+    font-size: 8px;
+    line-height: 1;
+    padding: 5px 6px;
+    border: 2px solid var(--border);
+    background: var(--text-muted);
+    color: var(--border);
+}
+.tcup-chip--open { background: var(--mint); }
+
+.tcup-fx {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    padding: 4px 8px;
+}
+.tcup-fx-abbr { font-size: 8px; line-height: 1; color: var(--text); }
+.tcup-fx-abbr--away { text-align: right; }
+.tcup-fx-v { font-size: 17px; line-height: 1; color: var(--text-muted); }
+
+.tcup-bar { height: 10px; background: var(--bg); border: 2px solid var(--border); }
+.tcup-bar-fill { display: block; height: 100%; background: var(--mint); }
+
+.tcup-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.tcup-mint { color: var(--mint); }
+.tcup-gold { color: var(--gold); }
+
+/* The final — full row, gold ring. */
+.tcup-final {
+    grid-column: 1 / -1;
+    background: var(--bg);
+    border: 4px solid var(--gold);
+    box-shadow: 0 0 0 1px var(--gold), 0 0 24px rgba(245,200,66,.2);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.tcup-final-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tcup-final-chip {
+    flex: none;
+    background: var(--gold);
+    color: var(--border);
+    border: 2px solid var(--border);
+    font-size: 8px;
+    line-height: 1;
+    padding: 6px 8px;
+}
+.tcup-final-name { font-size: 9px; line-height: 1.6; color: var(--gold); overflow-wrap: anywhere; }
+.tcup-final-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; }
+.tcup-final-side { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
+.tcup-final-side .tcup-badge svg { height: 40px; }
+.tcup-final-club { font-size: 14px; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
+.tcup-final-centre { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tcup-final-centre .tcup-trophy svg { height: 64px; }
+.tcup-final-lbl { font-size: 16px; line-height: 1; color: var(--text-muted); }
+.tcup-final-timer { font-size: clamp(12px, 1.6vw, 16px); line-height: 1.2; color: var(--gold); }
+
+/* Recent winners — mirrors .terminal-aside's column. */
+.tcup-winners {
+    flex: 1 1 260px;
+    min-width: 0;
+    padding: 20px 24px;
+    border-left: 2px solid var(--panel);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.tcup-winners .btn { align-self: flex-start; }
+.tcup-winners-title { font-size: 9px; line-height: 1.6; color: var(--gold); }
+.tcup-winners-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tcup-winner {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--dark);
+    border: 2px solid var(--panel);
+}
+.tcup-winner .tcup-badge svg { height: 26px; }
+.tcup-winner-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tcup-winner-club { font-size: 13px; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcup-winner-line { font-size: 16px; line-height: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Feed: cup lines. */
+.terminal-feed-trophy { flex: none; display: inline-flex; }
+.terminal-feed-trophy svg { height: 32px; width: auto; image-rendering: pixelated; }
+.terminal-feed-item.cat-cup { border-left-color: var(--gold); }
+.terminal-feed-item.cat-cup .terminal-feed-category { color: var(--gold); }
+
+@media (max-width: 860px) {
+    .tcup-winners { border-left: 0; border-top: 2px solid var(--panel); }
+}
+@media (max-width: 640px) {
+    .tcup-head { padding: 12px 16px; }
+    .tcup-winners { padding: 20px 16px; }
+    .tcup-badge svg + svg { display: none; }
+}
