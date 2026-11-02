@@ -82,7 +82,18 @@ class AudienceGroupCrudController extends AbstractCrudController
             targets beginners. Clubs with no country have no league and never match a tier criterion.
             <br><br>
             <code>country</code> and <code>leagueTier</code> accept a single value or a list.
-            Example: <code>{"minReputation": 500, "leagueTier": [7, 8], "tutorialCompleted": true}</code>
+            Example: <code>{"minReputation": 500, "leagueTier": [7, 8], "setupCompleted": true}</code>
+            <br><br>
+            <strong><code>setupCompleted</code></strong> is whether the club finished new-game
+            <em>setup</em> — picking a badge, kits, a ground and the boardroom, and tapping START GAME.
+            It is not "has played the game": a club row is created the moment the player taps FOUND
+            CLUB, with eleven steps still to go, so <code>false</code> finds the players who founded a
+            club and walked away mid-setup. For "past the opening weeks" use <code>minWeek</code>
+            instead, which counts synced weeks.
+            <br><br>
+            <strong>Renamed 2026-11-02</strong> from <code>tutorialCompleted</code>, which named a
+            walkthrough the game no longer has. The old spelling is still accepted on existing groups
+            but is deprecated — re-save any group using it, and prefer the new key when writing one.
         HTML;
     }
 }

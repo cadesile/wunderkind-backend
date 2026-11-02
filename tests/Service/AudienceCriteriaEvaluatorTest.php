@@ -128,18 +128,71 @@ class AudienceCriteriaEvaluatorTest extends TestCase
         $this->assertFalse($this->evaluator->matches($this->group(['country' => 'EN']), $this->club()));
     }
 
-    public function testTutorialCompletedBothWays(): void
+    public function testSetupCompletedBothWays(): void
     {
         $done = $this->club();
         $done->setTutorialCompletedAt(new \DateTimeImmutable());
 
         $notDone = $this->club();
 
-        $this->assertTrue($this->evaluator->matches($this->group(['tutorialCompleted' => true]), $done));
-        $this->assertFalse($this->evaluator->matches($this->group(['tutorialCompleted' => false]), $done));
+        $this->assertTrue($this->evaluator->matches($this->group(['setupCompleted' => true]), $done));
+        $this->assertFalse($this->evaluator->matches($this->group(['setupCompleted' => false]), $done));
 
+        $this->assertTrue($this->evaluator->matches($this->group(['setupCompleted' => false]), $notDone));
+        $this->assertFalse($this->evaluator->matches($this->group(['setupCompleted' => true]), $notDone));
+    }
+
+    /**
+     * The retired spelling must keep working, and must mean the same thing.
+     *
+     * This is the test that matters more than the rename itself. The whitelist fails CLOSED,
+     * so without the alias a stored group carrying `tutorialCompleted` would match NOBODY —
+     * and because that is the safe direction by design, nothing would report it. A group that
+     * used to reach most of the player base (`tutorialCompleted: false`) would simply stop
+     * delivering, silently, on deploy.
+     */
+    public function testRetiredTutorialCompletedKeyStillEvaluatesAsSetupCompleted(): void
+    {
+        $done = $this->club();
+        $done->setTutorialCompletedAt(new \DateTimeImmutable());
+
+        $notDone = $this->club();
+
+        foreach ([true, false] as $value) {
+            $this->assertSame(
+                $this->evaluator->matches($this->group(['setupCompleted' => $value]), $done),
+                $this->evaluator->matches($this->group(['tutorialCompleted' => $value]), $done),
+                'the alias must agree with its replacement on a completed club',
+            );
+            $this->assertSame(
+                $this->evaluator->matches($this->group(['setupCompleted' => $value]), $notDone),
+                $this->evaluator->matches($this->group(['tutorialCompleted' => $value]), $notDone),
+                'the alias must agree with its replacement on an unfinished club',
+            );
+        }
+
+        // Not merely "does not crash": it must actually select.
+        $this->assertTrue($this->evaluator->matches($this->group(['tutorialCompleted' => true]), $done));
         $this->assertTrue($this->evaluator->matches($this->group(['tutorialCompleted' => false]), $notDone));
-        $this->assertFalse($this->evaluator->matches($this->group(['tutorialCompleted' => true]), $notDone));
+    }
+
+    public function testRetiredKeyIsNotAdvertisedAsSupported(): void
+    {
+        // Admin help lists SUPPORTED_KEYS verbatim, so a legacy key leaking in there would
+        // recommend the spelling we are retiring.
+        $this->assertNotContains('tutorialCompleted', AudienceCriteriaEvaluator::SUPPORTED_KEYS);
+        $this->assertContains('setupCompleted', AudienceCriteriaEvaluator::SUPPORTED_KEYS);
+        $this->assertArrayHasKey('tutorialCompleted', AudienceCriteriaEvaluator::LEGACY_KEYS);
+
+        // Every legacy key must point at a key that really exists, or the alias is a slow
+        // trapdoor into the fails-closed path it was added to avoid.
+        foreach (AudienceCriteriaEvaluator::LEGACY_KEYS as $legacy => $replacement) {
+            $this->assertContains(
+                $replacement,
+                AudienceCriteriaEvaluator::SUPPORTED_KEYS,
+                sprintf('LEGACY_KEYS maps %s to %s, which is not supported.', $legacy, $replacement),
+            );
+        }
     }
 
     public function testLeagueTierMatchesScalarAndList(): void
@@ -181,7 +234,7 @@ class AudienceCriteriaEvaluatorTest extends TestCase
             'leagueTier'        => 8,
             'minWeek'           => 1,
             'maxWeek'           => 100,
-            'tutorialCompleted' => true,
+            'setupCompleted'    => true,
         ];
 
         $this->assertSame(

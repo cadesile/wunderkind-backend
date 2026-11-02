@@ -123,12 +123,12 @@ claiming canonical status)
   `StarterConfigController`'s docblock, which is what earns a place in that directory — or
   delete it, once the work lands. **So it is prunable the moment it is actioned.** Second,
   it carries an item that is not about this feature at all: `Club::$tutorialCompletedAt`
-  and the `tutorialCompleted` audience criterion had been fed by nothing since 2026-09-29,
+  and its audience criterion had been fed by nothing since 2026-09-29,
   the client half is fixed (`wunderkind-app@fe84d02e`) and a one-off backfill off
   `last_synced_week >= 1` is still owed here — read it in
   `src/Service/AudienceCriteriaEvaluator.php:31,77` and `SyncService.php:183`, with the
   column's meaning now written up under `Club` in `03_data/output/entities.md` and on
   `Club::$tutorialCompletedAt`'s own docblock (both corrected 2026-11-02; they had said
-  "first-launch tutorial", and the admin help text in
-  `AudienceGroupCrudController.php:85` still offers `tutorialCompleted: true` as its
-  worked example without saying what it now measures)
+  "first-launch tutorial"). The criterion itself was renamed `tutorialCompleted` →
+  `setupCompleted` the same day, with a stored-payload migration and a legacy alias, and the
+  admin help text now says what it measures — see `docs/api/server-driven-messaging.md`
