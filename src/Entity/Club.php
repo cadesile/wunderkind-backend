@@ -113,7 +113,28 @@ class Club
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $starterPackJson = null;
 
-    /** Set once when the client completes the first-launch tutorial. Survives reinstalls. */
+    /**
+     * Set once when the client completes new-game SETUP. Survives reinstalls.
+     *
+     * The name is historical. Until 2026-09-29 it meant "the first-launch
+     * walkthrough stopped running", written by that tour's own skip handler; the
+     * client deleted the walkthrough and, with it, the only thing that ever sent
+     * this field — so the column stayed null for every club created between then
+     * and 2026-11-02, and the `tutorialCompleted` audience criterion
+     * (AudienceCriteriaEvaluator) was silently false for all of them.
+     *
+     * The client sends it again as of 2026-11-02, with the only completion event
+     * still available: setup finished. That is narrower but not vacuous — the club
+     * row is created at FOUND CLUB, while setup continues through badge, kits,
+     * stadium, eight hire/role steps and the overview, so a club can exist whose
+     * setup was abandoned partway. Those are the clubs this column distinguishes.
+     *
+     * Still owed: a one-off backfill for the clubs created in the gap. They
+     * completed setup, but nothing client-side records when, and the client
+     * deliberately does not invent a value. `lastSyncedWeek >= 1` is the sound
+     * test — it only advances through a sync, which cannot happen until setup has
+     * completed. See docs/api/setup-tutorial.md.
+     */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $tutorialCompletedAt = null;
 

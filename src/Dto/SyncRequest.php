@@ -271,8 +271,14 @@ class SyncRequest
     }
 
     /**
-     * ISO 8601 timestamp of when the client completed the first-launch tutorial.
-     * Sent once; server records it idempotently and never overwrites with null.
+     * ISO 8601 timestamp of when the client completed new-game SETUP — see
+     * `Club::$tutorialCompletedAt` for why the name says "tutorial".
+     *
+     * Sent on EVERY sync, not once: the client holds the value in its own club
+     * state and resends it, which is harmless because this is recorded
+     * idempotently and never overwritten (SyncService). Null from a client whose
+     * setup predates 2026-11-02; those clubs need a server-side backfill rather
+     * than a guess here.
      */
     public ?string $tutorialCompletedAt = null;
 
