@@ -34,8 +34,14 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * a deleted account. Re-implementing that ordering here would be a second copy to keep in
  * step with every future FK. The bulk entry point exists because the per-account one opens a
  * transaction and invalidates every leaderboard category each time, which at a few thousand
- * spoof accounts is slow enough to time out the deploy step and the admin button that call
- * this.
+ * spoof accounts is slow enough to time out the admin button that calls this.
+ *
+ * ── Operator-invoked only, as of 2026-11-02 ────────────────────────────────────────────
+ * Both deploy workflows used to run this on every deploy. That made it scheduled data loss
+ * rather than cleanup: competitions are filled with spoof clubs by CompetitionAutoFillService,
+ * so each deploy deleted the opposition out of cups players had already won, leaving the
+ * bracket reading "To be decided". Run it from the admin's "Clear Spoof Clubs" button, or by
+ * hand. Do not put it back in a deploy workflow.
  *
  * **A user is only deleted when every club they own is a spoof** and their email is on the
  * spoof domain. Both conditions, not either: deleteAccount() removes ALL of a user's clubs,

@@ -148,7 +148,10 @@ so a token minted before the fix starts working without re-authentication. See
   `/admin/developer-tools/trigger-age21|cleanup-entities|generate-leaderboards|reset-database|nuclear-reset`,
   `/admin/developer-tools/purge-spoof-clubs` (`POST`, CSRF-guarded — the
   Settings screen's "Clear Spoof Clubs" button, running
-  `app:clubs:purge-spoof`; unlike the older Developer Tools buttons beside it
+  `app:clubs:purge-spoof` — **since 2026-11-02 this is the ONLY scheduled-ish caller there
+  is**, the deploy workflows having dropped their every-deploy run of the same command
+  (it was deleting the opposition out of finished cups; see `03_data/output/migrations.md`);
+  unlike the older Developer Tools buttons beside it
   this one posts to and redirects through `/admin?routeName=...`, which is what
   `src/Controller/Admin/CLAUDE.md` requires of any action rendering an
   `@EasyAdmin`-extending template),
