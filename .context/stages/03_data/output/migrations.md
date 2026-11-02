@@ -207,6 +207,42 @@ Most recent migrations (chronological):
     to `competition_result` to store an engine-agnostic derivation & computation
     audit trail for every tournament match result.
 
+## ⚠️ Never put a bare `?` in `addSql()` — DBAL reads it as a bind placeholder
+
+Cost a failed dev deploy on 2026-11-02. `Version20261102120000` renames a key inside
+`audience_group.criteria_payload` and guarded the UPDATE with Postgres's jsonb key-exists
+operator:
+
+```sql
+AND criteria_payload::jsonb ? 'tutorialCompleted'   -- correct Postgres, breaks via DBAL
+```
+
+DBAL rewrote the `?` to a positional parameter and bound nothing, so the server received
+`AND criteria_payload::jsonb $1 'tutorialCompleted'` and the deploy died with
+`SQLSTATE[42601]: syntax error at or near "$1"`. **Use the function form instead** —
+`jsonb_exists(col, key)`, and `jsonb_exists_any` / `jsonb_exists_all` for `?|` / `?&`.
+
+**The process lesson is the sharper one. The SQL had been exercised against a real
+Postgres 16 before the commit, on fixtures covering every branch — and that proved nothing,
+because it was run in `psql`, not through Doctrine.** `?` is valid in one and a placeholder
+in the other, so the only verification that could have caught it is the one that was
+skipped: run `doctrine:migrations:migrate` (or `migrations:execute --up/--down`) against a
+throwaway database. The host cannot run the suite (vendor needs PHP ≥ 8.5 against 8.4.13,
+and `compose.yaml` has no PHP service), which is exactly why this was tempting to skip; a
+`php:8.5-cli` container with `pdo_pgsql` and `intl`, pointed at the compose `database`
+service, runs both the suite and the console fine.
+
+**What made the failure survivable** was unrelated to the migration: the code it ships with
+accepts the old key through `AudienceCriteriaEvaluator::LEGACY_KEYS`, so dev kept working on
+un-migrated data between the failed deploy and the fix. A rename migration whose code half
+fails closed would have taken the feature down instead.
+
+Note also what a mid-deploy failure costs beyond the migration: `deploy-dev.yml` runs the
+seeders *after* `migrations:migrate`, so none of them ran. All are idempotent or
+TRUNCATE-and-rebuild, so the previous deploy's data stood — but a deploy that stops here
+leaves new code against an old schema, which the workflow's own `concurrency` comment calls
+out as the reason `cancel-in-progress` is false.
+
 ## Takeaway
 
 Active development from mid-September through 2026-09-27 progressed
