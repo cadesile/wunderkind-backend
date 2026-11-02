@@ -108,3 +108,24 @@ claiming canonical status)
   client reading cached payloads knows the correspondence), which endpoints
   carry it, and why `null` must not be defaulted into a visible cup — see
   "Trophy Identity" in CLAUDE.md
+- `docs/api/setup-tutorial.md` (2026-11-02) — **a work brief, not a contract: nothing in
+  it is implemented server-side yet.** The optional `tutorial: {version, items[]}` block
+  the app now reads off `GET /api/starter-config` to drive first-run cards inside new-game
+  setup: payload shape, the client's per-item drop rules, valid anchors, the five briefings
+  and where they anchor, `ngs.tut.*` copy keys, and `version` as the replay lever. Flagged
+  here rather than left to be found because its failure mode is **silence** —
+  `parseTutorial` cannot throw, so a bad anchor or a missing copy key makes a card not
+  appear, with no error anywhere.
+  **Two reasons it is listed as an exception.** First, it sits in `docs/api/` against the
+  grain of the 2026-11-02 prune above, which deleted
+  `tournament-sealed-results-backend-work.md` for being exactly this genre; its own header
+  says to rewrite it as a contract describing what IS — and cite it from
+  `StarterConfigController`'s docblock, which is what earns a place in that directory — or
+  delete it, once the work lands. **So it is prunable the moment it is actioned.** Second,
+  it carries an item that is not about this feature at all: `Club::$tutorialCompletedAt`
+  and the `tutorialCompleted` audience criterion had been fed by nothing since 2026-09-29,
+  the client half is fixed (`wunderkind-app@fe84d02e`) and a one-off backfill off
+  `last_synced_week >= 1` is still owed here — read it in
+  `src/Service/AudienceCriteriaEvaluator.php:31,77` and `SyncService.php:183`;
+  `03_data/output/entities.md` lists the column among `Club`'s fields but does not say
+  what it means, and its docblock on the entity is still the pre-2026-09-29 wording
