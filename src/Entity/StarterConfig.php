@@ -152,6 +152,191 @@ class StarterConfig
      *
      * @var array<string, array{min: int, max: int}>
      */
+    /**
+     * Optional first-run guidance for the app's new-game SETUP flow: `{version, items[]}`.
+     *
+     * Served verbatim as `tutorial` by `StarterConfigController::index()`. The client
+     * validates it item by item in `parseTutorial` and **cannot throw** — setup is the one
+     * route a new account cannot skip — so anything malformed, of an unknown kind, anchored
+     * to an unknown step, or naming a copy key the translation catalogue lacks is dropped
+     * SILENTLY. Nothing reports it. That is why `app:check-setup-tutorial` exists and why
+     * this column is validated rather than trusted; see `docs/api/setup-tutorial.md`.
+     *
+     * NOT named `tutorialConfig`: `Club::$tutorialCompletedAt` is a different and
+     * differently-scoped concept (per-club "setup finished"), and two unrelated `tutorial`
+     * things in one domain is how that one went stale unnoticed for five weeks. This is
+     * global config; that is per-club state.
+     *
+     * Non-nullable with a seeded default, like every other JSON column on this entity —
+     * which also avoids `ConfigImportExportService::coerce()`, whose null branch throws
+     * unless the setter takes `?array`. An empty array is the "no tutorial" state.
+     *
+     * Copy keys are `ngs.tut.*`. They are NOT needed for English to render — the app's
+     * bundled catalogue carries all 34 and API translations merge on top of it — but they
+     * must exist as `TranslationKey` rows for the copy to be reworded without an app build,
+     * which is the point of it living here. Get them by importing the app's
+     * `locales/en/translations.json` at `/admin/translations/import`; that file is the single
+     * source of those strings, so they are deliberately not re-typed on this side.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $setupTutorialConfig = [
+        'version' => 1,
+        'items' => [
+            [
+                'id' => 'brief-owner',
+                'kind' => 'briefing',
+                'anchor' => [
+                    'before' => 'avatar',
+                ],
+                'modes' => ['first'],
+                'titleKey' => 'ngs.tut.owner.title',
+                'bodyKey' => 'ngs.tut.owner.body',
+                'pointKeys' => ['ngs.tut.owner.p1', 'ngs.tut.owner.p2'],
+                'ctaKey' => 'ngs.tut.cta.gotIt',
+            ],
+            [
+                'id' => 'brief-club',
+                'kind' => 'briefing',
+                'anchor' => [
+                    'before' => 'country',
+                ],
+                'modes' => ['first', 'newClub'],
+                'titleKey' => 'ngs.tut.club.title',
+                'bodyKey' => 'ngs.tut.club.body',
+                'pointKeys' => ['ngs.tut.club.p1', 'ngs.tut.club.p2'],
+                'ctaKey' => 'ngs.tut.cta.gotIt',
+            ],
+            [
+                'id' => 'brief-identity',
+                'kind' => 'briefing',
+                'anchor' => [
+                    'before' => 'badge',
+                ],
+                'modes' => ['first', 'newClub'],
+                'titleKey' => 'ngs.tut.identity.title',
+                'bodyKey' => 'ngs.tut.identity.body',
+                'pointKeys' => ['ngs.tut.identity.p1', 'ngs.tut.identity.p2', 'ngs.tut.identity.p3'],
+                'ctaKey' => 'ngs.tut.cta.gotIt',
+            ],
+            [
+                'id' => 'brief-staff',
+                'kind' => 'briefing',
+                'anchor' => [
+                    'before' => 'hire:chairman',
+                ],
+                'modes' => ['first', 'newClub'],
+                'titleKey' => 'ngs.tut.staff.title',
+                'bodyKey' => 'ngs.tut.staff.body',
+                'pointKeys' => ['ngs.tut.staff.p1', 'ngs.tut.staff.p2', 'ngs.tut.staff.p3', 'ngs.tut.staff.p4'],
+                'ctaKey' => 'ngs.tut.cta.gotIt',
+            ],
+            [
+                'id' => 'brief-review',
+                'kind' => 'briefing',
+                'anchor' => [
+                    'before' => 'overview',
+                ],
+                'modes' => ['first', 'newClub'],
+                'titleKey' => 'ngs.tut.review.title',
+                'bodyKey' => 'ngs.tut.review.body',
+                'pointKeys' => ['ngs.tut.review.p1', 'ngs.tut.review.p2'],
+                'ctaKey' => 'ngs.tut.cta.gotIt',
+            ],
+            [
+                'id' => 'note-avatar',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'avatar',
+                ],
+                'modes' => ['first'],
+                'bodyKey' => 'ngs.tut.note.avatar',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-owner',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'owner',
+                ],
+                'modes' => ['first'],
+                'bodyKey' => 'ngs.tut.note.owner',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-country',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'country',
+                ],
+                'bodyKey' => 'ngs.tut.note.country',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-club',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'club',
+                ],
+                'bodyKey' => 'ngs.tut.note.club',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-badge',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'badge',
+                ],
+                'bodyKey' => 'ngs.tut.note.badge',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-kits',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'kits',
+                ],
+                'bodyKey' => 'ngs.tut.note.kits',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-stadium',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'stadium',
+                ],
+                'bodyKey' => 'ngs.tut.note.stadium',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-hire',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'hire',
+                ],
+                'bodyKey' => 'ngs.tut.note.hire',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-role',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'role',
+                ],
+                'bodyKey' => 'ngs.tut.note.role',
+                'dismissible' => true,
+            ],
+            [
+                'id' => 'note-overview',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'overview',
+                ],
+                'bodyKey' => 'ngs.tut.note.overview',
+                'dismissible' => true,
+            ],
+        ],
+    ];
+
     #[ORM\Column(type: 'json')]
     private array $fanBaseRanges = [
         '1' => ['min' => 50000,  'max' => 150000],
@@ -287,4 +472,27 @@ class StarterConfig
 
     public function getFanBaseRelegationDecrease(): float { return $this->fanBaseRelegationDecrease; }
     public function setFanBaseRelegationDecrease(float $v): static { $this->fanBaseRelegationDecrease = max(0.0, $v); return $this; }
+
+    public function getSetupTutorialConfig(): array { return $this->setupTutorialConfig; }
+    /** @param array<string, mixed> $v */
+    public function setSetupTutorialConfig(array $v): static { $this->setupTutorialConfig = $v; return $this; }
+
+    public function getSetupTutorialConfigJson(): string
+    {
+        return json_encode($this->setupTutorialConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * Admin textarea setter. Invalid JSON leaves the stored value ALONE rather than wiping
+     * it to `[]` — a typo in a 15-item blob should not silently delete the tutorial. The
+     * admin screen reports the parse error; `app:check-setup-tutorial` reports the rest.
+     */
+    public function setSetupTutorialConfigJson(string $v): static
+    {
+        $decoded = json_decode($v, true);
+        if (is_array($decoded)) {
+            $this->setupTutorialConfig = $decoded;
+        }
+        return $this;
+    }
 }

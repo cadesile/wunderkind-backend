@@ -29,6 +29,7 @@ use App\Controller\Admin\TranslationKeyCrudController;
 use App\Enum\Appearance\TrophyFinish;
 use App\Enum\Appearance\TrophyStyle;
 use App\Enum\Country;
+use App\Service\SetupTutorialValidator;
 use App\Enum\ReputationTier;
 use App\Repository\LeagueRepository;
 use App\Service\LeagueService;
@@ -622,6 +623,27 @@ class DashboardController extends AbstractDashboardController
             $this->addFlash('danger', 'Default Facilities contains invalid JSON and was not saved. Please fix it and try again.');
         } else {
             $config->setDefaultFacilitiesJson($facilitiesRaw);
+        }
+
+        // Setup tutorial — a JSON textarea, same shape as Default Facilities above.
+        //
+        // Two deliberate differences. The setter ignores un-decodable input rather than
+        // writing `[]`, so a typo in a 15-item blob cannot silently delete the tutorial; and
+        // the parse failure is reported here, because the CLIENT reports nothing — its
+        // `parseTutorial` cannot throw (setup is the one route a new account cannot skip), so
+        // it drops bad items in silence. `app:check-setup-tutorial` is the deeper check;
+        // this only catches "is it JSON at all".
+        $tutorialRaw = trim((string) $request->request->get('setupTutorialConfig', ''));
+        if ($tutorialRaw !== '') {
+            $decodedTutorial = json_decode($tutorialRaw, true);
+            if (!is_array($decodedTutorial)) {
+                $this->addFlash('danger', 'Setup Tutorial contains invalid JSON and was not saved. Please fix it and try again.');
+            } else {
+                $config->setSetupTutorialConfigJson($tutorialRaw);
+                foreach (SetupTutorialValidator::problems($decodedTutorial) as $problem) {
+                    $this->addFlash('warning', 'Setup Tutorial: ' . $problem);
+                }
+            }
         }
 
         $npcConfigInput = $request->request->all('npcConfig') ?: [];

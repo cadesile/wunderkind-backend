@@ -8,8 +8,9 @@
         .CodeMirror { height: 140px; font-size: 13px; border: 1px solid #ced4da; border-radius: 0.375rem; }
         .CodeMirror-focused { border-color: #86b7fe; box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25); outline: 0; }
         .cm-json-error .CodeMirror { border-color: #dc3545; }
-        #defaultFacilities-error { display: none; }
-        .cm-json-error #defaultFacilities-error { display: block; }
+        #defaultFacilities-error, #setupTutorialConfig-error { display: none; }
+        .cm-json-error #defaultFacilities-error,
+        .cm-json-error #setupTutorialConfig-error { display: block; }
     </style>
 {% endblock %}
 
@@ -144,6 +145,49 @@
                         </div>
                     </div>
 
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-graduation-cap text-muted"></i>
+                <span class="fw-semibold small">Setup Tutorial</span>
+            </div>
+            <div class="card-body">
+                <div class="col-12" id="setupTutorialConfig-wrap">
+                    <label for="setupTutorialConfig" class="form-label fw-semibold small">Tutorial block (JSON)</label>
+                    <textarea id="setupTutorialConfig" name="setupTutorialConfig"
+                              class="font-monospace" rows="14">{{ config.setupTutorialConfigJson }}</textarea>
+                    <div id="setupTutorialConfig-error" class="text-danger small mt-1">Invalid JSON — please fix before saving.</div>
+                    <div class="form-text">
+                        First-run cards inside the app's <strong>new-game setup</strong> flow, served as
+                        <code>tutorial</code> on <code>GET /api/starter-config</code>. Shape:
+                        <code>{"version": 1, "items": [...]}</code>.
+                        <br><br>
+                        <strong>A <code>note</code></strong> is a dismissible card at the top of a step
+                        (<code>anchor.on</code>); <strong>a <code>briefing</code></strong> replaces the step's body
+                        until the player taps its CTA (<code>anchor.before</code>). A briefing is not a step — it
+                        does not affect the counter, BACK or FOUND CLUB.
+                        <br><br>
+                        Anchors are a step name, optionally <code>kind:role</code> with at most one colon. Steps:
+                        <code>welcome avatar owner country club badge kits stadium hire role overview</code>; a role
+                        suffix is legal only on <code>hire</code> and <code>role</code>, from
+                        <code>chairman dof manager facilities</code>. A bare <code>hire</code> matches all four hire
+                        steps.
+                        <br><br>
+                        Copy lives in the translation catalogue under <code>ngs.tut.*</code> — the JSON carries
+                        <em>keys</em>, never text.
+                        <br><br>
+                        <strong>Raise <code>version</code> to show everything again to everyone.</strong> Changing one
+                        item's <code>id</code> replays just that item.
+                        <br><br>
+                        ⚠️ <strong>Mistakes here are silent.</strong> The app cannot fail on this data — setup is the
+                        one screen a new account cannot skip — so an item with an unknown anchor or an unresolvable
+                        copy key simply never appears, with no error anywhere. Saving runs a check and reports what
+                        it finds; <code>php bin/console app:check-setup-tutorial</code> runs the same check plus
+                        translation-row coverage. An empty <code>{}</code> is a valid "no tutorial" state.
+                    </div>
                 </div>
             </div>
         </div>
@@ -409,9 +453,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/json-lint.min.js"></script>
     <script>
-    (function () {
-        const ta = document.getElementById('defaultFacilities');
-        const wrap = document.getElementById('defaultFacilities-wrap');
+    // Both JSON textareas on this screen get the same editor + lint + submit guard.
+    // Was hardcoded to `defaultFacilities`; generalised 2026-11-02 when Setup Tutorial
+    // added a second one, rather than copying 40 lines.
+    ['defaultFacilities', 'setupTutorialConfig'].forEach(function (id) {
+        const ta = document.getElementById(id);
+        const wrap = document.getElementById(id + '-wrap');
+        if (!ta || !wrap) return;
         const form = ta.closest('form');
 
         const editor = CodeMirror.fromTextArea(ta, {
@@ -428,8 +476,7 @@
         }
 
         function validate() {
-            const val = editor.getValue().trim();
-            if (isValidJson(val)) {
+            if (isValidJson(editor.getValue().trim())) {
                 wrap.classList.remove('cm-json-error');
             } else {
                 wrap.classList.add('cm-json-error');
@@ -447,7 +494,7 @@
                 wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         });
-    })();
+    });
 
     // ── League Ability Range copy / paste ────────────────────────────────────
     (function () {
