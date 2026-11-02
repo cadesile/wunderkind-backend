@@ -257,7 +257,11 @@ class CompetitionController extends AbstractController
 
         if ($result['wasNewRegistration']) {
             $existingEntrantUserIds = array_values(array_filter(array_map(
-                static fn ($existing) => $existing->getId()->equals($entrant->getId()) ? null : (string) $existing->getClub()->getUser()->getId(),
+                // Null for the new registrant itself, and for any entry whose club has since
+                // been deleted (CompetitionEntrant::$club) — array_filter drops both.
+                static fn ($existing) => $existing->getId()->equals($entrant->getId()) || $existing->getClub() === null
+                    ? null
+                    : (string) $existing->getClub()->getUser()->getId(),
                 $this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition),
             )));
 

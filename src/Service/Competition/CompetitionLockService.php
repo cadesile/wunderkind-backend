@@ -84,8 +84,13 @@ class CompetitionLockService
 
         if ($this->inboxService !== null) {
             foreach ($entrants as $entrant) {
+                // No club, no inbox — an entry outlives its club (CompetitionEntrant::$club).
+                $entrantClub = $entrant->getClub();
+                if ($entrantClub === null) {
+                    continue;
+                }
                 $this->inboxService->createMessage(
-                    club: $entrant->getClub(),
+                    club: $entrantClub,
                     senderType: MessageSenderType::COMPETITION,
                     senderName: $templateName,
                     subject: sprintf('Registration full: %s', $templateName),

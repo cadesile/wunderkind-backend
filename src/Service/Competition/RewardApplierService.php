@@ -30,6 +30,15 @@ class RewardApplierService
 
     public function applyVictorPrize(CompetitionEntrant $winner, ActiveCompetition $activeCompetition): void
     {
+        // The prize is delivered as an inbox offer the player accepts, so there is nothing
+        // to deliver — and no one to deliver it to — when the winning entry's club has been
+        // deleted. An entry outlives its club (CompetitionEntrant::$club) precisely so the
+        // bracket can still show who won; that is all it can do here.
+        $winnerClub = $winner->getClub();
+        if ($winnerClub === null) {
+            return;
+        }
+
         $template        = $activeCompetition->getTemplate();
         $combinedEffects = [];
         $firstClaimId    = null;
@@ -64,7 +73,7 @@ class RewardApplierService
         $competitionId = (string) $activeCompetition->getId();
 
         $message = new InboxMessage(
-            club:       $winner->getClub(),
+            club:       $winnerClub,
             senderType: MessageSenderType::COMPETITION,
             senderName: $templateName,
             subject:    "You won the {$templateName}!",

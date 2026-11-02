@@ -72,7 +72,9 @@ class CompetitionRoundReminderService
         $userIds = [];
         foreach ($this->fixtureRepository->findByRoundOrderedBySlot($round) as $fixture) {
             foreach ([$fixture->getHomeEntrant(), $fixture->getAwayEntrant()] as $entrant) {
-                if ($entrant !== null) {
+                // An entry whose club has been deleted has no owner to remind
+                // (CompetitionEntrant::$club).
+                if ($entrant?->getClub() !== null) {
                     $userIds[] = (string) $entrant->getClub()->getUser()->getId();
                 }
             }

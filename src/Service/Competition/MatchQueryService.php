@@ -147,7 +147,9 @@ class MatchQueryService
                 $homeEntrant = $pendingFixture->getHomeEntrant();
                 $awayEntrant = $pendingFixture->getAwayEntrant();
                 $opponent    = ($homeEntrant !== null && $homeEntrant->getId()->equals($entrant->getId())) ? $awayEntrant : $homeEntrant;
-                $h2h         = $opponent !== null ? $this->computeH2hCounts((string) $club->getId(), (string) $opponent->getClub()->getId()) : null;
+                // By the entry's club id, which survives the club row (CompetitionEntrant::$club).
+                $opponentClubId = $opponent?->getClubIdValue();
+                $h2h            = $opponentClubId !== null ? $this->computeH2hCounts((string) $club->getId(), $opponentClubId) : null;
 
                 $items[] = [
                     'matchId'     => (string) $pendingFixture->getId(),
@@ -239,7 +241,10 @@ class MatchQueryService
         foreach ($cupFixtures as $fixture) {
             $winner = $fixture->getWinnerEntrant();
             if ($winner !== null) {
-                if ((string) $winner->getClub()->getId() === $clubId) {
+                // By the entry's club id, which outlives the club row itself
+                // (CompetitionEntrant::$club) — the viewer's own club always exists, so a
+                // winner with no club id is simply not the viewer.
+                if ($winner->getClubIdValue() === $clubId) {
                     $won++;
                 } else {
                     $lost++;
@@ -290,7 +295,10 @@ class MatchQueryService
         foreach ($this->fixtureRepository->findCompletedBetweenClubs($clubId, $opponentClubId) as $fixture) {
             $winner = $fixture->getWinnerEntrant();
             if ($winner !== null) {
-                if ((string) $winner->getClub()->getId() === $clubId) {
+                // By the entry's club id, which outlives the club row itself
+                // (CompetitionEntrant::$club) — the viewer's own club always exists, so a
+                // winner with no club id is simply not the viewer.
+                if ($winner->getClubIdValue() === $clubId) {
                     $won++;
                 } else {
                     $lost++;

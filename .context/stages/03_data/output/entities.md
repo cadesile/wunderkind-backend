@@ -616,10 +616,30 @@ migrations are the change log (see `migrations.md`).
   `facilities` is gone entirely — accepted, stored on every entrant, decoded on
   every read, and never read back by anything.
   Plus `seed`, `status:CompetitionEntrantStatus(enum)`, `snapshotLockedAt`,
-  `snapshotVersion:int(1)`, `registeredAt`. `ManyToOne` → `activeCompetition`,
-  `club` (both not nullable, `CASCADE`); `eliminatedInRound:?CompetitionRound`
+  `snapshotVersion:int(1)`, `registeredAt`. `ManyToOne` → `activeCompetition`
+  (not nullable, `CASCADE`); **`club:?Club` (NULLABLE, `SET NULL` since
+  2026-11-02 — it was not nullable / `CASCADE`)**; `eliminatedInRound:?CompetitionRound`
   (nullable, `SET NULL`). Unique index on (`active_competition_id`, `club_id`) —
-  one entry per club per competition. **No association to
+  one entry per club per competition, and unaffected by the nullability because
+  Postgres treats NULLs as distinct.
+  **An entry now OUTLIVES its club, and that is the point.** `competition_fixture`'s three
+  entrant columns are ON DELETE SET NULL, so cascading the entrant away with its club blanked
+  that club out of every bracket it had ever played in — a completed cup's opposition reverted
+  to "To be decided", scorelines included. It fired routinely, not rarely: competitions are
+  filled by `CompetitionAutoFillService` with spoof clubs and `app:clubs:purge-spoof` ran on
+  EVERY deploy in both workflows until 2026-11-02, so each deploy emptied the finished cups.
+  **The deploy step has since been removed** — purging is an operator action (admin →
+  "Clear Spoof Clubs") — but a club can still be deleted whenever an account is, so this
+  column is the fix, not the workflow change. Keeping the row
+  keeps `clubDisplayJson` with it, which is all a bracket renders.
+  Consequences to hold onto: **every reader must handle a null club** — prefer
+  `getDisplayName()` / `getClubIdValue()` / `getClubDisplayJson()` wherever the club is only
+  being DISPLAYED, and reserve `getClub()` for paying, mailing or pushing to its owner, which
+  skips a null entry rather than guessing. And `AccountDeletionService::releaseUnstartedCompetitionEntries()`
+  still deletes entries in a REGISTERING competition, because an orphan there would hold a
+  capacity slot for ever and `lockIfComplete()` waits on every entrant having a stored squad —
+  the same split as the FriendlyChallenge line beside it (an unaccepted challenge goes, a
+  played one stays). **No association to
   `CompetitionEntrantSquad`** — see the two rules in `schema.md`.
   `squadState:EntrantSquadState` (`pending`/`stored`/`failed`, default `stored`) records
   whether the queued squad/submission write has landed — registration reserves the slot

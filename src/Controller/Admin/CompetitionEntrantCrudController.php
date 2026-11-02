@@ -238,14 +238,18 @@ class CompetitionEntrantCrudController extends AbstractCrudController
                 return $this->redirect($detailUrl);
             }
 
-            $this->addFlash('success', sprintf('Created spoof entrant "%s".', $spoof->getClub()->getName()));
+            $this->addFlash('success', sprintf('Created spoof entrant "%s".', $spoof->getClub()?->getName() ?? $spoof->getDisplayName()));
 
             return $this->redirect($this->generateUrl('admin_competition_entrant_detail', ['entityId' => (string) $spoof->getId()]));
         }
 
         return $this->render('admin/competition/generate_spoof_from_entrant.html.twig', [
             'competition'  => $competition,
-            'clubName'     => $entrant->getClub()->getName(),
+            // The LIVE club's name, not the entrant's frozen display name: this page is
+            // about cloning a club's snapshot, and the two legitimately differ (the fixture
+            // in CompetitionEntrantCrudPageTest makes them differ on purpose). Null-safe
+            // because an entry outlives its club — see CompetitionEntrant::$club.
+            'clubName'     => $entrant->getClub()?->getName() ?? $entrant->getDisplayName(),
             'playerCount'  => $entrant->getSnapshotPlayerCount(),
             'remaining'    => $competition->getEntrantCapacity() - $this->entrantRepository->countForCompetition($competition),
             'detailUrl'    => $detailUrl,
@@ -296,7 +300,7 @@ class CompetitionEntrantCrudController extends AbstractCrudController
                         try {
                             $entrant = $service->createSpoofEntrantFromSnapshot($activeCompetition, $decoded, $formState['randomise']);
 
-                            $this->addFlash('success', sprintf('Created spoof entrant for "%s".', $entrant->getClub()->getName()));
+                            $this->addFlash('success', sprintf('Created spoof entrant for "%s".', $entrant->getClub()?->getName() ?? $entrant->getDisplayName()));
 
                             return $this->redirect($this->generateUrl('admin_competition_entrant_detail', ['entityId' => (string) $entrant->getId()]));
                         } catch (SpoofSnapshotValidationException $e) {

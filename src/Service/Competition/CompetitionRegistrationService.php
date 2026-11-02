@@ -176,6 +176,25 @@ class CompetitionRegistrationService
     }
 
     /**
+     * The entrant's club, or a refusal.
+     *
+     * `CompetitionEntrant::$club` is nullable — an entry is kept as a bracket record once its
+     * club is deleted. Every write path here needs a real club (a snapshot is split against
+     * it, a fee is paid into it), and none of them can do anything sensible without one, so
+     * they refuse rather than invent a fallback. Callers that merely DISPLAY an entry must
+     * use `getDisplayName()` / `getClubDisplayJson()` instead and never come through here.
+     */
+    private static function requireClub(CompetitionEntrant $entrant): Club
+    {
+        $club = $entrant->getClub();
+        if ($club === null) {
+            throw new \DomainException('club_deleted');
+        }
+
+        return $club;
+    }
+
+    /**
      * Splits a submitted envelope into the two rows it is stored across.
      *
      * One place decides what lands where, so register() and resubmit() cannot drift — which
@@ -305,7 +324,11 @@ class CompetitionRegistrationService
      */
     public function storeSubmission(CompetitionEntrant $entrant, array $snapshotJson): void
     {
-        $parts      = self::splitSnapshot($snapshotJson, $entrant->getClub());
+        // An entry outlives its club (CompetitionEntrant::$club), so the club can be gone by
+        // the time a queued submission is handled. There is nothing to store for it and no
+        // amount of retrying will bring the club back — the caller discards the message.
+        $club = self::requireClub($entrant);
+        $parts      = self::splitSnapshot($snapshotJson, $club);
         $entrantId  = $entrant->getId()->toRfc4122();
         $connection = $this->em->getConnection();
 
@@ -1053,7 +1076,12 @@ class CompetitionRegistrationService
 
             if ($entryFeePence > 0) {
                 foreach ($entrants as $entrant) {
+                    // Nothing to refund into when the club is gone — the entry is kept as a
+                    // bracket record, not as an account (CompetitionEntrant::$club).
                     $entrantClub = $entrant->getClub();
+                    if ($entrantClub === null) {
+                        continue;
+                    }
                     $connection->executeStatement(
                         'UPDATE club SET balance = balance + :fee WHERE id = :clubId',
                         [
@@ -1079,8 +1107,12 @@ class CompetitionRegistrationService
 
             if ($this->inboxService !== null) {
                 foreach ($entrants as $entrant) {
+                    $entrantClub = $entrant->getClub();
+                    if ($entrantClub === null) {
+                        continue;
+                    }
                     $this->inboxService->createMessage(
-                        club: $entrant->getClub(),
+                        club: $entrantClub,
                         senderType: MessageSenderType::COMPETITION,
                         senderName: 'Tournament Association',
                         subject: sprintf('Tournament Cancelled: %s', $activeCompetition->getTemplate()->getName()),
@@ -1102,8 +1134,8 @@ class CompetitionRegistrationService
 
             if ($this->pushNotificationService !== null && $entrants !== []) {
                 $userIds = array_values(array_unique(array_map(
-                    static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(),
-                    $entrants,
+                    static fn (CompetitionEntrant $e) => (string) $e->getClub()?->getUser()->getId(),
+                    array_filter($entrants, static fn (CompetitionEntrant $e) => $e->getClub() !== null),
                 )));
                 $this->pushNotificationService->notifyUsers(
                     $userIds,
@@ -1130,7 +1162,7 @@ class CompetitionRegistrationService
      */
     public function resubmit(CompetitionEntrant $entrant, array $snapshotJson): void
     {
-        $parts      = self::splitSnapshot($snapshotJson, $entrant->getClub());
+        $parts      = self::splitSnapshot($snapshotJson, self::requireClub($entrant));
         $connection = $this->em->getConnection();
 
         $connection->beginTransaction();

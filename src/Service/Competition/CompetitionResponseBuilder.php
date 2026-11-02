@@ -8,6 +8,7 @@ use App\Entity\Club;
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionEntrant;
 use App\Entity\Competition\CompetitionFixture;
+use App\Entity\Competition\CompetitionResult;
 use App\Entity\Competition\CompetitionRound;
 use App\Entity\Competition\CompetitionTemplate;
 use App\Entity\Competition\RewardTemplate;
@@ -50,8 +51,13 @@ class CompetitionResponseBuilder
      * COMPLETED.
      *
      * 2: `rounds[].roundId` added.
+     * 3: `rounds[].fixtures[].winnerSide` added, and `home`/`away` now fall back to the
+     *    result's frozen club copy when the entrant row is gone. The second half is why this
+     *    bump matters more than usual: the brackets it repairs belong to COMPLETED
+     *    competitions, whose state never moves again, so without it a damaged document would
+     *    be served from cache forever.
      */
-    private const DOCUMENT_SCHEMA_VERSION = 2;
+    private const DOCUMENT_SCHEMA_VERSION = 3;
 
     public function __construct(
         private readonly CompetitionEntrantRepository $entrantRepository,
@@ -157,10 +163,17 @@ class CompetitionResponseBuilder
                             'homeEntrantId'   => $f->getHomeEntrant() !== null ? (string) $f->getHomeEntrant()->getId() : null,
                             'awayEntrantId'   => $f->getAwayEntrant() !== null ? (string) $f->getAwayEntrant()->getId() : null,
                             'winnerEntrantId' => $f->getWinnerEntrant() !== null ? (string) $f->getWinnerEntrant()->getId() : null,
+                            // Which SIDE went through, rather than which entrant row did.
+                            // `winnerEntrantId` is the richer handle and stays the primary
+                            // one, but it is null for a side whose entrant row no longer
+                            // exists, and a bracket still has to show who won that tie —
+                            // see serializeFixtureSide() below for how a side outlives its
+                            // entrant.
+                            'winnerSide'      => $this->winnerSideOf($f, $resultEntity),
                             'score'           => $score,
                             'matchId'         => $f->getStatus() === CompetitionFixtureStatus::COMPLETE ? (string) $f->getId() : null,
-                            'home'            => $this->serializeEntrantSummary($f->getHomeEntrant()),
-                            'away'            => $this->serializeEntrantSummary($f->getAwayEntrant()),
+                            'home'            => $this->serializeFixtureSide($f->getHomeEntrant(), $resultEntity?->getHomeClubJson()),
+                            'away'            => $this->serializeFixtureSide($f->getAwayEntrant(), $resultEntity?->getAwayClubJson()),
                             // No `result` block. Per-fixture match detail — both lineups, the
                             // commentary timeline and the frozen club copies — was embedded
                             // here for every fixture, and `app:competition:benchmark` measured
@@ -457,10 +470,97 @@ class CompetitionResponseBuilder
         // normaliser over the entrant's whole snapshot, once per entrant AND twice more per
         // fixture, which is how a 64-club bracket came to decode every squad in it several
         // times over in a single request.
-        $normalized = $entrant->getClubDisplayJson();
+        return $this->serializeClubDisplayJson(
+            $entrant->getClubDisplayJson(),
+            (string) $entrant->getId(),
+            $entrant->getSeed(),
+        );
+    }
 
+    /**
+     * One side of a fixture, from the entrant row when it is still there and from the result's
+     * frozen copy of the same block when it is not.
+     *
+     * A side can outlive its entrant. `competition_entrant.club_id` cascades on club deletion
+     * and the fixture's three entrant columns are ON DELETE SET NULL, so deleting a club —
+     * which `app:clubs:purge-spoof` did on every deploy until 2026-11-02, to the spoof clubs
+     * that fill competitions — used to blank that club out of every bracket it had ever
+     * played in, including completed ones. Both halves of that are fixed: the entrant row now survives a club deletion (see
+     * CompetitionEntrant::$club), and this fallback repairs the brackets damaged before it did.
+     *
+     * CompetitionResult only cascades from the FIXTURE, so its `homeClubJson`/`awayClubJson` —
+     * which CompetitionResultsService::clubJsonOf() writes from this same
+     * `getClubDisplayJson()` block — survive anything short of the competition itself being
+     * deleted. `entrantId` and `seed` are genuinely gone in that case and are emitted null; a
+     * client must therefore display a side from `home`/`away` rather than by resolving
+     * `homeEntrantId` against `entrants[]`.
+     *
+     * @param  array<string, mixed>|null $frozenClubJson
+     * @return array<string, mixed>|null
+     */
+    private function serializeFixtureSide(?CompetitionEntrant $entrant, ?array $frozenClubJson): ?array
+    {
+        if ($entrant !== null) {
+            return $this->serializeEntrantSummary($entrant);
+        }
+
+        if ($frozenClubJson === null || !isset($frozenClubJson['clubId'])) {
+            return null;
+        }
+
+        return $this->serializeClubDisplayJson($frozenClubJson, null, null);
+    }
+
+    /**
+     * Which side won, for a client that cannot resolve `winnerEntrantId`.
+     *
+     * Read off the winning entrant where there is one. Where there is not — the winner's
+     * entrant row predates the ON DELETE SET NULL fix above, or was deleted with its
+     * competition's clubs — it is derived from the stored score instead, penalties first,
+     * which is the same order the engine decided the tie in. Null for anything unplayed, and
+     * for a draw with no shoot-out, which a cup tie should never be but a corrupt result row
+     * could claim to be.
+     */
+    private function winnerSideOf(CompetitionFixture $fixture, ?CompetitionResult $result): ?string
+    {
+        $winner = $fixture->getWinnerEntrant();
+        if ($winner !== null) {
+            if ($fixture->getHomeEntrant() !== null && $winner->getId()->equals($fixture->getHomeEntrant()->getId())) {
+                return 'home';
+            }
+            if ($fixture->getAwayEntrant() !== null && $winner->getId()->equals($fixture->getAwayEntrant()->getId())) {
+                return 'away';
+            }
+        }
+
+        if ($result === null) {
+            return null;
+        }
+
+        if ($result->isWentToPenalties()) {
+            $home = (int) $result->getPenaltyHomeScore();
+            $away = (int) $result->getPenaltyAwayScore();
+        } else {
+            $home = $result->getHomeScore();
+            $away = $result->getAwayScore();
+        }
+
+        return $home === $away ? null : ($home > $away ? 'home' : 'away');
+    }
+
+    /**
+     * The client-facing club block, built from a stored `clubDisplayJson` payload.
+     *
+     * `$entrantId`/`$seed` are passed rather than read, because the one caller that has no
+     * entrant row to read them from is exactly the case this split exists for.
+     *
+     * @param  array<string, mixed> $normalized
+     * @return array<string, mixed>
+     */
+    private function serializeClubDisplayJson(array $normalized, ?string $entrantId, ?int $seed): array
+    {
         $summary = [
-            'entrantId'      => (string) $entrant->getId(),
+            'entrantId'      => $entrantId,
             'clubId'         => $normalized['clubId'],
             'clubName'       => $normalized['clubName'],
             'name'           => $normalized['name'],
@@ -470,7 +570,7 @@ class CompetitionResponseBuilder
             'reputation'     => $normalized['reputation'],
             'reputationTier' => $normalized['reputationTier'],
             'tier'           => $normalized['tier'],
-            'seed'           => $entrant->getSeed(),
+            'seed'           => $seed,
             'homeKitConfig'  => $normalized['homeKitConfig'],
             'awayKitConfig'  => $normalized['awayKitConfig'],
             'badgeConfig'    => $normalized['badgeConfig'],
@@ -518,6 +618,7 @@ class CompetitionResponseBuilder
             'homeEntrantId'   => null,
             'awayEntrantId'   => null,
             'winnerEntrantId' => null,
+            'winnerSide'      => null,
             'score'           => null,
             'matchId'         => null,
             'home'            => null,
