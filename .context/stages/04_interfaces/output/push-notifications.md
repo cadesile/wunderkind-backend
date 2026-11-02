@@ -90,7 +90,7 @@ without a client update if a graceful unknown-type fallback exists.
   proactively), re-fetch **`GET /api/matches/{fixtureId}`** for the match
   itself — score, clubs, lineups, narrativePayload, tournament/round context
   (`MatchQueryService::serializeCupMatchDetail()`; the sibling
-  `wunderkind-app` doc is `docs/api/tournament-match-result-payload.md`).
+  doc is `wunderkind-app/docs/api/tournament-match-result-payload.md`).
   `GET /api/competitions/{id}` is still the call for current
   bracket/round state, but **it carries no per-fixture `result` block** — that
   was removed along with `CompetitionResult::toClientSummary()`, because

@@ -23,7 +23,7 @@
   become uninstallable overnight with the fix only on the next minor. Same pass took
   `easycorp/easyadmin-bundle` 5.0.1 ‒> 5.7.0, `twig/twig` 3.23 ‒> 3.30 (16 advisories, one
   critical), `api-platform/core` 4.2.19 ‒> 4.4.5, PHPUnit 13.1.1 ‒> 13.4.3.
-- **Excluded / vendored directories:** `vendor/` (Composer deps), `var/` (cache/logs), `scripts/global-context-generator` (git submodule — this tool itself, not app code), `.superpowers/`, `.worktrees/`, `context.zip` (stale archive)
+- **Excluded / vendored directories:** `vendor/` (Composer deps), `var/` (cache/logs), `scripts/global-context-generator` (git submodule — this tool itself, not app code), `.superpowers/`, `.worktrees/`
 
 ## Reasoning
 

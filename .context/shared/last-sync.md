@@ -5,6 +5,34 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-11-02), on top of commit 448a160** (uncommitted).
+  **Stages touched:** 06_documentation (`index.md`), 03_data (`migrations.md`),
+  04_interfaces (`routes.md`, `services.md`, `push-notifications.md`), shared
+  (`stack.md`, this file). **No code change** — a prune of `docs/`, 1.4MB to 408KB.
+  What went and why is in `06_documentation/output/index.md` under **Pruned
+  (2026-11-02)**; the shape of the decision is worth keeping here:
+
+  - What survived was decided by *inbound references*, not by age. Source docblocks
+    cite 20 `docs/api/*.md` files by name, so `docs/api/` is load-bearing and stayed
+    whole (bar one work log misfiled there). Three `docs/superpowers/` files stayed
+    for the same reason — notably
+    `plans/2026-10-28-tournament-concurrency-and-queues.md`, whose §3.4 is cited from
+    `CompetitionDrawService`, `CompetitionResultsService` and
+    `CompetitionBenchmarkCommand`. The other 23 had zero.
+  - **A dated plan left in the tree after its feature ships turns into a lie.**
+    `docs/2026-10-28-periodic-leaderboard-awards-plan.md` still read "planned, not
+    started" while `LeaderboardAwardDefinition`, `LeaderboardAwardDeliveryService`,
+    the period-archive entities and `docs/api/leaderboard-awards.md` were all in
+    place. That is the one category worth deleting on sight rather than archiving.
+  - Pointers in this tree into one-off episode docs were **replaced by the substance,
+    not by a link** — `routes.md`'s retry table and `migrations.md`'s retry-safety
+    section now stand alone, because the 2026-10-24 Sentry sweep's conclusions were
+    already recorded in this file's 2026-10-24 entries. Check that before deleting a
+    doc something here points at.
+  - `.DS_Store` was never in `.gitignore` and `docs/.DS_Store` was **tracked**; both
+    fixed. Five `docs/...` paths that actually live in the app repo are now written
+    `wunderkind-app/docs/...`, so a bare `docs/` path in this tree means this repo.
+
 - **New pass (2026-11-01), on top of commit 5333732** (uncommitted).
   **Stages touched:** 01_overview (`tribal-knowledge.md`), 04_interfaces (`controllers.md`),
   07_synthesis (`current-focus.md`). Second pass over the `ROLE_CLUB` lockout (commit
@@ -30,7 +58,7 @@
 
 - **New pass (2026-11-01), on top of commit 75ae1b0** (uncommitted).
   **Stages touched:** 03_data (`entities.md`), 04_interfaces (`routes.md`), 06_documentation
-  (`index.md`). Answered `wunderkind-app`'s `docs/backend-notes/2026-11-01-role-club-403.md`:
+  (`index.md`). Answered `wunderkind-app/docs/backend-notes/2026-11-01-role-club-403.md`:
   an authenticated account 403'd from every `ROLE_CLUB` endpoint. Two independent causes, both
   fixed. (1) `ROLE_CLUB` was read out of `user.roles`, a column that has twice held a value
   granting nothing — `[]` before `6dc85ab`, the since-deleted `ROLE_ACADEMY` until `2a9e6cd` —
@@ -61,7 +89,7 @@
 
 - **New pass (2026-10-24), on top of commit 0bc0832** (uncommitted).
   **Stages touched:** 04_interfaces (`services.md`). Closed the one open ask in
-  `wunderkind-app`'s `docs/api/match-detail-club-fields.md` §4a: an unplayed cup fixture or
+  `wunderkind-app/docs/api/match-detail-club-fields.md` §4a: an unplayed cup fixture or
   accepted friendly now returns both clubs' registered snapshot XIs as
   `homeLineup`/`awayLineup` rather than empty arrays, via a new
   `CompetitionRegistrationService::formatSnapshotXiForClient()` projection onto the played-
@@ -73,8 +101,7 @@
 - **New pass (2026-10-24), on top of commit 883f731** (uncommitted).
   **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces
   (`services.md`, `routes.md`). Backend half of the production Sentry sweep
-  (`docs/2026-10-24-sentry-sweep-backend-brief.md`; findings and answers in
-  `docs/2026-10-24-sentry-sweep-backend-answers.md`). Every item exists because the
+  (the brief/answers/reply docs are gone; what they concluded is this entry). Every item exists because the
   client gained a retry queue and started treating an empty/truncated 2xx as retryable,
   so requests that were never safe to retry now are:
   1. `ApiExceptionSubscriber` — every `/api/*` error is `application/problem+json` with
@@ -91,7 +118,7 @@
      `/api/league/conclude-season`.
   6. `OwnerAvatarRequest::$dob` accepts an ISO-8601 datetime, and `""` clears rather than
      meaning today.
-  **Round two, after `docs/2026-10-24-sentry-sweep-frontend-reply.md`** (same pass):
+  **Round two, after the app side replied** (same pass):
   the client's outbox *drops* a 4xx rather than retrying it, which reversed two
   decisions — `/api/league/conclude-season` was **removed** from the
   `IdempotencySubscriber` allowlist (its body-hash check can only false-positive now
@@ -126,7 +153,7 @@
 
 - **New pass (2026-10-24), on top of commit 68331a5** (uncommitted).
   **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces (`services.md`).
-  1. Aligned the competition & friendly snapshot pipeline with `wunderkind-app`'s `TournamentSnapshotBuilder.ts` (`docs/api/competition-registration-snapshot.md`) and `docs/api/match-detail-club-fields.md`: added `CompetitionRegistrationService::normalizeSnapshotClub()`, `normalizeClubData()`, and `formatLineupForClient()`, preserved `players[].appearance` in `DeterministicEngine::calculatePerformance()`, explicitly validated `playingStyle` against `PlayingStyle`, omitted `stadiumName` and `playingStyle` (rather than emitting `null`) when unset, merged entrant `snapshotJson['club']` + `Club` entity fallbacks under frozen `homeClubJson`/`awayClubJson` on completed matches, and returned `identity`, `stadium`, `stadiumName`, `playingStyle`, `reputation`, `tier`, `badgeShape`, kit/badge configs, and lineup `appearance` across all competition, match, and friendly endpoints.
+  1. Aligned the competition & friendly snapshot pipeline with `wunderkind-app`'s `TournamentSnapshotBuilder.ts` (`wunderkind-app/docs/api/competition-registration-snapshot.md`) and `wunderkind-app/docs/api/match-detail-club-fields.md`: added `CompetitionRegistrationService::normalizeSnapshotClub()`, `normalizeClubData()`, and `formatLineupForClient()`, preserved `players[].appearance` in `DeterministicEngine::calculatePerformance()`, explicitly validated `playingStyle` against `PlayingStyle`, omitted `stadiumName` and `playingStyle` (rather than emitting `null`) when unset, merged entrant `snapshotJson['club']` + `Club` entity fallbacks under frozen `homeClubJson`/`awayClubJson` on completed matches, and returned `identity`, `stadium`, `stadiumName`, `playingStyle`, `reputation`, `tier`, `badgeShape`, kit/badge configs, and lineup `appearance` across all competition, match, and friendly endpoints.
   2. Added engine-agnostic match derivation & computation auditing (`MatchEngineResult::$computationAudit`, `CompetitionResult::$computationAuditJson`, migration `Version20261024012500`): `DeterministicEngine` records the full step-by-step computation breakdown (`dominance`, `regulation`, `extraTime`, `penaltyShootout`, `goalDistribution`, `cardDistribution`, `playerRatings`, `outcome`) without altering the RNG sequence, `AiEngineStub` records delegation/fallback metadata, `CompetitionResultsService::buildComputationAudit()` guarantees an audit envelope regardless of engine and stamps round/winner/tiebreak context, and `templates/admin/competition/active_competition_detail.html.twig` renders the audit table and raw JSON in the admin detail view while keeping it out of client payloads.
 
 - **New pass (2026-10-23), on top of commit 68331a5** (uncommitted).
@@ -367,7 +394,7 @@
   Avatar Appearance system above it. Covered by
   `tests/Service/SyncServicePlayerStaffStatsTest.php`. No new docs/api/*.md —
   the contract is already documented frontend-side per the request
-  (`docs/api/sync-v2.md` in `wunderkind-app`), backend is just conforming to
+  (`wunderkind-app/docs/api/sync-v2.md`), backend is just conforming to
   an already-agreed spec here.)
 
 ---
