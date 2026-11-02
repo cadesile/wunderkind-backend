@@ -721,6 +721,67 @@ var FacilitySites = (function () {
     });
 }());
 
+// ── Cup Results (#cup-results) ──────────────────────────────────────────────
+// Every config here was FROZEN onto CompetitionResult at the final whistle, so
+// this can draw a club that no longer exists. Badges go through the shared
+// clubBadgeIconsHtml() (badge + kit; CSS hides the kit below 640px), so every
+// club draws at least its badge even with no identity configured.
+//
+// Hooks (keep these classes on the template):
+//   .cupr-scene[data-stadium-config]  → .cupr-stadium-slot
+//   .cupr-figure[data-sprite-kind][data-sprite]  kind: owner|manager|player|trophy
+//   [data-club-badge] → .cupr-badge inside it (.cupr-badge--only = badge, no kit)
+//
+// An owner/manager/player with a null appearance leaves its slot empty rather
+// than drawing a default face attributed to a named person — same rule as the
+// Rich List.
+(function () {
+    var section = document.getElementById('cup-results');
+    if (!section) return;
+
+    var scene = section.querySelector('.cupr-scene');
+    var stadiumSlot = scene && scene.querySelector('.cupr-stadium-slot');
+    if (stadiumSlot && typeof composeStadiumSvg === 'function') {
+        var stadium = jsonAttr(scene, 'data-stadium-config', null);
+        if (stadium) {
+            mountWhenVisible(stadiumSlot, function () {
+                stadiumSlot.innerHTML = composeStadiumSvg(stadium, { rotation: 0, time: 'day' }, 2);
+            });
+        }
+    }
+
+    section.querySelectorAll('.cupr-figure').forEach(function (slot) {
+        var kind = slot.getAttribute('data-sprite-kind');
+        var cfg = jsonAttr(slot, 'data-sprite', null);
+        if (!cfg) return;
+
+        mountWhenVisible(slot, function () {
+            if (kind === 'trophy') {
+                if (typeof composeTrophySvg === 'function' && cfg.style) {
+                    slot.innerHTML = composeTrophySvg(cfg, 1, { background: 'none' });
+                }
+                return;
+            }
+            if (typeof composePlayerSpriteSvg !== 'function') return;
+            // Owner and manager use the 'staff' body shape (AppearanceRole::OWNER
+            // falls into the non-player branch); the player wears the winner's kit,
+            // which the service merges into the appearance config.
+            slot.innerHTML = composePlayerSpriteSvg(cfg, kind === 'player' ? 'player' : 'staff', 'full', 3);
+        });
+    });
+
+    section.querySelectorAll('[data-club-badge]').forEach(function (el) {
+        var slot = el.querySelector('.cupr-badge');
+        if (!slot) return;
+        mountWhenVisible(slot, function () {
+            var identity = jsonAttr(el, 'data-club-badge', null);
+            slot.innerHTML = slot.classList.contains('cupr-badge--only')
+                ? clubBadgeOnlyHtml(identity)
+                : clubBadgeIconsHtml(identity);
+        });
+    });
+}());
+
 // ── Boardroom Incident & Consequence Feed (terminal + incident inspector modal) ──
 (function () {
     var feed = document.querySelector('.terminal-feed');
@@ -2087,4 +2148,58 @@ var Scenes = (function () {
             });
         });
     }
+}());
+
+// ── Telemetry: CUPS band sprites + countdowns ───────────────────────────────
+// Sprites: badges via the shared clubBadgeIconsHtml()/clubBadgeOnlyHtml(), trophies
+// via composeTrophySvg(). A [data-club-badge] element either IS the slot (has the
+// .tcup-badge class) or contains one. A null TrophyConfig leaves the slot empty —
+// a cup may simply have no trophy configured.
+//
+// Countdowns: every [data-countdown-to] (ISO 8601) ticks once a second from ONE
+// interval. Text-only change, so it keeps running under prefers-reduced-motion.
+// Clamped at 00:00:00 — the round resolves on the next cron tick, and the page is
+// not re-fetched, so a negative timer would only ever be a lie.
+(function () {
+    var root = document.getElementById('telemetry');
+    if (!root) return;
+
+    root.querySelectorAll('[data-trophy]').forEach(function (slot) {
+        var cfg = jsonAttr(slot, 'data-trophy', null);
+        if (!cfg || !cfg.style || typeof composeTrophySvg !== 'function') return;
+        mountWhenVisible(slot, function () {
+            slot.innerHTML = composeTrophySvg(cfg, 1, { background: 'none' });
+        });
+    });
+
+    root.querySelectorAll('.tcup-head ~ .tcup-body [data-club-badge]').forEach(function (el) {
+        var slot = el.classList.contains('tcup-badge') ? el : el.querySelector('.tcup-badge');
+        if (!slot) return;
+        mountWhenVisible(slot, function () {
+            var identity = jsonAttr(el, 'data-club-badge', null);
+            slot.innerHTML = slot.classList.contains('tcup-badge--only')
+                ? clubBadgeOnlyHtml(identity)
+                : clubBadgeIconsHtml(identity);
+        });
+    });
+
+    var timers = root.querySelectorAll('[data-countdown-to]');
+    if (!timers.length) return;
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function fmt(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        if (sec >= 86400) return Math.floor(sec / 86400) + 'D ' + pad(Math.floor(sec % 86400 / 3600)) + 'H';
+        return pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor(sec % 3600 / 60)) + ':' + pad(sec % 60);
+    }
+    var targets = Array.prototype.map.call(timers, function (el) {
+        return { el: el, at: Date.parse(el.getAttribute('data-countdown-to')) };
+    }).filter(function (t) { return !isNaN(t.at); });
+
+    function tick() {
+        var now = Date.now();
+        targets.forEach(function (t) { t.el.textContent = fmt((t.at - now) / 1000); });
+    }
+    tick();
+    setInterval(tick, 1000);
 }());

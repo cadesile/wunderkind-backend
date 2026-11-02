@@ -164,4 +164,41 @@ class SeasonRecordRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * The same window and the same rows as countPromotionsAndRelegationsSince(), split by
+     * direction, for the HUD tile that now reports promotions and relegations as two
+     * figures rather than one total.
+     *
+     * One query with two conditional aggregates rather than two COUNT queries: the split
+     * must add up to the total the same refresh stores in `tableTurnover`, and two separate
+     * queries against a table being written by concludeSeason() can straddle a commit and
+     * disagree by a row.
+     *
+     * A row can be BOTH promoted and relegated in principle (nothing in the schema forbids
+     * it), so the two counts can sum to more than the row count. countPromotions-
+     * AndRelegationsSince() counts rows. Treated as the lesser evil: a tile that says
+     * "1 up, 1 down" about one such row is readable, where silently picking one direction
+     * would lose a real movement.
+     *
+     * @return array{promotions: int, relegations: int}
+     */
+    public function countTurnoverByDirectionSince(\DateTimeImmutable $since): array
+    {
+        $row = $this->createQueryBuilder('sr')
+            ->select(
+                'SUM(CASE WHEN sr.promoted = true THEN 1 ELSE 0 END) AS promotions',
+                'SUM(CASE WHEN sr.relegated = true THEN 1 ELSE 0 END) AS relegations',
+            )
+            ->where('sr.createdAt >= :since')
+            ->andWhere('sr.promoted = true OR sr.relegated = true')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleResult();
+
+        return [
+            'promotions'  => (int) ($row['promotions'] ?? 0),
+            'relegations' => (int) ($row['relegations'] ?? 0),
+        ];
+    }
 }

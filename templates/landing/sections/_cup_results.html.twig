@@ -1,0 +1,200 @@
+{#
+   Cup Results (#cup-results) — the latest completed knockout cup, plus up to four
+   earlier finals.
+
+   Placed between _period_awards and _testers: the page's ranked/settled boards sit
+   together, and this is the third "who won" panel in a row.
+
+   Own .cupr-* namespace, borrowing the gold-ringed panel family from
+   .ospot-*/.lbaw-* without sharing a class with either.
+
+   Every value is FROZEN — club names, kits, badges and stadiums come from
+   CompetitionResult::$homeClubJson/$awayClubJson, which are copied at the final
+   whistle. Nothing is read off the live Club, so a deleted or rebranded club still
+   renders as it was on the day.
+
+   Sprites are composed CLIENT-SIDE by landing.js (mountCupResults block) from the
+   data-* attributes below. The JS hooks are load-bearing:
+     .cupr-scene        data-stadium-config
+     .cupr-figure       data-sprite-kind (owner|manager|player|trophy) + data-sprite
+     [data-club-badge]  .cupr-badge slot inside it
+
+   `completedAt` is nullable on ActiveCompetition, and Twig's `date` filter renders NULL
+   as *now* — so both date lines are gated rather than dating an old final today.
+
+   Renders nothing when cupResults is null — the real state until the first cup
+   completes. _nav.html.twig gates its jump link on the same check.
+#}
+{% if cupResults is not null %}
+{% set latest = cupResults.latest %}
+<section class="cupr-section" id="cup-results" aria-labelledby="cupr-title">
+    <div class="wrap">
+        <div class="section-label">Cup Results</div>
+        <div class="cupr-board-head">
+            <h2 class="pixel" id="cupr-title">LATEST CUP FINAL</h2>
+            <span class="cupr-header-sub vt">Knockout cups between players' clubs — settled at the final whistle</span>
+        </div>
+
+        <article class="cupr-leader">
+            <div class="cupr-scene" data-stadium-config="{{ latest.winner.stadium|json_encode|e('html_attr') }}">
+                <div class="cupr-scene-head">
+                    <span class="cupr-chip pixel">CHAMPIONS · {{ latest.capacity }} CLUBS</span>
+                    <div class="cupr-plate" data-club-badge="{{ latest.winner.badge|json_encode|e('html_attr') }}">
+                        <span class="cupr-badge" aria-hidden="true"></span>
+                        <span class="cupr-plate-name pixel">{{ latest.winner.name|upper }}</span>
+                        {% if latest.winner.countryCode %}
+                            <img class="cupr-flag"
+                                 src="{{ asset('assets/flags/' ~ latest.winner.countryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                                 width="18" height="13" loading="lazy" decoding="async"
+                                 alt="{{ latest.winner.countryCode }}" title="{{ latest.winner.countryCode }}">
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="cupr-stadium-slot" aria-hidden="true"></span>
+                <div class="cupr-figures">
+                    {% for fig in latest.figures %}
+                        <span class="cupr-figure cupr-figure--{{ fig.kind }}"
+                              data-sprite-kind="{{ fig.kind }}"
+                              data-sprite="{{ fig.sprite|json_encode|e('html_attr') }}"
+                              aria-hidden="true"></span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Captions share the scene's 4-column track so each sits under its figure. #}
+            <div class="cupr-captions">
+                {% for fig in latest.figures %}
+                    <div class="cupr-caption">
+                        <span class="cupr-caption-role vt">{{ fig.role }}</span>
+                        <span class="cupr-caption-name pixel">{{ fig.name|upper }}</span>
+                        {% if fig.stat %}<span class="cupr-caption-stat vt">{{ fig.stat }}</span>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="cupr-body">
+                <div class="cupr-body-head">
+                    <div>
+                        <h3 class="cupr-name pixel">{{ latest.name|upper }}</h3>
+                        <div class="cupr-meta vt">
+                            FINAL{% if latest.completedAt %} · {{ latest.completedAt|date('j M Y')|upper }}{% endif %}
+                            {%- if latest.winner.stadiumName %} · {{ latest.winner.stadiumName|upper }}{% endif %}
+                        </div>
+                    </div>
+                    {% if latest.prizePence > 0 %}
+                        <div class="cupr-prize">
+                            <span class="cupr-prize-lbl vt">VICTOR'S PRIZE</span>
+                            <span class="cupr-prize-val pixel">£{{ (latest.prizePence / 100)|round(0, 'floor')|number_format }}</span>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="cupr-cols">
+                    <div class="cupr-col">
+                        <div class="cupr-col-head vt">THE FINAL</div>
+                        <ol class="cupr-final">
+                            {% for side in [latest.winner, latest.runnerUp] %}
+                                <li class="cupr-final-row{{ loop.first ? ' cupr-final-row--won' : '' }}"
+                                    data-club-badge="{{ side.badge|json_encode|e('html_attr') }}">
+                                    <span class="cupr-badge" aria-hidden="true"></span>
+                                    <span class="cupr-final-name">
+                                        <span class="cupr-final-club">{{ side.name }}</span>
+                                        {% if side.countryCode %}
+                                            <img class="cupr-flag"
+                                                 src="{{ asset('assets/flags/' ~ side.countryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                                                 width="18" height="13" loading="lazy" decoding="async"
+                                                 alt="{{ side.countryCode }}" title="{{ side.countryCode }}">
+                                        {% endif %}
+                                    </span>
+                                    <span class="cupr-final-score pixel">
+                                        <span class="visually-hidden">{{ loop.first ? 'Winner, ' : 'Runner-up, ' }}scored </span>{{ side.score }}
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        </ol>
+                        <div class="cupr-settled vt">
+                            {% if latest.wentToPenalties %}
+                                Level after extra time · won {{ latest.penaltyWinner }} – {{ latest.penaltyLoser }} on penalties
+                            {% elseif latest.wentToExtraTime %}
+                                After extra time
+                            {% else %}
+                                Full time · 90 minutes
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if latest.road is not empty %}
+                        <div class="cupr-col">
+                            <div class="cupr-col-head vt">ROAD TO THE FINAL</div>
+                            <ul class="cupr-road">
+                                {% for leg in latest.road %}
+                                    <li class="cupr-road-row" data-club-badge="{{ leg.opponent.badge|json_encode|e('html_attr') }}">
+                                        <span class="cupr-road-round pixel">{{ leg.round }}</span>
+                                        <span class="cupr-badge cupr-badge--only" aria-hidden="true"></span>
+                                        <span class="cupr-road-name">{{ leg.opponent.name }}</span>
+                                        <span class="cupr-road-score vt">{{ leg.for }} – {{ leg.against }}{% if leg.pens %} P{% endif %}</span>
+                                        <span class="cupr-result pixel">W</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+
+        {% if cupResults.earlier is not empty %}
+            <div class="cupr-earlier-head">
+                <h3 class="pixel">EARLIER FINALS</h3>
+                <span class="vt">Most recent first</span>
+            </div>
+            <ol class="cupr-grid">
+                {% for cup in cupResults.earlier %}
+                    <li class="cupr-card">
+                        <div class="cupr-card-head">
+                            <span class="cupr-figure cupr-card-trophy" data-sprite-kind="trophy"
+                                  data-sprite="{{ cup.trophy|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                            <div>
+                                <div class="cupr-card-name pixel">{{ cup.name|upper }}</div>
+                                <div class="cupr-card-meta vt">FINAL{% if cup.completedAt %} · {{ cup.completedAt|date('j M Y')|upper }}{% endif %}</div>
+                            </div>
+                        </div>
+                        <div class="cupr-card-winner" data-club-badge="{{ cup.winner.badge|json_encode|e('html_attr') }}">
+                            <span class="cupr-badge" aria-hidden="true"></span>
+                            <span class="cupr-card-club">
+                                {{ cup.winner.name }}
+                                {% if cup.winner.countryCode %}
+                                    <img class="cupr-flag"
+                                         src="{{ asset('assets/flags/' ~ cup.winner.countryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                                         width="18" height="13" loading="lazy" decoding="async"
+                                         alt="{{ cup.winner.countryCode }}" title="{{ cup.winner.countryCode }}">
+                                {% endif %}
+                            </span>
+                            <span class="cupr-card-beat vt">
+                                {% if cup.wentToPenalties %}
+                                    Beat {{ cup.runnerUp.name }} on penalties ({{ cup.winner.score }} – {{ cup.runnerUp.score }} AET)
+                                {% else %}
+                                    Beat {{ cup.runnerUp.name }} {{ cup.winner.score }} – {{ cup.runnerUp.score }}{{ cup.wentToExtraTime ? ' AET' : '' }}
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="cupr-card-foot vt">
+                            <span>{{ cup.capacity }} CLUBS</span>
+                            {% if cup.prizePence > 0 %}
+                                <span class="cupr-card-prize">£{{ (cup.prizePence / 100)|round(0, 'floor')|number_format }}</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+            </ol>
+        {% endif %}
+
+        <p class="cupr-note">
+            Every cup is a single-elimination knockout between players' own clubs. A level score
+            goes to extra time, then penalties. Results are frozen at the final whistle, so names,
+            kits and badges are as they were on the day. A cup appears here once its final has
+            been played.
+        </p>
+    </div>
+</section>
+{% endif %}

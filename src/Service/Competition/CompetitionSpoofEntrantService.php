@@ -333,12 +333,9 @@ class CompetitionSpoofEntrantService
     {
         $names = [];
         foreach ($this->entrantRepository->findByCompetitionOrderedByRegistration($activeCompetition) as $entrant) {
-            $snapshotName = $entrant->getClubDisplayJson()['name'] ?? null;
-            $name         = is_string($snapshotName) && $snapshotName !== ''
-                ? $snapshotName
-                : $entrant->getClub()->getName();
-
-            $names[] = $name;
+            // Frozen name first, live club second — and the club may be gone entirely
+            // (CompetitionEntrant::$club). getDisplayName() is exactly that order.
+            $names[] = $entrant->getDisplayName();
         }
 
         return array_values(array_unique($names));

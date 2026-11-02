@@ -113,6 +113,13 @@ class TelemetryController extends AbstractController
                 // concludes, which is far rarer than a sync, so a 24h count would read 0
                 // almost permanently. Deliberate; do not "fix" by narrowing it.
                 'tableTurnover'         => $snapshot->getTableTurnover(),
+                // The same rows as tableTurnover, over the same window, split by direction —
+                // added for the landing page's ▲/▼ tile and published here so a client does
+                // not have to re-derive a split that cannot be recovered from the total.
+                // tableTurnover stays: it is the field an app release already in the wild
+                // reads, and it is exactly these two added together.
+                'promotions'            => $snapshot->getPromotions(),
+                'relegations'           => $snapshot->getRelegations(),
                 'tableTurnoverWindowDays' => self::FEED_WINDOW_DAYS,
                 // Nullable by design: null means "not enough paired morale readings to
                 // compute a delta", which is different from 0 ("no net change").
@@ -163,7 +170,7 @@ class TelemetryController extends AbstractController
         return [
             // The machine-readable category: switch on THIS. One of PYRAMID, OUTLAY,
             // ATTENDANCE, DRESSING_ROOM, DILUTION, COVENANT, TALISMAN, COMMUNITY,
-            // TOP_TRANSFER, TOP_SCORER — and treat the list as open, since a new
+            // TOP_TRANSFER, TOP_SCORER, CUP — and treat the list as open, since a new
             // category can ship server-side without an app release.
             'category' => $event['category'] ?? null,
             // Terminal-styled chrome for the landing page, e.g. "[PYRAMID // MOVEMENT]".
@@ -196,6 +203,9 @@ class TelemetryController extends AbstractController
             'clubs' => array_values($event['clubs'] ?? []),
             // Free-form per-category extras; shape varies by `category`.
             'meta'         => $event['meta'] ?? [],
+            // The cup's TrophyConfig, same shape the app's TrophySprite renders. Set only on
+            // CUP items; null everywhere else, since a trophy belongs to a competition.
+            'trophy'       => $event['trophy'] ?? null,
             'timestampIso' => $event['timestampIso'] ?? null,
         ];
     }

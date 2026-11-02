@@ -71,6 +71,60 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Completed instances that actually know WHEN they completed, newest first.
+     *
+     * Separate from findRecentlyCompleted() because of how Postgres orders nulls: `ORDER BY
+     * completed_at DESC` is NULLS **FIRST**, so a row whose status is COMPLETED but whose
+     * completedAt is blank ranks ahead of every real date. That row is reachable — the admin
+     * form (ActiveCompetitionCrudController) offers `status` and `completedAt` as independent
+     * fields, so saving one without the other is a click away — and the landing page's Cup
+     * Results board would then present it as the LATEST cup final and date it today.
+     *
+     * The app's own `recentlyCompleted` list keeps the looser query: there, an undated
+     * instance is still a completed instance worth listing, and only its position is odd.
+     * Here the position IS the content, so an instance that cannot be dated is excluded
+     * rather than ranked.
+     *
+     * @return list<ActiveCompetition>
+     */
+    public function findRecentlyCompletedWithKnownCompletion(int $limit): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.status = :status')
+            ->andWhere('a.completedAt IS NOT NULL')
+            ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
+            ->orderBy('a.completedAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Cups whose final was settled inside a window, newest first — the telemetry feed's
+     * `CUP // WINNER` lines, which report "a cup was won in the last 7 days" rather than
+     * "the last few cups ever", the way findRecentlyCompletedWithKnownCompletion() does.
+     *
+     * Shares that method's IS NOT NULL guard, and for a second reason here: completedAt is
+     * the only timestamp that can place a cup inside the window at all, so a row without
+     * one cannot be reported as recent.
+     *
+     * @return list<ActiveCompetition>
+     */
+    public function findCompletedSince(\DateTimeImmutable $since, int $limit): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.status = :status')
+            ->andWhere('a.completedAt IS NOT NULL')
+            ->andWhere('a.completedAt >= :since')
+            ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
+            ->setParameter('since', $since)
+            ->orderBy('a.completedAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findLatestCompletedForTemplate(CompetitionTemplate $template): ?ActiveCompetition
     {
         return $this->createQueryBuilder('a')

@@ -50,9 +50,32 @@ class CompetitionEntrant
     #[ORM\JoinColumn(name: 'active_competition_id', nullable: false, onDelete: 'CASCADE')]
     private ActiveCompetition $activeCompetition;
 
+    /**
+     * The club that entered — **null once that club has been deleted.**
+     *
+     * SET NULL rather than CASCADE, which is what it used to be. A cascade took the entrant
+     * row with the club, and CompetitionFixture's three entrant columns are themselves ON
+     * DELETE SET NULL, so deleting a club blanked it out of every bracket it had ever played
+     * in — completed ones included. That was not a hypothetical: `app:clubs:purge-spoof` ran
+     * on EVERY deploy (both deploy workflows) until 2026-11-02, and the clubs that fill a
+     * competition are spoofs (CompetitionAutoFillService), so each deploy stripped the
+     * opposition out of the finished cups players had just won. The deploy step is gone now —
+     * purging is an operator action (admin → "Clear Spoof Clubs") — but a club can still be
+     * deleted at any time, which is why this column, not the deploy change, is the fix.
+     *
+     * Keeping the row keeps `clubDisplayJson` with it, which is the whole of what a bracket
+     * needs — the frozen name, badge, kits and tier as they were at registration. The entrant
+     * therefore stays a valid, displayable historical record of an entry whose club is gone.
+     *
+     * **Anything that reads this must handle null**, and anything that writes to the club —
+     * prize money, inbox mail, a push — must skip the entry rather than guess. Live paths
+     * (registration, lock, draw, results) only meet a null here if a club is deleted
+     * mid-competition, which is rare and already degraded; they are written to drop that
+     * entrant quietly rather than fail the whole round for everyone else in it.
+     */
     #[ORM\ManyToOne(targetEntity: Club::class)]
-    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
-    private Club $club;
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Club $club;
 
     #[ORM\Column(type: 'smallint')]
     private int $seed;
@@ -149,7 +172,42 @@ class CompetitionEntrant
 
     public function getActiveCompetition(): ActiveCompetition { return $this->activeCompetition; }
 
-    public function getClub(): Club { return $this->club; }
+    /** Null once the entering club has been deleted — see the property's note. */
+    public function getClub(): ?Club { return $this->club; }
+
+    /**
+     * The entry's club id as a string, off the live club where there is one and the frozen
+     * block otherwise.
+     *
+     * Same reasoning as getDisplayName(): correct for identifying the ENTRY, including after
+     * its club row has gone. Null only for an entry whose frozen block predates `clubId`,
+     * which no live data has. Use `getClub()` where an actual Club entity is needed.
+     */
+    public function getClubIdValue(): ?string
+    {
+        if ($this->club !== null) {
+            return (string) $this->club->getId();
+        }
+
+        $frozen = $this->clubDisplayJson['clubId'] ?? null;
+
+        return is_string($frozen) && $frozen !== '' ? $frozen : null;
+    }
+
+    /**
+     * The entry's club name for display, off the frozen block rather than the live club.
+     *
+     * Prefer this to `getClub()?->getName()` anywhere the name is only being shown: it
+     * survives the club's deletion, and it is the name as it was at registration, which is
+     * what the rest of the bracket already shows. The live club is still the right source
+     * when the name is being used to address its OWNER rather than to label the entry.
+     */
+    public function getDisplayName(): string
+    {
+        $frozen = $this->clubDisplayJson['name'] ?? $this->clubDisplayJson['clubName'] ?? null;
+
+        return is_string($frozen) && $frozen !== '' ? $frozen : ($this->club?->getName() ?? 'Unknown club');
+    }
 
     public function getSeed(): int { return $this->seed; }
     public function setSeed(int $seed): static { $this->seed = $seed; return $this; }

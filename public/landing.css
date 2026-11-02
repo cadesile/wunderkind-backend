@@ -3650,3 +3650,413 @@ button:focus-visible,
     .spotlight-cta-bar { padding: 20px 16px; }
     .spotlight-fact { padding: 16px; }
 }
+
+/* ── Cup Results (#cup-results) ──────────────────────────────────────────────
+   Latest completed knockout cup + earlier finals. Own .cupr-* prefix, borrowing
+   the gold-ringed panel family from .ospot-*/.lbaw-* without sharing a class.
+   Tokens only, no new colours. */
+
+.cupr-section { background: var(--bg); border-top: 4px solid var(--border); }
+
+.cupr-board-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 24px;
+    margin-bottom: 32px;
+}
+.cupr-board-head .pixel {
+    font-size: clamp(14px, 2.2vw, 22px);
+    line-height: 1.5;
+    font-weight: 400;
+    color: var(--gold);
+    margin: 0;
+}
+.cupr-header-sub { font-size: 22px; line-height: 1.1; color: var(--text-muted); }
+
+.cupr-leader {
+    background: var(--panel);
+    border: 4px solid var(--gold);
+    box-shadow: 10px 10px 0 var(--border);
+    margin-bottom: 40px;
+}
+
+/* Scene: stadium behind, four figures standing on the bottom edge. */
+.cupr-scene {
+    position: relative;
+    height: 296px;
+    background: repeating-linear-gradient(90deg, #6b9a3e 0, #6b9a3e 56px, #608f37 56px, #608f37 112px);
+    overflow: hidden;
+}
+.cupr-scene-head {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+}
+.cupr-chip {
+    display: flex;
+    align-items: center;
+    background: var(--gold);
+    color: var(--border);
+    border: 4px solid var(--border);
+    font-size: 9px;
+    line-height: 1;
+    padding: 8px 10px;
+}
+.cupr-plate {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    background: var(--bg);
+    border: 4px solid var(--border);
+    padding: 4px 12px 4px 6px;
+}
+.cupr-plate .cupr-badge svg { height: 30px; }
+.cupr-plate-name { font-size: 9px; line-height: 1.5; color: var(--gold); overflow-wrap: anywhere; }
+
+.cupr-stadium-slot {
+    position: absolute;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 70%;
+}
+.cupr-stadium-slot svg { display: block; height: 160px; width: auto; max-width: 100%; image-rendering: pixelated; }
+
+/* One track shared by figures and captions so each caption sits under its figure. */
+.cupr-figures,
+.cupr-captions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 120px));
+    justify-content: center;
+    gap: 12px;
+    padding: 0 12px;
+}
+.cupr-figures { position: absolute; left: 0; right: 0; bottom: 0; align-items: end; }
+.cupr-figure { display: flex; justify-content: center; align-items: flex-end; min-width: 0; }
+.cupr-figure svg { display: block; height: 150px; width: auto; max-width: 100%; image-rendering: pixelated; }
+.cupr-figure--trophy svg { height: 104px; }
+
+.cupr-captions {
+    padding: 10px 12px;
+    background: var(--bg);
+    border-top: 4px solid var(--border);
+    border-bottom: 4px solid var(--border);
+}
+.cupr-caption { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.cupr-caption-role { font-size: 15px; line-height: 1; color: var(--text-muted); }
+.cupr-caption-name { font-size: 8px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.cupr-caption-stat { font-size: 15px; line-height: 1; color: var(--mint); }
+
+/* Body */
+.cupr-body { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cupr-body-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px 20px;
+}
+.cupr-name { font-size: 13px; line-height: 1.6; font-weight: 400; color: var(--text); margin: 0; overflow-wrap: anywhere; }
+.cupr-meta { font-size: 18px; line-height: 1.1; color: var(--text-muted); }
+.cupr-prize { display: flex; align-items: baseline; gap: 10px; }
+.cupr-prize-lbl { font-size: 18px; line-height: 1.1; color: var(--text-muted); }
+.cupr-prize-val { font-size: clamp(13px, 1.8vw, 18px); line-height: 1.3; color: var(--gold); }
+
+.cupr-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 16px 24px;
+    align-items: start;
+}
+.cupr-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cupr-col-head { font-size: 18px; line-height: 1.1; color: var(--text-muted); }
+
+.cupr-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.cupr-badge svg { display: block; height: 28px; width: auto; image-rendering: pixelated; }
+
+.cupr-final { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cupr-final-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    min-width: 0;
+}
+.cupr-final-row--won { border-color: var(--gold-dim); }
+.cupr-final-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--text);
+}
+.cupr-final-club { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cupr-final-score { flex: none; font-size: 16px; line-height: 1; color: var(--text); }
+.cupr-final-row--won .cupr-final-score { color: var(--gold); }
+.cupr-settled { font-size: 17px; line-height: 1.2; color: var(--text-muted); }
+.cupr-flag { flex: none; }
+
+.cupr-road { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cupr-road-row {
+    display: grid;
+    grid-template-columns: 36px auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    padding: 6px 10px;
+}
+.cupr-road-round { font-size: 8px; line-height: 1; color: var(--text-muted); }
+.cupr-road-row .cupr-badge svg { height: 24px; }
+.cupr-road-name { font-size: 13px; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cupr-road-score { font-size: 20px; line-height: 1; color: var(--text); }
+/* Same W chip as .spotlight-result-badge.is-w — the letter is the content. */
+.cupr-result {
+    font-size: 8px;
+    line-height: 1;
+    padding: 5px 6px;
+    border: 2px solid var(--border);
+    background: var(--mint);
+    color: var(--border);
+}
+
+/* Earlier finals */
+.cupr-earlier-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; margin-bottom: 20px; }
+.cupr-earlier-head .pixel { font-size: 11px; line-height: 1.6; font-weight: 400; color: var(--text); margin: 0; }
+.cupr-earlier-head .vt { font-size: 18px; line-height: 1.1; color: var(--text-muted); }
+
+.cupr-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    gap: 20px;
+}
+.cupr-card {
+    background: var(--panel);
+    border: 4px solid var(--text-muted);
+    box-shadow: 6px 6px 0 var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+.cupr-card-head { display: flex; align-items: center; gap: 12px; }
+.cupr-card-trophy { flex: none; }
+.cupr-card-trophy svg { height: 56px; }
+.cupr-card-name { font-size: 9px; line-height: 1.6; color: var(--gold); overflow-wrap: anywhere; }
+.cupr-card-meta { font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.cupr-card-winner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 6px 10px;
+    background: var(--bg);
+    border: 2px solid var(--gold-dim);
+    padding: 8px 10px;
+}
+.cupr-card-winner .cupr-badge svg { height: 26px; }
+.cupr-card-club { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--text); min-width: 0; overflow-wrap: break-word; }
+.cupr-card-beat { grid-column: 1 / -1; font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.cupr-card-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.cupr-card-prize { color: var(--gold); }
+
+.cupr-note { margin-top: 28px; font-size: 13px; line-height: 1.6; color: var(--text-muted); max-width: 760px; }
+
+@media (max-width: 640px) {
+    /* Same rule as .ospot-/.lbaw- rows: the badge is the identifier, the kit goes. */
+    .cupr-badge svg + svg { display: none; }
+    .cupr-figure svg { height: 110px; }
+    .cupr-figure--trophy svg { height: 76px; }
+    .cupr-stadium-slot svg { height: 130px; }
+    .cupr-body { padding: 20px 16px; }
+}
+
+/* ── Fix: Period Awards footer ───────────────────────────────────────────────
+   .lbaw-board-foot is a <footer>, so it inherits the global site `footer {}`
+   rule (dark background, 40px padding). Reset it. */
+.lbaw-board-foot { background: none; border-top: 0; padding: 0; }
+
+/* ── Telemetry: turnover split + CUPS band ───────────────────────────────────
+   Tokens only, no new colours. */
+
+/* Table Turnover: ▲ promotions / ▼ relegations. CSS triangles, not glyphs —
+   Press Start 2P has no ▲▼. */
+.terminal-turnover { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.terminal-turnover-item { display: inline-flex; align-items: center; gap: 8px; }
+.terminal-arrow { width: 0; height: 0; flex: none; border-left: 7px solid transparent; border-right: 7px solid transparent; }
+.terminal-arrow.is-up   { border-bottom: 10px solid var(--mint); }
+.terminal-arrow.is-down { border-top: 10px solid var(--red); }
+.terminal.is-pending .terminal-arrow.is-up   { border-bottom-color: var(--text-muted); }
+.terminal.is-pending .terminal-arrow.is-down { border-top-color: var(--text-muted); }
+
+/* Band header — same rhythm as .terminal-header, one step quieter. */
+.tcup-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding: 12px 24px;
+    background: var(--dark);
+    border-bottom: 2px solid var(--panel);
+}
+.tcup-head-live { display: flex; align-items: center; gap: 12px; }
+.tcup-dot { width: 12px; height: 12px; flex: none; background: var(--text-muted); }
+.tcup-dot.is-live { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.tcup-title { margin: 0; font-size: 10px; line-height: 1.6; font-weight: 400; color: var(--text); }
+.tcup-next { font-size: 20px; line-height: 1.1; color: var(--gold); }
+
+.tcup-body { display: flex; flex-wrap: wrap; border-bottom: 2px solid var(--panel); }
+.terminal-body--after-cups { border-top: 0; }
+
+.tcup-live {
+    flex: 2 1 460px;
+    min-width: 0;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 12px;
+    align-content: start;
+}
+.tcup-empty { grid-column: 1 / -1; margin: 0; padding: 4px 8px; font-size: 21px; line-height: 1.3; color: var(--text); }
+
+/* Sprite slots — filled by landing.js. */
+.tcup-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.tcup-badge svg { display: block; height: 22px; width: auto; image-rendering: pixelated; }
+.tcup-trophy { display: inline-flex; flex: none; }
+.tcup-trophy svg { display: block; height: 40px; width: auto; image-rendering: pixelated; }
+.tcup-trophy--sm svg { height: 36px; }
+
+/* Standard cup tile */
+.tcup-card {
+    background: var(--dark);
+    border: 2px solid var(--panel);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+.tcup-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tcup-card-id { min-width: 0; flex: 1 1 auto; }
+.tcup-card-name { font-size: 8px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
+.tcup-card-meta { font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.tcup-chip {
+    flex: none;
+    font-size: 8px;
+    line-height: 1;
+    padding: 5px 6px;
+    border: 2px solid var(--border);
+    background: var(--text-muted);
+    color: var(--border);
+}
+.tcup-chip--open { background: var(--mint); }
+
+.tcup-fx {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    padding: 4px 8px;
+}
+.tcup-fx-abbr { font-size: 8px; line-height: 1; color: var(--text); }
+.tcup-fx-abbr--away { text-align: right; }
+.tcup-fx-v { font-size: 17px; line-height: 1; color: var(--text-muted); }
+
+.tcup-bar { height: 10px; background: var(--bg); border: 2px solid var(--border); }
+.tcup-bar-fill { display: block; height: 100%; background: var(--mint); }
+
+.tcup-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 17px; line-height: 1.1; color: var(--text-muted); }
+.tcup-mint { color: var(--mint); }
+.tcup-gold { color: var(--gold); }
+
+/* The final — full row, gold ring. */
+.tcup-final {
+    grid-column: 1 / -1;
+    background: var(--bg);
+    border: 4px solid var(--gold);
+    box-shadow: 0 0 0 1px var(--gold), 0 0 24px rgba(245,200,66,.2);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.tcup-final-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tcup-final-chip {
+    flex: none;
+    background: var(--gold);
+    color: var(--border);
+    border: 2px solid var(--border);
+    font-size: 8px;
+    line-height: 1;
+    padding: 6px 8px;
+}
+.tcup-final-name { font-size: 9px; line-height: 1.6; color: var(--gold); overflow-wrap: anywhere; }
+.tcup-final-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; }
+.tcup-final-side { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
+.tcup-final-side .tcup-badge svg { height: 40px; }
+.tcup-final-club { font-size: 14px; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
+.tcup-final-centre { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tcup-final-centre .tcup-trophy svg { height: 64px; }
+.tcup-final-lbl { font-size: 16px; line-height: 1; color: var(--text-muted); }
+.tcup-final-timer { font-size: clamp(12px, 1.6vw, 16px); line-height: 1.2; color: var(--gold); }
+
+/* Recent winners — mirrors .terminal-aside's column. */
+.tcup-winners {
+    flex: 1 1 260px;
+    min-width: 0;
+    padding: 20px 24px;
+    border-left: 2px solid var(--panel);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.tcup-winners .btn { align-self: flex-start; }
+.tcup-winners-title { font-size: 9px; line-height: 1.6; color: var(--gold); }
+.tcup-winners-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tcup-winner {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--dark);
+    border: 2px solid var(--panel);
+}
+.tcup-winner .tcup-badge svg { height: 26px; }
+.tcup-winner-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tcup-winner-club { font-size: 13px; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcup-winner-line { font-size: 16px; line-height: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Feed: cup lines. */
+.terminal-feed-trophy { flex: none; display: inline-flex; }
+.terminal-feed-trophy svg { height: 32px; width: auto; image-rendering: pixelated; }
+.terminal-feed-item.cat-cup { border-left-color: var(--gold); }
+.terminal-feed-item.cat-cup .terminal-feed-category { color: var(--gold); }
+
+@media (max-width: 860px) {
+    .tcup-winners { border-left: 0; border-top: 2px solid var(--panel); }
+}
+@media (max-width: 640px) {
+    .tcup-head { padding: 12px 16px; }
+    .tcup-winners { padding: 20px 16px; }
+    .tcup-badge svg + svg { display: none; }
+}

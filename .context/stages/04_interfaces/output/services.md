@@ -24,6 +24,16 @@ filename alone.
   accumulated did not finish inside 115s that way, versus **17.7s** in bulk.
   Use it for any purge; `deleteAccount()` stays the path for a single GDPR
   erasure. Its one caller today is `app:clubs:purge-spoof`.
+  **`releaseUnstartedCompetitionEntries()` runs on both paths, and is a deletion that is
+  deliberately NARROW.** `competition_entrant.club_id` became ON DELETE SET NULL on
+  2026-11-02 so an entry outlives its club and finished brackets keep naming it (see
+  `03_data/output/migrations.md`). That is right for a competition with a bracket and wrong
+  for one still REGISTERING: an orphan there would hold its capacity slot for ever, and
+  `lockIfComplete()` waits on every entrant having a stored squad, so the competition could
+  never fill or lock again. So entries in a REGISTERING competition are released and
+  everything from SCHEDULED onwards is kept — the same split as the `FriendlyChallenge` line
+  beside it, where an unaccepted challenge goes and a played one stays. No refund: the
+  account being deleted has no balance left to pay into.
 - **`Admin/DashboardStatsService`** — computes admin dashboard growth/
   leaderboard/pool stats; Postgres-dialect-specific SQL confined here.
 - **`Admin/StatBuckets`** — bucketing helper backing dashboard facet
@@ -197,9 +207,24 @@ filename alone.
   same commit as any change to the document's shape.** Adding a key is not a state change,
   so nothing else in the fingerprint moves: every stored `competition_response_cache` row and
   every client ETag would keep validating, and a COMPLETED competition's state never changes
-  again, so its clients would be served the old shape indefinitely. (Currently `2` —
-  `rounds[].roundId` added; `null` on a `future` placeholder. See
-  `docs/api/competition-round-id.md`.) The ETag formats the fingerprint with `%s`: it was
+  again, so its clients would be served the old shape indefinitely. (Currently `3` —
+  `rounds[].fixtures[].winnerSide` added and the `home`/`away` fallback below; `2` was
+  `rounds[].roundId`, `null` on a `future` placeholder, see
+  `docs/api/competition-round-id.md`.)
+  **`serializeFixtureSide()` is why a finished bracket still names both clubs.** A fixture's
+  side comes from the entrant row when it is there and from `competition_result`'s frozen
+  `homeClubJson`/`awayClubJson` when it is not — the same block, since
+  `CompetitionResultsService::clubJsonOf()` writes it straight from
+  `getClubDisplayJson()`. It exists because deleting a club used to blank it out of every
+  bracket it had played in (see `03_data/output/migrations.md`'s 2026-11-02 entry for the
+  full mechanism and the deploy-time purge that triggered it); the entrant row now survives a
+  club deletion, and this repairs the brackets damaged before it did. Such a side carries
+  `entrantId: null` and `seed: null` — genuinely gone — so **a client must display a side
+  from `home`/`away`, never by resolving `homeEntrantId` against `entrants[]`**.
+  `winnerSide` exists for the same reason: `winnerEntrantId` is unrecoverable on a repaired
+  fixture, so `winnerSideOf()` derives the winner from the stored score, penalties first.
+  Pinned by `tests/Service/Competition/BracketSurvivesClubDeletionTest.php`.
+  The ETag formats the fingerprint with `%s`: it was
   `%d`, which parsed only the hex hash's leading decimal run, so 42% of fingerprints
   collapsed to `0` and about one real state change in five did not move the ETag at all —
   a polling client got a 304 with the previous bracket behind it.
@@ -414,6 +439,24 @@ filename alone.
   never changes once written. Two indexed reads, with the entry fetch **batched**
   (`findTopEntriesForArchives()`) for the same reason `findByEntrants()`/`findBothSides()`
   exist: don't trade a snapshot for an N+1 of the same size.
+- **`App\Service\Competition\CupResultsBoardService`** — the landing page's
+  `#cup-results` board: the latest completed knockout cup in full (frozen winner and
+  runner-up, road to the final, four caption figures) plus up to `EARLIER_LIMIT` = 4
+  earlier finals. Club identity is read **only** from `CompetitionResult::$homeClubJson`
+  / `$awayClubJson`, copied at the final whistle — never off the live `Club` — so a
+  purged or rebranded club still renders as it was on the day, the same rule
+  `PeriodAwardsBoardService` follows. No cache and no snapshot row, for that service's
+  reasons. Returns `null` until a cup has a resolved final, which hides both the section
+  and its nav link. Reads through
+  `ActiveCompetitionRepository::findRecentlyCompletedWithKnownCompletion()` rather than
+  `findRecentlyCompleted()`: Postgres orders `completed_at DESC` **NULLS FIRST**, and
+  `status`/`completedAt` are independent fields on the admin form, so the looser query
+  would present an undated instance as the latest cup final.
+  `resolveOwner()`/`resolveManager()` are **stubs returning `null`** — owner and manager
+  are not in the frozen display block, so both figures render empty; filling them means
+  either wiring the Owner Identity source `OwnerSpotlightService` uses plus the manager
+  `Staff` row, or adding those keys to
+  `CompetitionRegistrationService::clubDisplayBlock()` so they freeze like everything else.
 - **`LeagueImportExportService`** — imports/exports league/NPC-club
   config (formations, reputation tiers, the league `trophy` sprite config,
   city sizes, kit+badge `identity`). On import, a row carrying the retired
@@ -546,7 +589,27 @@ filename alone.
   `weeksPlayed` is an approximation (sync count x `WEEKS_PER_SYNC` = 4), not a
   true weeks-elapsed count. `tableTurnover` also reads the 7-day feed window, not
   the 24h stats window the HUD header advertises — deliberate, since
-  promotions/relegations are far rarer than syncs.
+  promotions/relegations are far rarer than syncs. Since 2026-11-02 the HUD renders
+  that figure as TWO, `promotions` (▲) and `relegations` (▼), counted by
+  `SeasonRecordRepository::countTurnoverByDirectionSince()` over the SAME 7-day
+  window; `tableTurnover` is still written because `GET /api/telemetry` publishes it.
+  The window did NOT move to 24h with the split — measured on the SeasonRecord
+  history to hand, movement lands on 33 of 55 days, so 24h would read ▲0 ▼0 about
+  two days in five, which is twice as visible as one 0 was.
+- **`App\Service\Competition\CupTelemetryService`** — the CUPS band inside the same
+  terminal (`cups`, passed by `LandingController`), plus the rows behind the feed's
+  `CUP // WINNER` lines. **Read LIVE, not from the snapshot**, unlike everything else
+  in that section: the band's countdowns are only honest if the round times are
+  current, and a 15-minute-old "RESULTS IN" is 15 minutes wrong. Bounded by
+  `LIVE_LIMIT`/`OPEN_LIMIT`/`WINNER_LIMIT`; a short cache would still be safe, since
+  the JS counts down client-side. Winners come from the frozen
+  `CompetitionResult::$homeClubJson`/`$awayClubJson`, never the live `Club` — same
+  rule as `CupResultsBoardService`, which is why a cup won by a purged club still
+  renders. Returns `null` when nothing is live, open or ever won, which drops the band
+  entirely. Timer semantics: a `DRAWN` round counts down to `matchesResolveAt`
+  ("RESULTS IN"), a `DRAW_PENDING` one to `scheduledAt` ("DRAW IN"); `matchesResolveAt`
+  is nullable, and both the band's sort and its `nextResultAt` exclude a null rather
+  than let it compare below every real date and read as the most imminent of all.
   `aggregate()` also produces `totalGoals`/`totalMatches` for the HUD's
   "Goals Logged" box, summed from `fixtures[]` and **deduplicated by
   `fixtureId`** — that array carries the syncing club's WHOLE division's

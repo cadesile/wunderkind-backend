@@ -287,12 +287,21 @@ class CompetitionDrawService
                     if (!$entrant instanceof CompetitionEntrant) {
                         continue;
                     }
-                    $opponentName = $opponent?->getClub()->getName() ?? 'TBD';
+                    // No club, nobody to write to: the entry outlives its club now
+                    // (CompetitionEntrant::$club), so skip it rather than fail the draw's
+                    // mail for everyone else in the round.
+                    $entrantClub = $entrant->getClub();
+                    if ($entrantClub === null) {
+                        continue;
+                    }
+                    // Names off the frozen display block, which is what the bracket shows and
+                    // what survives a deleted club.
+                    $opponentName = $opponent?->getDisplayName() ?? 'TBD';
                     $this->inboxService->createMessage(
-                        club: $entrant->getClub(),
+                        club: $entrantClub,
                         senderType: MessageSenderType::COMPETITION,
                         senderName: $templateName,
-                        subject: sprintf('%s draw: %s vs %s', $round->getLabel(), $home?->getClub()->getName() ?? 'TBD', $away?->getClub()->getName() ?? 'TBD'),
+                        subject: sprintf('%s draw: %s vs %s', $round->getLabel(), $home?->getDisplayName() ?? 'TBD', $away?->getDisplayName() ?? 'TBD'),
                         body: sprintf('You have been drawn against %s in the %s of the %s.', $opponentName, $round->getLabel(), $templateName),
                         offerData: [
                             'type'          => 'ROUND_DRAWN',
@@ -392,7 +401,7 @@ class CompetitionDrawService
         $userIds = [];
         foreach ($fixtures as $fixture) {
             foreach ([$fixture->getHomeEntrant(), $fixture->getAwayEntrant()] as $entrant) {
-                if ($entrant instanceof CompetitionEntrant) {
+                if ($entrant instanceof CompetitionEntrant && $entrant->getClub() !== null) {
                     $userIds[] = (string) $entrant->getClub()->getUser()->getId();
                 }
             }

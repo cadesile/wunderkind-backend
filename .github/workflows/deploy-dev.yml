@@ -179,15 +179,9 @@ jobs:
             # and aborted the deploy. Appearance is filled on persist by
             # AppearanceLifecycleSubscriber, so freshly generated pools need no
             # backfill; run the command by hand only if a backlog builds up.
-            # Deletes every admin-generated spoof club and its throwaway account — see the
-            # same block in deploy-prod.yml for why this goes through AccountDeletionService
-            # and why real clubs are safe.
-            # NOTE: this runs on EVERY deploy. Spoof data is regenerable in one admin click
-            # and there is a "Clear Spoof Clubs" button for on-demand runs, but a spoof
-            # competition left mid-test will not survive a deploy. Drop these two lines if you
-            # want spoof data to persist between dev deploys.
-            docker compose -f docker-compose.dev.yml exec -T app \
-              php bin/console app:clubs:purge-spoof
+            # NOTE: app:clubs:purge-spoof is deliberately NOT run here (removed 2026-11-02) —
+            # see the same block in deploy-prod.yml for why. Purging is an operator decision:
+            # Settings -> Developer Tools -> "Clear Spoof Clubs". Do not re-add it here.
             docker compose -f docker-compose.dev.yml exec -T app \
               php bin/console assets:install --symlink
             # NOTE: no cache:clear here, deliberately. `up -d` recreates the

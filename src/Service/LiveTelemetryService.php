@@ -7,6 +7,7 @@ use App\Repository\LiveTelemetrySnapshotRepository;
 use App\Repository\MatchResultRepository;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SyncRecordRepository;
+use App\Service\Competition\CupTelemetryService;
 use App\Entity\LiveTelemetrySnapshot;
 
 /**
@@ -18,15 +19,21 @@ use App\Entity\LiveTelemetrySnapshot;
  * method for exactly how. The feed shows real events only: the template does not
  * pad it with illustrative filler — a prior product decision, still binding.
  *
- * Nine categories feed the merged, newest-first ticker: pyramid movement
+ * Ten categories feed the merged, newest-first ticker: pyramid movement
  * (buildEvents), boardroom outlay (buildLedgerEvents), attendance
  * (buildAttendanceEvents), dressing-room fallout (buildDressingRoomEvents),
  * boardroom equity dilution (buildDilutionEvents), commercial covenant risk
  * (buildCovenantEvents), talisman/community highlights (buildTalismanEvents,
  * buildCommunityEvents), transfer-market record fees (buildTopTransferEvents),
- * and top goalscorers (buildTopScorerEvents). Every build* method is a pure
- * static function over already-fetched payload arrays (no DB inside), so each
- * is independently unit-testable — see LiveTelemetryServiceTest.
+ * top goalscorers (buildTopScorerEvents), and cup wins (buildCupEvents). Every
+ * build* method is a pure static function over already-fetched payload arrays
+ * (no DB inside), so each is independently unit-testable — see
+ * LiveTelemetryServiceTest.
+ *
+ * buildCupEvents() is the one source whose rows come from neither SyncRecord nor
+ * SeasonRecord: a cup win lives on competition_result, fetched by
+ * CupTelemetryService::recentWinnerRows() in refresh() and passed in like every
+ * other pre-fetched row set. Its items are also the only ones carrying `trophy`.
  *
  * Final assembly does NOT just concatenate all sources and keep the globally most
  * recent TOTAL_FEED_LIMIT — see selectBalanced()'s docblock for why a flat recency
@@ -71,6 +78,7 @@ class LiveTelemetryService
     private const COMMUNITY_EVENTS_LIMIT     = 5;
     private const TOP_TRANSFER_EVENTS_LIMIT  = 5;
     private const TOP_SCORER_EVENTS_LIMIT    = 5;
+    private const CUP_EVENTS_LIMIT           = 5;
 
     /**
      * Cap on the merged feed after all sources are combined — without this, adding
@@ -190,6 +198,11 @@ class LiveTelemetryService
         private readonly SeasonRecordRepository $seasonRecordRepository,
         private readonly LiveTelemetrySnapshotRepository $snapshotRepository,
         private readonly MatchResultRepository $matchResultRepository,
+        // The one source whose rows are not SyncRecord payloads or SeasonRecord rows:
+        // a cup win lives in competition_result. Injected as the service that already
+        // owns that walk rather than re-deriving a final's winner a third time (see also
+        // CupResultsBoardService, which does it for the landing page's #cup-results).
+        private readonly CupTelemetryService $cupTelemetryService,
     ) {}
 
     public function refresh(): void
@@ -207,6 +220,14 @@ class LiveTelemetryService
             self::EVENTS_LIMIT,
         );
         $attendanceRows = $this->syncRecordRepository->findTopAttendanceSince($since, self::ATTENDANCE_EVENTS_LIMIT);
+
+        // Cups won in the FEED's window, not the 24h stats window, for the same reason
+        // pyramid movement uses it: a cup final lands when a bracket runs out of rounds,
+        // which is far rarer than a sync.
+        $cupRows = $this->cupTelemetryService->recentWinnerRows(
+            $now->modify('-' . self::EVENTS_WINDOW_DAYS . ' days'),
+            self::CUP_EVENTS_LIMIT,
+        );
 
         $dressingRoomEvents = self::buildDressingRoomEvents($syncRows, $now);
         $dilutionEvents     = self::buildDilutionEvents($syncRows, $now);
@@ -226,6 +247,7 @@ class LiveTelemetryService
             array_slice($communityEvents, 0, self::COMMUNITY_EVENTS_LIMIT),
             self::buildTopTransferEvents($syncRows, $now, self::TOP_TRANSFER_EVENTS_LIMIT),
             array_slice($topScorerEvents, 0, self::TOP_SCORER_EVENTS_LIMIT),
+            self::buildCupEvents($cupRows, $now),
         ], self::TOTAL_FEED_LIMIT));
 
         // The boardroom overlay opens from any feed item, so the dossier is attached
@@ -243,9 +265,19 @@ class LiveTelemetryService
         // a sync, so a 24h count would read 0 almost permanently. The HUD header says 24H
         // PYRAMID FEED and this one box is wider than that — called out here because the
         // discrepancy is deliberate, not an oversight.
-        $tableTurnover = $this->seasonRecordRepository->countPromotionsAndRelegationsSince(
-            $now->modify('-' . self::EVENTS_WINDOW_DAYS . ' days'),
-        );
+        //
+        // Measured before the tile was split into ▲/▼ rather than assumed: across the 55
+        // days of SeasonRecord history on hand, promotions or relegations landed on 33 of
+        // them. So 7 days shows a real figure nearly always and 24h would read ▲0 ▼0 on
+        // about two days in five — which is why the split did NOT come with a move to the
+        // 24h window, and why this tile's sub-line says "7 days" where the other three
+        // say "24h".
+        $turnoverSince = $now->modify('-' . self::EVENTS_WINDOW_DAYS . ' days');
+        $turnover      = $this->seasonRecordRepository->countTurnoverByDirectionSince($turnoverSince);
+
+        // Still written, still the row count rather than the sum of the two: GET /api/telemetry
+        // publishes it as `stats.tableTurnover`. See LiveTelemetrySnapshot::$tableTurnover.
+        $tableTurnover = $this->seasonRecordRepository->countPromotionsAndRelegationsSince($turnoverSince);
 
         $snapshot = $this->snapshotRepository->getSnapshot();
         $snapshot->update(
@@ -261,6 +293,8 @@ class LiveTelemetryService
             $result['totalGoals'],
             $result['totalMatches'],
             $tableTurnover,
+            $turnover['promotions'],
+            $turnover['relegations'],
         );
         $this->snapshotRepository->getEntityManager()->flush();
     }
@@ -493,6 +527,75 @@ class LiveTelemetryService
         }
 
         return $events;
+    }
+
+    /**
+     * Turns CupTelemetryService::recentWinnerRows() into feed-ready `CUP // WINNER` items.
+     * Pure function (given $now), like every other build* method here.
+     *
+     * The tenth source, and the only one whose subject is a competition rather than a club's
+     * own season or sync. Every value in a row was FROZEN onto competition_result at the
+     * final whistle, so a line here can name and badge a club that no longer exists — the
+     * same property the landing page's #cup-results board relies on.
+     *
+     * `trophy` carries the cup's TrophyConfig so the line can draw the trophy sprite beside
+     * its text; it is the only category that sets it. The prize goes in `amountExact` rather
+     * than into the sentence: the feed's convention is one figure per item, formatted once,
+     * and the boardroom overlay reads it from there.
+     *
+     * @param list<array{clubName: string, clubId: ?string, clubBadge: array{home: ?array, away: ?array, badge: ?array}, trophy: ?array, cupName: string, winnerScore: int, loserScore: int, wentToExtraTime: bool, wentToPenalties: bool, penaltyWinner: ?int, penaltyLoser: ?int, prizePence: int, completedAt: \DateTimeImmutable}> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    public static function buildCupEvents(array $rows, \DateTimeImmutable $now): array
+    {
+        $events = [];
+
+        foreach ($rows as $row) {
+            $events[] = self::event(
+                $row['completedAt'],
+                $now,
+                'CUP',
+                '[CUP // WINNER]',
+                $row['clubName'],
+                self::describeCupWin($row),
+                amountExact: $row['prizePence'] > 0 ? LiveTelemetrySnapshot::formatPenceExact($row['prizePence']) : null,
+                meta: ['cupName' => $row['cupName']],
+                clubBadge: $row['clubBadge'],
+                clubId: $row['clubId'],
+                trophy: $row['trophy'],
+            );
+        }
+
+        return $events;
+    }
+
+    /**
+     * "Away Winners FC lifted the Spring Cup, 1 – 1 after extra time (5 – 3 on penalties)."
+     *
+     * The score is the WINNER's first, which is why the row carries winnerScore/loserScore
+     * rather than home/away — on a level final the two are equal and only the shootout
+     * separates them, so a home/away pair would read as though the loser had won.
+     *
+     * Wording matches the #cup-results board's own settled line ("on penalties", not "on
+     * pens"), since the two surfaces sit on the same page.
+     *
+     * @param array{clubName: string, cupName: string, winnerScore: int, loserScore: int, wentToExtraTime: bool, wentToPenalties: bool, penaltyWinner: ?int, penaltyLoser: ?int} $row
+     */
+    private static function describeCupWin(array $row): string
+    {
+        $line = sprintf('%s lifted the %s, %d – %d', $row['clubName'], $row['cupName'], $row['winnerScore'], $row['loserScore']);
+
+        if ($row['wentToPenalties']) {
+            // Penalties always follow extra time in this engine, so the phrasing can say so
+            // outright rather than branching on wentToExtraTime a second time.
+            return $line . sprintf(
+                ' after extra time (%d – %d on penalties).',
+                (int) $row['penaltyWinner'],
+                (int) $row['penaltyLoser'],
+            );
+        }
+
+        return $line . ($row['wentToExtraTime'] ? ' after extra time.' : '.');
     }
 
     /**
@@ -1126,6 +1229,7 @@ class LiveTelemetryService
                 // dossier off it — which reads as "no dossier anywhere", with no error.
                 'clubId'        => $event['clubId'] ?? null,
                 'clubs'         => $event['clubs'] ?? [],
+                'trophy'        => $event['trophy'] ?? null,
             ],
             $events,
         );
@@ -1371,6 +1475,7 @@ class LiveTelemetryService
         ?array $clubBadge = null,
         ?string $clubId = null,
         array $alsoNamed = [],
+        ?array $trophy = null,
     ): array {
         return [
             'time'          => self::relativeTime($at, $now),
@@ -1399,6 +1504,11 @@ class LiveTelemetryService
             // row at all — so they ship with a null badge rather than a guessed one, and
             // a null badge here means "no row", not "no kit set".
             'clubs'         => self::namedClubs($club, $clubId, $clubBadge, $alsoNamed),
+            // The cup's own TrophyConfig, for the sprite the feed line draws beside its
+            // text. Null on every category but CUP — a trophy belongs to a competition,
+            // not to a promotion or a transfer. Must also be listed in
+            // mergeEventsByRecency()'s whitelist, or it is dropped before render.
+            'trophy'        => $trophy,
             'at'            => $at,
         ];
     }

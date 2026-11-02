@@ -49,6 +49,17 @@ final class StoreEntrantSubmissionMessageHandler
             ));
         }
 
+        if ($entrant->getClub() === null) {
+            // The entry is still there but its club has been deleted — an entry outlives its
+            // club now, so the bracket keeps a record of it (CompetitionEntrant::$club).
+            // There is no club to split the snapshot against and retrying cannot bring one
+            // back, so this is unrecoverable for the same reason as a missing entrant above.
+            throw new UnrecoverableMessageHandlingException(sprintf(
+                'Entrant %s has no club; discarding its submission.',
+                $message->entrantId,
+            ));
+        }
+
         if ($entrant->hasStoredSquad()) {
             // Already written — a duplicate delivery, or a resubmission that overtook this
             // message. The writes are upserts so replaying would be harmless, but a

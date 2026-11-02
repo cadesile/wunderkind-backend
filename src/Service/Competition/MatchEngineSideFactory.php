@@ -29,10 +29,15 @@ class MatchEngineSideFactory
     {
         $display = $entrant->getClubDisplayJson();
 
+        // Off the frozen display block, not the live club: the club row can be gone
+        // (CompetitionEntrant::$club) and re-resolving a finished tie must still produce a
+        // side rather than a 500 — the same reasoning as the missing squad above.
+        $club = $entrant->getClub();
+
         return new MatchEngineSide(
             sideId: (string) $entrant->getId(),
-            clubId: (string) $entrant->getClub()->getId(),
-            clubName: $entrant->getClub()->getName(),
+            clubId: $club !== null ? (string) $club->getId() : (string) ($display['clubId'] ?? $entrant->getId()),
+            clubName: $club?->getName() ?? $entrant->getDisplayName(),
             seed: $entrant->getSeed(),
             snapshotVersion: $entrant->getSnapshotVersion(),
             displayName: is_string($display['name'] ?? null) ? $display['name'] : null,

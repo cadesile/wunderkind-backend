@@ -8,6 +8,8 @@ use App\Repository\ExcursionRepository;
 use App\Repository\GameConfigRepository;
 use App\Service\ArchetypeShowcaseService;
 use App\Service\ClubSpotlightService;
+use App\Service\Competition\CupResultsBoardService;
+use App\Service\Competition\CupTelemetryService;
 use App\Service\Leaderboard\PeriodAwardsBoardService;
 use App\Service\LiveTelemetryService;
 use App\Service\OwnerSpotlightService;
@@ -42,6 +44,8 @@ class LandingController extends AbstractController
         private readonly ClubSpotlightService $clubSpotlightService,
         private readonly OwnerSpotlightService $ownerSpotlightService,
         private readonly PeriodAwardsBoardService $periodAwardsBoardService,
+        private readonly CupResultsBoardService $cupResultsBoardService,
+        private readonly CupTelemetryService $cupTelemetryService,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -73,6 +77,16 @@ class LandingController extends AbstractController
             // above rather than copying either. Empty until a definition is enabled and a
             // period ends, which hides both the section and its nav link.
             'periodAwards' => $this->periodAwardsBoardService->getBoards(),
+            // Frozen club copies off competition_result, like periodAwards above — and like
+            // it, uncached: the reads are indexed and bounded by EARLIER_LIMIT. Null until a
+            // cup's final has been played, which hides both the section and its nav link.
+            'cupResults' => $this->cupResultsBoardService->getBoard(),
+            // Read LIVE, unlike `telemetry` right above it, which is a cron-written
+            // snapshot: the band's countdowns are only honest if the round times are
+            // current, and a 15-minute-old "RESULTS IN" is 15 minutes wrong. Bounded
+            // reads — see CupTelemetryService for the limits and for why a short cache
+            // would still be safe if traffic ever warrants one.
+            'cups' => $this->cupTelemetryService->getBand(),
         ]);
     }
 

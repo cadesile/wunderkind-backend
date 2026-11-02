@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\Club;
 use App\Entity\User;
+use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\LeaderboardCategory;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -108,6 +109,8 @@ final class AccountDeletionService
                         ->setParameter('clubs', $clubs)
                         ->execute();
 
+                    $this->releaseUnstartedCompetitionEntries($clubs);
+
                     $this->em->createQuery('DELETE FROM App\Entity\Club c WHERE c IN (:clubs)')
                         ->setParameter('clubs', $clubs)
                         ->execute();
@@ -142,6 +145,43 @@ final class AccountDeletionService
         }
 
         return ['users' => count($users), 'clubs' => $deletedClubs];
+    }
+
+    /**
+     * Releases a to-be-deleted club's entries in competitions that have not started.
+     *
+     * `competition_entrant.club_id` is ON DELETE SET NULL, so an entry now OUTLIVES its club
+     * — deliberately, because the frozen `clubDisplayJson` on it is what a finished bracket
+     * renders, and cascading it away used to blank a club out of every cup it had ever played
+     * in (see CompetitionEntrant::$club). That is right for a competition with a bracket and
+     * wrong for one still REGISTERING: an orphaned entry there would hold its capacity slot
+     * for good, and `lockIfComplete()` waits on every entrant having a stored squad, so the
+     * competition could never fill or lock again.
+     *
+     * So: entries in a REGISTERING competition are released, everything from SCHEDULED
+     * onwards is kept as history. Same split as the FriendlyChallenge line beside each caller
+     * — an unaccepted challenge goes, a played one stays.
+     *
+     * No refund: this is an account being deleted, and there is no balance left to pay into.
+     *
+     * @param list<Club> $clubs
+     */
+    private function releaseUnstartedCompetitionEntries(array $clubs): void
+    {
+        if ($clubs === []) {
+            return;
+        }
+
+        $this->em->createQuery(
+            'DELETE FROM App\Entity\Competition\CompetitionEntrant e
+              WHERE e.club IN (:clubs)
+                AND e.activeCompetition IN (
+                    SELECT c.id FROM App\Entity\Competition\ActiveCompetition c WHERE c.status = :registering
+                )'
+        )
+            ->setParameter('clubs', $clubs)
+            ->setParameter('registering', ActiveCompetitionStatus::REGISTERING)
+            ->execute();
     }
 
     /**
@@ -205,6 +245,8 @@ final class AccountDeletionService
                 $this->em->createQuery('DELETE FROM App\Entity\Friendly\FriendlyChallenge f WHERE f.challengerClub = :club AND f.acceptorClub IS NULL')
                     ->setParameter('club', $club)
                     ->execute();
+
+                $this->releaseUnstartedCompetitionEntries([$club]);
 
                 // Removed explicitly (not left to cascade from $user) so this doesn't depend on
                 // User::$clubs being a populated/lazy-initialized collection at call time.

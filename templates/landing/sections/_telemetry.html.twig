@@ -14,17 +14,16 @@
        activeClubs / weeksPlayed — aggregated from recent SyncRecord payloads.
        weeksPlayed is sync count * 4 (each sync ~= 4 on-device weekly ticks), an
        approximation rather than a true weeks-elapsed count.
-     - totalGoals / getGoalsPerMatchFormatted() and tableTurnover — pyramid-wide
-       collective totals. Goals are summed from fixtures[] deduplicated by
-       fixtureId, since each payload carries the syncing club's whole division's
-       round and several clubs report the same fixtures. Table Turnover counts
-       SeasonRecord promotions/relegations over the feed's 7-day window, not the
-       stats window: a season concludes far more rarely than a sync, so a 24h
-       count would read 0 almost permanently.
-     - recentEvents — up to 20 items across 9 real sources, selected round-robin
+     - totalGoals / getGoalsPerMatchFormatted() and promotions/relegations —
+       pyramid-wide collective totals. Goals are summed from fixtures[]
+       deduplicated by fixtureId, since each payload carries the syncing club's
+       whole division's round and several clubs report the same fixtures. See
+       TABLE TURNOVER below for the two turnover figures and their window.
+     - recentEvents — up to 20 items across 10 real sources, selected round-robin
        (selectBalanced()) so a rare category can't be crowded out, then re-sorted
        newest-first. Each carries {time, text, category, categoryLabel, club,
-       clubId, clubs, detail, amountExact, timestampIso, meta, dossier}.
+       clubId, clubs, detail, amountExact, timestampIso, meta, trophy, dossier}.
+       `trophy` is set only on CUP items.
 
    THREE STATES, per design/States.dc.html. The distinction that matters is
    "never generated" vs "generated and everything was zero" — a zero snapshot is
@@ -33,6 +32,30 @@
        default rather than a measurement. Tiles render as em-dashes, not zeros.
      - stale: generated, but longer ago than the cron's own cadence allows.
      - active: everything else.
+
+   CUPS BAND. Between the stat strip and the feed, fed by CupTelemetryService
+   (LandingController passes `cups`). Live cups with their current round, drawn
+   fixtures and countdowns; a gold-ringed tile for any cup whose current round is
+   the FINAL; open-for-entry progress; recent winners. Three states, decided by
+   the service, not here:
+     - cups is null        -> no band, no footer count: the terminal renders
+                              exactly as it did before cups existed.
+     - cups.live is empty  -> "CUPS // NONE LIVE", a one-line empty state and the
+                              recent winners.
+     - otherwise           -> the full band, finals sorted first.
+   Timers are rendered as ISO `data-countdown-to` values and counted down by
+   landing.js against the BROWSER's clock, so a viewer with a skewed clock sees a
+   skewed timer. They stop at 00:00:00 rather than going negative: the round
+   resolves on the next cron tick and the page is never re-fetched, so a negative
+   number could only ever be a lie. `cup.timerAt` is nullable and every read of it
+   is gated — Twig's `date` filter renders null as *now*, i.e. a countdown to zero.
+
+   TABLE TURNOVER is two figures, promotions (▲) and relegations (▼), and is the
+   one tile NOT on the 24h window. It stays on the feed's 7 days because a
+   promotion lands only when a season concludes: across the SeasonRecord history
+   on hand that happened on 33 of 55 days, so 24h would read ▲0 ▼0 about two days
+   in five. Its sub-line says "7 days" where the other three say "24h" — the
+   discrepancy is the honest reading, not an oversight.
 
    STALE_AFTER_SECONDS is 1800 here and in Api\TelemetryController, which is a
    duplicated constant: the API endpoint computes `stale` server-side, but this
@@ -45,6 +68,7 @@
 {% set telemetry_age = 'now'|date('U') - telemetry.generatedAt|date('U') %}
 {% set telemetry_stale = telemetry_generated and telemetry_age > 1800 %}
 {% set telemetry_state = not telemetry_generated ? 'pending' : (telemetry_stale ? 'stale' : 'active') %}
+{% set cups_live = cups is not null ? cups.live|length : 0 %}
 
 <section class="telemetry-section" id="telemetry" aria-labelledby="telemetry-title">
     <div class="wrap">
@@ -73,46 +97,175 @@
                 </span>
             </div>
 
-            {#
-               Four tiles. Each big pixel-font value stays a bare number with the
-               descriptive text in the smaller sub-line — a full sentence in the
-               pixel font wraps and overflows the tile.
-
-               An ungenerated snapshot shows an em-dash rather than 0: a real
-               pyramid-wide zero and "we have never measured this" look identical
-               as numerals, and only one of them is a figure.
-            #}
+            {# Every tile is the snapshot's 24h window — the sub-line says so. #}
             <div class="terminal-stats">
                 <div class="terminal-stat">
                     <span class="terminal-stat-label pixel">Fixtures &amp; Form</span>
                     <span class="terminal-stat-val">{{ telemetry_generated ? telemetry.fixturesSimulated|number_format : '—' }}</span>
-                    <span class="terminal-stat-sub vt">{{ telemetry_generated ? telemetry.getResultsFormatted() ~ ' (W-D-L)' : 'No snapshot yet' }}</span>
+                    <span class="terminal-stat-sub vt">{{ telemetry_generated ? telemetry.getResultsFormatted() ~ ' (W-D-L), 24h' : 'No snapshot yet' }}</span>
                 </div>
                 <div class="terminal-stat">
                     <span class="terminal-stat-label pixel">Capital Deployed</span>
                     <span class="terminal-stat-val is-mint">{{ telemetry_generated ? telemetry.getCapitalDeployedFormatted() : '—' }}</span>
-                    <span class="terminal-stat-sub vt">Transfers &amp; infra</span>
+                    <span class="terminal-stat-sub vt">Transfers &amp; infra, 24h</span>
                 </div>
                 <div class="terminal-stat">
                     <span class="terminal-stat-label pixel">Goals Logged</span>
                     <span class="terminal-stat-val is-gold">{{ telemetry_generated ? telemetry.totalGoals|number_format : '—' }}</span>
-                    <span class="terminal-stat-sub vt">{{ telemetry_generated ? telemetry.getGoalsPerMatchFormatted() : 'No snapshot yet' }}</span>
+                    <span class="terminal-stat-sub vt">{{ telemetry_generated ? telemetry.getGoalsPerMatchFormatted() ~ ', 24h' : 'No snapshot yet' }}</span>
                 </div>
                 <div class="terminal-stat">
                     <span class="terminal-stat-label pixel">Table Turnover</span>
-                    <span class="terminal-stat-val is-red">{{ telemetry_generated ? telemetry.tableTurnover|number_format : '—' }}</span>
-                    <span class="terminal-stat-sub vt">Promotions &amp; drops, 7 days</span>
+                    {# Split by direction. The arrow AND the colour AND the aria-label
+                       all carry it, so colour is never the only cue. #}
+                    <span class="terminal-turnover">
+                        <span class="terminal-turnover-item" aria-label="{{ telemetry_generated ? telemetry.promotions : 'No' }} promoted">
+                            <span class="terminal-arrow is-up" aria-hidden="true"></span>
+                            <span class="terminal-stat-val is-mint">{{ telemetry_generated ? telemetry.promotions|number_format : '—' }}</span>
+                        </span>
+                        <span class="terminal-turnover-item" aria-label="{{ telemetry_generated ? telemetry.relegations : 'No' }} relegated">
+                            <span class="terminal-arrow is-down" aria-hidden="true"></span>
+                            <span class="terminal-stat-val is-red">{{ telemetry_generated ? telemetry.relegations|number_format : '—' }}</span>
+                        </span>
+                    </span>
+                    <span class="terminal-stat-sub vt">Up · down, 7 days</span>
                 </div>
             </div>
 
-            <div class="terminal-body">
-                {#
-                   One real <button> per line, inside a list item. These used to be
-                   divs carrying tabindex="0" role="button" plus a keydown shim for
-                   Enter/Space in landing.js — a button gets all of that from the
-                   platform, including the right focus ring and the right behaviour
-                   for assistive tech that enumerates controls.
-                #}
+            {% if cups is not null %}
+                <div class="tcup-head">
+                    <div class="tcup-head-live">
+                        <span class="tcup-dot{{ cups_live > 0 ? ' is-live' : '' }}" aria-hidden="true"></span>
+                        <h3 class="pixel tcup-title">
+                            {%- if cups_live > 0 or cups.open is not empty -%}
+                                CUPS // {{ cups_live }} LIVE · {{ cups.open|length }} OPEN FOR ENTRY
+                            {%- else -%}
+                                CUPS // NONE LIVE
+                            {%- endif -%}
+                        </h3>
+                    </div>
+                    {% if cups.nextResultAt %}
+                        <span class="tcup-next vt">NEXT RESULT IN <span data-countdown-to="{{ cups.nextResultAt|date('c') }}">—</span></span>
+                    {% endif %}
+                </div>
+
+                <div class="tcup-body">
+                    <div class="tcup-live">
+                        {% if cups.live is empty and cups.open is empty %}
+                            <p class="tcup-empty vt">
+                                No cups in progress.
+                                {% if cups.winners is not empty %}The last final was settled {{ cups.winners[0].ago }} — results stay here until the next one.{% endif %}
+                            </p>
+                        {% endif %}
+
+                        {% for cup in cups.live %}
+                            {% if cup.isFinal %}
+                                <article class="tcup-final">
+                                    <div class="tcup-final-head">
+                                        <span class="tcup-final-chip pixel">FINAL</span>
+                                        <span class="tcup-final-name pixel">{{ cup.name|upper }}</span>
+                                    </div>
+                                    {% set fx = cup.fixtures|first %}
+                                    <div class="tcup-final-match">
+                                        <div class="tcup-final-side" data-club-badge="{{ fx.home.badge|json_encode|e('html_attr') }}">
+                                            <span class="tcup-badge" aria-hidden="true"></span>
+                                            <span class="tcup-final-club">{{ fx.home.name }}</span>
+                                        </div>
+                                        <div class="tcup-final-centre">
+                                            <span class="tcup-trophy" data-trophy="{{ cup.trophy|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                            <span class="tcup-final-lbl vt">{{ cup.timerLabel }}</span>
+                                            {% if cup.timerAt %}
+                                                <span class="tcup-final-timer pixel" data-countdown-to="{{ cup.timerAt|date('c') }}">—</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="tcup-final-side" data-club-badge="{{ fx.away.badge|json_encode|e('html_attr') }}">
+                                            <span class="tcup-badge" aria-hidden="true"></span>
+                                            <span class="tcup-final-club">{{ fx.away.name }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="tcup-foot vt">
+                                        <span>{{ cup.capacity }} CLUBS ENTERED</span>
+                                        {% if cup.prizePence > 0 %}<span class="tcup-gold">VICTOR'S PRIZE £{{ (cup.prizePence / 100)|round(0, 'floor')|number_format }}</span>{% endif %}
+                                    </div>
+                                </article>
+                            {% else %}
+                                <article class="tcup-card">
+                                    <div class="tcup-card-head">
+                                        <span class="tcup-trophy" data-trophy="{{ cup.trophy|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                        <div class="tcup-card-id">
+                                            <div class="tcup-card-name pixel">{{ cup.name|upper }}</div>
+                                            <div class="tcup-card-meta vt">{{ cup.roundName }} · {{ cup.clubsLeft }} OF {{ cup.capacity }} LEFT</div>
+                                        </div>
+                                        <span class="tcup-chip pixel">{{ cup.roundKey }}</span>
+                                    </div>
+                                    {% for fx in cup.fixtures %}
+                                        <div class="tcup-fx">
+                                            <span class="tcup-badge tcup-badge--only" data-club-badge="{{ fx.home.badge|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                            <span class="tcup-fx-abbr pixel" title="{{ fx.home.name }}">{{ fx.home.abbr }}</span>
+                                            <span class="tcup-fx-v vt">v</span>
+                                            <span class="tcup-fx-abbr tcup-fx-abbr--away pixel" title="{{ fx.away.name }}">{{ fx.away.abbr }}</span>
+                                            <span class="tcup-badge tcup-badge--only" data-club-badge="{{ fx.away.badge|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                        </div>
+                                    {% endfor %}
+                                    {% if cup.timerAt %}
+                                        <div class="tcup-foot vt">
+                                            <span>{{ cup.timerLabel }}</span>
+                                            <span class="tcup-mint" data-countdown-to="{{ cup.timerAt|date('c') }}">—</span>
+                                        </div>
+                                    {% endif %}
+                                </article>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% for cup in cups.open %}
+                            <article class="tcup-card">
+                                <div class="tcup-card-head">
+                                    <span class="tcup-trophy" data-trophy="{{ cup.trophy|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                    <div class="tcup-card-id">
+                                        <div class="tcup-card-name pixel">{{ cup.name|upper }}</div>
+                                        <div class="tcup-card-meta vt">{{ cup.capacity }} CLUBS{% if cup.entryFeePence > 0 %} · ENTRY £{{ (cup.entryFeePence / 100)|round(0, 'floor')|number_format }}{% endif %}</div>
+                                    </div>
+                                    <span class="tcup-chip tcup-chip--open pixel">OPEN</span>
+                                </div>
+                                {# capacity is an admin-editable IntegerField, so it is divided
+                                   by only after checking — a 0 would be a Twig division error
+                                   that takes the whole landing page down, not a broken bar. #}
+                                <div class="tcup-bar" role="img" aria-label="{{ cup.entered }} of {{ cup.capacity }} entered">
+                                    <span class="tcup-bar-fill" style="width:{{ cup.capacity > 0 ? (cup.entered / cup.capacity * 100)|round(1) : 0 }}%"></span>
+                                </div>
+                                <div class="tcup-card-meta vt">{{ cup.entered }} OF {{ cup.capacity }} ENTERED · DRAW WHEN FULL</div>
+                                {% if cup.prizePence > 0 %}
+                                    <div class="tcup-foot vt">
+                                        <span>WINNER TAKES</span>
+                                        <span class="tcup-mint">£{{ (cup.prizePence / 100)|round(0, 'floor')|number_format }}</span>
+                                    </div>
+                                {% endif %}
+                            </article>
+                        {% endfor %}
+                    </div>
+
+                    {% if cups.winners is not empty %}
+                        <aside class="tcup-winners">
+                            <div class="tcup-winners-title pixel">RECENT WINNERS</div>
+                            <ol class="tcup-winners-list">
+                                {% for w in cups.winners %}
+                                    <li class="tcup-winner" data-club-badge="{{ w.badge|json_encode|e('html_attr') }}">
+                                        <span class="tcup-trophy tcup-trophy--sm" data-trophy="{{ w.trophy|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                        <span class="tcup-badge tcup-badge--only" aria-hidden="true"></span>
+                                        <span class="tcup-winner-text">
+                                            <span class="tcup-winner-club">{{ w.clubName }}</span>
+                                            <span class="tcup-winner-line vt">{{ w.cupName|upper }} · {{ w.ago }}</span>
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ol>
+                            <a href="#cup-results" class="btn btn-outline btn-sm pixel">ALL CUP RESULTS</a>
+                        </aside>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <div class="terminal-body{{ cups is not null ? ' terminal-body--after-cups' : '' }}">
                 <ul class="terminal-feed" aria-label="Recent pyramid activity">
                     {% for event in telemetry.recentEvents %}
                         <li class="terminal-feed-row">
@@ -128,18 +281,10 @@
                                     data-dossier="{{ event.dossier|default(null)|json_encode|e('html_attr') }}">
                                 <span class="terminal-feed-category pixel">{{ event.categoryLabel }}</span>
                                 <span class="terminal-feed-line">
-                                    {#
-                                       A badge per club the line NAMES, not just the first.
-                                       event.clubs is [{name, clubId, badge}] in the order the
-                                       names appear, with the primary club at index 0; a
-                                       transfer names two sides and the design draws both.
-
-                                       A null badge means "no Club row behind this name" (an
-                                       NPC side, typically), not "kit unset" — those slots
-                                       carry no data-club-badge at all and landing.js leaves
-                                       them empty rather than drawing a default kit and
-                                       implying a club that does not exist.
-                                    #}
+                                    {# NEW: cup events carry the cup's TrophyConfig in event.trophy. #}
+                                    {% if event.trophy|default(null) %}
+                                        <span class="terminal-feed-trophy" data-trophy="{{ event.trophy|json_encode|e('html_attr') }}" aria-hidden="true"></span>
+                                    {% endif %}
                                     {% for named in event.clubs|default([]) %}
                                         {% if named.badge %}
                                             <span class="terminal-feed-badge"
@@ -170,12 +315,6 @@
                         <p class="terminal-aside-copy">Select any line to open the boardroom dossier: the club's badge and kit, the logged time, the value, its best-rated player and its latest fixtures.</p>
                     </div>
                     <div class="terminal-aside-actions">
-                        {#
-                           Hidden when there is nothing to rotate — a pause control
-                           over a single line (or none) is a dead toggle. Its pressed
-                           state and label are owned by landing.js, which also starts
-                           it already paused under prefers-reduced-motion.
-                        #}
                         {% if telemetry.recentEvents|length > 1 %}
                             <button type="button" class="btn btn-outline btn-sm pixel" id="telemetry-pause" aria-pressed="false">PAUSE FEED</button>
                         {% endif %}
@@ -186,7 +325,8 @@
 
             <p class="terminal-footer vt">
                 {% if telemetry_generated %}
-                    {{ telemetry.activeClubs|number_format }} ACTIVE CLUBS // ~{{ telemetry.weeksPlayed|number_format }} WEEKS PLAYED (ESTIMATE) // OFFLINE-FIRST ENGINE.
+                    {{ telemetry.activeClubs|number_format }} ACTIVE CLUBS // ~{{ telemetry.weeksPlayed|number_format }} WEEKS PLAYED (ESTIMATE)
+                    {%- if cups_live > 0 %} // {{ cups_live }} {{ cups_live == 1 ? 'CUP' : 'CUPS' }} LIVE{% endif %} // OFFLINE-FIRST ENGINE.
                     Results are tallied from the last five matches per sync, so a club that syncs often can be counted twice.
                 {% else %}
                     OFFLINE-FIRST ENGINE. Figures appear once the first snapshot is generated.

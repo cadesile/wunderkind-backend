@@ -102,7 +102,11 @@ Three things to know before touching them:
   application code.
 - **`competition_entrant`** — unique index on
   (`active_competition_id`, `club_id`) — one entry per club per
-  competition.
+  competition. `club_id` is **nullable, ON DELETE SET NULL** as of
+  `Version20261102140000`, so an entry survives its club's deletion and keeps
+  rendering in finished brackets — see `entities.md`'s `CompetitionEntrant`.
+  The unique index is unaffected: Postgres treats NULLs as distinct, so any
+  number of orphaned entries may sit in one competition.
 - **`competition_result`** — `OneToOne` + unique on `fixture_id` — one
   result per fixture.
 - **`competition_entrant_squad`** — unique on `entrant_id`. Required, not

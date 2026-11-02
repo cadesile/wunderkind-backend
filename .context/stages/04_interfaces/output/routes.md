@@ -26,6 +26,11 @@ serve these paths identically; see `01_overview/output/environment.md`.
   `POST /api/resend-verification`, `POST /api/forgot-password`,
   `POST /api/reset-password`, `POST /api/resend-password-reset`,
   `POST /api/sync`.
+- **`Api\TelemetryController`** `GET /api/telemetry` — also gained
+  `stats.promotions` / `stats.relegations` (the 7-day Table Turnover figure split by
+  direction, `tableTurnoverWindowDays` applies to all three) and a per-feed-item
+  `trophy` (TrophyConfig, set only on `CUP` items). All three are ADDITIVE:
+  `stats.tableTurnover` stays, and equals the two added together.
 - **`LandingController`** — public marketing site (Twig, not API JSON).
   Renders `LiveTelemetryService::getSnapshot()` server-side into the HTML and
   makes no client-side fetch of its own. Until 2026-10-21 it was the ONLY
@@ -34,6 +39,15 @@ serve these paths identically; see `01_overview/output/environment.md`.
   the snapshot shape has two consumers, not one.
   `GET /` (`landing_home`), `GET /delete-account`
   (`landing_delete_account`).
+  Section services it renders server-side: `WorldOverviewService`,
+  `ArchetypeShowcaseService`, `LiveTelemetryService`, `ClubSpotlightService`,
+  `OwnerSpotlightService`, `PeriodAwardsBoardService`,
+  `CupResultsBoardService` (`#cup-results`) and `CupTelemetryService` (the CUPS
+  band inside `#telemetry`). `PeriodAwardsBoardService` and
+  `CupResultsBoardService` gate their own section AND its nav link on the same
+  emptiness check, so a board with no data leaves no dead anchor in the header.
+  `CupTelemetryService` is the one read that is NOT a cached snapshot — see
+  services.md for why its countdowns cannot be.
 - **`InitializeController`** `#[Route('/api/initialize')]` —
   `POST /starter`, `GET /leagues`, `POST /league/{tier}` (`tier`
   constrained to `\d+`).
@@ -148,7 +162,10 @@ so a token minted before the fix starts working without re-authentication. See
   `/admin/developer-tools/trigger-age21|cleanup-entities|generate-leaderboards|reset-database|nuclear-reset`,
   `/admin/developer-tools/purge-spoof-clubs` (`POST`, CSRF-guarded — the
   Settings screen's "Clear Spoof Clubs" button, running
-  `app:clubs:purge-spoof`; unlike the older Developer Tools buttons beside it
+  `app:clubs:purge-spoof` — **since 2026-11-02 this is the ONLY scheduled-ish caller there
+  is**, the deploy workflows having dropped their every-deploy run of the same command
+  (it was deleting the opposition out of finished cups; see `03_data/output/migrations.md`);
+  unlike the older Developer Tools buttons beside it
   this one posts to and redirects through `/admin?routeName=...`, which is what
   `src/Controller/Admin/CLAUDE.md` requires of any action rendering an
   `@EasyAdmin`-extending template),

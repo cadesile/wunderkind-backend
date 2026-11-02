@@ -458,3 +458,55 @@ was not safe to retry:
 
   `INT` rather than `SMALLINT` on the counter so a client stuck in a resubmission loop
   cannot overflow it into a 500 that the outbox then retries forever.
+
+## A competition entry outlives its club (2026-11-02)
+
+- `Version20261102140000` — `competition_entrant.club_id` becomes **nullable, ON DELETE SET
+  NULL**, where it was NOT NULL / CASCADE. No backfill; nothing existing changes value.
+
+  **The bug it fixes was visible in the game.** `competition_fixture`'s `home_entrant_id`,
+  `away_entrant_id` and `winner_entrant_id` are already ON DELETE SET NULL, so cascading the
+  entrant row away with its club blanked that club out of every bracket it had ever played in
+  — a finished cup's opposition reverted to "To be decided", and the scorelines with it, since
+  the client only renders a score on a side it can resolve. And it fired on a schedule:
+  competitions are filled with spoof clubs by `CompetitionAutoFillService`, and
+  `app:clubs:purge-spoof` ran on EVERY deploy in both workflows until 2026-11-02, so each
+  deploy emptied out the cups players had just won. **That deploy step has since been removed**
+  (both workflows; purging is now an operator action via the admin's "Clear Spoof Clubs"), but
+  a club can still be deleted at any time, so this column remains the fix rather than a
+  belt-and-braces.
+
+  Keeping the entrant row keeps `clubDisplayJson` with it — the frozen name, badge, kits and
+  tier as they were at registration — which is the whole of what a bracket renders. The
+  unique index on (`active_competition_id`, `club_id`) is unaffected: Postgres treats NULLs
+  as distinct, so any number of orphaned entries may sit in one competition. Everything
+  hanging off the entrant (`competition_entrant_squad`, `competition_entrant_submission`,
+  `entrant_reward_claim`) still cascades from the entrant, so a deleted club no longer drags
+  those with it either.
+
+  `down()` restores CASCADE but deletes null-club rows first — it cannot restore
+  non-nullability over rows the original constraint would reject, and deleting them is exactly
+  what the old cascade would have done.
+
+  **This does not repair brackets already damaged** — those entrant rows are gone. That repair
+  is code, not schema: `CompetitionResponseBuilder::serializeFixtureSide()` falls back to
+  `competition_result`'s frozen club copy, which survived because that table cascades from the
+  FIXTURE rather than the club. See `04_interfaces/output/services.md`.
+
+- `Version20261102160000` — `live_telemetry_snapshot` gains `promotions` and `relegations`
+  (INT NOT NULL DEFAULT 0), the landing page's Table Turnover tile split by direction
+  ("▲ 7 ▼ 4" where it read "11"). Same rows, same 7-day window; see
+  `03_data/output/entities.md` for why the window did NOT move to 24h with the split.
+
+  `table_turnover` **stays, and `app:telemetry:generate` keeps writing it** — it is published
+  as `stats.tableTurnover` on `GET /api/telemetry`, so dropping it would break a field an app
+  release already in the wild reads. It equals promotions + relegations.
+
+  `postUp()` backfills `promotions` from `table_turnover` rather than leaving both at 0. The
+  table holds one snapshot row and the next cron tick overwrites all three anyway, but a
+  landing page rendered in between would otherwise show ▲0 ▼0 beside a live feed. The split
+  cannot be recovered from the total, so the whole of it goes to `promotions`: wrong in detail
+  for at most one interval, where 0/0 would be wrong AND look broken.
+
+  Written with the Schema API (`addColumn`/`dropColumn`) rather than raw DDL, per this
+  codebase's PostgreSQL-only rule.

@@ -322,14 +322,14 @@ class CompetitionResultsService
             // two calls rather than one, because the `result` key differs per side and is part
             // of the published contract; it rides in `data`, which the OS never renders.
             $this->pushNotificationService->notifyUsers(
-                array_map(static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(), $winners),
+                self::userIdsOf($winners),
                 self::COMPETITION_COMPLETED_TITLE,
                 self::COMPETITION_COMPLETED_BODY,
                 ['type' => 'COMPETITION_COMPLETED', 'competitionId' => (string) $activeCompetition->getId(), 'result' => 'WON'],
             );
             if ($runnersUp !== []) {
                 $this->pushNotificationService->notifyUsers(
-                    array_map(static fn (CompetitionEntrant $e) => (string) $e->getClub()->getUser()->getId(), $runnersUp),
+                    self::userIdsOf($runnersUp),
                     self::COMPETITION_COMPLETED_TITLE,
                     self::COMPETITION_COMPLETED_BODY,
                     ['type' => 'COMPETITION_COMPLETED', 'competitionId' => (string) $activeCompetition->getId(), 'result' => 'RUNNER_UP'],
@@ -518,15 +518,23 @@ class CompetitionResultsService
         // `result` block; the bracket no longer carries one, because per-fixture match detail
         // measured at ~74% of an 805KB response at capacity 64 and the match endpoint already
         // served the same thing.
-        $scoreline     = sprintf('%s %d-%d %s', $home->getClub()->getName(), $matchResult->homeScore, $matchResult->awayScore, $away->getClub()->getName());
+        // Frozen display names, not the live clubs': the scoreline is a label, and it has to
+        // read the same after an entrant's club is deleted as it did when the tie was played.
+        $scoreline     = sprintf('%s %d-%d %s', $home->getDisplayName(), $matchResult->homeScore, $matchResult->awayScore, $away->getDisplayName());
         $competitionId = (string) $round->getActiveCompetition()->getId();
         $fixtureId     = (string) $fixture->getId();
         $templateName  = $round->getActiveCompetition()->getTemplate()->getName();
 
         if ($this->inboxService !== null) {
             foreach ([$home, $away] as $sideEntrant) {
+                // An entry can outlive its club (CompetitionEntrant::$club); there is then no
+                // inbox to deliver to, and the other side must still get its mail.
+                $sideClub = $sideEntrant->getClub();
+                if ($sideClub === null) {
+                    continue;
+                }
                 $this->inboxService->createMessage(
-                    club: $sideEntrant->getClub(),
+                    club: $sideClub,
                     senderType: MessageSenderType::COMPETITION,
                     senderName: $templateName,
                     subject: sprintf('Match Result (%s): %s', $round->getLabel(), $scoreline),
@@ -569,16 +577,36 @@ class CompetitionResultsService
         ];
 
         $this->pushNotificationService->notifyUsers(
-            array_values(array_unique([
-                (string) $winner->getClub()->getUser()->getId(),
-                (string) $loser->getClub()->getUser()->getId(),
-            ])),
+            array_values(array_unique(self::userIdsOf([$winner, $loser]))),
             'Full time',
             sprintf('Your %s result is in — tap to reveal.', $round->getLabel()),
             $resultData,
         );
 
         return $winner;
+    }
+
+    /**
+     * Owning user ids for a set of entrants, skipping any whose club has been deleted.
+     *
+     * An entry outlives its club (CompetitionEntrant::$club) so that it stays displayable in
+     * the bracket; there is no one left to push to for such an entry, and a null here would
+     * take the whole notification — everybody else's included — down with it.
+     *
+     * @param  list<CompetitionEntrant> $entrants
+     * @return list<string>
+     */
+    private static function userIdsOf(array $entrants): array
+    {
+        $userIds = [];
+        foreach ($entrants as $entrant) {
+            $club = $entrant->getClub();
+            if ($club !== null) {
+                $userIds[] = (string) $club->getUser()->getId();
+            }
+        }
+
+        return $userIds;
     }
 
     /**
@@ -642,17 +670,20 @@ class CompetitionResultsService
                 'allowDraws' => false,
             ],
             'entrants' => [
+                // Club id and name off the entry rather than the live club row, which an
+                // entry outlives (CompetitionEntrant::$club). An audit record of a tie that
+                // was played must not depend on both clubs still existing to be written.
                 'home' => [
                     'entrantId'       => (string) $home->getId(),
-                    'clubId'          => (string) $home->getClub()->getId(),
-                    'clubName'        => $home->getClub()->getName(),
+                    'clubId'          => $home->getClubIdValue(),
+                    'clubName'        => $home->getDisplayName(),
                     'seed'            => $home->getSeed(),
                     'snapshotVersion' => $home->getSnapshotVersion(),
                 ],
                 'away' => [
                     'entrantId'       => (string) $away->getId(),
-                    'clubId'          => (string) $away->getClub()->getId(),
-                    'clubName'        => $away->getClub()->getName(),
+                    'clubId'          => $away->getClubIdValue(),
+                    'clubName'        => $away->getDisplayName(),
                     'seed'            => $away->getSeed(),
                     'snapshotVersion' => $away->getSnapshotVersion(),
                 ],
@@ -687,7 +718,7 @@ class CompetitionResultsService
             'tiebreakSeed'     => $usedTiebreak ? SeededRng::hashId($fixture->getId()->toRfc4122() . ':tiebreak') : null,
             'winnerSide'       => $winner === $home ? 'home' : 'away',
             'winnerEntrantId'  => (string) $winner->getId(),
-            'winnerClubId'     => (string) $winner->getClub()->getId(),
+            'winnerClubId'     => $winner->getClubIdValue(),
             'resolutionMethod' => $resolutionMethod,
         ]);
 

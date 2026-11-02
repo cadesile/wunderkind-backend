@@ -43,10 +43,11 @@ class LiveTelemetrySnapshot
     /**
      * Categorized real-event feed for the "Boardroom Incident & Consequence Feed" —
      * pyramid movement, boardroom outlay, attendance, dressing-room fallout, equity
-     * dilution, commercial covenant risk, and talisman/community highlights, merged
-     * newest-first. Each entry: {time, text, category, categoryLabel, club, detail,
-     * amountExact, timestampIso, meta}. See LiveTelemetryService for how each
-     * category is built and LiveTelemetryServiceTest for the exact shape.
+     * dilution, commercial covenant risk, talisman/community highlights, and cup wins,
+     * merged newest-first. Each entry: {time, text, category, categoryLabel, club,
+     * detail, amountExact, timestampIso, meta, trophy}. `trophy` is a TrophyConfig and
+     * is set only on CUP items. See LiveTelemetryService for how each category is built
+     * and LiveTelemetryServiceTest for the exact shape.
      *
      * @var array<int, array<string, mixed>>
      */
@@ -73,9 +74,33 @@ class LiveTelemetrySnapshot
      * 4th stat box. Clubs promoted or relegated across the whole pyramid in the feed's
      * own 7-day window — SeasonRecord rows, counted by
      * SeasonRecordRepository::countPromotionsAndRelegationsSince().
+     *
+     * Superseded on the landing page by $promotions/$relegations below, which the tile
+     * now renders as two figures. Kept, and still written on every refresh, because
+     * GET /api/telemetry serves it as `stats.tableTurnover` — removing it would break a
+     * published field for an app release that is already out. It is exactly
+     * promotions + relegations, counted as rows (see countTurnoverByDirectionSince()
+     * for the one case where that is not the same as adding the two).
      */
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $tableTurnover = 0;
+
+    /**
+     * $tableTurnover split by direction, over the SAME 7-day window — so the tile can
+     * say "▲ 7 ▼ 4" instead of "11", which is the question the figure is actually
+     * asked ("is the pyramid churning upward or downward").
+     *
+     * Still 7 days, not the 24h stats window, for the reason the window has always been
+     * 7 days: a promotion lands only when a season concludes, and on real data that
+     * happens on roughly 3 days in 5, so a 24h count reads 0 most of the time — twice
+     * as visibly now that it is two numbers instead of one. The tile's sub-line says
+     * "7 days" rather than inheriting the other three tiles' "24h".
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $promotions = 0;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $relegations = 0;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $generatedAt;
@@ -102,6 +127,8 @@ class LiveTelemetrySnapshot
     public function getTotalGoals(): int { return $this->totalGoals; }
     public function getTotalMatches(): int { return $this->totalMatches; }
     public function getTableTurnover(): int { return $this->tableTurnover; }
+    public function getPromotions(): int { return $this->promotions; }
+    public function getRelegations(): int { return $this->relegations; }
 
     /** @param array<int, array<string, mixed>> $recentEvents */
     public function update(
@@ -117,6 +144,8 @@ class LiveTelemetrySnapshot
         int $totalGoals = 0,
         int $totalMatches = 0,
         int $tableTurnover = 0,
+        int $promotions = 0,
+        int $relegations = 0,
     ): void {
         $this->fixturesSimulated         = $fixturesSimulated;
         $this->capitalDeployedPence      = $capitalDeployedPence;
@@ -130,6 +159,8 @@ class LiveTelemetrySnapshot
         $this->totalGoals                = $totalGoals;
         $this->totalMatches              = $totalMatches;
         $this->tableTurnover             = $tableTurnover;
+        $this->promotions                = $promotions;
+        $this->relegations               = $relegations;
         $this->generatedAt               = new \DateTimeImmutable();
     }
 
