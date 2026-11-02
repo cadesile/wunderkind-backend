@@ -12,6 +12,9 @@ use Symfony\Component\Routing\Attribute\Route;
  * Public endpoint — no JWT required.
  * Called by the client before the user has credentials,
  * to know how to initialise a fresh club.
+ *
+ * The `tutorial` block's contract, validation and admin workflow:
+ * docs/api/setup-tutorial.md.
  */
 #[Route('/api')]
 class StarterConfigController extends AbstractController
@@ -55,6 +58,13 @@ class StarterConfigController extends AbstractController
             'fanBaseRanges'              => $config->getFanBaseRanges(),
             'fanBasePromotionIncrease'   => $config->getFanBasePromotionIncrease(),
             'fanBaseRelegationDecrease'  => $config->getFanBaseRelegationDecrease(),
+            // Optional first-run guidance for the app's new-game setup flow. Served
+            // verbatim: the client's `parseTutorial` validates it item by item and never
+            // throws, dropping anything it does not like, so a malformed block degrades to
+            // "no tutorial" rather than blocking the one route a new account cannot skip.
+            // An empty array is that state. Copy keys are `ngs.tut.*`.
+            // See docs/api/setup-tutorial.md.
+            'tutorial'                   => $config->getSetupTutorialConfig(),
         ]);
     }
 }

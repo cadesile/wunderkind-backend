@@ -5,6 +5,32 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-11-02), on top of commit `fde3c60`** (uncommitted).
+  **Stages touched:** 03_data (`entities.md`), 04_interfaces (`routes.md`),
+  06_documentation (`index.md`), shared (this file).
+  **Code:** the `tutorial` block on `GET /api/starter-config` is implemented — column,
+  migration, admin editor, validator, CLI check, 26 tests.
+
+  Three things worth carrying beyond the feature:
+
+  - **A DB-level default on a new NOT NULL column is drift, but you still need it for one
+    statement.** `starter_config` has exactly one row, so `ADD ... JSON NOT NULL` with no
+    default fails outright; the default populates that row and then has to be DROPPED in the
+    same migration, because every other JSON column here has none and leaving it makes the
+    next `migrations:diff` emit `ALTER ... DROP DEFAULT`. The first draft left it in and did
+    exactly that — caught by re-running `diff` after applying, which is the check worth
+    making a habit.
+  - **A validator exists here only because the consumer reports nothing.** The app's
+    `parseTutorial` cannot throw (setup is the one route a new account cannot skip), so it
+    drops bad items in silence. `SetupTutorialValidator` mirrors its rules so an admin sees
+    them. It is deliberately NOT in `deploy-dev.yml`: it exits 1, the workflow runs under
+    `set -e`, and an admin saving a bad payload breaking the next deploy of everything else
+    is a worse failure with a less obvious cause.
+  - **The 34 `ngs.tut.*` strings were deliberately NOT seeded from a PHP array.** The app's
+    `locales/en/translations.json` is their single source and `/admin/translations/import`
+    already ingests it; re-typing them here would give the same copy two homes. The check
+    command names the missing rows and points at that route.
+
 - **New pass (2026-11-02), on top of commit `e12738d`** (uncommitted).
   **Stages touched:** 06_documentation (`index.md`), shared (this file).
   **No code change** — one doc registered, plus a correction to the entry below.

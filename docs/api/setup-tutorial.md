@@ -1,24 +1,21 @@
-# New-game setup tutorial — backend work needed
+# New-game setup tutorial (client integration)
 
-**This is a pending work brief, not a contract for something that exists.** Nothing described
-here is implemented server-side yet.
+**Contract for `GET /api/starter-config`'s `tutorial` block. Implemented 2026-11-02.** This file
+was a work brief until the work landed; it now describes what exists, per its own instruction at
+the time.
 
-Client side is shipped: `wunderkind-app@development` `b41beac0`, merged to `dev` as `54bc1c3a`
-on 2026-11-02, so it is live on the `dev` OTA channel and already parses this payload.
+- **Server:** `starter_config.setup_tutorial_config` (`Version20261102121403`), served verbatim as
+  `tutorial` by `StarterConfigController::index()`. Editable at `/admin/starter-config` →
+  **Setup Tutorial**. Validated by `App\Service\SetupTutorialValidator` on save and by
+  `php bin/console app:check-setup-tutorial`.
+- **Client:** `wunderkind-app@b41beac0`, on the `dev` OTA channel since `54bc1c3a`.
+- **Seeded on**, with the 5 briefings and 10 notes the client already shipped as its fixture, so
+  the feature arrived working rather than dark. An empty `{}` is the valid "off" state.
 
-Adds an optional `tutorial` block to `GET /api/starter-config` that drives first-run guidance
-inside the app's new-game setup flow.
-
-> ⚠️ **On this file's location and expiry.** `docs/api/` is otherwise contracts for endpoints
-> that exist, and is load-bearing because ~20 of its files are cited by name from source
-> docblocks. The 2026-11-02 prune deleted
-> `docs/api/tournament-sealed-results-backend-work.md` for being exactly what this file is — "a
-> work log misfiled as an API contract" — once its items were actioned. So this file is here only
-> because the request has to live somewhere a backend session will find it. **When the work
-> lands, it should either be rewritten as a contract describing what IS (and cited from
-> `StarterConfigController`'s docblock, which is what earns a place in this directory) or
-> deleted.** It is not currently registered in
-> `.context/stages/06_documentation/output/index.md`, so a staleness pass will not see it.
+Still owed, and tracked at the bottom of this file: the `ngs.tut.*` translation rows (the copy
+renders from the app's bundled catalogue without them — they are what makes it *reworded* without
+an app release), and the `Club::$tutorialCompletedAt` backfill, which is a different thing that
+happens to share the word "tutorial".
 
 ## Why this exists, and what it is not
 
@@ -306,94 +303,56 @@ cleared on logout).
   without touching anyone's other dismissals. That is the finer-grained tool; `version` is the
   blunt one.
 
-## Suggested implementation
+## How it is built
 
-`StarterConfig` is a singleton entity (`id = 1`) already edited through the admin screen at
-`/admin/starter-config` (`DashboardController::starterConfig()`), and it already carries five JSON
-columns, so the storage half of this is routine.
+| Piece | Where |
+|---|---|
+| Column | `StarterConfig::$setupTutorialConfig` — `json`, NOT NULL, PHP-default seeded with the 15 items |
+| Migration | `Version20261102121403` |
+| API | `StarterConfigController::index()` → `'tutorial' => $config->getSetupTutorialConfig()` |
+| Admin | `/admin/starter-config` → **Setup Tutorial** (CodeMirror JSON textarea, lint + submit guard) |
+| Validation | `App\Service\SetupTutorialValidator::problems()` — pure, static, no DB |
+| CLI | `php bin/console app:check-setup-tutorial` — structure **plus** translation-row coverage |
+| Tests | `tests/Service/SetupTutorialValidatorTest.php` (20), `tests/Controller/Api/StarterConfigTutorialTest.php` (6) |
 
-**The editing half is not, and the obvious precedent is a mirage.** No JSON column on this entity
-is edited as a free-form blob today. `npcSquadConfig` is reassembled field by field from per-tier
-number inputs (`DashboardController::saveStarterConfig()`, around lines 628-647, against the
-`npcConfig[tier][...]` inputs in `templates/admin/starter_config.html.twig`). The blob accessors
-that would make it a textarea — `StarterConfig::getNpcSquadConfigJson()` and
-`setNpcSquadConfigJson()` — are dead code, referenced nowhere in `src/`, `templates/` or
-`tests/`. A textarea editor for a nested array of objects is new work on that screen, not a copy
-of an existing section; the closest real precedent is the JSON textareas in
-`templates/admin/game_config.html.twig`.
+Four decisions in there are worth the explanation, because each had a wrong-looking easy option.
 
-1. **A JSON column on `StarterConfig`.** ⚠️ **Name it `setupTutorialConfig`, not
-   `tutorialConfig`** — `tutorial*` is already taken on `Club` by a different, live, and
-   differently-scoped concept (`Club::$tutorialCompletedAt`: per-club "setup finished", see the
-   section near the top). Two unrelated `tutorial` things in one domain is precisely how that one
-   went unnoticed for five weeks while it was dead, and the export/import service in the traps
-   below is reflection-driven over property names, so the collision would sit in one more place.
-   This one is per-club state on `Club`; yours is global config on `StarterConfig`. Keep the
-   names as far apart as the scopes. The API key stays exactly `tutorial` regardless — that
-   is fixed by the shipped client and is the one name here that cannot change.
+**Named `setupTutorialConfig`, not `tutorialConfig`.** `Club::$tutorialCompletedAt` is a different,
+differently-scoped thing (per-club "setup finished"); this is global config. Two unrelated
+`tutorial` names in one domain is exactly how that column went stale unnoticed for five weeks, and
+`ConfigImportExportService` is reflection-driven over property names, so a near-collision would
+have landed in one more place.
 
-   Decide nullable-or-seeded first, because they are different features, and this document has
-   previously implied both:
-   - *nullable, defaulting to null* — ships dark; the tutorial exists only once an admin fills it
-     in. Null is the no-op state.
-   - *non-nullable `array`, defaulting to the fixture contents* — ships with the tutorial on, and
-     matches all five existing JSON columns on the entity, every one of which is non-nullable with
-     a PHP default.
+**Non-nullable with a seeded PHP default, matching all five other JSON columns on the entity.**
+The nullable alternative also trips `ConfigImportExportService::coerce()`, whose null branch throws
+unless the setter is typed `?array` — and `ConfigImportExportCoverageTest` fails the build on a
+persisted column with no `get*`/`set*` pair, so both accessors are mandatory regardless.
 
-   Two mechanical traps on the way, neither of which announces itself:
-   - Config export/import is reflection-driven
-     (`ConfigImportExportService::exportableProperties()`), so the new column is picked up for
-     free — but `tests/Service/ConfigImportExportCoverageTest.php` fails the build on a persisted
-     column with no `get*`/`set*` pair.
-   - `ConfigImportExportService::coerce()` throws `null is not allowed` unless the setter's
-     parameter is typed `?array`. A nullable column with an `array` setter migrates cleanly and then
-     fails the export/import round-trip assertion in that same test.
+**The migration adds the column WITH a DB default and then drops it.** `starter_config` always has
+exactly one row, so `ADD ... JSON NOT NULL` with no default fails outright on any existing
+database. The default populates that row; dropping it afterwards is what keeps the mapping and the
+schema in agreement — every other JSON column here is NOT NULL with no DB default, and leaving one
+behind makes the next `migrations:diff` emit `ALTER ... DROP DEFAULT`, which is the drift `dbe3644`
+spent a commit clearing. The first draft left it in and did exactly that.
 
-2. **Exposed by `StarterConfigController::index()`** as
-   `'tutorial' => $config->getSetupTutorialConfig()`. Null is fine and is the no-op state.
+**The admin setter ignores un-decodable input rather than writing `[]`.** A typo in a 15-item blob
+should not silently delete the tutorial. The parse failure is reported as a flash, and
+`SetupTutorialValidator`'s findings alongside it — because the *client* reports nothing.
 
-3. **An admin screen section**, if the copy is to be editable without a deploy — which is the main
-   reason for doing this server-side at all. Per the note above, this is a new JSON textarea rather
-   than another NPC Squad Config-style grid of inputs.
+### Why this is NOT in the deploy pipeline
 
-   ⚠️ **`items` must survive the round trip as a JSON array.** If the save handler rebuilds it
-   into a PHP array with non-sequential keys, `json_encode` emits an object, the client's
-   "anything else is treated as empty" rule fires, and the whole tutorial silently disappears.
-   `array_values()` on save.
+`app:check-setup-tutorial` exits 1 on structural problems, and `deploy-dev.yml` runs under
+`set -e`. Wiring it in would mean an admin saving a bad payload breaks the next deploy of
+everything else — a worse failure than the one being prevented, and one with no obvious cause for
+whoever hits it. The save-time check is where an author sees it; the command is for CI on the
+payload itself, or for a human with a suspicion.
 
-4. **Validate server-side, and report it where an admin will look.** This is the answer to "failure
-   is silent" at the top of this document. `src/Controller/Admin/StarterPackCheckController.php`
-   (`/admin/starter-pack-check`) and its CLI twin `CheckStarterPackCommand` already exist as the "is
-   the starter config coherent?" surface. A server-side mirror of the client's drop rules reported
-   there — unknown anchor, a role suffix on a kind other than `hire`/`role`, two colons, duplicate
-   `id`, a bare `tut.*` prefix, a non-numeric `version`, a copy key with no `TranslationKey` row —
-   turns every invisible drop into a visible warning. Without it, nobody ever finds out the payload
-   was wrong.
+### Validation: what it can and cannot tell you
 
-5. **The 34 `ngs.tut.*` keys as `TranslationKey` rows with `en` values.** Not optional, and not
-   localisation work — see "English RENDERS without catalogue entries; REWORDING needs them"
-   above. This is what makes the copy editable without an app build.
-
-Seed value, if step 1 takes the seeded option: the contents of the client fixture named above.
-
-### Migration note
-
-`starter_config` was one of the four tables in `dbe3644` ("Clear the ORM/database schema drift",
-2026-10-11) whose column defaults existed in the database but were undeclared in the mapping.
-That commit's whole point was that `doctrine:migrations:diff` now emits only what you actually
-changed, instead of ~90 unrelated statements that had to be hand-trimmed. **Declare the new
-column's default in the mapping** — `options: ['default' => …]` for the seeded option, or plain
-`nullable: true` with no default — so the diff stays one statement and the drift does not come
-back. If `diff` emits more than the one `ALTER TABLE`, something is undeclared; do not trim it by
-hand without finding out what.
-
-### Auth, and why there is no per-account variation to design
-
-The endpoint is public — `StarterConfigController`'s docblock: "Public endpoint — no JWT required.
-Called by the client before the user has credentials." So nothing here can depend on an
-authenticated user, and **the payload is necessarily identical for everyone**. Per-account state —
-which items this player has dismissed — lives on the device in `setupBriefingStore`, never here.
-The only lever the server has over an individual is `version`, and it is all-or-nothing.
+It mirrors the client's drop rules, so an empty result means every item will *render*. It cannot
+tell you an anchor is on the **wrong** step — `{"before": "kits"}` on the owner briefing is
+structurally perfect and shows the wrong card in the wrong place. `StarterConfigTutorialTest`
+pins the five chapter-opening anchors for that reason.
 
 ## Client-side references
 
@@ -412,5 +371,26 @@ The only lever the server has over an individual is `version`, and it is all-or-
 - `src/Controller/Admin/DashboardController.php:576,598` — the admin screen routes
 - `templates/admin/game_config.html.twig` — the closest real JSON-textarea precedent
 - `docs/api/translations.md` — `GET /api/translations/{code}`, for the rewording half
+- `src/Entity/StarterConfig.php` — the column, its accessors and the seeded default
+- `src/Service/SetupTutorialValidator.php` — the client's drop rules, mirrored
+- `src/Command/CheckSetupTutorialCommand.php` — `app:check-setup-tutorial`
+- `templates/admin/starter_config.html.twig` — the Setup Tutorial card
 - `src/Service/AudienceCriteriaEvaluator.php` — the `setupCompleted` criterion and `LEGACY_KEYS`
 - `migrations/Version20261102120000.php` — the stored-payload rename, tested against PG16
+
+## Still owed
+
+1. **The 34 `ngs.tut.*` translation rows.** Import the app's `locales/en/translations.json` at
+   `/admin/translations/import`. **Deliberately not seeded from a PHP array here** — that file is
+   the single source of those strings, and re-typing them on this side gives the same copy two
+   homes and a drift problem. Without the rows the cards still render (the app's bundled catalogue
+   carries them and API translations merge on top); what you cannot do is reword or localise
+   without an app release, which is the whole reason the block lives server-side.
+   `app:check-setup-tutorial` reports exactly which are missing.
+
+2. **`Club::$tutorialCompletedAt` backfill** — unrelated to this feature beyond the word, and
+   described under the `setupCompleted` section above: `UPDATE club SET tutorial_completed_at = …
+   WHERE tutorial_completed_at IS NULL AND last_synced_week >= 1`.
+
+3. **Retire `AudienceCriteriaEvaluator::LEGACY_KEYS` and `Version20261102120000`'s `down()`
+   together** — that `down()` is only non-destructive while the alias accepts the old key.

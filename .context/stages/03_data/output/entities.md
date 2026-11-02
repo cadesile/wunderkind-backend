@@ -827,7 +827,19 @@ Each is effectively a single global-config row.
   `starterSponsorTier`, `starterClubTier`, `defaultFacilities`,
   `starterReputationTier`, `enabledCountries`, `leagueAbilityRanges`,
   `npcSquadConfig`, `fanBaseRanges`, promotion/relegation fan-base
-  multipliers). `id:int = 1` fixed. No relations.
+  multipliers, `setupTutorialConfig`). `id:int = 1` fixed. No relations.
+  **`setupTutorialConfig:json` (added 2026-11-02, `Version20261102121403`)** — the optional
+  first-run guidance block served as `tutorial` on `GET /api/starter-config`, seeded with the
+  5 briefings + 10 notes the app already shipped as a fixture. NOT NULL with a PHP default
+  like the other five JSON columns here; the migration adds a DB default purely to populate
+  the single existing row and then drops it, because leaving it behind is schema drift (the
+  first draft did, and the next `migrations:diff` emitted `ALTER ... DROP DEFAULT`). **Named
+  `setupTutorialConfig`, not `tutorialConfig`, to stay clear of `Club::$tutorialCompletedAt`**
+  — a different, per-club concept, and the near-collision matters because
+  `ConfigImportExportService` is reflection-driven over property names. Validated by
+  `SetupTutorialValidator` on admin save and by `app:check-setup-tutorial`, because the
+  consumer reports nothing: the app's `parseTutorial` cannot throw, so a bad item is dropped
+  in silence. See `docs/api/setup-tutorial.md`.
   `npcSquadConfig` is keyed by tier string `"1"`-`"8"`, each entry:
   `playerMin/playerMax, managerCount/coachCount/chairmanCount,
   directorOfFootballCount/facilityManagerCount/scoutCount, foreignPercent`
