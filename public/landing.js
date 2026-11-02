@@ -721,6 +721,67 @@ var FacilitySites = (function () {
     });
 }());
 
+// ── Cup Results (#cup-results) ──────────────────────────────────────────────
+// Every config here was FROZEN onto CompetitionResult at the final whistle, so
+// this can draw a club that no longer exists. Badges go through the shared
+// clubBadgeIconsHtml() (badge + kit; CSS hides the kit below 640px), so every
+// club draws at least its badge even with no identity configured.
+//
+// Hooks (keep these classes on the template):
+//   .cupr-scene[data-stadium-config]  → .cupr-stadium-slot
+//   .cupr-figure[data-sprite-kind][data-sprite]  kind: owner|manager|player|trophy
+//   [data-club-badge] → .cupr-badge inside it (.cupr-badge--only = badge, no kit)
+//
+// An owner/manager/player with a null appearance leaves its slot empty rather
+// than drawing a default face attributed to a named person — same rule as the
+// Rich List.
+(function () {
+    var section = document.getElementById('cup-results');
+    if (!section) return;
+
+    var scene = section.querySelector('.cupr-scene');
+    var stadiumSlot = scene && scene.querySelector('.cupr-stadium-slot');
+    if (stadiumSlot && typeof composeStadiumSvg === 'function') {
+        var stadium = jsonAttr(scene, 'data-stadium-config', null);
+        if (stadium) {
+            mountWhenVisible(stadiumSlot, function () {
+                stadiumSlot.innerHTML = composeStadiumSvg(stadium, { rotation: 0, time: 'day' }, 2);
+            });
+        }
+    }
+
+    section.querySelectorAll('.cupr-figure').forEach(function (slot) {
+        var kind = slot.getAttribute('data-sprite-kind');
+        var cfg = jsonAttr(slot, 'data-sprite', null);
+        if (!cfg) return;
+
+        mountWhenVisible(slot, function () {
+            if (kind === 'trophy') {
+                if (typeof composeTrophySvg === 'function' && cfg.style) {
+                    slot.innerHTML = composeTrophySvg(cfg, 1, { background: 'none' });
+                }
+                return;
+            }
+            if (typeof composePlayerSpriteSvg !== 'function') return;
+            // Owner and manager use the 'staff' body shape (AppearanceRole::OWNER
+            // falls into the non-player branch); the player wears the winner's kit,
+            // which the service merges into the appearance config.
+            slot.innerHTML = composePlayerSpriteSvg(cfg, kind === 'player' ? 'player' : 'staff', 'full', 3);
+        });
+    });
+
+    section.querySelectorAll('[data-club-badge]').forEach(function (el) {
+        var slot = el.querySelector('.cupr-badge');
+        if (!slot) return;
+        mountWhenVisible(slot, function () {
+            var identity = jsonAttr(el, 'data-club-badge', null);
+            slot.innerHTML = slot.classList.contains('cupr-badge--only')
+                ? clubBadgeOnlyHtml(identity)
+                : clubBadgeIconsHtml(identity);
+        });
+    });
+}());
+
 // ── Boardroom Incident & Consequence Feed (terminal + incident inspector modal) ──
 (function () {
     var feed = document.querySelector('.terminal-feed');

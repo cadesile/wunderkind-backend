@@ -34,6 +34,12 @@ serve these paths identically; see `01_overview/output/environment.md`.
   the snapshot shape has two consumers, not one.
   `GET /` (`landing_home`), `GET /delete-account`
   (`landing_delete_account`).
+  Section services it renders server-side: `WorldOverviewService`,
+  `ArchetypeShowcaseService`, `LiveTelemetryService`, `ClubSpotlightService`,
+  `OwnerSpotlightService`, `PeriodAwardsBoardService` and
+  `CupResultsBoardService` (`#cup-results`). The last three gate their own
+  section AND its nav link on the same emptiness check, so a board with no data
+  leaves no dead anchor in the header.
 - **`InitializeController`** `#[Route('/api/initialize')]` —
   `POST /starter`, `GET /leagues`, `POST /league/{tier}` (`tier`
   constrained to `\d+`).

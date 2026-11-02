@@ -439,6 +439,24 @@ filename alone.
   never changes once written. Two indexed reads, with the entry fetch **batched**
   (`findTopEntriesForArchives()`) for the same reason `findByEntrants()`/`findBothSides()`
   exist: don't trade a snapshot for an N+1 of the same size.
+- **`App\Service\Competition\CupResultsBoardService`** — the landing page's
+  `#cup-results` board: the latest completed knockout cup in full (frozen winner and
+  runner-up, road to the final, four caption figures) plus up to `EARLIER_LIMIT` = 4
+  earlier finals. Club identity is read **only** from `CompetitionResult::$homeClubJson`
+  / `$awayClubJson`, copied at the final whistle — never off the live `Club` — so a
+  purged or rebranded club still renders as it was on the day, the same rule
+  `PeriodAwardsBoardService` follows. No cache and no snapshot row, for that service's
+  reasons. Returns `null` until a cup has a resolved final, which hides both the section
+  and its nav link. Reads through
+  `ActiveCompetitionRepository::findRecentlyCompletedWithKnownCompletion()` rather than
+  `findRecentlyCompleted()`: Postgres orders `completed_at DESC` **NULLS FIRST**, and
+  `status`/`completedAt` are independent fields on the admin form, so the looser query
+  would present an undated instance as the latest cup final.
+  `resolveOwner()`/`resolveManager()` are **stubs returning `null`** — owner and manager
+  are not in the frozen display block, so both figures render empty; filling them means
+  either wiring the Owner Identity source `OwnerSpotlightService` uses plus the manager
+  `Staff` row, or adding those keys to
+  `CompetitionRegistrationService::clubDisplayBlock()` so they freeze like everything else.
 - **`LeagueImportExportService`** — imports/exports league/NPC-club
   config (formations, reputation tiers, the league `trophy` sprite config,
   city sizes, kit+badge `identity`). On import, a row carrying the retired
