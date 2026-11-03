@@ -1,5 +1,36 @@
 # Current Focus
 
+## Deployed 2026-11-02 — the bracket gap is CLOSED
+
+The two commits this section recorded as waiting are **live on `dev` and `master`**, pushed
+2026-11-02 23:51 and deployed in runs `41548564308` (dev) and `41548582109` (prod), 2
+migrations executed on each:
+
+- `85372c4` — a competition entry now outlives its club
+  (`competition_entrant.club_id` nullable / ON DELETE SET NULL,
+  `Version20261102140000`), plus `serializeFixtureSide()` repairing brackets already damaged.
+  The app half was already out, so a finished cup reading "To be decided" for every opponent
+  was that gap rather than a client regression. **Resolved** — do not re-diagnose it as one.
+- `bb607f3` — `app:clubs:purge-spoof` removed from both deploy workflows. Purging is now an
+  operator action via the admin's "Clear Spoof Clubs".
+
+There was no sequencing hazard in either direction: the client degraded quietly while the
+backend was behind, and resolves now the migration has landed. Full writeups in
+`03_data/output/migrations.md` and `04_interfaces/output/services.md`.
+
+Two landing-page features shipped in the same push and are gated on real data, so **both stay
+invisible in production until a cup exists** — that is the designed empty state, not a broken
+deploy:
+
+- `cbdcaf6` — the `#cup-results` board (`CupResultsBoardService`), hidden with its nav link
+  until a cup has a resolved final.
+- `2f54476` — the CUPS band in `#telemetry` (`CupTelemetryService`) plus the Table Turnover
+  ▲/▼ split (`Version20261102160000`) and `CUP // WINNER` feed lines. The band appears as soon
+  as a cup is live or open, which is sooner than the board.
+
+**Remember `wunderkind_test` is not migration-tracked** — see
+`01_overview/output/environment.md` before running the suite against this work.
+
 From `.context/stages/02_architecture/output/git-activity.md`'s
 `git log --oneline -30` / hotspot analysis:
 

@@ -83,6 +83,37 @@ script — don't conflate the two just because both touch the local database.
   `wunderkind_test` database (see root `CLAUDE.md`'s Testing section), never the `wunderkind`
   dev database this script touches.
 
+## ⚠️ `wunderkind_test` is NOT migration-tracked — a new migration never reaches it
+
+It is built by `doctrine:schema:create` from **entity metadata**, so
+`doctrine:migrations:migrate --env=test` fails on already-applied DDL and a migration you have
+just written has no effect there at all. The suite then fails in ways that look nothing like
+your change.
+
+**What that looks like (2026-11-02):** a full run reported **36 failures** across WorldPack,
+StarterConfig and competition tests. Thirty-five were one missing column
+(`starter_config.setup_tutorial_config`, added by an earlier commit and never applied here)
+cascading through everything that loads a `StarterConfig`. Exactly one was real. The noise is
+the danger: it is easy to read a wall of red as "my change broke everything" or, worse, as
+"this suite is always flaky" and push past it.
+
+**Syncing the test DB:**
+
+1. `lando php bin/console doctrine:schema:update --dump-sql --env=test` — shows the real diff.
+   Run this BEFORE trusting any full-suite result; a non-empty diff means you are about to
+   debug someone else's drift.
+2. `--force` aborts on any column needing a default for existing rows (`contains null values`),
+   which is the common case, so it often cannot be used. Fall back to the one statement:
+   `lando psql -d wunderkind_test -c "<ALTER …>"`.
+3. **A column with a PHP-level entity default also needs its VALUE seeded** into existing rows.
+   `schema:create` creates the column, not the content, so a row that predates the column stays
+   empty and content assertions fail even once the schema matches — that was the
+   `setup_tutorial_config` case, and filling the column with `{}` fixed the 500s while leaving
+   four assertions failing until the entity's own default was written into the row.
+
+The same applies to any FK/nullability change: `Version20261102140000` (competition_entrant) had
+to be applied to `wunderkind_test` by hand before its regression test could pass.
+
 ## Deployed dev/prod — Docker Compose
 
 - `docker-compose.dev.yml` and `docker-compose.prod.yml` are structurally
