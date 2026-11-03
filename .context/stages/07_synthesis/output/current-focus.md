@@ -1,5 +1,24 @@
 # Current Focus
 
+## Shipped but NOT YET DEPLOYED (as of 2026-11-02)
+
+Two commits sit on `development`, unpushed, and the app half of the first is **already live on
+`dev` and `master`** waiting for them:
+
+- `85372c4` — a competition entry now outlives its club
+  (`competition_entrant.club_id` nullable / ON DELETE SET NULL,
+  `Version20261102140000`), plus `serializeFixtureSide()` repairing brackets already damaged.
+  Until this deploys, a finished cup in the app still reads "To be decided" for every
+  opponent — that is the bug, unchanged, not a regression from the client release.
+- `bb607f3` — `app:clubs:purge-spoof` removed from both deploy workflows.
+
+There is no sequencing hazard in either direction: the client degrades quietly to "To be
+decided" while the backend is behind, and starts resolving once the migration lands. Full
+writeups in `03_data/output/migrations.md` and `04_interfaces/output/services.md`.
+
+**Remember `wunderkind_test` is not migration-tracked** — see
+`01_overview/output/environment.md` before running the suite against this work.
+
 From `.context/stages/02_architecture/output/git-activity.md`'s
 `git log --oneline -30` / hotspot analysis:
 
