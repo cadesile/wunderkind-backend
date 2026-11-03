@@ -183,3 +183,37 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   OOM/permission reasons).
 - **`.lando.yml`** — local dev via the Lando `symfony` recipe; see
   `.context/stages/01_overview/output/environment.md`.
+
+## Location & land economy module (added 2026-11-03)
+
+A new vertical slice, following the existing `Competition` / `Friendly` / `Leaderboard`
+sub-namespace convention:
+
+```
+src/Entity/Location/        13 entities (geography, holds, claims, estimates, enrichment)
+src/Enum/Location/           9 enums
+src/Repository/Location/     9 repositories
+src/Service/Location/        7 services + Enrichment/ (6 more)
+src/Exception/Location/      PlotUnavailableException
+src/Message/Location/        EnrichLocationMessage
+src/MessageHandler/Location/ EnrichLocationMessageHandler
+```
+
+Plus `src/Command/` gains `SeedLocationsCommand`, `EnrichLocationsCommand`,
+`LocationRivalsCommand`, `RefreshStadiumEstimatesCommand`; `src/Controller/Api/` gains
+`PlotHoldController` and `PlotClaimController`; `src/Controller/Admin/` gains three CRUD
+controllers and `LocationEnrichmentController`.
+
+**Messenger now has SIX transports.** `enrichment` was added alongside `async`,
+`worldpack`, `pool`, `competition` and `registration`, with the same justification each
+of those carries: a sweep is up to 865 external API calls of unpredictable latency and
+must not get in front of latency-sensitive competition rounds. It is the only queue whose
+work costs money per message, which is why
+`LocationEnrichmentOrchestrator::TRANSPORT_QUEUE` counts undrained rows before allowing
+another sweep. Drained by `docker/enrichment-consume.sh` (still to be added to the
+`Dockerfile` crontab).
+
+**The AI provider is deliberately not chosen.** Everything sits behind
+`LocationEnricherInterface`, aliased in `config/services.yaml` to
+`UnconfiguredLocationEnricher`, which throws. Wiring a real provider is one class plus
+repointing that alias; nothing else in the feature names a vendor.

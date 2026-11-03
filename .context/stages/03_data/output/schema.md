@@ -14,13 +14,17 @@ constraints. Don't restate field lists here.
 - **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_entrant_squad`, `competition_entrant_submission`, `competition_round`, `competition_fixture`, `competition_result`, `competition_result_audit`, `competition_response_cache`, `reward_template`, `entrant_reward_claim`
 - **Friendlies:** `friendly_challenge`, `friendly_challenge_squad`, `friendly_challenge_submission`, `friendly_challenge_audit`
 - **Config/singleton:** `game_config`, `pool_config`, `starter_config`
+- **Location / land economy:** `country_profile` (natural PK `code`), `location`, `location_rival`, `land_plot`, `plot_hold`, `plot_claim`, `plot_claim_valuation`, `stadium_estimate`, `stadium_estimate_input`, `location_enrichment_run`, `location_enrichment_attempt`
 - **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
 - **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table, shared by the `async` and `failed` transports (differentiated by `queue_name`, not by table — see `config/packages/messenger.yaml`); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
 
 ## The split rows (`*_squad`, `*_submission`, `*_audit`, `*_response_cache`)
 
-Seven of the tables above exist because a single column cannot express two
-different read profiles. ORM 3 removed PARTIAL hydration, so **every mapped
+Eleven of the tables above exist because a single column cannot express two
+different read profiles (seven from the competition/friendly domains, plus
+`stadium_estimate_input`, `plot_claim_valuation`, and — in spirit —
+`location_enrichment_attempt.raw_response_json`, which is written once and read only by
+admin forensics). ORM 3 removed PARTIAL hydration, so **every mapped
 column is decoded on every read of its row** — and the competition and friendly
 domains both stored client-submitted squads and admin-only forensics on rows
 that public, unauthenticated endpoints read in bulk.
@@ -167,6 +171,52 @@ Three things to know before touching them:
   `AccountDeletionService::forgetUserInArchives()`). `inbox_message_id` is likewise a plain
   string, because inbox messages cascade-delete with the club and an award must not vanish
   with its delivery receipt.
+- **`location`** — `UNIQUE(country_code, slug)`; `(country_code, status, land_pence)`
+  serving the list endpoint's filter and sort in one index; `(country_code,
+  town_normalised)` **deliberately NOT unique**, because two real towns can share a name
+  and that collision is something an admin should see rather than something the schema
+  forbids; `(lat, lng)` as the no-PostGIS bounding-box prefilter;
+  `(enrichment_status, enrichment_claimed_at)`.
+- **`location_rival`** — `UNIQUE(location_id, rank_position)`,
+  `UNIQUE(location_id, rival_location_id)`, plus **two CHECK constraints in raw
+  migration SQL only** (`rank BETWEEN 1 AND 4`, `location_id <> rival_location_id`).
+  Doctrine has no CHECK mapping; that is safe here because `migrations:diff` ignores
+  CHECKs entirely — unlike partial unique indexes, which must be declared on the entity.
+- **`land_plot`** — `UNIQUE(location_id, plot_number)`. `plot_number` is assigned by
+  `LandPlotCrudController` from `nextPlotNumber()`, not by the operator, so the unique
+  cannot throw out of `flush()`.
+- **`plot_hold`** — **two partial uniques**, `uq_plot_hold_active_plot (plot_id)` and
+  `uq_plot_hold_active_user (user_id)`, both
+  `WHERE ((released_at IS NULL) AND (consumed_at IS NULL))`. These settle the feature's
+  main race (two players tapping HOLD at once) in the database; `PlotHoldService` uses a
+  raw `INSERT ... ON CONFLICT DO NOTHING` because a unique violation out of `flush()`
+  closes the shared EntityManager on a user-facing write.
+  **Neither predicate mentions time, and cannot**: a unique index predicate must be
+  IMMUTABLE, so `expires_at > now()` is rejected. An expired-but-unreleased hold
+  therefore still occupies the index — every read filters on `expires_at`, and
+  `acquire()` releases exactly the two blocking rows first. That is the mechanism behind
+  "expired holds are ignored on read with no cleanup job".
+  `plot_hold.stadium_estimate_id` is **ON DELETE RESTRICT**, and that FK is what
+  actually enforces the frozen 15-minute quote.
+- **`plot_claim`** — `uq_plot_claim_active_plot (plot_id) WHERE (released_at IS NULL)`,
+  the one-club-per-plot guarantee. `club_id` is **SET NULL** so a purchase outlives its
+  club, with the consequence that the club-delete path must **release** the claim first
+  (`releaseActiveForClubs()`), or a nulled-but-active claim leaves a plot owned by nobody
+  and permanently unbuyable. Every `*_ledger_entry_id` is SET NULL: a ledger row is the
+  money and must never be deleted to tidy a claim.
+- **`stadium_estimate`** — `uq_stadium_estimate_current (location_id, model_version)
+  WHERE (superseded_at IS NULL)`. Estimates are superseded, never deleted, because a
+  live hold's RESTRICT FK forbids it.
+- **`user_ledger`** — new partial unique `uq_user_ledger_backend_source (source_kind,
+  source_ref, type) WHERE ((source_kind IS NOT NULL) AND (source_ref IS NOT NULL))`.
+  `uq_user_ledger_source_entry` keys on the two sync columns, which are NULL on every
+  backend-originated row — and PostgreSQL treats NULLs as distinct, so it offered those
+  rows no protection at all and a double-tapped purchase would have charged twice.
+  `type` is in the key because one plot claim legitimately writes both a LAND_PURCHASE
+  and a STADIUM_PURCHASE against the same `source_ref`.
+  **The three money columns are BIGINT** as of `Version20261103230000`: at real-world
+  stadium prices the old 4-byte integers capped at £21,474,836, below a single
+  Birmingham ground.
 - **`user_ledger`** — unique index `uq_user_ledger_source_entry` on
   (`source_sync_record_id`, `source_ledger_index`) — the idempotency guard
   for `app:backfill-user-ledger`/`UserLedgerService` (see `entities.md`).
@@ -256,6 +306,22 @@ one exception, and it is a real, confirmed bug, not a false lead:**
   `getCountsByCountryAndTier()`, `getAllGroupedByLeague()`,
   `findDistinctRegions()`, `clubNameExists()` — supports procedural world
   generation and league population.
+- **Location repositories** (`App\Repository\Location\*`) — two rules.
+  **(1) Contended writes are raw DBAL**, not ORM persists:
+  `LocationRepository::claimForEnrichment()`/`claimBatchForEnrichment()`,
+  `PlotHoldRepository::insertIfFree()`, `PlotClaimRepository::insertIfUnclaimed()` and
+  the conditional `release*()` updates all go through `executeStatement()` and check the
+  affected row count, because a unique violation out of `flush()` closes the shared
+  EntityManager and these run on user-facing writes.
+  **(2) `claimBatchForEnrichment()` uses a CTE, not `WHERE id IN (SELECT ... LIMIT n FOR
+  UPDATE SKIP LOCKED)`.** The latter silently ignored its limit: PostgreSQL may plan
+  `IN (subquery)` as a Nested Loop Semi Join, which re-executes the inner query per
+  candidate row, and with SKIP LOCKED each re-execution returns a fresh batch — so a
+  sweep asked for 4 rows claimed all of them. It only reproduced once the table had
+  enough rows to change the plan, and every claimed row is a billed API call.
+  Batch finders (`findActiveByPlots()`, `findClaimedByNames()`, `findByLocations()`,
+  `findCurrentByLocations()`, `findByEstimates()`, `findByClaims()`) exist so the split
+  rows do not trade a hydration cost for an N+1.
 - **`CountryWorldPackCacheRepository`** — `findForCountryAndTier`,
   `findCachedTiers(..., payloadVersion)`, `deleteByCountry`,
   `findAllSummaries` — cache invalidation/versioning.

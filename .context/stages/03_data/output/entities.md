@@ -54,7 +54,33 @@ migrations are the change log (see `migrations.md`).
   signed-in client, and the reason the mirror exists). Client contract:
   `docs/api/debug-logging.md`.
 - **`UserLedger`** (table `user_ledger`) — centralized, cross-club financial
-  audit trail for one `User`; currently only dividend draws the client
+  audit trail for one `User`. **UPDATED 2026-11-03** (`Version20261103180000`,
+  `Version20261103230000`): six new `UserLedgerEntryType` cases (`STARTING_GRANT`,
+  `QUIZ_BONUS`, `LAND_PURCHASE`, `STADIUM_PURCHASE`, `SELL_BACK_CREDIT`, `REVERSAL`);
+  **`club_id` is now NULLABLE with ON DELETE SET NULL**; new `sourceKind`/`sourceRef`
+  with a partial unique `uq_user_ledger_backend_source (source_kind, source_ref, type)
+  WHERE both NOT NULL`; and the three money columns are **BIGINT, not integer**.
+  Four things a reader must know:
+  **(1) `getTotalDividendsByClub()` and `sumDividendsByClub()` now FILTER BY TYPE.**
+  The latter feeds the PUBLIC `CAREER_EARNINGS` leaderboard and was an unfiltered
+  `SUM(amount_pence)`; purchases are stored negative, so the first one would have
+  deflated a club's public score and a club that spent more than it drew would have gone
+  negative on an unsigned column.
+  **(2) `findTopOwnersByBalance()` (the landing-page Rich List) now requires a real
+  dividend draw** — otherwise `STARTING_GRANT` would put every account on it.
+  **(3) Nulling `club_id` fixed a money bug.** While it was NOT NULL with a plain FK,
+  both delete paths had to DELETE a club's rows; because the balance is a chain of
+  before/after snapshots read from the latest surviving row, deleting a club rolled its
+  owner's balance back. `UserLedger` was therefore REMOVED from
+  `AccountDeletionService::BLOCKING_CLUB_DEPENDENTS` and from `DeleteAdminController`'s
+  delete loop — the FK detaches the rows itself.
+  **(4) BIGINT is required, not future-proofing.** The old 4-byte columns capped at
+  £21,474,836, below a single Birmingham stadium (~£69M).
+  The constructor is now **private**, with `fromSyncLedgerEntry()` and
+  `forBackendEvent()`; `UserLedgerService::append()` is the single writer for
+  backend-originated entries and takes a **per-user advisory lock**, because
+  `getCurrentBalance()` is an unlocked read and two concurrent writers would fork the
+  chain. Originally only dividend draws the client
   reports via the sync payload's free-form `ledger[]` array (category
   `dividend_draw`) — see `04_interfaces/output/services.md`'s
   `UserLedgerService` entry. `type:UserLedgerEntryType(enum, only
@@ -869,6 +895,106 @@ Each is effectively a single global-config row.
   the same shape exposed at `GET /api/game-config`'s `npcSquadConfig` key
   (sourced from here, not `GameConfig`). See
   `docs/api/npc-club-staff-scouts.md`.
+
+## Location / land economy (`App\Entity\Location`)
+
+Replaces the hardcoded place data that used to live in
+`CountryContentRegistry::PLACE_NAMES_BY_COUNTRY`. Adding a town is now an admin
+action, not a deploy — see `docs/world-generation/adding-a-country.md`.
+
+- **`CountryProfile`** (table `country_profile`) — per-country data with **no home in
+  `App\Enum\Country`**, plus the readiness gate. **PK is the natural key `code
+  varchar(2)`**, equal to `Country::$value`, which is what lets `location.country_code`
+  be a real FK without resolving a code five existing columns already store as a bare
+  string (precedent: `StarterConfig::$id = 1`). `name`/`defaultLocale` are **mirrored**
+  from the enum by the seeder so a label can be corrected without a deploy.
+  `isoAlpha3`, `continent`, `defaultTimezone`, `currencyCode`,
+  `landPriceCurrencyCode`, `distanceUnit:DistanceUnit(km|mi)`,
+  `status:CountryProfileStatus(draft|tier_ready|live|retired)`,
+  `tierStructureReadyAt`, `locationsLiveAt`, `bbox:?array` (json) and
+  `landPenceMin/Max:?int`.
+  **`bbox` and the land band exist for `EnrichmentValidator`** — they are what catches
+  an AI coordinate in the wrong country (there is a Birmingham in Alabama) and a
+  hallucinated valuation. **`App\Enum\Country` is NOT retired**: it remains the
+  canonical code list and the type-hint across ~24 files, and **no FK was added to the
+  five existing `varchar(2)` country columns**.
+- **`Location`** (table `location`) — one real town. `id` is a **UuidV7, deliberately
+  not a slug of the name**: towns get renamed and claims point here.
+  `country:CountryProfile` (**RESTRICT** — carries claims and real money; retire
+  instead), `slug`, `town`, `townNormalised` (via `ClubNameNormalizer::normalize()`),
+  `localisedNames:?array` (json), `region`, `lat`/`lng:?decimal(9,6)`, `population`,
+  `populationSource`, `populationAsOf`, `landPence:?bigint`, `landValuedAt`,
+  `landSource`, three `is*Locked` flags, `isCapital`, `citySize:CitySize`,
+  `status:LocationStatus`, `rivalsComputedAt`, plus the enrichment columns
+  (`enrichmentStatus:EnrichmentStatus`, `enrichmentClaimedAt`, `enrichedAt`,
+  `enrichmentProvider`, `enrichmentModel`, `enrichmentAttempts`, `enrichmentError`).
+  **`lat`/`lng`/`landPence` are NULLABLE, load-bearing**: "not known yet" is the normal
+  pre-enrichment state, and `0,0` is a point in the Atlantic the rival pass would treat
+  as real. **`citySize` is PERSISTED, not computed** — the 20/30/50 split is a property
+  of the whole country's set, so computing per call would classify the same town
+  differently as towns are added, while `NpcClub` already stores its own copy.
+  **`enrichmentClaimedAt` is a LEASE** (`CLAIM_LEASE_SECONDS = 300`, same name/value as
+  `CompetitionRound`): taking it is a conditional UPDATE and only the winner dispatches,
+  which is what turns 50 simultaneous viewers into one paid API call.
+  **The three `is*Locked` flags are set when an admin edits that field**, and enrichment
+  skips a locked field — a hand correction is never undone by a re-run.
+- **`LocationRival`** (table `location_rival`) — one of a location's four nearest rivals.
+  `location`/`rivalLocation` (both CASCADE), `rank` (column `rank_position`),
+  `distanceKm:decimal(7,2)`, `computedAt`. **Directional and that is intended** — a
+  small town's nearest rival is the big city, not vice versa, so A may list B without B
+  listing A. A table rather than a json column because `UNIQUE(location, rank)` plus a
+  `CHECK rank BETWEEN 1 AND 4` expresses "bounded at four" in the database. **The two
+  CHECK constraints are raw migration SQL only** — Doctrine has no CHECK mapping, and
+  that is safe because `migrations:diff` ignores CHECKs entirely.
+- **`LandPlot`** (table `land_plot`) — the buyable unit. **Claims and holds point here,
+  not at the location.** `location` (**RESTRICT**), `plotNumber:smallint`, `label`,
+  `landPenceOverride:?bigint` (null inherits the location's), `status`.
+  `UNIQUE(location, plot_number)`. Seeding creates exactly one per town, so
+  one-club-per-town holds until an operator adds more.
+- **`PlotHold`** (table `plot_hold`) — a 15-minute exclusive option at a frozen price.
+  `plot`/`user` (CASCADE), `landPence`, `stadiumEstimate` (**RESTRICT**),
+  `stadiumPence` (denormalised), `expiresAt`, `consumedAt`, `releasedAt`.
+  **The RESTRICT FK is what actually enforces the frozen quote** — a refresh physically
+  cannot delete an estimate a live hold points at, so it supersedes instead.
+  **Two partial uniques** settle the races: one active hold per plot, one per user.
+  **Neither predicate can mention time** (a unique predicate must be IMMUTABLE, so
+  `expires_at > now()` is illegal), so an expired-but-unreleased row still occupies the
+  index — every read filters on expiry and `acquire()` releases exactly the blocking
+  rows first. `app:plots:expire-holds` is hygiene, **not** required for correctness.
+- **`PlotClaim`** (table `plot_claim`) — ownership, and the financial record.
+  `plot`/`location` (**RESTRICT**), `user` (CASCADE, **the owner of record**),
+  `club:?Club` (**nullable, SET NULL**), `clubNameAtClaim` (frozen),
+  `landPencePaid`/`stadiumPencePaid:bigint`, `stadiumEstimate`, three
+  `*LedgerEntry:?UserLedger` (all SET NULL), `sellBackPence`, `releaseReason`.
+  **`UNIQUE(plot_id) WHERE released_at IS NULL`** is the one-club-per-plot guarantee.
+  **Prices are copied in, never referenced**: land is revalued later and a sell-back
+  needs both figures. **`club` is nullable because a plot can be bought before a club
+  exists** and a claim must outlive its club — but note the consequence: the
+  club-delete path must **RELEASE** the claim, because a nulled-but-active claim leaves
+  a plot owned by nobody and permanently unbuyable
+  (`PlotClaimRepository::releaseActiveForClubs()`).
+- **`PlotClaimValuation`** (table `plot_claim_valuation`) — the sell-back working.
+  **Split row**; `PlotClaim` declares no inverse association. Captures the land value
+  **as at the sell-back**, not only what was paid, because land is revalued and a payout
+  is otherwise unreproducible by the time a support ticket arrives. A reversal never
+  edits it — it stamps `reversedAt` and points at a new opposing ledger row.
+- **`StadiumEstimate`** (table `stadium_estimate`) — a cached build price.
+  `location` (CASCADE), `pence:bigint`, `modelVersion`, `validUntil`, `supersededAt`.
+  `UNIQUE(location_id, model_version) WHERE superseded_at IS NULL`.
+  **Superseded, never deleted** (see `PlotHold` above). Priced on **real-world
+  construction** (~£1,500/seat, so London is ~£135M) — the gap between that and a club's
+  balance **is the progression**, since funding a flagship city is meant to take ten to
+  fifteen clubs. There is deliberately **no affordability ceiling**.
+- **`StadiumEstimateInput`** (table `stadium_estimate_input`) — split row holding
+  `inputsJson`: every input AND every coefficient, so the arithmetic is reproducible
+  after a retune. No inverse association.
+- **`LocationEnrichmentRun`** / **`LocationEnrichmentAttempt`** — batch header and
+  per-call history, modelled on `WorldPackGenerationRun`. Two tables rather than three
+  because current state already lives on `Location::$enrichmentStatus`.
+  `attempt.run` is **SET NULL** (history outlives a pruned run header);
+  `rawResponseJson` is a split-row column in spirit — never hydrate these in bulk.
+  The column is **`trigger_type`, not `trigger`**: TRIGGER is reserved SQL, and this
+  table is written to with raw SQL (the `rank` → `rank_position` precedent).
 
 ## Misc / cache / analytics
 
