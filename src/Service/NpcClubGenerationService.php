@@ -18,6 +18,8 @@ use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\ClubInitializationService;
 use App\Service\CountryContent\CountryContentRegistry;
+use App\Service\Location\LocationCatalogueService;
+use App\Service\Location\LocationClassificationService;
 use App\Service\LeagueService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -44,6 +46,7 @@ class NpcClubGenerationService
         private readonly NpcClubRepository           $npcClubRepo,
         private readonly LeagueService               $leagueService,
         private readonly GameConfigRepository        $gameConfigRepository,
+        private readonly LocationCatalogueService    $locationCatalogue,
     ) {}
 
     /** @return string[] */
@@ -52,12 +55,19 @@ class NpcClubGenerationService
         return array_map(static fn(array $p) => $p['name'], $this->getPlaceData($countryCode));
     }
 
-    /** @return array<array{name:string,population_size:int,region:string,is_capital?:bool}> */
+    /**
+     * The curated generation pool for a country.
+     *
+     * Reads the `location` table rather than CountryContentRegistry::places(), which is where
+     * these 865 records used to live as a PHP const. The returned shape is unchanged, which is
+     * why every existing test of this class still passes untouched — see
+     * LocationCatalogueService.
+     *
+     * @return array<array{name:string,population_size:int,region:string,is_capital?:bool,city_size?:string}>
+     */
     public function getPlaceData(string $countryCode): array
     {
-        $country = Country::tryFrom($countryCode);
-
-        return $country !== null ? (CountryContentRegistry::places($country) ?? []) : [];
+        return $this->locationCatalogue->placesForGeneration($countryCode);
     }
 
     /** @return string[] every name from the original full list that isn't in the curated generation pool */
@@ -65,7 +75,12 @@ class NpcClubGenerationService
     {
         $curated = $this->getPlaceNames($countryCode);
         $country = Country::tryFrom($countryCode);
-        $all     = $country !== null ? CountryContentRegistry::allPlaceNames($country) : [];
+        // Still the PHP const, deliberately. ALL_PLACE_NAMES_BY_COUNTRY is ~4,200 bare town
+        // names with no coordinates, population or region — no geography at all — so migrating
+        // it would create thousands of location rows that enrichment could never resolve and
+        // that would pollute GET /api/locations. These names exist only to widen the club-name
+        // picker.
+        $all = $country !== null ? CountryContentRegistry::allPlaceNames($country) : [];
 
         return array_values(array_unique(array_diff($all, $curated)));
     }
@@ -75,32 +90,17 @@ class NpcClubGenerationService
      * top 20% => BIG, bottom 50% => SMALL, remaining middle 30% => MEDIUM.
      * is_capital always forces BIG regardless of rank.
      *
+     * The algorithm itself now lives in LocationClassificationService::classify(), which is
+     * what persists `location.city_size`. This method stays as the public entry point its
+     * existing callers and tests use, and delegates, so there is exactly one implementation of
+     * the banding rather than a live copy here and a stored copy there that could disagree.
+     *
      * @param array<array{name:string,population_size:int,region:string,is_capital?:bool}> $places
      * @return array<array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}>
      */
     public function classifyPlaces(array $places): array
     {
-        $sorted = $places;
-        usort($sorted, static fn(array $a, array $b) => $b['population_size'] <=> $a['population_size']);
-
-        $count      = count($sorted);
-        $bigCutoff  = (int) ceil($count * 0.20);
-        $smallCount = (int) ceil($count * 0.50);
-
-        foreach ($sorted as $i => &$place) {
-            if (!empty($place['is_capital'])) {
-                $place['city_size'] = \App\Enum\CitySize::BIG;
-            } elseif ($i < $bigCutoff) {
-                $place['city_size'] = \App\Enum\CitySize::BIG;
-            } elseif ($i >= $count - $smallCount) {
-                $place['city_size'] = \App\Enum\CitySize::SMALL;
-            } else {
-                $place['city_size'] = \App\Enum\CitySize::MEDIUM;
-            }
-        }
-        unset($place);
-
-        return $sorted;
+        return LocationClassificationService::classify($places);
     }
 
     /** @return string[] */
@@ -137,14 +137,7 @@ class NpcClubGenerationService
         $bandIndex  = $this->getBandIndexForTier($tier);
         $levelBand  = self::FACILITY_LEVELS[$bandIndex];
         $countryEnum = Country::tryFrom($country);
-        $placeData  = ($countryEnum !== null ? CountryContentRegistry::places($countryEnum) : null) ?? [
-            ['name' => 'Capital', 'population_size' => 500000, 'region' => 'Central', 'is_capital' => true],
-            ['name' => 'Northern', 'population_size' => 100000, 'region' => 'North'],
-            ['name' => 'Southern', 'population_size' => 100000, 'region' => 'South'],
-            ['name' => 'Eastern', 'population_size' => 100000, 'region' => 'East'],
-            ['name' => 'Western', 'population_size' => 100000, 'region' => 'West'],
-            ['name' => 'Central', 'population_size' => 100000, 'region' => 'Central'],
-        ];
+        $placeData  = $this->locationCatalogue->placesForGenerationOrPlaceholder($country);
         $classifiedPlaces = $this->classifyPlaces($placeData);
         $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
@@ -313,14 +306,7 @@ class NpcClubGenerationService
     public function generateClubName(string $countryCode, array $usedNames = [], int $tier = 4): string
     {
         $countryEnum = Country::tryFrom($countryCode);
-        $placeData = ($countryEnum !== null ? CountryContentRegistry::places($countryEnum) : null) ?? [
-            ['name' => 'Capital', 'population_size' => 500000, 'region' => 'Central', 'is_capital' => true],
-            ['name' => 'Northern', 'population_size' => 100000, 'region' => 'North'],
-            ['name' => 'Southern', 'population_size' => 100000, 'region' => 'South'],
-            ['name' => 'Eastern', 'population_size' => 100000, 'region' => 'East'],
-            ['name' => 'Western', 'population_size' => 100000, 'region' => 'West'],
-            ['name' => 'Central', 'population_size' => 100000, 'region' => 'Central'],
-        ];
+        $placeData = $this->locationCatalogue->placesForGenerationOrPlaceholder($countryCode);
         $classifiedPlaces = $this->classifyPlaces($placeData);
         $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];

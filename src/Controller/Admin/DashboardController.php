@@ -1547,6 +1547,15 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content'),
             MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content'),
         ]);
+        // Locations & Land — the geography a club is founded on, and the AI enrichment that
+        // fills in what the old hardcoded PHP place lists never had (coordinates, valuations).
+        // A CrudController is NOT auto-discovered into this sidebar; it has to be listed here.
+        yield MenuItem::subMenu('Locations & Land', 'fa fa-map-location-dot')->setSubItems([
+            MenuItem::linkTo(LocationCrudController::class, 'Locations', 'fa fa-map-pin'),
+            MenuItem::linkTo(LandPlotCrudController::class, 'Land Plots', 'fa fa-vector-square'),
+            MenuItem::linkTo(CountryProfileCrudController::class, 'Countries', 'fa fa-flag'),
+            MenuItem::linkToRoute('Enrichment', 'fa fa-wand-magic-sparkles', 'admin_location_enrichment'),
+        ]);
         yield MenuItem::subMenu('Competitions', 'fa fa-trophy')->setSubItems([
             MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy'),
             MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift'),

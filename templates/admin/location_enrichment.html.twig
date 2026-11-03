@@ -1,0 +1,366 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{#
+   Location AI enrichment: what is left, what needs a human, and the three triggers.
+
+   Every trigger is a POST with a CSRF token and targets path('admin', {routeName: ...}) rather
+   than the bare route — per src/Controller/Admin/CLAUDE.md, routeName is read from the query
+   string so this works for POST bodies too, and a bare route would miss EasyAdmin's `ea`
+   context. The reason they are POST rather than links is money: each one queues billed API
+   calls, and a crawler or a browser prefetch must not be able to spend any.
+#}
+
+{% set statusColours = {
+    'pending':      'secondary',
+    'queued':       'info',
+    'enriched':     'success',
+    'needs_review': 'warning',
+    'failed':       'danger'
+} %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    {# ── Header ─────────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Location Enrichment</h5>
+        <p class="text-muted small mb-0">
+            Seeded towns carry a name, region and population. Coordinates and land values are
+            supplied by an AI provider, validated per field, and stored once — subsequent reads
+            never call out again.
+        </p>
+    </div>
+
+    {# ── Focused location (arrived from a Location row's Enrich action) ──── #}
+    {% if focus %}
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-crosshairs text-primary"></i>
+                <span class="fw-semibold small">Enrich one location</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 small align-items-end">
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted">Town</div>
+                        <div class="fw-semibold">{{ focus.town }} <span class="text-muted">{{ focus.country_code }}</span></div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted">Status</div>
+                        <span class="badge bg-{{ statusColours[focus.enrichment_status] ?? 'secondary' }}">{{ focus.enrichment_status }}</span>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="text-muted">Attempts</div>
+                        <div class="fw-semibold">{{ focus.enrichment_attempts }}</div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        {#
+                           A POST, not the link that brought you here. The row action in the
+                           Locations list is deliberately side-effect-free, because an EasyAdmin
+                           row action is a plain GET and enriching costs money.
+                        #}
+                        <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_single'}) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_single') }}">
+                            <input type="hidden" name="location" value="{{ focus.id }}">
+                            <button type="submit" class="btn btn-sm btn-primary" {{ connection.ok ? '' : 'disabled' }}>
+                                Enrich {{ focus.town }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {% if focus.enrichment_error %}
+                    <div class="alert alert-warning mt-3 mb-0 small">
+                        <strong>Last error:</strong> {{ focus.enrichment_error }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Provider / connection ──────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-plug {{ connection.ok ? 'text-success' : 'text-danger' }}"></i>
+                <span class="fw-semibold small">Provider</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 small">
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted">Provider</div>
+                        <div class="fw-semibold">{{ provider }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted">Model</div>
+                        <div class="fw-semibold">{{ model }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted">Prompt</div>
+                        <div class="fw-semibold">{{ promptVersion }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted">Queue depth</div>
+                        <div class="fw-semibold">{{ queueDepth }} undrained</div>
+                    </div>
+                </div>
+
+                {% if not connection.ok %}
+                    {#
+                       Said loudly and at the top. A silently unreachable provider once cost
+                       this codebase a day of push notifications (see NotificationLog), so an
+                       unconfigured enricher must be impossible to miss BEFORE a sweep.
+                    #}
+                    <div class="alert alert-danger mt-3 mb-0 small">
+                        <strong>Enricher not reachable.</strong> {{ connection.detail }}
+                        <div class="mt-1">Sweeping now would record a failure against every location it touched.</div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-success mt-3 mb-0 small mb-0">{{ connection.detail }}</div>
+                {% endif %}
+
+                <div class="text-muted small mt-3">
+                    Last 30 days: {{ usage.attempts }} call(s),
+                    {{ usage.inputTokens|number_format }} input / {{ usage.outputTokens|number_format }} output tokens.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Progress per country ───────────────────────────────────────────── #}
+    <div class="col-12 col-xl-7">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-flag text-primary"></i>
+                <span class="fw-semibold small">Progress by country</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 small align-middle">
+                        <thead>
+                            <tr>
+                                <th>Country</th>
+                                <th class="text-end">Towns</th>
+                                <th class="text-end">Enriched</th>
+                                <th class="text-end">Left</th>
+                                <th class="text-end">Review</th>
+                                <th class="text-end">Failed</th>
+                                <th>Status</th>
+                                <th class="text-end">Sweep</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in countries %}
+                            {% set left = row.counts.pending + row.counts.queued %}
+                            <tr>
+                                <td class="fw-semibold">{{ row.name }} <span class="text-muted">{{ row.code }}</span></td>
+                                <td class="text-end">{{ row.total }}</td>
+                                <td class="text-end">{{ row.counts.enriched }}</td>
+                                <td class="text-end">{{ left > 0 ? left : '—' }}</td>
+                                <td class="text-end">
+                                    {% if row.counts.needs_review > 0 %}
+                                        <span class="badge bg-warning">{{ row.counts.needs_review }}</span>
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if row.counts.failed > 0 %}
+                                        <span class="badge bg-danger">{{ row.counts.failed }}</span>
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td><span class="badge bg-secondary">{{ row.status }}</span></td>
+                                <td class="text-end">
+                                    {% if row.counts.pending + row.counts.failed > 0 %}
+                                        <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}" class="d-inline">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_sweep') }}">
+                                            <input type="hidden" name="country" value="{{ row.code }}">
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-primary py-0 px-2"
+                                                    {{ connection.ok ? '' : 'disabled' }}
+                                                    onclick="return confirm('Queue {{ row.counts.pending + row.counts.failed }} paid API call(s) for {{ row.name }}?')">
+                                                Enrich
+                                            </button>
+                                        </form>
+                                    {% else %}—{% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="8" class="text-muted">No countries seeded. Run <code>app:locations:seed</code>.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Global sweep ───────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-5">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-wand-magic-sparkles text-primary"></i>
+                <span class="fw-semibold small">Enrich everything outstanding</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    Queues one message per outstanding town. Each is a billed API call, so a
+                    second sweep is refused while one is still draining.
+                </p>
+
+                <div class="d-flex gap-3 mb-3 small">
+                    <div>
+                        <div class="text-muted">Outstanding</div>
+                        <div class="fs-5 fw-semibold">{{ outstanding }}</div>
+                    </div>
+                    {% for status in statuses %}
+                        {% set n = totals[status.value] ?? 0 %}
+                        {% if n > 0 %}
+                            <div>
+                                <div class="text-muted">{{ status.label }}</div>
+                                <div class="fs-5 fw-semibold">{{ n }}</div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_sweep') }}">
+
+                    <div class="form-check small mb-3">
+                        <input class="form-check-input" type="checkbox" name="include_review" value="1" id="include_review">
+                        <label class="form-check-label" for="include_review">
+                            Also re-ask about <strong>needs review</strong> rows
+                            <span class="text-muted d-block">
+                                Off by default — re-rolling a row nobody has judged hides the thing that needed judging.
+                            </span>
+                        </label>
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-sm btn-primary"
+                            {{ (connection.ok and outstanding > 0 and queueDepth == 0) ? '' : 'disabled' }}
+                            onclick="return confirm('Queue up to {{ outstanding }} paid API call(s)?')">
+                        Enrich all outstanding
+                    </button>
+
+                    {% if queueDepth > 0 %}
+                        <div class="text-warning small mt-2">
+                            {{ queueDepth }} message(s) still queued — wait for the current sweep to drain.
+                        </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Review queue: the rows that need a human ───────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-list-check text-warning"></i>
+                <span class="fw-semibold small">Needs a human ({{ reviewQueue|length }})</span>
+            </div>
+            <div class="card-body p-0">
+                {% if reviewQueue is empty %}
+                    <div class="p-3 text-muted small">Nothing flagged. Every enriched town passed validation.</div>
+                {% else %}
+                <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_subset'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_subset') }}">
+
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 small align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width:2rem"></th>
+                                    <th>Town</th>
+                                    <th>Country</th>
+                                    <th>Status</th>
+                                    <th>Coords</th>
+                                    <th>Land value</th>
+                                    <th class="text-end">Attempts</th>
+                                    <th>Last error / reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for row in reviewQueue %}
+                                <tr>
+                                    <td><input class="form-check-input" type="checkbox" name="locations[]" value="{{ row.id }}"></td>
+                                    <td class="fw-semibold">{{ row.town }}</td>
+                                    <td>{{ row.country_code }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ statusColours[row.enrichment_status] ?? 'secondary' }}">
+                                            {{ row.enrichment_status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ row.lat is null ? '—' : 'set' }}</td>
+                                    <td>{{ row.land_pence is null ? '—' : (row.land_pence / 100)|number_format(2) }}</td>
+                                    <td class="text-end">{{ row.enrichment_attempts }}</td>
+                                    <td class="text-muted">{{ row.enrichment_error ?: '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-3 border-top">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" {{ connection.ok ? '' : 'disabled' }}>
+                            Re-enrich selected
+                        </button>
+                        <span class="text-muted small ms-2">
+                            An explicit retry is the only path past the attempt cap.
+                        </span>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Recent runs ────────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-clock-rotate-left text-primary"></i>
+                <span class="fw-semibold small">Recent runs</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 small align-middle">
+                        <thead>
+                            <tr>
+                                <th>Started</th>
+                                <th>Trigger</th>
+                                <th>Scope</th>
+                                <th>Model</th>
+                                <th class="text-end">Queued</th>
+                                <th class="text-end">OK</th>
+                                <th class="text-end">Review</th>
+                                <th class="text-end">Failed</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for run in recentRuns %}
+                            <tr>
+                                <td>{{ run.startedAt|date('Y-m-d H:i:s') }}</td>
+                                <td>{{ run.trigger.value }}</td>
+                                <td>{{ run.countryCode ?? 'all' }}</td>
+                                <td class="text-muted">{{ run.model }}</td>
+                                <td class="text-end">{{ run.queued }}</td>
+                                <td class="text-end">{{ run.succeeded }}</td>
+                                <td class="text-end">{{ run.needsReview }}</td>
+                                <td class="text-end">{{ run.failed }}</td>
+                                <td><span class="badge bg-secondary">{{ run.status.value }}</span></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="9" class="text-muted">No enrichment has been run yet.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

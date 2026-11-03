@@ -431,7 +431,7 @@ class LeaderboardAggregateCategoriesTest extends KernelTestCase
         $now        = new \DateTimeImmutable();
         $syncRecord = $this->persist(new SyncRecord($club, 1, $now, []));
 
-        return $this->persist(new UserLedger(
+        return $this->persist(UserLedger::fromSyncLedgerEntry(
             $club->getUser(),
             $club,
             UserLedgerEntryType::DIVIDEND_DRAW,

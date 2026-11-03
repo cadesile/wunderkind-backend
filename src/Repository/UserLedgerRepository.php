@@ -8,6 +8,7 @@ use App\Entity\Club;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Entity\UserLedger;
+use App\Enum\UserLedgerEntryType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
@@ -52,7 +53,13 @@ class UserLedgerRepository extends ServiceEntityRepository
         return (int) ($this->createQueryBuilder('l')
             ->select('SUM(l.amountPence)')
             ->where('l.club = :club')
+            // FILTERED BY TYPE, and it must stay that way. This was an unfiltered
+            // SUM(amountPence) when DIVIDEND_DRAW was the only entry kind. It no longer is:
+            // LAND_PURCHASE and STADIUM_PURCHASE are stored NEGATIVE, so without this clause a
+            // club's "earnings drawn" figure would be quietly reduced by its owner's spending.
+            ->andWhere('l.type = :dividendDraw')
             ->setParameter('club', $club)
+            ->setParameter('dividendDraw', UserLedgerEntryType::DIVIDEND_DRAW)
             ->getQuery()
             ->getSingleScalarResult() ?? 0);
     }
@@ -90,12 +97,22 @@ class UserLedgerRepository extends ServiceEntityRepository
                  SELECT DISTINCT ON (l.user_id)
                         l.user_id, l.balance_after_pence
                  FROM user_ledger l
+                 -- Restricted to accounts that have actually DRAWN a dividend, which is what
+                 -- this board has always meant (see the docblock: \"deliberately NOT the same
+                 -- population as every user who owns a club\"). Without it, the moment
+                 -- STARTING_GRANT exists every account in the game appears on the public Rich
+                 -- List at the grant value — turning a board about achievement into a roster.
+                 WHERE EXISTS (
+                     SELECT 1 FROM user_ledger d
+                      WHERE d.user_id = l.user_id
+                        AND d.type = :dividendDraw
+                 )
                  ORDER BY l.user_id, l.recorded_at DESC, l.id DESC
              ) AS latest
              JOIN \"user\" u ON u.id = latest.user_id
              ORDER BY latest.balance_after_pence DESC
              LIMIT :limit",
-            ['limit' => $limit],
+            ['limit' => $limit, 'dividendDraw' => UserLedgerEntryType::DIVIDEND_DRAW->value],
             ['limit' => ParameterType::INTEGER],
         );
 
@@ -130,6 +147,17 @@ class UserLedgerRepository extends ServiceEntityRepository
     {
         $rows = $this->createQueryBuilder('l')
             ->select('IDENTITY(l.club) AS clubId', 'SUM(l.amountPence) AS score')
+            // THE HIGHEST-CONSEQUENCE FILTER IN THIS CLASS. This feeds
+            // LeaderboardCategory::CAREER_EARNINGS, which is PUBLIC. It was an unfiltered sum
+            // when dividend draws were the only rows in the table; the first negative
+            // LAND_PURCHASE row would have silently deflated a club's public career-earnings
+            // score, and a club that spent more than it drew would have gone negative on a
+            // leaderboard whose score column is unsigned.
+            ->andWhere('l.type = :dividendDraw')
+            // club IS NULL on account-level entries (grants, pre-club purchases); they belong
+            // to no club and must not be grouped into one.
+            ->andWhere('l.club IS NOT NULL')
+            ->setParameter('dividendDraw', UserLedgerEntryType::DIVIDEND_DRAW)
             ->groupBy('l.club')
             ->getQuery()
             ->getArrayResult();
@@ -142,6 +170,31 @@ class UserLedgerRepository extends ServiceEntityRepository
             ],
             $rows,
         );
+    }
+
+    /**
+     * The backend-originated entry for this exact source, if one already exists.
+     *
+     * The read half of the idempotency guard that uq_user_ledger_backend_source enforces. Used
+     * before writing so a repeated purchase returns the original entry rather than hitting the
+     * unique index — a violation out of flush() would close the shared EntityManager, and this
+     * runs on a user-facing write path.
+     */
+    public function findByBackendSource(
+        string $sourceKind,
+        string $sourceRef,
+        UserLedgerEntryType $type,
+    ): ?UserLedger {
+        return $this->createQueryBuilder('l')
+            ->where('l.sourceKind = :kind')
+            ->andWhere('l.sourceRef = :ref')
+            ->andWhere('l.type = :type')
+            ->setParameter('kind', $sourceKind)
+            ->setParameter('ref', $sourceRef)
+            ->setParameter('type', $type)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 
     /** @return UserLedger[] */

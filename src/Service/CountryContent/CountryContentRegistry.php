@@ -2100,15 +2100,17 @@ final class CountryContentRegistry
         'SK' => WorldRegion::EASTERN_EUROPE,
         'SI' => WorldRegion::SOUTHERN_EUROPE,
         'CH' => WorldRegion::WESTERN_EUROPE,
-        'TR' => WorldRegion::SOUTHERN_EUROPE,
         'UA' => WorldRegion::EASTERN_EUROPE,
         'WA' => WorldRegion::BRITAIN_IRELAND,
-        'SC' => WorldRegion::BRITAIN_IRELAND,
-        'WA' => WorldRegion::BRITAIN_IRELAND,
-        'BE' => WorldRegion::WESTERN_EUROPE,
         'MX' => WorldRegion::MESOAMERICA_ANDES,
+        // Turkey is MIDDLE_EAST, which is what WorldRegion's own docblock says. This key was
+        // declared TWICE — SOUTHERN_EUROPE here first, then MIDDLE_EAST further down — and PHP
+        // silently keeps the last, so the behaviour was already correct and the first line was
+        // dead. Removing it is a provably zero-behaviour change (asserted in
+        // CountryContentRegistryTest) and takes away a trap for whoever migrates this const.
+        // 'SC', 'WA', 'BE' and 'KR' were likewise each declared twice with IDENTICAL values;
+        // those redundant copies are gone too.
         'TR' => WorldRegion::MIDDLE_EAST,
-        'KR' => WorldRegion::EAST_ASIA,
         'IN' => WorldRegion::SOUTH_ASIA,
         'SA' => WorldRegion::MIDDLE_EAST,
         'CO' => WorldRegion::MESOAMERICA_ANDES,
@@ -2169,7 +2171,6 @@ final class CountryContentRegistry
         'BE' => 'western_europe',
         'MX' => 'latin_america',
         'TR' => 'middle_east',
-        'KR' => 'east_asia',
         'IN' => 'south_asia',
         'SA' => 'middle_east',
         'CO' => 'latin_america',

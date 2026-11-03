@@ -152,6 +152,37 @@ class ClubControllerTest extends WebTestCase
         $this->assertContains('London', $data['cities']);
     }
 
+    /**
+     * The city list is never empty, whatever the state of the `location` table.
+     *
+     * A real regression guard. Curated town names moved from a PHP const into the database, and
+     * that silently gave this endpoint a new dependency: with an unseeded `location` table the
+     * England fallback produced nothing, so `?country=XX` returned an empty city list. This
+     * endpoint is what the client offers at club creation, so empty is not a degraded result —
+     * it is a dead end, and it would have shipped on any deploy where app:locations:seed had
+     * not been run.
+     *
+     * `wunderkind_test` has no seeded locations, so this test exercises precisely that case.
+     */
+    public function testNameOptionsNeverReturnsAnEmptyCityList(): void
+    {
+        $client = static::createClient();
+
+        foreach (['EN', 'ES', 'XX', 'ZZ', ''] as $country) {
+            $client->request('GET', '/api/club/name-options?country=' . urlencode($country));
+
+            $this->assertResponseStatusCodeSame(200, "country={$country}");
+
+            $data = json_decode($client->getResponse()->getContent(), true);
+
+            $this->assertNotEmpty(
+                $data['cities'],
+                "country={$country} returned no cities — club creation would have no town to offer",
+            );
+            $this->assertNotEmpty($data['suffixes'], "country={$country} returned no suffixes");
+        }
+    }
+
     public function testNameOptionsCitiesAndSuffixesAreAlphabetized(): void
     {
         $client = static::createClient();

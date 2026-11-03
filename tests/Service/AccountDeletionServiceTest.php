@@ -109,7 +109,7 @@ class AccountDeletionServiceTest extends KernelTestCase
         // user_ledger.club_id is NOT NULL with a NO-ACTION FK, so a dividend row blocks the club
         // delete outright. Nothing in this fixture carried one until a live admin user-delete hit
         // exactly that FK violation in production, so the regression is pinned here.
-        $this->persist(new UserLedger(
+        $this->persist(UserLedger::fromSyncLedgerEntry(
             $user,
             $club,
             UserLedgerEntryType::DIVIDEND_DRAW,
