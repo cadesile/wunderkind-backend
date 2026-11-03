@@ -48,7 +48,16 @@ final class AccountDeletionService
         'Sponsor',
         'SyncRecord',
         'LeaderboardEntry',
-        'UserLedger',
+        // UserLedger is deliberately ABSENT. It was here while user_ledger.club_id was NOT NULL
+        // with a plain FK — the column could not be nulled, so the rows had to be deleted for a
+        // club delete to succeed. It is now nullable with ON DELETE SET NULL, so the rows are
+        // detached instead (see detachClubScopedLedgerEntries() below). Deleting them was
+        // destructive in a way nobody intended: the balance is a chain of before/after
+        // snapshots, so removing a club's most recent entries rolled the owner's balance back.
+        //
+        // On a FULL account delete the rows go anyway, via user_id's own ON DELETE CASCADE.
+        // Detaching only changes the club-only delete path — which is exactly the path where
+        // the owner survives and their balance matters.
     ];
 
     public function __construct(

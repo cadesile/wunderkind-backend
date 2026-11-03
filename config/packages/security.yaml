@@ -81,6 +81,17 @@ security:
         - { path: ^/api/languages,             roles: PUBLIC_ACCESS }
         - { path: ^/api/translations,          roles: PUBLIC_ACCESS }
         - { path: ^/api/beta-request,          roles: PUBLIC_ACCESS }
+        # Land plots: holding, claiming and building a ground.
+        #
+        # IS_AUTHENTICATED_FULLY, deliberately NOT ROLE_CLUB. Land can be bought before a club
+        # exists, and User::getRoles() appends ROLE_CLUB unconditionally — so a ROLE_CLUB gate
+        # here would appear to work in testing and break the day that is corrected. That is the
+        # /api/club/check lockout, verbatim; see docs/api/role-club-403.md.
+        #
+        # Listed explicitly even though the ^/api catch-all already grants exactly this, so that
+        # a future narrower rule (an admin-only /api/plots/... say) has an anchor to be ordered
+        # AHEAD of. First match wins, and that ordering is load-bearing.
+        - { path: ^/api/plots,                 roles: IS_AUTHENTICATED_FULLY }
         # Browser-reachable account deletion (Google Play / iOS requirement).
         # Narrower than ^/api/account/delete, which stays JWT-only.
         - { path: ^/api/account/delete-request, roles: PUBLIC_ACCESS }

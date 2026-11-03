@@ -28,7 +28,23 @@ class NpcClubGenerationServiceLeagueTest extends TestCase
         $gameConfigRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
         $gameConfigRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
 
-        $service = new NpcClubGenerationService($em, $facilityRepo, $npcClubRepo, $leagueService, $gameConfigRepo);
+        // Place data moved to the `location` table, so the generator now takes a catalogue.
+        // Stubbed at the repository so this stays a unit test of league assignment.
+        $locationRepo = $this->createStub(\App\Repository\Location\LocationRepository::class);
+        $locationRepo->method('findForGeneration')->willReturn([
+            ['name' => 'Alpha', 'population_size' => 800_000, 'region' => 'North', 'is_capital' => true, 'city_size' => 'BIG'],
+            ['name' => 'Bravo', 'population_size' => 400_000, 'region' => 'South', 'is_capital' => false, 'city_size' => 'MEDIUM'],
+            ['name' => 'Charlie', 'population_size' => 90_000, 'region' => 'East', 'is_capital' => false, 'city_size' => 'SMALL'],
+        ]);
+
+        $service = new NpcClubGenerationService(
+            $em,
+            $facilityRepo,
+            $npcClubRepo,
+            $leagueService,
+            $gameConfigRepo,
+            new \App\Service\Location\LocationCatalogueService($locationRepo),
+        );
         $clubs   = $service->generateClubs(2, 4, 'EN');
 
         $this->assertCount(2, $clubs);

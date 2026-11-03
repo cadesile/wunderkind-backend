@@ -133,3 +133,12 @@ claiming canonical status)
   "first-launch tutorial"). The criterion itself was renamed `tutorialCompleted` →
   `setupCompleted` the same day, with a stored-payload migration and a legacy alias, and the
   admin help text now says what it measures — see `docs/api/server-driven-messaging.md`
+
+## Added 2026-11-03
+
+- **`docs/api/land-plots.md`** — client contract for the six `/api/plots` endpoints:
+  holding, claiming and building. Leads with the two things a client must get right —
+  that purchases are charged to **account** credit rather than `club.balance`, and that
+  prices are real-world so most plots are deliberately unaffordable for a long time.
+- **`docs/api/user-ledger.md`** — amended with the six new entry types, the signed-amount
+  convention, and the now-nullable `club`.

@@ -13,7 +13,6 @@ use App\Entity\SeasonSnapshot;
 use App\Entity\Sponsor;
 use App\Entity\Transfer;
 use App\Entity\User;
-use App\Entity\UserLedger;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -79,11 +78,13 @@ class DeleteAdminController extends AbstractController
             $this->addFlash('success', sprintf('User "%s" and all associated clubs deleted.', $email));
         } else {
             // Delete only this club; keep the user account.
-            // Note: this also discards the club's UserLedger dividend rows (its club FK is NOT
-            // NULL, so they cannot be kept with the club nulled out the way a Transfer is). The
-            // user's surviving rows still carry the balances they were chained with, so the
-            // running total only changes if the deleted club owned the most recent entries —
-            // getCurrentBalance() then reads an earlier row and the balance steps back.
+            //
+            // The club's UserLedger rows are KEPT, detached, because user_ledger.club_id is now
+            // nullable with ON DELETE SET NULL. That matters: the balance is a chain of
+            // before/after snapshots and getCurrentBalance() reads the latest surviving row, so
+            // while these rows were being deleted instead, removing a club that owned the most
+            // recent entries stepped the owner's balance back to an earlier figure. The rows
+            // stay, the chain stays whole, and the entries simply no longer name a club.
             $this->cleanClubForeignKeys($club);
             $this->em->remove($club); // cascade: removes players, staff, sync records, leaderboard entries, inbox messages
             $this->em->flush();
@@ -148,12 +149,16 @@ class DeleteAdminController extends AbstractController
      */
     private function cleanClubForeignKeys(Club $club): void
     {
-        // UserLedger blocks on user_ledger.club_id: NOT NULL with a plain NO-ACTION FK, so it can
-        // neither be cascaded through nor nulled out the way Investor/Sponsor are below. Its
-        // user_id IS ON DELETE CASCADE, but that only fires once the user row goes — too late,
-        // since the club is deleted first. Deleting a club therefore discards that club's dividend
-        // rows: harmless when the user goes too, but see the clubDelete() note when they don't.
-        foreach ([Transfer::class, MatchResult::class, SeasonRecord::class, SeasonSnapshot::class, UserLedger::class] as $class) {
+        // UserLedger is NO LONGER deleted here, and that is a bug fix rather than an adaptation.
+        //
+        // user_ledger.club_id used to be NOT NULL with a plain no-action FK, so it could neither
+        // cascade nor be nulled, and these rows had to be destroyed to let the club go. Because
+        // the running balance is a chain of before/after snapshots and getCurrentBalance() reads
+        // the latest surviving row, deleting a club's most recent entries rolled the owner's
+        // balance back to an earlier figure — real money disappearing from an account whose
+        // owner was not being deleted. The column is now nullable with ON DELETE SET NULL, so
+        // the rows survive, detached, and the balance chain stays intact.
+        foreach ([Transfer::class, MatchResult::class, SeasonRecord::class, SeasonSnapshot::class] as $class) {
             $this->em->createQueryBuilder()
                 ->delete($class, 'e')
                 ->where('e.club = :club')
@@ -161,6 +166,11 @@ class DeleteAdminController extends AbstractController
                 ->getQuery()->execute();
         }
 
+        // UserLedger is deliberately NOT in this loop either. Investor and Sponsor need an
+        // explicit null-out because their FKs are plain no-action; user_ledger.club_id is
+        // ON DELETE SET NULL, so PostgreSQL detaches those rows itself when the club row goes.
+        // An extra UPDATE here would be a redundant write over every one of the club's ledger
+        // rows, and worse, would imply to the next reader that the FK does not handle it.
         foreach ([Investor::class => 'i', Sponsor::class => 's'] as $class => $alias) {
             $this->em->createQueryBuilder()
                 ->update($class, $alias)

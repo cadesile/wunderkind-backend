@@ -1094,3 +1094,73 @@ legacy key sets literally — those arrays are a historical record of what shipp
 not a description of current output, and must never be edited to match new output.
 
 No `src/EventListener/` directory exists.
+
+## Location & land economy (`App\Service\Location`, added 2026-11-03)
+
+- **`Haversine`** — great-circle distance in PHP *and* as a SQL fragment, in one file so
+  the two cannot drift. There is **no PostGIS** (`postgres:16-alpine` in both compose
+  files), so rival ranking is a bounding-box prefilter against `idx_location_lat_lng`
+  plus this expression in `ORDER BY`. The `acos()` argument is clamped in both forms:
+  floating point can push the dot product outside [-1, 1] for identical points, which is
+  a domain error in Postgres and `NAN` in PHP.
+- **`LocationCatalogueService`** — the read side of the `location` table for world
+  generation, returning **exactly** the array shape `NpcClubGenerationService` always
+  consumed. Process-scoped memo (`private array $byCountry`), explicit column projection
+  via `getArrayResult()`. **Deliberately not a cache pool**: the data is admin-mutable
+  and a stale entry would generate clubs in retired towns. Holds the single
+  `PLACEHOLDER_PLACES` const that used to be inlined twice in the generator.
+- **`LocationClassificationService`** — the BIG/MEDIUM/SMALL banding (top 20% / bottom
+  50%, capital forced BIG), moved verbatim out of
+  `NpcClubGenerationService::classifyPlaces()`, which now delegates to it so its existing
+  tests prove the move changed nothing. `reclassifyCountry()` persists the result.
+  **Returns the distribution, not the number of rows changed** — those differ, and the
+  difference is misleading because `city_size` defaults to SMALL on a new entity.
+- **`CountryReadinessService`** — seven checks gating a country going Live: eight league
+  tiers, `StarterConfig::$leagueAbilityRanges`, club-naming content, ≥1 location, ≥1
+  plot, nothing outstanding in enrichment, and every active location actually priceable.
+  Reuses the existing league/config machinery rather than inventing a parallel one, and
+  keeps `isGenerationCapable()` / `enabledCountries` distinct as
+  `docs/world-generation/adding-a-country.md` insists.
+- **`LocationRivalService`** — directional nearest-four within 25 miles. **Re-runnable by
+  design**: coordinates arrive one location at a time, and a newly placed town changes
+  its NEIGHBOURS' nearest four too, so enrichment nulls `rivals_computed_at` across a
+  radius and `--stale-only` picks those up. Until a country is fully enriched its rival
+  sets are provisional, which is invisible because `CountryProfile.status` gates the
+  country out of the API.
+- **`StadiumEstimateService`** — build price from population → plausible capacity → cost,
+  plus the site's land value. **Real-world construction rates (~£1,500/seat), so London
+  is ~£135M**, and there is deliberately **no affordability ceiling**: the gap between
+  price and balance is the progression, since funding a flagship city is meant to take
+  ten to fifteen clubs. Deterministic, because a hold freezes a quote. Estimates are
+  superseded, never deleted.
+- **`PlotHoldService`** — acquire/release. Does **no check-then-insert**: both racing
+  callers attempt the insert and the partial unique lets one through, then
+  `explainConflict()` works out *why* the loser lost, because "someone else is holding
+  this" and "you already hold a plot" mean different things to a player.
+- **`PlotClaimService`** — the claim transaction, in this order: `SELECT ... FOR UPDATE`
+  on the hold (the serialisation point for a double-tapped CLAIM), validate, check
+  credit, insert the claim `ON CONFLICT DO NOTHING`, consume the hold, then charge.
+  **Charged last, so losing the race costs the player nothing.** Pays from
+  `UserLedgerService::append()`, never `club.balance`.
+- **`Enrichment\*`** — `LocationEnricherInterface` (provider-agnostic; the choice is
+  deliberately open), `UnconfiguredLocationEnricher` (the wired default, which **refuses
+  loudly** — the missing-`FIREBASE_SERVICE_ACCOUNT_JSON` lesson),
+  `EnrichmentValidator` (per-FIELD accept/reject against the country bbox and value
+  bands; a partial answer keeps its good half and lands NEEDS_REVIEW),
+  `LocationEnrichmentService` (the lease, the dispatch, the write-back),
+  `LocationEnrichmentOrchestrator` (the three admin triggers, with a stacked-sweep guard
+  copying `StarterPoolAuditService`'s undrained-queue count).
+
+**Sixth Messenger transport, `enrichment`.** Its own queue for the reason every transport
+below `async` has its own: an "enrich all remaining" sweep queues one message per town —
+865 on a full pass — each making an external API call of unpredictable latency, and it
+must not get in front of `competition` (latency-sensitive against wall-clock time) or
+push notifications. It is also the only queue whose work costs money per message.
+Drained by `docker/enrichment-consume.sh`; `in-memory://` in tests.
+
+**`UserLedgerService::append()`** is new and is the single writer for every
+backend-originated ledger entry. It takes a **per-user advisory lock**
+(`pg_advisory_xact_lock`), because `getCurrentBalance()` is an unlocked read and two
+concurrent writers would fork the before/after chain — survivable while sync was the only
+writer (the device serialises per club), not survivable once a player can tap "buy"
+twice. Idempotent on `(sourceKind, sourceRef, type)`, and it refuses a positive debit.

@@ -17,6 +17,7 @@ use App\Repository\NpcClubRepository;
 use App\Repository\SyncRecordRepository;
 use App\Service\ClubInitializationService;
 use App\Service\DebugLoggingResolver;
+use App\Service\Location\LocationCatalogueService;
 use App\Service\NpcClubGenerationService;
 use App\Service\ClubResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -62,10 +63,7 @@ class ClubController extends AbstractController
         NpcClubRepository $npcClubRepo,
     ): JsonResponse {
         $country  = strtoupper($request->query->get('country', 'EN'));
-        $cities   = array_merge(
-            $npcClubGenerationService->getPlaceNames($country) ?: $npcClubGenerationService->getPlaceNames('EN'),
-            $npcClubGenerationService->getRemainingPlaceNames($country),
-        );
+        $cities   = $this->cityOptionsFor($country, $npcClubGenerationService);
         $suffixes = $npcClubGenerationService->getSuffixes($country) ?: $npcClubGenerationService->getSuffixes('EN');
 
         $locale = Country::tryFrom($country)?->locale() ?? 'en_GB';
@@ -80,6 +78,53 @@ class ClubController extends AbstractController
             // Deliberately unsorted — this is a matching set, not a display list.
             'takenNames' => $npcClubRepo->findNamesByCountry($country),
         ]);
+    }
+
+    /**
+     * The club-name city list, which must never come back empty.
+     *
+     * Curated town names now live in the `location` table, so this endpoint gained a dependency
+     * it did not have before: an unseeded table means no towns. That broke the England
+     * fallback for unsupported countries outright — `?country=XX` returned an empty city list,
+     * and this endpoint is what the client offers at club creation, so an empty list is a dead
+     * end rather than a degraded experience.
+     *
+     * Hence an explicit chain rather than a single `?:`. The terminal source is
+     * CountryContentRegistry's bare-name list, reached through getRemainingPlaceNames(), which
+     * is still authored in PHP and is not going anywhere: those ~4,200 names exist precisely to
+     * widen this picker, and they carry no geography, which is why they were never migrated.
+     * Using them here is not the dual-source drift the migration set out to remove — world
+     * GENERATION reads the database and only the database.
+     *
+     * @return string[]
+     */
+    private function cityOptionsFor(string $country, NpcClubGenerationService $generator): array
+    {
+        // 1. The country's own curated towns (database) plus its wider name list (PHP const).
+        $cities = array_merge(
+            $generator->getPlaceNames($country),
+            $generator->getRemainingPlaceNames($country),
+        );
+
+        if ($cities !== []) {
+            return $cities;
+        }
+
+        // 2. Unsupported or unseeded country: fall back to England, both halves.
+        $cities = array_merge(
+            $generator->getPlaceNames('EN'),
+            $generator->getRemainingPlaceNames('EN'),
+        );
+
+        if ($cities !== []) {
+            return $cities;
+        }
+
+        // 3. Nothing at all — only reachable with an unseeded database AND a registry with no
+        //    England entry, which should be impossible. Returning the generic placeholder town
+        //    names keeps the picker usable instead of handing the client a dead end; the
+        //    operational problem behind it is reported by app:country:check.
+        return array_column(LocationCatalogueService::PLACEHOLDER_PLACES, 'name');
     }
 
     /** @param string[] $values @return string[] */

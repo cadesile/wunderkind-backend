@@ -298,3 +298,60 @@ One exception worth noting: **`AdminMessageCrudController`** overrides
 a message is saved Active with `sendAsPush` checked (`pushSentAt` guards
 against resending on later edits) — see `services.md`'s
 `Notification/` entries.
+
+## Location & land plots (added 2026-11-03)
+
+**`Api\PlotHoldController`** / **`Api\PlotClaimController`** — the six player-facing
+endpoints (see `routes.md`). Both gate on `IS_AUTHENTICATED_FULLY`, **not `ROLE_CLUB`**,
+because land can be bought before a club exists and `User::getRoles()` appends
+`ROLE_CLUB` unconditionally. Both map `PlotUnavailableException`'s typed reasons to
+distinct status codes rather than returning one generic 409, because the cases mean
+different things to a client: `plot_held` is transient and worth retrying, `hold_limit`
+is the player's own doing, `plot_not_sellable` is permanent, and `insufficient_credit`
+carries the balance and the requirement so the client can render the shortfall.
+
+**`Admin\LocationCrudController`** — full CRUD. Two behaviours that are not obvious from
+the fields: **editing a coordinate, population or land value LOCKS that field** against
+future AI enrichment (compared against the DATABASE row, since the form has already
+written onto the entity by the time `updateEntity()` runs, with a micro-degree tolerance
+so a plain re-save does not lock anything); and **deleting a location with plots is
+refused with a flash**, because the FK is ON DELETE RESTRICT and the alternative is a
+`ForeignKeyConstraintViolationException` reaching the operator as a 500. `citySize` is
+shown read-only — it is derived from the whole country's population spread.
+
+**`Admin\CountryProfileCrudController`** — the readiness gate. Setting status to LIVE is
+refused with a flash listing the failing checks unless `CountryReadinessService` passes,
+enforced in `persistEntity()`/`updateEntity()` rather than with a DB constraint — the
+`LanguageCrudController` single-default precedent, for the same reason (low-frequency
+single-admin CRUD, not a concurrency-sensitive path).
+
+**`Admin\LandPlotCrudController`** — assigns `plot_number` itself from
+`nextPlotNumber()`, so `UNIQUE(location, plot_number)` cannot throw out of `flush()`,
+and refuses to delete a location's last plot.
+
+**`Admin\LocationEnrichmentController`** + `templates/admin/location_enrichment.html.twig`
+— the overview (per-country progress, the needs-review work queue, recent runs, 30-day
+token spend) and the three triggers. Modelled on the `LeaderboardAwardCloseController`
+"Close now" panel, because there is no crontab under Lando and an admin-triggered POST is
+how a queued job gets exercised by hand. **All three triggers are POST-only and
+CSRF-guarded**, because each queues billed API calls and a crawler or browser prefetch
+must not be able to spend money. Redirects go through
+`$this->redirect($this->generateUrl('admin', ['routeName' => ...]))` per
+`src/Controller/Admin/CLAUDE.md`.
+
+Two EasyAdmin traps hit while building these, both already documented elsewhere in this
+repo and both confirmed the hard way:
+- **An enum-typed property needs `ChoiceField` + `EnumType`**, not `setChoices()` with
+  string values — the latter 500s the form with "Object of class … could not be converted
+  to string". Six fields across the three controllers.
+- **Custom routes rendering an `@EasyAdmin`-extending template must be *reached* via
+  `/admin?routeName=...`.** EasyAdmin *forwards* rather than redirects, so `routeParams`
+  arrive as request attributes and never appear in `$request->query` — the enrichment
+  screen resolves its focused location from both.
+
+**`Api\ClubController::nameOptions()`** gained an explicit three-step fallback chain.
+Curated town names moved to the database, which silently gave that endpoint a new
+dependency: with an unseeded `location` table the England fallback produced nothing and
+`?country=XX` returned an **empty city list**, which is a dead end at club creation
+rather than degraded output. It now falls back country → England → placeholder names, and
+`testNameOptionsNeverReturnsAnEmptyCityList` guards it.

@@ -10,6 +10,8 @@ use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
+use App\Service\Location\CountryReadinessService;
+use App\Service\Location\LocationCatalogueService;
 use App\Service\NameGeneratorService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -33,6 +35,8 @@ class CheckCountryContentCommand extends Command
         private readonly NpcClubRepository                $npcClubRepository,
         private readonly CountryWorldPackCacheRepository  $cacheRepository,
         private readonly StarterConfigRepository          $starterConfigRepository,
+        private readonly LocationCatalogueService         $locationCatalogue,
+        private readonly CountryReadinessService          $readinessService,
     ) {
         parent::__construct();
     }
@@ -62,10 +66,35 @@ class CheckCountryContentCommand extends Command
             ['Generation-capable', $country->isGenerationCapable() ? 'yes' : 'no'],
         ]);
 
+        // Places moved to the `location` table; everything else below is still authored in PHP.
+        $io->section('Locations (database)');
+        $locationCount = $this->locationCatalogue->countPlaces($countryCode);
+        $readiness     = $this->readinessService->evaluate($countryCode);
+
+        $io->table(['Check', 'Status'], array_merge(
+            [['Seeded locations', $locationCount > 0
+                ? $locationCount . ' active'
+                : 'NONE — run app:locations:seed ' . $countryCode . ' (generation falls back to placeholder town names)']],
+            array_map(
+                static fn (array $check): array => [
+                    ucfirst(str_replace('_', ' ', $check['key'])),
+                    ($check['ok'] ? 'OK — ' : 'BLOCKED — ') . $check['detail'],
+                ],
+                $readiness['checks'],
+            ),
+        ));
+
+        $io->text($readiness['ready']
+            ? '<info>Ready: this country may be set Live.</info>'
+            : '<comment>Not ready: ' . implode(', ', $readiness['blocking']) . '</comment>');
+
         $io->section('CountryContentRegistry content');
-        $missing = CountryContentRegistry::missingCategories($country);
+        // `places` is excluded: it is answered above, from the database.
+        $missing = array_values(array_filter(
+            CountryContentRegistry::missingCategories($country),
+            static fn (string $category): bool => $category !== 'places',
+        ));
         $io->table(['Category', 'Status'], [
-            ['Places', in_array('places', $missing, true) ? 'MISSING (generic fallback)' : count(CountryContentRegistry::places($country) ?? []) . ' entries'],
             ['Prestige suffixes', in_array('prestigeSuffixes', $missing, true) ? 'MISSING (falls back to [FC])' : count(CountryContentRegistry::prestigeSuffixes($country)) . ' entries'],
             ['Generic suffixes', in_array('genericSuffixes', $missing, true) ? 'MISSING (falls back to [FC])' : count(CountryContentRegistry::genericSuffixes($country)) . ' entries'],
             ['Stadium formats', in_array('stadiumFormats', $missing, true) ? 'MISSING (generic fallback)' : count(CountryContentRegistry::stadiumFormats($country)) . ' entries'],

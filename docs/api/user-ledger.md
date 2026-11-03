@@ -113,3 +113,33 @@ above, just not built yet.
 None specific to this feature. `ledger[]` entries are free-form and unvalidated server-side
 (same trust model as every other category) — an unrecognized `category`, or one that fails
 to parse as expected, is silently ignored rather than rejecting the sync.
+
+---
+
+## Addendum — new entry types (2026-11-03)
+
+`type` is no longer always `dividend_draw`. Six more exist, written by the backend rather
+than read out of a sync payload:
+
+| `type` | Sign | Written when |
+|---|---|---|
+| `starting_grant` | positive | A one-off credit granted to a new account |
+| `quiz_bonus` | positive | Credit earned from the onboarding quiz |
+| `land_purchase` | **negative** | Buying a land plot (see `land-plots.md`) |
+| `stadium_purchase` | **negative** | Building a ground on a claimed plot |
+| `sell_back_credit` | positive | Proceeds of selling a plot back |
+| `reversal` | either | A support reversal of an earlier entry |
+
+Three consequences for a client:
+
+- **`amountPence` is signed, and purchases are negative.** Do not take the absolute value
+  when rendering a running balance.
+- **`club` may be `null`.** Grants, bonuses and a plot bought before founding a club are
+  facts about the ACCOUNT, not about any club. It is also nulled when a club is deleted —
+  the entry survives, because the balance is a chain and removing rows would roll it back.
+- **The balance can be large.** Stadium prices are real-world (~£135M for a flagship
+  ground) and this balance deliberately accumulates across every club the account owns,
+  so size your formatting accordingly. The underlying columns are 64-bit.
+
+A reversal never edits the entry it corrects: it is a new, opposing row. Both remain
+visible in history.

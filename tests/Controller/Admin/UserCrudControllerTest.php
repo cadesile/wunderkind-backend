@@ -85,7 +85,7 @@ class UserCrudControllerTest extends WebTestCase
         $em->persist($syncRecord);
         $this->cleanup[] = $syncRecord;
 
-        $ledgerEntry = new UserLedger(
+        $ledgerEntry = UserLedger::fromSyncLedgerEntry(
             $user,
             $club,
             UserLedgerEntryType::DIVIDEND_DRAW,

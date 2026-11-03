@@ -368,3 +368,45 @@ found are vendored **swagger-ui static assets** bundled by
 `#[ApiResource]`-annotated, API Platform's auto-generated `/api/docs`
 spec would in any case be effectively empty. Treat the routes documented
 above as the sole source of truth — nothing to cross-check against.
+
+## Location & land plots (added 2026-11-03)
+
+| Method + path | Route name | Gate |
+|---|---|---|
+| `GET /api/plots/holds/mine` | `api_plot_holds_mine` | `IS_AUTHENTICATED_FULLY` |
+| `POST /api/plots/{plotId}/hold` | `api_plot_hold_create` | `IS_AUTHENTICATED_FULLY` |
+| `DELETE /api/plots/holds/{holdId}` | `api_plot_hold_release` | `IS_AUTHENTICATED_FULLY` |
+| `GET /api/plots/claims/mine` | `api_plot_claims_mine` | `IS_AUTHENTICATED_FULLY` |
+| `POST /api/plots/{plotId}/claim` | `api_plot_claim_create` | `IS_AUTHENTICATED_FULLY` |
+| `POST /api/plots/claims/{claimId}/stadium` | `api_plot_claim_stadium` | `IS_AUTHENTICATED_FULLY` |
+
+**`IS_AUTHENTICATED_FULLY`, deliberately NOT `ROLE_CLUB`.** Land can be bought before a
+club exists, and `User::getRoles()` appends `ROLE_CLUB` unconditionally — so a
+`ROLE_CLUB` gate here would *appear* to work in testing and break the day that is
+corrected. That is the `/api/club/check` lockout, verbatim; see
+`docs/api/role-club-403.md` and `01_overview/output/tribal-knowledge.md`.
+
+`access_control` carries `- { path: ^/api/plots, roles: IS_AUTHENTICATED_FULLY }`, listed
+**explicitly even though the `^/api` catch-all already grants exactly this**, so that a
+future narrower rule (an admin-only `/api/plots/...`, say) has an anchor to be ordered
+*ahead* of. First match wins, and that ordering is load-bearing.
+
+Response codes, from `PlotUnavailableException`'s typed reasons:
+`409 plot_held` / `hold_limit` / `plot_claimed` / `hold_consumed`,
+`410 hold_expired`, `403 hold_not_yours`, `422 plot_not_sellable`,
+and **`402 insufficient_credit`, which reports the LEDGER balance** — land and stadium
+purchases are account credit, never `club.balance`.
+
+`/holds/mine` and `/claims/mine` are `private` + `max-age=0`: a countdown is useless
+cached and the answer is per-account.
+
+### Admin routes
+
+`admin_location_index` / `admin_land_plot_index` / `admin_country_profile_index` (EasyAdmin
+CRUD), plus the custom `admin_location_enrichment` (GET) and three POST-only,
+CSRF-guarded triggers: `admin_location_enrich_single`, `..._sweep`, `..._subset`.
+**All three are POST.** The single-enrich action was a GET at first so an EasyAdmin row
+action could link to it, and the attempt to make a money-spending GET safe with a token
+in the query string does not work — Symfony's `SameOriginCsrfTokenManager` issues
+double-submit tokens that cannot be validated from a URL parameter. The row action now
+links to the enrichment screen, which carries the button.

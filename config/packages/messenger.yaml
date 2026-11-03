@@ -57,6 +57,22 @@ framework:
             # drawable within seconds of its last registration, so a 60s pickup delay would
             # routinely stall draws. See docker/supervisord.conf.
             registration: 'doctrine://default?queue_name=registration'
+            # AI enrichment of location geography, queued by the lazy read path and by the
+            # admin enrichment screen. Its own transport for the reason every transport below
+            # `async` has its own: an admin "enrich all remaining" queues one message per
+            # un-enriched town — 865 of them on a full sweep — and each makes an EXTERNAL API
+            # call of unpredictable latency. Sharing a queue would put that burst in front of
+            # `competition` (latency-sensitive against wall-clock time, so a backlog there is
+            # visible to players as a late draw) and in front of push notifications on `async`.
+            #
+            # It is also the only queue here whose work costs money per message, which is why
+            # LocationEnrichmentOrchestrator counts undrained rows on it before queueing
+            # another sweep — the StarterPoolAuditService::TRANSPORT_QUEUE technique. That
+            # const must keep matching this queue_name.
+            #
+            # Drained by docker/enrichment-consume.sh on the low-frequency cron tier, not by
+            # messenger-consume.sh.
+            enrichment: 'doctrine://default?queue_name=enrichment'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
@@ -81,6 +97,9 @@ framework:
             'App\Message\Competition\WarmCompetitionResponseMessage': competition
             # The one message carrying a payload rather than an id — see its own docblock.
             'App\Message\Competition\StoreEntrantSubmissionMessage': registration
+            # Location AI enrichment — see LocationEnrichmentService. Carries ids only; the
+            # handler re-reads the row and refreshes its lease, so a duplicate is a no-op.
+            'App\Message\Location\EnrichLocationMessage': enrichment
 
 when@test:
     framework:
@@ -93,6 +112,10 @@ when@test:
                 worldpack: 'in-memory://'
                 pool: 'in-memory://'
                 competition: 'in-memory://'
+                # in-memory, not sync: enrichment is a fire-and-forget side effect whose
+                # dispatch is what tests assert (InMemoryTransport::getSent()). Running the
+                # real handler in-process would call a real provider.
+                enrichment: 'in-memory://'
                 # sync://, not in-memory://, and alone among these in being so. The others are
                 # fire-and-forget side effects a test asserts were *dispatched*; this one is
                 # the second half of registration itself, so a test that only saw the envelope

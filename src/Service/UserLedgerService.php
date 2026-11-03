@@ -74,7 +74,7 @@ class UserLedgerService
 
             $balance ??= $this->userLedgerRepository->getCurrentBalance($user);
 
-            $ledgerRow = new UserLedger(
+            $ledgerRow = UserLedger::fromSyncLedgerEntry(
                 $user,
                 $club,
                 UserLedgerEntryType::DIVIDEND_DRAW,
@@ -96,5 +96,99 @@ class UserLedgerService
         }
 
         return $created;
+    }
+
+    /**
+     * Record one backend-originated entry — a grant, a bonus, a purchase, a sell-back, a reversal.
+     *
+     * THE SINGLE WRITER for everything that is not a sync-reported dividend draw, for the same
+     * reason recordDividendDraws() is the single writer for those: the before/after chaining has
+     * to exist in exactly one place or the running balance stops being reconstructible.
+     *
+     * TAKES A PER-USER ADVISORY LOCK, and that is not belt-and-braces. getCurrentBalance() is an
+     * unlocked `SELECT ... LIMIT 1`, so two concurrent writers for one user read the same
+     * balanceBefore and the chain FORKS — after which getCurrentBalance() returns whichever row
+     * happens to sort last, and the account's balance depends on a race. That was survivable
+     * while the only writer was sync, which the device serialises per club; it is not survivable
+     * now that a player can tap "buy" twice. pg_advisory_xact_lock rather than
+     * `SELECT ... FOR UPDATE` on the user row, to avoid contending with the auth and
+     * refresh-token paths that legitimately read it.
+     *
+     * IDEMPOTENT on (sourceKind, sourceRef, type): a repeat call returns the ORIGINAL entry and
+     * writes nothing. Checked rather than left to uq_user_ledger_backend_source, because a
+     * unique violation out of flush() closes the shared EntityManager and this runs on a
+     * user-facing write.
+     *
+     * @throws \InvalidArgumentException if a debit is not negative — a positive LAND_PURCHASE
+     *         would credit the account it was meant to charge, and that is a programming error
+     *         worth failing loudly on rather than reconciling later
+     */
+    public function append(
+        User $user,
+        ?Club $club,
+        UserLedgerEntryType $type,
+        int $amountPence,
+        string $sourceKind,
+        string $sourceRef,
+        ?string $description = null,
+        ?\DateTimeImmutable $occurredAt = null,
+    ): UserLedger {
+        if ($type->isDebit() && $amountPence > 0) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s must be recorded as a negative amount; %d would credit the account instead of charging it.',
+                $type->value,
+                $amountPence,
+            ));
+        }
+
+        if ($sourceKind === '' || $sourceRef === '') {
+            throw new \InvalidArgumentException(
+                'A backend ledger entry needs a sourceKind and a sourceRef — they are its only idempotency guard.',
+            );
+        }
+
+        return $this->em->wrapInTransaction(function () use (
+            $user,
+            $club,
+            $type,
+            $amountPence,
+            $sourceKind,
+            $sourceRef,
+            $description,
+            $occurredAt,
+        ): UserLedger {
+            // Serialises every balance read-modify-write for this one user, for the duration of
+            // the transaction. Released automatically on commit or rollback.
+            $this->em->getConnection()->executeStatement(
+                "SELECT pg_advisory_xact_lock(hashtext('user_ledger:' || :userId))",
+                ['userId' => (string) $user->getId()],
+            );
+
+            $existing = $this->userLedgerRepository->findByBackendSource($sourceKind, $sourceRef, $type);
+
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            $entry = UserLedger::forBackendEvent(
+                $user,
+                $club,
+                $type,
+                $amountPence,
+                $this->userLedgerRepository->getCurrentBalance($user),
+                $sourceKind,
+                $sourceRef,
+                $occurredAt,
+            );
+
+            if ($description !== null && $description !== '') {
+                $entry->setDescription($description);
+            }
+
+            $this->em->persist($entry);
+            $this->em->flush();
+
+            return $entry;
+        });
     }
 }

@@ -510,3 +510,35 @@ was not safe to retry:
 
   Written with the Schema API (`addColumn`/`dropColumn`) rather than raw DDL, per this
   codebase's PostgreSQL-only rule.
+
+## 2026-11-03 — location & land-plot economy (six migrations)
+
+| Version | What |
+|---|---|
+| `Version20261103120000` | Geography: `country_profile` (natural PK `code`), `location`, `location_rival` (+2 raw CHECKs), `land_plot` |
+| `Version20261103150000` | AI enrichment history: `location_enrichment_run`, `location_enrichment_attempt` |
+| `Version20261103180000` | `user_ledger`: nullable `club_id` + SET NULL, `source_kind`/`source_ref` + partial unique |
+| `Version20261103200000` | `stadium_estimate` + `stadium_estimate_input` |
+| `Version20261103220000` | `plot_hold`, `plot_claim`, `plot_claim_valuation` — three partial uniques |
+| `Version20261103230000` | `user_ledger` money columns INTEGER → BIGINT |
+
+Four things worth knowing before touching these:
+
+- **Six new partial unique indexes**, all declared on their entities with the predicate
+  spelled exactly as `pg_get_expr(indpred, indrelid)` reports it, and all verified to
+  round-trip. `tests/Doctrine/SchemaIsInSyncTest.php` was added for exactly this: it
+  asserts `SchemaTool::getUpdateSchemaSql()` is empty, which is the automated form of
+  "`migrations:diff` reports clean" and the only reliable guard against predicate churn.
+  It excludes the migrations storage table, whose name it reads from the migrations
+  configuration rather than hardcoding.
+- **`location_rival`'s two CHECK constraints are raw SQL only.** Doctrine cannot map
+  CHECKs; that is safe because `migrations:diff` ignores them entirely. Do not "fix"
+  their absence from the entity.
+- **`Version20261103230000` is a required widening, not hygiene.** Real-world stadium
+  prices (~£1,500/seat) exceed the 4-byte integer cap of £21,474,836, and an
+  account-level balance accumulates across ten to fifteen clubs by design. Its `down()`
+  narrows again and will FAIL rather than truncate if any row is out of range — correct
+  behaviour for money.
+- **`Version20261103180000`'s `down()` is lossy on purpose**: account-level entries
+  (grants, pre-club purchases) have no club and cannot exist in the old NOT NULL shape,
+  so they are deleted rather than silently attached to an arbitrary club.

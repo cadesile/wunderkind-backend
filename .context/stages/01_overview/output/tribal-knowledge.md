@@ -99,6 +99,36 @@ Three related traps, each of which looks like a one-line fix and is not:
 See `03_data/output/entities.md`'s `User` entry, `04_interfaces/output/routes.md`, and
 `docs/api/role-club-403.md` for the client-facing contract.
 
+### Land and stadium money is ACCOUNT credit, never `club.balance` (2026-11-03)
+
+**A land or stadium purchase is charged to `UserLedger`, not to the club's balance**, and
+that is a direct consequence of the rule above: the device owns `club.balance` and
+`SyncService::process()` overwrites it absolutely on every sync, so a server-side
+deduction there survives until the next sync and then vanishes. `UserLedger` is
+backend-owned and durable.
+
+**Why this is written down rather than left to the code:** the natural assumption is that
+buying something with a club's money debits the club's money, and that assumption would
+produce a feature that *appears* to work in testing — the balance goes down — and silently
+undoes itself the next time the device syncs. There is no server-side authority to repair
+it from afterwards.
+
+Two consequences worth holding onto:
+
+- **The ledger balance is deliberately CROSS-CLUB.** `getCurrentBalance()` sums an
+  account's whole history, not one club's, and that is what makes the intended
+  progression possible: stadium prices are real-world (~£1,500/seat, so London is
+  ~£135M), and funding a flagship city is expected to take the earnings of ten to fifteen
+  clubs. A per-club balance would make that arc impossible to express.
+- **The gap between price and balance is the design, not a bug.** An earlier draft of
+  `StadiumEstimateService` capped the most expensive stadium at a few multiples of
+  `StarterConfig::$startingBalance`; that was removed on instruction, because it
+  calibrated the world to the wallet rather than letting the wallet be the thing the
+  player grows. Do not reintroduce an affordability ceiling.
+
+See `03_data/output/entities.md`'s `UserLedger` and `StadiumEstimate` entries, and
+`src/Service/Location/StadiumEstimateService.php`'s `COST_PER_SEAT_PENCE` docblock.
+
 ## Canonical existing docs (Q5)
 
 `README.md` and everything under `docs/` are canonical — index them as-is

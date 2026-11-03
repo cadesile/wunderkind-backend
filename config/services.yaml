@@ -50,6 +50,21 @@ services:
         arguments:
             $socialTokenEncryptionKey: '%env(SOCIAL_TOKEN_ENCRYPTION_KEY)%'
 
+    # Which AI provider supplies location geography (coordinates, population, land value).
+    #
+    # The provider is a deliberately open decision, so everything above this line is written
+    # against LocationEnricherInterface and names no vendor. UnconfiguredLocationEnricher is
+    # the default and REFUSES LOUDLY: it throws EnrichmentUnavailableException, which lands as
+    # an outcome=error LocationEnrichmentAttempt row and shows as not-ok on the admin
+    # connection check. That is on purpose — a missing FIREBASE_SERVICE_ACCOUNT_JSON once
+    # discarded every push notification in this codebase with no trace at all, and an
+    # unconfigured enricher must be visible BEFORE someone starts an 865-row sweep.
+    #
+    # To wire a real provider: implement the interface and repoint this alias. Nothing else in
+    # the feature needs to change.
+    App\Service\Location\Enrichment\LocationEnricherInterface:
+        alias: App\Service\Location\Enrichment\UnconfiguredLocationEnricher
+
     App\Controller\Admin\SocialAuthController:
         arguments:
             $facebookAppId: '%env(FACEBOOK_APP_ID)%'

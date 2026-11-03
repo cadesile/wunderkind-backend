@@ -5,8 +5,10 @@ namespace App\Tests\Service;
 use App\Entity\FacilityTemplate;
 use App\Entity\NpcClub;
 use App\Repository\FacilityTemplateRepository;
+use App\Repository\Location\LocationRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\LeagueService;
+use App\Service\Location\LocationCatalogueService;
 use App\Service\NpcClubGenerationService;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
@@ -30,7 +32,63 @@ class NpcClubGenerationServiceTest extends TestCase
         $gameConfigRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
         $gameConfigRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
 
-        return new NpcClubGenerationService($em, $repo, $clubRepo, $this->createStub(LeagueService::class), $gameConfigRepo);
+        return new NpcClubGenerationService(
+            $em,
+            $repo,
+            $clubRepo,
+            $this->createStub(LeagueService::class),
+            $gameConfigRepo,
+            $this->makeCatalogue(),
+        );
+    }
+
+    /**
+     * A real LocationCatalogueService over a stubbed repository.
+     *
+     * Place data moved out of CountryContentRegistry and into the `location` table, so this
+     * class no longer carries it. The catalogue is constructed for real (it is final, and its
+     * memo is worth exercising) with the repository stubbed, which keeps this file a pure unit
+     * test of club GENERATION rather than of where the towns come from.
+     *
+     * The fixture is generic but deliberately the RIGHT SIZE: 40 towns with a descending
+     * population spread, matching what the real seed gives most countries. That matters — an
+     * earlier six-town fixture broke the tier-1 big-city skew test, because with only two BIG
+     * towns the generator exhausts them against name uniqueness and the weighting cannot show.
+     * A fixture has to be representative of the shape the code expects, not merely non-empty.
+     *
+     * Asserting that a specific country really does have Madrid and Barcelona is a claim about
+     * the seeded database, and lives in LocationCatalogueServiceTest where it can be checked
+     * against real rows instead of against this stub.
+     */
+    private function makeCatalogue(): LocationCatalogueService
+    {
+        $locationRepo = $this->createStub(LocationRepository::class);
+
+        $locationRepo->method('findForGeneration')->willReturnCallback(
+            static function (string $countryCode): array {
+                if ($countryCode === 'XX') {
+                    return [];
+                }
+
+                $regions = ['North', 'South', 'East', 'West', 'Central'];
+                $places  = [];
+
+                for ($i = 0; $i < 40; $i++) {
+                    $places[] = [
+                        'name'            => 'Town' . str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                        // Descending, spanning a capital city down to a market town.
+                        'population_size' => (int) round(2_000_000 * (0.9 ** $i)),
+                        'region'          => $regions[$i % 5],
+                        'is_capital'      => $i === 0,
+                        'city_size'       => 'SMALL',
+                    ];
+                }
+
+                return $places;
+            },
+        );
+
+        return new LocationCatalogueService($locationRepo);
     }
 
     public function testGeneratesCorrectCount(): void
@@ -176,14 +234,22 @@ class NpcClubGenerationServiceTest extends TestCase
         $this->assertSame($club->getIdentity()['home']['secondary'], $club->getSecondaryColor());
     }
 
-    public function testGetPlaceNamesReturnsKnownCountryData(): void
+    /**
+     * Place names come back from the catalogue, in order.
+     *
+     * This used to assert that Spain contains Madrid and Barcelona. That is now a statement
+     * about the seeded `location` table rather than about this class, and asserting it here
+     * against a stub would only prove the stub — so the real version lives in
+     * LocationCatalogueServiceTest, against real rows.
+     */
+    public function testGetPlaceNamesReturnsTheCataloguesTowns(): void
     {
         $service = $this->makeService();
         $places  = $service->getPlaceNames('ES');
 
         $this->assertNotEmpty($places);
-        $this->assertContains('Madrid', $places);
-        $this->assertContains('Barcelona', $places);
+        $this->assertContains('Town00', $places);
+        $this->assertCount(40, $places);
     }
 
     public function testGetPlaceNamesReturnsEmptyArrayForUnknownCountry(): void
@@ -208,11 +274,18 @@ class NpcClubGenerationServiceTest extends TestCase
         $this->assertSame([], $service->getSuffixes('XX'));
     }
 
-    public function testGetPlaceNamesCoversAllNineGenerationCapableCountries(): void
+    /**
+     * Suffixes still come from CountryContentRegistry, and still cover the nine.
+     *
+     * The place-name half of this assertion moved to LocationCatalogueServiceTest, which checks
+     * it against the seeded database. Suffixes did NOT move — they are per-country club-naming
+     * flavour with no geography in them — so they are still asserted here.
+     */
+    public function testSuffixesCoverAllNineGenerationCapableCountries(): void
     {
         $service = $this->makeService();
+
         foreach (['ES', 'EN', 'DE', 'IT', 'FR', 'BR', 'AR', 'NL', 'PT'] as $country) {
-            $this->assertNotEmpty($service->getPlaceNames($country), "Expected place names for {$country}");
             $this->assertNotEmpty($service->getSuffixes($country), "Expected suffixes for {$country}");
         }
     }
