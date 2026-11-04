@@ -22,6 +22,10 @@ class PlotUnavailableException extends \RuntimeException
     public const HOLD_NOT_YOURS   = 'hold_not_yours';
     public const HOLD_CONSUMED    = 'hold_consumed';
     public const INSUFFICIENT     = 'insufficient_credit';
+    /** Founding a club on a location the caller holds no active claim at. */
+    public const NOT_OWNED        = 'location_not_owned';
+    /** The caller's claim at that location already has a club standing on it. */
+    public const CLAIM_HAS_CLUB   = 'location_club_exists';
 
     private function __construct(
         public readonly string $reason,
@@ -29,6 +33,30 @@ class PlotUnavailableException extends \RuntimeException
         public readonly array $context = [],
     ) {
         parent::__construct($message);
+    }
+
+    /**
+     * The caller is trying to found a club somewhere they do not own land.
+     *
+     * Deliberately does NOT distinguish "nobody owns this" from "someone else owns this": both
+     * answers are the same to this caller, and the second would confirm the existence of
+     * another player's holding to anyone who guessed a location id.
+     */
+    public static function locationNotOwned(): self
+    {
+        return new self(
+            self::NOT_OWNED,
+            'You do not hold an active claim at that location. Buy the land before founding a club on it.',
+        );
+    }
+
+    public static function claimAlreadyHasClub(string $clubName): self
+    {
+        return new self(
+            self::CLAIM_HAS_CLUB,
+            sprintf('%s already plays at that location.', $clubName),
+            ['clubName' => $clubName],
+        );
     }
 
     public static function plotHeld(): self

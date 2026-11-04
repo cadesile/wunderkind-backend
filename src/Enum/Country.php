@@ -364,6 +364,52 @@ enum Country: string
      * Independent of whether players may currently pick it — see the class
      * docblock. Mirrors the country dropdowns on the admin Generate screen.
      */
+    /**
+     * The real ISO 3166-1 alpha-2 code for this country, or null where none exists.
+     *
+     * WHY THIS IS NOT JUST $value. Five of this enum's codes are FOOTBALL codes, not ISO ones,
+     * and two of those actively collide with real ISO codes belonging to other countries:
+     *
+     *   EN  England          -> GB    (England has no ISO code of its own)
+     *   SC  Scotland         -> GB    (ISO SC is Seychelles)
+     *   WA  Wales            -> GB    (no ISO code)
+     *   NI  Northern Ireland -> GB    (ISO NI is Nicaragua)
+     *   XK  Kosovo           -> null  (user-assigned; there is genuinely no ISO code, and
+     *                                  substituting RS would assert Serbian sovereignty)
+     *
+     * So a client that needs a real country code — to look up a flag in an ISO-keyed set, to
+     * call a third-party geo or currency API, or to match a prototype that uses GB — cannot
+     * derive one from `value` and must read this instead. Everything else returns its own code,
+     * because for the other 67 cases the two are the same.
+     *
+     * DELIBERATELY NOT A DATABASE COLUMN. country_profile.iso_alpha3 exists and is empty, and a
+     * second denormalised copy of a mapping that is pure, total and known at compile time would
+     * only create something to drift. This is the single source.
+     *
+     * THE FLAG ASSETS DO NOT USE THIS. public/assets/flags/ is keyed on `value` (en.svg, sc.svg)
+     * precisely so each of the five renders its own flag rather than the Union Jack — see that
+     * directory's README. Do not "simplify" the flag lookup onto this method.
+     */
+    public function isoAlpha2(): ?string
+    {
+        return match ($this) {
+            self::EN, self::SC, self::WA, self::NI => 'GB',
+            self::XK                               => null,
+            default                                => $this->value,
+        };
+    }
+
+    /**
+     * Whether this enum's own code is a real ISO 3166-1 alpha-2 code.
+     *
+     * Exposed so an API payload can say so explicitly rather than leaving a client to compare
+     * two fields and guess which to trust.
+     */
+    public function isIsoCode(): bool
+    {
+        return $this->isoAlpha2() === $this->value;
+    }
+
     public function isGenerationCapable(): bool
     {
         return match ($this) {

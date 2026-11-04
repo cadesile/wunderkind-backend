@@ -379,6 +379,49 @@ above as the sole source of truth — nothing to cross-check against.
 | `GET /api/plots/claims/mine` | `api_plot_claims_mine` | `IS_AUTHENTICATED_FULLY` |
 | `POST /api/plots/{plotId}/claim` | `api_plot_claim_create` | `IS_AUTHENTICATED_FULLY` |
 | `POST /api/plots/claims/{claimId}/stadium` | `api_plot_claim_stadium` | `IS_AUTHENTICATED_FULLY` |
+| `GET /api/plots/claims/{claimId}/sell-back-quote` | `api_plot_claim_sell_back_quote` | `IS_AUTHENTICATED_FULLY` |
+| `POST /api/plots/claims/{claimId}/sell-back` | `api_plot_claim_sell_back` | `IS_AUTHENTICATED_FULLY` |
+
+### Added 2026-11-04 — the read side, the balance, and founding on a plot
+
+| Method + path | Route name | Gate |
+|---|---|---|
+| `GET /api/locations` | `api_locations_list` | **`PUBLIC_ACCESS`** |
+| `GET /api/locations/facets` | `api_locations_facets` | **`PUBLIC_ACCESS`** |
+| `GET /api/locations/{id}` | `api_locations_detail` | **`PUBLIC_ACCESS`** |
+| `GET /api/account/ledger` | `api_account_ledger` | `IS_AUTHENTICATED_FULLY` |
+
+`^/api/locations` needed a **new `PUBLIC_ACCESS` `access_control` line**, placed with the other
+public read endpoints and ahead of the `^/api` catch-all. `/api/account/ledger` needed none —
+the catch-all already is `IS_AUTHENTICATED_FULLY`.
+
+Three things about `/api/locations` that are contracts rather than implementation:
+
+1. **`country` is required** on the list (`400 country_required`). No unfiltered list exists.
+2. **Only `/{id}` triggers enrichment.** The list dispatches zero messages however many pending
+   rows it holds — one page of 200 would otherwise be 200 billed external API calls. Asserted
+   in `LocationControllerTest`.
+3. **`lat`, `lng` and `landPence` are nullable** and `enrichmentStatus` is the loading signal.
+   `/{id}` of a pending row returns `200` with `enrichmentStatus: "queued"` — reported from the
+   lease's return value, not the hydrated entity, which still says `pending` because the lease
+   is a raw UPDATE.
+
+Caching splits three ways and the split is load-bearing: the plain list is `public, max-age=60`;
+the `?affordability=1` variant is `private, max-age=0` (it reads the caller's balance); and a
+detail response is `private, max-age=0` while pending or queued, or the client polls a cached
+"queued" for ever.
+
+`GET /api/account/ledger` returns **entity-shaped keys — `type` / `amountPence` / `club`** — and
+NOT the inbound sync DTO's `category` / `amount`. `AccountLedgerControllerTest` asserts the sync
+names are *absent*, because the two are easy to "harmonise" by accident.
+
+`POST /api/club/initialize` gained an **optional `locationId`**, which attaches the new club to
+a plot the caller already owns (and gives `PlotClaimService::attachClub()` its first production
+caller). New responses: `403 location_not_owned`, `409 location_club_exists`. A duplicate name
+at one location reuses the existing `422 club_name_taken` — no new code for the client.
+
+`GET /api/countries` gained additive `isoAlpha2` / `isIsoCode`, because `code` is a football
+code: `EN` has no ISO equivalent, and `SC`/`NI` collide with Seychelles and Nicaragua.
 
 **`IS_AUTHENTICATED_FULLY`, deliberately NOT `ROLE_CLUB`.** Land can be bought before a
 club exists, and `User::getRoles()` appends `ROLE_CLUB` unconditionally — so a

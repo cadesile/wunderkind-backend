@@ -115,8 +115,20 @@ class WorldOverviewService
                 'clubsPerTier'          => self::clubsPerTier($tiers),
             ],
             'starter' => [
-                'startingBalance'      => $config->getStartingBalance(),
-                'startingBalancePence' => $config->getStartingBalance() * 100,
+                // THREE KEYS, BECAUSE TWO OF THEM WERE WRONG. StarterConfig::$startingBalance is
+                // PENCE — its own column docblock says so, the admin form multiplies pounds by
+                // 100 to write it, and getStartingBalancePounds() divides by 100 to read it
+                // back. So `startingBalancePence` used to multiply an already-pence value by
+                // 100 again and overstate the starting balance a hundredfold on a PUBLIC
+                // payload, and `startingBalance` sat next to it under a name its neighbour
+                // implied was pounds.
+                //
+                // `startingBalance` keeps the pence meaning it already had, which is also what
+                // GET /api/starter-config emits for the same key — the two must not disagree.
+                // The explicit pair below exists so nothing has to infer the unit again.
+                'startingBalance'       => $config->getStartingBalance(),
+                'startingBalancePence'  => $config->getStartingBalance(),
+                'startingBalancePounds' => $config->getStartingBalancePounds(),
                 'squadSize'            => $config->getStarterPlayerCount(),
                 'staff' => [
                     'manager'             => $config->getStarterManagerCount(),

@@ -13,6 +13,8 @@ use App\Enum\Location\EnrichmentStatus;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\BrowserKit\Cookie;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
@@ -30,6 +32,13 @@ class LocationAdminTest extends WebTestCase
 {
     private const ADMIN_EMAIL = 'location-admin-test@example.com';
     private const COUNTRY     = 'ZT';
+
+    /**
+     * A REAL country from CountryContentRegistry, because seeding reads its town list from
+     * there — a made-up code has nothing to seed and the test would prove nothing. Wales is
+     * small enough to seed quickly and is not used by the other tests in this file.
+     */
+    private const SEEDABLE    = 'WA';
 
     /**
      * Log in, and stop the kernel rebooting between requests.
@@ -432,5 +441,365 @@ class LocationAdminTest extends WebTestCase
         ]));
 
         self::assertResponseIsSuccessful('filtering by enrichment status should work');
+    }
+
+    // ───────────────────────── export / import ─────────────────────────
+
+    public function testExportDownloadsJsonForOneCountry(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+        $this->fixture();
+
+        $client->request('GET', '/admin/locations/export?country=' . self::COUNTRY);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('application/json', $client->getResponse()->headers->get('Content-Type'));
+        self::assertStringContainsString(
+            'attachment',
+            (string) $client->getResponse()->headers->get('Content-Disposition'),
+        );
+
+        $body = $this->streamedBody($client);
+        $data = json_decode($body, true);
+
+        self::assertIsArray($data, 'export body was: ' . substr($body, 0, 300));
+        self::assertSame(1, $data['version']);
+        self::assertCount(1, $data['locations']);
+        self::assertSame('zt-adminville', $data['locations'][0]['slug']);
+    }
+
+    public function testExportCarriesNoClaimOrLedgerData(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+        $this->fixture();
+
+        $client->request('GET', '/admin/locations/export');
+
+        // Real money and real player data must never leave in a file an admin is told is safe
+        // to move between environments.
+        $body = $this->streamedBody($client);
+
+        self::assertStringNotContainsString('claimedBy', $body);
+        self::assertStringNotContainsString('sellBack', $body);
+        self::assertStringNotContainsString('userLedger', $body);
+    }
+
+    public function testImportIsPostOnly(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+
+        $client->request('GET', '/admin/locations/import');
+
+        // A GET that mutated geography would be followable by a crawler and cacheable by a
+        // proxy — the same reason the enrichment triggers are POST-only.
+        self::assertResponseStatusCodeSame(405);
+    }
+
+    public function testImportWithoutACsrfTokenChangesNothing(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+
+        $before = $this->locationCount();
+
+        $client->request(
+            'POST',
+            '/admin/locations/import',
+            [],
+            ['locations_file' => $this->uploadedExport()],
+        );
+
+        self::assertSame($before, $this->locationCount(), 'a tokenless import must write nothing');
+    }
+
+    public function testImportDryRunReportsAndWritesNothing(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+
+        $before = $this->locationCount();
+
+        $client->request(
+            'POST',
+            '/admin/locations/import',
+            ['_token' => $this->csrfToken($client, 'locations_import'), 'dry_run' => '1'],
+            ['locations_file' => $this->uploadedExport()],
+        );
+
+        self::assertSame($before, $this->locationCount(), 'a dry run must write nothing');
+    }
+
+    public function testImportAppliesAFileAndCreatesTheLocation(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+
+        $client->request(
+            'POST',
+            '/admin/locations/import',
+            ['_token' => $this->csrfToken($client, 'locations_import')],
+            ['locations_file' => $this->uploadedExport()],
+        );
+
+        $em      = self::getContainer()->get(EntityManagerInterface::class);
+        $em->clear();
+        $created = self::getContainer()->get(\App\Repository\Location\LocationRepository::class)
+            ->findBySlug(self::COUNTRY, 'zt-imported');
+
+        self::assertNotNull($created, 'the uploaded town should exist');
+        self::assertSame('Imported Town', $created->getTown());
+    }
+
+    /**
+     * The body of a StreamedResponse.
+     *
+     * Via getInternalResponse(), NOT getResponse(). getResponse() hands back the HttpFoundation
+     * StreamedResponse, whose getContent() is false (a streamed body goes straight to output and
+     * is never buffered) and whose sendContent() is a no-op the second time. The BrowserKit
+     * response behind getInternalResponse() holds the content the test client already captured
+     * while handling the request.
+     */
+    private function streamedBody(KernelBrowser $client): string
+    {
+        return (string) $client->getInternalResponse()->getContent();
+    }
+
+    /** Pre-seeds a session value, mirroring what a real form render would have stored. */
+    private function seedSession(KernelBrowser $client, array $values): void
+    {
+        $session = $client->getContainer()->get('session.factory')->createSession();
+
+        $existing = $client->getCookieJar()->get($session->getName());
+        if ($existing !== null) {
+            $session->setId($existing->getValue());
+        }
+        $session->start();
+
+        foreach ($values as $key => $value) {
+            $session->set($key, $value);
+        }
+        $session->save();
+
+        $client->getCookieJar()->set(new Cookie($session->getName(), $session->getId()));
+    }
+
+    /**
+     * A token the controller will accept.
+     *
+     * Reading one from security.csrf.token_manager needs an active request and session, and
+     * loginUser() performs no HTTP request — so there is nothing to read from yet. Seeding the
+     * session directly under SessionTokenStorage's own key (`_csrf/<id>`) and submitting the
+     * same plain value works because CsrfTokenManager::isTokenValid() compares raw values when
+     * the token is not in the randomised `x.y.z` form. Same pattern as
+     * NpcClubSizeWeightsControllerTest and SocialAuthControllerTest.
+     */
+    private function csrfToken(KernelBrowser $client, string $tokenId): string
+    {
+        $value = 'test-csrf-token-' . bin2hex(random_bytes(8));
+        $this->seedSession($client, ["_csrf/{$tokenId}" => $value]);
+
+        return $value;
+    }
+
+    private function locationCount(): int
+    {
+        return (int) self::getContainer()->get(Connection::class)->fetchOne(
+            'SELECT COUNT(*) FROM location WHERE country_code = :c',
+            ['c' => self::COUNTRY],
+        );
+    }
+
+    /** A minimal, valid export file as an upload. */
+    private function uploadedExport(): UploadedFile
+    {
+        $payload = [
+            'version'   => 1,
+            'countries' => [[
+                'code'         => self::COUNTRY,
+                'name'         => 'Admin Testland',
+                'distanceUnit' => 'km',
+                'status'       => 'draft',
+            ]],
+            'locations' => [[
+                'countryCode' => self::COUNTRY,
+                'slug'        => 'zt-imported',
+                'town'        => 'Imported Town',
+                'region'      => 'Imported Region',
+                'lat'         => 53.4,
+                'lng'         => -2.2,
+                'population'  => 90_000,
+                'landPence'   => 4_000_00,
+                'citySize'    => 'MEDIUM',
+                'status'      => 'active',
+                'enrichmentStatus' => 'enriched',
+                'plots'       => [['plotNumber' => 1, 'landPenceOverride' => null]],
+            ]],
+        ];
+
+        $path = tempnam(sys_get_temp_dir(), 'loc-import-') . '.json';
+        file_put_contents($path, json_encode($payload));
+
+        return new UploadedFile($path, 'locations.json', 'application/json', null, true);
+    }
+
+    // ───────────────────────── seeding ─────────────────────────
+
+    public function testTheOverviewOffersASeedButtonRatherThanNamingACommand(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+
+        // Via /admin?routeName=, not the bare path: EasyAdmin FORWARDS to the route and the `ea`
+        // context only exists on the dashboard request, so a direct hit dies on "i18n on null".
+        $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+
+        self::assertResponseIsSuccessful();
+
+        // The empty state used to say "Run app:locations:seed", which is a dead end for anyone
+        // without shell access to the box.
+        self::assertSelectorExists('form[action*="admin_locations_seed"]');
+        self::assertSelectorTextContains('body', 'Seed');
+    }
+
+    public function testSeedIsPostOnly(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin/locations/seed');
+
+        self::assertResponseStatusCodeSame(405);
+    }
+
+    public function testSeedWithoutACsrfTokenWritesNothing(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+
+        $before = $this->locationCount();
+
+        $client->request('POST', '/admin/locations/seed', ['country' => self::COUNTRY]);
+
+        self::assertSame($before, $this->locationCount(), 'a tokenless seed must write nothing');
+    }
+
+    public function testSeedingOneCountryCreatesItsTownsAndPlots(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSeedCountry();
+
+        $client->request('POST', '/admin/locations/seed', [
+            '_token'  => $this->csrfToken($client, 'locations_seed'),
+            'country' => self::SEEDABLE,
+        ]);
+
+        self::assertGreaterThan(0, $this->locationCountFor(self::SEEDABLE), 'towns should exist');
+        self::assertSame(
+            $this->locationCountFor(self::SEEDABLE),
+            $this->plotCountFor(self::SEEDABLE),
+            'exactly one plot per town',
+        );
+    }
+
+    public function testSeededTownsHaveNoGeographyYet(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSeedCountry();
+
+        $client->request('POST', '/admin/locations/seed', [
+            '_token'  => $this->csrfToken($client, 'locations_seed'),
+            'country' => self::SEEDABLE,
+        ]);
+
+        // There is no coordinate or valuation data in PHP to seed. Writing 0/0 instead would put
+        // every un-enriched town at the same point in the Atlantic, where the rival pass would
+        // treat them as each other's nearest neighbours.
+        $withGeography = (int) self::getContainer()->get(Connection::class)->fetchOne(
+            'SELECT COUNT(*) FROM location WHERE country_code = :c AND (lat IS NOT NULL OR land_pence IS NOT NULL)',
+            ['c' => self::SEEDABLE],
+        );
+
+        self::assertSame(0, $withGeography);
+    }
+
+    public function testSeedingTwiceIsANoOpRatherThanADuplicate(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSeedCountry();
+
+        $client->request('POST', '/admin/locations/seed', [
+            '_token'  => $this->csrfToken($client, 'locations_seed'),
+            'country' => self::SEEDABLE,
+        ]);
+        $afterFirst = $this->locationCountFor(self::SEEDABLE);
+
+        $client->request('POST', '/admin/locations/seed', [
+            '_token'  => $this->csrfToken($client, 'locations_seed'),
+            'country' => self::SEEDABLE,
+        ]);
+
+        // Act-only-when-empty. These rows get hand-corrected and then carry real money, so a
+        // re-seed must not be able to stomp a correction.
+        self::assertSame($afterFirst, $this->locationCountFor(self::SEEDABLE));
+    }
+
+    public function testAnUnknownCountryCodeWritesNothing(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/seed', [
+            '_token'  => $this->csrfToken($client, 'locations_seed'),
+            'country' => 'QQ',
+        ]);
+
+        // Redirects back with a danger flash rather than 500ing. The flash TEXT is asserted in
+        // LocationSeedServiceTest instead of here: following this redirect renders the EasyAdmin
+        // dashboard route, which dies on "i18n on null" under the test client.
+        self::assertResponseRedirects();
+        self::assertSame(0, $this->locationCountFor('QQ'));
+    }
+
+    private function locationCountFor(string $code): int
+    {
+        return (int) self::getContainer()->get(Connection::class)->fetchOne(
+            'SELECT COUNT(*) FROM location WHERE country_code = :c',
+            ['c' => $code],
+        );
+    }
+
+    private function plotCountFor(string $code): int
+    {
+        return (int) self::getContainer()->get(Connection::class)->fetchOne(
+            'SELECT COUNT(*) FROM land_plot p JOIN location l ON l.id = p.location_id WHERE l.country_code = :c',
+            ['c' => $code],
+        );
+    }
+
+    /** Clears the real country these seed tests write to, so each starts from empty. */
+    private function purgeSeedCountry(): void
+    {
+        $connection = self::getContainer()->get(Connection::class);
+
+        $connection->executeStatement(
+            'DELETE FROM land_plot WHERE location_id IN (SELECT id FROM location WHERE country_code = :c)',
+            ['c' => self::SEEDABLE],
+        );
+        $connection->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => self::SEEDABLE]);
+        $connection->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => self::SEEDABLE]);
     }
 }

@@ -23,6 +23,18 @@ class CountryController extends AbstractController
             'name'    => $c->nationality(),
             'country' => $c->label(),
             'code'    => $c->value,
+            // ADDITIVE, and the point of adding them: `code` is this game's own country code
+            // and for five cases it is NOT an ISO 3166-1 alpha-2 code — EN (England has none),
+            // SC and NI (which collide with Seychelles and Nicaragua), WA, and XK. A client
+            // that needs a real ISO code for a third-party lookup now reads isoAlpha2 instead
+            // of deriving one from `code` and getting the wrong country. null for Kosovo,
+            // which genuinely has none.
+            //
+            // `code` keeps its existing meaning and value, so nothing that reads it changes.
+            // The client's own countryCodeToFlag() 'EN' special case stays correct, as
+            // docs/api/countries.md has always promised.
+            'isoAlpha2' => $c->isoAlpha2(),
+            'isIsoCode' => $c->isIsoCode(),
         ], Country::cases());
 
         $response = new JsonResponse($countries);

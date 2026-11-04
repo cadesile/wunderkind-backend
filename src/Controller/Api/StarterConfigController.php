@@ -42,6 +42,13 @@ class StarterConfigController extends AbstractController
 
         return $this->json([
             'startingBalance'    => $config->getStartingBalance(),
+            // The ACCOUNT's opening credit range, in pence — what land and stadiums are charged
+            // against, as opposed to `startingBalance` above, which is the club's own kitty.
+            // The range is served (not the resolved figure) because this endpoint is PUBLIC and
+            // unauthenticated: there is no account to resolve for. The actual grant arrives on
+            // the ledger when the owner avatar is created; read it from GET /api/account/ledger.
+            'userStartingBalanceMinPence' => $config->getUserStartingBalanceMinPence(),
+            'userStartingBalanceMaxPence' => $config->getUserStartingBalanceMaxPence(),
             'starterPlayerCount' => $config->getStarterPlayerCount(),
             'starterManagerCount'             => $config->getStarterManagerCount(),
             'starterCoachCount'               => $config->getStarterCoachCount(),

@@ -23,6 +23,29 @@ class StarterConfig
     #[ORM\Column(type: 'integer')]
     private int $startingBalance = 5_000_000;
 
+    /**
+     * Range the ACCOUNT's opening credit is drawn from, in pence. Default £5,000,000-£6,000,000.
+     *
+     * A DIFFERENT THING FROM $startingBalance ABOVE, and conflating the two is the mistake this
+     * comment exists to prevent. $startingBalance is the CLUB's transfer kitty — device-owned,
+     * reassigned absolutely by every sync, and spent on players. This pair is the ACCOUNT's
+     * UserLedger credit: backend-owned, durable, and what land and stadiums are actually
+     * charged against. One player has many clubs and exactly one account balance.
+     *
+     * A RANGE RATHER THAN A VALUE because every account getting the identical opening figure
+     * makes the first decision — which town can I afford — the same for everybody. The default
+     * span matches what the prototype's land step was built against.
+     *
+     * BIGINT, not integer like $startingBalance. £6,000,000 is 600,000,000 pence, which fits a
+     * 4-byte int, but the ceiling is admin-editable and 4 bytes cap at £21,474,836 — the same
+     * trap that made Version20261103230000 necessary for user_ledger. Not worth re-learning.
+     */
+    #[ORM\Column(type: 'bigint')]
+    private int $userStartingBalanceMinPence = 500_000_000;
+
+    #[ORM\Column(type: 'bigint')]
+    private int $userStartingBalanceMaxPence = 600_000_000;
+
     /** Number of players assigned to a starter club. Default: 5 */
     #[ORM\Column(type: 'integer')]
     private int $starterPlayerCount = 5;
@@ -377,6 +400,97 @@ class StarterConfig
     /** Virtual property for the admin form — accepts/returns pounds; storage remains pence. */
     public function getStartingBalancePounds(): int { return (int) round($this->startingBalance / 100); }
     public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
+
+    // Cast on read: Doctrine hydrates a bigint column as a string.
+    public function getUserStartingBalanceMinPence(): int { return (int) $this->userStartingBalanceMinPence; }
+    public function getUserStartingBalanceMaxPence(): int { return (int) $this->userStartingBalanceMaxPence; }
+
+    /**
+     * Sets both ends at once, because they are only meaningful as a pair.
+     *
+     * NORMALISES RATHER THAN THROWING. An admin who types the bounds the wrong way round gets
+     * the range they obviously meant, and a negative floor is clamped to zero — this is a form
+     * handler's input, not a programming error, and refusing to save the whole starter-config
+     * form over a transposed pair would be worse than fixing it.
+     */
+    public function setUserStartingBalanceRangePence(int $minPence, int $maxPence): static
+    {
+        $min = max(0, min($minPence, $maxPence));
+        $max = max(0, max($minPence, $maxPence));
+
+        $this->userStartingBalanceMinPence = $min;
+        $this->userStartingBalanceMaxPence = $max;
+
+        return $this;
+    }
+
+    /**
+     * Single-ended setters, for reflective config import.
+     *
+     * ConfigImportExportService exports every property and imports it back through a matching
+     * setter, so the paired setter above is not enough on its own — ConfigImportExportCoverageTest
+     * fails on any exported field that cannot be imported, which is exactly how this omission was
+     * caught.
+     *
+     * These clamp to zero but deliberately do NOT clamp against each other: an import writes the
+     * two in whatever order reflection hands them over, so a min-versus-max check here would
+     * reject a perfectly good pair purely because of field ordering. The ordering invariant is
+     * enforced where it actually matters instead — resolveUserStartingBalancePence() normalises
+     * on read, so a transposed pair still yields a sane figure.
+     */
+    public function setUserStartingBalanceMinPence(int $pence): static
+    {
+        $this->userStartingBalanceMinPence = max(0, $pence);
+
+        return $this;
+    }
+
+    public function setUserStartingBalanceMaxPence(int $pence): static
+    {
+        $this->userStartingBalanceMaxPence = max(0, $pence);
+
+        return $this;
+    }
+
+    public function getUserStartingBalanceMinPounds(): int { return (int) round($this->getUserStartingBalanceMinPence() / 100); }
+    public function getUserStartingBalanceMaxPounds(): int { return (int) round($this->getUserStartingBalanceMaxPence() / 100); }
+
+    public function setUserStartingBalanceRangePounds(int $minPounds, int $maxPounds): static
+    {
+        return $this->setUserStartingBalanceRangePence($minPounds * 100, $maxPounds * 100);
+    }
+
+    /**
+     * The opening credit for one specific account, in pence.
+     *
+     * DETERMINISTIC FROM THE SEED, not random, and that is load-bearing rather than fussy. The
+     * grant is written once and is then real money in a ledger, so support has to be able to
+     * answer "why did this account open at £5.4M?" months later — and the same account must
+     * resolve to the same figure whether or not the grant row has been written yet. Pass the
+     * user id as the seed; crc32 is plenty for spreading values across a range and is stable
+     * across PHP versions and platforms, which rand() seeding is not.
+     *
+     * An inverted or zero-width range is already normalised by the setter, so this cannot
+     * divide by a negative span.
+     */
+    public function resolveUserStartingBalancePence(string $seed): int
+    {
+        // NORMALISED ON READ, not trusted from storage. The paired setter orders the bounds, but
+        // the single-ended setters above cannot (reflective import writes them in an arbitrary
+        // order), so a transposed pair can legitimately be in the columns. Sorting here means
+        // every caller gets a figure inside the range the operator meant, whichever way round it
+        // was written.
+        $a   = $this->getUserStartingBalanceMinPence();
+        $b   = $this->getUserStartingBalanceMaxPence();
+        $min = min($a, $b);
+        $max = max($a, $b);
+
+        if ($max <= $min) {
+            return $min;
+        }
+
+        return $min + (int) (crc32($seed) % (($max - $min) + 1));
+    }
 
     public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
     public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }

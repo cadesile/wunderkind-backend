@@ -99,14 +99,80 @@ before relying on it.
 - Multiple `dividend_draw` entries in one sync are each recorded in array order, chaining
   the running balance across them.
 
-## Reading the balance back — not yet available to the client
+## Reading the balance back — `GET /api/account/ledger`
 
-**There is currently no `GET` endpoint exposing a user's centralized balance or draw
-history to the app.** The data exists (visible today only in the admin panel, at
-`/admin/user/{id}/edit`), but nothing under `/api/` surfaces it yet. If the app needs to
-display "Owner Balance: £X" or a draw history screen, a new read endpoint needs to be
-designed and built — flag this back if/when that's needed; it isn't blocked on anything
-above, just not built yet.
+> This section previously said no read endpoint existed. It does now. The land step needs a
+> balance to show against a plot price, so this shipped alongside `GET /api/locations`.
+
+`GET /api/account/ledger` — requires a fully authenticated user (**not** `ROLE_CLUB`: credit
+exists before a club does). Never cached: `Cache-Control: private, max-age=0`.
+
+### Query parameters
+
+| Param | Default | Notes |
+|---|---|---|
+| `limit` | `50` | Clamped to 1–200. |
+| `cursor` | — | Opaque keyset cursor from a previous response's `nextCursor`. A malformed one is a `400 invalid_cursor`, never a silent restart from the top. |
+
+### Response
+
+```json
+{
+  "balancePence": 4850000,
+  "entries": [
+    {
+      "id": "0193...",
+      "type": "land_purchase",
+      "label": "Land purchase",
+      "amountPence": -150000,
+      "balanceAfterPence": 4850000,
+      "club": null,
+      "description": null,
+      "occurredAt": "2026-11-04T10:22:31+00:00",
+      "recordedAt": "2026-11-04T10:22:31+00:00"
+    }
+  ],
+  "nextCursor": "cHJpY2V8..."
+}
+```
+
+### The field names differ from the inbound sync contract, deliberately
+
+This is the one thing to get right when integrating. **Writing** a ledger entry (via `POST
+/api/sync`, above) uses `category` and `amount`. **Reading** one back uses `type` and
+`amountPence`. They are not interchangeable:
+
+| Concept | Inbound (`POST /api/sync`) | Outbound (`GET /api/account/ledger`) |
+|---|---|---|
+| Kind of entry | `category` | `type` |
+| Money | `amount` | `amountPence` |
+| Free text | `description` | `description` |
+
+Three reasons the read shape is spelled this way, so nobody "harmonises" the two later:
+
+1. `UserLedger`'s own properties and the admin grid's labels already use these names.
+2. `...Pence` is the convention for every endpoint built in this era (`/api/plots/*`,
+   `/api/telemetry`, `/api/excursions`).
+3. A bare `amount` key already means a row **count** elsewhere in this API
+   (`GET /api/players`), so reusing it for money would be actively misleading.
+
+### Other things worth knowing
+
+- **`amountPence` is signed.** Purchases are negative. `balanceAfterPence =
+  balanceBeforePence + amountPence` is a constructor invariant, so the running total is
+  reconstructible from history alone.
+- **`club` may be `null`**, and routinely is. A starting grant, a quiz bonus, or a plot bought
+  before founding a club are facts about the ACCOUNT. `club` is also null once the club it
+  referred to has been deleted — which is why `plot_claim` freezes `club_name_at_claim`
+  rather than reading an owner's name back through here.
+- **No unit rescaling happens here.** The 100x inbound scaling noted above applies to what the
+  client *sends*; this endpoint reports the stored figure, which is what `balancePence` is
+  actually computed from.
+- **Ordering is by `recordedAt` then `id`**, which is the same ordering `getCurrentBalance()`
+  uses — so `balancePence` always equals `entries[0].balanceAfterPence`. `recordedAt` is the
+  historical server timestamp even for backfilled rows, so this is a true chronology.
+- **Pagination is keyset, not offset.** A ledger grows at the head, so an offset window shifts
+  under a client that is paging through it.
 
 ## Error responses
 

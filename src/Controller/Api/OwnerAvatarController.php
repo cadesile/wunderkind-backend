@@ -6,6 +6,7 @@ use App\Dto\OwnerAvatarRequest;
 use App\Entity\User;
 use App\Enum\Appearance\AppearanceRole;
 use App\Service\Appearance\AppearanceGeneratorService;
+use App\Service\StartingGrantService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -43,6 +44,7 @@ class OwnerAvatarController extends AbstractController
         #[MapRequestPayload] OwnerAvatarRequest $dto,
         AppearanceGeneratorService $generator,
         EntityManagerInterface $em,
+        StartingGrantService $startingGrant,
     ): JsonResponse {
         /** @var User $user */
         $user = $this->getUser();
@@ -84,6 +86,13 @@ class OwnerAvatarController extends AbstractController
         }
 
         $em->flush();
+
+        // The account's opening credit, granted here because this is the first point at which
+        // there is a PLAYER rather than just a login. Idempotent on the user id, so the repeated
+        // calls this partial-update endpoint receives write exactly one grant — there is no
+        // "first save" heuristic to get wrong. Never throws: being unable to write a grant must
+        // not block the one screen a new account cannot skip, and the next save retries it.
+        $startingGrant->grantIfDue($user);
 
         return $this->json($this->serialize($user));
     }

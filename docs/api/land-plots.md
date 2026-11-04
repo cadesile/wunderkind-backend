@@ -28,8 +28,9 @@ between a price and a new club's balance is the long-term progression, not an er
 Show prices against the ACCOUNT balance, and expect most plots to be unaffordable for a
 long time.
 
-Read the balance from `GET /api/account/ledger` (see `user-ledger.md`). `402` responses
-below also carry it.
+Read the balance from `GET /api/account/ledger` (see `user-ledger.md` for the full response
+shape — note it returns `type`/`amountPence`, **not** the `category`/`amount` that sync
+sends). `402` responses below also carry it.
 
 ### Authentication, not club ownership
 
@@ -220,7 +221,117 @@ before founding a club, or whose club has since gone.
 
 ---
 
-## 7. Recommended client flow
+## 7. Founding a club on a plot you own
+
+Owning land and having a club are separate things, in that order. `POST
+/api/club/initialize` takes an **optional** `locationId` to tie them together:
+
+```json
+POST /api/club/initialize
+{ "clubName": "Salford FC", "locationId": "0193..." }
+```
+
+- **Supplied** — the caller must already hold an **active claim with no club on it** at that
+  location. The club is created, `home_location_id` is set, and the claim is pointed back at
+  the club in the same transaction. The `201` response echoes `homeLocationId`.
+- **Omitted** — exactly the previous behaviour. A club with no ground is still a club, and
+  `homeLocationId` comes back `null`.
+
+This endpoint **does not buy land**. It only attaches a club to land already bought, which is
+what keeps every money path in the claim endpoints.
+
+The new club's `balance` is still the standard starter balance from `GET /api/starter-config`.
+**The land is not deducted from it** — land came out of account credit at claim time, and
+`club.balance` is device-authoritative anyway (see §0).
+
+The location also settles the club's `country`, so there is no need to send both. An explicit
+`country` is respected and not overridden.
+
+### Errors
+
+| Status | `error` | Meaning |
+|---|---|---|
+| `403` | `location_not_owned` | You hold no active claim there. Deliberately does **not** say whether anyone else does. |
+| `409` | `location_club_exists` | Your claim there already has a club. Carries `clubName`. |
+| `422` | `club_name_taken` | That name is already used **at that location** (or by an NPC club in the country). The existing error code — nothing new to handle. |
+
+Club names are unique **per town**, not per country: two "United FC"s are fine in two
+different towns and refused in the same one. Comparison ignores case, accents and repeated
+spaces, matching `src/utils/clubName.ts`. Clubs with no location never collide with each other.
+
+---
+
+## 8. Selling a plot back, and the 30-day dormancy reclaim
+
+### `GET /api/plots/claims/{claimId}/sell-back-quote`
+
+What selling would pay, without selling. Same calculation the sale itself uses, so the figure
+shown and the figure paid cannot disagree. Writes nothing; `private, max-age=0`.
+
+```json
+{
+  "claim": { "...": "..." },
+  "quote": {
+    "payoutPence": 457000,
+    "land":    { "component": 450000, "currentLandPence": 500000, "landPencePaid": 480000,
+                 "basis": "current_valuation", "returnRate": 0.9 },
+    "stadium": { "component": 0, "stadiumPencePaid": 0, "returnRate": 0.5 },
+    "club":    { "component": 7000, "clubId": "0193...", "clubName": "Salford FC" }
+  }
+}
+```
+
+### `POST /api/plots/claims/{claimId}/sell-back`
+
+```
+payoutPence = round(currentLandPence x 0.9)      # current value, NOT what was paid
+            + round(stadiumPencePaid x 0.5)
+            + the club's value                   # when a club stands on the plot
+```
+
+Four things worth knowing:
+
+- **Land is paid at its CURRENT value, not what was paid.** Land is revalued over time, so a
+  plot can gain or lose. The missing 10% is a transaction fee, so churning plots has a cost.
+  Show the quote, not an assumption. If a location has no current valuation (un-enriched, or a
+  valuation withdrawn), the payout falls back to what was paid — `quote.land.basis` says which
+  rule applied.
+- **It liquidates the club.** The club loses its ground, so the payout includes the club's
+  value — its last-synced balance plus its sunk facility investment. Paying only for the land
+  would confiscate everything built on the site. The club row itself is kept; only its home
+  location is cleared. (Its **squad is not** in the valuation: there is no market-value field on
+  a player, and the one that looks like it is a wage.)
+- **The club's value is as of its last sync**, because `club.balance` is device-authoritative.
+  Worth saying out loud in the confirm screen.
+- **The credit is account-level** — a `sell_back_credit` entry with `club: null`, visible at
+  `GET /api/account/ledger`. The response carries the new `balancePence`.
+
+Errors: `404 claim_not_found`, `403 claim_not_yours`, `409 claim_released` (someone or something
+already released it — a dormancy reclaim, say).
+
+### The 30-day dormancy reclaim
+
+A plot whose club has not synced for **30 days** is released automatically and **the owner is
+credited exactly what a voluntary sell-back would have paid.** They lose the plot, not the money,
+so coming back after a break is recoverable.
+
+That equality is deliberate. If a reclaim paid *more* than selling, going quiet would be the
+optimal play — the opposite of what the rule is for.
+
+Two warnings arrive in the club inbox first, at **23 days** (`7 days left`) and **29 days**
+(`1 day left`), each with `offerData.kind = "dormancy_warning"` carrying `stage`, `claimId` and
+`daysRemaining`. **A plot with no delivered one-day warning is never reclaimed** — if the warning
+pass is behind, the reclaim stalls rather than taking plots silently.
+
+A single sync resets the clock. The warning schedule re-arms per period of inactivity, so a
+player who returns and later lapses again is warned again rather than silently skipped.
+
+**Claims with no club are never warned or reclaimed**, because the clock is the club's sync
+time. Land bought and never built on is held indefinitely.
+
+---
+
+## 9. Recommended client flow
 
 ```
 1. Player opens a town                -> GET /api/locations/{id}   (see locations.md)
@@ -228,7 +339,10 @@ before founding a club, or whose club has since gone.
                                          -> start a timer from secondsRemaining
 3. Player reviews the frozen prices   (no further calls; the figures cannot move)
 4. Player confirms                    -> POST /api/plots/{plotId}/claim  { holdId }
-5. Later, player builds a ground      -> POST /api/plots/claims/{id}/stadium
+5. Player founds the club             -> POST /api/club/initialize { clubName, locationId }
+6. Later, player builds a ground      -> POST /api/plots/claims/{id}/stadium
+7. Player wants out                   -> GET  /api/plots/claims/{id}/sell-back-quote
+                                         -> POST /api/plots/claims/{id}/sell-back
 ```
 
 Handle `409 plot_held` at step 2 by offering a retry, and `402` at steps 4 and 5 by
@@ -238,9 +352,10 @@ and the whole point is that a flagship city takes many clubs to afford.
 
 ---
 
-## 8. Not covered by this document
+## 10. Not covered by this document
 
-- `GET /api/locations` and `GET /api/locations/{id}` — the town list and detail, including
-  rivals and `claimedBy`. **Not yet implemented**; see `locations.md` when it lands.
-- Selling a plot back, and the 30-day dormancy reclaim. **Not yet implemented.**
-- The account credit ledger itself — see `user-ledger.md`.
+- `GET /api/locations`, `/facets` and `/{id}` — the town list, filters and detail, including
+  rivals, affordability and `isClaimed`. See `locations.md`.
+- The account credit ledger and `GET /api/account/ledger` — see `user-ledger.md`.
+- `starting_grant` and `quiz_bonus`. The ledger entry types exist; nothing writes them yet, and
+  there is no endpoint or defined grant amount. Prices stay real-world in the meantime.

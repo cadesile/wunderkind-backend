@@ -22,15 +22,25 @@ use App\Entity\Location\Location;
  * LocationEnrichmentAttempt row, with the message below in `error_message` — and reports itself
  * as not-ok to the admin connection check.
  *
- * REPLACING IT: implement LocationEnricherInterface against the chosen provider and point the
- * App\Service\Location\Enrichment\LocationEnricherInterface alias in config/services.yaml at
- * it. Nothing else in the feature names a vendor.
+ * REPLACING IT IS NOW A DEPLOY VARIABLE, not a code change: LocationEnricherFactory reads
+ * LOCATION_ENRICHER_PROVIDER and returns ClaudeLocationEnricher when it says `anthropic` and a
+ * key and model are present, or this class otherwise. Adding a second provider is one class
+ * plus one arm of that factory's match; nothing else in the feature names a vendor.
  */
 final class UnconfiguredLocationEnricher implements LocationEnricherInterface
 {
+    /**
+     * Shown on the admin connection check and stored in every failed attempt's error_message.
+     *
+     * NAMES ONLY THINGS AN OPERATOR CAN ACTUALLY DO. An earlier version of this also said to
+     * "alias LocationEnricherInterface to a real implementation", which was a code change and
+     * is no longer true — LocationEnricherFactory now selects the implementation from the
+     * provider variable, so the three variables below are the whole of it.
+     */
     public const MESSAGE = 'No AI location enricher is configured. '
-        . 'Set LOCATION_ENRICHER_PROVIDER, LOCATION_ENRICHER_MODEL and LOCATION_ENRICHER_API_KEY, '
-        . 'and alias LocationEnricherInterface to a real implementation.';
+        . "Set LOCATION_ENRICHER_PROVIDER='anthropic', LOCATION_ENRICHER_MODEL "
+        . '(e.g. claude-sonnet-5) and LOCATION_ENRICHER_API_KEY — in .env.local for local work, '
+        . 'or as deploy secrets. No code change is needed.';
 
     public function enrich(Location $location): EnrichmentResult
     {

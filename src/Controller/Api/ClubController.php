@@ -11,6 +11,7 @@ use App\Enum\Country;
 use App\Exception\ClubMismatchException;
 use App\Exception\ClubNameTakenException;
 use App\Exception\InvalidCountryCodeException;
+use App\Exception\Location\PlotUnavailableException;
 use App\Repository\ClubRepository;
 use App\Repository\GameConfigRepository;
 use App\Repository\NpcClubRepository;
@@ -150,7 +151,17 @@ class ClubController extends AbstractController
         $user = $this->getUser();
 
         try {
-            $club = $service->initializeClub($user, $dto->clubName, $dto->country);
+            $club = $service->initializeClub($user, $dto->clubName, $dto->country, $dto->locationId);
+        } catch (PlotUnavailableException $e) {
+            // Founding on a plot the caller does not own is a 403, not a 409: it is an
+            // authorisation answer about someone else's land, and the message deliberately does
+            // not say whether anyone owns it. A claim that already has a club IS a conflict.
+            return $this->json(
+                ['error' => $e->reason, 'message' => $e->getMessage()] + $e->context,
+                $e->reason === PlotUnavailableException::NOT_OWNED
+                    ? Response::HTTP_FORBIDDEN
+                    : Response::HTTP_CONFLICT,
+            );
         } catch (ClubNameTakenException $e) {
             // Distinct from the 409 below, which means "this user already has a club".
             return $this->json(
@@ -169,6 +180,11 @@ class ClubController extends AbstractController
         return $this->json([
             'id'            => $club->getId()->toRfc4122(),
             'name'          => $club->getName(),
+            // Echoed so the client can confirm the club landed on the plot it paid for, rather
+            // than inferring it from the absence of an error. NULL when founded without one.
+            'homeLocationId' => $club->getHomeLocation() !== null
+                ? (string) $club->getHomeLocation()->getId()
+                : null,
             'starterBundle' => $service->getStarterBundle(),
         ], Response::HTTP_CREATED);
     }
