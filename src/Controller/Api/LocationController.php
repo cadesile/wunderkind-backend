@@ -14,9 +14,11 @@ use App\Repository\Location\CountryProfileRepository;
 use App\Repository\Location\LandPlotRepository;
 use App\Repository\Location\LocationRepository;
 use App\Repository\Location\LocationRivalRepository;
+use App\Repository\NpcClubRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\ClubNameNormalizer;
 use App\Service\Location\Enrichment\LocationEnrichmentService;
+use App\Service\Location\LocationCapacityService;
 use App\Service\Location\StadiumEstimateService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -258,6 +260,8 @@ class LocationController extends AbstractController
         StadiumEstimateService $estimates,
         LocationEnrichmentService $enrichment,
         UserLedgerRepository $ledger,
+        NpcClubRepository $npcClubs,
+        LocationCapacityService $capacity,
     ): JsonResponse {
         $location = $locations->find($id);
 
@@ -308,10 +312,54 @@ class LocationController extends AbstractController
             // population and a land value.
             : null;
 
-        // RIVALS ARE DETAIL-ONLY. Four rows per location times a 200-row page is 800 rows for a
-        // list nobody reads them from — stated as a contract so it is not "optimised" into the
-        // list later.
+        // RIVALS, CLUBS AND RIVAL CLUBS ARE ALL DETAIL-ONLY. Four rows per location across a
+        // 200-row page is 800 rows for a list nobody reads them from — stated as a contract so
+        // none of them is "optimised" into the list later.
         $payload['enrichmentStatus'] = $effectiveStatus->value;
+
+        $rivalRows = $rivals->findForLocation($location);
+
+        // THE CLUBS ALREADY HERE, and the clubs at this town's nearest rivals. Both are what a
+        // player wants before buying: an empty town and one with three established clubs are
+        // very different propositions at the same price — and a town with clubs cannot be
+        // bought at all (see `claimable` below).
+        //
+        // ONE QUERY for both, by asking for this location and its rivals together; a per-town
+        // lookup would be five queries on a four-rival town.
+        $clubsByLocation = $npcClubs->findByLocations(array_merge(
+            [(string) $location->getId()],
+            array_map(
+                static fn ($rival): string => (string) $rival->getRivalLocation()->getId(),
+                $rivalRows,
+            ),
+        ));
+
+        $payload['clubs'] = $clubsByLocation[(string) $location->getId()] ?? [];
+
+        $capacityHere = $capacity->forLocation((string) $location->getId());
+
+        // The same arithmetic POST /api/plots/{id}/hold applies, reported before the player
+        // tries rather than after — and with the working, because "sold out" invites the
+        // question "according to what?".
+        $payload['capacity'] = [
+            'plots'        => $capacityHere['plots'],
+            'clubs'        => $capacityHere['npcClubs'],
+            'takenByClubs' => $capacityHere['npcOccupied'],
+            'claimed'      => $capacityHere['claimed'],
+            'available'    => $capacityHere['available'],
+        ];
+        $payload['claimable']       = !$capacityHere['soldOut'];
+        $payload['claimableReason'] = $capacityHere['soldOut'] ? 'town_sold_out' : null;
+
+        $payload['rivalClubs'] = array_map(
+            static fn ($rival): array => [
+                'locationId' => (string) $rival->getRivalLocation()->getId(),
+                'town'       => $rival->getRivalLocation()->getTown(),
+                'distanceKm' => $rival->getDistanceKm(),
+                'clubs'      => $clubsByLocation[(string) $rival->getRivalLocation()->getId()] ?? [],
+            ],
+            $rivalRows,
+        );
 
         $payload['rivals'] = array_map(
             static fn ($rival): array => [
@@ -321,7 +369,7 @@ class LocationController extends AbstractController
                 // Stored in km; the client converts per locale using country.distanceUnit.
                 'distanceKm' => $rival->getDistanceKm(),
             ],
-            $rivals->findForLocation($location),
+            $rivalRows,
         );
 
         $response = $this->json($payload);

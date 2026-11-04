@@ -45,7 +45,7 @@ GET /api/scout/foreign-clubs
 
 Both wrap `NpcClubRepository::findForeignClubs()` and return a flatter shape —
 each entry in the response's `clubs[]` array is `{id, name, country, tier,
-region, citySize, populationSize, isCapital}` (no `players`/`staff`/
+region, citySize, populationSize, isCapital, locationId}` (no `players`/`staff`/
 `facilities`/etc., since these endpoints are lightweight opponent/scouting
 lookups, not full club snapshots).
 
@@ -97,6 +97,27 @@ change. In practice, most NPC clubs get regenerated periodically via the admin
 treat `region: null` / `populationSize: 0` as a valid, expected "no data yet"
 state, not an error.
 
+## These fields are now derived from the town, not stored independently
+
+NPC clubs carry a `location_id` — the town they play in, the same link player clubs have through
+`club.home_location_id`. `region`, `citySize`, `populationSize` and `isCapital` are now a **cache
+of that town's facts**, not a second opinion about them:
+
+- Set from the town at generation.
+- Re-synced from it by `app:npc-clubs:link-locations`, and automatically whenever enrichment
+  moves the town's population.
+- **Names are never derived.** A club's name is its own from the moment it is generated, so
+  renaming a town leaves existing clubs alone; only newly generated ones use the new name.
+
+`GET /api/club/foreign` and `GET /api/scout/foreign-clubs` now also return **`locationId`**, so a
+client can tie a club to its town and to everything on `GET /api/locations/{id}`. It is `null`
+for clubs generated before their country's locations existed — those were named from a
+placeholder set ("Capital FC", "Northern Town") and have no town to point at.
+
+The **world-pack club snapshot deliberately does not carry `locationId`.** Adding a key there is
+a payload shape change and would force a `WORLD_PACK_VERSION` bump, invalidating every cached
+country. The uncached endpoints above carry it instead.
+
 ## Caching caveat — applies to the world pack only
 
 World packs (`POST /api/initialize/league/{tier}`) are cached per `(country,
@@ -107,8 +128,11 @@ regenerates that country's NPC clubs, the cached pack keeps serving the old
 snapshot — including old `region`/`citySize` values — until an admin manually
 clears it (`WorldPackController`'s delete action, or `app:worldpack:warm
 --force`). This is existing, unchanged cache behavior; it isn't specific to
-these new fields, but it means the client can't assume every world-pack club
-it receives reflects the latest backend state — treat these fields as
+these new fields, but it now matters more: the DATABASE is the authority on a
+club's region and city size, and a cached pack is a lagging copy of it. Both
+`app:npc-clubs:link-locations` and an enriched population can change those
+values without touching the cache, by design — the client can't assume every
+world-pack club it receives reflects the latest backend state — treat these fields as
 descriptive/flavor data there, not something to poll for freshness.
 
 `GET /api/club/foreign` and `GET /api/scout/foreign-clubs` are **not**

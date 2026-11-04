@@ -1009,6 +1009,43 @@ action, not a deploy — see `docs/world-generation/adding-a-country.md`.
   and `sentStagesByClaim()` filters on `sent_at IS NOT NULL` precisely so a failed send
   cannot count as a warning.
 
+### NpcClub gained a location (2026-11-04)
+
+`npc_club.location_id` -> `location(id)` **SET NULL**, nullable — the NPC half of what
+`club.home_location_id` already did. Before it, an NPC club was a SNAPSHOT of a town (`region`,
+`city_size`, `population_size`, `is_capital` copied at generation) rather than a reference to
+one, so nothing could answer "which clubs play here?" and the copies had already drifted:
+Leicester and Wakefield, both 355,000, classified into opposite bands on the two tables.
+
+**Root cause of that drift, now fixed:** `LocationRepository::findForClassification()` had no
+`ORDER BY`, and city size is a PERCENTILE split, so ties were broken on whatever order
+PostgreSQL returned.
+
+Those four columns are now **derived** — set from the town at generation, re-synced by
+`app:npc-clubs:link-locations` and by the enrichment cascade. They stay as columns rather than
+becoming accessors because they must survive the location being retired and because a cached
+world pack reads them long afterwards. **Names are never derived**: renaming a town does not
+rewrite existing clubs.
+
+Nullable because a club legitimately has no town — generated before its country's locations
+existed (`PLACEHOLDER_PLACES`), imported from a hand-edited file, or renamed by an admin.
+
+### Town capacity replaced "one plot per town" (2026-11-04)
+
+`land_plot` rows per town now follow city size (BIG 4, MEDIUM 2, SMALL 1) instead of being
+hardcoded to one. `LocationCapacityService` is the single definition of who can buy:
+
+```
+available = plots − min(npcClubsHere, NPC_PLOT_CAP) − activeClaims
+```
+
+NPC clubs consume capacity **without holding a claim** — they carry a location, not a plot — and
+are capped at 2 per town however many are generated there. Without the cap, nearly every town
+would be sold out regardless of size, since generation puts ~144 clubs into a 40-town list.
+
+Provisioning **tops up and never removes**: a plot can carry real money and `land_plot` is
+RESTRICT-referenced by `plot_claim`, so a town that re-bands downward keeps what it has.
+
 ### Club columns added for the land economy (2026-11-04)
 
 `Club` gained two columns and a partial unique:

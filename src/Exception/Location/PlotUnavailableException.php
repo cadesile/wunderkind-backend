@@ -26,6 +26,8 @@ class PlotUnavailableException extends \RuntimeException
     public const NOT_OWNED        = 'location_not_owned';
     /** The caller's claim at that location already has a club standing on it. */
     public const CLAIM_HAS_CLUB   = 'location_club_exists';
+    /** The town has no plots left — NPC clubs and other players have taken them all. */
+    public const TOWN_SOLD_OUT    = 'town_sold_out';
 
     private function __construct(
         public readonly string $reason,
@@ -56,6 +58,30 @@ class PlotUnavailableException extends \RuntimeException
             self::CLAIM_HAS_CLUB,
             sprintf('%s already plays at that location.', $clubName),
             ['clubName' => $clubName],
+        );
+    }
+
+    /**
+     * The town is full.
+     *
+     * Carries the arithmetic rather than just the verdict, because "sold out" invites the
+     * question "according to what?" — and a player looking at a big city wants to know whether
+     * it is full of established clubs or of other players. The same three numbers appear on the
+     * location endpoint, so the refusal and the listing cannot disagree.
+     */
+    public static function townSoldOut(string $town, int $plots, int $npcOccupied, int $claimed): self
+    {
+        return new self(
+            self::TOWN_SOLD_OUT,
+            sprintf(
+                '%s is full: %d plot%s, %d taken by established clubs and %d already bought.',
+                $town,
+                $plots,
+                $plots === 1 ? '' : 's',
+                $npcOccupied,
+                $claimed,
+            ),
+            ['town' => $town, 'plots' => $plots, 'npcOccupied' => $npcOccupied, 'claimed' => $claimed],
         );
     }
 

@@ -45,13 +45,26 @@ final class EnrichmentValidator
     public const POPULATION_MAX = 50_000_000;
 
     /**
-     * How far an AI population may diverge from a seeded one before the row is flagged.
+     * How far an AI population may differ from a seeded one before it is REFUSED, as a FACTOR.
      *
-     * 0.5 means "within half to one-and-a-half times". Generous on purpose: census years and
-     * city-vs-metropolitan-area definitions genuinely disagree by this much, so a tighter band
-     * would flag most of the set and teach everyone to ignore the flag.
+     * THIS CONSTANT CHANGED MEANING TWICE, and the second change was a bug fix worth recording.
+     * It used to gate a warning on a figure that was never written, because a seeded population
+     * always stood. Now the AI figure REPLACES the seeded one, so this is the line between "a
+     * legitimately different measurement" and "the model resolved the wrong town".
+     *
+     * IT IS A SYMMETRIC FACTOR, max/min, NOT abs(new - seeded)/seeded. The old formula is
+     * asymmetric and silently useless above 1.0: an over-estimate of 10x scores 9, but an
+     * UNDER-estimate can never score above 1.0 however wild it is, because the difference can
+     * never exceed the seeded value itself. Raising the old ratio past 1.0 therefore disabled
+     * the guard for under-estimates entirely — a test caught a 14x-too-small figure sailing
+     * through.
+     *
+     * 3.0 means "between a third and three times the seeded figure". City-proper versus
+     * urban-area versus metropolitan-area definitions routinely differ by two or three times,
+     * so a tighter band would send most of the catalogue to review and teach everyone to ignore
+     * it. A wrong TOWN is normally an order of magnitude out and is comfortably caught.
      */
-    public const POPULATION_DIVERGENCE_RATIO = 0.5;
+    public const POPULATION_DIVERGENCE_RATIO = 3.0;
 
     /**
      * Absolute floor and ceiling on a plot valuation, pence, when a country has no band.
@@ -192,29 +205,45 @@ final class EnrichmentValidator
 
         $seeded = $location->getPopulation();
 
-        if ($seeded === null) {
+        if ($seeded === null || $seeded <= 0) {
             $accepted['population'] = $population;
 
             return;
         }
 
-        // FILL GAPS ONLY: a seeded population is curated data and stands. The AI figure is used
-        // purely as a cross-check, and a big divergence flags the row for a human rather than
-        // replacing good data with a guess.
-        $skipped[] = 'population';
+        // NO LONGER FILL-GAPS-ONLY. This used to return here with the seeded figure intact,
+        // treating the AI purely as a cross-check. It now REPLACES the seeded value, because
+        // population is the single input city_size is derived from and city_size drives NPC club
+        // generation — so leaving the seeded figure authoritative meant enrichment could never
+        // reach the clubs standing in that town.
+        //
+        // Two guards survive that change, and both matter:
+        //
+        //   1. isPopulationLocked() is checked ABOVE and still wins outright. A human correction
+        //      outranks the model, permanently, exactly as for every other field.
+        //   2. A divergence beyond POPULATION_DIVERGENCE_RATIO is REFUSED, not accepted. The
+        //      characteristic failure is the model resolving a same-named town in another
+        //      country and returning its population; that is normally an order of magnitude out
+        //      and would silently re-band an entire country, since city_size is a percentile
+        //      split across the whole set. Keeping the seeded value and flagging needs_review
+        //      puts that in front of a person instead.
+        // Symmetric: 3.0 means three times bigger OR three times smaller. See the constant.
+        $factor = max($population, $seeded) / max(1, min($population, $seeded));
 
-        if ($seeded > 0) {
-            $ratio = abs($population - $seeded) / $seeded;
+        if ($factor > self::POPULATION_DIVERGENCE_RATIO) {
+            $skipped[] = 'population';
 
-            if ($ratio > self::POPULATION_DIVERGENCE_RATIO) {
-                $rejected['population_divergence'] = sprintf(
-                    'provider said %d but the seeded figure is %d (%.0f%% apart) — seeded value kept',
-                    $population,
-                    $seeded,
-                    $ratio * 100,
-                );
-            }
+            $rejected['population_divergence'] = sprintf(
+                'provider said %d but the seeded figure is %d (%.1fx apart) — too far to trust, seeded value kept',
+                $population,
+                $seeded,
+                $factor,
+            );
+
+            return;
         }
+
+        $accepted['population'] = $population;
     }
 
     /**

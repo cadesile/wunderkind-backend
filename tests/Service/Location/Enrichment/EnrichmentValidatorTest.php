@@ -159,27 +159,51 @@ class EnrichmentValidatorTest extends TestCase
     // ───────────────────────────── population ─────────────────────────────
 
     /** Fill-gaps-only: a seeded population is curated data and is never replaced. */
-    public function testSeededPopulationIsKeptNotOverwritten(): void
+    /**
+     * A plausible AI population now REPLACES the seeded one.
+     *
+     * This test asserted the opposite until the fill-gaps-only rule was dropped. Population is
+     * the single input city_size derives from, and city_size drives NPC club generation — so
+     * leaving the seeded figure authoritative meant enrichment could never reach the clubs
+     * standing in that town.
+     */
+    public function testAPlausiblePopulationReplacesTheSeededOne(): void
     {
         $verdict = $this->validator->validate(
             $this->location(population: 1_149_000),
             new EnrichmentResult(population: 1_200_000),
         );
 
+        self::assertSame(1_200_000, $verdict->accepted['population']);
+        self::assertNotContains('population', $verdict->skipped);
+    }
+
+    /** An admin lock still outranks the model, exactly as it does for every other field. */
+    public function testALockedPopulationIsStillNeverOverwritten(): void
+    {
+        $location = $this->location(population: 1_149_000);
+        $location->setIsPopulationLocked(true);
+
+        $verdict = $this->validator->validate($location, new EnrichmentResult(population: 1_200_000));
+
         self::assertArrayNotHasKey('population', $verdict->accepted);
         self::assertContains('population', $verdict->skipped);
     }
 
     /**
-     * A wildly divergent population flags the row without replacing the seeded figure.
+     * A wildly divergent population is REFUSED, and the seeded figure stands.
      *
-     * This is how bad seed data surfaces instead of being trusted for ever — but the seeded
-     * value still wins, because it is curated and the AI figure is not.
+     * The guard that survived dropping fill-gaps-only, and the reason it had to. The
+     * characteristic failure is the model resolving a same-named town in another country and
+     * returning its population; that is normally an order of magnitude out, and accepting it
+     * would silently re-band the whole country, because city_size is a percentile split across
+     * the entire set rather than a threshold on one row.
      */
-    public function testLargePopulationDivergenceIsFlaggedButSeedStands(): void
+    public function testAWildlyDivergentPopulationIsRefusedAndTheSeedStands(): void
     {
         $verdict = $this->validator->validate(
             $this->location(population: 1_149_000),
+            // Fourteen times smaller — a different town, not a different census year.
             new EnrichmentResult(population: 80_000),
         );
 

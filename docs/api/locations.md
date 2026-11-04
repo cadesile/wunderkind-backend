@@ -90,7 +90,11 @@ render as loading. A half-built country is kept out wholesale.
       "citySize": "MEDIUM",
       "status": "active",
       "enrichmentStatus": "enriched",
-      "plotCount": 1,
+      "plotCount": 4,
+      "plotsAvailable": 1,
+      "clubCount": 3,
+      "claimable": true,
+      "claimableReason": null,
       "plotId": "0193...",
       "isClaimed": false,
       "claimedBy": null
@@ -100,19 +104,57 @@ render as loading. A half-built country is kept out wholesale.
 }
 ```
 
-### How many plots does a town have? One — today
+### How many plots does a town have? It depends on its size
 
-**Every seeded location has exactly one plot** (865 locations, 865 plots). So one card per town
-is correct, and `plotId` on the list row is the plot to hold and claim.
+**Plot count scales with the town.** A big city holds several clubs; a village holds one:
 
-`plotId` and `locationId` are nonetheless separate fields because the schema permits several
-plots per town, and that is where this is heading — a town that can host more than one club.
-**Read `plotCount` rather than assuming 1.** While it is 1 the list row's own `plotId` is all
-you need; if it is ever greater, `GET /api/locations/{id}` returns the full `plots` array and
-the town needs more than one card (or a card with a plot picker).
+| City size | Plots |
+|---|---|
+| `BIG` | 4 |
+| `MEDIUM` | 2 |
+| `SMALL` | 1 |
 
-Nothing about the hold/claim flow changes either way: holds and claims have always been
-per-PLOT, never per-town.
+City size is derived from population, and population comes from enrichment — so **enrichment is
+what decides how much football a place can hold.** Read `plotCount`; never hardcode a number.
+
+### A town can be sold out, and `claimable` is what to gate on
+
+A town's plots are shared between established (NPC) clubs and players:
+
+```
+available = plotCount − (clubs here, capped at 2) − (plots already bought)
+```
+
+**`claimable: false` means there is nothing left to sell.** Hold and claim both return
+`409 town_sold_out` carrying the same arithmetic, so the list and the refusal can never
+disagree.
+
+The cap matters: a town can have eight or ten established clubs, but they only ever consume
+**two** plots between them. Without that, every town would be full regardless of size, and the
+plot count — and therefore enrichment — would decide nothing.
+
+**Gate "buy" on `claimable`, not on `isClaimed`.** `isClaimed` only describes the primary plot;
+`claimable` is the whole town's capacity, and it is the exact check the purchase endpoints run.
+
+`GET /api/locations/{id}` returns the working:
+
+```json
+"capacity": { "plots": 4, "clubs": 3, "takenByClubs": 2, "claimed": 1, "available": 1 },
+"claimable": true,
+"claimableReason": null
+```
+
+### Which clubs already play here
+
+Detail responses carry the established clubs at this town, and at its rival towns:
+
+```json
+"clubs":      [ { "id": "…", "name": "Salford Rovers", "tier": 3, "reputation": 42 } ],
+"rivalClubs": [ { "locationId": "…", "town": "Manchester", "distanceKm": 4.2, "clubs": [ … ] } ]
+```
+
+Strongest club first (lowest tier, then reputation). Both are **detail-only** — the list never
+carries them, for the same reason it never carries `rivals`.
 
 ### `isClaimed` and `claimedBy` are two different facts
 
@@ -208,6 +250,15 @@ array, and the `country` block. Unknown id is `404 location_not_found`.
     { "plotId": "0193...", "plotNumber": 1, "landPence": null, "isClaimed": false, "claimedBy": null }
   ],
   "stadiumEstimate": null,
+  "capacity": { "plots": 4, "clubs": 3, "takenByClubs": 2, "claimed": 1, "available": 1 },
+  "claimable": true,
+  "claimableReason": null,
+  "clubs": [
+    { "id": "0193...", "name": "Salford Rovers", "tier": 3, "reputation": 42 }
+  ],
+  "rivalClubs": [
+    { "locationId": "0193...", "town": "Manchester", "distanceKm": 4.2, "clubs": [] }
+  ],
   "rivals": [
     { "locationId": "0193...", "town": "Manchester", "rank": 1, "distanceKm": 4.2 }
   ]
@@ -248,3 +299,9 @@ the lease dispatches, and everyone else is told the same `queued`.
 | `400` | `cursor_sort_mismatch` | Cursor was issued for a different `sort`. |
 | `404` | `unknown_country` | No country profile for that code. |
 | `404` | `location_not_found` | No such location id. |
+
+Purchase endpoints (`docs/api/land-plots.md`) add one more that originates here:
+
+| Status | `error` | Meaning |
+|---|---|---|
+| `409` | `town_sold_out` | The town has no plots left. Carries `plots`, `npcOccupied` and `claimed` so the client can explain why. |

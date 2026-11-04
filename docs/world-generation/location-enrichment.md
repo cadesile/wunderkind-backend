@@ -100,6 +100,34 @@ false confidence; the honest framing produces better answers than either.
 
 ---
 
+## 3a. What enrichment now drives downstream
+
+Enrichment stopped being a read-only fact about a town. Two things follow from an accepted
+population:
+
+**City size, and therefore NPC club generation.** `city_size` is a percentile split across a
+country's whole set, so one town's new population can move *other* towns across a band
+boundary. An accepted population reclassifies the country and then re-syncs every NPC club
+linked to a town in it — `region`, `city_size`, `population_size` and `is_capital` follow the
+town. Club NAMES never do: a club's name is its own from the moment it is generated.
+
+**How many plots a town has.** Plot count follows city size (`BIG` 4, `MEDIUM` 2, `SMALL` 1), so
+a town that re-bands upward gains plots. It never loses them: a plot can carry a claim and real
+money, and `land_plot` is RESTRICT-referenced by `plot_claim`, so provisioning tops up and never
+removes.
+
+> **Population is no longer fill-gaps-only.** A plausible AI figure now REPLACES a seeded one.
+> Two guards remain: an admin lock still wins outright, and a figure more than
+> `POPULATION_DIVERGENCE_RATIO` (3x, symmetric) away from the seeded one is refused and sent to
+> `needs_review` — the characteristic failure is the model resolving a same-named town in
+> another country, which is normally an order of magnitude out and would otherwise re-band a
+> whole country silently.
+
+**It does not invalidate world-pack caches.** Those are per country and tier with no TTL, so
+clients keep receiving the old `region`/`citySize` until that country is rebuilt
+(`app:worldpack:warm <CODE>`). Rebuilding on every enriched row would regenerate a country
+hundreds of times during a sweep.
+
 ## 4. Nothing it returns is trusted
 
 `EnrichmentValidator` decides, **per field**, never per response:
@@ -182,12 +210,14 @@ lando php bin/console app:plots:refresh-estimates            # stadium prices
 ## 6. The normal working order
 
 ```
-app:locations:seed EN                              # towns, one plot each, all pending
+app:locations:seed EN                              # towns + plots, all pending
 app:locations:enrich EN --limit=3 --sync           # iterate the prompt on three rows
    ... check the connection on the admin screen ...
 admin: enrich all remaining for EN                 # the sweep
 admin: work the needs_review queue                 # the real budget
 app:locations:rivals --country=EN                  # once enrichment settles
+app:locations:provision-plots EN                   # top towns up to the plots their size allows
+app:npc-clubs:link-locations EN                    # link existing NPC clubs to their town
 app:locations:export EN -o locations-en.json       # so nobody pays for this twice
 ```
 

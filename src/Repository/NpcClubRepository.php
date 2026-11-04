@@ -6,6 +6,7 @@ use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Service\ClubNameNormalizer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -111,7 +112,9 @@ class NpcClubRepository extends ServiceEntityRepository
         ];
         $tiers = ($rep !== null) ? ($tierMap[$rep] ?? null) : null;
 
-        $columns = 'id, name, country, tier, region, city_size, population_size, is_capital';
+        // EXPLICIT COLUMN LIST, so a new entity field is invisible here until it is named —
+        // which is exactly how location_id was missed the first time.
+        $columns = 'id, name, country, tier, region, city_size, population_size, is_capital, location_id';
         if ($tiers !== null) {
             $placeholders = implode(',', array_fill(0, count($tiers), '?'));
             $params       = array_merge([$excludeCountry], $tiers);
@@ -136,6 +139,11 @@ class NpcClubRepository extends ServiceEntityRepository
                     'citySize'       => $row['city_size'],
                     'populationSize' => (int) $row['population_size'],
                     'isCapital'      => (bool) $row['is_capital'],
+                    // The town this club plays in, or null for one generated before its
+                    // country's locations were seeded. Additive, and this endpoint is
+                    // UNCACHED — unlike the world-pack snapshot, which is why that one
+                    // deliberately does not carry this field.
+                    'locationId'     => $row['location_id'] !== null ? (string) $row['location_id'] : null,
                 ];
             }
         }
@@ -149,6 +157,114 @@ class NpcClubRepository extends ServiceEntityRepository
      *
      * @return array<string, NpcClub[]>
      */
+    /**
+     * The tier that marks a town as "taken" for the purposes of selling land.
+     *
+     * TOP FLIGHT ONLY, and the number matters. NPC generation puts ~144 clubs per country into a
+     * 40-town list, so almost every town has SOME club — blocking on any club at all would leave
+     * roughly one buyable town per country. Tier 1 is the proxy for "this is a major town", which
+     * is what the rule is actually for: the main cities are spoken for, and a player starts
+     * somewhere smaller and works up.
+     */
+    public const TOP_FLIGHT_TIER = 1;
+
+    /**
+     * Which of these towns have a top-flight club, as a lookup set.
+     *
+     * One query for a whole page: the list endpoint needs this per row, and asking per town
+     * would be fifty queries for a fifty-row page.
+     *
+     * @param list<string> $locationIds
+     *
+     * @return array<string, true> location id => true, absent when the town is free
+     */
+    public function findLocationIdsWithTopFlightClub(array $locationIds): array
+    {
+        if ($locationIds === []) {
+            return [];
+        }
+
+        $rows = $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT DISTINCT location_id
+               FROM npc_club
+              WHERE location_id IN (:ids)
+                AND tier <= :tier',
+            ['ids' => $locationIds, 'tier' => self::TOP_FLIGHT_TIER],
+            ['ids' => ArrayParameterType::STRING],
+        );
+
+        return array_fill_keys(array_map(static fn ($id): string => (string) $id, $rows), true);
+    }
+
+    /** Whether one town has a top-flight club. The single-row form of the above. */
+    public function hasTopFlightClubAt(string $locationId): bool
+    {
+        return $this->findLocationIdsWithTopFlightClub([$locationId]) !== [];
+    }
+
+    /**
+     * The name of a top-flight club at this town, for the refusal message.
+     *
+     * Only called on the refusal path, so the extra query costs nothing in the common case —
+     * and "Bayern München already plays here" explains a 409 far better than "unavailable".
+     */
+    public function topFlightClubNameAt(string $locationId): ?string
+    {
+        $name = $this->getEntityManager()->getConnection()->fetchOne(
+            'SELECT name FROM npc_club
+              WHERE location_id = :id AND tier <= :tier
+              ORDER BY tier ASC, reputation DESC
+              LIMIT 1',
+            ['id' => $locationId, 'tier' => self::TOP_FLIGHT_TIER],
+        );
+
+        return $name === false || $name === null ? null : (string) $name;
+    }
+
+    /**
+     * The NPC clubs standing in each of these towns, keyed by location id.
+     *
+     * Batched so a location detail page costs one query however many towns it covers — it asks
+     * for the town itself and its rival towns together.
+     *
+     * PROJECTED, NOT HYDRATED. The caller wants four scalars per club; hydrating would decode
+     * every column of every club, including the facilities json, to render a name and a tier.
+     *
+     * Ordered by tier then reputation so the strongest club in a town reads first, which is the
+     * order a player comparing towns actually wants.
+     *
+     * @param list<string> $locationIds
+     *
+     * @return array<string, list<array{id: string, name: string, tier: int, reputation: int}>>
+     */
+    public function findByLocations(array $locationIds): array
+    {
+        if ($locationIds === []) {
+            return [];
+        }
+
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT location_id, id, name, tier, reputation
+               FROM npc_club
+              WHERE location_id IN (:ids)
+              ORDER BY location_id, tier ASC, reputation DESC',
+            ['ids' => $locationIds],
+            ['ids' => ArrayParameterType::STRING],
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row['location_id']][] = [
+                'id'         => (string) $row['id'],
+                'name'       => (string) $row['name'],
+                'tier'       => (int) $row['tier'],
+                'reputation' => (int) $row['reputation'],
+            ];
+        }
+
+        return $out;
+    }
+
     public function getAllGroupedByLeague(): array
     {
         $clubs = $this->createQueryBuilder('c')

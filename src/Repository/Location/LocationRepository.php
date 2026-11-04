@@ -252,6 +252,7 @@ class LocationRepository extends ServiceEntityRepository
     {
         $rows = $this->createQueryBuilder('l')
             ->select(
+                'l.id AS id',
                 'l.town AS name',
                 'l.population AS population_size',
                 'l.region AS region',
@@ -271,6 +272,10 @@ class LocationRepository extends ServiceEntityRepository
             $citySize = $row['city_size'];
 
             return [
+                // Carried so NpcClubGenerationService can link the club it generates back to the
+                // town it came from. LocationClassificationService::classify() annotates these
+                // rows BY REFERENCE rather than rebuilding them, so this key survives the trip.
+                'id'              => (string) $row['id'],
                 'name'            => (string) $row['name'],
                 'population_size' => (int) ($row['population_size'] ?? 0),
                 'region'          => (string) $row['region'],
@@ -283,6 +288,17 @@ class LocationRepository extends ServiceEntityRepository
     /**
      * Every active location in a country with its population, for reclassification.
      *
+     * ORDERED, AND THAT IS A CORRECTNESS REQUIREMENT, not tidiness. City size is a PERCENTILE
+     * split across the whole country's set, so two towns on an identical population sit either
+     * side of a band boundary and which one lands where is decided purely by row order. With no
+     * ORDER BY, PostgreSQL is free to return them differently between runs — and it did:
+     * Leicester and Wakefield are both 355,000, and they classified into opposite bands from the
+     * old PHP path (which walked the registry array) versus this one. Re-running the
+     * classification could silently re-band towns on no input change at all, which now
+     * propagates to every NPC club linked to them.
+     *
+     * population DESC matches the band walk; town ASC is the deterministic tie-break.
+     *
      * @return list<array{id: string, population: int, isCapital: bool}>
      */
     public function findForClassification(string $countryCode): array
@@ -293,6 +309,8 @@ class LocationRepository extends ServiceEntityRepository
             ->andWhere('l.status = :active')
             ->setParameter('country', strtoupper($countryCode))
             ->setParameter('active', LocationStatus::ACTIVE)
+            ->orderBy('l.population', 'DESC')
+            ->addOrderBy('l.town', 'ASC')
             ->getQuery()
             ->getArrayResult();
 
