@@ -261,6 +261,14 @@ class LocationRepository extends ServiceEntityRepository
             )
             ->where('l.country = :country')
             ->andWhere('l.status = :active')
+            // ONLY TOWNS WITH A POPULATION. The catalogue now also holds bare imported names —
+            // a town and a country, nothing else — waiting for lazy enrichment. Generating an
+            // NPC club in one would produce a club with an empty region and a population of
+            // zero, which then propagates into its city size, its reputation band and the
+            // cached world pack. Those towns become generatable the moment enrichment gives
+            // them a population; until then the generator does not see them.
+            ->andWhere('l.population IS NOT NULL')
+            ->andWhere('l.population > 0')
             ->setParameter('country', strtoupper($countryCode))
             ->setParameter('active', LocationStatus::ACTIVE)
             ->orderBy('l.population', 'DESC')
@@ -307,6 +315,14 @@ class LocationRepository extends ServiceEntityRepository
             ->select('l.id AS id', 'l.population AS population', 'l.isCapital AS isCapital')
             ->where('l.country = :country')
             ->andWhere('l.status = :active')
+            // ONLY TOWNS WITH A POPULATION, and this one is load-bearing. City size is a
+            // PERCENTILE split, so an unpriced town with no population would not merely classify
+            // as SMALL — it would enlarge the set and push every band boundary. Importing 238
+            // bare names into England would take BIG from 9 towns to 56 and promote every
+            // existing MEDIUM and SMALL town, re-banding a world that was already generated.
+            // The backlog joins the percentile the moment enrichment gives it a population.
+            ->andWhere('l.population IS NOT NULL')
+            ->andWhere('l.population > 0')
             ->setParameter('country', strtoupper($countryCode))
             ->setParameter('active', LocationStatus::ACTIVE)
             ->orderBy('l.population', 'DESC')
