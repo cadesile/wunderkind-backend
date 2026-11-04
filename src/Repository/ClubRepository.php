@@ -3,7 +3,9 @@
 namespace App\Repository;
 
 use App\Entity\Club;
+use App\Entity\Location\Location;
 use App\Entity\User;
+use App\Service\ClubNameNormalizer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -15,6 +17,34 @@ class ClubRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, Club::class);
+    }
+
+    /**
+     * Whether a club of this name already plays at this location.
+     *
+     * The read half of uq_club_name_per_location. Checked before the insert so the common case
+     * is the existing 422 club_name_taken rather than a UniqueConstraintViolationException out
+     * of flush() — which would close the shared EntityManager on a user-facing write.
+     *
+     * Compares on name_normalised through ClubNameNormalizer, so "brescia as" collides with
+     * "Bréscia AS" exactly as the index does. Passing the raw name here and normalising inside
+     * is deliberate: a caller cannot forget to normalise.
+     */
+    public function nameExistsAtLocation(string $name, Location $location, ?Club $excluding = null): bool
+    {
+        $qb = $this->createQueryBuilder('c')
+            ->select('1')
+            ->where('c.homeLocation = :location')
+            ->andWhere('c.nameNormalised = :normalised')
+            ->setParameter('location', $location->getId())
+            ->setParameter('normalised', ClubNameNormalizer::normalize($name))
+            ->setMaxResults(1);
+
+        if ($excluding !== null) {
+            $qb->andWhere('c.id != :excluding')->setParameter('excluding', $excluding->getId());
+        }
+
+        return $qb->getQuery()->getOneOrNullResult() !== null;
     }
 
     public function findByUser(User $user): ?Club

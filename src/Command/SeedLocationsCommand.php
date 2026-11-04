@@ -4,16 +4,9 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Entity\Location\CountryProfile;
-use App\Entity\Location\LandPlot;
-use App\Entity\Location\Location;
 use App\Enum\Country;
-use App\Repository\Location\CountryProfileRepository;
-use App\Service\ClubNameNormalizer;
-use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\Location\CountryReadinessService;
-use App\Service\Location\LocationClassificationService;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Service\Location\LocationSeedService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -21,33 +14,18 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\String\Slugger\SluggerInterface;
 
 /**
- * Moves the hardcoded town records out of PHP and into the `location` table.
+ * The CLI face of LocationSeedService.
  *
- * Source is CountryContentRegistry::PLACE_NAMES_BY_COUNTRY — 865 curated records across 25
- * countries, each `['name' =>, 'population_size' =>, 'region' =>, 'is_capital' =>]`. Each
- * becomes one `country_profile` row (if absent), one `location`, and one `land_plot`
- * numbered 1, so one-club-per-town holds until an operator adds more plots.
+ * ALL THE SEEDING LOGIC LIVES IN THE SERVICE, not here — this class resolves arguments and
+ * renders tables, nothing else. The admin "Seed" buttons call exactly the same service, so the
+ * two faces cannot drift; that is the LocationEnrichmentOrchestrator arrangement, applied for
+ * the same reason.
  *
- * ACT-ONLY-WHEN-EMPTY, SCOPED PER COUNTRY — SeedDefaultLanguageCommand's philosophy, not
- * SeedExcursionsCommand's upsert-by-code. These rows get corrected by hand (coordinates, land
- * values, locked fields) and they will carry claims and real money; an upsert on every deploy
- * would permanently stomp an admin's corrections, which is the hazard
- * SeedDefaultLanguageCommand's own docblock warns about, here with higher stakes.
- * `--force-country=XX` is the single explicit escape hatch, and it only ADDS missing towns —
- * it never rewrites one that already exists.
- *
- * WHAT IT DELIBERATELY DOES NOT WRITE: `lat`, `lng` and `land_pence` are left NULL. No
- * coordinate or valuation data exists anywhere in PHP, and those arrive later via AI
- * enrichment (app:locations:enrich). Writing 0/0 instead would put every un-enriched town at
- * the same point in the Atlantic, where the rival pass would treat them as each other's
- * nearest neighbours. The command reports the count it left for enrichment so this is visible
- * rather than surprising.
- *
- * `population` and `region` ARE seeded, with population_source recording that they came from
- * here — enrichment fills gaps only and will not overwrite them.
+ * Read that service's docblock for what is written, what is deliberately left NULL (lat, lng
+ * and land_pence — no coordinate data exists in PHP to seed), and why this is act-only-when-
+ * empty rather than an upsert.
  */
 #[AsCommand(
     name: 'app:locations:seed',
@@ -55,15 +33,15 @@ use Symfony\Component\String\Slugger\SluggerInterface;
 )]
 class SeedLocationsCommand extends Command
 {
-    /** Recorded on every row this command writes, so its provenance is never ambiguous. */
-    public const POPULATION_SOURCE = 'CountryContentRegistry (seeded)';
+    /**
+     * @deprecated Moved to LocationSeedService, which is where the rows are actually written.
+     *             Kept so an existing reference does not break silently.
+     */
+    public const POPULATION_SOURCE = LocationSeedService::POPULATION_SOURCE;
 
     public function __construct(
-        private readonly CountryProfileRepository      $countryProfileRepository,
-        private readonly LocationClassificationService $classificationService,
-        private readonly CountryReadinessService       $readinessService,
-        private readonly SluggerInterface              $slugger,
-        private readonly EntityManagerInterface        $em,
+        private readonly LocationSeedService     $seedService,
+        private readonly CountryReadinessService $readinessService,
     ) {
         parent::__construct();
     }
@@ -104,10 +82,16 @@ class SeedLocationsCommand extends Command
         // writing for a flag that names one country.
         $scope = $argument !== null ? (string) $argument : $forced;
 
-        $countries = $this->resolveCountries($scope, $io);
+        if ($scope !== null) {
+            try {
+                $countries = [$this->seedService->resolveCountry($scope)];
+            } catch (\InvalidArgumentException $e) {
+                $io->error($e->getMessage());
 
-        if ($countries === null) {
-            return Command::FAILURE;
+                return Command::FAILURE;
+            }
+        } else {
+            $countries = $this->seedService->seedableCountries();
         }
 
         if ($countries === []) {
@@ -120,18 +104,20 @@ class SeedLocationsCommand extends Command
             $io->note('Dry run — nothing will be written.');
         }
 
-        $rows             = [];
-        $totalLocations   = 0;
-        $totalPlots       = 0;
-        $awaitingEnrichment = 0;
+        $result = $this->seedService->seedMany($countries, $forced, $dryRun);
 
-        foreach ($countries as $country) {
-            $result = $this->seedCountry($country, $forced === $country->value, $dryRun, $io);
-
-            $rows[]             = $result;
-            $totalLocations    += $result['locations'];
-            $totalPlots        += $result['plots'];
-            $awaitingEnrichment += $result['locations'];
+        foreach ($result['rows'] as $row) {
+            if ($row['citySizes'] !== []) {
+                $io->writeln(sprintf(
+                    '  <info>%s</info> classified: %s',
+                    $row['country'],
+                    implode(', ', array_map(
+                        static fn (string $size, int $n): string => "{$size}={$n}",
+                        array_keys($row['citySizes']),
+                        $row['citySizes'],
+                    )),
+                ));
+            }
         }
 
         $io->table(
@@ -141,220 +127,34 @@ class SeedLocationsCommand extends Command
                 (string) $r['locations'],
                 (string) $r['plots'],
                 $r['outcome'],
-            ], $rows),
+            ], $result['rows']),
         );
 
         if ($dryRun) {
             $io->success(sprintf(
                 'Dry run: would add %d location(s) and %d plot(s).',
-                $totalLocations,
-                $totalPlots,
+                $result['locations'],
+                $result['plots'],
             ));
 
             return Command::SUCCESS;
         }
 
-        if ($awaitingEnrichment > 0) {
-            // Said loudly on purpose: a seeded country is NOT ready to go live, and the
-            // reason is not obvious from the row count alone.
+        if ($result['locations'] > 0) {
+            // Said loudly on purpose: a seeded country is NOT ready to go live, and the reason
+            // is not obvious from the row count alone.
             $io->warning(sprintf(
                 '%d location(s) have no coordinates and no land value — there is none in PHP to seed. '
                 . 'Run app:locations:enrich to fill them, then app:locations:rivals.',
-                $awaitingEnrichment,
+                $result['locations'],
             ));
         }
 
         $this->reportReadiness($countries, $io);
 
-        $io->success(sprintf('Seeded %d location(s) and %d plot(s).', $totalLocations, $totalPlots));
+        $io->success(sprintf('Seeded %d location(s) and %d plot(s).', $result['locations'], $result['plots']));
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * @return list<Country>|null null signals a bad argument (already reported)
-     */
-    private function resolveCountries(?string $argument, SymfonyStyle $io): ?array
-    {
-        if ($argument !== null) {
-            $code    = strtoupper(trim($argument));
-            $country = Country::tryFrom($code);
-
-            if ($country === null) {
-                $io->error("'{$code}' is not an App\\Enum\\Country case. A genuinely new country needs an enum case first — see docs/world-generation/adding-a-country.md.");
-
-                return null;
-            }
-
-            if (CountryContentRegistry::places($country) === null) {
-                $io->error("'{$code}' has no entry in CountryContentRegistry::PLACE_NAMES_BY_COUNTRY, so there is nothing to seed.");
-
-                return null;
-            }
-
-            return [$country];
-        }
-
-        return array_values(array_filter(
-            Country::cases(),
-            static fn (Country $c): bool => CountryContentRegistry::places($c) !== null,
-        ));
-    }
-
-    /**
-     * @return array{country: string, locations: int, plots: int, outcome: string}
-     */
-    private function seedCountry(Country $country, bool $forced, bool $dryRun, SymfonyStyle $io): array
-    {
-        $code   = $country->value;
-        $places = CountryContentRegistry::places($country) ?? [];
-
-        $existingCount = (int) $this->em->getConnection()->fetchOne(
-            'SELECT COUNT(*) FROM location WHERE country_code = :code',
-            ['code' => $code],
-        );
-
-        if ($existingCount > 0 && !$forced) {
-            return [
-                'country'   => $code,
-                'locations' => 0,
-                'plots'     => 0,
-                'outcome'   => "skipped — {$existingCount} location(s) already exist (use --force-country={$code} to add missing towns)",
-            ];
-        }
-
-        $profile = $this->countryProfileRepository->findByCode($code);
-
-        if ($profile === null) {
-            // name and defaultLocale are MIRRORED from the enum, so an admin can correct a
-            // label without a deploy while the enum stays the canonical code list.
-            $profile = new CountryProfile($code, $country->label());
-            $profile->setDefaultLocale($country->locale());
-
-            if (!$dryRun) {
-                $this->em->persist($profile);
-                $this->em->flush();
-            }
-        }
-
-        // Existing slugs and normalised names, so --force-country can add without colliding
-        // with uq_location_country_slug and without duplicating a town already present.
-        $existing = $this->em->getConnection()->fetchAllAssociative(
-            'SELECT slug, town_normalised FROM location WHERE country_code = :code',
-            ['code' => $code],
-        );
-
-        $usedSlugs = [];
-        $usedTowns = [];
-        foreach ($existing as $row) {
-            $usedSlugs[(string) $row['slug']]            = true;
-            $usedTowns[(string) $row['town_normalised']] = true;
-        }
-
-        $locations = 0;
-        $plots     = 0;
-
-        foreach ($places as $place) {
-            $town       = (string) ($place['name'] ?? '');
-            $normalised = ClubNameNormalizer::normalize($town);
-
-            if ($town === '' || isset($usedTowns[$normalised])) {
-                continue;
-            }
-
-            $slug = $this->uniqueSlug($code, $town, $usedSlugs);
-
-            $usedSlugs[$slug]       = true;
-            $usedTowns[$normalised] = true;
-
-            ++$locations;
-            ++$plots;
-
-            if ($dryRun) {
-                continue;
-            }
-
-            $location = new Location($profile, $town, $slug, $normalised);
-            $location->setRegion((string) ($place['region'] ?? ''));
-            $location->setIsCapital((bool) ($place['is_capital'] ?? false));
-
-            $population = $place['population_size'] ?? null;
-            if ($population !== null) {
-                $location->setPopulation((int) $population);
-                $location->setPopulationSource(self::POPULATION_SOURCE);
-            }
-
-            $this->em->persist($location);
-            // Exactly one plot per town — see LandPlot's docblock on why the level exists now.
-            $this->em->persist(new LandPlot($location, 1));
-        }
-
-        if (!$dryRun && $locations > 0) {
-            $this->em->flush();
-            $this->em->clear();
-
-            // city_size is a property of the whole country's set, so it can only be computed
-            // once every town for this country is in.
-            $sizes = $this->classificationService->reclassifyCountry($code);
-
-            if ($sizes !== []) {
-                $io->writeln(sprintf(
-                    '  <info>%s</info> classified: %s',
-                    $code,
-                    implode(', ', array_map(
-                        static fn (string $size, int $n): string => "{$size}={$n}",
-                        array_keys($sizes),
-                        $sizes,
-                    )),
-                ));
-            }
-        }
-
-        $outcome = $locations === 0
-            ? 'nothing to add — every registry town already present'
-            : ($forced && $existingCount > 0 ? 'forced: missing towns added' : 'seeded');
-
-        return [
-            'country'   => $code,
-            'locations' => $locations,
-            'plots'     => $plots,
-            'outcome'   => $outcome,
-        ];
-    }
-
-    /**
-     * `en-salford`, deduplicated within the country.
-     *
-     * The slug is display and log convenience only — nothing references it, and the primary
-     * key is a UuidV7 precisely so a renamed or re-spelled town is not a data migration. It
-     * still has to be unique per country, because uq_location_country_slug says so.
-     *
-     * @param array<string, true> $used
-     */
-    private function uniqueSlug(string $code, string $town, array $used): string
-    {
-        $base = strtolower($code) . '-' . strtolower($this->slugger->slug($town)->toString());
-        $base = trim(substr($base, 0, 72), '-');
-
-        if ($base === strtolower($code) . '-' || $base === '') {
-            // A town whose name slugifies to nothing (non-Latin script with no transliteration
-            // available). Fall back to a stable hash so the row is still addressable.
-            $base = strtolower($code) . '-' . substr(md5($town), 0, 8);
-        }
-
-        if (!isset($used[$base])) {
-            return $base;
-        }
-
-        for ($n = 2; $n < 1000; $n++) {
-            $candidate = "{$base}-{$n}";
-
-            if (!isset($used[$candidate])) {
-                return $candidate;
-            }
-        }
-
-        return $base . '-' . substr(md5($town . microtime()), 0, 6);
     }
 
     /** @param list<Country> $countries */

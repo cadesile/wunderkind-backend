@@ -61,6 +61,9 @@ COPY docker/competition-consume.sh /usr/local/bin/competition-consume.sh
 COPY docker/competition-health.sh /usr/local/bin/competition-health.sh
 COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 COPY docker/leaderboards-close-periods.sh /usr/local/bin/leaderboards-close-periods.sh
+COPY docker/enrichment-consume.sh /usr/local/bin/enrichment-consume.sh
+COPY docker/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-warn.sh
+COPY docker/plots-dormancy-reclaim.sh /usr/local/bin/plots-dormancy-reclaim.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   every 5 min — leaderboards-generate: recompute scores/ranks + invalidate leaderboard cache
@@ -81,6 +84,22 @@ COPY docker/leaderboards-close-periods.sh /usr/local/bin/leaderboards-close-peri
 #     and must match it. The section is gated on the stored window still being
 #     open, so a cron slower than that constant hides the Club Spotlight for the
 #     gap instead of rotating it. Was 12h/12h until 2026-10.
+#   every 1 min — enrichment-consume: drains the `enrichment` transport, where each
+#     message is ONE BILLED call to an external AI provider filling in a town's
+#     coordinates, population and land value. --limit is low on purpose and is a cost
+#     control as much as a memory one: a runaway sweep stays bounded by this cadence
+#     rather than draining the budget in a single run.
+#   daily 03:40 UTC — plots-dormancy-warn: warns owners at 23 and 29 days of inactivity
+#     that their plot is about to be reclaimed. MUST precede the reclaim below, which is
+#     why it is scheduled twenty minutes earlier; the reclaim also enforces the ordering
+#     itself by refusing to take an unwarned plot. Clear of reputation-decay (03:20) and
+#     of the on-the-hour spotlight runs.
+#   daily 04:00 UTC — plots-dormancy-reclaim: releases plots from clubs inactive for 30
+#     days and CREDITS THE OWNER the same figure a voluntary sell-back pays. It moves real
+#     money, so (a) it refuses any plot with no DELIVERED warning for the current dormancy
+#     cycle and reports the count, and (b) it is idempotent — the release is a conditional
+#     UPDATE and the credit is keyed on the claim id. Dry-run it before the first run on an
+#     environment that has never reclaimed.
 #   daily 03:20 UTC — reputation-decay: charges every non-spoof club 5 reputation
 #     per whole day since it last synced (app:reputation:decay). Idempotent and
 #     catch-up-safe via a per-club anchor, so a missed night is settled on the next
@@ -191,10 +210,13 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '*/5 * * * *  /usr/local/bin/competition-health.sh               >> /var/log/competition-health-cron.log   2>&1' \
     '35 * * * *   /usr/local/bin/starter-pool-audit.sh               >> /var/log/starter-pool-audit-cron.log   2>&1' \
     '4,14,24,34,44,54 * * * * /usr/local/bin/leaderboards-close-periods.sh >> /var/log/leaderboards-close-cron.log 2>&1' \
+    '* * * * *    /usr/local/bin/enrichment-consume.sh             >> /var/log/enrichment-consume-cron.log   2>&1' \
+    '40 3 * * *   /usr/local/bin/plots-dormancy-warn.sh           >> /var/log/plots-dormancy-cron.log       2>&1' \
+    '0 4 * * *    /usr/local/bin/plots-dormancy-reclaim.sh        >> /var/log/plots-dormancy-cron.log       2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
+RUN chmod +x /usr/local/bin/enrichment-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

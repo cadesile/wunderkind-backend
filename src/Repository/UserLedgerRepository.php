@@ -197,6 +197,58 @@ class UserLedgerRepository extends ServiceEntityRepository
             ->getOneOrNullResult();
     }
 
+    /**
+     * One page of a user's entries, newest first, for GET /api/account/ledger.
+     *
+     * KEYSET, NOT OFFSET. A ledger grows at the head: every new entry shifts an offset-paged
+     * window, so a client reading page 2 after a sync lands on rows it already showed, or skips
+     * rows entirely. A keyset cursor names a position rather than a distance, so inserts at the
+     * head cannot disturb a page the client already holds.
+     *
+     * ORDERED BY recordedAt THEN id, exactly as getCurrentBalance() is, and for the same
+     * reason: that method returns the balanceAfterPence of whichever row sorts first here, so
+     * ordering the list any other way would let the headline balance disagree with the top row
+     * of its own history. recordedAt is the historical server timestamp even for backfilled
+     * rows (BackfillUserLedgerCommand passes SyncRecord::getServerTimestamp()), so this is a
+     * true chronology and not an artefact of when the backfill ran. idx_user_ledger_user_recorded
+     * serves it directly.
+     *
+     * Fetches limit + 1 rows so the caller can tell "more to come" from "that was the last page"
+     * without a second COUNT query.
+     *
+     * @return UserLedger[] up to $limit + 1 rows
+     */
+    public function findPageForUser(
+        User $user,
+        int $limit,
+        ?\DateTimeImmutable $afterRecordedAt = null,
+        ?string $afterId = null,
+    ): array {
+        $qb = $this->createQueryBuilder('l')
+            // JOIN-FETCHED so rendering `club` costs no extra query. Club is a to-one
+            // association, so this is safe alongside setMaxResults() — the row count is
+            // unchanged by the join, which is not true of fetch-joining a collection. LEFT,
+            // because club is NULL on every account-level entry (grants, pre-club purchases).
+            ->leftJoin('l.club', 'c')
+            ->addSelect('c')
+            ->where('l.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('l.recordedAt', 'DESC')
+            ->addOrderBy('l.id', 'DESC')
+            ->setMaxResults($limit + 1);
+
+        if ($afterRecordedAt !== null && $afterId !== null) {
+            // The row-wise comparison a keyset cursor needs. Spelled out rather than written as
+            // a ROW() tuple because DQL has no tuple comparison: "strictly older, or the same
+            // instant with a lower id".
+            $qb->andWhere('(l.recordedAt < :cursorAt OR (l.recordedAt = :cursorAt AND l.id < :cursorId))')
+                ->setParameter('cursorAt', $afterRecordedAt)
+                ->setParameter('cursorId', $afterId);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
     /** @return UserLedger[] */
     public function findByUser(User $user): array
     {

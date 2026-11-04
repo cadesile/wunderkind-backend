@@ -40,9 +40,11 @@ GET /api/countries
 |---|---|
 | `name` | Nationality demonym — matches `Player`/`Staff`/`Scout`'s `nationality` field **exactly** (case-sensitive), e.g. `"English"`, `"American"`. |
 | `country` | Display label for the country, e.g. `"England"`, `"USA"`. |
-| `code` | 2-letter code — matches `Club`/`League`/`NpcClub`'s `country` field, and the new `countryCode` field below. |
+| `code` | 2-letter code — matches `Club`/`League`/`NpcClub`'s `country` field, and the new `countryCode` field below. **Not an ISO 3166-1 code in every case** — see below. |
+| `isoAlpha2` | The real ISO 3166-1 alpha-2 code, or `null` where none exists. Equal to `code` for 67 of the 72 entries. |
+| `isIsoCode` | `true` when `code` and `isoAlpha2` agree. `false` for the five exceptions. |
 
-Currently 21 entries. Static data (changes only on deploy, when a new country
+Currently 72 entries. Static data (changes only on deploy, when a new country
 is added backend-side) — response is sent with `Cache-Control: public,
 max-age=3600`, safe to cache for the session rather than refetching per
 screen.
@@ -58,11 +60,35 @@ const nameToCode = Object.fromEntries(countries.map(c => [c.name, c.code]));
 const codeToName = Object.fromEntries(countries.map(c => [c.code, c.name]));
 ```
 
+### `code` is a football code, not always an ISO one
+
+Five of the 72 codes are **not** ISO 3166-1 alpha-2, and two of them collide with real ISO
+codes belonging to entirely different countries:
+
+| `code` | Country | `isoAlpha2` | Why |
+|---|---|---|---|
+| `EN` | England | `GB` | England has no ISO country code of its own. |
+| `SC` | Scotland | `GB` | **ISO `SC` is Seychelles.** |
+| `WA` | Wales | `GB` | No ISO code. |
+| `NI` | Northern Ireland | `GB` | **ISO `NI` is Nicaragua.** |
+| `XK` | Kosovo | `null` | `XK` is user-assigned; there is genuinely no ISO code, and substituting `RS` would assert Serbian sovereignty. |
+
+**Which one to use.** Read `code` to match anything in our own data — `Club.country`,
+`League.country`, `GET /api/locations?country=`, flag asset filenames. Read `isoAlpha2` when
+handing a country to something outside this system that expects a real ISO code: a geo or
+currency API, or an ISO-keyed flag set. Never derive one from the other.
+
+`code` keeps its existing meaning and values — `isoAlpha2` and `isIsoCode` are purely
+additive, so nothing that already reads `code` needs to change.
+
 `countryCodeToFlag()` (deriving a flag emoji from a 2-letter code via Unicode
 regional indicators) needs no change — just feed it a `code` value sourced
 from here (or from `countryCode` below) instead of deriving it through a
 nationality lookup first. The `'EN'` special-case for the England flag stays
-correct either way, since the code itself is unchanged.
+correct either way, since the code itself is unchanged. **Do not switch that function to
+`isoAlpha2`** — it would render the Union Jack for Scotland, Wales and Northern Ireland, and
+nothing at all for Kosovo. The server's own flag assets are keyed on `code` for exactly this
+reason (`public/assets/flags/README`).
 
 ## 2. New `countryCode` field on generated players/staff/scouts
 

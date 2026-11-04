@@ -6,9 +6,12 @@ namespace App\Controller\Api;
 
 use App\Entity\Location\PlotClaim;
 use App\Entity\User;
+use App\Enum\Location\ClaimReleaseReason;
 use App\Exception\Location\PlotUnavailableException;
 use App\Repository\Location\PlotClaimRepository;
+use App\Repository\UserLedgerRepository;
 use App\Service\Location\PlotClaimService;
+use App\Service\Location\PlotSellBackService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -32,8 +35,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class PlotClaimController extends AbstractController
 {
     public function __construct(
-        private readonly PlotClaimService    $claimService,
-        private readonly PlotClaimRepository $claimRepository,
+        private readonly PlotClaimService     $claimService,
+        private readonly PlotClaimRepository  $claimRepository,
+        private readonly UserLedgerRepository $ledgerRepository,
     ) {}
 
     /** Every plot the caller owns. */
@@ -113,6 +117,76 @@ class PlotClaimController extends AbstractController
         }
 
         return $this->json(['claim' => $this->serialise($claim)]);
+    }
+
+    /**
+     * What selling this plot back would pay, without selling it.
+     *
+     * Reads the SAME calculation the sell-back itself uses, so the figure shown and the figure
+     * paid cannot disagree. Writes nothing — and is uncacheable, because the land valuation
+     * underneath it moves.
+     */
+    #[Route('/claims/{claimId}/sell-back-quote', name: 'api_plot_claim_sell_back_quote', methods: ['GET'])]
+    public function sellBackQuote(string $claimId, PlotSellBackService $sellBack): JsonResponse
+    {
+        $claim = $this->claimRepository->find($claimId);
+
+        if ($claim === null) {
+            return $this->json(['error' => 'claim_not_found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ((string) $claim->getUser()->getId() !== (string) $this->currentUser()->getId()) {
+            return $this->json(['error' => 'claim_not_yours'], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!$claim->isActive()) {
+            return $this->json(['error' => 'claim_released'], Response::HTTP_CONFLICT);
+        }
+
+        return $this->json([
+            'claim' => $this->serialise($claim),
+            'quote' => $sellBack->quote($claim),
+        ])->setPrivate()->setMaxAge(0);
+    }
+
+    /**
+     * Sell the plot back.
+     *
+     * LIQUIDATES THE CLUB STANDING ON IT, if there is one — the payout therefore includes the
+     * club's value, not just the land, and the club stops playing there. The club row itself is
+     * kept; only its home location is cleared.
+     *
+     * Pays exactly what a 30-day dormancy reclaim would. That equality is deliberate: a
+     * dormancy reclaim paying MORE would make going quiet the optimal play.
+     */
+    #[Route('/claims/{claimId}/sell-back', name: 'api_plot_claim_sell_back', methods: ['POST'])]
+    public function sellBack(string $claimId, PlotSellBackService $sellBack): JsonResponse
+    {
+        $claim = $this->claimRepository->find($claimId);
+
+        if ($claim === null) {
+            return $this->json(['error' => 'claim_not_found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ((string) $claim->getUser()->getId() !== (string) $this->currentUser()->getId()) {
+            return $this->json(['error' => 'claim_not_yours'], Response::HTTP_FORBIDDEN);
+        }
+
+        $quote = $sellBack->quote($claim);
+        $entry = $sellBack->execute($claim, ClaimReleaseReason::SOLD_BACK);
+
+        if ($entry === null && $claim->getReleasedAt() === null) {
+            // execute() returns null only when the release did not take, which here means
+            // someone else released it first. A conflict, not a failure.
+            return $this->json(['error' => 'claim_released'], Response::HTTP_CONFLICT);
+        }
+
+        return $this->json([
+            'soldBack'    => true,
+            'payoutPence' => $quote['payoutPence'],
+            'quote'       => $quote,
+            'balancePence' => $this->ledgerRepository->getCurrentBalance($this->currentUser()),
+        ]);
     }
 
     /** @return array<string, mixed> */

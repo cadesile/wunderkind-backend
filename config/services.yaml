@@ -7,7 +7,17 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
-    app.club_starting_balance: '%env(int:CLUB_STARTING_BALANCE)%'
+    # app.club_starting_balance WAS HERE AND WAS DEAD. It resolved %env(int:CLUB_STARTING_BALANCE)%
+    # and had exactly one occurrence in the repository — its own declaration. Nothing injected it
+    # and nothing read it, while StarterConfig::$startingBalance (admin-editable, in pence) was
+    # and remains the real and only source. Two costs to leaving it: changing the
+    # CLUB_STARTING_BALANCE deploy secret appeared to do something and did nothing, and because
+    # the parameter required the env var, dropping that var from a deploy would have failed the
+    # container's boot for a value no code consumed.
+    #
+    # CLUB_STARTING_BALANCE is still set in both compose files, both deploy workflows and
+    # docs/deploy/hetzner.md. Those are now harmless but equally pointless — removing them is a
+    # deploy-config change and deliberately left as a separate decision.
     app.leaderboard_cache_ttl: '%env(int:LEADERBOARD_CACHE_TTL)%'
 
 services:
@@ -62,8 +72,32 @@ services:
     #
     # To wire a real provider: implement the interface and repoint this alias. Nothing else in
     # the feature needs to change.
+    # Chosen by LOCATION_ENRICHER_PROVIDER at runtime via a factory, NOT an alias: a service
+    # alias needs a concrete id at compile time, so `alias: '%env(...)%'` does not compile.
+    # The factory falls back to UnconfiguredLocationEnricher for anything it does not
+    # recognise, or when the key or model is missing — and logs which of those it was.
     App\Service\Location\Enrichment\LocationEnricherInterface:
-        alias: App\Service\Location\Enrichment\UnconfiguredLocationEnricher
+        factory: ['@App\Service\Location\Enrichment\LocationEnricherFactory', 'create']
+
+    App\Service\Location\Enrichment\LocationEnricherFactory:
+        arguments:
+            $provider: '%env(string:LOCATION_ENRICHER_PROVIDER)%'
+            $apiKey: '%env(string:LOCATION_ENRICHER_API_KEY)%'
+            $model: '%env(string:LOCATION_ENRICHER_MODEL)%'
+
+    # Credentials come from env, never from the database. The admin panel is a much broader
+    # surface than a deploy secret, and a key in a DB column also lands in every backup and in
+    # the config export that admins are told is safe to commit. This follows
+    # FIREBASE_SERVICE_ACCOUNT_JSON, the only other external credential in this codebase.
+    #
+    # Registered unconditionally, even when no key is set: the alias above decides which
+    # implementation is USED, and a service that is defined but unused costs nothing, while a
+    # conditionally-defined one would break container compilation the moment the alias pointed
+    # at it.
+    App\Service\Location\Enrichment\ClaudeLocationEnricher:
+        arguments:
+            $apiKey: '%env(string:LOCATION_ENRICHER_API_KEY)%'
+            $model: '%env(string:LOCATION_ENRICHER_MODEL)%'
 
     App\Controller\Admin\SocialAuthController:
         arguments:

@@ -995,6 +995,37 @@ action, not a deploy — see `docs/world-generation/adding-a-country.md`.
   `rawResponseJson` is a split-row column in spirit — never hydrate these in bulk.
   The column is **`trigger_type`, not `trigger`**: TRIGGER is reserved SQL, and this
   table is written to with raw SQL (the `rank` → `rank_position` precedent).
+- **`ClubDormancyWarning`** (table `club_dormancy_warning`, added 2026-11-04) — the
+  EVIDENCE that a player was told their plot was about to be reclaimed. It does not drive
+  the countdown; that is computed once in `PlotClaimRepository::findDormantClaims()` as
+  `COALESCE(last_synced_at, created_at)`. `club` and `claim` both CASCADE.
+  **`UNIQUE(claim_id, stage, dormancy_cycle_key)` and the cycle key is the load-bearing
+  part**: a player can lapse, return, and lapse again, so keyed on `(claim, stage)` alone
+  the second lapse would be silenced for ever and somebody would lose a plot having been
+  warned only about a cycle they had already recovered from. The key is the `Y-m-d` of the
+  activity timestamp the cycle was computed from. `inbox_message_id` is a **plain varchar
+  with no FK** — inbox messages cascade with their club and this record must outlive its
+  own delivery receipt. Row-then-send-then-stamp (the `AdminMessage::$pushSentAt` idiom),
+  and `sentStagesByClaim()` filters on `sent_at IS NOT NULL` precisely so a failed send
+  cannot count as a warning.
+
+### Club columns added for the land economy (2026-11-04)
+
+`Club` gained two columns and a partial unique:
+
+- **`home_location_id`** → `location(id)` **SET NULL**, **nullable and staying that way**.
+  Clubs founded before the land economy have no plot, and inventing a town for a live save
+  would be worse than leaving it empty. This is the other half of the relationship
+  `PlotClaim.club` has carried since the start — `PlotClaimService::attachClub()` existed
+  with no caller at all until `ClubInitializationService` got one.
+- **`name_normalised`**, maintained by `Club::setName()` and the constructor via the
+  existing `ClubNameNormalizer` (whose rules the CLIENT mirrors in `src/utils/clubName.ts`).
+- **`uq_club_name_per_location`** on `(home_location_id, name_normalised)`
+  `WHERE (home_location_id IS NOT NULL)`. **Partial, or it would be useless**: the column is
+  NULL for every pre-existing club and every spoof clone, and PostgreSQL treats NULLs as
+  distinct. Partial also means existing duplicate names could not block the migration.
+  Scoped **per location, not per country** — the name IS town plus affix, so two
+  "Burnley FC"s only collide at Burnley.
 
 ## Misc / cache / analytics
 

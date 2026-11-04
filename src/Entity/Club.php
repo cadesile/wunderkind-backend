@@ -2,8 +2,10 @@
 
 namespace App\Entity;
 
+use App\Entity\Location\Location;
 use App\Enum\Formation;
 use App\Repository\ClubRepository;
+use App\Service\ClubNameNormalizer;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -11,6 +13,22 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: ClubRepository::class)]
 #[ORM\Index(name: 'idx_club_created_at', columns: ['created_at'])]
+// One club of a given name per town.
+//
+// PARTIAL, and it has to be: home_location_id is NULL for every club founded before the land
+// economy existed and for every spoof clone, and PostgreSQL treats NULLs as distinct — so a
+// plain unique on these two columns would look enforced while permitting unlimited duplicates
+// among exactly the rows that have them. The predicate is spelled as pg_get_expr(indpred,
+// indrelid) reports it, per CLAUDE.md; SchemaIsInSyncTest is what catches a mis-spelling.
+//
+// PER LOCATION, NOT PER COUNTRY, because the name IS the town plus an affix: two "Burnley FC"s
+// only collide when both sit at Burnley. Keying it per country would refuse a legitimate second
+// club across forty other towns.
+#[ORM\UniqueConstraint(
+    name: 'uq_club_name_per_location',
+    columns: ['home_location_id', 'name_normalised'],
+    options: ['where' => '(home_location_id IS NOT NULL)'],
+)]
 class Club
 {
     #[ORM\Id]
@@ -19,6 +37,35 @@ class Club
 
     #[ORM\Column(length: 100)]
     private string $name;
+
+    /**
+     * Canonical comparison form of $name, maintained by setName() and the constructor.
+     *
+     * Exists so uq_club_name_per_location can be a real database constraint rather than an
+     * application convention: "Brescia AS", "brescia as" and "Bréscia  AS" all render as the
+     * same name in game, and only a normalised column can express that to an index.
+     *
+     * ClubNameNormalizer is the single source of those rules and the CLIENT MIRRORS THEM in
+     * src/utils/clubName.ts — so the rules must not change here alone.
+     */
+    #[ORM\Column(length: 100)]
+    private string $nameNormalised;
+
+    /**
+     * The location this club plays at — the plot its owner claimed when founding it.
+     *
+     * NULLABLE, and expected to stay so for a long time. Every club founded before the land
+     * economy has no plot, and backfilling one would mean inventing a town for a live save. New
+     * clubs founded through the land flow set it; the older ones keep NULL and carry on, which
+     * is also what keeps uq_club_name_per_location from retroactively rejecting existing names.
+     *
+     * ON DELETE SET NULL rather than RESTRICT: a location is retired, not deleted (see
+     * Location's docblock), so this only fires in the admin-surgery case, where losing the link
+     * is much better than blocking the operation.
+     */
+    #[ORM\ManyToOne(targetEntity: Location::class)]
+    #[ORM\JoinColumn(name: 'home_location_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Location $homeLocation = null;
 
     /** Club Reputation score — drives Youth Requests recruitment pipeline */
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
@@ -245,6 +292,7 @@ class Club
     {
         $this->id                 = new UuidV7();
         $this->name               = $name;
+        $this->nameNormalised     = ClubNameNormalizer::normalize($name);
         $this->user               = $user;
         $this->createdAt          = new \DateTimeImmutable();
         $this->transfers          = new ArrayCollection();
@@ -260,7 +308,21 @@ class Club
     public function getId(): UuidV7 { return $this->id; }
 
     public function getName(): string { return $this->name; }
-    public function setName(string $name): void { $this->name = $name; }
+    /** Keeps name_normalised in step; the unique index depends on it being maintained here. */
+    public function setName(string $name): void
+    {
+        $this->name           = $name;
+        $this->nameNormalised = ClubNameNormalizer::normalize($name);
+    }
+
+    public function getNameNormalised(): string { return $this->nameNormalised; }
+
+    public function getHomeLocation(): ?Location { return $this->homeLocation; }
+
+    public function setHomeLocation(?Location $location): void
+    {
+        $this->homeLocation = $location;
+    }
 
     public function getReputation(): int { return $this->reputation; }
     public function setReputation(int $reputation): void { $this->reputation = $reputation; }

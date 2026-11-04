@@ -14,9 +14,14 @@ use App\Service\Location\Enrichment\EnrichmentSweepInProgressException;
 use App\Service\Location\Enrichment\LocationEnricherInterface;
 use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use Doctrine\DBAL\Connection;
+use App\Service\Location\LocationImportExportService;
+use App\Service\Location\LocationSeedService;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -42,6 +47,8 @@ class LocationEnrichmentController extends AbstractController
         private readonly LocationEnrichmentAttemptRepository $attemptRepository,
         private readonly LocationEnricherInterface           $enricher,
         private readonly Connection                          $connection,
+        private readonly LoggerInterface                     $logger,
+        private readonly LocationSeedService                 $seedService,
     ) {}
 
     /**
@@ -94,6 +101,10 @@ class LocationEnrichmentController extends AbstractController
             'usage'         => $this->attemptRepository->usageSince(new \DateTimeImmutable('-30 days')),
             'reviewQueue'   => $this->reviewQueue($country),
             'statuses'      => EnrichmentStatus::cases(),
+            // Every country the registry HAS places for, flagged with whether it is already
+            // seeded — so the seed picker can offer the unseeded ones first and label the rest
+            // honestly rather than looking like it does nothing.
+            'seedable'      => $this->seedableRows(),
         ]);
     }
 
@@ -256,6 +267,32 @@ class LocationEnrichmentController extends AbstractController
     }
 
     /**
+     * Seedable countries, each flagged with whether it already has locations.
+     *
+     * Drives the seed picker. The flag matters: seeding is act-only-when-empty per country, so
+     * choosing an already-seeded one does nothing unless "force" is ticked — and a picker that
+     * did not say so would look broken rather than careful.
+     *
+     * @return list<array{code: string, name: string, seeded: bool}>
+     */
+    private function seedableRows(): array
+    {
+        $seeded = array_flip(array_map(
+            static fn (array $row): string => $row['code'],
+            $this->countryRows(),
+        ));
+
+        return array_map(
+            static fn (\App\Enum\Country $c): array => [
+                'code'   => $c->value,
+                'name'   => $c->label(),
+                'seeded' => isset($seeded[$c->value]),
+            ],
+            $this->seedService->seedableCountries(),
+        );
+    }
+
+    /**
      * The rows a human has to look at: review-flagged and failed.
      *
      * Projected, not hydrated — this list is the operator's work queue and must not pull the
@@ -281,5 +318,237 @@ class LocationEnrichmentController extends AbstractController
         $sql .= ' ORDER BY l.enrichment_status, l.population DESC NULLS LAST LIMIT 100';
 
         return $this->connection->fetchAllAssociative($sql, $params);
+    }
+
+
+    /**
+     * Seed country_profile, location and land_plot rows from CountryContentRegistry.
+     *
+     * The admin face of app:locations:seed. Both call LocationSeedService and neither holds any
+     * seeding logic of its own, so the button and the command cannot drift.
+     *
+     * SYNCHRONOUS, DELIBERATELY. A full seed is about 1,755 small inserts across 25 countries
+     * and finishes in seconds; it touches no external service and spends no money, so there is
+     * nothing here worth the complexity of a queue — unlike enrichment, where every message is
+     * a billed API call. The country picker also lets an operator do it one country at a time.
+     *
+     * ACT-ONLY-WHEN-EMPTY per country unless `force` is sent, which only ADDS missing towns and
+     * never rewrites an existing row. That restraint is the point: these rows get hand-corrected
+     * and then carry real money, so a re-seed must not be able to stomp a correction.
+     */
+    #[Route('/admin/locations/seed', name: 'admin_locations_seed', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function seed(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('locations_seed', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen();
+        }
+
+        $code  = $this->normalisedCountry($request->request->get('country'));
+        $force = $request->request->has('force');
+
+        if ($code === null) {
+            $countries = $this->seedService->seedableCountries();
+        } else {
+            try {
+                $countries = [$this->seedService->resolveCountry($code)];
+            } catch (\InvalidArgumentException $e) {
+                $this->addFlash('danger', $e->getMessage());
+
+                return $this->backToScreen();
+            }
+        }
+
+        if ($countries === []) {
+            $this->addFlash('warning', 'No countries have place data in CountryContentRegistry.');
+
+            return $this->backToScreen();
+        }
+
+        try {
+            $result = $this->seedService->seedMany($countries, $force ? $code : null);
+        } catch (\Throwable $e) {
+            $this->logger->error('Location seeding failed', ['exception' => $e]);
+            $this->addFlash('danger', 'Seeding failed: ' . $e->getMessage());
+
+            return $this->backToScreen();
+        }
+
+        if ($result['locations'] === 0) {
+            // The common and correct outcome of pressing it twice. Said plainly so it does not
+            // read as a failure.
+            $this->addFlash('info', sprintf(
+                'Nothing to seed — every registry town is already present in %s.',
+                $code ?? 'all ' . count($countries) . ' countries',
+            ));
+
+            return $this->backToScreen();
+        }
+
+        $this->addFlash('success', sprintf(
+            'Seeded %d location(s) and %d plot(s) across %d country/countries.',
+            $result['locations'],
+            $result['plots'],
+            count($countries),
+        ));
+
+        // The thing an operator will otherwise be surprised by: seeded towns have no geography
+        // at all, because there is none in PHP to seed.
+        $this->addFlash('warning', sprintf(
+            '%d location(s) have no coordinates and no land value yet. Enrich them below, then '
+            . 'run app:locations:rivals. A country stays out of the API until its profile is LIVE.',
+            $result['locations'],
+        ));
+
+        return $this->backToScreen();
+    }
+
+    /**
+     * Download the enriched geography as JSON.
+     *
+     * The operator-facing half of "enrich once, import everywhere". Enrichment is a billed API
+     * call per town plus a human review pass over every valuation, so this file is the thing
+     * that stops dev, prod and every rebuilt database from each paying for it again.
+     *
+     * GET, and safe to be: it reads and streams, writes nothing, and carries no claims, holds
+     * or ledger entries — see LocationImportExportService for exactly what travels.
+     */
+    #[Route('/admin/locations/export', name: 'admin_locations_export', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function export(Request $request, LocationImportExportService $service): StreamedResponse
+    {
+        $country = $this->normalisedCountry($request->query->get('country'));
+
+        $data = $service->export($country === null ? null : [$country]);
+        $json = (string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $filename = sprintf('wunderkind-locations-%s-%s.json', $country ?? 'all', date('Y-m-d'));
+
+        $response = new StreamedResponse(static function () use ($json): void {
+            echo $json;
+        });
+
+        $response->headers->set('Content-Type', 'application/json');
+        $response->headers->set(
+            'Content-Disposition',
+            HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename),
+        );
+
+        return $response;
+    }
+
+    /**
+     * Upload an export and apply it.
+     *
+     * AN UPSERT, AND THERE IS NO "CLEAR FIRST" OPTION, unlike the world-content importer. A
+     * location is referenced by plot_claim with ON DELETE RESTRICT precisely because it can
+     * carry real money, so a truncate-then-import would either be refused by the database or
+     * mean deleting somebody's purchase first. Rows are matched on (countryCode, slug), updated
+     * in place, and nothing is ever deleted.
+     *
+     * Fields an admin has LOCKED here are skipped and counted — importing geography must not
+     * undo the review work the file exists to carry.
+     */
+    #[Route('/admin/locations/import', name: 'admin_locations_import', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function import(Request $request, LocationImportExportService $service): Response
+    {
+        if (!$this->isCsrfTokenValid('locations_import', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen();
+        }
+
+        $file = $request->files->get('locations_file');
+
+        if ($file === null || !$file->isValid()) {
+            $this->addFlash('danger', 'No valid file uploaded.');
+
+            return $this->backToScreen();
+        }
+
+        $raw = file_get_contents($file->getPathname());
+
+        if ($raw === false) {
+            $this->addFlash('danger', 'Could not read the uploaded file.');
+
+            return $this->backToScreen();
+        }
+
+        $data = json_decode($raw, true);
+
+        if (!is_array($data)) {
+            $this->addFlash('danger', 'Invalid JSON — could not parse the uploaded file.');
+
+            return $this->backToScreen();
+        }
+
+        $dryRun = $request->request->has('dry_run');
+        $result = $service->import($data, $dryRun);
+
+        $summary = sprintf(
+            'countries +%d/~%d, locations +%d/~%d, plots +%d, locked fields skipped %d',
+            $result['countriesCreated'],
+            $result['countriesUpdated'],
+            $result['locationsCreated'],
+            $result['locationsUpdated'],
+            $result['plotsCreated'],
+            $result['lockedFieldsSkipped'],
+        );
+
+        foreach ($result['errors'] as $error) {
+            $this->addFlash('warning', 'Import: ' . $error);
+        }
+
+        if ($dryRun) {
+            $this->addFlash('info', 'Dry run — nothing was written. Would apply: ' . $summary);
+
+            return $this->backToScreen();
+        }
+
+        if (!$result['applied']) {
+            $this->addFlash('danger', 'Import did not apply. See the warnings above.');
+
+            return $this->backToScreen();
+        }
+
+        $this->addFlash('success', 'Locations imported: ' . $summary);
+
+        if ($result['lockedFieldsSkipped'] > 0) {
+            $this->addFlash('info', sprintf(
+                '%d locked field group(s) were left alone — a correction made here outranks the file.',
+                $result['lockedFieldsSkipped'],
+            ));
+        }
+
+        // Both are derived from what just changed, and neither is carried in the file.
+        $this->addFlash(
+            'info',
+            'Run app:locations:rivals --stale-only to rebuild rival sets, and '
+            . 'app:plots:refresh-estimates to reprice stadiums against the imported land values.',
+        );
+
+        return $this->backToScreen();
+    }
+
+    /** Country code normalised for the export scope, or null for "everything". */
+    private function normalisedCountry(mixed $raw): ?string
+    {
+        $code = strtoupper(trim((string) $raw));
+
+        return $code === '' ? null : $code;
+    }
+
+    /**
+     * Back to the enrichment screen.
+     *
+     * Via generateUrl('admin', ...) and NOT redirectToRoute(), per src/Controller/Admin/CLAUDE.md
+     * — EasyAdmin needs the dashboard route or the redirect dies on an "i18n on null" Twig error.
+     */
+    private function backToScreen(): Response
+    {
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_location_enrichment']));
     }
 }

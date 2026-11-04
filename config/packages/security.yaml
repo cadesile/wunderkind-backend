@@ -80,6 +80,13 @@ security:
         - { path: ^/api/excursions,            roles: PUBLIC_ACCESS }
         - { path: ^/api/languages,             roles: PUBLIC_ACCESS }
         - { path: ^/api/translations,          roles: PUBLIC_ACCESS }
+        # The land catalogue. Public because a player browses towns before signing in,
+        # and the list carries no per-account data unless ?affordability=1 is passed —
+        # which the controller then serves against a zero balance for an anonymous
+        # caller, so there is nothing here to leak. Sits with the other PUBLIC_ACCESS
+        # read endpoints and AHEAD of the ^/api catch-all, which would otherwise demand
+        # authentication. Note ^/api/plots below is the WRITE side and stays private.
+        - { path: ^/api/locations,             roles: PUBLIC_ACCESS }
         - { path: ^/api/beta-request,          roles: PUBLIC_ACCESS }
         # Land plots: holding, claiming and building a ground.
         #

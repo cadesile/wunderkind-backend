@@ -439,6 +439,174 @@ class LocationRepository extends ServiceEntityRepository
         return (int) $this->getEntityManager()->getConnection()->fetchOne($sql, $params);
     }
 
+    /** Sort key for the price ordering, standing in for a NULL landPence so it sorts last. */
+    public const UNPRICED_SORT_KEY = PHP_INT_MAX;
+
+    public const SORT_TOWN  = 'town';
+    public const SORT_PRICE = 'price';
+
+    /**
+     * One page of locations for the public list endpoint.
+     *
+     * PROJECTED, NOT HYDRATED, for the reason in this class's docblock: ORM 3 decodes every
+     * mapped column of every hydrated row, jsonb included, and a 200-row page would pay for
+     * ~25 columns to render about a dozen.
+     *
+     * KEYSET, NOT OFFSET, on (sort key, id). Two reasons, and the second is the one that
+     * actually forced it: a deep page with a region filter makes OFFSET scan and discard
+     * everything before it, and — more importantly — an admin correcting a land valuation
+     * mid-browse reorders the price-sorted set, so an offset-paged client would silently skip
+     * or repeat towns. A keyset cursor names a position rather than a distance.
+     *
+     * THE PRICE SORT COALESCES NULL TO A SENTINEL rather than relying on NULLS LAST, so the
+     * ordering expression has no NULLs in it and the keyset comparison stays a plain two-column
+     * predicate. The cost is that idx_location_country_status_land cannot serve the ORDER BY
+     * for that sort (it still serves the filters) — accepted deliberately, because a country
+     * holds a few hundred to a few thousand rows and sorting that in memory is free. Revisit if
+     * the table is ever widened past the ~5,000 rows this feature is bounded at.
+     *
+     * Fetches limit + 1 so "there is another page" needs no COUNT.
+     *
+     * @param list<string>|null $regions
+     *
+     * @return list<array<string, mixed>> up to $limit + 1 rows
+     */
+    public function findForList(
+        string $countryCode,
+        LocationStatus $status,
+        int $limit,
+        ?array $regions = null,
+        ?int $maxLandPence = null,
+        ?string $normalisedSearch = null,
+        string $sort = self::SORT_TOWN,
+        int|string|null $cursorKey = null,
+        ?string $cursorId = null,
+    ): array {
+        $qb = $this->createQueryBuilder('l')
+            ->select(
+                'l.id',
+                'l.slug',
+                'l.town',
+                'l.localisedNames',
+                'l.region',
+                'l.lat',
+                'l.lng',
+                'l.population',
+                'l.populationSource',
+                'l.populationAsOf',
+                'l.landPence',
+                'l.landValuedAt',
+                'l.landSource',
+                'l.isCapital',
+                'l.citySize',
+                'l.status',
+                'l.enrichmentStatus',
+            )
+            ->where('l.country = :country')
+            ->andWhere('l.status = :status')
+            ->setParameter('country', strtoupper($countryCode))
+            ->setParameter('status', $status)
+            ->setMaxResults($limit + 1);
+
+        if ($regions !== null && $regions !== []) {
+            $qb->andWhere('l.region IN (:regions)')->setParameter('regions', $regions);
+        }
+
+        if ($maxLandPence !== null) {
+            // EXCLUDES UNPRICED ROWS, deliberately. A caller asking for "under £2m" cannot be
+            // served a town whose value is not known yet — it might be over. The un-enriched
+            // rows are still reachable without this filter.
+            $qb->andWhere('l.landPence IS NOT NULL')
+                ->andWhere('l.landPence <= :maxLand')
+                ->setParameter('maxLand', $maxLandPence);
+        }
+
+        if ($normalisedSearch !== null && $normalisedSearch !== '') {
+            // Matched against town_normalised, not town, so a search for "munchen" finds
+            // München — the same normalisation ClubNameNormalizer applies to the stored column.
+            $qb->andWhere('l.townNormalised LIKE :q')
+                ->setParameter('q', '%' . $normalisedSearch . '%');
+        }
+
+        if ($sort === self::SORT_PRICE) {
+            $qb->addSelect('COALESCE(l.landPence, :sentinel) AS sortKey')
+                ->setParameter('sentinel', self::UNPRICED_SORT_KEY)
+                ->orderBy('sortKey', 'ASC')
+                ->addOrderBy('l.id', 'ASC');
+
+            if ($cursorKey !== null && $cursorId !== null) {
+                $qb->andWhere(
+                    '(COALESCE(l.landPence, :sentinel) > :cursorKey'
+                    . ' OR (COALESCE(l.landPence, :sentinel) = :cursorKey AND l.id > :cursorId))',
+                )
+                    ->setParameter('cursorKey', (int) $cursorKey)
+                    ->setParameter('cursorId', $cursorId);
+            }
+        } else {
+            $qb->orderBy('l.town', 'ASC')->addOrderBy('l.id', 'ASC');
+
+            if ($cursorKey !== null && $cursorId !== null) {
+                $qb->andWhere('(l.town > :cursorKey OR (l.town = :cursorKey AND l.id > :cursorId))')
+                    ->setParameter('cursorKey', (string) $cursorKey)
+                    ->setParameter('cursorId', $cursorId);
+            }
+        }
+
+        return $qb->getQuery()->getArrayResult();
+    }
+
+    /**
+     * Region list with counts, plus the price range — backs GET /api/locations/facets.
+     *
+     * One GROUP BY per country off idx_location_country_region. Counted over ACTIVE rows only,
+     * so a facet never offers a filter that returns nothing.
+     *
+     * @return array{regions: list<array{region: string, count: int}>,
+     *     landPenceMin: ?int, landPenceMax: ?int, pricedCount: int, totalCount: int}
+     */
+    public function facetsFor(string $countryCode): array
+    {
+        $code = strtoupper($countryCode);
+
+        $regions = $this->createQueryBuilder('l')
+            ->select('l.region AS region', 'COUNT(l.id) AS cnt')
+            ->where('l.country = :country')
+            ->andWhere('l.status = :active')
+            ->setParameter('country', $code)
+            ->setParameter('active', LocationStatus::ACTIVE)
+            ->groupBy('l.region')
+            ->orderBy('l.region', 'ASC')
+            ->getQuery()
+            ->getArrayResult();
+
+        $range = $this->createQueryBuilder('l')
+            ->select(
+                'MIN(l.landPence) AS minLand',
+                'MAX(l.landPence) AS maxLand',
+                'COUNT(l.landPence) AS priced',
+                'COUNT(l.id) AS total',
+            )
+            ->where('l.country = :country')
+            ->andWhere('l.status = :active')
+            ->setParameter('country', $code)
+            ->setParameter('active', LocationStatus::ACTIVE)
+            ->getQuery()
+            ->getSingleResult();
+
+        return [
+            'regions' => array_map(
+                static fn (array $r): array => ['region' => (string) $r['region'], 'count' => (int) $r['cnt']],
+                $regions,
+            ),
+            // NULL until at least one location in the country has been enriched — an empty
+            // price range is a real pre-enrichment state, not a missing value.
+            'landPenceMin' => $range['minLand'] !== null ? (int) $range['minLand'] : null,
+            'landPenceMax' => $range['maxLand'] !== null ? (int) $range['maxLand'] : null,
+            'pricedCount'  => (int) $range['priced'],
+            'totalCount'   => (int) $range['total'],
+        ];
+    }
+
     /** @return list<Location> */
     public function findWithStaleRivals(?string $countryCode, int $limit): array
     {

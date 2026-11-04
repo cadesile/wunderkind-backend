@@ -131,9 +131,36 @@
     {# ── Progress per country ───────────────────────────────────────────── #}
     <div class="col-12 col-xl-7">
         <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
+            <div class="card-header py-2 d-flex align-items-center gap-2 flex-wrap">
                 <i class="fa fa-flag text-primary"></i>
                 <span class="fw-semibold small">Progress by country</span>
+
+                {# Seeding writes town rows from CountryContentRegistry. Free and fast — no
+                   external call, no spend — unlike the Enrich buttons below. #}
+                <form method="post"
+                      action="{{ path('admin', {routeName: 'admin_locations_seed'}) }}"
+                      class="ms-auto d-flex align-items-center gap-1">
+                    <input type="hidden" name="_token" value="{{ csrf_token('locations_seed') }}">
+
+                    <select name="country" class="form-select form-select-sm py-0"
+                            style="width:auto" aria-label="Country to seed">
+                        <option value="">All countries</option>
+                    {% for row in seedable %}
+                        <option value="{{ row.code }}">
+                            {{ row.code }} — {{ row.name }}{% if row.seeded %} (seeded){% endif %}
+                        </option>
+                    {% endfor %}
+                    </select>
+
+                    <div class="form-check form-check-inline m-0 ms-1" title="Add towns missing from a country that already has locations. Never rewrites an existing row.">
+                        <input class="form-check-input" type="checkbox" id="seedForce" name="force" value="1">
+                        <label class="form-check-label small text-muted" for="seedForce">force</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2">
+                        <i class="fa fa-seedling me-1"></i> Seed
+                    </button>
+                </form>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -185,7 +212,27 @@
                                 </td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="8" class="text-muted">No countries seeded. Run <code>app:locations:seed</code>.</td></tr>
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <p class="text-muted mb-1">No countries seeded yet.</p>
+                                    <p class="text-muted small mb-3">
+                                        Seeding writes <strong>865 towns across 25 countries</strong>
+                                        from the curated registry &mdash; one location and one plot
+                                        each. It makes no external calls and costs nothing.
+                                        Coordinates and land values are <em>not</em> seeded (there
+                                        are none in the source data); enrichment fills those in
+                                        afterwards.
+                                    </p>
+                                    <form method="post"
+                                          action="{{ path('admin', {routeName: 'admin_locations_seed'}) }}"
+                                          class="d-inline">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('locations_seed') }}">
+                                        <button type="submit" class="btn btn-sm btn-primary">
+                                            <i class="fa fa-seedling me-1"></i> Seed all countries
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -315,6 +362,107 @@
             </div>
         </div>
     </div>
+
+    {# ── Export / import ────────────────────────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-right-left text-success"></i>
+                <span class="fw-semibold small">Export &amp; import</span>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    Enrichment costs one billed API call per town, plus the review pass over every
+                    valuation it produces. <strong>Enrich once, then move the result.</strong> This
+                    file is what stops dev, prod and every rebuilt database from paying for the
+                    same 865 towns again.
+                </p>
+                <p class="small text-muted mb-3">
+                    Carries country profiles (including the bounding box validation needs),
+                    locations with their coordinates, population, land values, provenance,
+                    <em>locks</em> and enrichment status, and their plots. Deliberately carries
+                    <strong>no claims, holds or ledger entries</strong> &mdash; those are real
+                    money and real player data. Rival sets and stadium estimates are left out too:
+                    both are derived and cheaper to recompute than to map between databases.
+                </p>
+
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label for="exportCountry" class="form-label fw-semibold small">Export</label>
+                        <div class="input-group">
+                            <select id="exportCountry" class="form-select form-select-sm">
+                                <option value="">All countries</option>
+                            {% for row in countries %}
+                                <option value="{{ row.code }}" {% if row.code == selectedCountry %}selected{% endif %}>
+                                    {{ row.code }} &mdash; {{ row.name }}
+                                </option>
+                            {% endfor %}
+                            </select>
+                            <a class="btn btn-sm btn-outline-success"
+                               id="exportLink"
+                               href="{{ path('admin', {routeName: 'admin_locations_export'}) }}">
+                                <i class="fa fa-download me-1"></i> Download JSON
+                            </a>
+                        </div>
+                        <div class="form-text">Reads only. Writes nothing.</div>
+                    </div>
+
+                    <div class="col-md-7">
+                        <form method="post"
+                              action="{{ path('admin', {routeName: 'admin_locations_import'}) }}"
+                              enctype="multipart/form-data">
+                            <input type="hidden" name="_token" value="{{ csrf_token('locations_import') }}">
+                            <label for="locationsFile" class="form-label fw-semibold small">Import</label>
+                            <div class="input-group">
+                                <input type="file" id="locationsFile" name="locations_file"
+                                       accept="application/json,.json"
+                                       class="form-control form-control-sm" required>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="fa fa-upload me-1"></i> Apply
+                                </button>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox"
+                                       id="importDryRun" name="dry_run" value="1" checked>
+                                <label class="form-check-label small" for="importDryRun">
+                                    Dry run &mdash; report what would change and write nothing
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                An <strong>upsert</strong>, matched on country + slug. Nothing is
+                                ever deleted, and there is no &ldquo;clear first&rdquo;: a town can
+                                carry an active claim, and the database refuses to delete one.
+                                Fields you have <strong>locked</strong> here are skipped and
+                                counted &mdash; an import must not undo your review.
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Keeps the download link's ?country= in step with the select, so the button exports what
+       the operator just chose rather than whatever the page loaded with. #}
+    <script>
+        (function () {
+            var select = document.getElementById('exportCountry');
+            var link   = document.getElementById('exportLink');
+            if (!select || !link) { return; }
+
+            var base = link.getAttribute('href');
+
+            function sync() {
+                link.setAttribute(
+                    'href',
+                    select.value ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'country=' + encodeURIComponent(select.value) : base
+                );
+            }
+
+            select.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
 
     {# ── Recent runs ────────────────────────────────────────────────────── #}
     <div class="col-12">

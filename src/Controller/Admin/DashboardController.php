@@ -608,6 +608,14 @@ class DashboardController extends AbstractDashboardController
         $config = $this->starterConfigRepository->getConfig();
         // Form submits pounds; multiply by 100 to store pence
         $config->setStartingBalance((int) $request->request->get('startingBalance', 50_000) * 100);
+
+        // The ACCOUNT's opening credit range — distinct from the club kitty above. Set as a
+        // pair, because the setter normalises a transposed min/max rather than refusing the
+        // whole form over it.
+        $config->setUserStartingBalanceRangePounds(
+            (int) $request->request->get('userStartingBalanceMinPounds', 5_000_000),
+            (int) $request->request->get('userStartingBalanceMaxPounds', 6_000_000),
+        );
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));

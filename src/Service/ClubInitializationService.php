@@ -6,9 +6,15 @@ namespace App\Service;
 
 use App\Enum\Country;
 use App\Entity\Club;
+use App\Entity\Location\Location;
+use App\Entity\Location\PlotClaim;
 use App\Entity\User;
 use App\Exception\ClubNameTakenException;
 use App\Exception\InvalidCountryCodeException;
+use App\Exception\Location\PlotUnavailableException;
+use App\Repository\ClubRepository;
+use App\Repository\Location\LocationRepository;
+use App\Repository\Location\PlotClaimRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -34,6 +40,9 @@ class ClubInitializationService
         private readonly EntityManagerInterface  $em,
         private readonly StarterConfigRepository $starterConfigRepository,
         private readonly NpcClubRepository       $npcClubRepository,
+        private readonly ClubRepository          $clubRepository,
+        private readonly LocationRepository      $locationRepository,
+        private readonly PlotClaimRepository     $plotClaimRepository,
     ) {}
 
     /**
@@ -42,11 +51,30 @@ class ClubInitializationService
      * Pulls entities from the pool. Throws \OverflowException if any pool is
      * insufficient — run app:generate-market-data to replenish before retrying.
      *
-     * @throws \OverflowException        if any entity pool has too few entries
-     * @throws ClubNameTakenException    if an NPC club in the same country already uses this name
+     * FOUNDING ON A PLOT is opt-in via $locationId. Supplied, the caller must already hold an
+     * active, club-less claim at that location — this method does not buy land, it only attaches
+     * a club to land already bought, which is what keeps the money path in one place
+     * (PlotClaimService) and out of club creation. Omitted, behaviour is byte-identical to
+     * before and home_location_id stays NULL, so every existing client keeps working and the
+     * requirement can be tightened to mandatory in one line once existing clubs are dealt with.
+     *
+     * NOTE WHAT IS NOT CHARGED HERE. club.balance is still set from StarterConfig and the land
+     * is NOT debited from it: land comes out of the account's UserLedger credit at claim time.
+     * club.balance is device-authoritative (SyncService assigns it absolutely), so a deduction
+     * here would survive until the next sync and then silently vanish.
+     *
+     * @throws \OverflowException         if any entity pool has too few entries
+     * @throws ClubNameTakenException     if the name is already taken, by an NPC club in the
+     *                                    same country or by another club at this location
+     * @throws PlotUnavailableException   if $locationId is not a location the caller owns, or
+     *                                    their claim there already has a club
      */
-    public function initializeClub(User $user, string $clubName, ?string $country = null): Club
-    {
+    public function initializeClub(
+        User $user,
+        string $clubName,
+        ?string $country = null,
+        ?string $locationId = null,
+    ): Club {
         // Normalize + validate before anything else: Club::$country must always be a real,
         // canonically-cased Country code from this point on. A mis-cased or garbled code (the
         // client's own country-picker, the X-Club-Id debug flows, anything) used to get
@@ -70,6 +98,19 @@ class ClubInitializationService
             throw new ClubNameTakenException($clubName);
         }
 
+        // Resolved BEFORE the club is persisted, so a bad location id leaves no orphan club
+        // behind. Both checks below throw rather than returning null.
+        $claim    = $locationId !== null && trim($locationId) !== ''
+            ? $this->resolveClaimForFounding($user, trim($locationId))
+            : null;
+        $location = $claim?->getLocation();
+
+        // The second half of the uniqueness rule, alongside the NPC check above. Same exception
+        // and therefore the same existing 422 — no new error code for the client to learn.
+        if ($location !== null && $this->clubRepository->nameExistsAtLocation($clubName, $location)) {
+            throw new ClubNameTakenException($clubName);
+        }
+
         $config  = $this->starterConfigRepository->getConfig();
         $club = new Club($clubName, $user);
         $club->setBalance($config->getStartingBalance());
@@ -83,10 +124,62 @@ class ClubInitializationService
             $club->setCountry($country);
         }
 
+        if ($location !== null) {
+            $club->setHomeLocation($location);
+
+            // A location belongs to exactly one country, so founding on a plot settles the
+            // club's country too. Only filled in where the client did not say — an explicit
+            // country is the caller's business and is validated above.
+            if ($club->getCountry() === null) {
+                $club->setCountry($location->getCountryCode());
+            }
+        }
+
         $this->em->persist($club);
+
+        // ONE FLUSH for the club and the claim's new club link. Both sides of the relationship
+        // land together or neither does — a club with a home location whose claim does not point
+        // back at it would read as owned by nobody, and uq_plot_claim_active_plot would then
+        // block anyone from buying it again.
+        if ($claim !== null) {
+            $claim->attachClub($club);
+        }
+
         $this->em->flush();
 
         return $club;
+    }
+
+    /**
+     * The caller's active, club-less claim at this location.
+     *
+     * @throws PlotUnavailableException if there is no such claim, or it already has a club
+     */
+    private function resolveClaimForFounding(User $user, string $locationId): PlotClaim
+    {
+        $location = $this->locationRepository->find($locationId);
+
+        if ($location === null) {
+            // Same answer as "someone else owns it" — see locationNotOwned()'s docblock on why
+            // this deliberately does not distinguish the cases.
+            throw PlotUnavailableException::locationNotOwned();
+        }
+
+        foreach ($this->plotClaimRepository->findActiveForUser($user) as $claim) {
+            if ((string) $claim->getLocation()->getId() !== (string) $location->getId()) {
+                continue;
+            }
+
+            $existing = $claim->getClub();
+
+            if ($existing !== null) {
+                throw PlotUnavailableException::claimAlreadyHasClub($existing->getName());
+            }
+
+            return $claim;
+        }
+
+        throw PlotUnavailableException::locationNotOwned();
     }
 
     public static function countryToNationality(string $countryCode): ?string

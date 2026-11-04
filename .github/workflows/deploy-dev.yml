@@ -92,6 +92,9 @@ jobs:
             TWITTER_REDIRECT_URI="${{ secrets.DEV_TWITTER_REDIRECT_URI }}"
             MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=1
             FIREBASE_SERVICE_ACCOUNT_JSON='${{ secrets.DEV_FIREBASE_SERVICE_ACCOUNT_JSON }}'
+            LOCATION_ENRICHER_PROVIDER="${{ secrets.DEV_LOCATION_ENRICHER_PROVIDER }}"
+            LOCATION_ENRICHER_MODEL="${{ secrets.DEV_LOCATION_ENRICHER_MODEL }}"
+            LOCATION_ENRICHER_API_KEY="${{ secrets.DEV_LOCATION_ENRICHER_API_KEY }}"
             EOF
             sed -i 's/^[[:space:]]*//' .env
 

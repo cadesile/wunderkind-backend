@@ -78,7 +78,17 @@ Per environment, prefixed `PROD_` / `DEV_`:
 `JWT_SECRET_KEY`, `JWT_PUBLIC_KEY`, `MAILER_DSN`, `MAILER_FROM`, `MAILER_FROM_NAME`,
 `SOCIAL_TOKEN_ENCRYPTION_KEY`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`,
 `FACEBOOK_REDIRECT_URI`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`,
-`TWITTER_REDIRECT_URI`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
+`TWITTER_REDIRECT_URI`, `FIREBASE_SERVICE_ACCOUNT_JSON`,
+`LOCATION_ENRICHER_PROVIDER`, `LOCATION_ENRICHER_MODEL`, `LOCATION_ENRICHER_API_KEY`.
+
+The three `LOCATION_ENRICHER_*` variables configure the AI that supplies town coordinates and
+land valuations. **Enrichment stays OFF until all three are set** — `PROVIDER` empty (the
+default) means every attempt is recorded as `outcome=error` and the admin connection check
+reports not-ok, which is deliberate rather than a bug: an unconfigured enricher must be visible
+before someone starts an 865-row sweep, not after. Setting them needs no code change, and the
+same warning applies as to `FIREBASE_SERVICE_ACCOUNT_JSON` below: **a secret on the server's
+`.env` is not injected into the container unless it is also listed in that service's
+`environment:` block.** See `docs/world-generation/location-enrichment.md`.
 
 Shared: `HETZNER_IP`, `HETZNER_SSH_KEY`.
 

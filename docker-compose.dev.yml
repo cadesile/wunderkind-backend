@@ -46,6 +46,14 @@ services:
       # which decodes to an empty object — exactly the "every field missing" error this
       # entry fixes, regardless of how correct the GitHub secret itself was.
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      # Location enrichment (the AI that supplies town coordinates and land valuations).
+      # LISTED HERE DELIBERATELY: a secret on the server's .env is only interpolated while
+      # docker-compose PARSES this file — it reaches the container only because of these three
+      # lines. That is the FIREBASE_SERVICE_ACCOUNT_JSON mistake above, and the failure mode is
+      # the same shape: enrichment would silently stay off while the deploy secret looked set.
+      LOCATION_ENRICHER_PROVIDER: ${LOCATION_ENRICHER_PROVIDER}
+      LOCATION_ENRICHER_MODEL: ${LOCATION_ENRICHER_MODEL}
+      LOCATION_ENRICHER_API_KEY: ${LOCATION_ENRICHER_API_KEY}
     networks:
       - web
       - default
