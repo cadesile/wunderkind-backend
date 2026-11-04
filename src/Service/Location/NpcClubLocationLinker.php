@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Service\Location;
 
+use App\Enum\Country;
 use App\Service\ClubNameNormalizer;
+use App\Service\CountryContent\CountryContentRegistry;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
@@ -23,21 +25,34 @@ use Doctrine\DBAL\ParameterType;
  * CountryContentRegistry::SUFFIX_LEADS_NAME (PL, BE, SA, CO, EG, TN — Legia Lodz, Gornik Gdynia).
  * The town is always a whole, verbatim, space-delimited token. So:
  *
- *   1. longest whole-token PREFIX match, then
+ *   1. longest whole-token match in the position the country PUTS the town, then
  *   2. longest whole-token match anywhere.
  *
- * Measured over the real catalogue this resolves 1,535 of 1,535 clubs: zero unmatched, zero
- * ambiguous. Three hazards make the obvious alternatives wrong:
+ * THE POSITION IS PER COUNTRY, and getting that wrong is not theoretical — it shipped. An
+ * earlier cut always preferred the PREFIX, which is right for the 19 town-leading countries and
+ * exactly backwards for the six affix-leading ones. It mis-linked the Saudi club "Al Riyadh
+ * Hail" to Riyadh instead of Hail, because `riyadh` is a longer token than `hail` and neither
+ * is a prefix. Found on dev, where the affix pool happened to draw a club name containing
+ * another town; local data never produced one. See LOCAL DATA IS NOT A PROOF, below.
+ *
+ * Measured over the real catalogues this resolves every club — 1,535 locally and 3,239 on dev,
+ * zero unmatched, zero ambiguous. Three hazards make the obvious alternatives wrong:
  *
  *   - A SUBSTRING IS NOT A TOKEN. Manchester contains Chester; Enschede contains Ede (NL);
  *     Calabar contains Aba (NG); Las Palmas contains Palma (ES). Token matching rejects all of
  *     them, LIKE '%town%' does not.
- *   - SOME AFFIXES ARE THEMSELVES TOWNS. Burgos is an ES generic suffix and an ES town; so are
- *     Bari and Palermo (IT prestige), Amiens (FR generic), Covilha (PT generic). So a club named
- *     Metz Amiens matches two towns and the LONGER one is the wrong answer — which is exactly
- *     why prefix position outranks length rather than the reverse.
+ *   - SOME AFFIXES ARE THEMSELVES TOWNS, IN BOTH DIRECTIONS. Burgos is an ES generic suffix and
+ *     an ES town; so are Bari and Palermo (IT prestige), Amiens (FR generic), Covilha (PT
+ *     generic) — so "Metz Amiens" matches two towns and the LONGER one is wrong. The mirror case
+ *     is "Al Riyadh Hail" in suffix-leading SA, where the longer token is in the AFFIX. Position
+ *     outranks length; which position depends on the country.
  *   - COMPOUND TOWNS CONTAIN SHORTER ONES. Aparecida de Goiania contains Goiania; Richmond Hill
- *     contains Richmond. Longest-prefix picks the compound, correctly.
+ *     contains Richmond. Longest positional match picks the compound, correctly.
+ *
+ * LOCAL DATA IS NOT A PROOF. Club names are drawn at random from per-country affix pools, so
+ * whether a given database contains a name that trips this rule is luck. Always dry-run against
+ * the target environment and read the drift table: a club whose copied city_size disagrees with
+ * the town it matched is the signature of a mis-link, not of drift.
  *
  * MATCHED IN PHP, NOT SQL, and that is deliberate. The comparison key is
  * ClubNameNormalizer::normalize() — the same function that produced `location.town_normalised`
@@ -84,9 +99,12 @@ final class NpcClubLocationLinker
         $updates = [];
 
         foreach ($clubs as $club) {
+            $countryCode = (string) $club['country'];
+
             $town = $this->matchTown(
                 ClubNameNormalizer::normalize((string) $club['name']),
-                $townsByCc[(string) $club['country']] ?? [],
+                $townsByCc[$countryCode] ?? [],
+                $this->suffixLeads($countryCode),
             );
 
             if ($town === null) {
@@ -164,16 +182,31 @@ final class NpcClubLocationLinker
     }
 
     /**
+     * Whether this country writes its club names as "{affix} {town}" rather than "{town} {affix}".
+     *
+     * Six do: PL, BE, SA, CO, EG, TN. Polish is uniformly like this (Legia Warszawa, Gornik
+     * Zabrze) and composing it the other way round produces names no Polish speaker would
+     * recognise — which is why NpcClubGenerationService asks the same question when it BUILDS
+     * the name. This reads the identical source, so the two cannot disagree.
+     */
+    private function suffixLeads(string $countryCode): bool
+    {
+        $country = Country::tryFrom(strtoupper(trim($countryCode)));
+
+        return $country !== null && CountryContentRegistry::suffixLeadsName($country);
+    }
+
+    /**
      * The rule, applied to one club name against one country's towns.
      *
-     * Towns arrive sorted longest-normalised-name first, so the first prefix hit is the longest
-     * prefix and the first token hit is the longest token — no scoring pass needed.
+     * Towns arrive sorted longest-normalised-name first, so the first positional hit is the
+     * longest one and the first token hit is the longest token — no scoring pass needed.
      *
      * @param list<array<string, mixed>> $towns
      *
      * @return array<string, mixed>|null
      */
-    private function matchTown(string $clubNorm, array $towns): ?array
+    private function matchTown(string $clubNorm, array $towns, bool $suffixLeads): ?array
     {
         $tokenHit = null;
 
@@ -184,12 +217,19 @@ final class NpcClubLocationLinker
                 continue;
             }
 
-            // Pass 1 wins outright, so return immediately rather than scoring.
-            if ($clubNorm === $t || str_starts_with($clubNorm, $t . ' ')) {
+            // PASS 1: the position this country actually puts the town in. Wins outright, so
+            // return immediately rather than scoring — and it is what stops a longer town name
+            // sitting in the AFFIX from beating the real one.
+            $positional = $suffixLeads
+                ? str_ends_with($clubNorm, ' ' . $t)
+                : str_starts_with($clubNorm, $t . ' ');
+
+            if ($clubNorm === $t || $positional) {
                 return $town;
             }
 
-            // Remember only the first (longest) token hit as the fallback.
+            // PASS 2: anywhere in the name, longest first. Reached when the name does not follow
+            // its country's convention at all — an imported or hand-edited club, say.
             if ($tokenHit === null
                 && (str_ends_with($clubNorm, ' ' . $t) || str_contains($clubNorm, ' ' . $t . ' '))) {
                 $tokenHit = $town;
