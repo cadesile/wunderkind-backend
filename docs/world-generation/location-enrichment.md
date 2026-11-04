@@ -149,6 +149,57 @@ never undo a human correction.
 
 ---
 
+## 4a. Two registries: curated towns, and everything else
+
+`CountryContentRegistry` holds two lists, and they seed differently:
+
+| | Rows | Carries | Command |
+|---|---|---|---|
+| **Curated** | 865 | name, population, region, capital flag | `app:locations:seed` |
+| **Bare names** | ~4,226 | **name only** | `app:locations:import-names` |
+
+England has **42 curated and 280 bare**, which is why Prestwich was long a name a player could
+build a club name from but never a place anyone could buy.
+
+Imported towns arrive with **no population, no region, no coordinates and no price**, status
+`pending`. Enrichment supplies all of it lazily — the first time a player opens the town. Nothing
+sweeps them, so the spend follows real interest rather than the size of the catalogue.
+
+### Two guards stop the backlog wrecking the world it joins
+
+Both live in `LocationRepository` and both filter on `population IS NOT NULL AND population > 0`:
+
+- **`findForClassification()`** — city size is a PERCENTILE across a country's set, so an
+  unpriced town would not merely classify as `SMALL`, it would enlarge the set and push every
+  boundary. Importing 238 names into England would have taken `BIG` from 9 towns to 56 and
+  promoted every existing `MEDIUM` and `SMALL`, re-banding an already-generated world and
+  re-syncing every NPC club in it.
+- **`findForGeneration()`** — generating an NPC club in an unpriced town yields a club with an
+  empty region and a population of zero, which propagates into its city size, its reputation
+  band and the cached world pack.
+
+A town joins both the moment enrichment gives it a population. There is a test asserting the
+bands do not move across an import.
+
+### Near-duplicates are reported, never merged
+
+18 bare names are a whole-word prefix of a curated one. Some are the same city written two ways
+— `Newcastle` / `Newcastle upon Tyne`, `Frankfurt` / `Frankfurt am Main` — and a human should
+merge them. Others are **genuinely different places that merely read alike**: `San Sebastián de
+los Reyes` is a Madrid suburb, not `San Sebastián`; `San Miguel` is not `San Miguel de Tucumán`.
+Merging automatically would silently delete real towns, so both rows are created and the pair is
+printed for review.
+
+### Readiness changed with it
+
+A country used to need **every** town priced and **zero** pending. Under a lazy catalogue that is
+a bar nothing can clear, so:
+
+- `pending` and `queued` no longer block — that backlog is the design.
+- `needs_review` and `failed` still block; those need a human.
+- `sellable` now asks for **at least `MIN_SELLABLE_LOCATIONS` (25)** priced, placed towns rather
+  than all of them — enough that a player has real choice on day one.
+
 ## 5. Export and import — enrich once, move the result
 
 This is the part that stops dev, prod and every rebuilt database from paying for the same 865
@@ -210,7 +261,9 @@ lando php bin/console app:plots:refresh-estimates            # stadium prices
 ## 6. The normal working order
 
 ```
-app:locations:seed EN                              # towns + plots, all pending
+app:locations:seed EN                              # the 865 curated towns + plots
+app:locations:import-names EN --dry-run            # preview the bare names
+app:locations:import-names EN --with-plots         # the rest of the catalogue, unpriced
 app:locations:enrich EN --limit=3 --sync           # iterate the prompt on three rows
    ... check the connection on the admin screen ...
 admin: enrich all remaining for EN                 # the sweep

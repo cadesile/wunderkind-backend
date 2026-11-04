@@ -114,8 +114,89 @@ render as loading. A half-built country is kept out wholesale.
 | `MEDIUM` | 2 |
 | `SMALL` | 1 |
 
+An **unpriced** town has no population yet, so it defaults to `SMALL` and one plot. It gains
+plots if enrichment later reveals a bigger place — and never loses them, because a plot can
+already carry somebody's claim.
+
 City size is derived from population, and population comes from enrichment — so **enrichment is
 what decides how much football a place can hold.** Read `plotCount`; never hardcode a number.
+
+### Most towns arrive unpriced — this is the normal state, not an error
+
+**The catalogue is far larger than the priced set.** England has **280 towns, of which ~42 are
+priced**. The rest — Prestwich, Telford, Doncaster — exist as real, selectable places but have
+never been valued, because valuing a town costs a billed AI call and we only pay for towns
+players actually look at.
+
+An unpriced town looks like this in the list:
+
+```json
+{
+  "town": "Prestwich",
+  "lat": null,
+  "lng": null,
+  "population": null,
+  "landPence": null,
+  "enrichmentStatus": "pending",
+  "citySize": "SMALL",
+  "claimable": true,
+  "plotsAvailable": 1
+}
+```
+
+**All five nulls are expected.** Render it as a town that exists but has no price yet — not as
+an error, not as a loading failure, and not filtered out.
+
+#### The flow, end to end
+
+| Step | What the client does | What happens |
+|---|---|---|
+| 1 | `GET /api/locations?country=EN` | 280 towns. ~42 priced, the rest `pending`. **No enrichment is triggered — browsing is free.** |
+| 2 | Player opens Prestwich → `GET /api/locations/{id}` | **One** billed AI call is queued. Response returns immediately with `enrichmentStatus: "queued"` and the fields still null. |
+| 3 | Client polls the same URL | Usually a few seconds. Status becomes `enriched` and `lat`/`lng`/`population`/`landPence` are populated. |
+| 4 | Player buys | Normal hold → claim flow. |
+
+**Poll the detail endpoint; do not re-request the list.** The list deliberately never triggers
+enrichment — one page of 200 unpriced towns would otherwise queue 200 billed calls, so a player
+scrolling a region could spend the budget in a few swipes.
+
+**While `enrichmentStatus` is `pending` or `queued` the detail response is `private, max-age=0`.**
+Once enriched it becomes `public, max-age=60`. So polling works; don't add your own cache layer
+in front of it.
+
+#### Statuses you will see
+
+| `enrichmentStatus` | Meaning | What to show |
+|---|---|---|
+| `pending` | Never looked at. Opening it starts enrichment. | The town, no price. Normal. |
+| `queued` | Enrichment is in flight — including on the very request that started it. | A loading state. Poll. |
+| `enriched` | Priced and placed. | Everything. |
+| `needs_review` | The AI answered, but something failed validation and a human must look. | Treat as unpriced; it will not self-resolve. |
+| `failed` | Could not be enriched, repeatedly. | Treat as unpriced. Will not retry on its own. |
+
+**`needs_review` and `failed` do not resolve by polling.** They need an admin. If a player is
+sitting on one, stop polling after a few attempts and show it as unavailable rather than
+spinning forever.
+
+#### Buying an unpriced town
+
+A town with no price **cannot be bought yet** — `POST /api/plots/{id}/hold` returns
+`422 plot_not_sellable` with *"the land has not been valued yet"* or *"the town has not been
+located yet"*.
+
+That is not a dead end: it means enrichment has not finished. The correct client behaviour is to
+open the town (which starts enrichment), wait for `enriched`, then offer the buy button. Don't
+offer it against a null `landPence`.
+
+#### What is NOT affected by an unpriced town
+
+- **It cannot host an NPC club.** Generation ignores towns with no population, so an unpriced
+  town is never somebody else's home ground.
+- **It does not affect other towns' `citySize`.** City size is a percentile across the country,
+  and unpriced towns are excluded from that calculation until they have a population — so
+  importing thousands of them cannot re-band the priced ones.
+- **It still gets a plot.** Unpriced towns default to `SMALL`, so one plot. If enrichment later
+  reveals a large population the town re-bands and gains plots; it never loses them.
 
 ### A town can be sold out, and `claimable` is what to gate on
 

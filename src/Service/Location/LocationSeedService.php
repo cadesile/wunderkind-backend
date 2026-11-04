@@ -234,6 +234,151 @@ final class LocationSeedService
     }
 
     /**
+     * Import the bare town names — the ~4,200 that carry no population, region or capital flag.
+     *
+     * THE SECOND, LARGER REGISTRY. CountryContentRegistry holds two lists: 865 CURATED records
+     * with a population and a region (what seedCountry() writes), and ~4,200 bare NAME STRINGS
+     * with nothing else. England has 42 curated and 280 bare, so Prestwich, Telford and Doncaster
+     * exist as names a player can already pick a club name from, but have never existed as
+     * places a player could buy.
+     *
+     * They arrive with NO population, NO region and NO coordinates, status pending — and that is
+     * the whole point. Enrichment supplies all of it, lazily, the first time somebody opens the
+     * town. Two guards keep that backlog from distorting the world it joins:
+     * LocationRepository::findForClassification() and findForGeneration() both ignore towns with
+     * no population, so an unpriced town neither shifts a city-size percentile band nor becomes
+     * a candidate for NPC club generation until it has been enriched.
+     *
+     * ADDS ONLY, MATCHED ON town_normalised. A name already present as a location is skipped, so
+     * this is idempotent and safe to re-run after a curated seed.
+     *
+     * NEAR-DUPLICATES ARE REPORTED, NEVER MERGED. 18 bare names are a whole-word prefix of a
+     * curated one — "Newcastle" against "Newcastle upon Tyne", "Frankfurt" against "Frankfurt am
+     * Main". Some of those are the same city written two ways and ought to be merged by a human;
+     * others are genuinely different places that merely read alike — "San Sebastián de los
+     * Reyes" is a Madrid suburb and "San Sebastián" is in the Basque Country, and "San Miguel"
+     * is not "San Miguel de Tucumán". Automatic merging would silently destroy real towns, so
+     * both rows are created and the pair is reported for review.
+     *
+     * @return array{country: string, imported: int, skipped: int, duplicates: int,
+     *     nearDuplicates: list<array{imported: string, existing: string}>}
+     */
+    public function importPlaceNames(Country $country, bool $dryRun = false): array
+    {
+        $code  = $country->value;
+        $names = CountryContentRegistry::allPlaceNames($country);
+
+        $result = [
+            'country'        => $code,
+            'imported'       => 0,
+            'skipped'        => 0,
+            'duplicates'     => 0,
+            'nearDuplicates' => [],
+        ];
+
+        if ($names === []) {
+            return $result;
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            // Deliberate: importing bare names into a country that has never been seeded would
+            // create a catalogue with no curated anchor at all — nothing priced, nothing
+            // generatable, and a readiness gate that can never pass.
+            throw new \InvalidArgumentException(sprintf(
+                "'%s' has no country profile — run app:locations:seed %s first.",
+                $code,
+                $code,
+            ));
+        }
+
+        $existing = $this->em->getConnection()->fetchAllAssociative(
+            'SELECT slug, town, town_normalised FROM location WHERE country_code = :code',
+            ['code' => $code],
+        );
+
+        $usedSlugs = [];
+        $usedTowns = [];
+        foreach ($existing as $row) {
+            $usedSlugs[(string) $row['slug']]            = true;
+            $usedTowns[(string) $row['town_normalised']] = (string) $row['town'];
+        }
+
+        // Snapshot of what was already in the database, so the two skip reasons stay
+        // distinguishable: a name that was already a location, versus the registry listing the
+        // same name twice. 124 of the ~4,200 are exact repeats once normalised, and an operator
+        // reading "skipped 3,400" wants to know which kind.
+        $preexisting = $usedTowns;
+
+        foreach ($names as $raw) {
+            $town       = trim((string) $raw);
+            $normalised = ClubNameNormalizer::normalize($town);
+
+            if ($town === '' || $normalised === '') {
+                continue;
+            }
+
+            if (isset($usedTowns[$normalised])) {
+                $result[isset($preexisting[$normalised]) ? 'skipped' : 'duplicates']++;
+                continue;
+            }
+
+            foreach ($this->nearDuplicateOf($normalised, $usedTowns) as $match) {
+                $result['nearDuplicates'][] = ['imported' => $town, 'existing' => $match];
+            }
+
+            $slug = $this->uniqueSlug($code, $town, $usedSlugs);
+
+            $usedSlugs[$slug]       = true;
+            $usedTowns[$normalised] = $town;
+
+            $result['imported']++;
+
+            if ($dryRun) {
+                continue;
+            }
+
+            // No population, no region, no capital flag — there is none in this registry, and
+            // writing a zero would be worse than writing nothing: it would look like data.
+            $location = new Location($profile, $town, $slug, $normalised);
+
+            $this->em->persist($location);
+        }
+
+        if (!$dryRun && $result['imported'] > 0) {
+            $this->em->flush();
+            $this->em->clear();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Existing towns this name is probably a variant of.
+     *
+     * Whole-word prefix in either direction, which is what separates "Newcastle" / "Newcastle
+     * upon Tyne" from a coincidence. Reported, never acted on — see importPlaceNames().
+     *
+     * @param array<string, string> $usedTowns normalised => display name
+     *
+     * @return list<string>
+     */
+    private function nearDuplicateOf(string $normalised, array $usedTowns): array
+    {
+        $out = [];
+
+        foreach ($usedTowns as $existingNorm => $existingTown) {
+            if (str_starts_with($existingNorm, $normalised . ' ')
+                || str_starts_with($normalised, $existingNorm . ' ')) {
+                $out[] = $existingTown;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * `en-salford`, deduplicated within the country.
      *
      * The slug is display and log convenience only — nothing references it, and the primary key

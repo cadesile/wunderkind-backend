@@ -93,6 +93,15 @@ final class CountryReadinessService
     }
 
     /** @return array{key: string, ok: bool, detail: string} */
+    /**
+     * Priced, placed towns a country needs before players may be let into it.
+     *
+     * Twenty-five is a judgement, not a derivation: enough that the land list is worth browsing
+     * and a player has real choice on day one, low enough that a country does not need its whole
+     * catalogue enriched before it can open. The rest arrive lazily as players find them.
+     */
+    public const MIN_SELLABLE_LOCATIONS = 25;
+
     private function leagueCheck(string $code): array
     {
         $count = count($this->leagueRepository->findByCountry($code));
@@ -192,55 +201,70 @@ final class CountryReadinessService
     {
         $counts = $this->locationRepository->countByEnrichmentStatus($code);
 
+        // PENDING AND QUEUED ARE NOT FAILURES. They used to block, which was right when every
+        // town in the catalogue was curated and enriched in one sweep. The catalogue now also
+        // holds thousands of bare imported names waiting for lazy enrichment — a town is
+        // enriched the first time a player opens it — so a permanent backlog is the design, and
+        // requiring it to be empty would mean no country could ever go Live again.
+        //
+        // NEEDS_REVIEW and FAILED still block: those are rows a human has to look at, and
+        // shipping a country with unreviewed valuations is the thing this gate exists to stop.
         $outstanding = [];
-        foreach ([
-            EnrichmentStatus::PENDING,
-            EnrichmentStatus::QUEUED,
-            EnrichmentStatus::NEEDS_REVIEW,
-            EnrichmentStatus::FAILED,
-        ] as $status) {
+        foreach ([EnrichmentStatus::NEEDS_REVIEW, EnrichmentStatus::FAILED] as $status) {
             $n = $counts[$status->value] ?? 0;
             if ($n > 0) {
                 $outstanding[] = "{$n} {$status->value}";
             }
         }
 
+        $backlog = ($counts[EnrichmentStatus::PENDING->value] ?? 0)
+            + ($counts[EnrichmentStatus::QUEUED->value] ?? 0);
+
         return [
             'key'    => 'enrichment',
             'ok'     => $outstanding === [],
             'detail' => $outstanding === []
-                ? 'every location enriched'
-                : 'still outstanding: ' . implode(', ', $outstanding),
+                ? ($backlog > 0
+                    ? sprintf('nothing needs review (%d awaiting lazy enrichment, which is fine)', $backlog)
+                    : 'every location enriched')
+                : 'needs a human: ' . implode(', ', $outstanding),
         ];
     }
 
     /**
-     * Every active location must actually have the two values a sale needs.
+     * Enough towns must actually carry the two values a sale needs.
      *
-     * Separate from the enrichment check on purpose: a row can be marked ENRICHED by a
-     * provider that returned a population but no usable coordinate, or be hand-created in the
-     * admin and never enriched at all. This asks the question that matters directly of the
-     * data rather than trusting the status column.
+     * A MINIMUM, NOT A TOTAL. This asked for EVERY active location to be priced, which was
+     * right while the catalogue was 865 curated towns enriched in one pass. It now also holds
+     * thousands of bare imported names that are priced lazily, on first view — so "all of them"
+     * is a bar no country will ever clear, and the question worth asking became "is there
+     * enough here for a player to actually buy something on day one?".
+     *
+     * Separate from the enrichment check on purpose: a row can be marked ENRICHED by a provider
+     * that returned a population but no usable coordinate, or be hand-created in the admin and
+     * never enriched at all. This asks the data directly rather than trusting the status column.
      *
      * @return array{key: string, ok: bool, detail: string}
      */
     private function sellableCheck(string $code): array
     {
-        $incomplete = (int) $this->connection->fetchOne(
+        $sellable = (int) $this->connection->fetchOne(
             "SELECT COUNT(*)
                FROM location
               WHERE country_code = :code
                 AND status = 'active'
-                AND (lat IS NULL OR lng IS NULL OR land_pence IS NULL)",
+                AND lat IS NOT NULL AND lng IS NOT NULL AND land_pence IS NOT NULL",
             ['code' => $code],
         );
 
         return [
             'key'    => 'sellable',
-            'ok'     => $incomplete === 0,
-            'detail' => $incomplete === 0
-                ? 'every active location has coordinates and a land value'
-                : sprintf('%d active location(s) missing coordinates or a land value', $incomplete),
+            'ok'     => $sellable >= self::MIN_SELLABLE_LOCATIONS,
+            'detail' => sprintf(
+                '%d location(s) priced and placed, of %d needed to open',
+                $sellable,
+                self::MIN_SELLABLE_LOCATIONS,
+            ),
         ];
     }
 }
