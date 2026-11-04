@@ -117,6 +117,11 @@ class LocationEnrichmentServiceTest extends KernelTestCase
             self::getContainer()->get(MessageBusInterface::class),
             $this->em,
             new NullLogger(),
+            // An accepted population now re-bands the country and re-syncs its NPC clubs, so the
+            // service needs both. Real instances rather than stubs: the cascade is wrapped in a
+            // try/catch, so a stub that silently did nothing would hide a broken cascade.
+            self::getContainer()->get(\App\Service\Location\LocationClassificationService::class),
+            self::getContainer()->get(\App\Service\Location\NpcClubLocationLinker::class),
         );
     }
 

@@ -15,6 +15,7 @@ back office. Full plain-language summary:
 | Entities, fields, relationships | `stages/03_data/output/entities.md` |
 | Migration history | `stages/03_data/output/migrations.md` |
 | Client/in-memory state (there mostly isn't any — backend-only) | `stages/03_data/output/state.md` |
+| **Changing ANY API response, request DTO or generated payload — read before writing the change** | `shared/api-backwards-compatibility.md` |
 | Routes/endpoints (`/api/*` and `/admin/*`) | `stages/04_interfaces/output/routes.md` |
 | What each controller does | `stages/04_interfaces/output/controllers.md` |
 | What each service does | `stages/04_interfaces/output/services.md` |

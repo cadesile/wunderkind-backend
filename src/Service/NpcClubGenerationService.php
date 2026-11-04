@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\FacilityTemplate;
+use App\Entity\Location\Location;
 use App\Entity\NpcClub;
 use App\Enum\Appearance\BadgeCentre;
 use App\Enum\Appearance\BadgePattern;
@@ -22,6 +23,7 @@ use App\Service\Location\LocationCatalogueService;
 use App\Service\Location\LocationClassificationService;
 use App\Service\LeagueService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 
 class NpcClubGenerationService
 {
@@ -173,6 +175,17 @@ class NpcClubGenerationService
                 citySize:       $citySize,
                 populationSize: (int) ($place['population_size'] ?? 0),
                 isCapital:      (bool) ($place['is_capital'] ?? false),
+                // The town this club plays in. getReference() rather than a lookup: the id came
+                // straight out of findForGeneration() a moment ago, so the row is known to exist
+                // and Doctrine needs only a proxy to write the FK — a find() here would be one
+                // query per club.
+                //
+                // NULL on the placeholder path. A country with no locations yet generates from
+                // LocationCatalogueService::PLACEHOLDER_PLACES, whose entries carry no id and
+                // never will be location rows ("Capital FC", "Northern Town").
+                location:       isset($place['id'])
+                    ? $this->em->getReference(Location::class, Uuid::fromString((string) $place['id']))
+                    : null,
             );
             $club->setStadiumName($stadiumName);
             $club->setPlayingStyle($this->playingStyleForTier($tier));

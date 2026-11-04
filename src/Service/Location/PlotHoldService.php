@@ -40,6 +40,7 @@ final class PlotHoldService
         private readonly PlotClaimRepository    $claimRepository,
         private readonly StadiumEstimateService $estimateService,
         private readonly EntityManagerInterface $em,
+        private readonly LocationCapacityService $capacityService,
     ) {}
 
     /**
@@ -56,6 +57,30 @@ final class PlotHoldService
 
         if ($existingClaim !== null) {
             throw PlotUnavailableException::plotClaimed($existingClaim->getClaimedByName());
+        }
+
+        // TOWN CAPACITY, CHECKED AFTER THE SPECIFIC PLOT AND NOT BEFORE. A town holds as many
+        // clubs as its size allows: plots scale with city size, established clubs consume up to
+        // NPC_PLOT_CAP of them, and players buy what remains.
+        //
+        // THE ORDER IS THE POINT. A one-plot town whose plot is already owned is BOTH "this plot
+        // is taken" and "this town is full", and the first is the more useful answer — it names
+        // the owner and tells the player to look elsewhere for a reason they can act on.
+        // Checking capacity first would have replaced every plot_claimed with a vaguer
+        // town_sold_out, which a test caught.
+        //
+        // Not in assertSellable() because that asks only about this plot and its town's own
+        // state; this question spans npc_club and plot_claim and is about the town's population
+        // of clubs.
+        $capacity = $this->capacityService->forLocation((string) $plot->getLocation()->getId());
+
+        if ($capacity['soldOut']) {
+            throw PlotUnavailableException::townSoldOut(
+                $plot->getLocation()->getTown(),
+                $capacity['plots'],
+                $capacity['npcOccupied'],
+                $capacity['claimed'],
+            );
         }
 
         // The estimate must exist BEFORE the hold, because the hold's whole purpose is to pin a

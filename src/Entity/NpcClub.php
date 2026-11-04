@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Location\Location;
 use App\Enum\CitySize;
 use App\Enum\Formation;
 use App\Repository\NpcClubRepository;
@@ -67,6 +68,34 @@ class NpcClub
     #[ORM\Column(options: ['default' => false])]
     private bool $isCapital = false;
 
+    /**
+     * The town this club plays in.
+     *
+     * NULLABLE AND STAYING SO. Three legitimate ways a club has no town: a country generated
+     * before its locations were seeded (those draw from LocationCatalogueService::
+     * PLACEHOLDER_PLACES, so the "town" is "Capital" or "Northern" and will never be a location
+     * row), a club created by LeagueImportExportService::importClubs() from a hand-edited file,
+     * and any club an admin has renamed freely.
+     *
+     * THE FOUR FIELDS ABOVE ARE NO LONGER INDEPENDENT. region, citySize, populationSize and
+     * isCapital are DERIVED from this location — set from it at generation, and re-synced by
+     * app:npc-clubs:link-locations. They stay as columns rather than becoming accessors because
+     * they must survive the location being retired or the link being nulled, and because a
+     * cached world pack reads them long after the fact. Treat them as a cache of the town's
+     * facts, not as a second opinion about them.
+     *
+     * THE NAME IS NOT DERIVED. A club's name is its own from the moment it is generated, so
+     * renaming a town never rewrites existing clubs — only newly generated ones use the new
+     * name. Same principle as plot_claim.club_name_at_claim.
+     *
+     * SET NULL, not RESTRICT: nothing in this codebase deletes a Location (retirement is a
+     * status flip — see Version20261103120000), so this only fires under admin surgery, where
+     * losing the link beats blocking the operation.
+     */
+    #[ORM\ManyToOne(targetEntity: Location::class)]
+    #[ORM\JoinColumn(name: 'location_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Location $location = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -98,6 +127,7 @@ class NpcClub
         CitySize $citySize = CitySize::MEDIUM,
         int $populationSize = 0,
         bool $isCapital = false,
+        ?Location $location = null,
     ) {
         $this->id             = new UuidV7();
         $this->name           = $name;
@@ -112,6 +142,7 @@ class NpcClub
         $this->citySize       = $citySize;
         $this->populationSize = $populationSize;
         $this->isCapital      = $isCapital;
+        $this->location       = $location;
         $this->createdAt      = new \DateTimeImmutable();
     }
 
@@ -175,6 +206,9 @@ class NpcClub
 
     public function getPopulationSize(): int { return $this->populationSize; }
     public function setPopulationSize(int $v): static { $this->populationSize = $v; return $this; }
+
+    public function getLocation(): ?Location { return $this->location; }
+    public function setLocation(?Location $location): static { $this->location = $location; return $this; }
 
     public function isCapital(): bool { return $this->isCapital; }
     public function setIsCapital(bool $v): static { $this->isCapital = $v; return $this; }

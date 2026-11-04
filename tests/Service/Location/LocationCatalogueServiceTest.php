@@ -98,7 +98,13 @@ class LocationCatalogueServiceTest extends KernelTestCase
         }
     }
 
-    /** The generator's contract: the exact keys it has always consumed, plus city_size. */
+    /**
+     * The generator's contract: the keys it has always consumed, plus city_size, plus the id.
+     *
+     * `id` was added so NpcClubGenerationService can link each generated club back to the town
+     * it was named after. The rest of the shape is unchanged and must stay that way — it is what
+     * makes the move off CountryContentRegistry provably behaviour-preserving.
+     */
     public function testReturnsTheGeneratorsExpectedShape(): void
     {
         $places = $this->catalogue->placesForGeneration(self::COUNTRY);
@@ -107,7 +113,7 @@ class LocationCatalogueServiceTest extends KernelTestCase
 
         foreach (array_slice($places, 0, 5) as $place) {
             self::assertSame(
-                ['name', 'population_size', 'region', 'is_capital', 'city_size'],
+                ['id', 'name', 'population_size', 'region', 'is_capital', 'city_size'],
                 array_keys($place),
             );
             self::assertIsString($place['name']);

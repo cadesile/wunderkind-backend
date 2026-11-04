@@ -110,6 +110,28 @@ The `message` is written to be shown to a player; the `error` code is what you b
 
 ---
 
+### A town can be full
+
+`POST /api/plots/{plotId}/hold` returns **`409 town_sold_out`** when the town has no capacity
+left, even though the plot itself is unclaimed.
+
+A town holds as many clubs as its size allows — plots scale with city size (`BIG` 4, `MEDIUM` 2,
+`SMALL` 1, derived from the enriched population). Established clubs take up to **two** of them
+between them however many there are, and players buy what remains:
+
+```
+available = plotCount − min(clubsHere, 2) − plotsAlreadyBought
+```
+
+The error carries `plots`, `npcOccupied` and `claimed`, so the client can say *"Smallham is
+full: 1 plot, 1 taken by established clubs"* rather than just "unavailable".
+
+**Check `claimable` on the location first** (`locations.md`) — it is the identical calculation,
+so the list and the refusal cannot disagree. Note the ordering: if the specific plot is already
+owned you get `409 plot_claimed` instead, which is the more useful answer.
+
+---
+
 ## 3. `DELETE /api/plots/holds/{holdId}`
 
 Give up a hold early, freeing the plot for others immediately.

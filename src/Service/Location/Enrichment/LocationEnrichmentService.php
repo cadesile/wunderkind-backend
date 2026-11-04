@@ -13,6 +13,8 @@ use App\Message\Location\EnrichLocationMessage;
 use App\Repository\Location\LocationEnrichmentAttemptRepository;
 use App\Repository\Location\LocationEnrichmentRunRepository;
 use App\Repository\Location\LocationRepository;
+use App\Service\Location\LocationClassificationService;
+use App\Service\Location\NpcClubLocationLinker;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -60,6 +62,8 @@ final class LocationEnrichmentService
         private readonly MessageBusInterface                 $messageBus,
         private readonly EntityManagerInterface              $em,
         private readonly LoggerInterface                     $logger,
+        private readonly LocationClassificationService       $classificationService,
+        private readonly NpcClubLocationLinker               $npcLinker,
     ) {}
 
     /**
@@ -231,6 +235,9 @@ final class LocationEnrichmentService
             $location->setCoordinates((float) $accepted['lat'], (float) $accepted['lng']);
         }
 
+        $populationMoved = isset($accepted['population'])
+            && (int) $accepted['population'] !== $location->getPopulation();
+
         if (isset($accepted['population'])) {
             $location->setPopulation((int) $accepted['population']);
             $location->setPopulationSource($source);
@@ -252,6 +259,10 @@ final class LocationEnrichmentService
         $location->setEnrichedAt($stamp);
 
         $this->em->flush();
+
+        if ($populationMoved) {
+            $this->cascadePopulationChange($location);
+        }
 
         if ($verdict->hasCoordinates()) {
             $invalidated = $this->locationRepository->invalidateRivalsNear(
@@ -326,5 +337,52 @@ final class LocationEnrichmentService
         $this->em->flush();
 
         return $attempt;
+    }
+
+    /**
+     * A population landed, so the country's size bands and its NPC clubs have to follow.
+     *
+     * CITY SIZE IS A PERCENTILE SPLIT across the whole country's set, not a threshold on one
+     * row — so one town's new population can push OTHER towns across a band boundary. That is
+     * why this reclassifies the country rather than the location, and re-syncs every linked club
+     * in it rather than just this town's.
+     *
+     * This is the path that makes enrichment actually reach NPC clubs. Without it, an AI
+     * population would update `location` and stop there, leaving the clubs standing in that town
+     * on the figures they were generated with.
+     *
+     * NEVER THROWS INTO THE CALLER. An enrichment attempt that produced good data must be
+     * recorded as a success even if the downstream cascade fails; the attempt row and the
+     * location write have already been committed by this point, and `app:npc-clubs:link-locations
+     * --relink` repairs the cascade at any time. Failing here would roll back nothing and lose
+     * the attempt's outcome.
+     *
+     * DOES NOT INVALIDATE WORLD-PACK CACHES, deliberately. They are per country and tier with no
+     * TTL, and clients keep receiving the old values until that country is rebuilt — see
+     * docs/api/npc-club-city-size.md. Rebuilding on every enriched row would make a sweep
+     * regenerate a country hundreds of times.
+     */
+    private function cascadePopulationChange(Location $location): void
+    {
+        $countryCode = $location->getCountryCode();
+
+        try {
+            $this->classificationService->reclassifyCountry($countryCode);
+            $resynced = $this->npcLinker->resyncCountry($countryCode);
+
+            if ($resynced > 0) {
+                $this->logger->info('NPC clubs re-synced after an enriched population', [
+                    'country'  => $countryCode,
+                    'location' => (string) $location->getId(),
+                    'resynced' => $resynced,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Could not cascade a population change to city sizes or NPC clubs', [
+                'country'   => $countryCode,
+                'location'  => (string) $location->getId(),
+                'exception' => $e,
+            ]);
+        }
     }
 }
