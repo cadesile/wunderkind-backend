@@ -63,9 +63,9 @@ final class EnrichmentQuotaService
      * second: treating it as zero disables the button, and `?? DEFAULT_ALLOWANCE` inverts
      * unlimited into the smallest cap the client knows.
      *
-     * AND THE DEPLOYED DEV BOX STILL CARRIES 0, so this is the live path there, not a corner
-     * case — the migration sets 0 deliberately and only an operator changes it, per
-     * environment. See the warning in docs/api/locations.md.
+     * Dev now carries a real ceiling (25, set 2026-11-05), so the null is not the everyday path
+     * there any more — but it stays one admin field away, and a fresh environment starts at 0
+     * because the migration sets it that way deliberately. See docs/api/locations.md.
      *
      * NOTE: these aliases are ALSO repeated at the top level of the two
      * `POST /api/locations/{id}/enrich` responses, where this array is nested under `quota` —
