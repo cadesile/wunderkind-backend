@@ -13,10 +13,13 @@ namespace App\Enum;
  * THE SIGN CONVENTION IS LOAD-BEARING. `amountPence` is signed and
  * `balanceAfterPence = balanceBeforePence + amountPence` is a constructor invariant, so
  * purchases MUST be negative and credits positive. A purchase recorded positive would credit
- * the account it was meant to debit.
+ * the account it was meant to debit. Two cases opt out and carry either sign per row —
+ * REVERSAL, which has to undo whatever it targets, and CUSTOM_INCOME, which is a human
+ * adjustment that may credit or deduct. Both are therefore absent from isDebit(); see its note.
  *
  * Adding a case is free of migrations — the column is varchar(30) and the longest value here is
- * 16 characters (asserted in UserLedgerEntryTypeTest, so case nine cannot silently overflow it).
+ * 17 characters (`facility_training`), asserted in UserLedgerEntryTypeTest so a new case cannot
+ * silently overflow it.
  * What is NOT free is the effect on aggregates: UserLedgerRepository's dividend sums and the
  * landing page's Rich List both read this table, and both filter on type precisely because a
  * negative purchase row would otherwise corrupt a public leaderboard. Read that repository
@@ -67,6 +70,24 @@ enum UserLedgerEntryType: string
     /** The opening float the player puts into a club at setup. NEGATIVE. */
     case CLUB_FUNDING = 'club_funding';
 
+    /**
+     * A manual adjustment made by an admin. EITHER SIGN.
+     *
+     * The only type a human authors directly — a goodwill credit, a compensation, a correction.
+     * Written through the normal service path from the admin's "New Adjustment" form, never by
+     * hand-editing a row: the balance chain still has to be computed in one place.
+     *
+     * DELIBERATELY NOT LISTED IN isDebit(), and that is load-bearing rather than an oversight.
+     * UserLedgerService::append() throws when isDebit() is true and the amount is positive, so
+     * marking this a debit would make it impossible to CREDIT an account — the common case. The
+     * sign is per row here, which no other type does, so neither answer from isDebit() is right
+     * for all of them and the permissive one is the only one that works.
+     *
+     * Its label is player-visible: GET /api/account/ledger returns label() alongside the
+     * operator's own description text.
+     */
+    case CUSTOM_INCOME = 'custom_income';
+
     /** Support reversal of an earlier entry. Carries whatever sign undoes its target. */
     case REVERSAL = 'reversal';
 
@@ -85,11 +106,24 @@ enum UserLedgerEntryType: string
             self::FACILITY_STADIUM  => 'Stadium',
             self::FACILITY_BUILD   => 'Facility build',
             self::CLUB_FUNDING     => 'Club funding',
+            // PLAYER-VISIBLE. Returned as `label` by GET /api/account/ledger, so it is worded
+            // for the person reading their own ledger, not for the admin who typed it — and it
+            // has to read sensibly whether the amount is a credit or a deduction.
+            self::CUSTOM_INCOME    => 'Adjustment',
             self::REVERSAL         => 'Reversal',
         };
     }
 
-    /** Whether this kind of entry should normally reduce the balance. */
+    /**
+     * Whether this kind of entry should normally reduce the balance.
+     *
+     * CUSTOM_INCOME AND REVERSAL ARE DELIBERATELY ABSENT, and that is not an oversight to be
+     * tidied up. UserLedgerService::append() throws when this returns true and the amount is
+     * positive — a guard that only makes sense for a type whose direction is fixed. Both of
+     * these carry either sign per row, so listing them here would make it impossible to CREDIT
+     * an account, which for CUSTOM_INCOME is the common case. tests/Enum/UserLedgerEntryTypeTest
+     * asserts the exact debit list precisely so this stays true.
+     */
     public function isDebit(): bool
     {
         return match ($this) {
@@ -126,6 +160,9 @@ enum UserLedgerEntryType: string
             self::FACILITY_TRAINING, self::FACILITY_MEDICAL,
             self::FACILITY_SCOUTING, self::FACILITY_STADIUM,
             self::FACILITY_BUILD, self::CLUB_FUNDING         => 'warning',
+            // Neutral on purpose: the sign varies per row, so no one colour is honest about
+            // direction. The amount column already shows it.
+            self::CUSTOM_INCOME                             => 'info',
             self::REVERSAL                                  => 'danger',
         };
     }

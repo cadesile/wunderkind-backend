@@ -190,6 +190,15 @@ so a token minted before the fix starts working without re-authentication. See
   page through `AdminUrlGenerator`. Surfaced as a "Kill Session" button on both
   `/admin/user/{id}` and its edit page (`templates/admin/_kill_session_button.html.twig`),
   alongside a count of unexpired refresh tokens.
+- **`UserLedgerCrudController`** — `GET|POST /admin/user-ledger-entries/create-adjustment`
+  (`admin_user_ledger_create_adjustment`) — the only path by which a human writes a
+  `user_ledger` row. Records a `custom_income` entry of either sign through
+  `UserLedgerService::append()`; EasyAdmin's `NEW` stays disabled. The path segment is
+  deliberately **not** `/admin/user-ledger/…`, which EasyAdmin's `{entityId}` detail
+  wildcard would shadow. Reached via `/admin?routeName=…` for both verbs (it renders an
+  `@EasyAdmin` template); its success redirect goes direct to `admin_user_ledger_detail`,
+  one of the documented exemptions. See `controllers.md` for the idempotency token and the
+  Rich List invalidation.
 - **`FacilityAdminController`** — `POST /admin/facilities/{id}/quick-edit`.
 - **`LeagueAdminController`** — `POST /admin/leagues/{id}/quick-edit`,
   `POST /admin/leagues/tier-defaults/bulk-edit` (`admin_league_tier_defaults_bulk_edit`

@@ -182,9 +182,9 @@ to parse as expected, is silently ignored rather than rejecting the sync.
 
 ---
 
-## Addendum — new entry types (2026-11-03)
+## Addendum — new entry types (last updated 2026-11-05)
 
-`type` is no longer always `dividend_draw`. Six more exist, written by the backend rather
+`type` is no longer always `dividend_draw`. Thirteen more exist, written by the backend rather
 than read out of a sync payload:
 
 | `type` | Sign | Written when |
@@ -194,7 +194,23 @@ than read out of a sync payload:
 | `land_purchase` | **negative** | Buying a land plot (see `land-plots.md`) |
 | `stadium_purchase` | **negative** | Building a ground on a claimed plot |
 | `sell_back_credit` | positive | Proceeds of selling a plot back |
+| `facility_training` | **negative** | Building out the training site at setup (see `club-setup.md`) |
+| `facility_medical` | **negative** | Building out the medical site at setup |
+| `facility_scouting` | **negative** | Building out the scouting site at setup |
+| `facility_stadium` | **negative** | Building out the stadium site at setup |
+| `facility_build` | **negative** | A facility site with no type of its own — only reachable if an admin adds a new category |
+| `club_funding` | **negative** | The opening capital staked into a new club at setup |
+| `custom_income` | **either** | An operator credited or deducted the account by hand |
 | `reversal` | either | A support reversal of an earlier entry |
+
+**One type is localised per site, deliberately.** The four `facility_*` values exist as separate
+types rather than one value carrying the site, because the client localises a row on its `type`
+and ships a copy key per site.
+
+**`custom_income` is the one an operator authors.** Two things follow from that and from nothing
+else in this table: its sign varies **per row**, so it cannot be assumed either way; and its
+`description` is free text a human typed, rather than a fixed server string. Its `label` is
+`"Adjustment"`.
 
 Three consequences for a client:
 

@@ -1,0 +1,126 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+    <div class="col-12 col-lg-8">
+        <h5 class="fw-semibold mb-0">New Adjustment</h5>
+        <p class="text-muted small mb-3">
+            Credit or deduct an account by hand — a goodwill payment, a compensation, a
+            correction. The entry is written through <code>UserLedgerService</code> exactly like
+            every automatic one, so the running balance stays reconstructible.
+        </p>
+
+        <div class="alert alert-warning py-2 small">
+            <strong class="d-block mb-1">Two things to know before you submit.</strong>
+            <ul class="mb-0">
+                <li>
+                    <strong>The player reads your description.</strong> It is returned verbatim
+                    on their own in-app ledger, next to the label &ldquo;Adjustment&rdquo;.
+                </li>
+                <li>
+                    <strong>This can move the public Rich List.</strong> For any account that has
+                    drawn a dividend, their newest ledger row is the balance shown on the
+                    landing page.
+                </li>
+            </ul>
+        </div>
+
+        {% if formState.errors is not empty %}
+            <div class="alert alert-danger py-2">
+                <strong class="d-block mb-1">Nothing was written:</strong>
+                <ul class="mb-0 small">
+                    {% for error in formState.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-body">
+                {# Posts back through the dashboard entry point, not the bare route — the `ea`
+                   Twig context only exists for /admin?routeName=..., including on POST.
+                   See src/Controller/Admin/CLAUDE.md. #}
+                <form method="post"
+                      id="ledger-adjustment-form"
+                      action="{{ path('admin', {routeName: 'admin_user_ledger_create_adjustment'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('user_ledger_create_adjustment') }}">
+                    {# Minted when this page was rendered. Resubmitting the same form writes
+                       nothing instead of crediting twice; a fresh form can record another. #}
+                    <input type="hidden" name="submissionToken" value="{{ formState.submissionToken }}">
+
+                    <div class="mb-3">
+                        <label for="userId" class="form-label">User</label>
+                        <select class="form-select" id="userId" name="userId" required>
+                            <option value="" data-balance-pence="">Choose an account&hellip;</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}"
+                                        data-balance-pence="{{ balances[user.id|lower] ?? balances[user.id] ?? 0 }}"
+                                        {{ formState.userId == user.id ? 'selected' : '' }}>
+                                    {{ user.email }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">The adjustment is an account-level entry — no club is attached.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="amountPence" class="form-label">Amount</label>
+                        <input type="text" inputmode="numeric" class="form-control" id="amountPence"
+                               name="amountPence" value="{{ formState.amountPence }}" required
+                               placeholder="e.g. 250000">
+                        <div class="form-text">
+                            Whole <strong>pence</strong> &mdash; <code>250000</code> is
+                            &pound;2,500.00. Digits only; lead with a minus to deduct.
+                            Maximum {{ (maxAbsPence / 100)|number_format(2) }} either way.
+                            <span id="amountPreview" class="fw-semibold ms-1"></span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label for="balanceBeforeDisplay" class="form-label">Balance before</label>
+                            {# No `name` attribute, deliberately: the browser cannot post these, so
+                               there is no path by which a form value could reach the ledger. The
+                               real figures are read by append() under its per-user lock. #}
+                            <input type="text" class="form-control" id="balanceBeforeDisplay"
+                                   value="&mdash;" readonly tabindex="-1">
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="balanceAfterDisplay" class="form-label">Balance after</label>
+                            <input type="text" class="form-control" id="balanceAfterDisplay"
+                                   value="&mdash;" readonly tabindex="-1">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-text">
+                                A preview, computed in the browser. The stored figures are read by
+                                the server when it writes, so they will differ if this account's
+                                balance changes in the meantime.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <input type="text" class="form-control" id="description" name="description"
+                               value="{{ formState.description }}" maxlength="255" required
+                               placeholder="e.g. Goodwill credit for the lost season 3 save">
+                        <div class="form-text">Required, and <strong>visible to the player</strong> on their ledger.</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Record adjustment</button>
+                        <a href="{{ indexUrl }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Per-screen widget JS, loaded by its own template with a cache-bust — the convention used by
+   the appearance/kit/trophy widgets. Deliberately not in configureAssets(), which loads on
+   every admin page. #}
+{% set cacheBust = 'now'|date('YmdHis') %}
+<script src="{{ asset('assets/user-ledger-adjustment.js') }}?v={{ cacheBust }}"></script>
+{% endblock %}

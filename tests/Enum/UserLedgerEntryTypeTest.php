@@ -93,5 +93,38 @@ class UserLedgerEntryTypeTest extends TestCase
     public function testStoredValuesAreUnchanged(): void
     {
         self::assertSame('dividend_draw', UserLedgerEntryType::DIVIDEND_DRAW->value);
+        self::assertSame('custom_income', UserLedgerEntryType::CUSTOM_INCOME->value);
+    }
+
+    /**
+     * CUSTOM_INCOME must never be marked a debit.
+     *
+     * The debit list above already proves it by omission, but only to someone who notices the
+     * absence. This says it out loud, because the omission looks exactly like an oversight and
+     * the consequence of "fixing" it is severe: UserLedgerService::append() throws when a debit
+     * type carries a positive amount, so listing CUSTOM_INCOME there would make it impossible to
+     * CREDIT an account — which is the main thing the admin adjustment form is for.
+     *
+     * The type carries either sign per row, which is why no fixed answer from isDebit() is right
+     * for it and the permissive one is the only workable choice.
+     */
+    public function testCustomIncomeIsNotADebitSoEitherSignIsAccepted(): void
+    {
+        self::assertFalse(
+            UserLedgerEntryType::CUSTOM_INCOME->isDebit(),
+            'marking custom_income a debit would make UserLedgerService::append() reject every credit',
+        );
+    }
+
+    /**
+     * Its label is player-visible, so it is checked rather than left to drift.
+     *
+     * GET /api/account/ledger returns `label` for every row the player reads back, so this
+     * string lands in front of a person who has no idea an admin typed it — and it has to read
+     * sensibly whether the row credits or deducts.
+     */
+    public function testCustomIncomeReadsSensiblyToAPlayer(): void
+    {
+        self::assertSame('Adjustment', UserLedgerEntryType::CUSTOM_INCOME->label());
     }
 }
