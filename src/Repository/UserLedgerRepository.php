@@ -44,6 +44,48 @@ class UserLedgerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Every user's current balance in one query, keyed by user id as a string.
+     *
+     * The bulk form of getCurrentBalance(), and it MUST agree with it row for row — the admin's
+     * "New Adjustment" form renders each user's balance into the page so the before/after
+     * preview needs no round trip, and a preview that disagreed with what append() will actually
+     * read would mislead an operator about the figure they are about to commit. There is a test
+     * asserting the two agree.
+     *
+     * Same ordering as getCurrentBalance() — recorded_at then id, a UuidV7 being itself
+     * time-ordered — so a tie resolves identically in both.
+     *
+     * Raw SQL for `DISTINCT ON`, like findTopOwnersByBalance() above: "the latest row per user"
+     * needs a window function or a lateral join in DQL, and this is one indexed pass over
+     * idx_user_ledger_user_recorded instead.
+     *
+     * A user with no ledger rows is simply ABSENT from the result rather than present as 0.
+     * Callers default to 0, matching getCurrentBalance()'s own answer for that case.
+     *
+     * @return array<string, int> user id => balance in pence
+     */
+    public function findBalancesByUser(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            <<<'SQL'
+                SELECT DISTINCT ON (l.user_id)
+                       l.user_id,
+                       l.balance_after_pence
+                  FROM user_ledger l
+                 ORDER BY l.user_id, l.recorded_at DESC, l.id DESC
+            SQL,
+        );
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $out[(string) $row['user_id']] = (int) $row['balance_after_pence'];
+        }
+
+        return $out;
+    }
+
+    /**
      * Total pence drawn against one specific club — distinct from getCurrentBalance(), which
      * is the user's overall balance across every club they own. Used by the admin user profile
      * panel to show "earnings drawn from this club" alongside the club's own totalCareerEarnings.

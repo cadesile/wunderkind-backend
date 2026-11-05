@@ -237,8 +237,43 @@ a deleted account — correct, and documented in `docs/api/account-delete.md`.
 **`UserLedgerCrudController`** — read-only (new/edit/delete disabled), same
 `NotificationLogCrudController`/`DeletionRequestCrudController` pattern — an
 audit trail of `UserLedger` rows, filterable by `user`/`club`
-(`EntityFilter`), with `balanceBeforePence`/`balanceAfterPence` shown so a
-mismatch between adjacent rows for the same user is visibly a bug.
+(`EntityFilter`) and `type` (`ChoiceFilter`), with
+`balanceBeforePence`/`balanceAfterPence` shown so a mismatch between adjacent
+rows for the same user is visibly a bug.
+
+It also carries the **one place a human writes a ledger row**: a global
+`New Adjustment` action linking to
+`GET|POST /admin/user-ledger-entries/create-adjustment`
+(`admin_user_ledger_create_adjustment`), which records a `custom_income` entry
+of either sign against an account. Four things about it are load-bearing:
+
+- **EasyAdmin's `NEW` stays disabled and the row is still written by
+  `UserLedgerService::append()`.** `UserLedger`'s constructor is private and
+  `balanceAfterPence` is computed inside it with no setter, so a CRUD form
+  cannot build one — and would take the balance from form input, bypassing the
+  per-user advisory lock `append()` holds while reading the real balance. The
+  form posts three fields (user, amount, description); the service does the
+  rest. There is a test asserting `/new` and `/edit` still answer 403.
+- **The path segment is `user-ledger-entries`, not `user-ledger`**, because
+  EasyAdmin's detail route is `/admin/user-ledger/{entityId}` with an
+  unconstrained wildcard and would shadow it — the same trap
+  `CompetitionEntrantCrudController` documents.
+- **The uniqueness token is minted when the form is rendered**, not per
+  request, and rides in `sourceRef` as `<adminUuid>:<26 hex>` (63 of the
+  column's 64 chars, keeping the admin id whole so attribution is a
+  `LIKE '<adminId>:%'`). Resubmitting one rendered form therefore hits
+  `append()`'s idempotency guard and writes nothing rather than crediting
+  twice; the replay is flashed as a **warning naming the recorded amount**,
+  never as success.
+- **It clears `OwnerSpotlightService`**, because for any account that has drawn
+  a dividend this row becomes their newest and therefore their figure on the
+  public Rich List (`findTopOwnersByBalance()` publishes the latest row's
+  balance for any type).
+
+The balance preview needs no endpoint: `UserLedgerRepository::findBalancesByUser()`
+(one `DISTINCT ON (user_id)` pass) renders every user's balance onto its
+`<option>`, and `public/assets/user-ledger-adjustment.js` does the arithmetic.
+The two balance inputs carry **no `name`**, so a browser cannot post them.
 
 **`UserCrudController`** overrides two standard actions, not just fields:
 - `detail()` renders a fully custom `admin/user_profile.html.twig` instead of
