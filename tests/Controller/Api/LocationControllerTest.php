@@ -531,6 +531,55 @@ class LocationControllerTest extends WebTestCase
         $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId), 'a no-op is free');
     }
 
+    /**
+     * The 202 carries the allowance at the top level too, so one tap needs no second call.
+     *
+     * Same reason as the 429's assertion: the shipped client reads `res.enrichmentCount`, and
+     * the `quota` block alone left that undefined. Both positions are asserted because both
+     * have a reader.
+     */
+    public function testTheQueuedResponseCarriesTheAllowanceAtTheTopLevel(): void
+    {
+        $this->setEnrichmentCap(5);
+
+        $location = $this->location('Toplevel', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        $this->assertResponseStatusCodeSame(202);
+        $body = $this->json();
+
+        $this->assertSame(1, $body['enrichmentCount'], 'top-level, where allowance() looks');
+        $this->assertSame(5, $body['enrichmentCountMax']);
+        $this->assertSame(1, $body['quota']['used'], 'and the nested block is unchanged');
+        $this->assertSame(4, $body['quota']['remaining']);
+    }
+
+    /**
+     * An unlimited allowance sends a NULL ceiling, and that is the one case the alias cannot
+     * express in the client's own terms.
+     *
+     * Asserted so the behaviour is pinned rather than incidental: `0` would read as "none
+     * allowed" and disable the button, and a client applying `?? DEFAULT` to null inverts
+     * unlimited into the smallest cap it has. Dev therefore carries a real ceiling (25) so this
+     * path is not what the app meets first — see docs/api/locations.md.
+     */
+    public function testAnUnlimitedAllowanceSendsANullCeilingAtTheTopLevel(): void
+    {
+        $this->setEnrichmentCap(0);
+
+        $location = $this->location('Unlimitedtown', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        $this->assertResponseStatusCodeSame(202);
+        $body = $this->json();
+
+        $this->assertSame(1, $body['enrichmentCount']);
+        $this->assertNull($body['enrichmentCountMax'], 'unlimited is null, never 0');
+        $this->assertTrue($body['quota']['unlimited']);
+    }
+
     public function testAnExhaustedAccountIsRefusedAndNothingIsBilled(): void
     {
         $this->setEnrichmentCap(1);
@@ -547,10 +596,22 @@ class LocationControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(429);
         $this->assertSame('enrichment_quota_exhausted', $this->json()['error']);
-        // THE ALIAS THE SHIPPED CLIENT BRANCHES ON. It switches on `code` and expects
-        // `enrichment_limited`; `error` is what docs/api/locations.md documents. Both are sent,
-        // because dropping either breaks one of the two readers.
+        // A second spelling of the same refusal. `error` stays canonical; `code` carries the
+        // spelling the app's switch is written against. The app reads its ApiError.code from
+        // `body.error` alone, so this does not make its branch fire on its own — it has to
+        // accept either string. Asserted so the pairing cannot silently disappear.
         $this->assertSame('enrichment_limited', $this->json()['code']);
+
+        // AND THE ALIASES AT THE TOP LEVEL, not only inside `quota`. The shipped client's
+        // allowance() reads res.enrichmentCount; nested-only it reads undefined and bails,
+        // leaving VALUE TOWN enabled to re-429 on every tap. That is what the first version of
+        // this change shipped, and this assertion is what would have caught it.
+        $body = $this->json();
+        $this->assertArrayHasKey('enrichmentCount', $body, 'alias must be top-level, not only under quota');
+        $this->assertSame(1, $body['enrichmentCount']);
+        $this->assertSame(1, $body['enrichmentCountMax']);
+        // The nested block stays, for readers already using it.
+        $this->assertSame(1, $body['quota']['used']);
         $this->assertCount(0, $this->transport()->getSent(), 'a refusal must not dispatch');
         $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId), 'nor charge');
     }
