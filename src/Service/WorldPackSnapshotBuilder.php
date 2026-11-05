@@ -153,6 +153,14 @@ class WorldPackSnapshotBuilder
         ];
     }
 
+    /**
+     * NO `weeklySalary` HERE, DELIBERATELY. Scout gained a wage column on 2026-11-05 and
+     * GET /api/market/data exposes it, but this is the CACHED world-pack shape: adding a key
+     * is a payload shape change, and WorldInitializationService::WORLD_PACK_VERSION's docblock
+     * requires a bump for one — which invalidates every country's pack. Nothing needs the
+     * figure here yet (the funding projection reads the live market, not a pack), so the shape
+     * stays put. Same resolution the NPC-club `locationId` work reached.
+     */
     public function buildScoutSnapshot(Scout $scout): array
     {
         return [

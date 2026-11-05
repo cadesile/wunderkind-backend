@@ -46,7 +46,16 @@ class UserLedgerEntryTypeTest extends TestCase
         self::assertSame([UserLedgerEntryType::DIVIDEND_DRAW], $earning);
     }
 
-    /** Purchases are the debits, and they are the ones that must be stored negative. */
+    /**
+     * Purchases and setup spends are the debits, and they are the ones that must be stored
+     * negative.
+     *
+     * Deliberately exhaustive rather than a predicate check: UserLedgerService::append() throws
+     * on a positive debit, so moving a case in or out of this list changes which writes are
+     * rejected. The four per-site FACILITY_* cases, their FACILITY_BUILD fallback and
+     * CLUB_FUNDING joined it with the setup endpoints. The per-site split exists because the
+     * client localises a ledger row on its type and ships one i18n key per site.
+     */
     public function testOnlyPurchasesAreDebits(): void
     {
         $debits = array_map(
@@ -57,7 +66,19 @@ class UserLedgerEntryTypeTest extends TestCase
             )),
         );
 
-        self::assertSame(['land_purchase', 'stadium_purchase'], $debits);
+        self::assertSame(
+            [
+                'land_purchase',
+                'stadium_purchase',
+                'facility_training',
+                'facility_medical',
+                'facility_scouting',
+                'facility_stadium',
+                'facility_build',
+                'club_funding',
+            ],
+            $debits,
+        );
     }
 
     public function testEveryCaseHasALabelAndABadgeColour(): void

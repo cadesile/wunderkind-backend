@@ -46,6 +46,23 @@ final class EnrichmentQuotaService
      *
      * @return array{used: int, max: int, remaining: ?int, unlimited: bool, exhausted: bool}
      */
+    /**
+     * SERVES TWO SETS OF FIELD NAMES FOR ONE FACT, DELIBERATELY.
+     *
+     * `used`/`max`/`remaining`/`unlimited`/`exhausted` is this endpoint's own shape and what
+     * `docs/api/locations.md` documents. `enrichmentCount`/`enrichmentCountMax` are ALIASES the
+     * shipped client reads — its allowance() bails out when `enrichmentCount` is null, which
+     * meant the VALUATIONS LEFT strip never rendered and VALUE TOWN stayed permanently enabled
+     * against the documented shape alone. The backend ships ahead of the app, so both are sent
+     * rather than the app being asked to catch up before the strip works.
+     *
+     * **`enrichmentCountMax` IS `null` WHEN THE ALLOWANCE IS UNLIMITED**, which is the one thing
+     * the alias cannot express in the client's own terms: the ceiling is stored as `0` meaning
+     * unlimited, and passing that straight through would read as "none allowed" and disable the
+     * button for everyone — today's default on dev. A client that treats a null ceiling as "no
+     * limit" is correct; one that treats it as zero is inverted. Flagged in
+     * `docs/api/locations.md` rather than guessed at.
+     */
     public function quotaFor(User $user): array
     {
         $max  = $this->starterConfigRepository->getConfig()->getMaxEnrichmentRequestsPerUser();
@@ -58,6 +75,11 @@ final class EnrichmentQuotaService
                 'remaining' => null,
                 'unlimited' => true,
                 'exhausted' => false,
+                // ALIASES — see the method docblock. `null` is the honest value for an
+                // unlimited ceiling: 0 here would render as "0 valuations left" and disable the
+                // button on an account that may actually ask for any number.
+                'enrichmentCount'    => $used,
+                'enrichmentCountMax' => null,
             ];
         }
 
@@ -67,6 +89,8 @@ final class EnrichmentQuotaService
             'remaining' => max(0, $max - $used),
             'unlimited' => false,
             'exhausted' => $used >= $max,
+            'enrichmentCount'    => $used,
+            'enrichmentCountMax' => $max,
         ];
     }
 

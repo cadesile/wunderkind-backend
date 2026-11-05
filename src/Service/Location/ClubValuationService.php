@@ -7,6 +7,7 @@ namespace App\Service\Location;
 use App\Entity\Club;
 use App\Entity\ClubFacility;
 use App\Repository\FacilityTemplateRepository;
+use App\Service\Facility\FacilityCostCalculator;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -54,6 +55,7 @@ final class ClubValuationService
 
     public function __construct(
         private readonly FacilityTemplateRepository $templateRepository,
+        private readonly FacilityCostCalculator     $costCalculator,
         private readonly EntityManagerInterface     $em,
     ) {}
 
@@ -103,6 +105,11 @@ final class ClubValuationService
      * costs baseCost x (1 + 2 + ... + L) = baseCost x L(L+1)/2. That is arithmetic on stored
      * values, not an estimate.
      *
+     * The sum itself lives in FacilityCostCalculator, shared with the BUILD charge in
+     * ClubSetupService. Not a tidy-up: that endpoint bills this exact figure from the account's
+     * ledger, so a second copy of the triangular sum here would let the price charged and the
+     * investment credited back on a sell-back drift apart.
+     *
      * A facility whose template has gone (an admin deleted it) contributes nothing and is
      * skipped rather than guessed at.
      *
@@ -137,7 +144,7 @@ final class ClubValuationService
                 'slug'          => $slug,
                 'level'         => $level,
                 'baseCost'      => $baseCost,
-                'investedPence' => (int) ($baseCost * $level * ($level + 1) / 2),
+                'investedPence' => $this->costCalculator->costToReach($baseCost, $level),
             ];
         }
 

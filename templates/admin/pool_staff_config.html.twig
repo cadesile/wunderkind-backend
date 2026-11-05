@@ -546,6 +546,24 @@
                             <div class="form-text">Default: 0–10</div>
                         </div>
                         <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Weekly Wage Range (pence)</label>
+                            <div class="input-group">
+                                <input type="number" name="scoutWageMin" value="{{ config.scoutWageMin }}"
+                                       min="0" class="form-control" placeholder="Min">
+                                <span class="input-group-text">–</span>
+                                <input type="number" name="scoutWageMax" value="{{ config.scoutWageMax }}"
+                                       min="0" class="form-control" placeholder="Max">
+                            </div>
+                            <div class="form-text">
+                                Interpolated across the experience range above, so a more
+                                experienced scout always costs more. Default: 2500–7000
+                                (£25–£70/week).
+                                <br>
+                                Saving this does <strong>not</strong> reprice scouts that already
+                                exist — run <code>app:backfill-scout-wages --force</code> for that.
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label fw-semibold small">Judgement Range</label>
                             <div class="input-group">
                                 <input type="number" name="scoutJudgementMin" value="{{ config.scoutJudgementMin }}"

@@ -619,6 +619,16 @@ class DashboardController extends AbstractDashboardController
         // Zero is a meaningful value here (unlimited), so the default on a missing field has to
         // be zero too — falling back to a positive number would impose a ceiling nobody typed.
         $config->setMaxEnrichmentRequestsPerUser((int) $request->request->get('maxEnrichmentRequestsPerUser', 0));
+
+        // Setup flow: what the onboarding quiz pays, and whether a club stake has a floor.
+        // Both fall back to the "off"/default value on a missing field rather than to something
+        // positive — a quiz bonus or a funding minimum nobody typed would change what players
+        // are paid and what they are allowed to do, silently.
+        $config->setQuizBonusMultiplier((float) $request->request->get('quizBonusMultiplier', 1.0));
+        // Pounds in the form, pence in the column — same convention as the balances above.
+        // Zero means "no minimum", so zero is the right fallback.
+        $config->setClubFundingMinimumPence((int) $request->request->get('clubFundingMinimumPounds', 0) * 100);
+        $config->setClubFundingProjectionWeeks((int) $request->request->get('clubFundingProjectionWeeks', 13));
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
@@ -1598,6 +1608,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::subMenu('Configuration', 'fa fa-sliders')->setSubItems([
             MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config'),
             MenuItem::linkToRoute('Starter Pack Check', 'fa fa-vial', 'admin_starter_pack_check'),
+            // A CrudController is not auto-discovered into this sidebar — it has to be listed.
+            MenuItem::linkTo(SetupQuizQuestionCrudController::class, 'Setup Quiz', 'fa fa-circle-question'),
             MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config'),
             MenuItem::linkToRoute('Player Pool Config', 'fa fa-person-running', 'admin_player_pool_config'),
             MenuItem::linkToRoute('Staff Pool Config', 'fa fa-users', 'admin_staff_pool_config'),

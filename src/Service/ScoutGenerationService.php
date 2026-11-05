@@ -20,6 +20,7 @@ class ScoutGenerationService
         private readonly PoolConfigRepository $poolConfigRepo,
         private readonly NameGeneratorService $nameGenerator,
         private readonly PersonalityLifecycleSubscriber $personalityLifecycle,
+        private readonly ScoutWageCalculator $wageCalculator,
     ) {}
 
     public function build(?string $nationality = null): Scout
@@ -35,6 +36,9 @@ class ScoutGenerationService
         $scout->setDob($this->dobFromAge($age));
         $scout->setNationality($scoutNat);
         $scout->setExperience($experience);
+        // Derived from the experience just rolled, not rolled separately — see
+        // ScoutWageCalculator for why generation and the backfill must agree.
+        $scout->setWeeklySalary($this->wageCalculator->weeklyWageFor($experience, $cfg));
         $scout->setJudgements([
             'potential'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'technical'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),

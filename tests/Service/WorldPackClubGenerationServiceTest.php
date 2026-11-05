@@ -17,6 +17,7 @@ use App\Service\NameGeneratorService;
 use App\Service\Personality\PersonalityGeneratorService;
 use App\Service\PlayerGenerationService;
 use App\Service\ScoutGenerationService;
+use App\Service\ScoutWageCalculator;
 use App\Service\StaffGenerationService;
 use App\Service\WorldPackClubGenerationService;
 use App\Service\WorldPackSnapshotBuilder;
@@ -52,7 +53,12 @@ class WorldPackClubGenerationServiceTest extends TestCase
 
         $playerGen = new PlayerGenerationService($nameGen, $poolConfigRepo, new PersonalityGeneratorService());
         $staffGen  = new StaffGenerationService($poolConfigRepo, $gameConfigRepo, $nameGen, $personalityLifecycle);
-        $scoutGen  = new ScoutGenerationService($poolConfigRepo, $nameGen, $personalityLifecycle);
+        $scoutGen  = new ScoutGenerationService(
+            $poolConfigRepo,
+            $nameGen,
+            $personalityLifecycle,
+            new ScoutWageCalculator($poolConfigRepo),
+        );
 
         return new WorldPackClubGenerationService(
             $playerGen,

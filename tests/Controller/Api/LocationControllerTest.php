@@ -547,6 +547,10 @@ class LocationControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(429);
         $this->assertSame('enrichment_quota_exhausted', $this->json()['error']);
+        // THE ALIAS THE SHIPPED CLIENT BRANCHES ON. It switches on `code` and expects
+        // `enrichment_limited`; `error` is what docs/api/locations.md documents. Both are sent,
+        // because dropping either breaks one of the two readers.
+        $this->assertSame('enrichment_limited', $this->json()['code']);
         $this->assertCount(0, $this->transport()->getSent(), 'a refusal must not dispatch');
         $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId), 'nor charge');
     }
@@ -605,6 +609,13 @@ class LocationControllerTest extends WebTestCase
         $this->assertFalse($data['exhausted']);
         $this->assertNull($data['remaining'], 'no sentinel number a client could render');
         $this->assertSame(2, $data['used'], 'the meter still counts, it just does not gate');
+
+        // THE ALIAS CANNOT SAY "UNLIMITED" IN THE CLIENT'S OWN TERMS, so it says null. The
+        // ceiling is stored as 0 meaning unlimited; passing that through as the max would read
+        // as "none allowed" and disable the button for every account on dev, where 0 is the
+        // deployed default. A client treating a null ceiling as "no limit" is correct.
+        $this->assertSame(2, $data['enrichmentCount']);
+        $this->assertNull($data['enrichmentCountMax'], 'unlimited is null, never 0');
     }
 
     public function testTheQuotaEndpointReportsTheAccountsStanding(): void
@@ -618,7 +629,15 @@ class LocationControllerTest extends WebTestCase
 
         $this->assertResponseIsSuccessful();
         $this->assertSame(
-            ['used' => 1, 'max' => 3, 'remaining' => 2, 'unlimited' => false, 'exhausted' => false],
+            [
+                'used' => 1, 'max' => 3, 'remaining' => 2, 'unlimited' => false, 'exhausted' => false,
+                // ALIASES the shipped client reads — its allowance() bails when
+                // `enrichmentCount` is null, so without these the VALUATIONS LEFT strip never
+                // renders and VALUE TOWN stays permanently enabled. Asserted exhaustively, and
+                // on purpose: these are the field names an app build already in the wild
+                // depends on, so dropping one is a client regression, not a tidy-up.
+                'enrichmentCount' => 1, 'enrichmentCountMax' => 3,
+            ],
             $this->json(),
         );
 

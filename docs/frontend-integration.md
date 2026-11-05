@@ -897,86 +897,32 @@ Errors:
 
 ---
 
-### `GET /api/facilities` — JWT required (`ROLE_CLUB`)
-List all four academy facilities and their current state. Facilities are created at level 0 when the academy is initialized.
+### `GET /api/facilities` and `POST /api/facilities/{type}/upgrade` — ⚠️ **REMOVED, do not call**
 
-Response `200`:
-```json
-{
-  "facilities": {
-    "training_pitch": {
-      "type": "training_pitch",
-      "level": 1,
-      "canUpgrade": true,
-      "upgradeCost": 150000,
-      "currentEffect": "+5% coaching effectiveness",
-      "lastUpgradedAt": "2026-03-01T10:00:00+00:00"
-    },
-    "medical_centre": {
-      "type": "medical_centre",
-      "level": 0,
-      "canUpgrade": true,
-      "upgradeCost": 50000,
-      "currentEffect": "No bonus",
-      "lastUpgradedAt": null
-    },
-    "medical_network": {
-      "type": "medical_network",
-      "level": 0,
-      "canUpgrade": true,
-      "upgradeCost": 50000,
-      "currentEffect": "No bonus",
-      "lastUpgradedAt": null
-    },
-    "scouting_network": {
-      "type": "scouting_network",
-      "level": 0,
-      "canUpgrade": true,
-      "upgradeCost": 50000,
-      "currentEffect": "No bonus",
-      "lastUpgradedAt": null
-    }
-  }
-}
-```
+**Neither endpoint exists.** Both are 404s, and have been since **2026-04-12** (`a20e276`):
+`src/Controller/Api/FacilityController.php` was deleted when the old `Facility` entity and its
+`FacilityType` enum gave way to `FacilityTemplate` + `ClubFacility`, and no API replacement was
+built. The response shapes previously documented here described the pre-2026-04 model (four
+academy facilities, levels deducted from an academy balance) and no longer correspond to
+anything — they are removed rather than corrected, because a wrong shape is worse than none.
 
-Facility levels run 0–5. Upgrade costs and effects per level (all costs in pence):
+`config/packages/security.yaml` still carries an access-control line for `^/api/facilities`,
+which protects a path nothing serves. Harmless, and left in place deliberately until the prefix
+is either rebuilt or the line is removed in a change of its own.
 
-| Level | Upgrade cost | training_pitch | medical_centre | medical_network | scouting_network |
-|------:|-------------:|----------------|----------------|-----------------|------------------|
-| 0→1 | 50,000p (£500) | +5% coaching | +10% recovery | +5% prevention | +10 range |
-| 1→2 | 150,000p (£1,500) | +10% coaching | +20% recovery | +10% prevention | +20 range |
-| 2→3 | 300,000p (£3,000) | +15% coaching | +30% recovery | +15% prevention | +30 range |
-| 3→4 | 500,000p (£5,000) | +20% coaching | +40% recovery | +20% prevention | +40 range |
-| 4→5 | 1,000,000p (£10,000) | +25% coaching | +50% recovery | +25% prevention | +50 range |
+**What to use instead:**
 
-Errors:
-- `404` — no academy found for the authenticated user
+| You want | Use |
+|---|---|
+| The facility catalogue — slugs, categories, `baseCost`, `maxLevel`, upkeep | `GET /api/game-config` → `facilityTemplates` |
+| To build and pay for facilities during setup | `POST /api/club/facilities/{site}` — see [`api/club-setup.md`](api/club-setup.md) |
+| What a club has already built and been charged for | `GET /api/club/setup-state` |
 
----
-
-### `POST /api/facilities/{type}/upgrade` — JWT required (`ROLE_CLUB`)
-Upgrade a facility by one level. The upgrade cost is deducted from the academy's balance immediately.
-
-`{type}` — one of: `training_pitch` · `medical_centre` · `medical_network` · `scouting_network`
-
-Response `200`:
-```json
-{
-  "type": "training_pitch",
-  "level": 2,
-  "canUpgrade": true,
-  "upgradeCost": 300000,
-  "currentEffect": "+10% coaching effectiveness",
-  "balance": 337500
-}
-```
-- `balance` — the academy's remaining balance after the upgrade cost was deducted
-
-Errors:
-- `400` — invalid facility type string
-- `404` — facility or academy not found
-- `409` — facility is already at max level (5), or insufficient funds
+There is currently **no in-game facility upgrade endpoint** for a club past setup. Upgrades
+during play are device-side, like the rest of the in-game economy: the server holds a club's
+facility levels, but gameplay finances are self-contained between the opening stake and a
+dividend draw. If a server-authoritative upgrade is needed, it is a new endpoint and a decision
+about which balance it charges, not a restoration of the two above.
 
 ---
 

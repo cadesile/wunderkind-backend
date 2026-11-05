@@ -28,6 +28,24 @@ class Scout
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $experience = 0;
 
+    /**
+     * Weekly wage in pence.
+     *
+     * ADDED 2026-11-05, AND IT CLOSES A REAL HOLE RATHER THAN ADDING DETAIL. Staff carry
+     * `weeklySalary` and scouts carried nothing at all — not unexposed, absent — so any
+     * projection of a club's running costs built from the market modelled every scout as free.
+     * That is the gap that blocked the funding floor on POST /api/club/fund; see
+     * docs/api/setup-flow.md.
+     *
+     * DERIVED FROM `experience`, DETERMINISTICALLY, by ScoutWageCalculator — not rolled. Every
+     * scout in the world was generated before this column existed, so the backfill has to
+     * compute a wage from what was stored; a random roll would make the backfilled figure
+     * unreproducible and would differ from what the same scout would be worth if generated
+     * today. Generation and backfill therefore share one formula.
+     */
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
+    private int $weeklySalary = 0;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -56,6 +74,9 @@ class Scout
 
     public function getName(): string { return $this->name; }
     public function setName(string $name): void { $this->name = $name; }
+
+    public function getWeeklySalary(): int { return $this->weeklySalary; }
+    public function setWeeklySalary(int $pence): void { $this->weeklySalary = max(0, $pence); }
 
     public function getDob(): ?\DateTimeImmutable { return $this->dob; }
     public function setDob(?\DateTimeImmutable $dob): void { $this->dob = $dob; }
