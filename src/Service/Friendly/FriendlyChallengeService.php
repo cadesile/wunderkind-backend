@@ -24,6 +24,8 @@ use App\Enum\Friendly\FriendlySide;
 use App\Repository\Friendly\FriendlyChallengeSquadRepository;
 use App\Repository\Friendly\FriendlyChallengeSubmissionRepository;
 use App\Repository\Friendly\FriendlyChallengeAuditRepository;
+use App\Message\Friendly\ResolveFriendlyMatchMessage;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 class FriendlyChallengeService
 {
@@ -75,6 +77,7 @@ class FriendlyChallengeService
         private readonly DeterministicEngine $deterministicEngine,
         private readonly InboxService $inboxService,
         private readonly PushNotificationService $pushNotificationService,
+        private readonly MessageBusInterface $messageBus,
     ) {}
 
     /**
@@ -346,14 +349,68 @@ class FriendlyChallengeService
     }
 
     /**
-     * Resolves all ACCEPTED friendly challenges whose kickoffAt <= $now.
+     * Queues every due friendly for resolution, one message each.
+     *
+     * What the cron calls. Resolving a friendly runs the match engine and narrative
+     * generation for a full 90 minutes, and this tick used to do that for *every* due
+     * challenge inline, in one 256M process — unbounded work in a single minute, since how
+     * many friendlies kick off together is decided by players, not by a schedule. It now
+     * writes one row per due challenge and the consumer decides how fast to drain them.
+     * Drained by docker/friendly-consume.sh.
+     *
+     * Dispatch is deliberately not deduped, for the same reason the competition side's
+     * isn't: the message carries an id only and the handler takes the claim, so a duplicate
+     * is a no-op, and tracking what had already been sent would be a second piece of state
+     * to get wrong. A challenge queued but not yet drained is still ACCEPTED and still due,
+     * so the next tick queues it again — that is the intended behaviour, not a leak.
+     *
+     * @return int Number of challenges queued.
+     */
+    public function dispatchDueMatches(\DateTimeImmutable $now): int
+    {
+        $queued = 0;
+        foreach ($this->repository->findDueForResolution($now) as $challenge) {
+            $this->messageBus->dispatch(new ResolveFriendlyMatchMessage((string) $challenge->getId()));
+            $queued++;
+        }
+
+        return $queued;
+    }
+
+    /**
+     * Resolves one friendly if its claim can be taken.
+     *
+     * The single per-challenge implementation, shared by the queue handler and by
+     * resolveDueMatches() below, so the queued and synchronous paths cannot drift.
+     *
+     * @return bool False when another tick (or handler) holds the lease, or the challenge is
+     *              no longer ACCEPTED — both ordinary, not errors.
+     */
+    public function resolveIfClaimable(FriendlyChallenge $challenge, \DateTimeImmutable $now): bool
+    {
+        if (!$this->claimResolution($challenge, $now)) {
+            return false;
+        }
+
+        $this->resolveSingleMatch($challenge, $now);
+
+        return true;
+    }
+
+    /**
+     * Resolves all ACCEPTED friendly challenges whose kickoffAt <= $now, inline.
+     *
+     * Kept as the synchronous driver: it is what the tests exercise, and a usable fallback
+     * if the `friendly` consumer is not running. Production goes through
+     * dispatchDueMatches().
+     *
+     * @return int Number of challenges this call actually resolved.
      */
     public function resolveDueMatches(\DateTimeImmutable $now): int
     {
         $resolved = 0;
         foreach ($this->repository->findDueForResolution($now) as $challenge) {
-            if ($this->claimResolution($challenge, $now)) {
-                $this->resolveSingleMatch($challenge, $now);
+            if ($this->resolveIfClaimable($challenge, $now)) {
                 $resolved++;
             }
         }
@@ -447,6 +504,13 @@ class FriendlyChallengeService
             narrativePayload: $engineResult->narrativePayload,
             resolvedAt: $now,
         );
+
+        // Released in the same flush as the COMPLETE status, mirroring
+        // CompetitionResultsService::finalizeRound(), so that
+        // `resolve_locked_at IS NOT NULL AND status = 'accepted'` means exactly "being
+        // resolved right now, or a tick died mid-resolve" — the state the lease in
+        // claimResolution() reclaims, and the one worth watching for in admin.
+        $challenge->setResolveLockedAt(null);
 
         $stakePence  = $challenge->getStakePence();
         $challengeId = (string) $challenge->getId();
@@ -687,6 +751,25 @@ class FriendlyChallengeService
         return $item;
     }
 
+    /**
+     * Takes the resolve lease for this challenge, or reports that someone else holds it.
+     *
+     * `resolve_locked_at IS NULL` used to make a claim unreleasable: the claim commits here
+     * through raw SQL, so **any** later failure — a DB error, a timeout, anything thrown
+     * between here and the single flush at the end of resolveSingleMatch() — left the lock
+     * set with no predicate that could ever match it again. The challenge stayed ACCEPTED
+     * and claimed, every later tick skipped it, and both clubs' stakes stayed escrowed.
+     * Starting the cron ticks is what made that reachable at all, since before them nothing
+     * claimed.
+     *
+     * A claim older than FriendlyChallenge::CLAIM_LEASE_SECONDS is now reclaimable, and
+     * retrying is safe because of how resolveSingleMatch() commits: the audit row, the
+     * result, the COMPLETE status and both inbox notes all land in ONE flush, and the stake
+     * moves as a `ledger_delta` on those notes rather than as a balance write. So a resolve
+     * that dies before that flush has committed nothing to redo, and one that dies after it
+     * leaves a challenge that is no longer ACCEPTED — which this predicate rejects. There is
+     * no window in which a reclaim can pay a stake twice.
+     */
     private function claimResolution(FriendlyChallenge $challenge, \DateTimeImmutable $now): bool
     {
         $affected = $this->em->getConnection()->executeStatement(
@@ -695,12 +778,13 @@ class FriendlyChallengeService
                SET resolve_locked_at = :now
              WHERE id = :id
                AND status = :accepted
-               AND resolve_locked_at IS NULL
+               AND (resolve_locked_at IS NULL OR resolve_locked_at < :reclaimBefore)
             SQL,
             [
-                'now'      => $now->format('Y-m-d H:i:s'),
-                'id'       => $challenge->getId()->toRfc4122(),
-                'accepted' => FriendlyChallengeStatus::ACCEPTED->value,
+                'now'           => $now->format('Y-m-d H:i:s'),
+                'id'            => $challenge->getId()->toRfc4122(),
+                'accepted'      => FriendlyChallengeStatus::ACCEPTED->value,
+                'reclaimBefore' => $now->modify(sprintf('-%d seconds', FriendlyChallenge::CLAIM_LEASE_SECONDS))->format('Y-m-d H:i:s'),
             ],
         );
 
