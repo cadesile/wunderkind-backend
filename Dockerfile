@@ -64,6 +64,8 @@ COPY docker/leaderboards-close-periods.sh /usr/local/bin/leaderboards-close-peri
 COPY docker/enrichment-consume.sh /usr/local/bin/enrichment-consume.sh
 COPY docker/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-warn.sh
 COPY docker/plots-dormancy-reclaim.sh /usr/local/bin/plots-dormancy-reclaim.sh
+COPY docker/friendly-resolve-matches.sh /usr/local/bin/friendly-resolve-matches.sh
+COPY docker/friendly-expire-challenges.sh /usr/local/bin/friendly-expire-challenges.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   every 5 min — leaderboards-generate: recompute scores/ranks + invalidate leaderboard cache
@@ -191,6 +193,23 @@ COPY docker/plots-dormancy-reclaim.sh /usr/local/bin/plots-dormancy-reclaim.sh
 #     :04 so it lands on no other job's minute. A period left at status `pending`
 #     past its 300s claim lease means a close is failing part-way: its archive is
 #     incomplete and its live rows are deliberately NOT pruned.
+#   every 1 min — friendly-resolve-matches: resolves any ACCEPTED FriendlyChallenge
+#     whose kickoffAt is due, paying the winner 2x the stake as an acceptable inbox
+#     message or refunding both escrows on a draw. Milestone 6 shipped the command and
+#     this entry was missed, so until 2026-11 nothing resolved a friendly in either
+#     environment: accepted challenges sat past kickoff forever with both stakes held.
+#     One minute because accept sets kickoffAt = now + 15 min and a player is waiting on
+#     the result — the same reasoning as competition-resolve-rounds above.
+#     Its claim (FriendlyChallengeService::claimResolution) is `resolve_locked_at IS NULL`
+#     with NO lease reclaim, unlike the competition one, so a run that dies mid-resolve
+#     strands that challenge and its stakes permanently — see the script header.
+#   every 1 min — friendly-expire-challenges: expires OPEN challenges past expiresAt and
+#     REFUNDS the challenger's escrowed stake. Same missing-entry history as above, so
+#     stakes on unanswered challenges were never returned. The refund is guarded by the
+#     conditional status flip (`WHERE status = 'open'`) and so cannot pay twice. A minute
+#     is finer than this needs — expiresAt is in whole hours — but the scan is indexed
+#     and normally empty, and the accept path rejects a stale challenge on time rather
+#     than on status, so a late tick delays only the refund, never correctness.
 RUN mkdir -p /var/spool/cron/crontabs \
  && printf '%s\n' \
     '*/5 * * * *  /usr/local/bin/leaderboards-generate.sh  >> /var/log/leaderboards-cron.log  2>&1' \
@@ -213,10 +232,12 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '* * * * *    /usr/local/bin/enrichment-consume.sh             >> /var/log/enrichment-consume-cron.log   2>&1' \
     '40 3 * * *   /usr/local/bin/plots-dormancy-warn.sh           >> /var/log/plots-dormancy-cron.log       2>&1' \
     '0 4 * * *    /usr/local/bin/plots-dormancy-reclaim.sh        >> /var/log/plots-dormancy-cron.log       2>&1' \
+    '* * * * *    /usr/local/bin/friendly-resolve-matches.sh     >> /var/log/friendly-resolve-cron.log     2>&1' \
+    '* * * * *    /usr/local/bin/friendly-expire-challenges.sh   >> /var/log/friendly-expire-cron.log      2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/enrichment-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
+RUN chmod +x /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/enrichment-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 
