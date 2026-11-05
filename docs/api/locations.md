@@ -21,6 +21,12 @@ This is the read side. Holding, buying and selling plots is `docs/api/land-plots
 balance you spend is `docs/api/user-ledger.md`; where these calls sit in the first-launch
 sequence, and the auth level of every other call in it, is `docs/api/setup-flow.md`.
 
+> **Building the town picker? Read [`location-discovery.md`](location-discovery.md) first.**
+> Most of a country's towns have no region, no population and no price until somebody asks for a
+> valuation — 242 of England's 284 today. A list filtered on region or price hides all of them,
+> and since a player has to find a town to request its enrichment, that filter makes them
+> permanently unreachable. That note has the numbers and the flow.
+
 ---
 
 ## Three rules that shape every response
