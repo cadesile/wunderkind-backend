@@ -497,6 +497,11 @@ because `0` reads as "none allowed" and would disable the button for every accou
 the deployed default on dev today. **A client must treat a null ceiling as "no limit, always
 enabled".** One that treats it as zero has the behaviour exactly inverted.
 
+Dev now carries a real ceiling of **25** rather than the migration's `0`, set on 2026-11-05 so
+the unlimited path is not the default experience while the app is being integrated. Keep a real
+number set there: it means `enrichmentCountMax` is always a number on dev, and the null case
+only shows up if an operator deliberately turns the ceiling off.
+
 `private, max-age=0` — it is one account's spend and changes on that account's own next request.
 
 **Only billed calls are charged.** A `202` with `queued: false` costs nothing and does not touch
