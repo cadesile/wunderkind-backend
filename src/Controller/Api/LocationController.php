@@ -457,6 +457,12 @@ class LocationController extends AbstractController
         if ($quota->isExhausted($user)) {
             return $this->json([
                 'error'   => 'enrichment_quota_exhausted',
+                // ALIAS, for the shipped client, which branches on `code` and expects
+                // `enrichment_limited`. Both are sent: `error` is what
+                // docs/api/locations.md documents and what the land screens already handle,
+                // `code` is what the app's own switch reads. Dropping either breaks one reader,
+                // and the backend ships ahead of the app.
+                'code'    => 'enrichment_limited',
                 'message' => 'This account has used all of its land valuations.',
                 'quota'   => $quota->quotaFor($user),
             ], Response::HTTP_TOO_MANY_REQUESTS);

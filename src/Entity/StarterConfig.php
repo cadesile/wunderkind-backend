@@ -67,6 +67,60 @@ class StarterConfig
     #[ORM\Column(type: 'integer', options: ['default' => 25])]
     private int $maxEnrichmentRequestsPerUser = 25;
 
+    /**
+     * What finishing the onboarding quiz is worth, as a multiple of the account's OWN grant.
+     *
+     * A MULTIPLIER AND NOT A FIXED AMOUNT, which docs/api/setup-flow.md #4 settled and this
+     * comment records the reason for: the grant is a RANGE resolved per account
+     * (resolveUserStartingBalancePence above), so a fixed bonus would be a larger proportion of
+     * an unlucky account's grant than a lucky one's — backwards from the intent. A multiple of
+     * the account's own figure is the same reward to everyone.
+     *
+     * SCALED BY THE SHARE ANSWERED CORRECTLY, so a 1.0 multiplier doubles the grant only on a
+     * perfect score. See SetupQuizService::bonusPence().
+     *
+     * 0.0 TURNS THE BONUS OFF and is a legitimate setting — the quiz still runs and still
+     * records answers, it just pays nothing. Default 1.0: a perfect score doubles the grant,
+     * which is the question the prototype note actually asked.
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 1.0])]
+    private float $quizBonusMultiplier = 1.0;
+
+    /**
+     * Smallest opening float a player may stake into a new club, in pence. **Zero means no
+     * minimum**, and that is the default.
+     *
+     * WHY OFF BY DEFAULT. The client's funding step lets the player stake "a partial sum or
+     * 100%" of their balance, with no floor in the agreed flow. docs/api/setup-flow.md had
+     * proposed enforcing a floor projected from running costs, and POST /api/club/fund does
+     * compute and return that projection — but it refuses nothing unless an operator sets this,
+     * because refusing a stake the player was told they could make is a worse failure than
+     * letting them underfund a club they can top up from a dividend later.
+     *
+     * Same "zero is off, not zero" asymmetry as maxEnrichmentRequestsPerUser, and for the same
+     * reason: the column arrives on a database whose endpoint is about to go live, and a
+     * default that started refusing stakes would be a migration changing behaviour.
+     */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $clubFundingMinimumPence = 0;
+
+    /**
+     * How many weeks the funding step should project running costs over. Default: 13 (a quarter).
+     *
+     * PUBLISHED FOR THE CLIENT TO PROJECT WITH — the server cannot do the projection itself, and
+     * that is a fact about the data model rather than a gap to close later.
+     * POST /api/market/assign deletes players and staff from the pool when they are hired ("no
+     * club_id" — see that controller), so a club's squad and staff exist ONLY on the device. The
+     * server therefore knows a club's facilities and nothing about who it employs.
+     *
+     * So the split is: the client sums candidate wages from GET /api/market/data (staff and, as
+     * of 2026-11-05, scouts both carry `weeklySalary` there) multiplied by this many weeks; the
+     * server returns the one running cost it does hold, facility upkeep, on POST /api/club/fund.
+     * Neither half is enforced unless clubFundingMinimumPence above is set.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 13])]
+    private int $clubFundingProjectionWeeks = 13;
+
     /** Number of players assigned to a starter club. Default: 5 */
     #[ORM\Column(type: 'integer')]
     private int $starterPlayerCount = 5;
@@ -485,6 +539,33 @@ class StarterConfig
     public function setUserStartingBalanceMaxPence(int $pence): static
     {
         $this->userStartingBalanceMaxPence = max(0, $pence);
+
+        return $this;
+    }
+
+    public function getQuizBonusMultiplier(): float { return $this->quizBonusMultiplier; }
+    public function setQuizBonusMultiplier(float $multiplier): static
+    {
+        // Negative would turn a bonus into a charge against the grant it is meant to top up.
+        $this->quizBonusMultiplier = max(0.0, $multiplier);
+
+        return $this;
+    }
+
+    public function getClubFundingMinimumPence(): int { return (int) $this->clubFundingMinimumPence; }
+    public function setClubFundingMinimumPence(int $pence): static
+    {
+        $this->clubFundingMinimumPence = max(0, $pence);
+
+        return $this;
+    }
+
+    public function getClubFundingProjectionWeeks(): int { return $this->clubFundingProjectionWeeks; }
+    public function setClubFundingProjectionWeeks(int $weeks): static
+    {
+        // A zero-week projection is a projection of nothing, which would read as "no running
+        // costs" rather than "no opinion". One week is the floor.
+        $this->clubFundingProjectionWeeks = max(1, $weeks);
 
         return $this;
     }

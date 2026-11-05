@@ -223,6 +223,21 @@ class PoolConfig
     #[ORM\Column(type: 'integer', options: ['default' => 80])]
     private int $scoutExperienceMax = 80;
 
+    /**
+     * Weekly wage in pence for the LEAST experienced scout. Default: 2500 (£25/week).
+     *
+     * The pair below is the range a scout's wage is interpolated across by experience, and the
+     * defaults match the scale docs/frontend-integration.md already publishes for scouts
+     * (£25-£70/week) — chosen so the column arriving does not silently reprice the market
+     * against what the client has been showing.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 2500])]
+    private int $scoutWageMin = 2500;
+
+    /** Weekly wage in pence for a scout at maximum experience. Default: 7000 (£70/week). */
+    #[ORM\Column(type: 'integer', options: ['default' => 7000])]
+    private int $scoutWageMax = 7000;
+
     /** Min value for all 5 scout judgement categories. Default: 40 */
     #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $scoutJudgementMin = 40;
@@ -466,6 +481,12 @@ class PoolConfig
 
     public function getScoutExperienceMax(): int { return $this->scoutExperienceMax; }
     public function setScoutExperienceMax(int $v): static { $this->scoutExperienceMax = $v; return $this; }
+
+    public function getScoutWageMin(): int { return $this->scoutWageMin; }
+    public function setScoutWageMin(int $v): static { $this->scoutWageMin = max(0, $v); return $this; }
+
+    public function getScoutWageMax(): int { return $this->scoutWageMax; }
+    public function setScoutWageMax(int $v): static { $this->scoutWageMax = max(0, $v); return $this; }
 
     public function getScoutJudgementMin(): int { return $this->scoutJudgementMin; }
     public function setScoutJudgementMin(int $v): static { $this->scoutJudgementMin = $v; return $this; }

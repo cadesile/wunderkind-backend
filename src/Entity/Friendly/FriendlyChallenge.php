@@ -18,6 +18,20 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Index(columns: ['acceptor_club_id', 'status'], name: 'idx_friendly_challenge_acceptor_status')]
 class FriendlyChallenge
 {
+    /**
+     * How long a resolve claim (`resolveLockedAt`) stays valid before another tick may take
+     * it. Matches CompetitionRound::CLAIM_LEASE_SECONDS, LeaderboardPeriodArchive's and
+     * Location's deliberately — one recognisable pattern across every claimed row.
+     *
+     * `resolveLockedAt` is a LEASE, not a one-way flag. It used to be the latter, and that
+     * was a bug with teeth: the claim commits through raw SQL, so any failure between the
+     * claim and the result left the column set with no predicate that could ever match it
+     * again — the challenge stayed ACCEPTED and claimed, every later tick skipped it, and
+     * both clubs' stakes stayed escrowed with no way back short of clearing the column by
+     * hand. See FriendlyChallengeService::claimResolution() for why reclaiming is safe.
+     */
+    public const CLAIM_LEASE_SECONDS = 300;
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;

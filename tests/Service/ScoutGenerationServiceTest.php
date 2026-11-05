@@ -11,6 +11,7 @@ use App\Repository\PoolConfigRepository;
 use App\Service\NameGeneratorService;
 use App\Service\Personality\PersonalityGeneratorService;
 use App\Service\ScoutGenerationService;
+use App\Service\ScoutWageCalculator;
 use PHPUnit\Framework\TestCase;
 
 class ScoutGenerationServiceTest extends TestCase
@@ -28,10 +29,13 @@ class ScoutGenerationServiceTest extends TestCase
         $nameGen->method('getRandomNationality')->willReturn('English');
         $nameGen->method('generateName')->willReturn('Test Scout');
 
+        $poolRepo = $this->makePoolConfigRepo($config);
+
         return new ScoutGenerationService(
-            $this->makePoolConfigRepo($config),
+            $poolRepo,
             $nameGen,
             new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
+            new ScoutWageCalculator($poolRepo),
         );
     }
 
@@ -53,10 +57,12 @@ class ScoutGenerationServiceTest extends TestCase
         $nameGen->expects($this->never())->method('getRandomNationality');
         $nameGen->method('generateName')->willReturn('Test Scout');
 
-        $service = new ScoutGenerationService(
-            $this->makePoolConfigRepo(),
+        $poolRepo = $this->makePoolConfigRepo();
+        $service  = new ScoutGenerationService(
+            $poolRepo,
             $nameGen,
             new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
+            new ScoutWageCalculator($poolRepo),
         );
 
         $scout = $service->build('Brazilian');

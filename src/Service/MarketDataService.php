@@ -77,6 +77,12 @@ class MarketDataService
             'nationality' => $s->getNationality(),
             'experience'  => $s->getExperience(),
             'tier'        => Tier::fromScore($s->getExperience())->value,
+            // ADDITIVE, 2026-11-05, and it closes a hole the setup flow found: a running-cost
+            // projection built from this endpoint modelled every scout as free, because Scout
+            // had no wage column at all. Staff candidates have always carried weeklySalary;
+            // scouts now do too, so the two can be summed the same way.
+            // See docs/api/setup-flow.md's "gap in 5.6/5.7".
+            'weeklySalary' => $s->getWeeklySalary(),
             'judgements'  => $s->getJudgements(),
             'appearance'  => $s->getAppearance(),
             'personality' => $s->getPersonality()->toArray(),

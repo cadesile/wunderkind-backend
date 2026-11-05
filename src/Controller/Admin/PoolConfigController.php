@@ -199,6 +199,11 @@ class PoolConfigController extends AbstractController
         $config->setScoutAgeMax((int) $request->request->get('scoutAgeMax', 40));
         $config->setScoutExperienceMin((int) $request->request->get('scoutExperienceMin', 0));
         $config->setScoutExperienceMax((int) $request->request->get('scoutExperienceMax', 10));
+        // Weekly wage range in pence, interpolated across a scout's experience by
+        // ScoutWageCalculator. Changing it does NOT reprice existing scouts — run
+        // `app:backfill-scout-wages --force` for that.
+        $config->setScoutWageMin((int) $request->request->get('scoutWageMin', 2500));
+        $config->setScoutWageMax((int) $request->request->get('scoutWageMax', 7000));
         $config->setScoutJudgementMin((int) $request->request->get('scoutJudgementMin', 40));
         $config->setScoutJudgementMax((int) $request->request->get('scoutJudgementMax', 80));
 

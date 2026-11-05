@@ -14,6 +14,7 @@ constraints. Don't restate field lists here.
 - **Competition:** `competition_template`, `competition_template_reward_template` (join table), `active_competition`, `competition_entrant`, `competition_entrant_squad`, `competition_entrant_submission`, `competition_round`, `competition_fixture`, `competition_result`, `competition_result_audit`, `competition_response_cache`, `reward_template`, `entrant_reward_claim`
 - **Friendlies:** `friendly_challenge`, `friendly_challenge_squad`, `friendly_challenge_submission`, `friendly_challenge_audit`
 - **Config/singleton:** `game_config`, `pool_config`, `starter_config`
+- **New-game setup:** `setup_quiz_question`, `setup_quiz_answer` (the onboarding quiz, which pays a `quiz_bonus` ledger entry)
 - **Location / land economy:** `country_profile` (natural PK `code`), `location`, `location_rival`, `land_plot`, `plot_hold`, `plot_claim`, `plot_claim_valuation`, `stadium_estimate`, `stadium_estimate_input`, `location_enrichment_run`, `location_enrichment_attempt`
 - **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
 - **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table, shared by the `async` and `failed` transports (differentiated by `queue_name`, not by table — see `config/packages/messenger.yaml`); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
@@ -217,6 +218,24 @@ Three things to know before touching them:
   **The three money columns are BIGINT** as of `Version20261103230000`: at real-world
   stadium prices the old 4-byte integers capped at £21,474,836, below a single
   Birmingham ground.
+- **`setup_quiz_answer`** — unique index `uq_setup_quiz_answer_user_question (user_id,
+  question_id)`. **This index IS the "one attempt per account, ever" rule** — the server
+  deliberately does not trust the client's 5-second timer, and a check-then-insert could be
+  raced into two answers for one question. `user_id` is `ON DELETE CASCADE`, which is what
+  makes account deletion correct with no new DQL in `AccountDeletionService` (it leans on the
+  database cascade for user-scoped tables). `question_id` is CASCADE too, but nothing deletes a
+  question: withdrawal is an `is_active` flip, because answers reference the row and bonuses
+  already paid were scored against it.
+- **`scout.weekly_salary`** — added `Version20261105120000` as `DEFAULT 0 NOT NULL`, and **the
+  0 is a deliberate "unpriced" sentinel, not a real wage**: a migration cannot invent a per-row
+  figure. `app:backfill-scout-wages` derives each one from the experience already stored
+  (`ScoutWageCalculator`, deterministic, so generation and backfill agree) and acts only on
+  zero unless `--force`. Scout had **no wage column at all** before this, which is why any
+  running-cost projection built from `GET /api/market/data` modelled every scout as free.
+- **`starter_config`** — `club_funding_minimum_pence` is **BIGINT and 0 means NO MINIMUM**, the
+  same "zero is off, not zero" asymmetry `max_enrichment_requests_per_user` has and for the
+  same reason: the endpoint goes live with the migration, and a default that started refusing
+  stakes would be a schema change quietly changing behaviour.
 - **`user_ledger`** — unique index `uq_user_ledger_source_entry` on
   (`source_sync_record_id`, `source_ledger_index`) — the idempotency guard
   for `app:backfill-user-ledger`/`UserLedgerService` (see `entities.md`).

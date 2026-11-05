@@ -109,6 +109,73 @@
                     </div>
 
                     <div class="col-md-6">
+                        <label for="quizBonusMultiplier" class="form-label fw-semibold small">
+                            Quiz Bonus Multiplier
+                        </label>
+                        <input type="number" id="quizBonusMultiplier"
+                               name="quizBonusMultiplier"
+                               value="{{ config.quizBonusMultiplier }}"
+                               min="0" step="0.05" class="form-control">
+                        <div class="form-text">
+                            What finishing the onboarding quiz pays, as a multiple of
+                            <strong>that account's own</strong> starting grant above &mdash; scaled
+                            by the share of questions answered correctly. At the default
+                            <code>1.0</code>, a perfect score doubles the grant and half marks add
+                            50%.
+                            <br>
+                            A multiple rather than a fixed amount because the grant is a range: a
+                            flat bonus would be a bigger proportion of an unlucky account's grant
+                            than a lucky one's.
+                            <strong>Set to 0 to switch the bonus off</strong> &mdash; the quiz
+                            still runs and still records answers, it just pays nothing.
+                            {% if config.quizBonusMultiplier == 0 %}
+                                <br><span class="text-warning">Bonus currently switched off.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="clubFundingMinimumPounds" class="form-label fw-semibold small">
+                            Minimum Club Stake (&pound;)
+                        </label>
+                        <input type="number" id="clubFundingMinimumPounds"
+                               name="clubFundingMinimumPounds"
+                               value="{{ (config.clubFundingMinimumPence / 100)|round }}"
+                               min="0" step="1000" class="form-control">
+                        <div class="form-text">
+                            The smallest opening capital a player may stake into a new club on
+                            <code>POST /api/club/fund</code>.
+                            <strong>0 means no minimum</strong>, which is the default: the setup
+                            flow offers any part of the account balance, up to all of it, and
+                            refusing a stake the player was told they could make is a worse
+                            failure than letting them underfund a club they can top up from a
+                            dividend later.
+                            {% if config.clubFundingMinimumPence == 0 %}
+                                <br><span class="text-warning">No minimum enforced.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="clubFundingProjectionWeeks" class="form-label fw-semibold small">
+                            Funding Projection Weeks
+                        </label>
+                        <input type="number" id="clubFundingProjectionWeeks"
+                               name="clubFundingProjectionWeeks"
+                               value="{{ config.clubFundingProjectionWeeks }}"
+                               min="1" step="1" class="form-control">
+                        <div class="form-text">
+                            How many weeks of running costs the funding screen projects, published
+                            to the app on <code>/api/starter-config</code>. Advisory &mdash; it
+                            warns, it does not refuse.
+                            <br>
+                            The app does the wage half of that projection itself: hired staff and
+                            players are removed from the pool on assign, so the server holds no
+                            roster and can only report facility upkeep.
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
                         <label for="starterSponsorTier" class="form-label fw-semibold small">Starter Sponsor Tier</label>
                         <select id="starterSponsorTier" name="starterSponsorTier" class="form-select">
                             <option value="SMALL"  {% if config.starterSponsorTier == 'SMALL'  %}selected{% endif %}>SMALL</option>

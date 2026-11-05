@@ -6,6 +6,12 @@ A reply to the prototype team's "Setup flow and authentication" note (v3 prototy
 **Read this with `.context/shared/api-backwards-compatibility.md`.** The backend ships ahead of
 the app, so everything below that is "exists" is already deployed to dev and must keep working.
 
+> **Update, 2026-11-05 — the five "not built" endpoints are built.** `POST /api/club/facilities/{site}`,
+> `POST /api/club/fund`, `GET /api/club/setup-state`, `GET /api/setup-quiz` and
+> `POST /api/setup-quiz/{id}/answer` are all on `development`. **Full contract:
+> [`docs/api/club-setup.md`](club-setup.md)** — that page is authoritative for them; the answers
+> below record the reasoning and the two decisions that changed on the way.
+
 ---
 
 ## The one correction that changes the whole auth table
@@ -123,9 +129,20 @@ So: **the client must not compute an expected opening balance.** Read the real f
 wrong for almost every account. (A range both ends of which are `0` is a legitimate "grant off"
 setting, and then no entry is written at all — handle a zero balance.)
 
-### 4. Should `quiz_bonus` double the grant? — recommend a server-side multiplier
+### 4. Should `quiz_bonus` double the grant? — yes, as a server-side multiplier
 
-**Not built.** Neither `GET /api/setup-quiz` nor the answer endpoint exists.
+**BUILT, 2026-11-05.** Both endpoints exist; see [`club-setup.md`](club-setup.md).
+
+The recommendation below was taken, with the scoring settled as **proportional**:
+`bonus = that account's own grant x quizBonusMultiplier x (correct / total)`. Half marks pay
+half, so a five-question onboarding quiz has no all-or-nothing cliff. The multiplier defaults to
+`1.0` — a perfect score doubles the grant — is admin-set on Starter Config, published on
+`/api/starter-config`, and `0` switches the bonus off while still running the quiz.
+
+Questions live in a `setup_quiz_question` table with its own admin CRUD rather than a JSON
+config blob: a question has a right answer that decides a payout, needs per-row withdrawal, and
+is answered against a foreign key. The payout is written on the LAST answer, not on a separate
+finish call a killed client would never make.
 
 On the question itself: "double the grant" only works if the server does the arithmetic, because
 of #3 — the client cannot know the grant. So the recommendation is a configured
@@ -159,7 +176,8 @@ hub's first call do work for a screen the player may never reach.
 
 Recommend **`GET /api/club/setup-state`** returning which sites are charged and whether the club
 is funded, derived from the ledger rather than from flag columns, so it cannot drift from what
-was actually billed. **Proposed, not built.**
+was actually billed. **BUILT, 2026-11-05** — exactly that, plus the grant and quiz state. See
+[`club-setup.md`](club-setup.md).
 
 ---
 

@@ -432,14 +432,17 @@ effect of navigation.
 | `202` | `{enrichmentStatus: "queued", queued: false, pollUrl, message}` | Already in flight — somebody else (or an earlier tap) queued it. Nothing extra was spent. Poll anyway. |
 | `200` | `{enrichmentStatus: "enriched", queued: false, pollUrl, message}` | Already valued. A no-op, not an error: show the town. |
 | `409` | `{error: "enrichment_needs_admin", enrichmentStatus: "needs_review"\|"failed"}` | Terminal. Polling will not change it. Show the town as unavailable. |
-| `429` | `{error: "enrichment_quota_exhausted", message, quota}` | This account has used its allowance. Nothing was queued or billed. |
+| `429` | `{error: "enrichment_quota_exhausted", code: "enrichment_limited", message, quota}` | This account has used its allowance. Nothing was queued or billed. |
 | `404` | `{error: "location_not_found"}` | Unknown id. |
 | `401` | — | No token. |
 
 Every `2xx` also carries a `quota` block — the same shape as the quota endpoint below — so a
 client never has to make a second call to find out what it has left.
 
-**`429 enrichment_quota_exhausted`** is the other refusal — see the quota section below.
+**`429 enrichment_quota_exhausted`** is the other refusal — see the quota section below. The
+body carries **both** `error: "enrichment_quota_exhausted"` and `code: "enrichment_limited"`:
+the first is this API's own code, the second is what the shipped client's switch branches on.
+Both are sent for the same reason the quota aliases are.
 
 **`queued: false` with `202` is a success, not a conflict.** It is how a double-tap, a retry after
 a timeout, and two players opening the same town all resolve: the first one dispatches, the rest
@@ -466,7 +469,8 @@ admin-set; the account's spend against it is on the account.
 **`GET /api/account/enrichment-quota`** — requires a signed-in user, no club.
 
 ```json
-{ "used": 7, "max": 25, "remaining": 18, "unlimited": false, "exhausted": false }
+{ "used": 7, "max": 25, "remaining": 18, "unlimited": false, "exhausted": false,
+  "enrichmentCount": 7, "enrichmentCountMax": 25 }
 ```
 
 | Field | Notes |
@@ -476,6 +480,27 @@ admin-set; the account's spend against it is on the account.
 | `remaining` | `max - used`, floored at zero. **`null` when `unlimited`** — deliberately not a large sentinel, because a client doing arithmetic on `PHP_INT_MAX` will eventually render it. |
 | `unlimited` | No ceiling is set. `exhausted` is then always `false`. |
 | `exhausted` | The next `POST /{id}/enrich` will be refused with `429`. **Gate the "get a valuation" button on this.** |
+| `enrichmentCount` | Alias of `used` — added 2026-11-05 for the shipped client. |
+| `enrichmentCountMax` | Alias of `max`, **except that it is `null` when unlimited, never `0`.** |
+
+### Two sets of field names, and the one place they differ
+
+`enrichmentCount` / `enrichmentCountMax` are **aliases** added for an app build already in the
+wild: its `allowance()` bails out when `enrichmentCount` is null, so against the documented
+shape alone the VALUATIONS LEFT strip never rendered and VALUE TOWN stayed permanently enabled.
+Both sets are sent, and both will keep being sent — dropping either breaks one of the two
+readers.
+
+**The one thing the alias cannot express is "unlimited".** The ceiling is stored as `0` meaning
+unlimited, and `enrichmentCountMax` sends **`null`** for that rather than passing `0` through,
+because `0` reads as "none allowed" and would disable the button for every account — and `0` is
+the deployed default on dev today. **A client must treat a null ceiling as "no limit, always
+enabled".** One that treats it as zero has the behaviour exactly inverted.
+
+Dev now carries a real ceiling of **25** rather than the migration's `0`, set on 2026-11-05 so
+the unlimited path is not the default experience while the app is being integrated. Keep a real
+number set there: it means `enrichmentCountMax` is always a number on dev, and the null case
+only shows up if an operator deliberately turns the ceiling off.
 
 `private, max-age=0` — it is one account's spend and changes on that account's own next request.
 

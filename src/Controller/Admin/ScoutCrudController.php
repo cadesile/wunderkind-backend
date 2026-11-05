@@ -43,6 +43,14 @@ class ScoutCrudController extends AbstractCrudController
         yield DateField::new('dob')->setLabel('Date of Birth');
         yield TextField::new('nationality');
         yield IntegerField::new('experience');
+        yield IntegerField::new('weeklySalary', 'Weekly Wage')
+            ->formatValue(fn ($v) => $v !== null ? '£' . number_format((int) $v / 100, 2) : '—')
+            ->setHelp(
+                'Pence per week. Normally derived from experience by ScoutWageCalculator at '
+                . 'generation; set by hand here only to override one scout. '
+                . '`app:backfill-scout-wages` fills in scouts that have none, and leaves '
+                . 'anything non-zero alone unless given --force.',
+            );
         yield TextareaField::new('judgementsJson', 'Judgements')
             ->setFormType(TextareaType::class)
             ->setHelp('JSON object of scout judgement attributes. Invalid JSON is silently ignored on save.')
