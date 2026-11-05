@@ -457,15 +457,20 @@ class LocationController extends AbstractController
         if ($quota->isExhausted($user)) {
             return $this->json([
                 'error'   => 'enrichment_quota_exhausted',
-                // ALIAS, for the shipped client, which branches on `code` and expects
-                // `enrichment_limited`. Both are sent: `error` is what
-                // docs/api/locations.md documents and what the land screens already handle,
-                // `code` is what the app's own switch reads. Dropping either breaks one reader,
-                // and the backend ships ahead of the app.
+                // A SECOND SPELLING OF THE SAME REFUSAL, not a second meaning. `error` is
+                // canonical and is what docs/api/locations.md documents and the land screens
+                // already handle, so it does not change. `code` carries the spelling the app's
+                // own switch is written against (`enrichment_limited`).
+                //
+                // NOTE, because the first version of this comment over-claimed: the shipped
+                // client reads its ApiError.code from `body.error` ALONE (client.ts:325), so
+                // this field does not by itself make the app's branch fire — the app has to
+                // accept either string. Kept because it is the right canonical pairing once it
+                // does, and harmless meanwhile. Verified against the client rather than assumed
+                // this time.
                 'code'    => 'enrichment_limited',
                 'message' => 'This account has used all of its land valuations.',
-                'quota'   => $quota->quotaFor($user),
-            ], Response::HTTP_TOO_MANY_REQUESTS);
+            ] + $this->quotaPayload($quota->quotaFor($user)), Response::HTTP_TOO_MANY_REQUESTS);
         }
 
         $queued = $enrichment->queueOnRequest($location);
@@ -484,9 +489,40 @@ class LocationController extends AbstractController
             'enrichmentStatus' => EnrichmentStatus::QUEUED->value,
             'queued'           => $queued,
             'pollUrl'          => $this->pollUrl($location),
-            'quota'            => $quota->quotaFor($user),
             'message'          => 'Queued. Poll the location until enrichmentStatus is "enriched".',
-        ], Response::HTTP_ACCEPTED);
+        ] + $this->quotaPayload($quota->quotaFor($user)), Response::HTTP_ACCEPTED);
+    }
+
+    /**
+     * The quota block, plus its two aliases hoisted to the TOP LEVEL.
+     *
+     * WHY THE DUPLICATION IS THE WHOLE POINT. `GET /api/account/enrichment-quota` returns
+     * `quotaFor()` as its entire body, so `enrichmentCount` is top-level there — but on these
+     * two enrich responses the same array is NESTED under `quota`, and the shipped client's
+     * `allowance()` reads `res.enrichmentCount` at the top level. Nested, it reads undefined and
+     * bails, which is the exact failure the aliases were added to prevent: the VALUATIONS LEFT
+     * strip never renders and VALUE TOWN stays enabled, re-429ing on every tap.
+     *
+     * So the aliases are sent in BOTH positions and the `quota` block is unchanged. A client
+     * reading `res.quota.used`, one reading `res.quota ?? res`, and one reading
+     * `res.enrichmentCount` are then all correct.
+     *
+     * THE FIRST VERSION OF THIS SHIPPED ONLY THE NESTED COPY, on an assumption about the
+     * reader rather than a check of it. `.context/shared/api-backwards-compatibility.md` says
+     * to prove compatibility with a test and a diff rather than assert it from reasoning; this
+     * is what that rule is for.
+     *
+     * @param array<string, mixed> $quota
+     *
+     * @return array<string, mixed>
+     */
+    private function quotaPayload(array $quota): array
+    {
+        return [
+            'quota'              => $quota,
+            'enrichmentCount'    => $quota['enrichmentCount'] ?? $quota['used'] ?? 0,
+            'enrichmentCountMax' => $quota['enrichmentCountMax'] ?? null,
+        ];
     }
 
     /** Where a caller watches for the result: the location's own detail read. */

@@ -59,9 +59,15 @@ final class EnrichmentQuotaService
      * **`enrichmentCountMax` IS `null` WHEN THE ALLOWANCE IS UNLIMITED**, which is the one thing
      * the alias cannot express in the client's own terms: the ceiling is stored as `0` meaning
      * unlimited, and passing that straight through would read as "none allowed" and disable the
-     * button for everyone — today's default on dev. A client that treats a null ceiling as "no
-     * limit" is correct; one that treats it as zero is inverted. Flagged in
-     * `docs/api/locations.md` rather than guessed at.
+     * button for everyone. There are two ways to misread the null, and the shipped drop hits the
+     * second: treating it as zero disables the button, and `?? DEFAULT_ALLOWANCE` inverts
+     * unlimited into the smallest cap the client knows. Dev is therefore set to a real ceiling
+     * (25) rather than the migration's 0, so this path is not what the app meets first.
+     *
+     * NOTE: these aliases are ALSO repeated at the top level of the two
+     * `POST /api/locations/{id}/enrich` responses, where this array is nested under `quota` —
+     * see LocationController::quotaPayload(). Here they are already top-level, because this
+     * array is the whole body of GET /api/account/enrichment-quota.
      */
     public function quotaFor(User $user): array
     {

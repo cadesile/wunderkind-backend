@@ -440,9 +440,11 @@ Every `2xx` also carries a `quota` block — the same shape as the quota endpoin
 client never has to make a second call to find out what it has left.
 
 **`429 enrichment_quota_exhausted`** is the other refusal — see the quota section below. The
-body carries **both** `error: "enrichment_quota_exhausted"` and `code: "enrichment_limited"`:
-the first is this API's own code, the second is what the shipped client's switch branches on.
-Both are sent for the same reason the quota aliases are.
+body carries **both** `error: "enrichment_quota_exhausted"` and `code: "enrichment_limited"` —
+two spellings of one refusal, not two meanings. `error` is canonical and will not change.
+
+**A client should accept either string.** The `code` field alone does not help a client that
+reads its error code from `error`: treat the two as equivalent rather than branching on one.
 
 **`queued: false` with `202` is a success, not a conflict.** It is how a double-tap, a retry after
 a timeout, and two players opening the same town all resolve: the first one dispatches, the rest
@@ -491,11 +493,20 @@ shape alone the VALUATIONS LEFT strip never rendered and VALUE TOWN stayed perma
 Both sets are sent, and both will keep being sent — dropping either breaks one of the two
 readers.
 
+**Where they appear matters, so they appear in both places.** On this endpoint `quotaFor()` *is*
+the whole body, so the aliases are top-level. On `POST /{id}/enrich` the same array is nested
+under `quota` — and the aliases are **also repeated at the top level there**, on both the `202`
+and the `429`, because a client reading `res.enrichmentCount` would otherwise get `undefined`
+on exactly the responses that follow a tap. A reader using `res.quota.used`, one using
+`res.quota ?? res`, and one using `res.enrichmentCount` are all correct.
+
 **The one thing the alias cannot express is "unlimited".** The ceiling is stored as `0` meaning
 unlimited, and `enrichmentCountMax` sends **`null`** for that rather than passing `0` through,
 because `0` reads as "none allowed" and would disable the button for every account — and `0` is
 the deployed default on dev today. **A client must treat a null ceiling as "no limit, always
-enabled".** One that treats it as zero has the behaviour exactly inverted.
+enabled".** Two ways to get this wrong, both seen: treating it as zero disables the button for
+everyone, and applying a `?? DEFAULT_ALLOWANCE` fallback to it silently inverts "unlimited" into
+the smallest cap the client knows. Check for null explicitly.
 
 Dev now carries a real ceiling of **25** rather than the migration's `0`, set on 2026-11-05 so
 the unlimited path is not the default experience while the app is being integrated. Keep a real

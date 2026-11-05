@@ -175,6 +175,18 @@ jobs:
             # and idempotent — safe to re-run every deploy.
             docker compose -f docker-compose.prod.yml exec -T app \
               php bin/console app:backfill-narrative-translations
+            # Prices scouts that have none. `scout.weekly_salary` arrived DEFAULT 0 in
+            # Version20261105120000, and that 0 is an "unpriced" sentinel rather than a real
+            # wage — a migration cannot invent a per-row figure. Left unrun, every scout on the
+            # box reads as FREE, which is the exact gap that made a running-cost projection
+            # built from GET /api/market/data understate a club's wage bill.
+            #
+            # Safe on every deploy, unlike app:backfill-appearances below: it acts only on rows
+            # at 0, re-running is a no-op, and the wage is derived from stored experience so the
+            # figure is reproducible. It does hydrate the matching rows, but the scout table is
+            # thousands of rows rather than the tens of thousands that broke appearances.
+            docker compose -f docker-compose.prod.yml exec -T app \
+              php bin/console app:backfill-scout-wages
             # NOTE: app:backfill-appearances is deliberately NOT run here. It
             # hydrates every matching row in one findBy(), which exhausted the
             # 128MB container limit on prod's 36,569 appearance-less Staff rows
