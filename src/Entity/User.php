@@ -118,6 +118,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(options: ['default' => 0])]
     private int $tokenVersion = 0;
 
+    /**
+     * How many AI land valuations this account has spent.
+     *
+     * Each one is a billed external API call, so this is a spend meter, and
+     * `StarterConfig::$maxEnrichmentRequestsPerUser` is the ceiling it is read against.
+     *
+     * COUNTS DISPATCHES, NOT REQUESTS, and the distinction is the whole design. A request that
+     * finds the town already queued by somebody else — a double tap, a retry after a timeout,
+     * two players opening the same town — bills nothing, so charging the player's quota for it
+     * would take budget for an API call that never happened. The increment therefore sits behind
+     * the same conditional UPDATE that decides who pays: whoever wins the claim is counted, and
+     * everybody else is told the same `queued` and charged nothing. See
+     * LocationEnrichmentService::queueOnRequest().
+     *
+     * LIFETIME TOTAL, NOT A WINDOW. It only ever goes up — there is no reset, no per-hour
+     * bucket and no decay. That is the cheapest thing that satisfies the requirement (cap the
+     * paid calls an account can make) and it needs no scheduled job to be correct. A rolling
+     * window is a different feature and would want its own table of timestamps rather than a
+     * counter; this column would not be the place to bolt it on.
+     *
+     * Starts at 0, which is also what every account predating the column reads as — so
+     * deploying this gives existing accounts their full allowance rather than retroactively
+     * billing them for valuations they already triggered. There is no backfill to do, and no
+     * source to backfill from: enrichment attempts were never attributed to a user.
+     */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $enrichmentCount = 0;
+
     public function __construct(string $email)
     {
         $this->id        = new UuidV7();
@@ -167,6 +195,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
     public function setRoles(array $roles): void { $this->roles = $roles; }
+
+    public function getEnrichmentCount(): int { return $this->enrichmentCount; }
+
+    /**
+     * One more valuation spent.
+     *
+     * No setter, deliberately: the only legitimate change to a spend meter is "one more", and an
+     * absolute setter is how one caller clobbers another's increment. Writing it through the
+     * entity rather than a bare UPDATE keeps it inside the same transaction as the claim, so a
+     * rolled-back dispatch cannot leave the player charged for it.
+     */
+    public function recordEnrichmentRequest(): void { ++$this->enrichmentCount; }
 
     public function eraseCredentials(): void {}
 
