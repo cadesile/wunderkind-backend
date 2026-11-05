@@ -63,6 +63,7 @@ COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 COPY docker/leaderboards-close-periods.sh /usr/local/bin/leaderboards-close-periods.sh
 COPY docker/friendly-resolve-matches.sh /usr/local/bin/friendly-resolve-matches.sh
 COPY docker/friendly-expire-challenges.sh /usr/local/bin/friendly-expire-challenges.sh
+COPY docker/friendly-consume.sh /usr/local/bin/friendly-consume.sh
 
 # Cron schedule (Alpine busybox crond, /var/spool/cron/crontabs/root):
 #   every 5 min — leaderboards-generate: recompute scores/ranks + invalidate leaderboard cache
@@ -174,16 +175,24 @@ COPY docker/friendly-expire-challenges.sh /usr/local/bin/friendly-expire-challen
 #     :04 so it lands on no other job's minute. A period left at status `pending`
 #     past its 300s claim lease means a close is failing part-way: its archive is
 #     incomplete and its live rows are deliberately NOT pruned.
-#   every 1 min — friendly-resolve-matches: resolves any ACCEPTED FriendlyChallenge
-#     whose kickoffAt is due, paying the winner 2x the stake as an acceptable inbox
-#     message or refunding both escrows on a draw. Milestone 6 shipped the command and
-#     this entry was missed, so until 2026-11 nothing resolved a friendly in either
-#     environment: accepted challenges sat past kickoff forever with both stakes held.
-#     One minute because accept sets kickoffAt = now + 15 min and a player is waiting on
-#     the result — the same reasoning as competition-resolve-rounds above.
-#     Its claim (FriendlyChallengeService::claimResolution) is `resolve_locked_at IS NULL`
-#     with NO lease reclaim, unlike the competition one, so a run that dies mid-resolve
-#     strands that challenge and its stakes permanently — see the script header.
+#   every 1 min — friendly-resolve-matches: QUEUES any ACCEPTED FriendlyChallenge whose
+#     kickoffAt is due, one message each onto the `friendly` transport — it does not
+#     resolve them. Milestone 6 shipped the command and this entry was missed, so until
+#     2026-11 nothing resolved a friendly in either environment: accepted challenges sat
+#     past kickoff forever with both stakes held. One minute because accept sets
+#     kickoffAt = now + 15 min and a player is waiting on the result — the same
+#     reasoning as competition-resolve-rounds above, and the tick is now equally cheap:
+#     an indexed due-row scan plus one INSERT per due challenge.
+#   every 1 min — friendly-consume: drains the `friendly` transport, where the resolving
+#     actually happens (match engine + narrative for a full 90 minutes per message).
+#     Own transport and own consumer rather than sharing `competition`: how many
+#     friendlies come due together is decided by players rather than by a schedule, and
+#     that burst must not get in front of tournament rounds, which are the more
+#     time-critical of the two. Bounded by --time-limit=50/--memory-limit=256M, not a
+#     message count. The resolve claim is a lease (FriendlyChallenge::CLAIM_LEASE_SECONDS)
+#     taken in the handler, so a duplicate delivery and a mid-resolve death are both
+#     recoverable, and the stake rides on an inbox ledger_delta committed in the same
+#     flush as COMPLETE — so no retry can pay twice.
 #   every 1 min — friendly-expire-challenges: expires OPEN challenges past expiresAt and
 #     REFUNDS the challenger's escrowed stake. Same missing-entry history as above, so
 #     stakes on unanswered challenges were never returned. The refund is guarded by the
@@ -212,10 +221,11 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '4,14,24,34,44,54 * * * * /usr/local/bin/leaderboards-close-periods.sh >> /var/log/leaderboards-close-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/friendly-resolve-matches.sh     >> /var/log/friendly-resolve-cron.log     2>&1' \
     '* * * * *    /usr/local/bin/friendly-expire-challenges.sh   >> /var/log/friendly-expire-cron.log      2>&1' \
+    '* * * * *    /usr/local/bin/friendly-consume.sh            >> /var/log/friendly-consume-cron.log     2>&1' \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
+RUN chmod +x /usr/local/bin/friendly-consume.sh /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

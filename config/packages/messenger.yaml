@@ -57,6 +57,23 @@ framework:
             # drawable within seconds of its last registration, so a 60s pickup delay would
             # routinely stall draws. See docker/supervisord.conf.
             registration: 'doctrine://default?queue_name=registration'
+            # Friendly match resolution, queued by friendly-resolve-matches.sh. Resolving one
+            # friendly runs the match engine and narrative generation for a full 90 minutes,
+            # which is real work per message, so the cron tick queues rather than resolving
+            # every due challenge inline in one process.
+            #
+            # NOT shared with `competition`, though the work is the same shape. How many
+            # friendlies come due in the same minute is decided by players rather than by a
+            # schedule, so a busy evening is exactly the burst that must not get in front of
+            # tournament rounds — and a round is the more time-critical of the two, being
+            # scheduled against wall-clock time with the next round's draw waiting behind it.
+            # A friendly's own deadline is softer: its result is sealed until the player
+            # reveals it, so a late one reads as a result not yet in rather than as a visibly
+            # missed kickoff. Sharing one queue would trade the round's latency for the
+            # friendly's, in the wrong direction.
+            #
+            # Drained by docker/friendly-consume.sh.
+            friendly: 'doctrine://default?queue_name=friendly'
 
         routing:
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
@@ -81,6 +98,10 @@ framework:
             'App\Message\Competition\WarmCompetitionResponseMessage': competition
             # The one message carrying a payload rather than an id — see its own docblock.
             'App\Message\Competition\StoreEntrantSubmissionMessage': registration
+            # Cron-queued friendly resolution — see FriendlyChallengeService::dispatchDueMatches().
+            # Carries only a challenge id; the handler re-reads it and takes the claim, so a
+            # duplicate dispatch is a no-op.
+            'App\Message\Friendly\ResolveFriendlyMatchMessage': friendly
 
 when@test:
     framework:
@@ -93,6 +114,10 @@ when@test:
                 worldpack: 'in-memory://'
                 pool: 'in-memory://'
                 competition: 'in-memory://'
+                # in-memory, like `competition`: the friendly tests drive resolution through
+                # FriendlyChallengeService::resolveDueMatches()/resolveSingleMatch() directly,
+                # so what matters here is only that a dispatch does not reach a real consumer.
+                friendly: 'in-memory://'
                 # sync://, not in-memory://, and alone among these in being so. The others are
                 # fire-and-forget side effects a test asserts were *dispatched*; this one is
                 # the second half of registration itself, so a test that only saw the envelope
