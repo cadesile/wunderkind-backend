@@ -616,6 +616,9 @@ class DashboardController extends AbstractDashboardController
             (int) $request->request->get('userStartingBalanceMinPounds', 5_000_000),
             (int) $request->request->get('userStartingBalanceMaxPounds', 6_000_000),
         );
+        // Zero is a meaningful value here (unlimited), so the default on a missing field has to
+        // be zero too — falling back to a positive number would impose a ceiling nobody typed.
+        $config->setMaxEnrichmentRequestsPerUser((int) $request->request->get('maxEnrichmentRequestsPerUser', 0));
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));

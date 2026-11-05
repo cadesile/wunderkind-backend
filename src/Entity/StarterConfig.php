@@ -46,6 +46,27 @@ class StarterConfig
     #[ORM\Column(type: 'bigint')]
     private int $userStartingBalanceMaxPence = 600_000_000;
 
+    /**
+     * How many AI land valuations one account may ever ask for. **Zero means unlimited.**
+     *
+     * Each `POST /api/locations/{id}/enrich` that actually dispatches costs one billed external
+     * API call, so without a ceiling a single account can spend the whole enrichment budget by
+     * walking the catalogue — ~4,200 towns at the time of writing.
+     *
+     * ZERO IS UNLIMITED, NOT ZERO, and that asymmetry is deliberate. The column arrives on
+     * databases where the feature is already deployed and in use; a default that meant "nobody
+     * may enrich anything" would silently break a working endpoint the moment the migration ran.
+     * Unlimited is the behaviour those rows already have, so unlimited is what the default has
+     * to preserve. An operator who genuinely wants to switch enrichment off has the provider
+     * setting for that.
+     *
+     * Counted against dispatches, not requests — see User::$enrichmentCount.
+     *
+     * Default: 25.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 25])]
+    private int $maxEnrichmentRequestsPerUser = 25;
+
     /** Number of players assigned to a starter club. Default: 5 */
     #[ORM\Column(type: 'integer')]
     private int $starterPlayerCount = 5;
@@ -400,6 +421,22 @@ class StarterConfig
     /** Virtual property for the admin form — accepts/returns pounds; storage remains pence. */
     public function getStartingBalancePounds(): int { return (int) round($this->startingBalance / 100); }
     public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
+
+    public function getMaxEnrichmentRequestsPerUser(): int { return $this->maxEnrichmentRequestsPerUser; }
+
+    /** Clamped at zero rather than throwing: a negative ceiling is a typo, and zero already means unlimited. */
+    public function setMaxEnrichmentRequestsPerUser(int $max): static
+    {
+        $this->maxEnrichmentRequestsPerUser = max(0, $max);
+
+        return $this;
+    }
+
+    /** True when this config places no ceiling on enrichment requests at all. */
+    public function enrichmentRequestsAreUnlimited(): bool
+    {
+        return $this->maxEnrichmentRequestsPerUser === 0;
+    }
 
     // Cast on read: Doctrine hydrates a bigint column as a string.
     public function getUserStartingBalanceMinPence(): int { return (int) $this->userStartingBalanceMinPence; }

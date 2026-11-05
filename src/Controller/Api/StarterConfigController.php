@@ -49,6 +49,10 @@ class StarterConfigController extends AbstractController
             // the ledger when the owner avatar is created; read it from GET /api/account/ledger.
             'userStartingBalanceMinPence' => $config->getUserStartingBalanceMinPence(),
             'userStartingBalanceMaxPence' => $config->getUserStartingBalanceMaxPence(),
+            // The CEILING only. An account's spend against it is per-account and therefore
+            // cannot live on this shared, cached read — see GET /api/account/enrichment-quota,
+            // which returns both. 0 means unlimited.
+            'maxEnrichmentRequestsPerUser' => $config->getMaxEnrichmentRequestsPerUser(),
             'starterPlayerCount' => $config->getStarterPlayerCount(),
             'starterManagerCount'             => $config->getStarterManagerCount(),
             'starterCoachCount'               => $config->getStarterCoachCount(),

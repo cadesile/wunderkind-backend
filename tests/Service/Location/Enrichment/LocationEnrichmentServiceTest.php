@@ -117,11 +117,21 @@ class LocationEnrichmentServiceTest extends KernelTestCase
             self::getContainer()->get(MessageBusInterface::class),
             $this->em,
             new NullLogger(),
-            // An accepted population now re-bands the country and re-syncs its NPC clubs, so the
-            // service needs both. Real instances rather than stubs: the cascade is wrapped in a
-            // try/catch, so a stub that silently did nothing would hide a broken cascade.
+            // An accepted population now re-bands the country, re-syncs its NPC clubs and gives
+            // the town the plots its new size earns it, so the service needs all three. Real
+            // instances rather than stubs: the cascade is wrapped in a try/catch, so a stub that
+            // silently did nothing would hide a broken cascade.
             self::getContainer()->get(\App\Service\Location\LocationClassificationService::class),
             self::getContainer()->get(\App\Service\Location\NpcClubLocationLinker::class),
+            self::getContainer()->get(\App\Service\Location\LandPlotProvisioner::class),
+        );
+    }
+
+    private function plotCountOf(Location $location): int
+    {
+        return (int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM land_plot WHERE location_id = :id',
+            ['id' => (string) $location->getId()],
         );
     }
 
@@ -164,7 +174,7 @@ class LocationEnrichmentServiceTest extends KernelTestCase
             $this->em->clear();
             $fresh = $this->locations->find((string) $location->getId());
 
-            if ($service->queueForRead($fresh)) {
+            if ($service->queueOnRequest($fresh)) {
                 ++$won;
             }
         }
@@ -183,7 +193,7 @@ class LocationEnrichmentServiceTest extends KernelTestCase
         $location = $this->location();
         $service  = $this->service();
 
-        self::assertTrue($service->queueForRead($location));
+        self::assertTrue($service->queueOnRequest($location));
 
         // Backdate the claim past the lease, as a dead worker would leave it.
         $this->connection->executeStatement(
@@ -224,7 +234,7 @@ class LocationEnrichmentServiceTest extends KernelTestCase
 
         $this->transport()->reset();
 
-        self::assertFalse($this->service()->queueForRead($fresh));
+        self::assertFalse($this->service()->queueOnRequest($fresh));
         self::assertCount(0, $this->transport()->getSent());
     }
 
@@ -243,7 +253,7 @@ class LocationEnrichmentServiceTest extends KernelTestCase
             $fresh = $this->locations->find((string) $location->getId());
 
             self::assertFalse(
-                $this->service()->queueForRead($fresh),
+                $this->service()->queueOnRequest($fresh),
                 "{$status->value} must not be re-queued by a reader",
             );
         }
@@ -283,6 +293,71 @@ class LocationEnrichmentServiceTest extends KernelTestCase
 
         self::assertSame(410, $attempt->getInputTokens());
         self::assertSame(190, $attempt->getOutputTokens());
+    }
+
+    /**
+     * Enrichment is what makes a town buyable, and that must not depend on the population
+     * CHANGING.
+     *
+     * The regression this guards: plot provisioning once lived inside cascadePopulationChange(),
+     * which only runs when the accepted population differs from what was there. A town whose
+     * seeded figure the AI simply confirms took that branch with "nothing moved" and came out
+     * enriched, priced, and with zero plots — permanently unbuyable, reporting
+     * `awaiting_enrichment` for ever with nothing in the response to explain it.
+     *
+     * So this seeds a population and has the enricher return THE SAME NUMBER.
+     */
+    public function testAnEnrichedTownGetsItsPlotsEvenWhenThePopulationDidNotMove(): void
+    {
+        $location = $this->location(population: 270_000);
+
+        self::assertSame(0, $this->plotCountOf($location), 'precondition: no plots yet');
+
+        $this->enricher->always(new EnrichmentResult(
+            lat: 53.4808,
+            lng: -2.2426,
+            population: 270_000, // identical to the seeded figure: nothing moves.
+            landPence: 45_000_00,
+            raw: [],
+        ));
+
+        $attempt = $this->service()->enrich($location);
+
+        self::assertSame(EnrichmentOutcome::ACCEPTED, $attempt->getOutcome());
+        self::assertGreaterThan(
+            0,
+            $this->plotCountOf($location),
+            'an enriched town must have plots to sell, however its population got there',
+        );
+    }
+
+    /** Running enrichment twice must not double a town's plots — provisioning is a top-up. */
+    public function testProvisioningIsNotRepeatedOnASecondEnrichment(): void
+    {
+        $location = $this->location(population: 270_000);
+
+        $this->enricher->always(new EnrichmentResult(
+            lat: 53.4808,
+            lng: -2.2426,
+            population: 270_000,
+            landPence: 45_000_00,
+            raw: [],
+        ));
+
+        $this->service()->enrich($location);
+        $first = $this->plotCountOf($location);
+
+        // Re-open the row so a second pass is possible at all, then run it again.
+        $this->connection->executeStatement(
+            "UPDATE location SET enrichment_status = 'pending' WHERE id = :id",
+            ['id' => (string) $location->getId()],
+        );
+        $this->em->clear();
+
+        $reloaded = $this->em->find(Location::class, (string) $location->getId());
+        $this->service()->enrich($reloaded);
+
+        self::assertSame($first, $this->plotCountOf($reloaded));
     }
 
     /** A partial answer keeps the good half and flags the row rather than failing it. */
@@ -416,7 +491,7 @@ class LocationEnrichmentServiceTest extends KernelTestCase
         $location = $this->location();
         $service  = $this->service();
 
-        self::assertTrue($service->queueForRead($location));
+        self::assertTrue($service->queueOnRequest($location));
 
         $stale = (new \DateTimeImmutable())->modify('-200 seconds');
         $this->connection->executeStatement(

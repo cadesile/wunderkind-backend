@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service\Location;
 
 use App\Enum\CitySize;
+use App\Exception\Location\PlotUnavailableException;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
@@ -57,6 +58,19 @@ final class LocationCapacityService
      */
     public const NPC_PLOT_CAP = 2;
 
+    /** The town has no plots because it has never been priced — ask for enrichment and wait. */
+    public const REASON_NOT_PRICED = 'awaiting_enrichment';
+
+    /**
+     * The town has plots and every one of them is taken — look elsewhere.
+     *
+     * Aliased to the EXCEPTION's constant rather than repeating the literal, because the two
+     * must be the same string: a client reads this off the catalogue to decide whether to offer
+     * the buy button, and reads the other off a `409` when it offers it anyway. Two literals
+     * that happen to agree today is how they stop agreeing later.
+     */
+    public const REASON_SOLD_OUT = PlotUnavailableException::TOWN_SOLD_OUT;
+
     public function __construct(private readonly Connection $connection) {}
 
     /** Plots a town of this size should have. */
@@ -74,7 +88,7 @@ final class LocationCapacityService
      * @param list<string> $locationIds
      *
      * @return array<string, array{plots: int, npcClubs: int, npcOccupied: int, claimed: int,
-     *     available: int, soldOut: bool}>
+     *     available: int, soldOut: bool, unprovisioned: bool, reason: ?string}>
      */
     public function forLocations(array $locationIds): array
     {
@@ -110,14 +124,18 @@ final class LocationCapacityService
         return $out;
     }
 
-    /** @return array{plots: int, npcClubs: int, npcOccupied: int, claimed: int, available: int, soldOut: bool} */
+    /**
+     * @return array{plots: int, npcClubs: int, npcOccupied: int, claimed: int, available: int,
+     *     soldOut: bool, unprovisioned: bool, reason: ?string}
+     */
     public function forLocation(string $locationId): array
     {
         return $this->forLocations([$locationId])[$locationId] ?? $this->shape(0, 0, 0);
     }
 
     /**
-     * @return array{plots: int, npcClubs: int, npcOccupied: int, claimed: int, available: int, soldOut: bool}
+     * @return array{plots: int, npcClubs: int, npcOccupied: int, claimed: int, available: int,
+     *     soldOut: bool, unprovisioned: bool, reason: ?string}
      */
     private function shape(int $plots, int $npcClubs, int $claimed): array
     {
@@ -128,13 +146,26 @@ final class LocationCapacityService
         // Negative availability is not a thing a caller should have to reason about.
         $available = max(0, $plots - $npcOccupied - $claimed);
 
+        // NO PLOTS IS NOT THE SAME AS NO PLOTS LEFT, and conflating them sends a client the
+        // wrong way. A town with zero plots has never been sized — it was imported as a bare
+        // name and nobody has asked for it to be priced, so the answer is "ask for enrichment
+        // and wait". A town whose plots are all taken is finished, and the answer is "look
+        // elsewhere". Both used to report town_sold_out.
+        $unprovisioned = $plots === 0;
+
         return [
-            'plots'       => $plots,
-            'npcClubs'    => $npcClubs,
-            'npcOccupied' => $npcOccupied,
-            'claimed'     => $claimed,
-            'available'   => $available,
-            'soldOut'     => $available === 0,
+            'plots'         => $plots,
+            'npcClubs'      => $npcClubs,
+            'npcOccupied'   => $npcOccupied,
+            'claimed'       => $claimed,
+            'available'     => $available,
+            'soldOut'       => $available === 0,
+            'unprovisioned' => $unprovisioned,
+            'reason'        => match (true) {
+                $available > 0 => null,
+                $unprovisioned => self::REASON_NOT_PRICED,
+                default        => self::REASON_SOLD_OUT,
+            },
         ];
     }
 }

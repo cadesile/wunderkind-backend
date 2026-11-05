@@ -83,6 +83,45 @@ worth copying the style of:
 - creating a club does **not** touch account credit (land is a separate, opt-in purchase);
 - two clubs with no plot can still share a name — the partial-index guard from point 4.
 
+## The log of deliberate breaks
+
+Additive is the rule; a break is allowed only when it is **recorded here with its consumer
+check**. The point of the log is that "nothing consumed it" is a claim somebody can audit later,
+not a thing you assert once and forget.
+
+| Date | Change | Consumer check |
+|---|---|---|
+| 2026-11-04 | `GET /api/locations`, `/facets`, `/{id}` moved from `PUBLIC_ACCESS` to `IS_AUTHENTICATED_FULLY`. An unauthenticated caller now gets `401`. | No shipped build calls them — the whole locations surface postdates the last app release. Requested directly by the product owner: the catalogue is unreleased curated content, and the detail read was the doorway to a billed AI call. |
+| 2026-11-04 | `GET /api/locations/{id}` no longer queues enrichment as a side effect. Response shape unchanged; the write is gone. Replaced by `POST /api/locations/{id}/enrich`. | Same: no shipped consumer. A GET that spends money on a metered external API is the defect being removed, so leaving it in place additively was not an option. |
+
+Both are behaviour changes to **deployed** endpoints, which is why they are logged even though
+the blast radius is zero. The window where that is true is closing: once the app ships against
+any of this, the rule above applies with no exceptions.
+
+### The near-miss that is worth copying: the enrichment quota
+
+The per-account valuation cap (2026-11-04) added a ceiling to an endpoint that had none. Done
+carelessly that is a break — every request past the ceiling starts failing — so note what made
+it additive instead:
+
+- **The new config column's default means "behave as before".**
+  `starter_config.max_enrichment_requests_per_user` is `0 = unlimited`, and the migration sets
+  the existing row to `0` explicitly. A default of 25 would have been the obvious choice and
+  would have silently started refusing requests that worked the day before, as a side effect of
+  running migrations. **Zero-means-unlimited is not a quirk; it is the compatibility mechanism.**
+  There is a test asserting it (`LocationControllerTest::testACapOfZeroMeansUnlimited`) whose
+  docblock says so, because the asymmetry looks like a bug to anyone who finds it later.
+- **The new counter defaults to 0 with no backfill**, so no existing account is retroactively
+  billed for valuations it already triggered. There was nothing to backfill from in any case —
+  enrichment attempts were never attributed to a user.
+- **`429 enrichment_quota_exhausted` is a new error code**, which is client-visible per point 6
+  below. It is unreachable while the cap is 0, which is how a cap can ship ahead of any client
+  that understands the refusal.
+
+The general shape: **when adding a limit to something that was unlimited, the migration's job is
+to preserve "unlimited", and turning the limit on is an operator action with a form in front of
+it.**
+
 ## What "backwards compatible" does and does not cover
 
 It means: **the old request shapes still work, and the old response keys still mean the same

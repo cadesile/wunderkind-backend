@@ -7,6 +7,7 @@ namespace App\Controller\Api;
 use App\Entity\User;
 use App\Entity\UserLedger;
 use App\Repository\UserLedgerRepository;
+use App\Service\Location\EnrichmentQuotaService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -53,6 +54,30 @@ class AccountLedgerController extends AbstractController
 {
     private const DEFAULT_LIMIT = 50;
     private const MAX_LIMIT     = 200;
+
+    /**
+     * `GET /api/account/enrichment-quota` — how many AI land valuations this account has left.
+     *
+     * Its own endpoint rather than a field on starter-config, because the ceiling alone is not
+     * the useful fact: a client needs the ceiling AND this account's spend against it to decide
+     * whether to offer the "get a valuation" button, and the spend is per-account so it could
+     * never live on a shared, cacheable config read.
+     *
+     * Here rather than on LocationController because it describes the ACCOUNT, not a town — the
+     * same family as the ledger above, and still correct to call when the player is nowhere near
+     * the land screens.
+     */
+    #[Route('/enrichment-quota', name: 'api_account_enrichment_quota', methods: ['GET'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function enrichmentQuota(EnrichmentQuotaService $quota): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        // Private and uncacheable: it is one account's spend, and it changes on that account's
+        // own next request. A shared cache here would serve one player's allowance to another.
+        return $this->json($quota->quotaFor($user))->setPrivate()->setMaxAge(0);
+    }
 
     #[Route('/ledger', name: 'api_account_ledger', methods: ['GET'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]

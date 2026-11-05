@@ -1,13 +1,25 @@
 # Locations — the land catalogue
 
-`GET /api/locations`, `GET /api/locations/facets`, `GET /api/locations/{id}`
+`GET /api/locations`, `GET /api/locations/facets`, `GET /api/locations/{id}`,
+`POST /api/locations/{id}/enrich`
 
-**Public.** A player browses towns before signing in, and the default list carries no
-per-account data. The one exception is the affordability variant, which is opt-in precisely
-because it changes that.
+**All four require a signed-in user** — a valid JWT, `IS_AUTHENTICATED_FULLY`. **No club is
+needed**, and that distinction matters: land is bought before a club exists, so none of these is
+gated on `ROLE_CLUB`.
+
+> **This changed on 2026-11-04.** The three reads were previously `PUBLIC_ACCESS`. They are not
+> any more. A client that browsed towns before sign-in now gets `401`. Nothing shipped consumed
+> them, so no released build is affected — but see
+> `.context/shared/api-backwards-compatibility.md`: this is a behaviour change to a deployed
+> endpoint and is recorded as one.
+>
+> Two reasons, and the second is the real one. The catalogue is pre-release curated content, and
+> the detail read is the doorway to a **billed** AI valuation — see rule 3. A public doorway to a
+> metered external API is a budget anyone can spend.
 
 This is the read side. Holding, buying and selling plots is `docs/api/land-plots.md`; the
-balance you spend is `docs/api/user-ledger.md`.
+balance you spend is `docs/api/user-ledger.md`; where these calls sit in the first-launch
+sequence, and the auth level of every other call in it, is `docs/api/setup-flow.md`.
 
 ---
 
@@ -23,10 +35,19 @@ common state — not an error and not a 404. Treat `enrichmentStatus` as the loa
 render an un-enriched town as pending rather than crashing on a missing number. The keys are
 always present; only their values are null.
 
-**3. Only the detail endpoint triggers enrichment.** A read of an un-enriched location queues
-one background job. The **list never does**, however many pending rows it contains — one page
-of 200 would otherwise queue 200 billed external API calls, so a crawler or a player scrolling
-a region could drain the budget in a few requests. Batch enrichment is an admin action.
+**3. Nothing a GET does triggers enrichment. Only `POST /{id}/enrich` does.**
+Every read on this page is side-effect free and free of charge: the list, the facets and the
+detail. Pricing an un-enriched town is an **explicit, authenticated POST**, because it spends one
+billed external API call, and spending money is not something a GET should do.
+
+> **This changed on 2026-11-04.** `GET /api/locations/{id}` used to queue enrichment as a side
+> effect of being read. It no longer writes anything. A client that relied on opening a town to
+> start its valuation must now send the POST. The GET's response shape is unchanged — only the
+> side effect is gone, so polling code keeps working once something has queued the job.
+
+The old behaviour was wrong in both directions. It meant a town could be priced by a crawler, a
+prefetch, or a double-tap that nobody intended; and it meant the client had no way to say "price
+this one" without also navigating to it. Batch enrichment remains an admin action.
 
 ### A country that is not live serves no locations
 
@@ -151,14 +172,22 @@ an error, not as a loading failure, and not filtered out.
 
 | Step | What the client does | What happens |
 |---|---|---|
-| 1 | `GET /api/locations?country=EN` | 280 towns. ~42 priced, the rest `pending`. **No enrichment is triggered — browsing is free.** |
-| 2 | Player opens Prestwich → `GET /api/locations/{id}` | **One** billed AI call is queued. Response returns immediately with `enrichmentStatus: "queued"` and the fields still null. |
-| 3 | Client polls the same URL | Usually a few seconds. Status becomes `enriched` and `lat`/`lng`/`population`/`landPence` are populated. |
-| 4 | Player buys | Normal hold → claim flow. |
+| 1 | `GET /api/locations?country=EN` | 280 towns. ~42 priced, the rest `pending`. **Free, and nothing is queued.** |
+| 2 | Player opens Prestwich → `GET /api/locations/{id}` | Still free, still nothing queued. `enrichmentStatus: "pending"`, prices null. Show a "get a valuation" affordance. |
+| 3 | Player asks for it → `POST /api/locations/{id}/enrich` | **One** billed AI call is queued. `202` with `enrichmentStatus: "queued"` and a `pollUrl`. |
+| 4 | Client polls `pollUrl` (the detail GET) | Status becomes `enriched` and `lat`/`lng`/`population`/`landPence` are populated — **and the town gains its plots** (see below). |
+| 5 | Player buys | Normal hold → claim flow. |
 
-**Poll the detail endpoint; do not re-request the list.** The list deliberately never triggers
-enrichment — one page of 200 unpriced towns would otherwise queue 200 billed calls, so a player
-scrolling a region could spend the budget in a few swipes.
+**Poll the detail endpoint; do not re-request the list.** The list carries the same
+`enrichmentStatus`, but it is a page-sized query and is cached — the detail read is the cheap,
+uncached one while a row is in flight.
+
+**Enrichment is what gives a town its plots.** A town imported as a bare name has **zero** plots
+until it is enriched: enrichment supplies the population, population gives the city size, and
+city size decides the plot count (4 / 2 / 1). So step 4 is not only "a price appeared" — it is
+also "something became buyable". Before that the town reports
+`claimableReason: "awaiting_enrichment"`, which is **not** the same as `"town_sold_out"`; see
+the reasons table under `GET /api/locations/{id}`.
 
 **While `enrichmentStatus` is `pending` or `queued` the detail response is `private, max-age=0`.**
 Once enriched it becomes `public, max-age=60`. So polling works; don't add your own cache layer
@@ -168,8 +197,8 @@ in front of it.
 
 | `enrichmentStatus` | Meaning | What to show |
 |---|---|---|
-| `pending` | Never looked at. Opening it starts enrichment. | The town, no price. Normal. |
-| `queued` | Enrichment is in flight — including on the very request that started it. | A loading state. Poll. |
+| `pending` | Never valued. **Reading it does nothing** — `POST /{id}/enrich` is what starts it. | The town, no price, and an affordance to ask for a valuation. Normal. |
+| `queued` | Enrichment is in flight. | A loading state. Poll. |
 | `enriched` | Priced and placed. | Everything. |
 | `needs_review` | The AI answered, but something failed validation and a human must look. | Treat as unpriced; it will not self-resolve. |
 | `failed` | Could not be enriched, repeatedly. | Treat as unpriced. Will not retry on its own. |
@@ -184,9 +213,10 @@ A town with no price **cannot be bought yet** — `POST /api/plots/{id}/hold` re
 `422 plot_not_sellable` with *"the land has not been valued yet"* or *"the town has not been
 located yet"*.
 
-That is not a dead end: it means enrichment has not finished. The correct client behaviour is to
-open the town (which starts enrichment), wait for `enriched`, then offer the buy button. Don't
-offer it against a null `landPence`.
+That is not a dead end: it means the town has never been valued. The correct client behaviour is
+to `POST /api/locations/{id}/enrich`, poll until `enriched`, then offer the buy button. Don't
+offer it against a null `landPence`, and don't expect opening the town to be enough — the GET no
+longer starts anything.
 
 #### What is NOT affected by an unpriced town
 
@@ -224,6 +254,19 @@ plot count — and therefore enrichment — would decide nothing.
 "claimable": true,
 "claimableReason": null
 ```
+
+#### `claimableReason` — two "no"s that mean opposite things
+
+When `claimable` is false, `claimableReason` says why, and the two values need different UI:
+
+| `claimableReason` | Means | What to do |
+|---|---|---|
+| `null` | `claimable` is true. | Offer the buy button. |
+| `awaiting_enrichment` | The town has **no plots at all**, because it has never been valued. `capacity.plots` is 0. | Offer **"get a valuation"** → `POST /{id}/enrich`. This is a door, not a wall. |
+| `town_sold_out` | The town has plots and every one is taken. | Offer nothing. Send the player elsewhere. This one is final. |
+
+These used to both report `town_sold_out`, which sent players away from every bare-name town in
+the catalogue — the large majority of it. Do not treat an empty `capacity.plots` as sold out.
 
 ### Which clubs already play here
 
@@ -272,8 +315,11 @@ towns. A cursor names a position rather than a distance.
 | `balancePence` | The caller's account credit, repeated per row for convenience. |
 
 **Against land only**, because that is what `POST /api/plots/{id}/claim` actually charges — the
-stadium is a separate, later purchase (`land-plots.md`). A signed-out caller gets the flags
-computed against a zero balance, which is honest: nothing is affordable without credit.
+stadium is a separate, later purchase (`land-plots.md`).
+
+There is no longer a signed-out case to reason about: the endpoint requires a token, so
+`balancePence` is always the real caller's credit. (It previously computed against zero for an
+anonymous caller. That branch is gone with the auth change.)
 
 `?affordable=1` does the same and additionally filters the page. The filter is applied **after**
 the page is assembled, because it depends on a balance rather than a column — so an
@@ -286,6 +332,12 @@ until `nextCursor` is `null`.
 |---|---|
 | plain list | `public, max-age=60` |
 | `?affordability=1` or `?affordable=1` | `private, max-age=0` |
+
+Note that `public, max-age=60` on the plain list is a **shared**-cache directive on a response
+that now requires a token. That is deliberate and safe: the plain list carries no per-account
+field whatsoever, so two players' plain pages for the same query are byte-identical. The moment a
+balance enters the response the directive flips to `private`, which is the whole point of the
+split.
 
 The split is load-bearing: a shared cache would serve one player's affordability to another.
 
@@ -353,20 +405,99 @@ rows nobody reads them from. `distanceKm` is always kilometres; convert for disp
 **`stadiumEstimate` is `null` when the town cannot be priced yet** — a stadium cost needs a
 population and a land value, so this is a normal pre-enrichment state rather than an error.
 
-### This GET can write, and is therefore not cacheable while pending
+### This GET is read-only, and not cacheable while pending
 
-Reading an un-enriched location takes an enrichment lease and queues a job, so the endpoint is
-not idempotent in a small, deliberate way. Two consequences:
+It writes nothing and costs nothing. It used to take an enrichment lease and queue a job; that
+moved to `POST /{id}/enrich` on 2026-11-04.
 
-- The response says `enrichmentStatus: "queued"` on the very read that queued it — not
-  `"pending"`. Poll the same URL; it becomes `enriched` (or `needs_review` / `failed`) once the
-  worker finishes.
-- While the status is `pending` or `queued`, the response is `private, max-age=0`. A cached
-  `"queued"` would be polled for ever and the client would never see the result. Once enriched,
-  it is `public, max-age=60`.
+While the status is `pending` or `queued` the response is still `private, max-age=0`, because a
+cached `"queued"` would be polled for ever and the client would never see the result. Once
+enriched it becomes `public, max-age=60`.
 
-A herd of simultaneous readers costs **one** API call, not one each — only the reader that wins
-the lease dispatches, and everyone else is told the same `queued`.
+---
+
+## `POST /api/locations/{id}/enrich`
+
+Ask for one town to be valued. **Requires a signed-in user; no club needed.** It takes no body.
+
+This is the only client-callable thing in the system that spends money — one AI call per town —
+which is why it is a POST, why it is authenticated, and why it is explicit rather than a side
+effect of navigation.
+
+### Responses
+
+| Status | Body | When |
+|---|---|---|
+| `202` | `{enrichmentStatus: "queued", queued: true, pollUrl, message}` | Accepted. **This caller's request is what dispatched the job.** |
+| `202` | `{enrichmentStatus: "queued", queued: false, pollUrl, message}` | Already in flight — somebody else (or an earlier tap) queued it. Nothing extra was spent. Poll anyway. |
+| `200` | `{enrichmentStatus: "enriched", queued: false, pollUrl, message}` | Already valued. A no-op, not an error: show the town. |
+| `409` | `{error: "enrichment_needs_admin", enrichmentStatus: "needs_review"\|"failed"}` | Terminal. Polling will not change it. Show the town as unavailable. |
+| `429` | `{error: "enrichment_quota_exhausted", message, quota}` | This account has used its allowance. Nothing was queued or billed. |
+| `404` | `{error: "location_not_found"}` | Unknown id. |
+| `401` | — | No token. |
+
+Every `2xx` also carries a `quota` block — the same shape as the quota endpoint below — so a
+client never has to make a second call to find out what it has left.
+
+**`429 enrichment_quota_exhausted`** is the other refusal — see the quota section below.
+
+**`queued: false` with `202` is a success, not a conflict.** It is how a double-tap, a retry after
+a timeout, and two players opening the same town all resolve: the first one dispatches, the rest
+are told the same thing, and exactly **one** API call is billed. Treat `202` as "poll `pollUrl`"
+regardless of the flag; the flag is only there if you want to distinguish "I started this" for
+analytics or copy.
+
+### Polling
+
+`pollUrl` is the detail GET for the same id. Suggested cadence, which matches what the worker
+actually does:
+
+- Poll every **3s for the first 30s**, then back off to **10s**.
+- **Give up at ~3 minutes** and show the town as unpriced with a retry affordance. Do not spin
+  forever: `needs_review` and `failed` are terminal, and a `queued` row whose worker died is only
+  reclaimed when its lease expires.
+- Stop immediately on `enriched`, `needs_review` or `failed`.
+
+### Each account has a limited number of valuations
+
+A valuation is a billed API call, so an account gets a finite number of them. The ceiling is
+admin-set; the account's spend against it is on the account.
+
+**`GET /api/account/enrichment-quota`** — requires a signed-in user, no club.
+
+```json
+{ "used": 7, "max": 25, "remaining": 18, "unlimited": false, "exhausted": false }
+```
+
+| Field | Notes |
+|---|---|
+| `used` | Valuations this account has spent. A lifetime total — it does not reset. |
+| `max` | The admin-set ceiling. **`0` means unlimited.** |
+| `remaining` | `max - used`, floored at zero. **`null` when `unlimited`** — deliberately not a large sentinel, because a client doing arithmetic on `PHP_INT_MAX` will eventually render it. |
+| `unlimited` | No ceiling is set. `exhausted` is then always `false`. |
+| `exhausted` | The next `POST /{id}/enrich` will be refused with `429`. **Gate the "get a valuation" button on this.** |
+
+`private, max-age=0` — it is one account's spend and changes on that account's own next request.
+
+**Only billed calls are charged.** A `202` with `queued: false` costs nothing and does not touch
+the allowance, so a double tap, a retry after a timeout, and two players opening the same town
+are all free. Likewise opening an **already-priced** town: that is a `200` no-op and never
+charged. An exhausted account can still browse the whole catalogue and open every priced town in
+it — only a *new* valuation is refused.
+
+`max` is also published on `GET /api/starter-config` as `maxEnrichmentRequestsPerUser`, but the
+ceiling alone cannot tell you whether to offer the button. Use the quota endpoint, which has
+both.
+
+### Throughput ceiling — read this before designing the UI
+
+The worker is a per-minute cron running `app:locations:enrich --limit=10`, so the whole system
+drains at about **10 towns per minute**. That is fine for one player valuing one town, and it is
+not fine for a screen that fans out across a list. A queue of 50 is a five-minute wait with no
+feedback beyond `queued`.
+
+So: **one town at a time, on an explicit user action.** Do not pre-warm, do not enrich on scroll,
+and do not offer "value all of these".
 
 ---
 

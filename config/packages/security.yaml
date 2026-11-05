@@ -80,13 +80,17 @@ security:
         - { path: ^/api/excursions,            roles: PUBLIC_ACCESS }
         - { path: ^/api/languages,             roles: PUBLIC_ACCESS }
         - { path: ^/api/translations,          roles: PUBLIC_ACCESS }
-        # The land catalogue. Public because a player browses towns before signing in,
-        # and the list carries no per-account data unless ?affordability=1 is passed —
-        # which the controller then serves against a zero balance for an anonymous
-        # caller, so there is nothing here to leak. Sits with the other PUBLIC_ACCESS
-        # read endpoints and AHEAD of the ^/api catch-all, which would otherwise demand
-        # authentication. Note ^/api/plots below is the WRITE side and stays private.
-        - { path: ^/api/locations,             roles: PUBLIC_ACCESS }
+        # The land catalogue is NOT public. It was, briefly, on the assumption that a player
+        # browses towns before signing in — but they do not: locations are only ever reached
+        # from inside the game, and `?affordability=1` is only meaningful for an account that
+        # has a balance. Making it authenticated also closes a real hole, because
+        # POST /api/locations/{id}/enrich spends money: one billed AI call per town, and a
+        # script could otherwise walk ~4,200 towns and commit the whole enrichment budget.
+        #
+        # There is deliberately NO line here — ^/api/locations falls through to the ^/api
+        # catch-all at the bottom, which already requires IS_AUTHENTICATED_FULLY. A redundant
+        # line restating that is noise, and the `^/api/plots` entry below documents why the one
+        # case that DOES need an anchor has one.
         - { path: ^/api/beta-request,          roles: PUBLIC_ACCESS }
         # Land plots: holding, claiming and building a ground.
         #

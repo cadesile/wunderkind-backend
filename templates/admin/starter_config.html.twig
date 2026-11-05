@@ -83,6 +83,31 @@
                         </div>
                     </div>
 
+                    <div class="col-md-12">
+                        <label for="maxEnrichmentRequestsPerUser" class="form-label fw-semibold small">
+                            Land Valuations Per Account
+                        </label>
+                        <input type="number" id="maxEnrichmentRequestsPerUser"
+                               name="maxEnrichmentRequestsPerUser"
+                               value="{{ config.maxEnrichmentRequestsPerUser }}"
+                               min="0" step="1" class="form-control">
+                        <div class="form-text">
+                            How many AI land valuations one account may ever request. Each one is
+                            a <strong>billed external API call</strong>, so this is the ceiling on
+                            what a single player can spend &mdash; the catalogue is thousands of
+                            towns, and without a cap one account can walk it.
+                            <br>
+                            <strong>Set to 0 for unlimited.</strong> Only requests that actually
+                            start a valuation are counted: a repeat tap, or a second player
+                            opening a town somebody else is already valuing, costs nothing and is
+                            not charged against the allowance. The count is a lifetime total per
+                            account and does not reset.
+                            {% if config.maxEnrichmentRequestsPerUser == 0 %}
+                                <br><span class="text-warning">Currently unlimited.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
                     <div class="col-md-6">
                         <label for="starterSponsorTier" class="form-label fw-semibold small">Starter Sponsor Tier</label>
                         <select id="starterSponsorTier" name="starterSponsorTier" class="form-select">

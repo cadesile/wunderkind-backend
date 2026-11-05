@@ -35,6 +35,7 @@ class LocationControllerTest extends WebTestCase
     private const DRAFT   = 'ZD';
 
     private KernelBrowser $client;
+    private string $currentUserId = '';
     private EntityManagerInterface $em;
     private Connection $connection;
 
@@ -52,6 +53,12 @@ class LocationControllerTest extends WebTestCase
         $this->connection = $c->get(Connection::class);
 
         $this->purge();
+        $this->restoreEnrichmentCap();
+
+        // Every location endpoint requires authentication — the catalogue is reached from
+        // inside the game, and POST /{id}/enrich spends money. Tests that care about a specific
+        // account's balance call loginAs() with their own user.
+        $this->currentUserId = (string) $this->user()->getId();
 
         foreach ([[self::COUNTRY, 'Locland', CountryProfileStatus::LIVE],
                   [self::DRAFT, 'Draftland', CountryProfileStatus::DRAFT]] as [$code, $name, $status]) {
@@ -66,6 +73,7 @@ class LocationControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->purge();
+        $this->restoreEnrichmentCap();
 
         parent::tearDown();
     }
@@ -76,7 +84,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Alpha');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
 
         // Proves the ^/api/locations access_control line is present AND ordered ahead of the
         // ^/api catch-all. Without it this is a 401 and the land step is unreachable.
@@ -85,7 +93,7 @@ class LocationControllerTest extends WebTestCase
 
     public function testMissingCountryIs400(): void
     {
-        $this->client->request('GET', '/api/locations');
+        $this->authedRequest('GET', '/api/locations');
 
         $this->assertResponseStatusCodeSame(400);
         $this->assertSame('country_required', $this->json()['error']);
@@ -93,7 +101,7 @@ class LocationControllerTest extends WebTestCase
 
     public function testUnknownCountryIs404(): void
     {
-        $this->client->request('GET', '/api/locations?country=QQ');
+        $this->authedRequest('GET', '/api/locations?country=QQ');
 
         $this->assertResponseStatusCodeSame(404);
         $this->assertSame('unknown_country', $this->json()['error']);
@@ -103,7 +111,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Hidden', country: self::DRAFT);
 
-        $this->client->request('GET', '/api/locations?country=' . self::DRAFT);
+        $this->authedRequest('GET', '/api/locations?country=' . self::DRAFT);
 
         $this->assertResponseStatusCodeSame(200);
         $data = $this->json();
@@ -116,7 +124,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Unpriced', landPence: null, lat: null, lng: null, population: null);
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
 
         $row = $this->json()['locations'][0];
 
@@ -136,6 +144,7 @@ class LocationControllerTest extends WebTestCase
             $this->location('Pending' . $i, landPence: null, lat: null, lng: null, population: null);
         }
 
+        $this->prepareClient();
         $this->transport()->reset();
         $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&limit=25');
 
@@ -150,7 +159,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Alpha');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
 
         $cacheControl = (string) $this->client->getResponse()->headers->get('Cache-Control');
 
@@ -162,7 +171,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Alpha');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&affordability=1');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&affordability=1');
 
         $cacheControl = (string) $this->client->getResponse()->headers->get('Cache-Control');
 
@@ -179,7 +188,7 @@ class LocationControllerTest extends WebTestCase
         $user = $this->user(creditPence: 500_000_00);
         $this->loginAs($user);
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&affordability=1');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&affordability=1');
 
         $byTown = $this->byTown($this->json()['locations']);
 
@@ -198,7 +207,7 @@ class LocationControllerTest extends WebTestCase
         $user = $this->user(creditPence: 100_000_000_00);
         $this->loginAs($user);
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&affordability=1');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&affordability=1');
 
         $row = $this->json()['locations'][0];
 
@@ -215,7 +224,7 @@ class LocationControllerTest extends WebTestCase
 
         $this->loginAs($this->user(creditPence: 500_000_00));
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&affordable=1');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&affordable=1');
 
         $towns = array_column($this->json()['locations'], 'town');
 
@@ -227,7 +236,7 @@ class LocationControllerTest extends WebTestCase
         $this->location('Cheap', landPence: 1_000_00);
         $this->location('Unpriced', landPence: null);
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&maxLandPence=' . 2_000_00);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&maxLandPence=' . 2_000_00);
 
         $towns = array_column($this->json()['locations'], 'town');
 
@@ -241,7 +250,7 @@ class LocationControllerTest extends WebTestCase
         $this->location('Southtown', region: 'South');
         $this->location('Easttown', region: 'East');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&region=North,South');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&region=North,South');
 
         $towns = array_column($this->json()['locations'], 'town');
         sort($towns);
@@ -253,7 +262,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('München');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&q=munchen');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&q=munchen');
 
         $this->assertCount(1, $this->json()['locations'], 'an accent-free search must find an accented town');
     }
@@ -264,7 +273,7 @@ class LocationControllerTest extends WebTestCase
             $this->location($town, landPence: ($i + 1) * 1_000_00);
         }
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&sort=price&limit=2');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&sort=price&limit=2');
         $first = $this->json();
         $this->assertCount(2, $first['locations']);
         $this->assertNotNull($first['nextCursor']);
@@ -276,7 +285,7 @@ class LocationControllerTest extends WebTestCase
         $moved->setLandPence(99_000_000_00);
         $this->em->flush();
 
-        $this->client->request(
+        $this->authedRequest(
             'GET',
             '/api/locations?country=' . self::COUNTRY . '&sort=price&limit=2&cursor=' . urlencode($first['nextCursor']),
         );
@@ -297,10 +306,10 @@ class LocationControllerTest extends WebTestCase
             $this->location($town, landPence: ($i + 1) * 1_000_00);
         }
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&sort=price&limit=1');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&sort=price&limit=1');
         $cursor = $this->json()['nextCursor'];
 
-        $this->client->request(
+        $this->authedRequest(
             'GET',
             '/api/locations?country=' . self::COUNTRY . '&sort=town&limit=1&cursor=' . urlencode($cursor),
         );
@@ -314,7 +323,7 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Alpha');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&cursor=rubbish');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&cursor=rubbish');
 
         $this->assertResponseStatusCodeSame(400);
         $this->assertSame('invalid_cursor', $this->json()['error']);
@@ -324,10 +333,10 @@ class LocationControllerTest extends WebTestCase
     {
         $this->location('Alpha');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&limit=999999');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&limit=999999');
         $this->assertResponseIsSuccessful();
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY . '&limit=-3');
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&limit=-3');
         $this->assertResponseIsSuccessful();
     }
 
@@ -341,7 +350,7 @@ class LocationControllerTest extends WebTestCase
         $hold = self::getContainer()->get(PlotHoldService::class)->acquire($user, $plot);
         self::getContainer()->get(PlotClaimService::class)->claimFromHold($user, (string) $hold->getId());
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
         $row = $this->json()['locations'][0];
 
         // THE ASSERTION THAT EARNS ITS KEEP. There is no club, so there is no display name —
@@ -365,7 +374,7 @@ class LocationControllerTest extends WebTestCase
 
         self::getContainer()->get(PlotClaimService::class)->attachClub($claim, $club);
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
         $row = $this->json()['locations'][0];
 
         $this->assertTrue($row['isClaimed']);
@@ -377,7 +386,7 @@ class LocationControllerTest extends WebTestCase
         );
         $this->em->clear();
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
         $row = $this->json()['locations'][0];
 
         $this->assertFalse($row['isClaimed'], 'a released plot is back on the market');
@@ -392,7 +401,7 @@ class LocationControllerTest extends WebTestCase
         $this->location('Northville', region: 'North', landPence: 5_000_00);
         $this->location('Southtown', region: 'South', landPence: null);
 
-        $this->client->request('GET', '/api/locations/facets?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations/facets?country=' . self::COUNTRY);
 
         $data = $this->json();
 
@@ -408,7 +417,7 @@ class LocationControllerTest extends WebTestCase
 
     public function testFacetsRouteIsNotSwallowedByTheDetailRoute(): void
     {
-        $this->client->request('GET', '/api/locations/facets?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations/facets?country=' . self::COUNTRY);
 
         // /facets is declared before /{id}; if that ever flips, this returns location_not_found.
         $this->assertResponseIsSuccessful();
@@ -417,10 +426,11 @@ class LocationControllerTest extends WebTestCase
 
     // ───────────────────────── detail ─────────────────────────
 
-    public function testDetailOfAPendingLocationQueuesExactlyOneEnrichment(): void
+    public function testReadingAPendingTownCostsNothing(): void
     {
         $location = $this->location('Pendingtown', landPence: null, lat: null, lng: null, population: null);
 
+        $this->prepareClient();
         $this->transport()->reset();
         $this->client->request('GET', '/api/locations/' . $location->getId());
 
@@ -428,19 +438,263 @@ class LocationControllerTest extends WebTestCase
         $data = $this->json();
 
         $this->assertNull($data['lat']);
-        $this->assertSame('queued', $data['enrichmentStatus'], 'the client is told it is loading');
-        $this->assertCount(1, $this->transport()->getSent(), 'one read, one billed call');
+        $this->assertSame('pending', $data['enrichmentStatus'], 'reading does not change anything');
+
+        // THE WHOLE REASON THE TRIGGER MOVED TO A POST. A GET can be issued by a crawler, a
+        // link preview, a prefetch or a double-tap, and every one of those used to spend money.
+        $this->assertCount(0, $this->transport()->getSent(), 'a read must never be billable');
+    }
+
+    public function testPostingToEnrichQueuesExactlyOneCall(): void
+    {
+        $location = $this->location('Pendingtown', landPence: null, lat: null, lng: null, population: null);
+
+        $this->prepareClient();
+        $this->transport()->reset();
+        $this->client->request('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        $this->assertResponseStatusCodeSame(202);
+        $data = $this->json();
+
+        $this->assertTrue($data['queued']);
+        $this->assertSame('queued', $data['enrichmentStatus']);
+        $this->assertStringContainsString((string) $location->getId(), $data['pollUrl']);
+        $this->assertCount(1, $this->transport()->getSent(), 'one request, one billed call');
+    }
+
+    public function testEnrichingTwiceStillQueuesOnlyOneCall(): void
+    {
+        $location = $this->location('Pendingtown', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        $this->prepareClient();
+        $this->transport()->reset();
+        $this->client->request('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        // The claim is an atomic conditional UPDATE, so a herd of callers produces ONE job.
+        // `queued: false` means somebody else got there first — the same outcome for this caller,
+        // which is why both answers are 202.
+        $this->assertResponseStatusCodeSame(202);
+        $this->assertFalse($this->json()['queued']);
+        $this->assertCount(0, $this->transport()->getSent(), 'a second request must not re-bill');
+    }
+
+    public function testEnrichingAnAlreadyPricedTownIsANoOp(): void
+    {
+        $location = $this->location('Donetown');
+        $location->setEnrichmentStatus(EnrichmentStatus::ENRICHED);
+        $this->em->flush();
+
+        $this->prepareClient();
+        $this->transport()->reset();
+        $this->client->request('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertFalse($this->json()['queued']);
+        $this->assertCount(0, $this->transport()->getSent());
+    }
+
+    public function testEnrichingATownThatNeedsAHumanIsRefused(): void
+    {
+        $location = $this->location('Problemtown', landPence: null, lat: null, lng: null, population: null);
+        $location->setEnrichmentStatus(EnrichmentStatus::FAILED);
+        $this->em->flush();
+
+        $this->prepareClient();
+        $this->transport()->reset();
+        $this->client->request('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        // Terminal. Re-queueing would burn a billed call on every retry of a town that cannot be
+        // resolved, so the client is told to stop rather than left polling.
+        $this->assertResponseStatusCodeSame(409);
+        $this->assertSame('enrichment_needs_admin', $this->json()['error']);
+        $this->assertCount(0, $this->transport()->getSent());
+    }
+
+    // ───────────────────── the per-account valuation quota ─────────────────────
+
+    public function testTheQuotaIsChargedOnlyWhenACallIsActuallyBilled(): void
+    {
+        $this->setEnrichmentCap(5);
+
+        $a = $this->location('Quotatown', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $a->getId() . '/enrich');
+        $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId), 'a dispatch is charged');
+
+        // The same town again: somebody is already paying for it, so this one bills nothing and
+        // must not take the player's allowance with it. This is the double-tap / retry case.
+        $this->authedRequest('POST', '/api/locations/' . $a->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(202);
+        $this->assertFalse($this->json()['queued']);
+        $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId), 'a no-op is free');
+    }
+
+    public function testAnExhaustedAccountIsRefusedAndNothingIsBilled(): void
+    {
+        $this->setEnrichmentCap(1);
+
+        $first  = $this->location('Firsttown', landPence: null, lat: null, lng: null, population: null);
+        $second = $this->location('Secondtown', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $first->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(202);
+
+        $this->prepareClient();
+        $this->transport()->reset();
+        $this->client->request('POST', '/api/locations/' . $second->getId() . '/enrich');
+
+        $this->assertResponseStatusCodeSame(429);
+        $this->assertSame('enrichment_quota_exhausted', $this->json()['error']);
+        $this->assertCount(0, $this->transport()->getSent(), 'a refusal must not dispatch');
+        $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId), 'nor charge');
+    }
+
+    /**
+     * An exhausted allowance must not make the catalogue unusable.
+     *
+     * The refusal is checked AFTER the cheap answers for exactly this reason: reading towns and
+     * opening already-priced ones cost nothing, so they keep working. Only a NEW valuation is
+     * refused.
+     */
+    public function testAnExhaustedAccountCanStillBrowseAndOpenPricedTowns(): void
+    {
+        $this->setEnrichmentCap(1);
+
+        $spend = $this->location('Spendtown', landPence: null, lat: null, lng: null, population: null);
+        $this->authedRequest('POST', '/api/locations/' . $spend->getId() . '/enrich');
+
+        $priced = $this->location('Pricedtown');
+        $priced->setEnrichmentStatus(EnrichmentStatus::ENRICHED);
+        $this->em->flush();
+
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->assertResponseIsSuccessful();
+
+        $this->authedRequest('POST', '/api/locations/' . $priced->getId() . '/enrich');
+        $this->assertResponseIsSuccessful();
+        $this->assertSame('enriched', $this->json()['enrichmentStatus']);
+    }
+
+    /**
+     * A cap of zero is UNLIMITED, not "nobody may enrich".
+     *
+     * Load-bearing for the deploy: the column lands on a database where enrichment already
+     * works, and the migration sets the live row to 0 precisely so the endpoint keeps behaving
+     * as it does today until an admin picks a number. If this ever flips, deploying the feature
+     * silently switches enrichment off.
+     */
+    public function testACapOfZeroMeansUnlimited(): void
+    {
+        $this->setEnrichmentCap(0);
+
+        $a = $this->location('Freetown', landPence: null, lat: null, lng: null, population: null);
+        $b = $this->location('Freetwo', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $a->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(202);
+
+        $this->authedRequest('POST', '/api/locations/' . $b->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(202);
+
+        $this->authedRequest('GET', '/api/account/enrichment-quota');
+        $data = $this->json();
+
+        $this->assertTrue($data['unlimited']);
+        $this->assertFalse($data['exhausted']);
+        $this->assertNull($data['remaining'], 'no sentinel number a client could render');
+        $this->assertSame(2, $data['used'], 'the meter still counts, it just does not gate');
+    }
+
+    public function testTheQuotaEndpointReportsTheAccountsStanding(): void
+    {
+        $this->setEnrichmentCap(3);
+
+        $location = $this->location('Metertown', landPence: null, lat: null, lng: null, population: null);
+        $this->authedRequest('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        $this->authedRequest('GET', '/api/account/enrichment-quota');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(
+            ['used' => 1, 'max' => 3, 'remaining' => 2, 'unlimited' => false, 'exhausted' => false],
+            $this->json(),
+        );
+
+        // One account's spend must never be served to another from a shared cache.
+        $this->assertResponseHeaderSame('Cache-Control', 'max-age=0, private');
+    }
+
+    /** One account's spend must not bleed into another's allowance. */
+    public function testTheQuotaIsPerAccount(): void
+    {
+        $this->setEnrichmentCap(1);
+
+        $location = $this->location('Sharedtown', landPence: null, lat: null, lng: null, population: null);
+
+        $this->authedRequest('POST', '/api/locations/' . $location->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(202);
+
+        $other = $this->location('Othertown', landPence: null, lat: null, lng: null, population: null);
+        $this->loginAs($this->user());
+
+        $this->authedRequest('POST', '/api/locations/' . $other->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(202);
+        $this->assertSame(1, $this->enrichmentCountOf($this->currentUserId));
+    }
+
+    /**
+     * An admin LOWERING the cap below what an account already spent must refuse it, not wrap
+     * around into giving it budget back. This is why the check is `>=` and not `===`.
+     */
+    public function testLoweringTheCapBelowAnAccountsSpendRefusesIt(): void
+    {
+        $this->setEnrichmentCap(5);
+
+        $first = $this->location('Beforetown', landPence: null, lat: null, lng: null, population: null);
+        $this->authedRequest('POST', '/api/locations/' . $first->getId() . '/enrich');
+        $this->authedRequest('GET', '/api/account/enrichment-quota');
+        $this->assertSame(1, $this->json()['used']);
+
+        $this->setEnrichmentCap(1);
+
+        $second = $this->location('Aftertown', landPence: null, lat: null, lng: null, population: null);
+        $this->authedRequest('POST', '/api/locations/' . $second->getId() . '/enrich');
+        $this->assertResponseStatusCodeSame(429);
+    }
+
+    public function testTheQuotaEndpointRequiresAuthentication(): void
+    {
+        self::ensureKernelShutdown();
+        $client = static::createClient();
+        $client->request('GET', '/api/account/enrichment-quota');
+
+        $this->assertSame(401, $client->getResponse()->getStatusCode());
+    }
+
+    public function testEnrichingRequiresAuthentication(): void
+    {
+        $location = $this->location('Pendingtown', landPence: null, lat: null, lng: null, population: null);
+
+        self::ensureKernelShutdown();
+        $client = static::createClient();
+        $client->request('POST', '/api/locations/' . $location->getId() . '/enrich');
+
+        // Browsing is one thing; spending is another. Without this a script could walk the whole
+        // catalogue and commit the entire enrichment budget.
+        $this->assertSame(401, $client->getResponse()->getStatusCode());
     }
 
     public function testASecondDetailReadDoesNotQueueAgain(): void
     {
         $location = $this->location('Pendingtown', landPence: null, lat: null, lng: null, population: null);
 
-        $this->client->request('GET', '/api/locations/' . $location->getId());
+        $this->authedRequest('GET', '/api/locations/' . $location->getId());
         $this->transport()->reset();
 
         $this->em->clear();
-        $this->client->request('GET', '/api/locations/' . $location->getId());
+        $this->authedRequest('GET', '/api/locations/' . $location->getId());
 
         // The lease is what collapses a herd of readers into one API call; a second reader
         // inside the lease window must see the status and dispatch nothing.
@@ -451,7 +705,7 @@ class LocationControllerTest extends WebTestCase
     {
         $location = $this->location('Pendingtown', landPence: null, lat: null, lng: null, population: null);
 
-        $this->client->request('GET', '/api/locations/' . $location->getId());
+        $this->authedRequest('GET', '/api/locations/' . $location->getId());
 
         $cacheControl = (string) $this->client->getResponse()->headers->get('Cache-Control');
 
@@ -467,7 +721,7 @@ class LocationControllerTest extends WebTestCase
         $location->setEnrichedAt(new \DateTimeImmutable());
         $this->em->flush();
 
-        $this->client->request('GET', '/api/locations/' . $location->getId());
+        $this->authedRequest('GET', '/api/locations/' . $location->getId());
 
         $this->assertStringContainsString(
             'public',
@@ -479,10 +733,10 @@ class LocationControllerTest extends WebTestCase
     {
         $location = $this->location('Alpha');
 
-        $this->client->request('GET', '/api/locations/' . $location->getId());
+        $this->authedRequest('GET', '/api/locations/' . $location->getId());
         $this->assertArrayHasKey('rivals', $this->json(), 'rivals are a detail concern');
 
-        $this->client->request('GET', '/api/locations?country=' . self::COUNTRY);
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY);
         $this->assertArrayNotHasKey(
             'rivals',
             $this->json()['locations'][0],
@@ -492,7 +746,7 @@ class LocationControllerTest extends WebTestCase
 
     public function testUnknownLocationIs404(): void
     {
-        $this->client->request('GET', '/api/locations/01932000-0000-7000-8000-000000000000');
+        $this->authedRequest('GET', '/api/locations/01932000-0000-7000-8000-000000000000');
 
         $this->assertResponseStatusCodeSame(404);
     }
@@ -527,7 +781,81 @@ class LocationControllerTest extends WebTestCase
 
     private function loginAs(User $user): void
     {
-        $this->client->loginUser($user, 'api');
+        $this->currentUserId = (string) $user->getId();
+    }
+
+    /**
+     * A fresh, authenticated client, ready for exactly ONE request.
+     *
+     * loginUser() authenticates a single request against this stateless JWT firewall and the
+     * client never recovers — the next one is a 401, and calling loginUser() again does not
+     * help. So every request needs a new client, which reboots the kernel and therefore REBUILDS
+     * the in-memory transport.
+     *
+     * That is why this is separate from authedRequest(): a test asserting on the transport must
+     * prepare the client FIRST, then reset the transport, then make its single request, so all
+     * three touch the same container. Resetting before the client exists would reset a transport
+     * that is about to be thrown away, and every "queued nothing" assertion would pass vacuously.
+     */
+    private function prepareClient(): void
+    {
+        self::ensureKernelShutdown();
+
+        $this->client = static::createClient();
+        $this->client->disableReboot();
+
+        $c = self::getContainer();
+
+        $this->em         = $c->get(EntityManagerInterface::class);
+        $this->connection = $c->get(Connection::class);
+
+        $this->client->loginUser($this->em->find(User::class, $this->currentUserId), 'api');
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function authedRequest(string $method, string $uri, array $parameters = []): void
+    {
+        $this->prepareClient();
+        $this->client->request($method, $uri, $parameters);
+    }
+
+    /**
+     * The admin-set ceiling. 0 is unlimited.
+     *
+     * `starter_config` is a SINGLETON ROW that purge() does not touch, so whatever a test leaves
+     * here is what the next test file sees. tearDown() puts it back — see restoreEnrichmentCap().
+     */
+    private function setEnrichmentCap(int $max): void
+    {
+        $this->connection->executeStatement(
+            'UPDATE starter_config SET max_enrichment_requests_per_user = :max',
+            ['max' => $max],
+        );
+
+        // The config is read through a repository that may already hold the row; a fresh client
+        // per request means a fresh container, but the connection above is shared, so clear to
+        // be certain the next read sees the new number.
+        $this->em->clear();
+    }
+
+    /**
+     * Put the shared config row back to unlimited.
+     *
+     * Not an optimisation — a leaked ceiling of 1 would make an unrelated test file's first
+     * enrichment pass and its second 429, with nothing in that file mentioning a quota. The
+     * cheapest version of the leaked-row bug this suite has already been bitten by once.
+     */
+    private function restoreEnrichmentCap(): void
+    {
+        $this->connection->executeStatement('UPDATE starter_config SET max_enrichment_requests_per_user = 0');
+    }
+
+    private function enrichmentCountOf(string $userId): int
+    {
+        return (int) $this->connection->fetchOne(
+            'SELECT enrichment_count FROM "user" WHERE id = :id',
+            ['id' => $userId],
+        );
     }
 
     private function location(

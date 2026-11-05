@@ -13,6 +13,7 @@ use App\Message\Location\EnrichLocationMessage;
 use App\Repository\Location\LocationEnrichmentAttemptRepository;
 use App\Repository\Location\LocationEnrichmentRunRepository;
 use App\Repository\Location\LocationRepository;
+use App\Service\Location\LandPlotProvisioner;
 use App\Service\Location\LocationClassificationService;
 use App\Service\Location\NpcClubLocationLinker;
 use Doctrine\ORM\EntityManagerInterface;
@@ -25,13 +26,13 @@ use Symfony\Component\Messenger\MessageBusInterface;
  *
  * TWO GUARANTEES THIS CLASS EXISTS TO PROVIDE.
  *
- * 1. ONE API CALL PER LOCATION, however many people look at it. queueForRead() is a
+ * 1. ONE API CALL PER LOCATION, however many people ask for it. queueOnRequest() is a
  *    conditional UPDATE, and only the caller whose UPDATE affected a row dispatches a message.
- *    Fifty simultaneous viewers of an un-enriched town therefore produce one paid call and
- *    forty-nine no-ops. This is LeaderboardPeriodCloseService::claim()'s idiom applied to a
- *    GET, and it is raw DBAL for the same reason that is: a failed flush() closes the shared
- *    EntityManager, and this runs on a public read path where that would turn a cosmetic
- *    problem into a 500 for an unrelated request.
+ *    Fifty simultaneous requests for an un-enriched town therefore produce one paid call and
+ *    forty-nine no-ops — which is also what makes a double-tap and a retry-after-timeout free.
+ *    This is LeaderboardPeriodCloseService::claim()'s idiom, and it is raw DBAL for the same
+ *    reason that is: a failed flush() closes the shared EntityManager, and this runs on a
+ *    request path where that would turn a cosmetic problem into a 500 for an unrelated request.
  *
  * 2. AN ADMIN'S CORRECTION IS NEVER UNDONE. Locked fields are skipped by EnrichmentValidator
  *    before they are examined, and applyResult() writes only what the validator accepted.
@@ -64,15 +65,21 @@ final class LocationEnrichmentService
         private readonly LoggerInterface                     $logger,
         private readonly LocationClassificationService       $classificationService,
         private readonly NpcClubLocationLinker               $npcLinker,
+        private readonly LandPlotProvisioner                 $plotProvisioner,
     ) {}
 
     /**
-     * Lazy path: claim this location and queue it, if it is claimable.
+     * On-demand path: claim this location and queue it, if it is claimable.
      *
      * Returns true only for the caller that won the claim and dispatched. Everyone else gets
-     * false and should simply report the location's current status to the client.
+     * false and should simply report the location's current status to the client — false is not
+     * a failure, it means somebody else is already paying for this town.
+     *
+     * NAMED FOR A REQUEST, NOT A READ. It was `queueForRead()` when GET /api/locations/{id}
+     * called it as a side effect of being read. That is gone: the only production caller is now
+     * POST /api/locations/{id}/enrich, where a person has explicitly asked for a valuation.
      */
-    public function queueForRead(Location $location): bool
+    public function queueOnRequest(Location $location): bool
     {
         if (!$this->isLazyCandidate($location)) {
             return false;
@@ -264,6 +271,8 @@ final class LocationEnrichmentService
             $this->cascadePopulationChange($location);
         }
 
+        $this->provisionPlots($location);
+
         if ($verdict->hasCoordinates()) {
             $invalidated = $this->locationRepository->invalidateRivalsNear(
                 $location,
@@ -362,12 +371,53 @@ final class LocationEnrichmentService
      * docs/api/npc-club-city-size.md. Rebuilding on every enriched row would make a sweep
      * regenerate a country hundreds of times.
      */
+    /**
+     * THE TOWN GETS ITS PLOTS. This is what makes "find a plot on demand" work.
+     *
+     * An imported town arrives as a bare name — no population, no size, and therefore no plots
+     * at all, so it cannot be bought and the API reports it as `awaiting_enrichment`. Learning
+     * its population tells us how big it is, and how big it is decides how much football it
+     * holds, so the plots appear here rather than waiting for somebody to run a command.
+     *
+     * RUNS ON EVERY ACCEPTED ENRICHMENT, not only when the population MOVED, and that is the
+     * whole point of it not living in cascadePopulationChange(). A town whose seeded population
+     * the AI simply confirms has `$populationMoved === false` — nothing changed — and under the
+     * cascade it would stay plotless for ever, enriched and unbuyable, with nothing in the
+     * response explaining why. Provisioning is a top-up keyed on what already exists, so running
+     * it on a town that is already provisioned writes nothing.
+     *
+     * TOPS UP ONLY, NEVER REMOVES. A town that re-bands DOWNWARD keeps the plots it has, because
+     * one of them may already carry a claim and somebody's real money.
+     *
+     * NEVER THROWS INTO THE CALLER, for the same reason as the cascade: an attempt that produced
+     * good data is a success, and `app:locations:provision-plots` repairs this at any time.
+     */
+    private function provisionPlots(Location $location): void
+    {
+        try {
+            $plots = $this->plotProvisioner->provisionLocation($location);
+
+            if ($plots > 0) {
+                $this->logger->info('Plots provisioned for a newly priced town', [
+                    'location' => (string) $location->getId(),
+                    'plots'    => $plots,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Could not provision plots after enrichment', [
+                'location'  => (string) $location->getId(),
+                'exception' => $e,
+            ]);
+        }
+    }
+
     private function cascadePopulationChange(Location $location): void
     {
         $countryCode = $location->getCountryCode();
 
         try {
             $this->classificationService->reclassifyCountry($countryCode);
+
             $resynced = $this->npcLinker->resyncCountry($countryCode);
 
             if ($resynced > 0) {

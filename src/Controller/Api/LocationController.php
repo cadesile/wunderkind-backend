@@ -18,6 +18,7 @@ use App\Repository\NpcClubRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\ClubNameNormalizer;
 use App\Service\Location\Enrichment\LocationEnrichmentService;
+use App\Service\Location\EnrichmentQuotaService;
 use App\Service\Location\LocationCapacityService;
 use App\Service\Location\StadiumEstimateService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,13 +26,18 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * The land catalogue — which towns exist, what they cost, and who already owns them.
  *
- * PUBLIC. A player browses land before signing in, and the list carries no per-account data by
- * default. The one exception is the affordability variant below, which is opt-in precisely
- * because it changes that.
+ * AUTHENTICATED, all of it. Locations are only ever reached from inside the game, affordability
+ * is meaningless without an account, and POST /{id}/enrich spends real money — one billed AI
+ * call per town. There is no access_control line for this prefix: it falls through to the
+ * `^/api` catch-all, which already requires IS_AUTHENTICATED_FULLY.
+ *
+ * The list still carries no per-account data unless `?affordability=1` is passed, which is why
+ * the caching split below is still worth having even though every caller is signed in.
  *
  * THREE RULES THIS CONTROLLER EXISTS TO ENFORCE.
  *
@@ -160,9 +166,9 @@ class LocationController extends AbstractController
         $hasMore = count($rows) > $limit;
         $page    = $hasMore ? array_slice($rows, 0, $limit) : $rows;
 
-        // Opt-in, because it makes the response per-user and therefore uncacheable. A signed-out
-        // caller asking for it gets the flags computed against a zero balance, which is honest:
-        // nothing is affordable until you have credit.
+        // Opt-in, because it makes the response per-user and therefore uncacheable. Every caller
+        // is authenticated now, so the plain list is still shareable between accounts and worth
+        // caching; only this variant is not.
         $wantsAffordability = $request->query->getBoolean('affordability')
             || $request->query->getBoolean('affordable');
 
@@ -258,7 +264,6 @@ class LocationController extends AbstractController
         LandPlotRepository $plots,
         LocationRivalRepository $rivals,
         StadiumEstimateService $estimates,
-        LocationEnrichmentService $enrichment,
         UserLedgerRepository $ledger,
         NpcClubRepository $npcClubs,
         LocationCapacityService $capacity,
@@ -269,20 +274,12 @@ class LocationController extends AbstractController
             return $this->json(['error' => 'location_not_found'], Response::HTTP_NOT_FOUND);
         }
 
-        // Only the caller that wins the lease dispatches; everyone else just reports the status.
-        // Either way the response says "queued", so a herd of readers sees one consistent
-        // answer and costs one API call.
-        //
-        // THE RETURN VALUE IS USED, not discarded, and it has to be: the lease is taken by a raw
-        // conditional UPDATE, so the hydrated entity in this request still carries the status it
-        // had BEFORE the claim. Reading the status off the entity would report "pending" on the
-        // very read that queued it — and a client watching for "queued" would re-request for
-        // ever, which is a billed API call each time it wins the lease.
-        $justQueued = $enrichment->queueForRead($location);
-
-        $effectiveStatus = $justQueued
-            ? EnrichmentStatus::QUEUED
-            : $location->getEnrichmentStatus();
+        // READ-ONLY. This used to queue enrichment as a side effect, which worked but meant
+        // every GET of a town was potentially billable — including a crawler, a link preview or
+        // a client prefetch, none of which represent a player who wants that town priced.
+        // Spending is now an explicit POST to /enrich, so it is always something somebody asked
+        // for. See that action.
+        $effectiveStatus = $location->getEnrichmentStatus();
 
         $plotRows = $plots->findActivePlotsWithClaimsByLocationIds([(string) $location->getId()]);
         $estimate = $estimates->currentFor($location);
@@ -349,7 +346,7 @@ class LocationController extends AbstractController
             'available'    => $capacityHere['available'],
         ];
         $payload['claimable']       = !$capacityHere['soldOut'];
-        $payload['claimableReason'] = $capacityHere['soldOut'] ? 'town_sold_out' : null;
+        $payload['claimableReason'] = $capacityHere['reason'];
 
         $payload['rivalClubs'] = array_map(
             static fn ($rival): array => [
@@ -387,6 +384,109 @@ class LocationController extends AbstractController
         }
 
         return $response;
+    }
+
+    /**
+     * Ask for a town to be priced.
+     *
+     * THE ONLY THING THAT SPENDS MONEY in this controller, and it is a POST for exactly that
+     * reason: one call to one AI provider per town. A GET can be issued by a crawler, a link
+     * preview, a prefetch or a double-tap, none of which mean a player wants that town valued.
+     *
+     * AUTHENTICATION REQUIRED, unlike every other action here. Browsing the catalogue is public
+     * — a player looks at land before signing in — but spending is not. Without this, a script
+     * could walk all ~4,200 towns and commit the entire enrichment budget in one pass. The
+     * `^/api/locations` access_control line stays PUBLIC_ACCESS; this attribute is what narrows
+     * the one action that needs it.
+     *
+     * IDEMPOTENT BY CONSTRUCTION. The claim is an atomic conditional UPDATE, so fifty callers
+     * hammering this produce ONE queued job. A second call while a job is in flight is a no-op
+     * that simply reports the status. Both return 202 — the client's job is to poll the detail
+     * endpoint, not to interpret a difference between "I queued it" and "someone else did".
+     *
+     * 409 for the terminal states. `needs_review` and `failed` are deliberately not re-queued:
+     * a town that cannot be resolved would otherwise burn a billed call on every retry. Those
+     * need an admin, and the client should stop rather than poll.
+     */
+    #[Route('/{id}/enrich', name: 'api_locations_enrich', methods: ['POST'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function enrich(
+        string $id,
+        LocationRepository $locations,
+        LocationEnrichmentService $enrichment,
+        EnrichmentQuotaService $quota,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        $location = $locations->find($id);
+
+        if ($location === null) {
+            return $this->json(['error' => 'location_not_found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $status = $location->getEnrichmentStatus();
+
+        if ($status === EnrichmentStatus::ENRICHED) {
+            // 200, not a 4xx: asking for something that has already happened is a no-op, not a
+            // client error. `pollUrl` is here too so a client can follow it unconditionally on
+            // any 2xx rather than branching on the status first.
+            return $this->json([
+                'enrichmentStatus' => $status->value,
+                'queued'           => false,
+                'pollUrl'          => $this->pollUrl($location),
+                'message'          => 'This town is already priced.',
+            ]);
+        }
+
+        if (in_array($status, [EnrichmentStatus::NEEDS_REVIEW, EnrichmentStatus::FAILED], true)) {
+            return $this->json([
+                'error'            => 'enrichment_needs_admin',
+                'enrichmentStatus' => $status->value,
+                'message'          => $status === EnrichmentStatus::FAILED
+                    ? 'This town could not be priced automatically and needs an administrator.'
+                    : 'This town has been priced but is waiting on a human review.',
+            ], Response::HTTP_CONFLICT);
+        }
+
+        // CHECKED HERE, AFTER THE CHEAP ANSWERS. An already-enriched town costs nothing and is
+        // answered above, so a player on an exhausted allowance can still browse and still open
+        // priced towns — only a NEW valuation is refused. Checking first would have turned
+        // "this town is already priced" into "you are out of allowance", which is both wrong
+        // and the sort of dead end that reads as a bug.
+        if ($quota->isExhausted($user)) {
+            return $this->json([
+                'error'   => 'enrichment_quota_exhausted',
+                'message' => 'This account has used all of its land valuations.',
+                'quota'   => $quota->quotaFor($user),
+            ], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        $queued = $enrichment->queueOnRequest($location);
+
+        if ($queued) {
+            // CHARGED ONLY FOR A REAL DISPATCH. `false` means somebody else's request is already
+            // paying for this town, so this caller gets the same answer for free — which is what
+            // makes a double tap, a retry after a timeout, and two players opening the same town
+            // all harmless to an allowance.
+            $quota->record($user);
+        }
+
+        return $this->json([
+            // QUEUED either way when the row is claimable: `false` here means somebody else's
+            // request got there first, which is the same outcome for this caller.
+            'enrichmentStatus' => EnrichmentStatus::QUEUED->value,
+            'queued'           => $queued,
+            'pollUrl'          => $this->pollUrl($location),
+            'quota'            => $quota->quotaFor($user),
+            'message'          => 'Queued. Poll the location until enrichmentStatus is "enriched".',
+        ], Response::HTTP_ACCEPTED);
+    }
+
+    /** Where a caller watches for the result: the location's own detail read. */
+    private function pollUrl(Location $location): string
+    {
+        return $this->generateUrl('api_locations_detail', ['id' => (string) $location->getId()]);
     }
 
     /** @param array<string, mixed> $payload */
