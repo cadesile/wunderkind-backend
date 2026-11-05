@@ -109,6 +109,44 @@ class LocationAdminTest extends WebTestCase
 
     // ───────────────────────── rendering ─────────────────────────
 
+    /**
+     * The Countries index shows a real readiness verdict, not a red "Inaccessible" badge.
+     *
+     * A REGRESSION THAT A RENDER TEST CANNOT CATCH, which is why this is separate from the
+     * screens-render test below: the page returned 200 the whole time it was broken. Readiness
+     * and Locations are computed columns with no backing property, and EasyAdmin's
+     * CommonPreConfigurator reads every field with PropertyAccessor BEFORE any formatValue()
+     * callback runs — so the read threw, the field was marked unreadable with a null value, and
+     * the inaccessible template was substituted for the verdict. The placeholder getters on
+     * CountryProfile are what make the read succeed; this asserts they still do.
+     *
+     * Worth guarding because that column is exactly what an operator consults before setting a
+     * country Live, and a red badge where the verdict belongs reads as "the admin is broken"
+     * rather than "this country is not ready".
+     */
+    public function testTheCountriesIndexShowsAReadinessVerdictRatherThanInaccessible(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+        $this->fixture();
+
+        $client->request('GET', self::getContainer()->get('router')->generate('admin_country_profile_index'));
+
+        self::assertResponseIsSuccessful();
+        $html = (string) $client->getResponse()->getContent();
+
+        // The fixture country has one location and no leagues, so it cannot be ready — the
+        // verdict must name what is blocking rather than rendering a badge.
+        self::assertStringContainsString(
+            'blocked:',
+            $html,
+            'the Readiness column must render a verdict; "Inaccessible" means the virtual column lost its property accessor again',
+        );
+        self::assertStringNotContainsString('label.inaccessible', $html);
+        self::assertStringNotContainsString('Inaccessible', $html);
+    }
+
     public function testEveryLocationAdminScreenRenders(): void
     {
         $client = static::createClient();

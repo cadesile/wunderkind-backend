@@ -144,6 +144,28 @@ class CountryProfile
     public function setDistanceUnit(DistanceUnit $distanceUnit): void { $this->distanceUnit = $distanceUnit; }
 
     public function getStatus(): CountryProfileStatus { return $this->status; }
+
+    /**
+     * Placeholders for the two COMPUTED index columns on CountryProfileCrudController.
+     *
+     * THEY EXIST ONLY SO EASYADMIN CAN READ SOMETHING, and without them the admin renders a red
+     * "Inaccessible" badge where the Readiness and Locations verdicts should be — which is
+     * precisely the column an operator consults before setting a country Live.
+     *
+     * The mechanism, because it is not obvious from the CRUD controller: EasyAdmin's
+     * CommonPreConfigurator calls PropertyAccessor::getValue() for every field BEFORE any
+     * formatValue() callback runs. A property that does not exist throws, the field is marked
+     * unreadable with a null value, and the inaccessible template is substituted — so a
+     * formatValue() callback on a property-less virtual field is never reached. Returning an
+     * empty string here makes the read succeed; the real text comes from the controller's
+     * formatValue(), which needs CountryReadinessService and a Connection and therefore cannot
+     * live on the entity.
+     *
+     * Do not "clean these up" as unused: nothing calls them in PHP, and that is the point.
+     */
+    public function getReadinessSummary(): string { return ''; }
+
+    public function getLocationCount(): string { return ''; }
     public function setStatus(CountryProfileStatus $status): void { $this->status = $status; }
 
     public function isLive(): bool { return $this->status === CountryProfileStatus::LIVE; }
