@@ -508,16 +508,16 @@ enabled".** Two ways to get this wrong, both seen: treating it as zero disables 
 everyone, and applying a `?? DEFAULT_ALLOWANCE` fallback to it silently inverts "unlimited" into
 the smallest cap the client knows. Check for null explicitly.
 
-⚠️ **The deployed dev box still carries the migration's `0`, so the null ceiling IS what the app
-meets there today.** Verified against `https://api.dev.buildmyclub.co.uk/api/starter-config` on
-2026-11-05: `maxEnrichmentRequestsPerUser: 0`. Until a client handles a null ceiling as
-unlimited, an operator should set a real number —
-`/admin?routeName=admin_starter_config` → **"Land Valuations Per Account"** → e.g. `25` — so
-`enrichmentCountMax` is always a number and the awkward path is not the default experience.
+**Dev carries a real ceiling of `25`**, set by an operator on 2026-11-05 and verified against
+`https://api.dev.buildmyclub.co.uk/api/starter-config`. So `enrichmentCountMax` is always a
+number there and the null case is not what the app meets day to day.
 
-The migration deliberately sets `0` on the existing row (enrichment was already deployed and
-working, and a migration must not start refusing requests as a side effect), so this is a
-one-time operator action per environment rather than something a deploy will fix.
+**It is still worth handling**, because the ceiling is one admin field away from `0` at any
+time, and a fresh environment starts there: the migration deliberately sets `0` on the existing
+row (enrichment was already deployed and working, and a migration must not start refusing
+requests as a side effect). Setting a real number is therefore a **one-time operator action per
+environment** — `/admin?routeName=admin_starter_config` → **"Land Valuations Per Account"** —
+that no deploy performs for you.
 
 `private, max-age=0` — it is one account's spend and changes on that account's own next request.
 
