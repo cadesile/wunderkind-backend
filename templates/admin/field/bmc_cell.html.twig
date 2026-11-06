@@ -1,0 +1,102 @@
+{# @var field \EasyCorp\Bundle\EasyAdminBundle\Dto\FieldDto #}
+{# @var entity \EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto #}
+{#
+  One template for every cell type in the redesigned list pages (handoff §6.2).
+
+  Rather than a template per column, each column's formatValue() returns a small
+  spec array and this renders it. That is the same shape the design prototype
+  uses (prototype/admin-config.js, `cell: function (r, x) { return {...} }`), so
+  a column's appearance stays described in one readable line in the controller
+  instead of being spread across a template file per column.
+
+  Spec keys, all optional:
+    text      main value            tone   dim|positive|warning|danger|accent
+    sub       second line           subTone  as above
+    big       render text at VT323 28 (leaderboard positions)
+    img       kit/badge config, encoded into data-kit for bmc-admin.js
+    imgs      [{kit, title}, …] for a row of up to three badges
+    more      "+2" trailing a badge row
+    flag      2-letter country code (any case; the file names are lowercase).
+              Pass null rather than a guess — an unresolvable code renders as
+              an empty bordered box, which reads as a broken image.
+    chip      {label, color}  a standalone badge filling the cell
+    tag       {label, color}  a badge trailing the text
+    lead      {label, color}  a badge preceding the text
+    bar       {pct, pct2, label}  meter; pct2 is the ghost drawn behind pct
+
+  Colour names map to .bmc-badge--*; omit for the neutral badge.
+  A missing value is an em dash in dim ink, never an empty cell — an empty cell
+  reads as a rendering fault.
+#}
+{% set c = field.formattedValue %}
+
+{% if c is null or c is empty %}
+    <span class="bmc-text tone-dim">—</span>
+
+{% elseif c.bar is defined %}
+    <div class="bmc-meter">
+        <div class="bmc-meter__track">
+            {% if c.bar.pct2 is defined and c.bar.pct2 %}
+                <span class="bmc-meter__ghost" style="width:{{ min(100, max(0, c.bar.pct2)) }}%"></span>
+            {% endif %}
+            <span class="bmc-meter__fill" style="width:{{ min(100, max(0, c.bar.pct)) }}%"></span>
+        </div>
+        {% if c.bar.label is defined %}<span class="bmc-text">{{ c.bar.label }}</span>{% endif %}
+    </div>
+
+{% elseif c.chip is defined %}
+    <span class="bmc-badge{{ c.chip.color is defined and c.chip.color ? ' bmc-badge--' ~ c.chip.color }}">{{ c.chip.label }}</span>
+
+{% elseif c.imgs is defined %}
+    <div class="bmc-cell">
+        <div class="bmc-sprites">
+            {% for img in c.imgs %}
+                <span class="bmc-sprite" role="img" aria-label="{{ img.title }} badge"
+                      title="{{ img.title }}" data-kit="{{ img.kit|json_encode|e('html_attr') }}"></span>
+            {% endfor %}
+        </div>
+        {% if c.more is defined and c.more %}<span class="bmc-sub">{{ c.more }}</span>{% endif %}
+    </div>
+
+{% else %}
+    {% set stack %}
+        {% if c.lead is defined %}
+            <span class="bmc-badge{{ c.lead.color is defined and c.lead.color ? ' bmc-badge--' ~ c.lead.color }}">{{ c.lead.label }}</span>
+        {% endif %}
+        {% if c.text is defined and c.text is not null %}
+            <span class="bmc-text{{ c.big is defined and c.big ? ' bmc-text--big' }}{{ c.tone is defined and c.tone ? ' tone-' ~ c.tone }}">{{ c.text }}</span>
+        {% endif %}
+        {% if c.sub is defined and c.sub %}
+            <span class="bmc-sub{{ c.subTone is defined and c.subTone ? ' tone-' ~ c.subTone }}">{{ c.sub }}</span>
+        {% endif %}
+    {% endset %}
+
+    {% set needsRow = c.img is defined or c.flag is defined or c.tag is defined or c.lead is defined %}
+
+    {% if needsRow %}
+        <div class="bmc-cell">
+            {# A background image, not <img src>: a malformed kit config would
+               otherwise throw a broken-image error mid-render. bmc-admin.js
+               fills this in and leaves the 30x32 slot empty if it cannot. #}
+            {% if c.img is defined and c.img %}
+                <span class="bmc-sprite" role="img" aria-label="{{ c.text|default('') }} badge"
+                      data-kit="{{ c.img|json_encode|e('html_attr') }}"></span>
+            {% endif %}
+            {% if c.flag is defined and c.flag %}
+                <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ c.flag|lower ~ '.svg') }}')"></span>
+            {% endif %}
+            {% if c.sub is defined and c.sub %}
+                <div class="bmc-stack">{{ stack }}</div>
+            {% else %}
+                {{ stack }}
+            {% endif %}
+            {% if c.tag is defined and c.tag %}
+                <span class="bmc-badge{{ c.tag.color is defined and c.tag.color ? ' bmc-badge--' ~ c.tag.color }}">{{ c.tag.label }}</span>
+            {% endif %}
+        </div>
+    {% elseif c.sub is defined and c.sub %}
+        <div class="bmc-stack">{{ stack }}</div>
+    {% else %}
+        {{ stack }}
+    {% endif %}
+{% endif %}

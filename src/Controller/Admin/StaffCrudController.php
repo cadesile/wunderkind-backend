@@ -2,7 +2,13 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\FacetCounter;
 use App\Entity\Staff;
+use App\Enum\Country;
+use App\Filter\Admin\PenceRangeFilter;
+use App\Twig\BmcAdminExtension;
+use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
+use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use App\Entity\PersonalityProfile;
 use App\Enum\StaffRole;
 use App\Form\Type\AppearanceType;
@@ -28,6 +34,9 @@ class StaffCrudController extends AbstractCrudController
 {
     public function __construct(
         private readonly ArchetypeResolverService $archetypeResolver,
+        private readonly FacetCounter $facets,
+        private readonly BmcAdminExtension $bmc,
+        private readonly \Doctrine\ORM\EntityManagerInterface $em,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -37,13 +46,29 @@ class StaffCrudController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::DELETE);
+        return $actions
+            ->disable(Action::DELETE)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->update(Crud::PAGE_INDEX, Action::DETAIL, fn (Action $a) => $a
+                ->setLabel('View staff')->setIcon('eye')
+                ->setHtmlAttributes(['title' => 'View staff', 'aria-label' => 'View staff member'])
+                ->setCssClass('bmc-iconbtn'))
+            ->update(Crud::PAGE_INDEX, Action::EDIT, fn (Action $a) => $a
+                ->setLabel('Edit staff')->setIcon('pencil')
+                ->setHtmlAttributes(['title' => 'Edit staff', 'aria-label' => 'Edit staff member'])
+                ->setCssClass('bmc-iconbtn'));
     }
 
     public function configureCrud(Crud $crud): Crud
     {
         return $crud
+            ->setEntityLabelInSingular('Staff member')
+            ->setEntityLabelInPlural('Staff')
             ->setDefaultSort(['lastName' => 'ASC'])
+            ->setPaginatorPageSize(25)
+            ->showEntityActionsInlined()
+            ->setSearchFields(['firstName', 'lastName', 'nationality'])
+            ->overrideTemplate('crud/index', 'admin/crud/bmc_index.html.twig')
             ->addFormTheme('admin/form/appearance_theme.html.twig')
             ->addFormTheme('admin/form/archetype_summary_theme.html.twig');
     }
@@ -57,15 +82,89 @@ class StaffCrudController extends AbstractCrudController
                 'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL,
                 'Facility Manager'     => StaffRole::FACILITY_MANAGER,
                 'Chairman'             => StaffRole::CHAIRMAN,
-            ]))
-            ->add(TextFilter::new('nationality'))
-            ->add(NumericFilter::new('coachingAbility'))
-            ->add(NumericFilter::new('scoutingRange'))
-            ->add(NumericFilter::new('morale'));
+            ])->canSelectMultiple())
+            ->add(ChoiceFilter::new('nationality', 'Nationality')->setChoices($this->nationalityChoices())->canSelectMultiple())
+            ->add(NumericFilter::new('coachingAbility', 'Coaching ability'))
+            ->add(NumericFilter::new('morale', 'Morale'))
+            ->add(PenceRangeFilter::new('weeklySalary', 'Salary/wk'));
+    }
+
+    public function configureResponseParameters(KeyValueStore $responseParameters): KeyValueStore
+    {
+        if (Crud::PAGE_INDEX !== $responseParameters->get('pageName')) {
+            return $responseParameters;
+        }
+
+        $responseParameters->set('bmcGroup', 'People & market');
+        $responseParameters->set('bmcDomain', 'people');
+        $responseParameters->set('bmcTotal', $this->em->getRepository(Staff::class)->count([]));
+        $responseParameters->set('bmcSearchPlaceholder', 'Staff name');
+        $responseParameters->set('bmcUnits', ['weeklySalary' => '£']);
+        $responseParameters->set('bmcWidths', ['role' => 172, 'coachingAbility' => 160, 'weeklySalary' => 100]);
+
+        $responseParameters->set('bmcFacets', $this->facets->count(
+            $this,
+            $this->getContext(),
+            new FieldCollection(iterator_to_array($this->indexFields())),
+            $responseParameters->get('filters'),
+            ['role' => 'entity.role', 'nationality' => 'entity.nationality'],
+        ));
+
+        return $responseParameters;
+    }
+
+    /** @return array<string, string> only the nationalities actually present */
+    private function nationalityChoices(): array
+    {
+        $rows = $this->em->createQuery(
+            'SELECT DISTINCT s.nationality FROM ' . Staff::class . ' s WHERE s.nationality IS NOT NULL ORDER BY s.nationality ASC'
+        )->getScalarResult();
+
+        return array_combine(array_column($rows, 'nationality'), array_column($rows, 'nationality'));
+    }
+
+    /** Staff member, role, coaching ability, salary. */
+    private function indexFields(): iterable
+    {
+        yield TextField::new('lastName', 'Staff')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Staff $s) => [
+                'flag' => $s->getNationality() ? Country::fromNationality($s->getNationality())?->value : null,
+                'text' => $s->getFullName(),
+                'sub'  => $s->getNationality(),
+            ]);
+
+        yield ChoiceField::new('role', 'Role')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Staff $s) => ['chip' => match ($s->getRoleValue()) {
+                'manager'              => ['label' => 'MANAGER', 'color' => 'positive'],
+                'chairman'             => ['label' => 'CHAIRMAN', 'color' => 'warning'],
+                'facility_manager'     => ['label' => 'FACILITY MGR', 'color' => 'subtle'],
+                'director_of_football' => ['label' => 'DIR. OF FOOTBALL', 'color' => null],
+                default                => ['label' => strtoupper(str_replace('_', ' ', $s->getRoleValue())), 'color' => null],
+            }]);
+
+        yield IntegerField::new('coachingAbility', 'Coaching')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Staff $s) => ['bar' => [
+                'pct'   => $s->getCoachingAbility(),
+                'label' => (string) $s->getCoachingAbility(),
+            ]]);
+
+        yield IntegerField::new('weeklySalary', 'Salary/wk')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->setTextAlign('right')
+            ->formatValue(fn ($v, Staff $s) => ['text' => $this->bmc->money($s->getWeeklySalary())]);
     }
 
     public function configureFields(string $pageName): iterable
     {
+        if (Crud::PAGE_INDEX === $pageName) {
+            yield from $this->indexFields();
+
+            return;
+        }
+
         // Index: firstName | lastName | nationality | role | DOB | coachingAbility
         yield TextField::new('firstName');
         yield TextField::new('lastName');

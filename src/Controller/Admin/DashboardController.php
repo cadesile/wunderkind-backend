@@ -14,6 +14,9 @@ use App\Repository\SocialAccountConnectionRepository;
 use App\Repository\SocialPostTemplateRepository;
 use App\Repository\StarterConfigRepository;
 use App\Repository\LanguageRepository;
+use App\Service\Admin\AdminQueueCounts;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Asset;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Menu\ControllerMenuItem;
 use App\Service\ConfigImportExportService;
 use App\Service\LeagueImportExportService;
 use App\Service\NarrativeImportExportService;
@@ -71,6 +74,7 @@ class DashboardController extends AbstractDashboardController
         private \App\Repository\FacilityTemplateRepository $facilityTemplateRepository,
         private SocialAccountConnectionRepository $socialAccountConnectionRepository,
         private SocialPostTemplateRepository $socialPostTemplateRepository,
+        private AdminQueueCounts $adminQueueCounts,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -1516,129 +1520,219 @@ class DashboardController extends AbstractDashboardController
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_telemetry_config']));
     }
 
+    // ── Import / Export hub ──────────────────────────────────────────────
+
+    /**
+     * One page for all four import/export domains.
+     *
+     * The sidebar used to carry four separate entries, every one of them
+     * labelled "Import / Export" with the same icon, sitting in four different
+     * submenus — so finding a domain's file meant already knowing which group
+     * it lived under. This is the index over them.
+     *
+     * Nothing moved behind the scenes: each card still posts to its own
+     * existing route with its own CSRF token, and the per-domain pages are
+     * still reachable (the cards link to them) for their longer notes on what
+     * each import actually does.
+     */
+    #[Route('/admin/import-export', name: 'admin_import_export')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function importExport(LanguageRepository $languageRepository): Response
+    {
+        return $this->render('admin/import_export.html.twig', [
+            // Only the translations card needs these, but the template reads
+            // them unconditionally to keep its empty-state check simple.
+            'languages' => $languageRepository->findEnabled(),
+        ]);
+    }
+
     // ── EasyAdmin configuration ───────────────────────────────────────────
+
+    /**
+     * Hand-bumped cache-buster for the two redesign assets. There is no asset
+     * pipeline in this project (no importmap, no Encore), so public/ files are
+     * served verbatim with no versioning of their own. Bump this on every edit
+     * to public/bmc-admin.css or public/bmc-admin.js. Same approach as
+     * templates/admin/dashboard.html.twig's dash_v.
+     */
+    private const BMC_ASSET_VERSION = '20261106a';
 
     public function configureAssets(): Assets
     {
         return Assets::new()
+            // admin-theme.css still dresses the pages that have not been
+            // redesigned yet; bmc-admin.css loads after it so it wins.
             ->addCssFile('admin-theme.css')
-            // Admin-wide UI corrections. Currently gives EasyAdmin's unlabelled,
-            // keyboard-unreachable sidebar collapse control real button semantics
-            // (admin-theme.css gives it the visible face).
-            ->addJsFile('admin-ui.js');
+            ->addCssFile('bmc-admin.css?v=' . self::BMC_ASSET_VERSION)
+            // All three are deferred, and that is load-bearing rather than an
+            // optimisation. EasyAdmin emits configureAssets() scripts in <head>,
+            // well before the shell markup exists, and bmc-admin.js is a plain
+            // IIFE that wires everything up the moment it runs — icons,
+            // accordion, pinned/recent, palette, clock, filter rail, row
+            // selection. Without defer it runs against an empty document and
+            // every one of those is silently a no-op. (The handoff's reference
+            // page loads it at the end of <body>, which has the same effect.)
+            //
+            // defer also preserves execution order, so the dependency chain
+            // below still holds.
+            ->addJsFile(Asset::new('lucide.min.js')->defer())
+            // window.composeKitSvg — draws club badges from their kit config.
+            ->addJsFile(Asset::new('assets/kit-compositor.js')->defer())
+            // Must run after the two above: it calls lucide.createIcons() and
+            // composeKitSvg() on the way in.
+            ->addJsFile(Asset::new('bmc-admin.js?v=' . self::BMC_ASSET_VERSION)->defer());
+        // admin-ui.js is gone: it only gave EasyAdmin's sidebar-collapse handle
+        // real button semantics, and the redesigned shell replaces that sidebar.
     }
 
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            // logo-192 rather than the full-size /images/logo.png (1.5MB): both of these
-            // render at 48px or smaller, and the master is only there as an archival
-            // original. 192px still covers a 4x retina navbar icon.
-            ->setTitle('<img src="/logo-192.png" alt="Build My Club" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;"> Build My Club')
+            // Plain text now. The logo is rendered by the shell's own
+            // .bmc-brand markup in layout.html.twig rather than smuggled in
+            // through the title, so this only has to serve <title> and the
+            // responsive header.
+            ->setTitle('Build My Club')
             ->setFaviconPath('logo-32.png')
             ->renderContentMaximized();
     }
 
+    /**
+     * The sidebar.
+     *
+     * Three zones (OPERATE / WORLD / SYSTEM) over nine groups, which the
+     * redesigned menu template renders as an accordion with one group open at a
+     * time. See assets/design_handoff_admin_overhaul/README.md §5.1 for the
+     * grouping and what moved where.
+     *
+     * Icons are Lucide names, and they sit on group headings only — page links
+     * are text. templates/bundles/EasyAdminBundle/menu.html.twig emits them as
+     * <i data-lucide="..."> so EasyAdmin never gets to interpret them as Font
+     * Awesome classes. Font Awesome still dresses action icons inside the CRUD
+     * pages that have not been redesigned yet.
+     *
+     * A CrudController is NOT auto-discovered into this sidebar; it has to be
+     * listed here or it has no way in.
+     */
     public function configureMenuItems(): iterable
     {
-        yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
+        $queues = $this->adminQueueCounts->get();
 
-        yield MenuItem::subMenu('Users & Clubs', 'fa fa-users')->setSubItems([
-            MenuItem::linkTo(UserCrudController::class, 'Users', 'fa fa-users'),
-            MenuItem::linkTo(ClubCrudController::class, 'Clubs', 'fa fa-school'),
-            MenuItem::linkTo(AdminCrudController::class, 'Admins', 'fa fa-user-shield'),
-            MenuItem::linkTo(BetaRequestCrudController::class, 'Beta Requests', 'fa fa-envelope-open-text'),
-            MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion Requests', 'fa fa-user-slash'),
-            MenuItem::linkTo(UserLedgerCrudController::class, 'User Ledger', 'fa fa-scale-balanced'),
+        yield MenuItem::linkToDashboard('Dashboard', 'house');
+
+        // ── OPERATE — the live game and the people in it ──────────────────
+        yield MenuItem::section('Operate');
+
+        yield MenuItem::subMenu('Accounts', 'users')->setSubItems([
+            MenuItem::linkTo(UserCrudController::class, 'Users'),
+            MenuItem::linkTo(ClubCrudController::class, 'Clubs'),
+            MenuItem::linkTo(UserLedgerCrudController::class, 'User ledger'),
+            MenuItem::linkTo(SyncRecordCrudController::class, 'Sync records'),
+            self::queue(MenuItem::linkTo(BetaRequestCrudController::class, 'Beta requests'), $queues['beta']),
+            self::queue(MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion requests'), $queues['deletion']),
         ]);
-        yield MenuItem::subMenu('Sync & Leaderboards', 'fa fa-rotate')->setSubItems([
-            MenuItem::linkTo(SyncRecordCrudController::class, 'Sync Records', 'fa fa-rotate'),
-            MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard Entries', 'fa fa-trophy'),
-            MenuItem::linkTo(SeasonRecordCrudController::class, 'Season Records', 'fa fa-calendar-check'),
-            MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season Snapshots', 'fa fa-camera'),
-            MenuItem::linkTo(LeaderboardAwardDefinitionCrudController::class, 'Award Definitions', 'fa fa-medal'),
-            MenuItem::linkTo(LeaderboardPeriodArchiveCrudController::class, 'Period Archives', 'fa fa-box-archive'),
-            MenuItem::linkTo(LeaderboardPeriodArchiveEntryCrudController::class, 'Awards', 'fa fa-gift'),
+        yield MenuItem::subMenu('Seasons & competitions', 'trophy')->setSubItems([
+            MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active competitions'),
+            MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds'),
+            MenuItem::linkTo(FriendlyChallengeCrudController::class, 'Challenges'),
+            MenuItem::linkTo(LeaderboardEntryCrudController::class, 'Leaderboard entries'),
+            MenuItem::linkTo(SeasonRecordCrudController::class, 'Season records'),
+            MenuItem::linkTo(SeasonSnapshotCrudController::class, 'Season snapshots'),
+            MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club snapshots'),
+            MenuItem::linkTo(LeaderboardPeriodArchiveCrudController::class, 'Period archives'),
+            MenuItem::linkTo(LeaderboardPeriodArchiveEntryCrudController::class, 'Awards'),
         ]);
-        yield MenuItem::subMenu('Clubs & Leagues', 'fa fa-table-list')->setSubItems([
-            MenuItem::linkToRoute('League Overview', 'fa fa-table-list', 'admin_leagues_overview'),
-            MenuItem::linkTo(NpcClubCrudController::class, 'NPC Clubs', 'fa fa-shield-halved'),
-            MenuItem::linkTo(LeagueCrudController::class, 'Leagues', 'fa fa-trophy'),
-            MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical Matrix', 'fa fa-chess-board'),
-            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_world_content'),
-            MenuItem::linkToRoute('Generate', 'fa fa-wand-magic-sparkles', 'admin_npc_clubs_content'),
+        yield MenuItem::subMenu('Comms', 'megaphone')->setSubItems([
+            MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements'),
+            MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience groups'),
+            MenuItem::linkTo(NotificationLogCrudController::class, 'Notification logs'),
+            MenuItem::linkToRoute('Social connections', null, 'admin_social_connections'),
         ]);
-        // Locations & Land — the geography a club is founded on, and the AI enrichment that
-        // fills in what the old hardcoded PHP place lists never had (coordinates, valuations).
-        // A CrudController is NOT auto-discovered into this sidebar; it has to be listed here.
-        yield MenuItem::subMenu('Locations & Land', 'fa fa-map-location-dot')->setSubItems([
-            MenuItem::linkTo(LocationCrudController::class, 'Locations', 'fa fa-map-pin'),
-            MenuItem::linkTo(LandPlotCrudController::class, 'Land Plots', 'fa fa-vector-square'),
-            MenuItem::linkTo(CountryProfileCrudController::class, 'Countries', 'fa fa-flag'),
-            MenuItem::linkToRoute('Enrichment', 'fa fa-wand-magic-sparkles', 'admin_location_enrichment'),
+
+        // ── WORLD — the map, its inhabitants, and the content behind them ──
+        yield MenuItem::section('World');
+
+        yield MenuItem::subMenu('World', 'globe')->setSubItems([
+            MenuItem::linkTo(LeagueCrudController::class, 'Leagues'),
+            MenuItem::linkToRoute('League overview', null, 'admin_leagues_overview'),
+            MenuItem::linkTo(NpcClubCrudController::class, 'NPC clubs'),
+            MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical matrix'),
+            MenuItem::linkToRoute('Generate', null, 'admin_npc_clubs_content'),
         ]);
-        yield MenuItem::subMenu('Competitions', 'fa fa-trophy')->setSubItems([
-            MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Templates', 'fa fa-trophy'),
-            MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward Templates', 'fa fa-gift'),
-            MenuItem::linkTo(ActiveCompetitionCrudController::class, 'Active Competitions', 'fa fa-flag-checkered'),
-            MenuItem::linkTo(CompetitionRoundCrudController::class, 'Rounds', 'fa fa-list-ol'),
-            MenuItem::linkTo(CompetitionEntrantCrudController::class, 'Club Snapshots', 'fa fa-camera-retro'),
-            MenuItem::linkTo(FriendlyChallengeCrudController::class, 'Challenges', 'fa fa-futbol'),
+        // Not in the design handoff's grouping, which predates this work: the
+        // land-plot economy and its AI enrichment. Four live pages, so they get
+        // their own group rather than being buried at the bottom of World.
+        yield MenuItem::subMenu('Locations & land', 'map-pin')->setSubItems([
+            MenuItem::linkTo(LocationCrudController::class, 'Locations'),
+            MenuItem::linkTo(LandPlotCrudController::class, 'Land plots'),
+            MenuItem::linkTo(CountryProfileCrudController::class, 'Countries'),
+            MenuItem::linkToRoute('Enrichment', null, 'admin_location_enrichment'),
         ]);
-        yield MenuItem::subMenu('Roster', 'fa fa-person-running')->setSubItems([
-            MenuItem::linkTo(PlayerCrudController::class, 'Players', 'fa fa-person-running'),
-            MenuItem::linkTo(StaffCrudController::class, 'Staff', 'fa fa-users'),
-            MenuItem::linkTo(ScoutCrudController::class, 'Scouts', 'fa fa-binoculars'),
-            MenuItem::linkTo(AgentCrudController::class, 'Agents', 'fa fa-handshake'),
-            MenuItem::linkTo(GuardianCrudController::class, 'Guardians', 'fa fa-users'),
+        yield MenuItem::subMenu('People & market', 'person-standing')->setSubItems([
+            MenuItem::linkTo(PlayerCrudController::class, 'Players'),
+            MenuItem::linkTo(StaffCrudController::class, 'Staff'),
+            MenuItem::linkTo(ScoutCrudController::class, 'Scouts'),
+            MenuItem::linkTo(AgentCrudController::class, 'Agents'),
+            MenuItem::linkTo(GuardianCrudController::class, 'Guardians'),
+            MenuItem::linkTo(InvestorCrudController::class, 'Investors'),
+            MenuItem::linkTo(SponsorCrudController::class, 'Sponsors'),
         ]);
-        yield MenuItem::subMenu('Narrative', 'fa fa-scroll')->setSubItems([
-            MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event Templates', 'fa fa-scroll'),
-            MenuItem::linkToRoute('Facility Templates', 'fa fa-building', 'admin_facilities_overview'),
-            MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player Archetypes', 'fa fa-masks-theater'),
-            MenuItem::linkTo(ExcursionCrudController::class, 'Excursions', 'fa fa-bus'),
-            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_narrative_content'),
+        yield MenuItem::subMenu('Templates', 'scroll')->setSubItems([
+            MenuItem::linkTo(CompetitionTemplateCrudController::class, 'Competition templates'),
+            MenuItem::linkTo(RewardTemplateCrudController::class, 'Reward templates'),
+            MenuItem::linkTo(LeaderboardAwardDefinitionCrudController::class, 'Award definitions'),
+            MenuItem::linkTo(GameEventTemplateCrudController::class, 'Event templates'),
+            MenuItem::linkToRoute('Facility templates', null, 'admin_facilities_overview'),
+            MenuItem::linkTo(PlayerArchetypeCrudController::class, 'Player archetypes'),
+            MenuItem::linkTo(ExcursionCrudController::class, 'Excursions'),
+            MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post templates'),
         ]);
-        yield MenuItem::subMenu('Translations', 'fa fa-language')->setSubItems([
-            MenuItem::linkTo(LanguageCrudController::class, 'Languages', 'fa fa-flag'),
-            MenuItem::linkTo(TranslationKeyCrudController::class, 'Translation Keys', 'fa fa-key'),
-            MenuItem::linkTo(TranslationCrudController::class, 'Translations', 'fa fa-language'),
-            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_translations_content'),
+        yield MenuItem::subMenu('Translations', 'languages')->setSubItems([
+            MenuItem::linkTo(LanguageCrudController::class, 'Languages'),
+            MenuItem::linkTo(TranslationKeyCrudController::class, 'Translation keys'),
+            MenuItem::linkTo(TranslationCrudController::class, 'Translations'),
         ]);
-        yield MenuItem::subMenu('Configuration', 'fa fa-sliders')->setSubItems([
-            MenuItem::linkToRoute('Starter Config', 'fa fa-flag', 'admin_starter_config'),
-            MenuItem::linkToRoute('Starter Pack Check', 'fa fa-vial', 'admin_starter_pack_check'),
-            // A CrudController is not auto-discovered into this sidebar — it has to be listed.
-            MenuItem::linkTo(SetupQuizQuestionCrudController::class, 'Setup Quiz', 'fa fa-circle-question'),
-            MenuItem::linkToRoute('Game Config', 'fa fa-sliders', 'admin_game_config'),
-            MenuItem::linkToRoute('Player Pool Config', 'fa fa-person-running', 'admin_player_pool_config'),
-            MenuItem::linkToRoute('Staff Pool Config', 'fa fa-users', 'admin_staff_pool_config'),
-            MenuItem::linkToRoute('Investor Pool Config', 'fa fa-handshake', 'admin_investor_pool_config'),
-            MenuItem::linkToRoute('Worldpack Cache', 'fa fa-database', 'admin_worldpack_cache'),
-            MenuItem::linkToRoute('Import / Export', 'fa fa-file-arrow-up', 'admin_config_content'),
+
+        // ── SYSTEM — the knobs and the plumbing ───────────────────────────
+        yield MenuItem::section('System');
+
+        yield MenuItem::subMenu('Config', 'sliders-horizontal')->setSubItems([
+            MenuItem::linkToRoute('Starter config', null, 'admin_starter_config'),
+            MenuItem::linkToRoute('Starter pack check', null, 'admin_starter_pack_check'),
+            MenuItem::linkToRoute('Game config', null, 'admin_game_config'),
+            // Also absent from the handoff's grouping; it is a config screen.
+            MenuItem::linkTo(SetupQuizQuestionCrudController::class, 'Setup quiz'),
+            MenuItem::linkToRoute('Player pool', null, 'admin_player_pool_config'),
+            MenuItem::linkToRoute('Staff pool', null, 'admin_staff_pool_config'),
+            MenuItem::linkToRoute('Investor pool', null, 'admin_investor_pool_config'),
+            MenuItem::linkToRoute('Worldpack cache', null, 'admin_worldpack_cache'),
+            MenuItem::linkToRoute('Telemetry config', null, 'admin_telemetry_config'),
+            MenuItem::linkToRoute('App links', null, 'admin_app_links'),
         ]);
-        yield MenuItem::subMenu('System', 'fa fa-gear')->setSubItems([
-            MenuItem::linkToRoute('App Links', 'fa fa-mobile-screen', 'admin_app_links'),
-            MenuItem::linkToRoute('Settings & Tools', 'fa fa-gear', 'admin_settings'),
-            MenuItem::linkToRoute('Telemetry Config', 'fa fa-tower-broadcast', 'admin_telemetry_config'),
-            MenuItem::linkToRoute('Logs', 'fa fa-file-lines', 'admin_logs'),
+        yield MenuItem::subMenu('System', 'settings')->setSubItems([
+            MenuItem::linkTo(AdminCrudController::class, 'Admins'),
+            MenuItem::linkToRoute('Settings & tools', null, 'admin_settings'),
+            MenuItem::linkToRoute('Logs', null, 'admin_logs'),
+            MenuItem::linkToRoute('Debug tools', null, 'admin_notification_debug'),
+            // One page now, replacing four menu entries that were all called
+            // "Import / Export" in four different groups.
+            MenuItem::linkToRoute('Import / Export', null, 'admin_import_export'),
         ]);
-        yield MenuItem::subMenu('Messaging', 'fa fa-bullhorn')->setSubItems([
-            MenuItem::linkTo(AdminMessageCrudController::class, 'Announcements', 'fa fa-bullhorn'),
-            MenuItem::linkTo(AudienceGroupCrudController::class, 'Audience Groups', 'fa fa-user-group'),
-        ]);
-        yield MenuItem::subMenu('Notifications', 'fa fa-bell')->setSubItems([
-            MenuItem::linkTo(NotificationLogCrudController::class, 'Notification Logs', 'fa fa-bell'),
-            MenuItem::linkToRoute('Debug Tools', 'fa fa-bug', 'admin_notification_debug'),
-        ]);
-        yield MenuItem::subMenu('Social', 'fa fa-share-nodes')->setSubItems([
-            MenuItem::linkTo(SocialPostTemplateCrudController::class, 'Post Templates', 'fa fa-file-signature'),
-            MenuItem::linkToRoute('Social Connections', 'fa fa-share-nodes', 'admin_social_connections'),
-        ]);
-        yield MenuItem::subMenu('Market', 'fa fa-chart-line')->setSubItems([
-            MenuItem::linkTo(InvestorCrudController::class, 'Investors', 'fa fa-chart-line'),
-            MenuItem::linkTo(SponsorCrudController::class, 'Sponsors', 'fa fa-star'),
-        ]);
+    }
+
+    /**
+     * Badge a queue page with how many rows are waiting, or leave it bare.
+     *
+     * A badge showing 0 is worse than no badge: it draws the eye to a page with
+     * nothing to do on it.
+     */
+    private static function queue(ControllerMenuItem $item, int $count): ControllerMenuItem
+    {
+        // ControllerMenuItem, not MenuItem: MenuItem is the static factory, and
+        // linkTo() hands back a ControllerMenuItem. setBadge() comes from
+        // MenuItemTrait rather than MenuItemInterface, so the concrete type is
+        // what has to be named here.
+        return $count > 0 ? $item->setBadge($count, 'warning') : $item;
     }
 
 }

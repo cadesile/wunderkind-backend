@@ -1,0 +1,175 @@
+{# @var filters \EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection #}
+{#
+  The faceted filter rail (handoff §7).
+
+  It renders itself from the page's own configureFilters() rather than from a
+  hand-written list of controls per page: the control for each facet is chosen
+  from the filter's form type, and the options come from the filter's own
+  choices. Adding a filter to a controller therefore adds it to the rail, and
+  the two can never describe different things.
+
+  Every control uses EasyAdmin's own query parameters, so FilterFactory applies
+  them with no custom parsing:
+
+    search        query=
+    checks        filters[prop][comparison]=  + filters[prop][value][]=
+    segment       filters[prop]=1 | 0         (a bare value defaults to EQ)
+    range         filters[prop][comparison]=between + [value] + [value2]
+    date          filters[prop][comparison]=between + [value] + [value2]
+
+  Nested properties are spelled with ':' in the parameter name, not '.' —
+  FiltersFormType::EMBEDDED_PROPERTY_SEPARATOR. Getting this wrong means the
+  filter silently never applies.
+
+  Counts in bmcFacets are per-option matches with every OTHER active filter
+  applied but not this facet's own, so ticking England does not zero the other
+  countries. Zero-match options stay visible and clickable in dim ink.
+#}
+{% set activeFilters = app.request.query.all['filters']|default({}) %}
+{% set searchQuery   = app.request.query.get('query')|default('') %}
+{% set facets        = bmcFacets|default({}) %}
+
+<aside class="bmc-rail" id="bmc-rail" aria-label="Filters">
+    <div class="bmc-rail__head">
+        <i data-lucide="sliders-horizontal" width="18" height="18"></i>
+        <span class="bmc-rail__title">FILTERS</span>
+        <a class="bmc-clear" href="{{ ea_url().unset('filters').unset('query').unset('page').generateUrl() }}">CLEAR ALL</a>
+    </div>
+
+    <form id="bmc-filters" method="get" action="{{ ea_url().unset('filters').unset('query').unset('page').generateUrl() }}">
+        {# The action URL already carries EasyAdmin's routing parameters, but a
+           GET form discards a query string on submit, so they are restated as
+           fields or the submit lands on a page with no CRUD context. #}
+        {% for name, value in app.request.query.all|filter((v, k) => k not in ['filters', 'query', 'page'] and v is not iterable) %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+
+        {% if ea.crud.searchFields is not empty %}
+            <fieldset class="bmc-facet{{ searchQuery is not empty ? ' is-active' }}">
+                <legend class="bmc-facet__head"><span class="bmc-facet__label">SEARCH</span></legend>
+                <label class="bmc-search">
+                    <i data-lucide="search" width="16" height="16"></i>
+                    <input class="bmc-input" type="search" name="query" value="{{ searchQuery }}"
+                           placeholder="{{ bmcSearchPlaceholder|default('Search') }}">
+                </label>
+            </fieldset>
+        {% endif %}
+
+        {% for filter in filters %}
+            {% set prop    = filter.property %}
+            {% set param   = prop|replace({'.': ':'}) %}
+            {% set active  = activeFilters[param] is defined %}
+            {% set applied = activeFilters[param]|default(null) %}
+            {% set counts  = facets[param]|default(facets[prop]|default({})) %}
+            {% set formType = filter.formType|split('\\')|last %}
+            {% set choices  = filter.formTypeOptions['value_type_options']['choices']|default(null) %}
+            {% set rest     = activeFilters|filter((v, k) => k != param) %}
+            {% set clearUrl = (rest is empty ? ea_url().unset('filters') : ea_url().set('filters', rest)).unset('page').generateUrl() %}
+
+            <fieldset class="bmc-facet{{ active ? ' is-active' }}">
+                <legend class="bmc-facet__head">
+                    <span class="bmc-facet__label">{{ filter.label|trans }}</span>
+                    {% if active %}<a class="bmc-clear" href="{{ clearUrl }}">CLEAR</a>{% endif %}
+                </legend>
+
+                {% if formType == 'BooleanFilterType' %}
+                    {% set current = applied is iterable ? applied['value']|default('') : (applied ?? '') %}
+                    {# A boolean reads better as the thing it distinguishes than
+                       as yes/no: "REAL | SPOOF", not "YES | NO". Pages name the
+                       two sides in bmcSegmentLabels. #}
+                    {% set yes = bmcSegmentLabels[prop]['1']|default('YES') %}
+                    {% set no  = bmcSegmentLabels[prop]['0']|default('NO') %}
+                    <div class="bmc-seg" role="radiogroup" aria-label="{{ filter.label|trans }}">
+                        {% for opt in [{v: '', l: 'ALL'}, {v: '0', l: no}, {v: '1', l: yes}] %}
+                            <label>
+                                <input type="radio" name="filters[{{ param }}]" value="{{ opt.v }}"
+                                       {{ current|default('') == opt.v ? 'checked' }}>
+                                <span>{{ opt.l }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+
+                {% elseif formType in ['NumericFilterType', 'ComparisonFilterType'] %}
+                    {% set unit = bmcUnits[prop]|default('') %}
+                    <input type="hidden" name="filters[{{ param }}][comparison]" value="between">
+                    <div class="bmc-range">
+                        <label class="bmc-field">
+                            {% if unit %}<span class="bmc-field__unit">{{ unit }}</span>{% endif %}
+                            <input class="bmc-input" type="text" inputmode="decimal"
+                                   name="filters[{{ param }}][value]" placeholder="Min"
+                                   value="{{ applied['value']|default('') }}"
+                                   aria-label="Minimum {{ filter.label|trans|lower }}">
+                        </label>
+                        <span class="bmc-dash">–</span>
+                        <label class="bmc-field">
+                            {% if unit %}<span class="bmc-field__unit">{{ unit }}</span>{% endif %}
+                            <input class="bmc-input" type="text" inputmode="decimal"
+                                   name="filters[{{ param }}][value2]" placeholder="Max"
+                                   value="{{ applied['value2']|default('') }}"
+                                   aria-label="Maximum {{ filter.label|trans|lower }}">
+                        </label>
+                    </div>
+                    {% if bmcRanges[prop] is defined %}
+                        <span class="bmc-hint">Range {{ bmcRanges[prop] }}</span>
+                    {% endif %}
+
+                {% elseif formType in ['DateTimeFilterType', 'DateFilterType'] %}
+                    <input type="hidden" name="filters[{{ param }}][comparison]" value="between">
+                    <div class="bmc-seg">
+                        {% for d in [7, 30, 90] %}
+                            <button type="button" data-bmc-days="{{ d }}"><span>{{ d }}D</span></button>
+                        {% endfor %}
+                    </div>
+                    <div class="bmc-dates">
+                        <input class="bmc-date" type="date" name="filters[{{ param }}][value]"
+                               value="{{ applied['value']|default('') }}" data-bmc-from aria-label="From">
+                        <input class="bmc-date" type="date" name="filters[{{ param }}][value2]"
+                               value="{{ applied['value2']|default('') }}" data-bmc-to aria-label="To">
+                    </div>
+
+                {% elseif choices is not null %}
+                    {% set chosen = applied['value']|default([]) %}
+                    {% set chosen = chosen is iterable ? chosen : [chosen] %}
+                    {% set cols   = bmcFacetColumns[prop]|default(1) %}
+                    <input type="hidden" name="filters[{{ param }}][comparison]" value="=">
+                    <div class="bmc-checks{{ cols > 1 ? ' bmc-checks--' ~ cols }}">
+                        {% for label, value in choices %}
+                            {# A choice value can be a string, a bool, or a
+                               backed enum case — controllers pass enum cases
+                               straight to setChoices(). Everything has to
+                               reach the checkbox as the string the query
+                               string will carry, and as the string
+                               FacetCounter keys its counts on. #}
+                            {% set v = value is same as(true) ? '1'
+                                     : (value is same as(false) ? '0'
+                                     : (value.value|default(value))) %}
+                            {% set n = counts[v]|default(0) %}
+                            <label class="bmc-check{{ n == 0 ? ' is-empty' }}">
+                                <input type="checkbox" name="filters[{{ param }}][value][]" value="{{ v }}"
+                                       {{ v in chosen ? 'checked' }}>
+                                <span class="bmc-tile"></span>
+                                {% if bmcFlagFacets is defined and prop in bmcFlagFacets %}
+                                    <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ v|lower ~ '.svg') }}')"></span>
+                                {% endif %}
+                                <span class="bmc-check__text">
+                                    <span class="bmc-check__label">{{ label|trans }}</span>
+                                    {% if bmcHints[prop][v] is defined %}<span class="bmc-check__hint">{{ bmcHints[prop][v] }}</span>{% endif %}
+                                </span>
+                                {% if counts is not empty %}<span class="bmc-check__n">{{ n }}</span>{% endif %}
+                            </label>
+                        {% endfor %}
+                    </div>
+
+                {% else %}
+                    {# TextFilterType and anything else with free text. #}
+                    <label class="bmc-search">
+                        <input class="bmc-input" type="text" name="filters[{{ param }}][value]"
+                               value="{{ applied['value']|default(applied is iterable ? '' : applied) }}"
+                               aria-label="{{ filter.label|trans }}">
+                    </label>
+                    <input type="hidden" name="filters[{{ param }}][comparison]" value="like">
+                {% endif %}
+            </fieldset>
+        {% endfor %}
+    </form>
+</aside>

@@ -3,14 +3,23 @@
 namespace App\Controller\Admin;
 
 use App\Entity\User;
+use App\Enum\Country;
 use App\Form\Type\AppearanceType;
+use App\Admin\FacetCounter;
+use App\Filter\Admin\AccountTypeFilter;
+use App\Filter\Admin\ActivityFilter;
+use App\Filter\Admin\ClubsOwnedFilter;
 use App\Repository\SyncRecordRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\SessionRevocationService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
+use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\BooleanFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\DateTimeFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
@@ -31,6 +40,8 @@ class UserCrudController extends AbstractCrudController
         private readonly SyncRecordRepository $syncRecordRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
         private readonly SessionRevocationService $sessionRevocation,
+        private readonly FacetCounter $facets,
+        private readonly \Doctrine\ORM\EntityManagerInterface $em,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -45,21 +56,49 @@ class UserCrudController extends AbstractCrudController
             ->setHtmlAttributes(['data-delete-trigger' => '1', 'data-delete-mode' => 'user'])
             ->setCssClass('btn btn-sm btn-outline-danger');
 
+        // Icon-only buttons on the index (bmc-iconbtn switches
+        // crud/action.html.twig onto the Lucide branch); the detail page is not
+        // redesigned and keeps the labelled Font Awesome button.
+        $deleteIndex = Action::new('confirmDeleteUser', 'Delete user + clubs', 'user-x')
+            ->linkToUrl(fn (User $entity) => $this->generateUrl('admin_user_delete_info', ['id' => $entity->getId()]))
+            ->setHtmlAttributes([
+                'title'               => 'Delete user + clubs',
+                'aria-label'          => 'Delete user and their clubs',
+                'data-delete-trigger' => '1',
+                'data-delete-mode'    => 'user',
+            ])
+            ->setCssClass('bmc-iconbtn bmc-iconbtn--danger');
+
         return $actions
             // NEW/DELETE stay disabled — accounts are created via registration
             // and removed via the account-deletion flow, not admin.
             ->disable(Action::NEW, Action::DELETE)
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
-            ->add(Crud::PAGE_INDEX, $deleteAction)
+            ->update(Crud::PAGE_INDEX, Action::DETAIL, fn (Action $a) => $a
+                ->setLabel('View user')->setIcon('eye')
+                ->setHtmlAttributes(['title' => 'View user', 'aria-label' => 'View user'])
+                ->setCssClass('bmc-iconbtn'))
+            ->update(Crud::PAGE_INDEX, Action::EDIT, fn (Action $a) => $a
+                ->setLabel('Edit user')->setIcon('pencil')
+                ->setHtmlAttributes(['title' => 'Edit user', 'aria-label' => 'Edit user'])
+                ->setCssClass('bmc-iconbtn'))
+            ->add(Crud::PAGE_INDEX, $deleteIndex)
             ->add(Crud::PAGE_DETAIL, $deleteAction);
     }
 
     public function configureCrud(Crud $crud): Crud
     {
         return $crud
-            ->setDefaultSort(['createdAt' => 'DESC'])
-            ->setSearchFields(['email'])
+            ->setEntityLabelInSingular('User')
+            ->setEntityLabelInPlural('Users')
+            // A–Z by owner name, not newest-first: this is the page you arrive
+            // at knowing who you are looking for.
+            ->setDefaultSort(['name' => 'ASC'])
+            ->setPaginatorPageSize(25)
+            ->showEntityActionsInlined()
+            ->setSearchFields(['email', 'name', 'clubs.name'])
             ->addFormTheme('admin/form/appearance_theme.html.twig')
+            ->overrideTemplate('crud/index', 'admin/crud/bmc_index.html.twig')
             ->overrideTemplate('crud/edit', 'admin/user_edit.html.twig');
     }
 
@@ -129,8 +168,138 @@ class UserCrudController extends AbstractCrudController
         return $configs;
     }
 
+    /**
+     * Four columns: who they are, what they own, what kind of account, verified.
+     *
+     * "Owner" leads with the person's name and drops the email to the sub-line,
+     * because an unnamed guest account reads as a wall of UUID otherwise.
+     */
+    private function indexFields(): iterable
+    {
+        yield TextField::new('name', 'Owner')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, User $u) => [
+                // User::$nationality holds a demonym ("English"), not a code,
+                // so it has to be resolved before it can name a flag file.
+                // Country::fromNationality() is the existing reverse lookup.
+                'flag' => $u->getNationality()
+                    ? Country::fromNationality($u->getNationality())?->value
+                    : null,
+                'text' => $u->getName() ?: 'Unnamed',
+                'tone' => $u->getName() ? null : 'dim',
+                'sub'  => self::accountLabel($u),
+            ]);
+
+        // Up to three badges then "+N" — enough to recognise the account at a
+        // glance without the column setting the row height.
+        yield IntegerField::new('clubs.count', 'Clubs')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->setSortable(false)
+            ->formatValue(function ($v, User $u): ?array {
+                $clubs = $u->getClubs();
+                if (0 === $clubs->count()) {
+                    return ['text' => 'No clubs', 'tone' => 'dim'];
+                }
+
+                $shown = [];
+                foreach ($clubs->slice(0, 3) as $club) {
+                    $shown[] = ['kit' => $club->getBadgeConfig(), 'title' => $club->getName()];
+                }
+
+                return [
+                    'imgs' => $shown,
+                    'more' => $clubs->count() > 3 ? '+' . ($clubs->count() - 3) : null,
+                ];
+            });
+
+        yield TextField::new('email', 'Account')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, User $u) => ['chip' => match (true) {
+                User::isGuestEmail($u->getEmail()) => ['label' => 'GUEST', 'color' => 'subtle'],
+                User::isSpoofEmail($u->getEmail()) => ['label' => 'SPOOF', 'color' => 'warning'],
+                default                            => ['label' => 'REAL', 'color' => null],
+            }]);
+
+        yield BooleanField::new('isVerified', 'Verified')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->setTextAlign('center')
+            ->formatValue(fn ($v, User $u) => $u->isVerified()
+                ? ['text' => '✓', 'tone' => 'positive']
+                : ['text' => '—', 'tone' => 'dim']);
+    }
+
+    /** Email, or a readable stand-in for the machine-generated ones. */
+    private static function accountLabel(User $user): string
+    {
+        $email = $user->getEmail();
+
+        if (User::isGuestEmail($email)) {
+            return strstr($email, '@', true) . ' · guest';
+        }
+
+        return $email;
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters
+            ->add(AccountTypeFilter::new())
+            ->add(BooleanFilter::new('isVerified', 'Verified'))
+            ->add(ClubsOwnedFilter::new())
+            ->add(ActivityFilter::new('lastLoginAt', 'Last login', [
+                'Active' => ActivityFilter::ACTIVE,
+                'Lapsed' => ActivityFilter::DORMANT,
+                'Never'  => ActivityFilter::NEVER,
+            ]))
+            ->add(DateTimeFilter::new('createdAt', 'Created'));
+    }
+
+    public function configureResponseParameters(KeyValueStore $responseParameters): KeyValueStore
+    {
+        if (Crud::PAGE_INDEX !== $responseParameters->get('pageName')) {
+            return $responseParameters;
+        }
+
+        $context = $this->getContext();
+        $qb      = $this->em->createQueryBuilder();
+
+        $responseParameters->set('bmcGroup', 'Accounts');
+        $responseParameters->set('bmcDomain', 'people');
+        $responseParameters->set('bmcTotal', $this->em->getRepository(User::class)->count([]));
+        $responseParameters->set('bmcSearchPlaceholder', 'Email, owner, club');
+        $responseParameters->set('bmcSegmentLabels', ['isVerified' => ['0' => 'NO', '1' => 'YES']]);
+        $responseParameters->set('bmcFacetColumns', ['id' => 3]);
+        $responseParameters->set('bmcHints', [
+            'lastLoginAt' => [ActivityFilter::ACTIVE => '≤ 7d', ActivityFilter::DORMANT => '> 7d'],
+            'email'       => [AccountTypeFilter::GUEST => 'device-bound', AccountTypeFilter::SPOOF => 'admin-made'],
+        ]);
+        $responseParameters->set('bmcWidths', ['clubs.count' => 160, 'email' => 112, 'isVerified' => 96]);
+
+        $responseParameters->set('bmcFacets', $this->facets->count(
+            $this,
+            $context,
+            new FieldCollection(iterator_to_array($this->indexFields())),
+            $responseParameters->get('filters'),
+            [
+                'email'        => AccountTypeFilter::countExpression(),
+                'isVerified'   => 'entity.isVerified',
+                'id'           => ClubsOwnedFilter::countExpression($qb),
+                'lastLoginAt'  => ActivityFilter::countExpression('entity.lastLoginAt'),
+            ],
+            ['bmc_activity_cutoff' => new \DateTimeImmutable('-' . ActivityFilter::CUTOFF_DAYS . ' days')],
+        ));
+
+        return $responseParameters;
+    }
+
     public function configureFields(string $pageName): iterable
     {
+        if (Crud::PAGE_INDEX === $pageName) {
+            yield from $this->indexFields();
+
+            return;
+        }
+
         yield IdField::new('id')->hideOnForm();
         yield EmailField::new('email');
         yield IntegerField::new('clubs.count', 'Clubs')

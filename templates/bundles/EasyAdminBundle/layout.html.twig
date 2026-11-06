@@ -1,6 +1,29 @@
 {% extends '@!EasyAdmin/layout.html.twig' %}
 
 {#
+  The redesigned admin shell. See assets/design_handoff_admin_overhaul/README.md
+  (§4) and reference/example-clubs.html for the target markup.
+
+  Three overrides carry the shell:
+    head_favicon    — kept from before, null-guards the admin context.
+    header_logo     — the sidebar head: brand, server clock, ⌘K jump button.
+    wrapper_wrapper — the whole two-column .bmc-shell grid.
+
+  Why wrapper_wrapper and not wrapper: .bmc-shell is a 100vh grid that owns its
+  own scrolling, so it cannot sit inside EasyAdmin's .wrapper div — and that div
+  is emitted OUTSIDE {% block wrapper %}. Taking wrapper_wrapper instead drops
+  it, and with it the three {% set %} blocks that build the user-menu avatar,
+  the user-menu dropdown and the settings dropdown — none of which the new shell
+  renders (the admin's email and log-out move to .bmc-side__foot).
+
+  What replacing it deliberately gives up: EasyAdmin's responsive header (the
+  mobile nav toggle), its global search box, the colour-scheme switcher and the
+  two resizer handles. The design replaces search with the ⌘K palette plus the
+  per-page filter rail, and is dark-only by intent. There is consequently no
+  mobile navigation, which matches §10: "the sidebar keeps a fixed width".
+#}
+
+{#
   Override head_favicon to guard against null admin context.
   When the EasyAdmin context isn't set up (e.g. during exception rendering
   or direct route access), ea() returns null and asset(null) throws a TypeError.
@@ -13,37 +36,107 @@
 {% endblock %}
 
 {#
-  Adds a live server clock under the sidebar's "Build My Club" title.
+  The sidebar head. Rendered into .bmc-side__head by the wrapper_wrapper
+  override below, not by EasyAdmin's own sidebar component.
 
-  The admin panel is where cron-driven work is reasoned about — competition
-  draws run every minute, rounds resolve on a schedule, deploys stamp their own
-  timestamps — and the server runs UTC while the operator rarely does. Having to
-  convert from a local wall clock to read any of that is a small tax paid
-  constantly, so the server's own time is stated on every page.
-
-  The whole `<a>` is reproduced verbatim from @!EasyAdmin/layout.html.twig
-  because Twig has no way to append to a block without re-stating it; the clock
-  is the only addition, and it sits OUTSIDE the anchor so clicking it does not
-  navigate to the dashboard.
+  The server clock is the same idea as before the redesign: the admin panel is
+  where cron-driven work is reasoned about — competition draws run every minute,
+  rounds resolve on a schedule — and the server runs UTC while the operator
+  rarely does. The rendered value is the initial paint and the no-JS fallback;
+  the data attribute is what the ticker anchors to. Both are server time, and
+  public/bmc-admin.js (§7) now owns the tick with the same skew logic.
 #}
 {% block header_logo %}
-    <a class="logo" title="{{ ea.dashboardTitle|striptags }}" href="{{ path(ea.dashboardRouteName) }}">
-        <span class="logo-custom">{{ ea.dashboardTitle|raw }}</span>
-        <span class="logo-compact"><twig:ea:Icon name="internal:home" /></span>
+    <a class="bmc-brand" href="{{ path(ea.dashboardRouteName) }}">
+        <img src="{{ asset('logo-192.png') }}" alt="">
+        <span class="bmc-brand__name"><span>BUILD MY CLUB</span><span>ADMIN</span></span>
     </a>
-    {# The rendered value is the initial paint and the no-JS fallback; the data
-       attribute is what the ticker anchors to. Both are server time. #}
-    <div class="bmc-server-clock"
-         id="bmc-server-clock"
+    <div class="bmc-clock" id="bmc-server-clock"
          data-server-time="{{ 'now'|date('c') }}"
          title="Server time (UTC) — not your local time">
         {# The zone lives on the label, not the value: it never changes, and
-           carrying it on the value made that line long enough to crowd the
-           narrow sidebar. #}
-        <span class="bmc-server-clock-label">Server &middot; UTC</span>
-        <span class="bmc-server-clock-value">{{ 'now'|date('Y-m-d H:i:s') }}</span>
+           carrying it on the value crowds the narrow sidebar. #}
+        <span class="bmc-clock__label">UTC</span>
+        <span class="bmc-clock__value">{{ 'now'|date('Y-m-d H:i:s') }}</span>
     </div>
+    <button type="button" class="bmc-jump" data-bmc-open-palette title="Jump to any page">
+        <i data-lucide="search" width="16" height="16"></i>
+        <span class="bmc-jump__text">Jump to page…</span><span class="bmc-kbd">⌘K</span>
+    </button>
 {% endblock %}
+
+{% block wrapper_wrapper %}
+    {#
+      data-bmc-page is the key bmc-admin.js matches against the nav links'
+      data-page to drive PINNED and RECENT.
+
+      It is derived from the label of whichever menu item EasyAdmin marked
+      selected, through the same replace map menu.html.twig uses — so the two
+      sides are the same string by construction and cannot drift. Deriving it
+      from ea.crud.entityLabelInPlural instead would look simpler but breaks
+      wherever the menu renames a page (the menu's "Awards" against
+      LeaderboardPeriodArchiveEntry's own plural label, for one).
+
+      bmc_page still wins if a controller sets it, which is the escape hatch
+      for pages that are reached without a menu entry of their own.
+    #}
+    {# Written as one reduce rather than a nested for/if because Twig scopes
+       {% set %} to the loop body — assigning inside a {% for %} would not be
+       visible out here. Exactly one menu item can be selected, so folding the
+       labels into a string yields that one label, or '' off-menu. #}
+    {% set _bmc_page = bmc_page|default(null) %}
+    {% if _bmc_page is null %}
+        {% set _selected_label = ea.mainMenu.items|reduce(
+            (carry, item) => carry ~ item.subItems|reduce((c, sub) => c ~ (sub.selected ? sub.label|trans : ''), ''),
+            ''
+        ) %}
+        {% if _selected_label is not empty %}
+            {% set _bmc_page = _selected_label|lower|replace({' & ': '-', ' / ': '-', ' ': '-'}) %}
+        {% endif %}
+    {% endif %}
+
+    <div class="bmc-shell">
+        <aside class="bmc-side" aria-label="Admin navigation">
+            <div class="bmc-side__head">
+                {{ block('header_logo') }}
+            </div>
+
+            {# Renders templates/bundles/EasyAdminBundle/menu.html.twig, which
+               emits <nav class="bmc-nav"> with the PINNED / RECENT slots. #}
+            {{ include(ea.templatePath('main_menu')) }}
+
+            <div class="bmc-side__foot">
+                <span class="bmc-side__user">{{ app.user ? app.user.userIdentifier : '' }}</span>
+                <a class="bmc-iconbtn bmc-iconbtn--sm" href="{{ path('admin_logout') }}"
+                   title="Log out" aria-label="Log out">
+                    <i data-lucide="log-out" width="16" height="16"></i>
+                </a>
+            </div>
+        </aside>
+
+        {#
+          .bmc-main is the scroll container. Re-declaring content /
+          content_header_wrapper / main here is what keeps every page that
+          already overrides one of them working — Twig resolves blocks by name,
+          not by nesting. That covers templates/admin/dashboard.html.twig
+          (overrides content) and the ~30 tool pages that extend this layout.
+        #}
+        <main class="bmc-main"{% if _bmc_page %} data-bmc-page="{{ _bmc_page }}"{% endif %}>
+            {% block content %}
+                {% block content_header_wrapper %}{% endblock %}
+                <section id="main" class="content-body">
+                    {% block main %}{% endblock %}
+                </section>
+                {% block content_footer_wrapper %}{% endblock %}
+            {% endblock content %}
+        </main>
+    </div>
+{% endblock wrapper_wrapper %}
+
+{# Flashes are rendered as toasts in body_javascript instead. Kept as an
+   explicit empty block so anything still calling it renders nothing rather
+   than showing every message twice. #}
+{% block flash_messages %}{% endblock %}
 
 {% block body_javascript %}
 {{ parent() }}
@@ -197,46 +290,37 @@
 }());
 </script>
 
-{# Ticks the sidebar's server clock.
-   Anchored to the server timestamp rendered into the markup, not to the
-   browser's own clock: it measures the skew between the two once at load and
-   then applies it, so a machine whose clock is wrong still reads true server
-   time. Formatting is pinned to UTC for the same reason — `toLocaleString`
-   without an explicit timeZone would quietly show the operator's zone, which is
-   the one thing this is here to avoid. #}
-<script>
-(function () {
-    var el = document.getElementById('bmc-server-clock');
-    if (!el) { return; }
+{# ── Redesign overlays ─────────────────────────────────────────────────────── #}
+{# The ⌘K palette reads its page list from the rendered nav links, so it needs
+   no config of its own and only ever lists pages this admin can see —
+   EasyAdmin has already applied setPermission() by the time the menu renders. #}
+<div class="bmc-overlay">
+    <div class="bmc-scrim" id="bmc-palette" hidden>
+        <div class="bmc-palette" role="dialog" aria-modal="true" aria-label="Jump to page">
+            <div class="bmc-palette__head">
+                <i data-lucide="search" width="18" height="18"></i>
+                <input class="bmc-input" id="bmc-palette-q" type="text" placeholder="Jump to page…"
+                       role="combobox" aria-expanded="true" aria-controls="bmc-palette-list" autocomplete="off">
+                <span class="bmc-kbd">ESC</span>
+            </div>
+            <ul class="bmc-palette__list" id="bmc-palette-list" role="listbox"></ul>
+            <div class="bmc-palette__empty" id="bmc-palette-empty" hidden>NO PAGES MATCH</div>
+            <div class="bmc-palette__foot"><span>↑↓ MOVE</span><span>↵ OPEN</span><span>⌘K TOGGLE</span></div>
+        </div>
+    </div>
 
-    var serverMs = Date.parse(el.getAttribute('data-server-time'));
-    if (isNaN(serverMs)) { return; }  // Leave the server-rendered value in place.
-
-    var valueEl = el.querySelector('.bmc-server-clock-value');
-    var skew    = serverMs - Date.now();
-    var fmt;
-
-    try {
-        fmt = new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'UTC', hour12: false,
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-        });
-    } catch (e) {
-        return;  // No Intl support — the server-rendered value stands.
-    }
-
-    function tick() {
-        var parts = {};
-        fmt.formatToParts(new Date(Date.now() + skew)).forEach(function (p) { parts[p.type] = p.value; });
-        // No zone suffix here — the label carries it (see the markup).
-        valueEl.textContent = parts.year + '-' + parts.month + '-' + parts.day
-            + ' ' + parts.hour + ':' + parts.minute + ':' + parts.second;
-    }
-
-    tick();
-    setInterval(tick, 1000);
-}());
-</script>
-<script src="https://perf-analytics.lndo.site/widget/019f86f4-913f-7e7f-ad62-9eda77f0d402.js"></script>
+    {# Flashes → toasts. The container stacks them: .bmc-toast is position:fixed
+       in the stylesheet, so without it several flashes land on top of each
+       other at the same bottom:24px. #}
+    {% set _flashes = app.flashes %}
+    {% if _flashes is not empty %}
+        <div class="bmc-toasts">
+            {% for type, messages in _flashes %}
+                {% for message in messages %}
+                    <div class="bmc-toast" role="status">{{ message|upper }}</div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
 {% endblock %}

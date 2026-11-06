@@ -1,0 +1,85 @@
+{#
+  The redesigned sidebar navigation. Replaces @EasyAdmin/menu.html.twig, which
+  renders <twig:ea:Sidebar:Group> / :Item / :Submenu components.
+
+  Output contract for public/bmc-admin.js — if any of this drifts, the
+  accordion, the PINNED/RECENT lists and the ⌘K palette all break silently:
+
+    groups        .bmc-group  >  .bmc-group__head[aria-expanded][aria-controls]
+                               +  .bmc-group__items#<id>[hidden]
+    links         a.bmc-link[data-page][data-group][data-zone][data-icon]
+                  with the LABEL IN THE FIRST <span> (the palette reads
+                  a.querySelector('span').textContent)
+    quick lists   #bmc-pinned / #bmc-recent, each with a .bmc-quick__items box
+
+  Icons are Lucide names, emitted as <i data-lucide> so EasyAdmin never gets a
+  chance to treat them as Font Awesome classes. The redesign puts icons on
+  group headings only, so configureMenuItems() supplies ten of them; page links
+  are text.
+
+  Only the group containing the current page is expanded, and EasyAdmin has
+  already worked out which that is (MenuItemMatcher::doMarkExpandedMenuItem).
+  That is also the no-JS fallback: without JavaScript every other group simply
+  renders closed.
+
+  Every label goes through |trans, as EasyAdmin's own menu template does:
+  MenuItemDto::getLabel() returns TranslatableInterface|string|null, so a label
+  reaches here as a TranslatableMessage object about as often as a string, and
+  printing one raw is a fatal "could not be converted to string".
+
+  The slug on data-page must match <main data-bmc-page> in layout.html.twig.
+  Both derive it from the same menu label through the same replace map, so they
+  cannot disagree.
+#}
+<nav class="bmc-nav">
+    {# Both filled client-side from localStorage, and hidden while empty. #}
+    <div class="bmc-quick" id="bmc-pinned" hidden>
+        <div class="bmc-quick__head"><i data-lucide="pin" width="16" height="16"></i><span>PINNED</span></div>
+        <div class="bmc-quick__items"></div>
+    </div>
+    <div class="bmc-quick" id="bmc-recent" hidden>
+        <div class="bmc-quick__head"><i data-lucide="history" width="16" height="16"></i><span>RECENT</span></div>
+        <div class="bmc-quick__items"></div>
+    </div>
+
+    {% set zone = '' %}
+    {% for item in ea.mainMenu.items %}
+        {% if item.isMenuSection %}
+            {% set zone = item.label|trans %}
+            <div class="bmc-zone">{{ zone|upper }}</div>
+
+        {% elseif item.hasSubItems %}
+            {% set gid = 'bmc-g-' ~ loop.index %}
+            {# Queue totals roll up to the heading so a collapsed group still
+               shows there is something waiting inside it. #}
+            {% set total = item.subItems|reduce((n, s) => n + (s.badge ? s.badge.content : 0), 0) %}
+            <div class="bmc-group">
+                <button type="button" class="bmc-group__head"
+                        aria-expanded="{{ item.expanded ? 'true' : 'false' }}" aria-controls="{{ gid }}">
+                    <i data-lucide="{{ item.icon }}" width="16" height="16"></i>
+                    <span class="bmc-group__label">{{ item.label|trans }}</span>
+                    {% if total > 0 %}<span class="bmc-count">{{ total }}</span>{% endif %}
+                    <span class="bmc-group__chev"><i data-lucide="chevron-right" width="16" height="16"></i></span>
+                </button>
+                <div class="bmc-group__items" id="{{ gid }}"{{ item.expanded ? '' : ' hidden' }}>
+                    {% for sub in item.subItems %}
+                        <a class="bmc-link{{ sub.selected ? ' is-current' }}" href="{{ sub.linkUrl }}"
+                           {% if sub.selected %}aria-current="page"{% endif %}
+                           data-page="{{ sub.label|trans|lower|replace({' & ': '-', ' / ': '-', ' ': '-'}) }}"
+                           data-group="{{ item.label|trans }}" data-zone="{{ zone }}" data-icon="{{ item.icon }}">
+                            <span>{{ sub.label|trans }}</span>
+                            {% if sub.badge %}<span class="bmc-count">{{ sub.badge.content }}</span>{% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+        {% else %}
+            {# Top-level link with no children — the Dashboard. #}
+            <a class="bmc-navhead{{ item.selected ? ' is-current' }}" href="{{ item.linkUrl }}"
+               {% if item.selected %}aria-current="page"{% endif %}>
+                <i data-lucide="{{ item.icon }}" width="16" height="16"></i><span>{{ item.label|trans|upper }}</span>
+            </a>
+        {% endif %}
+    {% endfor %}
+</nav>

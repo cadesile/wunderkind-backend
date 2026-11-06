@@ -2,7 +2,13 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\FacetCounter;
 use App\Entity\Player;
+use App\Enum\Country;
+use App\Filter\Admin\AgeRangeFilter;
+use App\Filter\Admin\PenceRangeFilter;
+use App\Twig\BmcAdminExtension;
+use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use App\Entity\PersonalityProfile;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
@@ -38,6 +44,9 @@ class PlayerCrudController extends AbstractCrudController
     public function __construct(
         private readonly PlayerRepository $playerRepository,
         private readonly ArchetypeResolverService $archetypeResolver,
+        private readonly FacetCounter $facets,
+        private readonly BmcAdminExtension $bmc,
+        private readonly \Doctrine\ORM\EntityManagerInterface $em,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -49,6 +58,14 @@ class PlayerCrudController extends AbstractCrudController
     {
         return $actions
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->update(Crud::PAGE_INDEX, Action::DETAIL, fn (Action $a) => $a
+                ->setLabel('View player')->setIcon('eye')
+                ->setHtmlAttributes(['title' => 'View player', 'aria-label' => 'View player'])
+                ->setCssClass('bmc-iconbtn'))
+            ->update(Crud::PAGE_INDEX, Action::EDIT, fn (Action $a) => $a
+                ->setLabel('Edit player')->setIcon('pencil')
+                ->setHtmlAttributes(['title' => 'Edit player', 'aria-label' => 'Edit player'])
+                ->setCssClass('bmc-iconbtn'))
             ->add(Crud::PAGE_EDIT, Action::DETAIL)
             ->disable(Action::DELETE);
     }
@@ -56,50 +73,178 @@ class PlayerCrudController extends AbstractCrudController
     public function configureCrud(Crud $crud): Crud
     {
         return parent::configureCrud($crud)
+            ->setEntityLabelInSingular('Player')
+            ->setEntityLabelInPlural('Players')
             ->setDefaultSort(['lastName' => 'ASC'])
-            ->overrideTemplate('crud/index', 'admin/player_index.html.twig')
+            ->setPaginatorPageSize(25)
+            ->showEntityActionsInlined()
+            ->setSearchFields(['firstName', 'lastName', 'nationality'])
+            // Was admin/player_index.html.twig, which replaced
+            // content_header_wrapper with a three-card summary and so would
+            // have swallowed the new page strip. The shared template owns that
+            // block now.
+            ->overrideTemplate('crud/index', 'admin/crud/bmc_index.html.twig')
             ->addFormTheme('admin/form/appearance_theme.html.twig')
             ->addFormTheme('admin/form/archetype_summary_theme.html.twig');
     }
 
-    public function index(AdminContext $context): KeyValueStore|Response
-    {
-        $responseParameters = parent::index($context);
-        if ($responseParameters instanceof KeyValueStore) {
-            $responseParameters->set('playerSummary', $this->playerRepository->getAdminSummary());
-        }
-        return $responseParameters;
-    }
+    // The playerSummary panel that used to sit here is gone with
+    // admin/player_index.html.twig. It was three cards of by-nationality and
+    // by-position totals rendered above the table — the filter rail now
+    // carries the same breakdown as live facet counts beside each option,
+    // which is both current and clickable.
 
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
-            ->add(ChoiceFilter::new('position')->setChoices([
+            ->add(ChoiceFilter::new('position', 'Position')->setChoices([
                 'Goalkeeper' => PlayerPosition::GOALKEEPER,
                 'Defender'   => PlayerPosition::DEFENDER,
                 'Midfielder' => PlayerPosition::MIDFIELDER,
                 'Attacker'   => PlayerPosition::ATTACKER,
-            ]))
-            ->add(ChoiceFilter::new('status')->setChoices([
+            ])->canSelectMultiple())
+            ->add(ChoiceFilter::new('status', 'Status')->setChoices([
                 'Active'               => PlayerStatus::ACTIVE,
                 'Loaned Out'           => PlayerStatus::LOANED_OUT,
                 'Transferred'          => PlayerStatus::TRANSFERRED,
                 'Transferred (Agent)'  => PlayerStatus::TRANSFERRED_VIA_AGENT,
                 'Retired'              => PlayerStatus::RETIRED,
-            ]))
-            ->add(ChoiceFilter::new('recruitmentSource')->setChoices([
-                'Scouting Network' => RecruitmentSource::SCOUTING_NETWORK,
-                'Coaching Find'    => RecruitmentSource::COACHING_FIND,
-                'Agent Offer'      => RecruitmentSource::AGENT_OFFER,
-                'Youth Request'    => RecruitmentSource::YOUTH_REQUEST,
-            ]))
-            ->add(TextFilter::new('nationality'))
-            ->add(NumericFilter::new('currentAbility'))
-            ->add(NumericFilter::new('potential'));
+            ])->canSelectMultiple())
+            // Every case, not the four this used to list: the two it left out
+            // (youth and senior intake) are where the players actually come
+            // from, so the facet read 0 against all four offered options while
+            // the whole roster sat in a bucket you could not tick.
+            ->add(ChoiceFilter::new('recruitmentSource', 'Recruited via')
+                ->setChoices($this->recruitmentChoices())
+                ->canSelectMultiple())
+            ->add(ChoiceFilter::new('nationality', 'Nationality')->setChoices($this->nationalityChoices())->canSelectMultiple())
+            ->add(AgeRangeFilter::new())
+            ->add(NumericFilter::new('currentAbility', 'Current ability'))
+            ->add(NumericFilter::new('potential', 'Potential'))
+            ->add(PenceRangeFilter::new('contractValue', 'Wage/wk'));
+    }
+
+    public function configureResponseParameters(KeyValueStore $responseParameters): KeyValueStore
+    {
+        if (Crud::PAGE_INDEX !== $responseParameters->get('pageName')) {
+            return $responseParameters;
+        }
+
+        $responseParameters->set('bmcGroup', 'People & market');
+        $responseParameters->set('bmcDomain', 'people');
+        $responseParameters->set('bmcTotal', $this->em->getRepository(Player::class)->count([]));
+        $responseParameters->set('bmcSearchPlaceholder', 'Player name');
+        // One column: "Goalkeeper" plus its count does not fit a 136px half-rail.
+        $responseParameters->set('bmcFacetColumns', []);
+        $responseParameters->set('bmcUnits', ['contractValue' => '£']);
+        $responseParameters->set('bmcWidths', [
+            'position' => 80, 'currentAbility' => 210, 'status' => 132, 'contractValue' => 96,
+        ]);
+
+        $responseParameters->set('bmcFacets', $this->facets->count(
+            $this,
+            $this->getContext(),
+            new FieldCollection(iterator_to_array($this->indexFields())),
+            $responseParameters->get('filters'),
+            [
+                'position'          => 'entity.position',
+                'status'            => 'entity.status',
+                'recruitmentSource' => 'entity.recruitmentSource',
+                'nationality'       => 'entity.nationality',
+            ],
+        ));
+
+        return $responseParameters;
+    }
+
+    /** @return array<string, RecruitmentSource> */
+    private function recruitmentChoices(): array
+    {
+        $choices = [];
+        foreach (RecruitmentSource::cases() as $case) {
+            $choices[ucwords(str_replace('_', ' ', $case->value))] = $case;
+        }
+
+        return $choices;
+    }
+
+    /** @return array<string, string> only the nationalities actually present */
+    private function nationalityChoices(): array
+    {
+        $rows = $this->em->createQuery(
+            'SELECT DISTINCT p.nationality FROM ' . Player::class . ' p ORDER BY p.nationality ASC'
+        )->getScalarResult();
+
+        return array_combine(
+            array_column($rows, 'nationality'),
+            array_column($rows, 'nationality'),
+        );
+    }
+
+    /**
+     * Player, position, ability, status, wage.
+     *
+     * Ability and potential share one meter: the green fill is what the player
+     * can do now and the grey ghost behind it is how far they could go, so the
+     * gap between the two is the thing you actually read.
+     */
+    private function indexFields(): iterable
+    {
+        yield TextField::new('lastName', 'Player')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Player $p) => [
+                // Nationality is a demonym here too, so it needs the same
+                // reverse lookup the Users page uses before it can name a flag.
+                'flag' => Country::fromNationality($p->getNationality())?->value,
+                'text' => $p->getFullName(),
+                'sub'  => $p->getNationality() . ' · ' . $p->getAge() . 'y',
+            ]);
+
+        yield TextField::new('position', 'Pos')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Player $p) => ['chip' => [
+                'label' => $p->getPositionValue(),
+                'color' => match ($p->getPositionValue()) {
+                    'GK'    => 'warning',
+                    'DEF'   => 'positive',
+                    'ATT'   => 'danger',
+                    default => null,
+                },
+            ]]);
+
+        yield IntegerField::new('currentAbility', 'Ability · potential')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Player $p) => ['bar' => [
+                'pct'   => $p->getCurrentAbility(),
+                'pct2'  => $p->getPotential(),
+                'label' => $p->getCurrentAbility() . ' / ' . $p->getPotential(),
+            ]]);
+
+        yield TextField::new('status', 'Status')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Player $p) => ['chip' => match ($p->getStatusValue()) {
+                'active'               => ['label' => 'ACTIVE', 'color' => 'positive'],
+                'loaned_out'           => ['label' => 'LOANED OUT', 'color' => 'warning'],
+                'transferred'          => ['label' => 'TRANSFERRED', 'color' => null],
+                'transferred_via_agent' => ['label' => 'VIA AGENT', 'color' => null],
+                'retired'              => ['label' => 'RETIRED', 'color' => 'subtle'],
+                default                => ['label' => strtoupper($p->getStatusValue()), 'color' => null],
+            }]);
+
+        yield IntegerField::new('contractValue', 'Wage/wk')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->setTextAlign('right')
+            ->formatValue(fn ($v, Player $p) => ['text' => $this->bmc->money($p->getContractValue())]);
     }
 
     public function configureFields(string $pageName): iterable
     {
+        if (Crud::PAGE_INDEX === $pageName) {
+            yield from $this->indexFields();
+
+            return;
+        }
+
         // ── Index: flat list columns ──────────────────────────────────────────
         yield TextField::new('firstName')->onlyOnIndex();
         yield TextField::new('lastName')->onlyOnIndex();

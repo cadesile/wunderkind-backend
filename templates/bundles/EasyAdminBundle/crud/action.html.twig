@@ -1,0 +1,59 @@
+{# @var action \EasyCorp\Bundle\EasyAdminBundle\Dto\ActionDto #}
+{# @var entity \EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto #}
+{#
+  Row and batch actions.
+
+  EasyAdmin routes every action through this one template, so opting in by CSS
+  class lets the redesigned list pages render 36x36 Lucide icon buttons while
+  every page that has not been redesigned keeps the stock Font Awesome
+  <twig:ea:Button> untouched.
+
+  On the redesigned branch the action's icon is a Lucide name rather than a
+  Font Awesome class, and the label becomes the accessible name instead of
+  visible text — these buttons are icon-only, so without it they would be
+  unreadable to a screen reader.
+#}
+{% if 'bmc-iconbtn' in action.cssClass %}
+    {% set label = action.label|trans %}
+    {# ea_html_attrs resolves TranslatableMessage values to strings. Not
+       optional: EasyAdmin injects data-action-confirmation-title/-content on
+       DELETE as translatable objects, and printing one raw is fatal. #}
+    {% set attrs = action.htmlAttributes|ea_html_attrs %}
+    {% set title = attrs.title|default(label) %}
+    {# The ...spread form only parses inside <twig:…> component tags, so the
+       remaining attributes are written out by hand. title, aria-label and
+       class are already placed above. #}
+    {% set extra = attrs|filter((v, k) => v is not null and k not in ['title', 'aria-label', 'class']) %}
+
+    {% if action.htmlElement.isForm %}
+        <form method="POST" action="{{ action.linkUrl }}" class="bmc-rowaction-form">
+            <button type="submit" class="{{ action.cssClass }}"
+                    title="{{ title }}" aria-label="{{ attrs['aria-label']|default(label) }}"
+                    {%- for name, value in extra %} {{ name }}="{{ value }}"{% endfor %}>
+                <i data-lucide="{{ action.icon }}" width="16" height="16"></i>
+            </button>
+        </form>
+    {% else %}
+        <a class="{{ action.cssClass }}" href="{{ action.linkUrl }}"
+           title="{{ title }}" aria-label="{{ attrs['aria-label']|default(label) }}"
+           {%- for name, value in extra %} {{ name }}="{{ value }}"{% endfor %}>
+            <i data-lucide="{{ action.icon }}" width="16" height="16"></i>
+        </a>
+    {% endif %}
+{% else %}
+    <twig:ea:Button
+        variant="{{ action.variant }}"
+        isInvisible="{{ action.usesTextStyle }}"
+        class="{{ action.htmlElement.isLink and isIncludedInDropdown|default(false) ? 'dropdown-item' }} {{ action.cssClass }}"
+        {{ ...action.htmlAttributes|ea_html_attrs|filter(v => v is not null) }}
+        htmlElement="{{ action.htmlElement }}"
+        type="{{ action.buttonType }}"
+        icon="{{ action.icon }}"
+        href="{{ action.htmlElement.isLink ? action.linkUrl : null }}"
+        action="{{ action.htmlElement.isForm ? action.linkUrl : null }}"
+        method="{{ action.htmlElement.isForm ? 'POST' : null }}"
+    >
+        {% set action_label = outerScope.action.label|trans %}
+        {%- if action_label is not empty -%}<span class="action-label">{{ action_label|raw }}</span>{%- endif -%}
+    </twig:ea:Button>
+{% endif %}
