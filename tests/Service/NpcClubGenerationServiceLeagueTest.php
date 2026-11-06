@@ -44,6 +44,9 @@ class NpcClubGenerationServiceLeagueTest extends TestCase
             $leagueService,
             $gameConfigRepo,
             new \App\Service\Location\LocationCatalogueService($locationRepo),
+            // No profile row: tierCountFor() falls back to 8, the depth this test's
+            // expectations were written against.
+            $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
         );
         $clubs   = $service->generateClubs(2, 4, 'EN');
 

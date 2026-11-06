@@ -16,6 +16,7 @@ use App\Enum\Appearance\KitStyle;
 use App\Enum\Country;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\ClubInitializationService;
 use App\Service\CountryContent\CountryContentRegistry;
@@ -49,7 +50,21 @@ class NpcClubGenerationService
         private readonly LeagueService               $leagueService,
         private readonly GameConfigRepository        $gameConfigRepository,
         private readonly LocationCatalogueService    $locationCatalogue,
+        private readonly CountryProfileRepository     $countryProfileRepository,
     ) {}
+
+    /**
+     * How deep this country's pyramid is meant to be.
+     *
+     * Read from the profile's declared intent rather than counted from the league rows:
+     * clubs are often generated while a structure is still being built, and rescaling them
+     * against a half-finished count would bake in the wrong reputations and balances.
+     * Falls back to the full eight for a country with no profile yet.
+     */
+    private function tierCountFor(string $country): int
+    {
+        return $this->countryProfileRepository->findByCode(strtoupper($country))?->getLeagueTierCount() ?? 8;
+    }
 
     /** @return string[] */
     public function getPlaceNames(string $countryCode): array
@@ -134,7 +149,8 @@ class NpcClubGenerationService
     /** @return NpcClub[] */
     public function generateClubs(int $count, int $tier, string $country, bool $deleteExisting = false): array
     {
-        $tier       = max(1, min(8, $tier));
+        $tierCount  = $this->tierCountFor($country);
+        $tier       = max(1, min($tierCount, $tier));
         $slugs      = $this->getActiveFacilitySlugs();
         $bandIndex  = $this->getBandIndexForTier($tier);
         $levelBand  = self::FACILITY_LEVELS[$bandIndex];
@@ -143,7 +159,7 @@ class NpcClubGenerationService
         $classifiedPlaces = $this->classifyPlaces($placeData);
         $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
-        $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier($tier);
+        $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier($tier, $tierCount);
         $suffixLeads      = $countryEnum !== null && CountryContentRegistry::suffixLeadsName($countryEnum);
         $usedNames        = [];
         $clubs            = [];
@@ -156,8 +172,8 @@ class NpcClubGenerationService
             [$name, $place] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights, $suffixLeads);
             $usedNames[]    = $name;
             $citySize       = $place['city_size'];
-            $reputation     = $this->reputationForTier($tier, $citySize);
-            $balance        = $this->balanceForTier($tier, $citySize);
+            $reputation     = $this->reputationForTier($tier, $citySize, $tierCount);
+            $balance        = $this->balanceForTier($tier, $citySize, $tierCount);
             $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
             $identity       = $this->generateIdentity($name);
             $stadiumName    = $this->generateStadiumName($place['name'], $country);
@@ -323,7 +339,8 @@ class NpcClubGenerationService
         $classifiedPlaces = $this->classifyPlaces($placeData);
         $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
-        $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier(max(1, min(8, $tier)));
+        $tierCount        = $this->tierCountFor($countryCode);
+        $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier(max(1, min($tierCount, $tier)), $tierCount);
 
         $suffixLeads = $countryEnum !== null && CountryContentRegistry::suffixLeadsName($countryEnum);
 
@@ -352,18 +369,26 @@ class NpcClubGenerationService
         };
     }
 
-    private function reputationForTier(int $tier, \App\Enum\CitySize $citySize): int
+    private function reputationForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8): int
     {
-        // tier 1 → 70–90, tier 8 → 5–20 (linear interpolation)
-        $minRep = max(1, (int) round(70 - ($tier - 1) * (65 / 7)));
-        $maxRep = max(1, (int) round(90 - ($tier - 1) * (70 / 7)));
+        // Top tier → 70–90, bottom tier → 5–20, interpolated across the country's OWN
+        // depth rather than a fixed eight. A 3-tier country's bottom division should be as
+        // unglamorous as tier 8 is in a full pyramid; anchored at 7 it would come out
+        // around 42–70, which reads as a respectable second division.
+        $tierCount = max(1, min(8, $tierCount));
+        $tier      = max(1, min($tierCount, $tier));
+        $steps     = max(1, $tierCount - 1);
+        $progress  = $tierCount === 1 ? 0.0 : ($tier - 1) / $steps;
+
+        $minRep = max(1, (int) round(70 - $progress * 65));
+        $maxRep = max(1, (int) round(90 - $progress * 70));
         [$min, $max] = $this->skewRange($minRep, $maxRep, $citySize);
         return random_int($min, $max);
     }
 
-    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize): int
+    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8): int
     {
-        $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier);
+        $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier, $tierCount);
         $min   = max(0, (int) $range['min']);
         $max   = max($min, (int) $range['max']);
         [$skewMin, $skewMax] = $this->skewRange($min, $max, $citySize);
