@@ -112,6 +112,24 @@ class LocationEnrichmentRun
     public function getNeedsReview(): int { return $this->needsReview; }
     public function getFailed(): int { return $this->failed; }
 
+    /**
+     * Set the settled counts outright, for a run whose outcome is known all at once.
+     *
+     * The enrichment path must NOT use these. There, outcomes arrive one message at a time
+     * across concurrent workers, so the counters have to be incremented atomically in SQL —
+     * LocationEnrichmentRunRepository::recordOutcome() exists precisely so two workers
+     * finishing together cannot both read 4 and both write 5.
+     *
+     * A town-suggestion run has no such race: it is one synchronous call whose results are
+     * all in hand before anything is written. Reading its totals back out of the database a
+     * row at a time would be slower and no safer.
+     */
+    public function setSettled(int $succeeded, int $failed): void
+    {
+        $this->succeeded = $succeeded;
+        $this->failed    = $failed;
+    }
+
     public function getSettled(): int { return $this->succeeded + $this->needsReview + $this->failed; }
 
     public function getStatus(): EnrichmentRunStatus { return $this->status; }

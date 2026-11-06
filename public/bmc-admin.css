@@ -282,3 +282,8 @@
 /* EasyAdmin paints its own ground on <body>; .bmc-shell covers the viewport,
    but a stray margin would show it as a seam. */
 body:has(> .bmc-shell), body:has(.bmc-shell) { margin: 0; }
+
+/* Global actions sit beside the total in the page strip. The strip is a
+   space-between row, so its right-hand side needs to be one flex group or the
+   buttons and the total drift apart as the button count changes. */
+.bmc-strip__right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }

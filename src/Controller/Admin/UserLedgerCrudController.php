@@ -116,6 +116,10 @@ class UserLedgerCrudController extends AbstractCrudController
             // STAYS DISABLED. See the class docblock — re-enabling NEW here would write balances
             // from form input and fork the balance chain.
             ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->update(Crud::PAGE_INDEX, Action::DETAIL, fn (Action $a) => $a
+                ->setLabel('View entry')->setIcon('eye')
+                ->setHtmlAttributes(['title' => 'View entry', 'aria-label' => 'View ledger entry'])
+                ->setCssClass('bmc-iconbtn'))
             ->addBatchAction(self::exportCsvAction());
     }
 

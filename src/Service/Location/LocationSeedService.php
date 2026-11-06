@@ -265,8 +265,24 @@ final class LocationSeedService
      */
     public function importPlaceNames(Country $country, bool $dryRun = false): array
     {
-        $code  = $country->value;
-        $names = CountryContentRegistry::allPlaceNames($country);
+        return $this->importNames($country, CountryContentRegistry::allPlaceNames($country), $dryRun);
+    }
+
+    /**
+     * Add town names to a country's catalogue, from wherever they came from.
+     *
+     * Extracted from importPlaceNames() when a second source appeared — AI-suggested towns —
+     * so the two cannot drift on the things that matter here: add-only, deduped on
+     * town_normalised, near-duplicates reported rather than merged, and no fabricated
+     * population, region or capital flag.
+     *
+     * @param list<string> $names
+     *
+     * @return array{country: string, imported: int, skipped: int, duplicates: int, nearDuplicates: list<array{imported: string, existing: string}>}
+     */
+    public function importNames(Country $country, array $names, bool $dryRun = false): array
+    {
+        $code = $country->value;
 
         $result = [
             'country'        => $code,

@@ -94,8 +94,20 @@ services:
     # implementation is USED, and a service that is defined but unused costs nothing, while a
     # conditionally-defined one would break container compilation the moment the alias pointed
     # at it.
-    App\Service\Location\Enrichment\ClaudeLocationEnricher:
+    # The one place the Anthropic credentials are bound. Both callers — location enrichment
+    # and town suggestion — share this client and therefore share the key, which is what
+    # "use the existing API key" means in practice.
+    App\Service\Ai\AnthropicJsonClient:
         arguments:
+            $apiKey: '%env(string:LOCATION_ENRICHER_API_KEY)%'
+            $model: '%env(string:LOCATION_ENRICHER_MODEL)%'
+
+    App\Service\Location\Suggestion\TownSuggesterInterface:
+        factory: ['@App\Service\Location\Suggestion\TownSuggesterFactory', 'create']
+
+    App\Service\Location\Suggestion\TownSuggesterFactory:
+        arguments:
+            $provider: '%env(string:LOCATION_ENRICHER_PROVIDER)%'
             $apiKey: '%env(string:LOCATION_ENRICHER_API_KEY)%'
             $model: '%env(string:LOCATION_ENRICHER_MODEL)%'
 

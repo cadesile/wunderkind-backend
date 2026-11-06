@@ -28,12 +28,46 @@
                 </button>
             </div>
         </div>
-        {% if bmcTotal is defined %}
-            <div class="bmc-total">
-                <span class="bmc-total__n">{{ bmcTotal|number_format(0, '.', ',') }}</span>
-                <span class="bmc-total__noun">{{ ea.crud.entityLabelInPlural|trans|upper }}</span>
-            </div>
-        {% endif %}
+        <div class="bmc-strip__right">
+            {#
+              Global actions — the New button, and page-specific ones like the User Ledger's
+              "New Adjustment".
+
+              THEY HAVE TO BE RENDERED HERE EXPLICITLY. EasyAdmin puts them in `page_actions`,
+              which lives inside `content_header_wrapper` — the block this template replaces
+              wholesale. Overriding that block therefore silently drops every global action on
+              every redesigned page, which is exactly what happened: seven pages lost a button
+              that was still configured and whose route still worked.
+
+              Rendered directly rather than through crud/action.html.twig, because these are
+              text buttons in the page strip rather than the 36px icon buttons a row carries,
+              and the action DTO already holds everything needed to draw one.
+            #}
+            {% for action in global_actions|default([]) %}
+                {% if not action.isActionGroup %}
+                    {% set label = action.label is same as(false) ? '' : action.label|trans %}
+                    {% if action.htmlElement.isForm %}
+                        <form method="POST" action="{{ action.linkUrl }}" class="d-inline">
+                            <button type="submit" class="bmc-btn bmc-btn--yellow" title="{{ label }}">
+                                <span>{{ label|upper }}</span>
+                            </button>
+                        </form>
+                    {% else %}
+                        <a class="bmc-btn bmc-btn--yellow" href="{{ action.linkUrl }}" title="{{ label }}"
+                           {%- for name, value in action.htmlAttributes|ea_html_attrs|filter((v, k) => v is not null and k not in ['class', 'title']) %} {{ name }}="{{ value }}"{% endfor %}>
+                            <span>{{ label|upper }}</span>
+                        </a>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+
+            {% if bmcTotal is defined %}
+                <div class="bmc-total">
+                    <span class="bmc-total__n">{{ bmcTotal|number_format(0, '.', ',') }}</span>
+                    <span class="bmc-total__noun">{{ ea.crud.entityLabelInPlural|trans|upper }}</span>
+                </div>
+            {% endif %}
+        </div>
     </header>
 {% endblock %}
 
