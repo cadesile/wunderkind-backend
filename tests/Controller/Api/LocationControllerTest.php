@@ -415,6 +415,74 @@ class LocationControllerTest extends WebTestCase
         $this->assertSame(3, $data['totalCount']);
     }
 
+    /**
+     * Region-less towns are offered as a named, selectable bucket.
+     *
+     * A region arrives with enrichment, so most of a catalogue has none. Those rows used to
+     * come back as a facet with an EMPTY name, which a region picker cannot render and so
+     * drops — leaving the only un-enriched towns in the game reachable by search alone, and
+     * therefore un-enrichable, since a player has to find a town to ask for its valuation.
+     */
+    public function testFacetsLabelTheRegionlessTownsRatherThanReturningAnEmptyName(): void
+    {
+        $this->location('Northtown', region: 'North');
+        $this->location('Barename', region: '', landPence: null, lat: null, lng: null);
+
+        $this->authedRequest('GET', '/api/locations/facets?country=' . self::COUNTRY);
+
+        $byRegion = [];
+        foreach ($this->json()['regions'] as $row) {
+            $byRegion[$row['region']] = $row['count'];
+        }
+
+        $this->assertSame(1, $byRegion['Unassigned'] ?? null, 'the region-less town needs a usable label');
+        $this->assertSame(1, $byRegion['North'] ?? null);
+        $this->assertArrayNotHasKey('', $byRegion, 'an empty facet name is unrenderable');
+    }
+
+    /**
+     * And the label is accepted back as a filter.
+     *
+     * THE HALF THAT MAKES THE LABEL WORTH ANYTHING. `region IN ('Unassigned')` matches nothing,
+     * because the stored value is `''` — so without this translation the facet would offer a
+     * bucket that is selectable and always empty, which is worse than not offering it at all.
+     */
+    public function testFilteringByUnassignedReturnsTheRegionlessTowns(): void
+    {
+        $this->location('Northtown', region: 'North');
+        $this->location('Barename', region: '', landPence: null, lat: null, lng: null);
+
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&region=Unassigned');
+
+        $towns = array_column($this->json()['locations'], 'town');
+        $this->assertSame(['Barename'], $towns);
+    }
+
+    /** A named region still excludes them — the bucket is opt-in, not a widening of every filter. */
+    public function testFilteringByANamedRegionStillExcludesTheRegionlessTowns(): void
+    {
+        $this->location('Northtown', region: 'North');
+        $this->location('Barename', region: '', landPence: null, lat: null, lng: null);
+
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&region=North');
+
+        $this->assertSame(['Northtown'], array_column($this->json()['locations'], 'town'));
+    }
+
+    /** Combined with a named region, so "North plus the ones we do not know yet" works. */
+    public function testUnassignedCombinesWithNamedRegions(): void
+    {
+        $this->location('Northtown', region: 'North');
+        $this->location('Southtown', region: 'South');
+        $this->location('Barename', region: '', landPence: null, lat: null, lng: null);
+
+        $this->authedRequest('GET', '/api/locations?country=' . self::COUNTRY . '&region=North,Unassigned');
+
+        $towns = array_column($this->json()['locations'], 'town');
+        sort($towns);
+        $this->assertSame(['Barename', 'Northtown'], $towns);
+    }
+
     public function testFacetsRouteIsNotSwallowedByTheDetailRoute(): void
     {
         $this->authedRequest('GET', '/api/locations/facets?country=' . self::COUNTRY);

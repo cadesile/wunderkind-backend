@@ -480,6 +480,23 @@ class LocationRepository extends ServiceEntityRepository
     public const SORT_PRICE = 'price';
 
     /**
+     * The label for towns that have no region yet, on both the facet and the filter.
+     *
+     * A region arrives with ENRICHMENT, so most of a country's catalogue has none — 242 of
+     * England's 284 at the time of writing. Those rows used to surface as a facet with an empty
+     * name, which a region picker cannot render and so drops, leaving the only un-enriched
+     * towns in the game reachable by search alone. They are labelled instead, and
+     * findForList() accepts the same label back as a filter, so "browse the unassigned bucket"
+     * is a real flow rather than a bucket you can see but not select.
+     *
+     * NOT A STORED VALUE. The column is `''` and stays `''`; this is a presentation label that
+     * the filter translates back. Inventing a stored region would be wrong data that enrichment
+     * would then refuse to overwrite — its validator only fills a region that is genuinely
+     * absent.
+     */
+    public const REGION_UNASSIGNED = 'Unassigned';
+
+    /**
      * One page of locations for the public list endpoint.
      *
      * PROJECTED, NOT HYDRATED, for the reason in this class's docblock: ORM 3 decodes every
@@ -543,7 +560,20 @@ class LocationRepository extends ServiceEntityRepository
             ->setMaxResults($limit + 1);
 
         if ($regions !== null && $regions !== []) {
-            $qb->andWhere('l.region IN (:regions)')->setParameter('regions', $regions);
+            // The facet offers REGION_UNASSIGNED for the region-less towns, so the filter has to
+            // accept it back or that bucket is selectable and always empty — worse than not
+            // offering it. It is translated to the stored `''`, never matched literally.
+            $named          = array_values(array_filter($regions, static fn (string $r): bool => $r !== self::REGION_UNASSIGNED));
+            $wantsUnplaced  = count($named) !== count($regions);
+
+            if ($wantsUnplaced && $named === []) {
+                $qb->andWhere("l.region = ''");
+            } elseif ($wantsUnplaced) {
+                $qb->andWhere("(l.region IN (:regions) OR l.region = '')")
+                    ->setParameter('regions', $named);
+            } else {
+                $qb->andWhere('l.region IN (:regions)')->setParameter('regions', $named);
+            }
         }
 
         if ($maxLandPence !== null) {
@@ -592,7 +622,7 @@ class LocationRepository extends ServiceEntityRepository
     /**
      * Region list with counts, plus the price range — backs GET /api/locations/facets.
      *
-     * One GROUP BY per country off idx_location_country_region. Counted over ACTIVE rows only,
+     * One GROUP BY per country off idx_location_region. Counted over ACTIVE rows only,
      * so a facet never offers a filter that returns nothing.
      *
      * @return array{regions: list<array{region: string, count: int}>,
@@ -629,7 +659,12 @@ class LocationRepository extends ServiceEntityRepository
 
         return [
             'regions' => array_map(
-                static fn (array $r): array => ['region' => (string) $r['region'], 'count' => (int) $r['cnt']],
+                static fn (array $r): array => [
+                    // '' is "not enriched yet", not "no name" — labelled so a picker can show
+                    // and select it. findForList() maps the label back. See REGION_UNASSIGNED.
+                    'region' => (string) $r['region'] === '' ? self::REGION_UNASSIGNED : (string) $r['region'],
+                    'count'  => (int) $r['cnt'],
+                ],
                 $regions,
             ),
             // NULL until at least one location in the country has been enriched — an empty
