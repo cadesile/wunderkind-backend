@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Admin\FacetCounter;
 use App\Entity\NotificationLog;
 use App\Twig\BmcAdminExtension;
@@ -33,10 +36,14 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
  */
 class NotificationLogCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -56,7 +63,8 @@ class NotificationLogCrudController extends AbstractCrudController
                 ->setLabel('View payload')->setIcon('eye')
                 ->setHtmlAttributes(['title' => 'View payload', 'aria-label' => 'View payload'])
                 ->setCssClass('bmc-iconbtn'))
-            ->disable(Action::NEW, Action::EDIT, Action::DELETE);
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->addBatchAction(self::exportCsvAction());
     }
 
     public function configureCrud(Crud $crud): Crud

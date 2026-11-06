@@ -2,6 +2,11 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\BatchActionDto;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Entity\User;
 use App\Enum\Country;
 use App\Form\Type\AppearanceType;
@@ -36,11 +41,15 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UserCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly SyncRecordRepository $syncRecordRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
         private readonly SessionRevocationService $sessionRevocation,
         private readonly FacetCounter $facets,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
         private readonly \Doctrine\ORM\EntityManagerInterface $em,
     ) {}
 
@@ -83,7 +92,14 @@ class UserCrudController extends AbstractCrudController
                 ->setHtmlAttributes(['title' => 'Edit user', 'aria-label' => 'Edit user'])
                 ->setCssClass('bmc-iconbtn'))
             ->add(Crud::PAGE_INDEX, $deleteIndex)
-            ->add(Crud::PAGE_DETAIL, $deleteAction);
+            ->add(Crud::PAGE_DETAIL, $deleteAction)
+            ->addBatchAction(self::exportCsvAction())
+            ->addBatchAction(Action::new('killSessions', 'Kill sessions')
+                ->linkToCrudAction('killSessions')
+                ->createAsBatchAction())
+            ->addBatchAction(Action::new('debugPanelOn', 'Debug panel on')
+                ->linkToCrudAction('debugPanelOn')
+                ->createAsBatchAction());
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -238,6 +254,66 @@ class UserCrudController extends AbstractCrudController
         }
 
         return $email;
+    }
+
+    /**
+     * Sign the selected users out everywhere.
+     *
+     * Reuses SessionRevocationService rather than deleting refresh tokens
+     * here: revoking a session is two things, not one — the refresh-token rows
+     * go, and User::bumpTokenVersion() retires the stateless JWTs already in
+     * the wild, which JwtTokenVersionSubscriber checks on every request. Doing
+     * only the first would leave a signed-out user signed in until their
+     * access token happened to expire.
+     */
+    #[AdminRoute(path: '/batch/kill-sessions', name: 'batch_kill_sessions', options: ['methods' => ['POST']])]
+    public function killSessions(BatchActionDto $batch, AdminContext $context): Response
+    {
+        $this->assertBatchToken($batch);
+
+        $users = 0;
+        $sessions = 0;
+        foreach ($this->batchSelection->chunks($batch, $context->getRequest(), $this->matchingQuery($context)) as $chunk) {
+            foreach ($chunk as $user) {
+                $sessions += $this->sessionRevocation->revokeAllSessions($user);
+                ++$users;
+            }
+        }
+
+        return $this->backToReferrer($context, 'success', \sprintf(
+            'Signed out %d %s (%d %s revoked).',
+            $users, 1 === $users ? 'user' : 'users',
+            $sessions, 1 === $sessions ? 'session' : 'sessions',
+        ));
+    }
+
+    /**
+     * Turn the per-user debug panel on for the selection.
+     *
+     * One-way by design, matching DebugLoggingResolver: the per-user flag is
+     * additive over the global one and can never switch the panel off, so
+     * there is no "debug panel off" counterpart that would do what its label
+     * promises while the global switch is on.
+     */
+    #[AdminRoute(path: '/batch/debug-panel-on', name: 'batch_debug_panel_on', options: ['methods' => ['POST']])]
+    public function debugPanelOn(BatchActionDto $batch, AdminContext $context): Response
+    {
+        $this->assertBatchToken($batch);
+
+        $changed = 0;
+        foreach ($this->batchSelection->chunks($batch, $context->getRequest(), $this->matchingQuery($context)) as $chunk) {
+            foreach ($chunk as $user) {
+                if (!$user->isDebugLoggingEnabled()) {
+                    $user->setDebugLoggingEnabled(true);
+                    ++$changed;
+                }
+            }
+            $this->em->flush();
+        }
+
+        return $this->backToReferrer($context, 'success', \sprintf(
+            'Debug panel on for %d %s.', $changed, 1 === $changed ? 'user' : 'users',
+        ));
     }
 
     public function configureFilters(Filters $filters): Filters

@@ -2,6 +2,15 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Message\Leaderboard\RecalculateLeaderboardMessage;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\BatchActionDto;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\HttpFoundation\Response;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Admin\FacetCounter;
 use App\Entity\LeaderboardEntry;
 use App\Filter\Admin\LeaderboardPeriodFilter;
@@ -26,10 +35,15 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class LeaderboardEntryCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
+        private readonly MessageBusInterface $bus,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -47,7 +61,11 @@ class LeaderboardEntryCrudController extends AbstractCrudController
             ->update(Crud::PAGE_INDEX, Action::DETAIL, fn (Action $a) => $a
                 ->setLabel('Open entry')->setIcon('external-link')
                 ->setHtmlAttributes(['title' => 'Open entry', 'aria-label' => 'Open entry'])
-                ->setCssClass('bmc-iconbtn'));
+                ->setCssClass('bmc-iconbtn'))
+            ->addBatchAction(self::exportCsvAction())
+            ->addBatchAction(Action::new('recalculate', 'Recalculate')
+                ->linkToCrudAction('recalculate')
+                ->createAsBatchAction());
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -72,6 +90,44 @@ class LeaderboardEntryCrudController extends AbstractCrudController
             ->add(ChoiceFilter::new('category', 'Board')->setChoices($this->categoryChoices())->canSelectMultiple())
             ->add(NumericFilter::new('rank', 'Position'))
             ->add(DateTimeFilter::new('updatedAt', 'Updated'));
+    }
+
+    /**
+     * Queue a recalculation of every board the selection touches.
+     *
+     * Deliberately per board rather than per row: a leaderboard is recomputed
+     * whole, so fifty selected rows from one board are one job, not fifty. The
+     * selection is collapsed to its distinct (category, period) pairs and one
+     * message dispatched for each.
+     *
+     * Asynchronous, and only here — the "generate leaderboards" button and the
+     * cron still run synchronously, so this adds a path rather than changing
+     * how the existing ones behave.
+     */
+    #[AdminRoute(path: '/batch/recalculate', name: 'batch_recalculate', options: ['methods' => ['POST']])]
+    public function recalculate(BatchActionDto $batch, AdminContext $context): Response
+    {
+        $this->assertBatchToken($batch);
+
+        $boards = [];
+        foreach ($this->batchSelection->chunks($batch, $context->getRequest(), $this->matchingQuery($context)) as $chunk) {
+            foreach ($chunk as $entry) {
+                $boards[$entry->getCategoryValue() . "\0" . $entry->getPeriod()] = [
+                    $entry->getCategoryValue(),
+                    $entry->getPeriod(),
+                ];
+            }
+        }
+
+        foreach ($boards as [$category, $period]) {
+            $this->bus->dispatch(new RecalculateLeaderboardMessage($category, $period));
+        }
+
+        $n = \count($boards);
+
+        return $this->backToReferrer($context, 'success', \sprintf(
+            '%d %s queued for recalculation.', $n, 1 === $n ? 'leaderboard' : 'leaderboards',
+        ));
     }
 
     public function configureResponseParameters(KeyValueStore $responseParameters): KeyValueStore

@@ -2,6 +2,9 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Admin\FacetCounter;
 use App\Entity\Staff;
 use App\Enum\Country;
@@ -32,11 +35,15 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class StaffCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly ArchetypeResolverService $archetypeResolver,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
         private readonly \Doctrine\ORM\EntityManagerInterface $em,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -56,7 +63,8 @@ class StaffCrudController extends AbstractCrudController
             ->update(Crud::PAGE_INDEX, Action::EDIT, fn (Action $a) => $a
                 ->setLabel('Edit staff')->setIcon('pencil')
                 ->setHtmlAttributes(['title' => 'Edit staff', 'aria-label' => 'Edit staff member'])
-                ->setCssClass('bmc-iconbtn'));
+                ->setCssClass('bmc-iconbtn'))
+            ->addBatchAction(self::exportCsvAction());
     }
 
     public function configureCrud(Crud $crud): Crud

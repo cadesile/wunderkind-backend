@@ -12,7 +12,14 @@ use App\Entity\SeasonSnapshot;
 use App\Entity\Sponsor;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
+use App\Admin\BatchSelection;
+use App\Message\Leaderboard\RecalculateLeaderboardMessage;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\BatchActionDto;
+use Symfony\Component\Messenger\MessageBusInterface;
+use App\Admin\CsvExporter;
 use App\Admin\FacetCounter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Enum\Country;
 use App\Filter\Admin\ActivityFilter;
 use App\Filter\Admin\PenceRangeFilter;
@@ -39,11 +46,16 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ClubCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private EntityManagerInterface $em,
         private UserLedgerRepository $userLedgerRepository,
         private BmcAdminExtension $bmc,
         private FacetCounter $facets,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
+        private readonly MessageBusInterface $bus,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -84,7 +96,11 @@ class ClubCrudController extends AbstractCrudController
                 ->setHtmlAttributes(['title' => 'View club', 'aria-label' => 'View club'])
                 ->setCssClass('bmc-iconbtn'))
             ->add(Crud::PAGE_INDEX, $deleteIndex)
-            ->add(Crud::PAGE_DETAIL, $deleteDetail);
+            ->add(Crud::PAGE_DETAIL, $deleteDetail)
+            ->addBatchAction(self::exportCsvAction())
+            ->addBatchAction(Action::new('recalcBoards', 'Recalc boards')
+                ->linkToCrudAction('recalcBoards')
+                ->createAsBatchAction());
     }
 
     /**
@@ -317,6 +333,57 @@ class ClubCrudController extends AbstractCrudController
      * (filters[currentLeague:tier]) — FiltersFormType swaps '.' for ':' — and
      * that the join is nullable, so a club between leagues matches no tier.
      */
+    /**
+     * Queue a recalculation of every board the selected clubs appear on.
+     *
+     * A club does not own a leaderboard — it has entries on some number of
+     * them — so this reads back the distinct (category, period) pairs those
+     * clubs appear in and queues one job per board. Selecting thirty clubs
+     * from the same league is a handful of boards, not thirty jobs.
+     *
+     * One query rather than per-club lookups, and it only reads the two
+     * columns it needs.
+     */
+    #[AdminRoute(path: '/batch/recalc-boards', name: 'batch_recalc_boards', options: ['methods' => ['POST']])]
+    public function recalcBoards(BatchActionDto $batch, AdminContext $context): Response
+    {
+        $this->assertBatchToken($batch);
+
+        $clubIds = [];
+        foreach ($this->batchSelection->chunks($batch, $context->getRequest(), $this->matchingQuery($context)) as $chunk) {
+            foreach ($chunk as $club) {
+                $clubIds[] = $club->getId();
+            }
+        }
+
+        if ([] === $clubIds) {
+            return $this->backToReferrer($context, 'warning', 'No clubs selected.');
+        }
+
+        $boards = $this->em->createQuery(
+            'SELECT DISTINCT e.category AS category, e.period AS period
+             FROM ' . LeaderboardEntry::class . ' e
+             WHERE e.club IN (:clubs)'
+        )->setParameter('clubs', $clubIds)->getScalarResult();
+
+        foreach ($boards as $board) {
+            $category = $board['category'];
+
+            $this->bus->dispatch(new RecalculateLeaderboardMessage(
+                $category instanceof \BackedEnum ? (string) $category->value : (string) $category,
+                (string) $board['period'],
+            ));
+        }
+
+        $n = \count($boards);
+
+        return $this->backToReferrer($context, 'success', \sprintf(
+            '%d %s queued for %d %s.',
+            $n, 1 === $n ? 'leaderboard' : 'leaderboards',
+            \count($clubIds), 1 === \count($clubIds) ? 'club' : 'clubs',
+        ));
+    }
+
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
