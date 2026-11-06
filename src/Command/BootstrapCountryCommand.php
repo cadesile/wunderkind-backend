@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Entity\StarterConfig;
 use App\Enum\Country;
+use App\Repository\LeagueRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\LeagueService;
@@ -33,6 +34,7 @@ class BootstrapCountryCommand extends Command
 {
     public function __construct(
         private readonly LeagueService              $leagueService,
+        private readonly LeagueRepository           $leagueRepository,
         private readonly NpcClubGenerationService    $npcClubGenerationService,
         private readonly StarterConfigRepository     $starterConfigRepository,
         private readonly EntityManagerInterface      $em,
@@ -91,15 +93,26 @@ class BootstrapCountryCommand extends Command
             $io->warning(sprintf('%s is missing: %s — proceeding anyway (--force).', $countryCode, implode(', ', $missing)));
         }
 
-        // ── 1. Leagues (tiers 1-8, skips existing) ───────────────────────────
-        $createdLeagues = $this->leagueService->generateLeaguesForCountry($countryCode);
+        // ── 1. Leagues (skips existing tiers) ────────────────────────────────
+        $result = $this->leagueService->generateLeaguesForCountry($countryCode);
         $io->section('Leagues');
-        $io->text(sprintf('%d new league(s) created (existing tiers skipped).', count($createdLeagues)));
+        $io->text(sprintf('%d new league(s) created (existing tiers skipped).', count($result['created'])));
 
         // ── 2. NPC clubs, one tier at a time ──────────────────────────────────
+        //
+        // Driven off the tiers that ACTUALLY EXIST, not 1..8. A country with a shallower
+        // pyramid used to get clubs generated for tiers it has no league for; those rows
+        // land with league_id NULL, which makes them invisible to every world pack while
+        // still counting in every admin total — garbage accumulating on each run.
         $io->section('NPC Clubs');
         $deleteExisting = (bool) $input->getOption('delete-existing');
-        for ($tier = 1; $tier <= 8; $tier++) {
+        $tiers = array_map(
+            static fn ($league) => $league->getTier(),
+            $this->leagueRepository->findByCountry($countryCode),
+        );
+        sort($tiers);
+
+        foreach ($tiers as $tier) {
             $clubs = $this->npcClubGenerationService->generateClubs($clubsPerTier, $tier, $countryCode, $deleteExisting);
             $io->text(sprintf('Tier %d: %d club(s) generated.', $tier, count($clubs)));
         }

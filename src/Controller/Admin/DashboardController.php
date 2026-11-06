@@ -75,6 +75,7 @@ class DashboardController extends AbstractDashboardController
         private SocialAccountConnectionRepository $socialAccountConnectionRepository,
         private SocialPostTemplateRepository $socialPostTemplateRepository,
         private AdminQueueCounts $adminQueueCounts,
+        private \App\Repository\Location\CountryProfileRepository $countryProfileRepository,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -1180,11 +1181,34 @@ class DashboardController extends AbstractDashboardController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_npc_clubs_content']));
         }
 
-        $created  = $this->leagueService->generateLeaguesForCountry($country);
-        $skipped  = 8 - count($created);
-        $msg      = sprintf('Created %d leagues for %s', count($created), $country);
-        if ($skipped > 0) {
-            $msg .= sprintf(', %d already existed', $skipped);
+        // Clamped rather than rejected: the form already bounds the input, and an out-of-range
+        // value here means a hand-crafted request, not an operator who needs an error page.
+        $tiers = (int) ($request->request->get('tiers') ?: LeagueService::MAX_TIERS);
+        $tiers = max(1, min(LeagueService::MAX_TIERS, $tiers));
+
+        $result = $this->leagueService->generateLeaguesForCountry($country, $tiers);
+
+        // Record the DECLARED depth, which is what NPC quality is scaled against. Without
+        // this a 3-tier country's bottom division would be generated as a comfortable
+        // mid-table one.
+        $profile = $this->countryProfileRepository->findByCode($country);
+        if ($profile !== null) {
+            $profile->setLeagueTierCount($tiers);
+            $this->em->flush();
+        }
+
+        $msg = sprintf('%s now has a %d-tier structure: %d created', $country, $tiers, count($result['created']));
+        if ($result['skipped'] > 0) {
+            $msg .= sprintf(', %d already existed', $result['skipped']);
+        }
+        if ($result['removedTiers'] > 0) {
+            // Said plainly, because this is the destructive half and the operator should
+            // see what went with it rather than discover it later.
+            $msg .= sprintf(
+                ', %d surplus tier(s) removed along with %d pool club(s)',
+                $result['removedTiers'],
+                $result['removedClubs'],
+            );
         }
         $this->addFlash('success', $msg . '.');
 

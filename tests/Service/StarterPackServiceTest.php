@@ -93,8 +93,61 @@ class StarterPackServiceTest extends TestCase
         );
     }
 
+    /**
+     * Regression: a founder in a short pyramid got a squad drawn at the wrong level.
+     *
+     * A new club has no league when its pack is built, so the tier used to be assumed to
+     * be 8 — the 10–25 ability band. The club is then placed in the country's real bottom
+     * division, which in a 3-tier country is tier 3, whose NPCs were generated at 55–75.
+     * That is a ~45 point gap the founder can never close, and nothing reports it: the
+     * starter-pack diagnostic re-derives the same wrong tier and calls it correct.
+     */
+    public function testTheSquadIsDrawnAtTheCountrysRealBottomTier(): void
+    {
+        $bands = [];
+
+        $playerRepo = $this->createStub(PlayerRepository::class);
+        $playerRepo->method('findForWorldInitByPositionAndNationality')
+            ->willReturnCallback(function (...$args) use (&$bands) {
+                $bands[] = [$args[0], $args[1]];
+                return [$this->createStub(Player::class)];
+            });
+        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
+
+        $leagueRepo = $this->createStub(\App\Repository\LeagueRepository::class);
+        $leagueRepo->method('findLowestTierForCountry')->willReturn(new \App\Entity\League('EN', 3, 'League 3'));
+
+        $this->runInitialize($playerRepo, firstTeamAgeMin: 19, leagueRepo: $leagueRepo);
+
+        $this->assertNotEmpty($bands, 'the native draw should have run');
+        // WorldInitializationService::ABILITY_RANGES[3], not [8].
+        $this->assertSame([55, 75], $bands[0]);
+    }
+
+    /** With no pyramid at all there is nothing to resolve, so the old default stands. */
+    public function testWithNoLeaguesAtAllTheDefaultStarterTierIsUsed(): void
+    {
+        $bands = [];
+
+        $playerRepo = $this->createStub(PlayerRepository::class);
+        $playerRepo->method('findForWorldInitByPositionAndNationality')
+            ->willReturnCallback(function (...$args) use (&$bands) {
+                $bands[] = [$args[0], $args[1]];
+                return [$this->createStub(Player::class)];
+            });
+        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
+
+        $this->runInitialize($playerRepo, firstTeamAgeMin: 19);
+
+        $this->assertSame([10, 25], $bands[0]);
+    }
+
     /** Minimal wiring for a starter-pack run; the draws themselves return nothing. */
-    private function runInitialize(PlayerRepository $playerRepo, int $firstTeamAgeMin): void
+    private function runInitialize(
+        PlayerRepository $playerRepo,
+        int $firstTeamAgeMin,
+        ?\App\Repository\LeagueRepository $leagueRepo = null,
+    ): void
     {
         $config = $this->createStub(StarterConfig::class);
         $config->method('getStarterPlayerCount')->willReturn(2);
@@ -136,6 +189,9 @@ class StarterPackServiceTest extends TestCase
             $snapshotBuilder,
             $this->createStub(EntityManagerInterface::class),
             $this->createStub(\Psr\Log\LoggerInterface::class),
+            // Defaults to a stub returning null, so the tier falls back to
+            // DEFAULT_STARTER_TIER — the assumption most of these cases were written against.
+            $leagueRepo ?? $this->createStub(\App\Repository\LeagueRepository::class),
         ))->initialize($club);
     }
 
@@ -230,6 +286,7 @@ class StarterPackServiceTest extends TestCase
             $snapshotBuilder,
             $em,
             $this->createStub(\Psr\Log\LoggerInterface::class),
+            $this->createStub(\App\Repository\LeagueRepository::class),
         );
 
         $result = $service->initialize($club);
@@ -290,6 +347,7 @@ class StarterPackServiceTest extends TestCase
             $snapshotBuilder,
             $em,
             $this->createStub(\Psr\Log\LoggerInterface::class),
+            $this->createStub(\App\Repository\LeagueRepository::class),
         );
 
         $this->expectException(InsufficientStarterPoolException::class);

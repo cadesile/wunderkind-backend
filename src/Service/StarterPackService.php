@@ -11,6 +11,7 @@ use App\Entity\Staff;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
 use App\Exception\InsufficientStarterPoolException;
+use App\Repository\LeagueRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
@@ -23,10 +24,17 @@ use Psr\Log\LoggerInterface;
 class StarterPackService
 {
     /**
-     * The tier a brand-new club's starter squad is drawn at. The club has no league yet
-     * when the starter pack is built — LeagueService::assignClubToStarterLeague() runs
-     * after StarterPackService::initialize() — so in practice this is always the tier
-     * used, and the ?-> below is for re-initialisation of an already-placed club.
+     * Last-resort tier for a starter squad when the country's pyramid cannot be read.
+     *
+     * NOT THE NORMAL PATH ANY MORE. A brand-new club has no league yet when its pack is
+     * built, and this used to be taken literally as tier 8 — fine while every country had
+     * eight tiers, badly wrong once they do not. In a 3-tier country the squad was drawn
+     * at the tier-8 band (10-25 ability) and then placed in tier 3, whose NPCs were
+     * generated at 55-75: a founder roughly 45 points behind every opponent, with nothing
+     * logged and the diagnostic reporting it as correct.
+     *
+     * initialize() now resolves the country's real bottom tier instead. This remains only
+     * for a country with no leagues at all, where there is nothing better to say.
      */
     public const DEFAULT_STARTER_TIER = 8;
 
@@ -39,6 +47,7 @@ class StarterPackService
         private readonly WorldPackSnapshotBuilder   $snapshotBuilder,
         private readonly EntityManagerInterface     $em,
         private readonly LoggerInterface            $logger,
+        private readonly LeagueRepository           $leagueRepository,
     ) {}
 
     /**
@@ -71,7 +80,13 @@ class StarterPackService
     {
         $starterConfig  = $this->starterConfigRepository->getConfig();
         $country        = $club->getCountry();
-        $ampLeagueTier  = $club->getCurrentLeague()?->getTier() ?? self::DEFAULT_STARTER_TIER;
+        // The club's own league if it has one (re-initialisation), otherwise the country's
+        // real bottom division — which is where maybeAutoAssignLeague() is about to put it.
+        // Assuming 8 here is what produced squads 45 ability points below their opponents
+        // in any country with a shallower pyramid.
+        $ampLeagueTier  = $club->getCurrentLeague()?->getTier()
+            ?? $this->leagueRepository->findLowestTierForCountry((string) $country)?->getTier()
+            ?? self::DEFAULT_STARTER_TIER;
         $ampRange       = $this->resolveAbilityRange($country, $ampLeagueTier);
         $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
 

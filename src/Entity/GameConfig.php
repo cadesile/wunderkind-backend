@@ -1374,10 +1374,34 @@ class GameConfig
      * Falls back to the tier-8 entry if the tier is out of bounds.
      * @return array{min:int,max:int}
      */
-    public function getNpcClubBalanceRangeForTier(int $tier): array
+    public function getNpcClubBalanceRangeForTier(int $tier, int $tierCount = 8): array
     {
-        $idx = max(0, min(7, $tier - 1));
+        // The stored ranges are eight rungs of a ladder, so a shallower pyramid has to be
+        // stretched across them rather than take the first N. Without this, the bottom
+        // division of a 3-tier country gets the tier-3-of-8 band — comfortably wealthy —
+        // when it should be scraping the floor like tier 8 does.
+        $idx = self::scaleTierToEight($tier, $tierCount) - 1;
+
         return $this->npcClubBalanceRanges[$idx] ?? ['min' => 31_250_000, 'max' => 46_875_000];
+    }
+
+    /**
+     * Map tier N of M onto the equivalent rung of the canonical 8-tier ladder.
+     *
+     * Tier 1 always maps to 1 and the bottom tier always maps to 8, so the top and bottom
+     * of any pyramid land on the extremes the config tables were written for. A one-tier
+     * country is the degenerate case and maps to 1: its only division is its top one.
+     */
+    public static function scaleTierToEight(int $tier, int $tierCount): int
+    {
+        $tierCount = max(1, min(8, $tierCount));
+        $tier      = max(1, min($tierCount, $tier));
+
+        if ($tierCount === 1) {
+            return 1;
+        }
+
+        return (int) round(1 + (($tier - 1) / ($tierCount - 1)) * 7);
     }
 
     // ── League Tier Defaults ───────────────────────────────────────────────
@@ -1531,12 +1555,17 @@ class GameConfig
      * Interpolated {big, medium, small} weight percentages for a given tier (1–8, clamped).
      * @return array{big:float,medium:float,small:float}
      */
-    public function getNpcClubSizeWeightsForTier(int $tier): array
+    public function getNpcClubSizeWeightsForTier(int $tier, int $tierCount = 8): array
     {
-        $tier    = max(1, min(8, $tier));
-        $tier1   = $this->npcClubSizeWeights['tier1'] ?? ['big' => 70, 'medium' => 25, 'small' => 5];
-        $tier8   = $this->npcClubSizeWeights['tier8'] ?? ['big' => 5, 'medium' => 25, 'small' => 70];
-        $fraction = ($tier - 1) / 7;
+        $tierCount = max(1, min(8, $tierCount));
+        $tier      = max(1, min($tierCount, $tier));
+        $tier1     = $this->npcClubSizeWeights['tier1'] ?? ['big' => 70, 'medium' => 25, 'small' => 5];
+        $tier8     = $this->npcClubSizeWeights['tier8'] ?? ['big' => 5, 'medium' => 25, 'small' => 70];
+
+        // Interpolated across the country's own depth, so its bottom division reaches the
+        // small-town end of the scale. Dividing by a fixed 7 would leave a 3-tier country
+        // only 28% of the way there — every club in a big city, nothing grassroots.
+        $fraction = $tierCount === 1 ? 0.0 : ($tier - 1) / ($tierCount - 1);
 
         $result = [];
         foreach (['big', 'medium', 'small'] as $bucket) {

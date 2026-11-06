@@ -17,6 +17,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SeasonSnapshotRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -33,12 +34,33 @@ class LeagueService
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
     ) {}
 
-    /** @return League[] newly created leagues (skips tiers that already exist) */
-    public function generateLeaguesForCountry(string $country): array
+    /** The deepest pyramid the per-tier config tables describe. */
+    public const MAX_TIERS = 8;
+
+    /**
+     * Create a country's league pyramid, and remove any tier below the depth asked for.
+     *
+     * $tiers DEFAULTS TO 8 so every existing caller keeps its behaviour unchanged.
+     *
+     * Additive per tier, as it always was — an existing tier is skipped, never rewritten,
+     * because these rows are hand-corrected and then referenced by generated clubs.
+     *
+     * Shrinking IS destructive, and deliberately so. A league row is pool data: once a
+     * world pack is consumed it lives as a client-side snapshot, so removing a tier changes
+     * only what future packs are built from, not anybody's running game. Nothing cascades
+     * at the database level, so the order below matters.
+     *
+     * @return array{created: League[], skipped: int, removedTiers: int, removedClubs: int}
+     */
+    public function generateLeaguesForCountry(string $country, int $tiers = self::MAX_TIERS): array
     {
+        $tiers   = max(1, min(self::MAX_TIERS, $tiers));
         $created = [];
-        for ($tier = 1; $tier <= 8; $tier++) {
+        $skipped = 0;
+
+        for ($tier = 1; $tier <= $tiers; $tier++) {
             if ($this->leagueRepository->findByCountryAndTier($country, $tier) !== null) {
+                ++$skipped;
                 continue;
             }
             $defaults = $this->gameConfigRepository->getConfig()->getLeagueTierDefaultsForTier($tier);
@@ -53,7 +75,66 @@ class LeagueService
             $created[] = $league;
         }
         $this->em->flush();
-        return $created;
+
+        $removed = $this->removeTiersBelow($country, $tiers);
+
+        return [
+            'created'      => $created,
+            'skipped'      => $skipped,
+            'removedTiers' => $removed['tiers'],
+            'removedClubs' => $removed['clubs'],
+        ];
+    }
+
+    /**
+     * Drop every tier deeper than $keepTiers for a country.
+     *
+     * Three steps, in this order, because none of the foreign keys cascade:
+     *
+     *   1. Detach player clubs. club.current_league_id is a nullable join column with no
+     *      ON DELETE rule, so the delete would simply fail with one pointing at it. Nulling
+     *      it costs the player nothing — SyncService::maybeAutoAssignLeague() re-assigns
+     *      from the lowest remaining tier on their next sync.
+     *   2. Delete the NPC clubs. They are pool data for a division that no longer exists;
+     *      leaving them would strand rows that no world pack can ever reach while they
+     *      still count in every admin total.
+     *   3. Delete the leagues.
+     *
+     * @return array{tiers: int, clubs: int}
+     */
+    private function removeTiersBelow(string $country, int $keepTiers): array
+    {
+        $surplus = array_values(array_filter(
+            $this->leagueRepository->findByCountry($country),
+            static fn (League $l): bool => $l->getTier() > $keepTiers,
+        ));
+
+        if ($surplus === []) {
+            return ['tiers' => 0, 'clubs' => 0];
+        }
+
+        $ids   = array_map(static fn (League $l) => $l->getId(), $surplus);
+        $conn  = $this->em->getConnection();
+        $clubs = 0;
+
+        $conn->executeStatement(
+            'UPDATE club SET current_league_id = NULL WHERE current_league_id IN (?)',
+            [$ids],
+            [ArrayParameterType::STRING],
+        );
+
+        $clubs = (int) $conn->executeStatement(
+            'DELETE FROM npc_club WHERE league_id IN (?)',
+            [$ids],
+            [ArrayParameterType::STRING],
+        );
+
+        foreach ($surplus as $league) {
+            $this->em->remove($league);
+        }
+        $this->em->flush();
+
+        return ['tiers' => \count($surplus), 'clubs' => $clubs];
     }
 
     /** Assigns the NpcClub to its matching League if one exists (country + tier). */
@@ -66,12 +147,16 @@ class LeagueService
     }
 
     /**
-     * Assigns a new Club to the tier-8 league for its country.
-     * Call this from ClubInitService after club creation.
+     * Assigns a new Club to the bottom division of its country.
+     *
+     * Resolved as the LOWEST tier that actually exists, not tier 8. A country may have a
+     * shallower pyramid, and looking up a hardcoded 8 there finds nothing and silently
+     * leaves the club with no league at all. SyncService::maybeAutoAssignLeague() has
+     * always done it this way; this method had drifted.
      */
     public function assignClubToStarterLeague(Club $club, string $country): void
     {
-        $league = $this->leagueRepository->findByCountryAndTier($country, 8);
+        $league = $this->leagueRepository->findLowestTierForCountry($country);
         if ($league !== null) {
             $club->setCurrentLeague($league);
         }
@@ -543,7 +628,7 @@ class LeagueService
     /**
      * The league a club moves to given the one it just finished in. Shared by the fresh
      * conclude and the replay rebuild so both can only ever agree; tier 1 cannot promote
-     * and tier 8 cannot relegate.
+     * and the country's bottom tier cannot relegate.
      */
     private function resolveNewLeague(League $from, bool $promoted, bool $relegated): ?League
     {
@@ -551,7 +636,13 @@ class LeagueService
             return $this->leagueRepository->findByCountryAndTier($from->getCountry(), $from->getTier() - 1);
         }
 
-        if ($relegated && $from->getTier() < 8) {
+        // Compared against the country's real bottom tier, not a hardcoded 8. With a
+        // shallower pyramid the old guard let a bottom-tier relegation query a division
+        // that cannot exist; it returned null and read as "no move", so it was harmless by
+        // luck rather than by design.
+        $bottom = $this->leagueRepository->findLowestTierForCountry($from->getCountry())?->getTier() ?? $from->getTier();
+
+        if ($relegated && $from->getTier() < $bottom) {
             return $this->leagueRepository->findByCountryAndTier($from->getCountry(), $from->getTier() + 1);
         }
 

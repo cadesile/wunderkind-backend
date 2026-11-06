@@ -94,9 +94,23 @@ class CountryProfile
     #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $landPenceMax = null;
 
-    /** Stamped by CountryReadinessService once eight league tiers and ability ranges exist. */
+    /** Stamped by CountryReadinessService once the league pyramid and ability ranges exist. */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $tierStructureReadyAt = null;
+
+    /**
+     * How deep this country's league pyramid is meant to be, 1-8.
+     *
+     * The DECLARED INTENT, set when the structure is generated — not a count of the rows,
+     * which LeagueRepository::findByCountry() already gives and which is briefly wrong
+     * mid-generation. NPC quality is interpolated against this (a tier-3-of-3 club should
+     * be a bottom-of-the-pyramid club, not a mid-table one), and a half-built country must
+     * not have its clubs rescaled by however many tiers happen to exist at that moment.
+     *
+     * Defaults to 8 because every country predating this column genuinely has eight.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 8])]
+    private int $leagueTierCount = 8;
 
     /** Stamped when status first reaches LIVE. */
     #[ORM\Column(nullable: true)]
@@ -212,6 +226,10 @@ class CountryProfile
 
     public function getTierStructureReadyAt(): ?\DateTimeImmutable { return $this->tierStructureReadyAt; }
     public function setTierStructureReadyAt(?\DateTimeImmutable $at): void { $this->tierStructureReadyAt = $at; }
+
+    public function getLeagueTierCount(): int { return $this->leagueTierCount; }
+
+    public function setLeagueTierCount(int $count): void { $this->leagueTierCount = max(1, min(8, $count)); }
 
     public function getLocationsLiveAt(): ?\DateTimeImmutable { return $this->locationsLiveAt; }
     public function setLocationsLiveAt(?\DateTimeImmutable $at): void { $this->locationsLiveAt = $at; }

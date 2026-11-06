@@ -40,8 +40,15 @@ use Doctrine\DBAL\Connection;
  */
 final class CountryReadinessService
 {
-    /** Tiers LeagueService::generateLeaguesForCountry() creates. */
-    public const EXPECTED_LEAGUE_TIERS = 8;
+    /**
+     * The deepest pyramid the per-tier config tables describe.
+     *
+     * NO LONGER THE READINESS BAR. A country may deliberately have fewer tiers — see
+     * leagueCheck() — and requiring eight here meant an admin could pick three on the
+     * generate form and then find the country permanently unable to go Live, with the gate
+     * silently overruling the choice they had just made.
+     */
+    public const MAX_LEAGUE_TIERS = 8;
 
     /** Registry category that is now satisfied by the `location` table, not by PHP. */
     private const DB_BACKED_CATEGORY = 'places';
@@ -106,10 +113,16 @@ final class CountryReadinessService
     {
         $count = count($this->leagueRepository->findByCountry($code));
 
+        // At least one. The gate's job is to catch a country with NO pyramid at all —
+        // which cannot serve a pack, place a founder, or run a season. How deep the
+        // pyramid goes beyond that is a decision made on the generate form, and this is
+        // not the place to second-guess it.
         return [
             'key'    => 'leagues',
-            'ok'     => $count >= self::EXPECTED_LEAGUE_TIERS,
-            'detail' => sprintf('%d of %d league tiers exist', $count, self::EXPECTED_LEAGUE_TIERS),
+            'ok'     => $count >= 1,
+            'detail' => $count === 0
+                ? 'no league tiers exist'
+                : sprintf('%d league tier(s) exist', $count),
         ];
     }
 
