@@ -134,7 +134,15 @@
                     <input type="hidden" name="filters[{{ param }}][comparison]" value="=">
                     <div class="bmc-checks{{ cols > 1 ? ' bmc-checks--' ~ cols }}">
                         {% for label, value in choices %}
-                            {% set v = value is same as(true) ? '1' : (value is same as(false) ? '0' : value) %}
+                            {# A choice value can be a string, a bool, or a
+                               backed enum case — controllers pass enum cases
+                               straight to setChoices(). Everything has to
+                               reach the checkbox as the string the query
+                               string will carry, and as the string
+                               FacetCounter keys its counts on. #}
+                            {% set v = value is same as(true) ? '1'
+                                     : (value is same as(false) ? '0'
+                                     : (value.value|default(value))) %}
                             {% set n = counts[v]|default(0) %}
                             <label class="bmc-check{{ n == 0 ? ' is-empty' }}">
                                 <input type="checkbox" name="filters[{{ param }}][value][]" value="{{ v }}"

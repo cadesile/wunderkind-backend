@@ -91,7 +91,11 @@
                                                    in the toolbar, which cannot wrap the table. #}
                                                 <input type="checkbox" name="batchActionEntityIds[]"
                                                        value="{{ entity.primaryKeyValue }}" form="bmc-batch" class="bmc-sr"
-                                                       aria-label="Select {{ entity.toString }}">
+                                                       {# EntityDto stringifies to a readable label; there is
+                                                          no toString property, and an unlabelled checkbox in a
+                                                          column of identical checkboxes is useless to a screen
+                                                          reader. #}
+                                                       aria-label="Select {{ entity }}">
                                                 <span class="bmc-tile"></span>
                                             </label>
                                         </td>

@@ -6,7 +6,11 @@ namespace App\Controller\Admin;
 
 use App\Entity\Admin;
 use App\Entity\User;
+use App\Admin\FacetCounter;
 use App\Entity\UserLedger;
+use App\Filter\Admin\PenceRangeFilter;
+use App\Twig\BmcAdminExtension;
+use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use App\Enum\UserLedgerEntryType;
 use App\Repository\UserLedgerRepository;
 use App\Service\OwnerSpotlightService;
@@ -17,6 +21,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\DateTimeFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -77,6 +83,8 @@ class UserLedgerCrudController extends AbstractCrudController
         private readonly UserLedgerRepository  $ledgerRepository,
         private readonly OwnerSpotlightService $ownerSpotlight,
         private readonly EntityManagerInterface $em,
+        private readonly FacetCounter $facets,
+        private readonly BmcAdminExtension $bmc,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -109,6 +117,10 @@ class UserLedgerCrudController extends AbstractCrudController
             ->setEntityLabelInSingular('User Ledger Entry')
             ->setEntityLabelInPlural('User Ledger')
             ->setDefaultSort(['recordedAt' => 'DESC'])
+            ->setPaginatorPageSize(25)
+            ->showEntityActionsInlined()
+            ->setSearchFields(['user.email', 'user.name', 'club.name'])
+            ->overrideTemplate('crud/index', 'admin/crud/bmc_index.html.twig')
             ->setDefaultRowAction(Action::DETAIL)
             ->setHelp('index', 'Audit trail of every balance movement centralized onto a user across every club they own. '
                 . 'Written by UserLedgerService. <strong>New Adjustment</strong> credits or deducts an account by hand — '
@@ -119,15 +131,106 @@ class UserLedgerCrudController extends AbstractCrudController
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
-            ->add(EntityFilter::new('user'))
-            ->add(EntityFilter::new('club'))
             // Added with the adjustment form: the first thing anyone wants is "show me the
             // hand-entered rows", and there was no way to ask that.
-            ->add(ChoiceFilter::new('type')->setChoices(self::typeChoices()));
+            ->add(ChoiceFilter::new('type', 'Type')->setChoices(self::typeChoices())->canSelectMultiple())
+            ->add(PenceRangeFilter::new('amountPence', 'Amount'))
+            ->add(DateTimeFilter::new('recordedAt', 'Recorded'));
+    }
+
+    public function configureResponseParameters(KeyValueStore $responseParameters): KeyValueStore
+    {
+        if (Crud::PAGE_INDEX !== $responseParameters->get('pageName')) {
+            return $responseParameters;
+        }
+
+        $responseParameters->set('bmcGroup', 'Accounts');
+        $responseParameters->set('bmcDomain', 'club');
+        $responseParameters->set('bmcTotal', $this->em->getRepository(UserLedger::class)->count([]));
+        $responseParameters->set('bmcSearchPlaceholder', 'User or club');
+        $responseParameters->set('bmcUnits', ['amountPence' => '£']);
+        $responseParameters->set('bmcWidths', [
+            'amountPence' => 104, 'balanceAfterPence' => 120, 'recordedAt' => 140,
+        ]);
+
+        $responseParameters->set('bmcFacets', $this->facets->count(
+            $this,
+            $this->getContext(),
+            new FieldCollection(iterator_to_array($this->indexFields())),
+            $responseParameters->get('filters'),
+            ['type' => 'entity.type'],
+        ));
+
+        return $responseParameters;
+    }
+
+    /**
+     * User, club, amount, resulting balance, when.
+     *
+     * The design wanted "When" to read "S3 · WK 14", but UserLedger stores
+     * neither a season nor a week — only occurredAt (in-game) and recordedAt
+     * (real-world). The in-game date is the closest honest equivalent, with
+     * the real-world time as the sub-line, so the cell keeps its two-line
+     * shape without inventing a season number.
+     */
+    private function indexFields(): iterable
+    {
+        yield AssociationField::new('user', 'User')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, UserLedger $l) => [
+                'text' => $l->getUser()->getName() ?: 'Unnamed',
+                'tone' => $l->getUser()->getName() ? null : 'dim',
+                'sub'  => $l->getUser()->getEmail(),
+            ]);
+
+        yield AssociationField::new('club', 'Club')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, UserLedger $l) => null === $l->getClub()
+                // The club relation is nullable and detachable, so a historic
+                // entry can outlive the club it belonged to.
+                ? ['text' => 'Deleted club', 'tone' => 'dim']
+                : [
+                    'img'  => $l->getClub()->getBadgeConfig(),
+                    'text' => $l->getClub()->getName(),
+                    'sub'  => $l->getClub()->getAbbreviation(),
+                ]);
+
+        yield IntegerField::new('amountPence', 'Amount')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->setTextAlign('right')
+            ->formatValue(fn ($v, UserLedger $l) => [
+                'text' => ($l->getAmountPence() > 0 ? '+' : '') . $this->bmc->money($l->getAmountPence()),
+                'tone' => match (true) {
+                    $l->getAmountPence() > 0 => 'positive',
+                    $l->getAmountPence() < 0 => 'danger',
+                    default                  => null,
+                },
+            ]);
+
+        yield IntegerField::new('balanceAfterPence', 'Balance')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->setTextAlign('right')
+            ->formatValue(fn ($v, UserLedger $l) => [
+                'text' => $this->bmc->money($l->getBalanceAfterPence()),
+                'sub'  => 'from ' . $this->bmc->money($l->getBalanceBeforePence()),
+            ]);
+
+        yield DateTimeField::new('recordedAt', 'When')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, UserLedger $l) => [
+                'text' => $this->bmc->date($l->getOccurredAt()),
+                'sub'  => $this->bmc->ago($l->getRecordedAt()),
+            ]);
     }
 
     public function configureFields(string $pageName): iterable
     {
+        if (Crud::PAGE_INDEX === $pageName) {
+            yield from $this->indexFields();
+
+            return;
+        }
+
         yield IdField::new('id')->hideOnIndex();
         yield AssociationField::new('user');
         yield AssociationField::new('club');

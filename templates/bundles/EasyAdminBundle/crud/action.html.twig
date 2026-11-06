@@ -15,7 +15,10 @@
 #}
 {% if 'bmc-iconbtn' in action.cssClass %}
     {% set label = action.label|trans %}
-    {% set attrs = action.htmlAttributes %}
+    {# ea_html_attrs resolves TranslatableMessage values to strings. Not
+       optional: EasyAdmin injects data-action-confirmation-title/-content on
+       DELETE as translatable objects, and printing one raw is fatal. #}
+    {% set attrs = action.htmlAttributes|ea_html_attrs %}
     {% set title = attrs.title|default(label) %}
     {# The ...spread form only parses inside <twig:…> component tags, so the
        remaining attributes are written out by hand. title, aria-label and
