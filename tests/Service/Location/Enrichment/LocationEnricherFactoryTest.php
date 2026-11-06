@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Service\Location\Enrichment;
 
+use App\Service\Ai\AnthropicJsonClient;
 use App\Service\Location\Enrichment\ClaudeLocationEnricher;
 use App\Service\Location\Enrichment\LocationEnricherFactory;
 use App\Service\Location\Enrichment\UnconfiguredLocationEnricher;
@@ -111,7 +112,7 @@ class LocationEnricherFactoryTest extends TestCase
     private function factory(string $provider, string $apiKey, string $model): LocationEnricherFactory
     {
         return new LocationEnricherFactory(
-            new ClaudeLocationEnricher(new MockHttpClient(), new NullLogger(), $apiKey, $model),
+            new ClaudeLocationEnricher(new AnthropicJsonClient(new MockHttpClient(), new NullLogger(), $apiKey, $model)),
             new UnconfiguredLocationEnricher(),
             new NullLogger(),
             $provider,

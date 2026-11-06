@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace App\Service\Location\Enrichment;
 
 use App\Entity\Location\Location;
-use Psr\Log\LoggerInterface;
-use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
+use App\Service\Ai\AiUnavailableException;
+use App\Service\Ai\AnthropicJsonClient;
 
 /**
  * Asks the Claude Messages API for the geography the seeded data does not have.
  *
- * RAW HTTP OVER THE SHARED HttpClientInterface, no vendor SDK. The request is one POST with a
- * JSON body; `YouTubeFeedService` and `SocialPostingService` already talk to external APIs this
- * way, and a new Composer dependency for one endpoint is not worth the supply-chain surface.
+ * THE HTTP ITSELF LIVES IN AnthropicJsonClient, extracted once town suggestion needed to call
+ * the same API. Auth, the pinned API version and the structured-output request shape must have
+ * exactly one implementation; what stays here is everything specific to enriching one town —
+ * the prompt, the schema, and the parsing.
  *
  * STRUCTURED OUTPUTS, which is the single most important choice in this class. `output_config.
  * format` with a JSON schema makes the response schema-valid BY CONSTRUCTION rather than
@@ -40,11 +40,6 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 final class ClaudeLocationEnricher implements LocationEnricherInterface
 {
-    private const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-
-    /** The long-stable Messages API version. Pinned, not latest, so a server-side change cannot alter parsing. */
-    private const API_VERSION = '2023-06-01';
-
     /**
      * Bumped on ANY change to the prompt text or the schema below.
      *
@@ -56,14 +51,7 @@ final class ClaudeLocationEnricher implements LocationEnricherInterface
     /** Small — the reply is five short fields. Generous enough that a thinking model has room. */
     private const MAX_TOKENS = 2_048;
 
-    private const TIMEOUT_SECONDS = 45;
-
-    public function __construct(
-        private readonly HttpClientInterface $httpClient,
-        private readonly LoggerInterface     $logger,
-        private readonly string              $apiKey,
-        private readonly string              $model,
-    ) {}
+    public function __construct(private readonly AnthropicJsonClient $client) {}
 
     public function provider(): string
     {
@@ -72,7 +60,7 @@ final class ClaudeLocationEnricher implements LocationEnricherInterface
 
     public function model(): string
     {
-        return $this->model;
+        return $this->client->model();
     }
 
     public function promptVersion(): string
@@ -84,30 +72,20 @@ final class ClaudeLocationEnricher implements LocationEnricherInterface
     {
         $this->assertConfigured();
 
-        $payload = $this->request($this->prompt($location));
-
-        // The structured-outputs contract puts the schema-valid JSON in the first text block as
-        // a string. Parsed defensively anyway: a transport-level success with an unexpected
-        // body shape must be an error we can see, not a silently empty result that looks like a
-        // provider answering unhelpfully.
-        $text = $payload['content'][0]['text'] ?? null;
-
-        if (!is_string($text)) {
-            throw new EnrichmentUnavailableException(sprintf(
-                'Claude returned no text block for %s (stop_reason: %s).',
+        // Rethrown rather than allowed to escape: a great deal of code catches
+        // EnrichmentUnavailableException specifically, and that must keep working.
+        try {
+            $response = $this->client->sendJson(
+                $this->prompt($location),
+                self::schema(),
+                self::MAX_TOKENS,
                 $location->getTown(),
-                (string) ($payload['stop_reason'] ?? 'unknown'),
-            ));
+            );
+        } catch (AiUnavailableException $e) {
+            throw new EnrichmentUnavailableException($e->getMessage(), previous: $e);
         }
 
-        $decoded = json_decode($text, true);
-
-        if (!is_array($decoded)) {
-            throw new EnrichmentUnavailableException(sprintf(
-                'Claude returned text that is not JSON for %s.',
-                $location->getTown(),
-            ));
-        }
+        $decoded = $response->data;
 
         return new EnrichmentResult(
             lat: $this->floatOrNull($decoded['lat'] ?? null),
@@ -120,8 +98,8 @@ final class ClaudeLocationEnricher implements LocationEnricherInterface
             landPence: $this->poundsToPence($decoded['land_value_gbp'] ?? null),
             region: $this->stringOrNull($decoded['region'] ?? null),
             raw: $decoded,
-            inputTokens: $this->intOrNull($payload['usage']['input_tokens'] ?? null),
-            outputTokens: $this->intOrNull($payload['usage']['output_tokens'] ?? null),
+            inputTokens: $response->inputTokens,
+            outputTokens: $response->outputTokens,
         );
     }
 
@@ -135,84 +113,21 @@ final class ClaudeLocationEnricher implements LocationEnricherInterface
      */
     public function checkConnection(): array
     {
-        if ($this->apiKey === '') {
+        if (!$this->client->hasApiKey()) {
             return ['ok' => false, 'detail' => 'LOCATION_ENRICHER_API_KEY is empty.'];
         }
 
-        if ($this->model === '') {
+        if ($this->client->model() === '') {
             return ['ok' => false, 'detail' => 'LOCATION_ENRICHER_MODEL is empty.'];
         }
 
         try {
-            $this->request('Reply with the single word: ok', maxTokens: 16, withSchema: false);
+            $this->client->send('Reply with the single word: ok', maxTokens: 16);
         } catch (\Throwable $e) {
             return ['ok' => false, 'detail' => $e->getMessage()];
         }
 
-        return ['ok' => true, 'detail' => sprintf('Reached %s as model %s.', $this->provider(), $this->model)];
-    }
-
-    /**
-     * One Messages API call.
-     *
-     * @return array<string, mixed>
-     *
-     * @throws EnrichmentUnavailableException on any transport, auth, rate-limit or server error
-     */
-    private function request(string $prompt, int $maxTokens = self::MAX_TOKENS, bool $withSchema = true): array
-    {
-        $body = [
-            'model'      => $this->model,
-            'max_tokens' => $maxTokens,
-            'messages'   => [['role' => 'user', 'content' => $prompt]],
-        ];
-
-        if ($withSchema) {
-            $body['output_config'] = ['format' => ['type' => 'json_schema', 'schema' => self::schema()]];
-        }
-
-        try {
-            $response = $this->httpClient->request('POST', self::ENDPOINT, [
-                'headers' => [
-                    'content-type'      => 'application/json',
-                    'x-api-key'         => $this->apiKey,
-                    'anthropic-version' => self::API_VERSION,
-                ],
-                'json'    => $body,
-                'timeout' => self::TIMEOUT_SECONDS,
-            ]);
-
-            $status = $response->getStatusCode();
-            $raw    = $response->getContent(throw: false);
-        } catch (HttpExceptionInterface $e) {
-            // A transport failure is "could not ask", which the attempt row records as
-            // outcome=error — deliberately distinct from "asked, got nonsense".
-            throw new EnrichmentUnavailableException(
-                sprintf('Could not reach the Claude API: %s', $e->getMessage()),
-                previous: $e,
-            );
-        }
-
-        if ($status !== 200) {
-            $this->logger->error('Claude enrichment call failed', [
-                'status' => $status,
-                // Truncated: an error body can be large and this lands in a varchar(255) column
-                // downstream. The status code is the part that identifies the problem.
-                'body'   => substr($raw, 0, 500),
-            ]);
-
-            throw new EnrichmentUnavailableException(
-                sprintf('Claude API returned HTTP %d: %s', $status, substr($raw, 0, 200)),
-            );
-        }
-
-        $decoded = json_decode($raw, true);
-
-        if (!is_array($decoded)) {
-            throw new EnrichmentUnavailableException('Claude API returned a body that is not JSON.');
-        }
-
-        return $decoded;
+        return ['ok' => true, 'detail' => sprintf('Reached %s as model %s.', $this->provider(), $this->client->model())];
     }
 
     /**
@@ -316,7 +231,7 @@ final class ClaudeLocationEnricher implements LocationEnricherInterface
 
     private function assertConfigured(): void
     {
-        if ($this->apiKey === '' || $this->model === '') {
+        if (!$this->client->isConfigured()) {
             throw new EnrichmentUnavailableException(
                 'The Claude enricher is selected but not configured. Set LOCATION_ENRICHER_API_KEY '
                 . 'and LOCATION_ENRICHER_MODEL.',

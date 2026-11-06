@@ -50,6 +50,92 @@ class LocationAdminTest extends WebTestCase
      * "queued nothing" assertion passes trivially whether the guard works or not, which would
      * make the CSRF tests below look green while proving nothing.
      */
+    // ── Pulling towns from the AI provider ────────────────────────────────────
+
+    public function testTheOverviewOffersAPullTownsButton(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('form[action*="admin_locations_suggest_towns"]');
+        self::assertSelectorExists('input[name="max_towns"]');
+    }
+
+    public function testPullingTownsOffersNoAllCountriesOption(): void
+    {
+        // Structural, not advisory. Seeding is free and may run across every country; this one
+        // is a paid call, and the simplest way to make a 25-country fan-out impossible is for
+        // the control to have no way to express it.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+
+        $select = $crawler->filter('form[action*="admin_locations_suggest_towns"] select[name="country"]');
+
+        self::assertNotNull($select->attr('required'), 'the country must be required');
+
+        // The only blank option is the "Country…" placeholder, and it is disabled — so unlike
+        // the seed form above it, there is no selectable value meaning "every country".
+        $blank = $select->filter('option[value=""]');
+        self::assertCount(1, $blank);
+        self::assertNotNull($blank->attr('disabled'), 'the blank placeholder must not be selectable');
+
+        // A real seedable country, not self::COUNTRY — that is a fictional code with no
+        // registry places, so it is deliberately absent from this list.
+        $values = $select->filter('option')->each(static fn ($n): string => (string) $n->attr('value'));
+        self::assertContains('AR', $values);
+        self::assertNotContains('all', $values);
+    }
+
+    public function testPullingTownsIsPostOnly(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin/locations/suggest-towns');
+
+        self::assertResponseStatusCodeSame(405);
+    }
+
+    public function testPullingTownsWithoutACsrfTokenWritesNothing(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $before = $this->locationCount();
+
+        $client->request('POST', '/admin/locations/suggest-towns', ['country' => self::COUNTRY, 'max_towns' => '5']);
+
+        self::assertSame($before, $this->locationCount(), 'a tokenless pull must write nothing');
+    }
+
+    public function testPullingTownsWithoutACountryIsRefused(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $before = $this->locationCount();
+        $token  = $this->csrfToken($client, 'locations_suggest_towns');
+
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $token,
+            'country'   => '',
+            'max_towns' => '5',
+        ]);
+
+        self::assertSame($before, $this->locationCount());
+        $client->followRedirect();
+        // Flashes render as toasts, which upper-case the message.
+        self::assertStringContainsStringIgnoringCase(
+            'pick a country first',
+            (string) $client->getResponse()->getContent(),
+        );
+    }
+
     private function loginAsAdmin(KernelBrowser $client): void
     {
         $client->disableReboot();

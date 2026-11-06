@@ -161,6 +161,40 @@
                         <i class="fa fa-seedling me-1"></i> Seed
                     </button>
                 </form>
+
+                {# Pulling towns asks the AI provider for names the registry does not have.
+                   A SEPARATE FORM, not a second button on the one above: this one costs money
+                   and requires a country, where seeding is free and allows "all". Its country
+                   list therefore has no "All countries" option at all, which is the simplest
+                   way to make a paid fan-out across 25 countries impossible rather than merely
+                   discouraged. #}
+                <form method="post"
+                      action="{{ path('admin', {routeName: 'admin_locations_suggest_towns'}) }}"
+                      class="d-flex align-items-center gap-1 ms-2 ps-2 border-start">
+                    <input type="hidden" name="_token" value="{{ csrf_token('locations_suggest_towns') }}">
+
+                    <select name="country" class="form-select form-select-sm py-0"
+                            style="width:auto" aria-label="Country to pull towns for" required>
+                        <option value="" disabled selected>Country…</option>
+                    {% for row in seedable %}
+                        <option value="{{ row.code }}">{{ row.code }} — {{ row.name }}</option>
+                    {% endfor %}
+                    </select>
+
+                    <label class="visually-hidden" for="suggestMax">Most towns to add</label>
+                    <input type="number" class="form-control form-control-sm py-0" id="suggestMax"
+                           name="max_towns" value="300" min="1" max="1000" step="10"
+                           style="width:5.5rem"
+                           title="Most towns to add in one run. The reply is ordered largest-first, so a cap drops the smallest towns.">
+
+                    <button type="submit"
+                            class="btn btn-sm btn-outline-warning py-0 px-2"
+                            {{ connection.ok ? '' : 'disabled' }}
+                            title="{{ connection.ok ? 'Ask the AI provider for more towns' : connection.detail }}"
+                            onclick="return confirm('Make 1 paid API call to pull up to the chosen number of towns?\n\nEach town added will later cost one enrichment call when a player opens it.')">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Pull towns
+                    </button>
+                </form>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">

@@ -289,3 +289,40 @@ out of the API until it is ready.
 `docker/enrichment-consume.sh` drains the queue every minute, with a low `--limit` that is a
 **cost control** as much as a memory one: a runaway sweep stays bounded by the cron cadence
 rather than draining the budget in one run.
+
+---
+
+## Pulling town names from the model
+
+Seeding draws its towns from `CountryContentRegistry`, so a country cannot grow past whatever
+was typed into that PHP array — Argentina's curated list is 40 entries, and that is why its row
+reads 40. `app:locations:suggest-towns <country> [--max=300] [--dry-run]`, and the admin **Pull
+towns** button beside Seed, ask the configured provider for more names.
+
+**It asks for names and nothing else.** Coordinates, population, region and land value stay
+enrichment's job. That is not laziness: a population written at suggestion time would be a
+guess, and `EnrichmentValidator` keeps a seeded population when a later figure diverges by more
+than 3×, so the guess would permanently shield itself from the better-prompted call that
+follows. The same reasoning `importPlaceNames()` already records — writing a zero would be worse
+than writing nothing, because it would look like data.
+
+A population *is* requested, and then thrown away. It is the sort key: the reply comes back
+largest-first and the server re-sorts it rather than trusting that it did, which is what makes
+`--max` mean "the 300 biggest" instead of "the first 300 it happened to say".
+
+**Cost shape is the opposite of enrichment's.** One call per run however many towns come back —
+but every town added becomes a row that costs one billed enrichment call later, when a player
+first opens it. That is the intended design, not a backlog; it is also why the cap exists and
+why the admin button refuses "All countries".
+
+New towns arrive exactly like imported bare names: `enrichment_status = pending`, no
+coordinates, no land value, no plot until enrichment provisions one. Nothing existing is ever
+rewritten.
+
+**A hallucinated town is caught downstream, by design.** Its coordinates will fail the bounding
+box check, which marks the row `needs_review`, which `CountryReadinessService` treats as
+blocking. It surfaces on the review queue rather than quietly shipping — which is why there is
+no "does this look like a town name" heuristic in the validator. Nine of the twenty-five
+countries write their place names in a non-Latin script, and such a rule would reject real
+Japanese, Korean, Arabic and Hindi towns while still admitting a confident English-looking
+invention.

@@ -16,6 +16,7 @@ use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use Doctrine\DBAL\Connection;
 use App\Service\Location\LocationImportExportService;
 use App\Service\Location\LocationSeedService;
+use App\Service\Location\Suggestion\TownSuggestionService;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -49,6 +50,7 @@ class LocationEnrichmentController extends AbstractController
         private readonly Connection                          $connection,
         private readonly LoggerInterface                     $logger,
         private readonly LocationSeedService                 $seedService,
+        private readonly TownSuggestionService               $suggestionService,
     ) {}
 
     /**
@@ -401,6 +403,101 @@ class LocationEnrichmentController extends AbstractController
             . 'run app:locations:rivals. A country stays out of the API until its profile is LIVE.',
             $result['locations'],
         ));
+
+        return $this->backToScreen();
+    }
+
+    /**
+     * Ask the AI provider for more town names for one country, and add the new ones.
+     *
+     * The admin face of app:locations:suggest-towns. Both call TownSuggestionService and
+     * neither holds logic of its own.
+     *
+     * SYNCHRONOUS, like seeding and unlike sweeping. It is ONE API call regardless of how many
+     * towns come back, so there is no queue of billed messages to guard against — the cost
+     * profile that makes enrichment asynchronous simply is not present here.
+     *
+     * ONE COUNTRY AT A TIME, ENFORCED. "All countries" is refused rather than fanning
+     * twenty-five paid calls out of a single click. That also sidesteps the trap in the seed
+     * form directly above this one, where ticking `force` with "All countries" selected does
+     * nothing at all, silently: seed() passes `$force ? $code : null`, and `$code` is null.
+     *
+     * The towns it adds are unpriced and unplaced. Enrichment fills them in lazily, one paid
+     * call each, when a player first opens them — which is the design, not a backlog.
+     */
+    #[Route('/admin/locations/suggest-towns', name: 'admin_locations_suggest_towns', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function suggestTowns(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('locations_suggest_towns', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen();
+        }
+
+        $code = $this->normalisedCountry($request->request->get('country'));
+
+        if ($code === null) {
+            $this->addFlash('warning', 'Pick a country first — pulling towns is a paid call, so it is not run across every country at once.');
+
+            return $this->backToScreen();
+        }
+
+        try {
+            $country = $this->seedService->resolveCountry($code);
+        } catch (\InvalidArgumentException $e) {
+            $this->addFlash('danger', $e->getMessage());
+
+            return $this->backToScreen();
+        }
+
+        $max = (int) ($request->request->get('max_towns') ?: TownSuggestionService::DEFAULT_MAX);
+
+        try {
+            $result = $this->suggestionService->suggestForCountry($country, $max, false, $this->currentAdmin());
+        } catch (\Throwable $e) {
+            $this->logger->error('Town suggestion failed', ['exception' => $e, 'country' => $code]);
+            $this->addFlash('danger', 'Pulling towns failed: ' . $e->getMessage());
+
+            return $this->backToScreen();
+        }
+
+        if ($result['imported'] === 0) {
+            // The honest outcome when a country's catalogue is already as complete as the
+            // model can make it. Phrased so it does not read as a failure.
+            $this->addFlash('info', sprintf(
+                'Nothing new for %s — the model offered %d town(s) and we already held all of them.',
+                $code,
+                $result['offered'],
+            ));
+
+            return $this->backToScreen();
+        }
+
+        $this->addFlash('success', sprintf(
+            'Added %d town(s) to %s. The model offered %d; %d were already held.',
+            $result['imported'],
+            $code,
+            $result['offered'],
+            $result['alreadyHeld'],
+        ));
+
+        $this->addFlash('warning', sprintf(
+            '%d new location(s) have no coordinates and no land value yet. They enrich lazily '
+            . 'when a player opens them, one paid call each.',
+            $result['imported'],
+        ));
+
+        if ($result['nearDuplicates'] !== []) {
+            // Reported, never merged — the same rule importPlaceNames() follows. Two real
+            // towns in one country can genuinely share a name.
+            $this->addFlash('warning', sprintf(
+                '%d added town(s) look like existing ones (e.g. "%s" vs "%s"). Added anyway — check them.',
+                count($result['nearDuplicates']),
+                $result['nearDuplicates'][0]['imported'],
+                $result['nearDuplicates'][0]['existing'],
+            ));
+        }
 
         return $this->backToScreen();
     }
