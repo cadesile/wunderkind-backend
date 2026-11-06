@@ -37,9 +37,19 @@
         <div class="bmc-quick__head"><i data-lucide="pin" width="16" height="16"></i><span>PINNED</span></div>
         <div class="bmc-quick__items"></div>
     </div>
+    {# RECENT collapses, PINNED does not. Pins are a deliberate choice an admin made and
+       expects to see; recents accumulate on their own and are the list most likely to be in
+       the way, so this one starts closed and remembers being opened. The head is a real
+       <button> with aria-expanded, same as a nav group — a <div> that toggles something is
+       invisible to a screen reader and unreachable by keyboard. #}
     <div class="bmc-quick" id="bmc-recent" hidden>
-        <div class="bmc-quick__head"><i data-lucide="history" width="16" height="16"></i><span>RECENT</span></div>
-        <div class="bmc-quick__items"></div>
+        <button type="button" class="bmc-quick__head bmc-quick__head--toggle"
+                id="bmc-recent-toggle" aria-expanded="false" aria-controls="bmc-recent-items">
+            <i data-lucide="history" width="16" height="16"></i>
+            <span>RECENT</span>
+            <span class="bmc-quick__chev"><i data-lucide="chevron-right" width="16" height="16"></i></span>
+        </button>
+        <div class="bmc-quick__items" id="bmc-recent-items" hidden></div>
     </div>
 
     {% set zone = '' %}

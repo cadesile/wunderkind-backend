@@ -287,3 +287,11 @@ body:has(> .bmc-shell), body:has(.bmc-shell) { margin: 0; }
    space-between row, so its right-hand side needs to be one flex group or the
    buttons and the total drift apart as the button count changes. */
 .bmc-strip__right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* RECENT is a disclosure. Shares the group heading's affordances — dim when closed,
+   full ink when open, chevron a quarter-turn — so the sidebar has one collapse
+   gesture rather than two that look different. */
+.bmc-quick__head--toggle { width: 100%; }
+.bmc-quick__head--toggle[aria-expanded="true"] { color: var(--wk-text); }
+.bmc-quick__chev { margin-left: auto; display: flex; transition: none; }
+.bmc-quick__head--toggle[aria-expanded="true"] .bmc-quick__chev { transform: rotate(90deg); }

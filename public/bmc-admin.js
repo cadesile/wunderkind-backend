@@ -20,7 +20,7 @@
 (function () {
     'use strict';
 
-    var LS_PINS = 'bmc-admin-pins', LS_RECENT = 'bmc-admin-recent';
+    var LS_PINS = 'bmc-admin-pins', LS_RECENT = 'bmc-admin-recent', LS_RECENT_OPEN = 'bmc-admin-recent-open';
     var $ = function (s, r) { return (r || document).querySelector(s); };
     var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
     var read = function (k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
@@ -94,14 +94,36 @@
         if (p.count) a.lastChild.textContent = p.count;
         return a;
     }
+    // RECENT collapses and starts closed: it fills itself as you browse, so it is the list
+    // most likely to be in the way. Opening it is remembered, per browser, like the filter rail.
+    var recentToggle = $('#bmc-recent-toggle'), recentItems = $('#bmc-recent-items');
+    var recentOpen = false;
+    try { recentOpen = localStorage.getItem(LS_RECENT_OPEN) === 'open'; } catch (e) {}
+
+    function applyRecentOpen() {
+        if (!recentToggle || !recentItems) return;
+        recentToggle.setAttribute('aria-expanded', recentOpen ? 'true' : 'false');
+        recentItems.hidden = !recentOpen;
+    }
+    if (recentToggle) {
+        recentToggle.addEventListener('click', function () {
+            recentOpen = !recentOpen;
+            try { localStorage.setItem(LS_RECENT_OPEN, recentOpen ? 'open' : 'closed'); } catch (e) {}
+            applyRecentOpen();
+        });
+    }
+
     function renderQuick() {
         [['#bmc-pinned', pins], ['#bmc-recent', recent.filter(function (k) { return pins.indexOf(k) < 0; }).slice(0, 4)]].forEach(function (pair) {
             var box = $(pair[0]); if (!box) return;
             var list = $('.bmc-quick__items', box);
             list.innerHTML = '';
             pair[1].forEach(function (k) { list.appendChild(quickLink(byKey[k])); });
+            // Still hidden entirely while empty — a disclosure with nothing behind it is worse
+            // than no disclosure.
             box.hidden = pair[1].length === 0;
         });
+        applyRecentOpen();
         var pinBtn = $('.bmc-pin');
         if (pinBtn) {
             var on = pins.indexOf(current) >= 0;
