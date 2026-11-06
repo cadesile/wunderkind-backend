@@ -1,0 +1,133 @@
+{% extends '@EasyAdmin/crud/index.html.twig' %}
+{#
+  The shared index for the redesigned list pages (handoff §6).
+
+  Ten CRUD controllers point at this with
+  ->overrideTemplate('crud/index', 'admin/crud/bmc_index.html.twig'); every
+  other page keeps the stock EasyAdmin index until it is redesigned.
+
+  It overrides exactly two blocks. content_header_wrapper becomes the sticky
+  page strip, and main becomes the rail + table + pager. Everything else —
+  routing, security, CSRF, per-CRUD configuration — is still EasyAdmin's.
+
+  bmcGroup / bmcDomain / bmcTotal come from each controller's
+  configureResponseParameters(); see _bmc_rail for the facet variables.
+#}
+
+{% block content_header_wrapper %}
+    <header class="bmc-strip">
+        <div class="bmc-strip__titles">
+            <span class="bmc-crumb">ADMIN › {{ bmcGroup|default('')|upper }}</span>
+            <div class="bmc-title-row">
+                <h1 class="bmc-title">{{ (ea.crud.customPageTitle ?? ea.crud.entityLabelInPlural)|trans }}</h1>
+                {# bmc-admin.js pairs this with <main data-bmc-page> and the
+                   sidebar's PINNED list; it does nothing without that key. #}
+                <button type="button" class="bmc-iconbtn bmc-iconbtn--sm bmc-pin"
+                        aria-pressed="false" title="Pin to sidebar">
+                    <i data-lucide="pin" width="16" height="16"></i>
+                </button>
+            </div>
+        </div>
+        {% if bmcTotal is defined %}
+            <div class="bmc-total">
+                <span class="bmc-total__n">{{ bmcTotal|number_format(0, '.', ',') }}</span>
+                <span class="bmc-total__noun">{{ ea.crud.entityLabelInPlural|trans|upper }}</span>
+            </div>
+        {% endif %}
+    </header>
+{% endblock %}
+
+{% block main %}
+{% set sortParams = app.request.query.all['sort']|default({}) %}
+{% set columns    = entities|filter(e => e.isAccessible)|first.fields ?? [] %}
+
+<div class="bmc-body">
+    {{ include('admin/crud/_bmc_rail.html.twig') }}
+
+    <section class="bmc-list">
+        {{ include('admin/crud/_bmc_toolbar.html.twig') }}
+
+        <div>
+            <div class="bmc-table-wrap" data-domain="{{ bmcDomain|default('club') }}">
+                <table class="bmc-table">
+                    <thead>
+                        <tr>
+                            {% if batch_actions|length > 0 %}
+                                <th class="bmc-sel">
+                                    <label class="bmc-selbox" title="Select page">
+                                        <input type="checkbox" id="bmc-select-page" class="bmc-sr"
+                                               aria-label="Select all on this page">
+                                        <span class="bmc-tile"></span>
+                                    </label>
+                                </th>
+                            {% endif %}
+                            {% for field in columns %}
+                                {% set dir     = sortParams[field.property]|default(null) %}
+                                {% set nextDir = dir == 'ASC' ? 'DESC' : 'ASC' %}
+                                <th {% if bmcWidths[field.property] is defined %}style="width:{{ bmcWidths[field.property] }}px"{% endif %}
+                                    class="{{ field.textAlign == 'right' ? 'is-right' : (field.textAlign == 'center' ? 'is-center') }}"
+                                    {% if dir %}aria-sort="{{ dir == 'ASC' ? 'ascending' : 'descending' }}"{% endif %}>
+                                    {% if field.sortable %}
+                                        <a class="bmc-sort{{ dir ? ' is-sorted' }}"{% if dir %} data-dir="{{ dir|lower }}"{% endif %}
+                                           href="{{ ea_url().set('sort', {(field.property): nextDir}).unset('page').generateUrl() }}">
+                                            {{ field.label|trans|upper }}
+                                        </a>
+                                    {% else %}
+                                        <span class="bmc-sort">{{ field.label|trans|upper }}</span>
+                                    {% endif %}
+                                </th>
+                            {% endfor %}
+                            <th><span class="bmc-sr">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entity in entities %}
+                            {% if entity.isAccessible %}
+                                <tr>
+                                    {% if batch_actions|length > 0 %}
+                                        <td class="bmc-sel">
+                                            <label class="bmc-selbox">
+                                                {# form="bmc-batch" is how these join the batch form
+                                                   in the toolbar, which cannot wrap the table. #}
+                                                <input type="checkbox" name="batchActionEntityIds[]"
+                                                       value="{{ entity.primaryKeyValue }}" form="bmc-batch" class="bmc-sr"
+                                                       aria-label="Select {{ entity.toString }}">
+                                                <span class="bmc-tile"></span>
+                                            </label>
+                                        </td>
+                                    {% endif %}
+                                    {% for field in entity.fields %}
+                                        <td class="{{ field.textAlign == 'right' ? 'is-right' : (field.textAlign == 'center' ? 'is-center') }}">
+                                            {{ include(field.templatePath, {field: field, entity: entity}, with_context = false) }}
+                                        </td>
+                                    {% endfor %}
+                                    <td class="bmc-actions">
+                                        <div class="bmc-rowactions">
+                                            {% for action in entity.actions %}
+                                                {{ include(action.templatePath, {action: action, entity: entity}, with_context = false) }}
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        {% else %}
+                            <tr class="bmc-empty">
+                                <td colspan="{{ columns|length + 2 }}">
+                                    <div class="bmc-empty__inner">
+                                        NO {{ ea.crud.entityLabelInPlural|trans|upper }} MATCH THESE FILTERS
+                                        <a class="bmc-btn" href="{{ ea_url().unset('filters').unset('query').unset('page').generateUrl() }}">
+                                            <span>CLEAR FILTERS</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {{ include('admin/crud/_bmc_pager.html.twig') }}
+        </div>
+    </section>
+</div>
+{% endblock %}

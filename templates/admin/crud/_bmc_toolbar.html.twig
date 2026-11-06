@@ -1,0 +1,101 @@
+{#
+  The strip above the table: rail toggle, active-filter chips, result count,
+  and the selection bar that replaces the chips once rows are picked.
+
+  #bmc-batch is the form the row checkboxes join via form="bmc-batch". It has
+  to live outside the table for that to work, and it cannot wrap the table
+  either, so the attribute is the whole mechanism.
+
+  CSRF: EasyAdmin's token is per batch action — 'ea-batch-action-<action>-<fqcn>'
+  — so one hidden field cannot serve several buttons. Each button carries its
+  own in data-action-csrf-token and bmc-admin.js copies the right one into the
+  hidden field on click, which is what EasyAdmin's own app.js does.
+#}
+{% set activeFilters = app.request.query.all['filters']|default({}) %}
+{% set searchQuery   = app.request.query.get('query')|default('') %}
+{% set activeCount   = activeFilters|length + (searchQuery is empty ? 0 : 1) %}
+
+<div class="bmc-toolbar">
+    <button type="button" class="bmc-btn" data-bmc-toggle-rail
+            data-closed-label="{{ activeCount > 0 ? 'FILTERS · ' ~ activeCount : 'FILTERS' }}">
+        <span>HIDE FILTERS</span>
+    </button>
+
+    <form id="bmc-batch" method="post" action="{{ ea_url().setAction('index').generateUrl() }}">
+        <input type="hidden" name="batchActionCsrfToken" id="bmc-batch-token" value="">
+        <input type="hidden" name="batchActionName" id="bmc-batch-name" value="">
+        <input type="hidden" name="entityFqcn" value="{{ ea.entity.fqcn }}">
+        <input type="hidden" name="batchActionUrl" id="bmc-batch-url" value="">
+        {# Set to 1 by "select all N matching"; the handler then rebuilds the
+           query from the referrer rather than trusting a list of ids. #}
+        <input type="hidden" name="allMatching" id="bmc-all-matching" value="0">
+        <input type="hidden" name="referrer" value="{{ app.request.requestUri }}">
+
+        <div class="bmc-selbar" id="bmc-selbar"
+             data-total="{{ paginator.numResults }}"
+             data-noun-one="{{ ea.crud.entityLabelInSingular|trans|lower }}"
+             data-noun-many="{{ ea.crud.entityLabelInPlural|trans|lower }}" hidden>
+            <span class="bmc-selbar__n">0 SELECTED</span>
+            {% for batchAction in batch_actions %}
+                <button type="submit"
+                        class="bmc-btn{{ 'delete' in batchAction.name|lower ? ' bmc-btn--red' }}"
+                        data-bmc-batch
+                        data-action-name="{{ batchAction.name }}"
+                        data-action-url="{{ batchAction.linkUrl }}"
+                        data-action-csrf-token="{{ batchAction.htmlAttributes['data-action-csrf-token']|default('') }}"
+                        {% if 'delete' in batchAction.name|lower %}data-bmc-confirm="This cannot be undone."{% endif %}>
+                    <span>{{ batchAction.label|trans|upper }}</span>
+                </button>
+            {% endfor %}
+            <button type="button" class="bmc-iconbtn bmc-iconbtn--sm" data-bmc-clear-selection
+                    title="Clear selection" aria-label="Clear selection">
+                <i data-lucide="x" width="16" height="16"></i>
+            </button>
+        </div>
+    </form>
+
+    <div class="bmc-chips" id="bmc-chips">
+        {% if searchQuery is not empty %}
+            <span class="bmc-chip">
+                <span class="bmc-chip__k">SEARCH</span>
+                <span class="bmc-chip__v">“{{ searchQuery }}”</span>
+                <a class="bmc-chip__x" href="{{ ea_url().unset('query').unset('page').generateUrl() }}"
+                   title="Remove filter" aria-label="Remove search filter"><i data-lucide="x" width="16" height="16"></i></a>
+            </span>
+        {% endif %}
+        {% for key, value in activeFilters %}
+            {# unset() removes a whole top-level parameter, so dropping one
+               facet means rewriting the filters map without it. The query
+               string spells nested properties with ':' (FiltersFormType's
+               EMBEDDED_PROPERTY_SEPARATOR), so translate back to find the
+               filter and borrow its label. #}
+            {% set rest = activeFilters|filter((v, k) => k != key) %}
+            {% set filterDto = filters.get(key|replace({':': '.'}))|default(null) %}
+            <span class="bmc-chip">
+                <span class="bmc-chip__k">{{ (filterDto ? filterDto.label|trans : key)|upper }}</span>
+                <span class="bmc-chip__v">{{ bmc_filter_summary(value) }}</span>
+                <a class="bmc-chip__x"
+                   href="{{ (rest is empty ? ea_url().unset('filters') : ea_url().set('filters', rest)).unset('page').generateUrl() }}"
+                   title="Remove filter" aria-label="Remove filter"><i data-lucide="x" width="16" height="16"></i></a>
+            </span>
+        {% endfor %}
+        {% if activeCount > 0 %}
+            <a class="bmc-clear" href="{{ ea_url().unset('filters').unset('query').unset('page').generateUrl() }}">CLEAR ALL</a>
+        {% endif %}
+    </div>
+
+    <span class="bmc-toolbar__count">
+        {% if activeCount > 0 and bmcTotal is defined and bmcTotal != paginator.numResults %}
+            {{ paginator.numResults|number_format(0, '.', ',') }} of {{ bmcTotal|number_format(0, '.', ',') }}
+        {% else %}
+            {{ paginator.numResults|number_format(0, '.', ',') }}
+        {% endif %}
+        {{ (paginator.numResults == 1 ? ea.crud.entityLabelInSingular : ea.crud.entityLabelInPlural)|trans|lower }}
+    </span>
+</div>
+
+{# Appears only once every row on the page is ticked and more rows match. #}
+<div class="bmc-selall" id="bmc-selall" hidden>
+    <span>All {{ paginator.rangeLastResultNumber - paginator.rangeFirstResultNumber + 1 }} on this page are selected.</span>
+    <button type="button">SELECT ALL {{ paginator.numResults|number_format(0, '.', ',') }} MATCHING</button>
+</div>
