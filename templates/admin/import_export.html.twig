@@ -1,0 +1,207 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{#
+  One Import / Export page for all four domains (README §5.4).
+
+  Before this, the sidebar carried four separate entries all labelled
+  "Import / Export" with the same icon, in four different submenus — you had to
+  know which group a domain lived in to find its file. They are one page now.
+
+  Each card posts to its own existing route, with its own CSRF token id and its
+  own file-input name; no service or controller logic changed. The per-domain
+  pages (admin_world_content and friends) still work and keep their longer
+  explanatory copy — this page is the index over them, so the blurbs here are
+  deliberately one line each.
+
+  Watch the checkbox ids: all four domains name the field clear_before_import,
+  which is fine as a POST field but would be a duplicate id on one page, so the
+  id (and its label's `for`) is suffixed per domain.
+#}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Import / Export</h5>
+        <p class="text-muted small mb-0">
+            Move data between environments as JSON. Export writes a snapshot of this
+            environment; import applies a file to it. Each domain is independent —
+            there is no combined file.
+        </p>
+    </div>
+
+    {# ── World ───────────────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-earth-europe text-primary"></i>
+                <span class="fw-semibold small">World</span>
+                <a class="ms-auto small" href="{{ path('admin', {routeName: 'admin_world_content'}) }}">Details</a>
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+                <p class="text-muted small mb-0">
+                    Leagues and NPC clubs. Matched on country/tier for leagues and
+                    name/country/tier for clubs.
+                </p>
+                <a href="{{ path('admin_world_export') }}" class="btn btn-primary btn-sm align-self-start">
+                    <i class="fa fa-download me-1"></i> Download JSON
+                </a>
+                <form method="POST" action="{{ path('admin_world_import') }}" enctype="multipart/form-data" class="mt-auto">
+                    <input type="hidden" name="_token" value="{{ csrf_token('world_import') }}">
+                    <div class="mb-2">
+                        <label for="ie_world_file" class="form-label small fw-semibold">JSON file</label>
+                        <input class="form-control form-control-sm" type="file" id="ie_world_file"
+                               name="world_file" accept=".json,application/json" required>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="ie_clear_world" name="clear_before_import">
+                        <label class="form-check-label small fw-semibold text-danger" for="ie_clear_world">
+                            Clear all leagues and clubs first
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fa fa-upload me-1"></i> Import
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Narrative ───────────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-scroll text-primary"></i>
+                <span class="fw-semibold small">Narrative</span>
+                <a class="ms-auto small" href="{{ path('admin', {routeName: 'admin_narrative_content'}) }}">Details</a>
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+                <p class="text-muted small mb-0">
+                    Event templates, facility templates, player archetypes and tactical
+                    advantages. Upserted by slug; records absent from the file are left alone.
+                </p>
+                <a href="{{ path('admin_narrative_export') }}" class="btn btn-primary btn-sm align-self-start">
+                    <i class="fa fa-download me-1"></i> Download JSON
+                </a>
+                <form method="POST" action="{{ path('admin_narrative_import') }}" enctype="multipart/form-data" class="mt-auto">
+                    <input type="hidden" name="_token" value="{{ csrf_token('narrative_import') }}">
+                    <div class="mb-2">
+                        <label for="ie_narrative_file" class="form-label small fw-semibold">JSON file</label>
+                        <input class="form-control form-control-sm" type="file" id="ie_narrative_file"
+                               name="narrative_file" accept=".json,application/json" required>
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="ie_clear_narrative" name="clear_before_import">
+                        <label class="form-check-label small fw-semibold text-danger" for="ie_clear_narrative">
+                            Clear existing narrative content first
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fa fa-upload me-1"></i> Import
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Translations ────────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-language text-primary"></i>
+                <span class="fw-semibold small">Translations</span>
+                <a class="ms-auto small" href="{{ path('admin', {routeName: 'admin_translations_content'}) }}">Details</a>
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+                {% if languages|length == 0 %}
+                    <div class="alert alert-warning py-2 small mb-0">
+                        No languages are configured yet — add one under Translations → Languages first.
+                    </div>
+                {% else %}
+                    <p class="text-muted small mb-0">
+                        The generic UI-copy catalogue, one language at a time. Narrative text has
+                        its own Translations action on each entity and is not covered here.
+                    </p>
+                    <form method="GET" action="{{ path('admin_translations_export') }}">
+                        <div class="mb-2">
+                            <label for="ie_export_language" class="form-label small fw-semibold">Language</label>
+                            <select class="form-select form-select-sm" id="ie_export_language" name="language" required>
+                                {% for language in languages %}
+                                    <option value="{{ language.code }}">{{ language.name }} ({{ language.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-download me-1"></i> Download JSON
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ path('admin_translations_import') }}" enctype="multipart/form-data" class="mt-auto">
+                        <input type="hidden" name="_token" value="{{ csrf_token('translations_import') }}">
+                        <div class="mb-2">
+                            <label for="ie_import_language" class="form-label small fw-semibold">Target language</label>
+                            <select class="form-select form-select-sm" id="ie_import_language" name="language" required>
+                                {% for language in languages %}
+                                    <option value="{{ language.code }}">{{ language.name }} ({{ language.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label for="ie_translations_file" class="form-label small fw-semibold">JSON file</label>
+                            <input class="form-control form-control-sm" type="file" id="ie_translations_file"
+                                   name="translations_file" accept=".json,application/json" required>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="ie_clear_translations" name="clear_before_import">
+                            <label class="form-check-label small fw-semibold text-danger" for="ie_clear_translations">
+                                Clear this language's values first
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="fa fa-upload me-1"></i> Import
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Config ──────────────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-sliders text-primary"></i>
+                <span class="fw-semibold small">Config</span>
+                <a class="ms-auto small" href="{{ path('admin', {routeName: 'admin_config_content'}) }}">Details</a>
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+                <p class="text-muted small mb-0">
+                    Game, starter and pool settings. Only keys present in the file are
+                    applied, so a partial export is safe to import.
+                </p>
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="fa fa-triangle-exclamation me-1"></i>
+                    Importing overwrites live configuration immediately. There is no
+                    clear-first option here, and no undo — export a backup first.
+                </div>
+                <a href="{{ path('admin_config_export') }}" class="btn btn-primary btn-sm align-self-start">
+                    <i class="fa fa-download me-1"></i> Download JSON
+                </a>
+                <form method="POST" action="{{ path('admin_config_import') }}" enctype="multipart/form-data" class="mt-auto">
+                    <input type="hidden" name="_token" value="{{ csrf_token('config_import') }}">
+                    <div class="mb-2">
+                        <label for="ie_config_file" class="form-label small fw-semibold">JSON file</label>
+                        <input class="form-control form-control-sm" type="file" id="ie_config_file"
+                               name="config_file" accept=".json,application/json" required>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fa fa-upload me-1"></i> Import
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
