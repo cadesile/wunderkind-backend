@@ -355,12 +355,12 @@ Everything needed to build the filter UI in one call. `public, max-age=300`.
 
 ```json
 {
-  "country": { "code": "EN", "...": "...", "locationCount": 42 },
-  "regions": [ { "region": "North West", "count": 7 } ],
+  "country": { "code": "EN", "...": "...", "locationCount": 284 },
+  "regions": [ { "region": "Unassigned", "count": 242 }, { "region": "North West", "count": 5 } ],
   "landPenceMin": 12000000,
   "landPenceMax": 980000000,
   "pricedCount": 38,
-  "totalCount": 42
+  "totalCount": 284
 }
 ```
 
@@ -368,6 +368,33 @@ Region counts are over **active** rows only, so a facet never offers a filter th
 nothing. `landPenceMin`/`Max` are `null` until at least one location in the country has been
 enriched — an empty price range is a real pre-enrichment state, not a missing value.
 `pricedCount` versus `totalCount` is how far enrichment has got.
+
+### `"Unassigned"` — the towns that have no region yet
+
+**A region arrives with enrichment**, so most of a catalogue has none: 242 of England's 284
+today. Those rows are reported under the label **`"Unassigned"`**, and
+`GET /api/locations?region=Unassigned` **filters by it**, returning exactly those towns.
+
+> **Changed 2026-11-05.** This bucket previously came back with an empty name
+> (`{"region": "", "count": 242}`), which a region picker cannot render and so drops — leaving
+> the only un-enriched towns in the game reachable by search alone, and therefore impossible to
+> enrich, since a player has to find a town to ask for its valuation. This is a **changed value
+> under an unchanged key**, which `.context/shared/api-backwards-compatibility.md` counts as a
+> breaking change, so it is recorded as one. Nothing shipped consumed the empty bucket.
+
+Three things worth knowing:
+
+- **It is a label, not a stored value.** The column holds `''` and keeps holding it; the filter
+  translates the label back. No town is given a made-up region — enrichment's validator only
+  fills a region that is genuinely absent, so inventing one would block the real one later.
+- **It is opt-in.** A named region still excludes these towns; `region=North West` does not
+  quietly widen. Combine them when you want both: `region=North West,Unassigned`.
+- **It is how you browse towns to enrich.** Select the bucket, pick a town, call
+  `POST /api/locations/{id}/enrich`. After that the town has a real region and leaves the
+  bucket on its own.
+
+Building a town picker? [`location-discovery.md`](location-discovery.md) has the whole flow and
+the filters to avoid.
 
 ---
 

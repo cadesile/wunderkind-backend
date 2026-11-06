@@ -104,20 +104,33 @@ discovery.
 
 Full enrichment contract, including the quota and its error codes: [`locations.md`](locations.md).
 
-## One thing we can change on the backend if it helps
+## Browsing them: the `"Unassigned"` bucket — **built 2026-11-05**
 
-`GET /api/locations/facets` currently returns the region-less towns as a real bucket with an
-empty name:
+`GET /api/locations/facets` reports the region-less towns under a usable label, and the list
+endpoint accepts it back as a filter:
 
 ```json
-{ "regions": [ { "region": "", "count": 242 }, { "region": "North West", "count": 6 } ] }
+{ "regions": [ { "region": "Unassigned", "count": 242 }, { "region": "North West", "count": 5 } ] }
 ```
 
-Honest, but not renderable — a region picker built from it gets a blank entry it will probably
-drop. **Not built, and happy to build it:** return that bucket explicitly labelled (`null` plus
-a count, or `"Unassigned"`) so there is something selectable to browse un-enriched towns from.
-That would make "browse the unassigned bucket → tap a town → request a valuation" a first-class
-flow rather than something only search can reach.
+```
+GET /api/locations?country=EN&region=Unassigned      → the 242 un-enriched towns
+GET /api/locations?country=EN&region=North West      → still excludes them (opt-in, not a widening)
+GET /api/locations?country=EN&region=North West,Unassigned   → both
+```
+
+So the flow you want is now first-class: **browse the Unassigned bucket → tap a town → request
+a valuation → it gains a region and leaves the bucket on its own.** Search still works and is
+still the fastest route to a town by name.
+
+It previously came back as `{"region": "", "count": 242}` — a blank entry a picker drops. That
+is a **changed value under an unchanged key**, so it is recorded as a breaking change even
+though nothing shipped consumed it.
+
+**It is a label, not stored data.** The column holds `''` and keeps holding it; the filter
+translates the label back. We deliberately did not invent regions for the 242: the source list
+is names only, and enrichment's validator fills a region only when one is genuinely absent, so
+a made-up value would block the real one from ever landing.
 
 What we would **not** do is invent regions for the 242. The source list for bare towns is names
 only; a made-up region would be wrong data that enrichment would then have to overwrite, and the
