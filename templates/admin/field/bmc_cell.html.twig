@@ -16,7 +16,9 @@
     img       kit/badge config, encoded into data-kit for bmc-admin.js
     imgs      [{kit, title}, …] for a row of up to three badges
     more      "+2" trailing a badge row
-    flag      2-letter country code, lowercase
+    flag      2-letter country code (any case; the file names are lowercase).
+              Pass null rather than a guess — an unresolvable code renders as
+              an empty bordered box, which reads as a broken image.
     chip      {label, color}  a standalone badge filling the cell
     tag       {label, color}  a badge trailing the text
     lead      {label, color}  a badge preceding the text
