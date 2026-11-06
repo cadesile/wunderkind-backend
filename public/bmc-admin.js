@@ -221,8 +221,26 @@
     if (clearBtn) clearBtn.addEventListener('click', function () { boxes.forEach(function (b) { b.checked = false; }); allField.value = '0'; syncSel(); });
     syncSel();
 
-    // Destructive batch actions confirm first. Swap confirm() for the restyled delete modal in layout.html.twig.
-    $$('[data-bmc-confirm]').forEach(function (b) {
+    // Batch submit: EasyAdmin's CSRF token is per action — 'ea-batch-action-<action>-<fqcn>' —
+    // so one hidden field cannot serve several buttons in one form. Each button carries its own
+    // in data-action-csrf-token and we copy the right one across on click, which is what
+    // EasyAdmin's own app.js does when it synthesises a form.
+    var tokenField = $('#bmc-batch-token'), nameField = $('#bmc-batch-name'), urlField = $('#bmc-batch-url');
+    $$('[data-bmc-batch]').forEach(function (b) {
+        b.addEventListener('click', function (e) {
+            var confirmText = b.getAttribute('data-bmc-confirm');
+            if (confirmText && !window.confirm(confirmText)) { e.preventDefault(); return; }
+            if (tokenField) tokenField.value = b.getAttribute('data-action-csrf-token') || '';
+            if (nameField) nameField.value = b.getAttribute('data-action-name') || '';
+            if (urlField) urlField.value = b.getAttribute('data-action-url') || '';
+            // The form posts to the action's own URL, not the index.
+            var form = b.closest('form');
+            if (form && b.getAttribute('data-action-url')) form.action = b.getAttribute('data-action-url');
+        });
+    });
+
+    // Row-level destructive actions outside the batch bar.
+    $$('[data-bmc-confirm]:not([data-bmc-batch])').forEach(function (b) {
         b.addEventListener('click', function (e) { if (!window.confirm(b.getAttribute('data-bmc-confirm'))) e.preventDefault(); });
     });
 
