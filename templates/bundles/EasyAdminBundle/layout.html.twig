@@ -123,7 +123,47 @@
         #}
         <main class="bmc-main"{% if _bmc_page %} data-bmc-page="{{ _bmc_page }}"{% endif %}>
             {% block content %}
-                {% block content_header_wrapper %}{% endblock %}
+                {#
+                  content_header_wrapper is reproduced from @!EasyAdmin/layout.html.twig
+                  VERBATIM, and it has to be.
+
+                  Re-declaring it empty here — which is what this did at first — overrides the
+                  parent's definition for EVERY page, not just the redesigned ones. The result
+                  was that every stock CRUD page silently lost its title, its help popover and
+                  its whole page-actions row: New, Filters and Sort. The redesigned pages were
+                  unaffected because bmc_index.html.twig overrides this block itself, which is
+                  exactly why it went unnoticed.
+
+                  So the default has to be the real thing. Pages that want the new page strip
+                  override this block; pages that have not been redesigned get what they always
+                  had.
+                #}
+                {% block content_header_wrapper %}
+                    {% set crud_help_message = ea.crud.helpMessage ?? null %}
+                    {% set has_help_message = crud_help_message is ea_is_not_empty %}
+                    <section class="content-header">
+                        {% block content_header %}
+                            <div class="content-header-title">
+                                <h1 class="title">
+                                    {% block content_title %}{% endblock %}
+
+                                    {% block content_help %}
+                                        {% if has_help_message %}
+                                            <a tabindex="0" class="content-header-help" data-bs-toggle="popover" data-bs-custom-class="ea-content-help-popover" data-bs-animation="true" data-bs-html="true" data-bs-placement="bottom" data-bs-trigger="focus" data-bs-content="{{ ea.crud.helpMessage|trans|e('html') }}">
+                                                <twig:ea:Icon name="internal:circle-info" />
+                                            </a>
+                                        {% endif %}
+                                    {% endblock %}
+                                </h1>
+                            </div>
+
+                            {% block page_actions_wrapper %}
+                                <div class="page-actions">{% block page_actions %}{% endblock %}</div>
+                            {% endblock %}
+                        {% endblock content_header %}
+                    </section>
+                {% endblock content_header_wrapper %}
+
                 <section id="main" class="content-body">
                     {% block main %}{% endblock %}
                 </section>
