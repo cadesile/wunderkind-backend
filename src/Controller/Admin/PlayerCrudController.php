@@ -2,6 +2,9 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Admin\FacetCounter;
 use App\Entity\Player;
 use App\Enum\Country;
@@ -41,12 +44,16 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class PlayerCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly PlayerRepository $playerRepository,
         private readonly ArchetypeResolverService $archetypeResolver,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
         private readonly \Doctrine\ORM\EntityManagerInterface $em,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -67,7 +74,8 @@ class PlayerCrudController extends AbstractCrudController
                 ->setHtmlAttributes(['title' => 'Edit player', 'aria-label' => 'Edit player'])
                 ->setCssClass('bmc-iconbtn'))
             ->add(Crud::PAGE_EDIT, Action::DETAIL)
-            ->disable(Action::DELETE);
+            ->disable(Action::DELETE)
+            ->addBatchAction(self::exportCsvAction());
     }
 
     public function configureCrud(Crud $crud): Crud

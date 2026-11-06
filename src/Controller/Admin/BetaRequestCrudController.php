@@ -2,6 +2,15 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Service\Admin\AdminQueueCounts;
+use App\Service\EmailVerificationService;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\BatchActionDto;
+use Symfony\Component\HttpFoundation\Response;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Admin\FacetCounter;
 use App\Entity\BetaRequest;
 use App\Filter\Admin\BetaStatusFilter;
@@ -27,11 +36,17 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 class BetaRequestCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly CsrfTokenManagerInterface $csrf,
         private readonly EntityManagerInterface $em,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
+        private readonly EmailVerificationService $emailVerification,
+        private readonly AdminQueueCounts $queueCounts,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -57,7 +72,11 @@ class BetaRequestCrudController extends AbstractCrudController
 
         return $actions
             ->disable(Action::NEW, Action::EDIT, Action::DELETE)
-            ->add(Crud::PAGE_INDEX, $sendInvite);
+            ->add(Crud::PAGE_INDEX, $sendInvite)
+            ->addBatchAction(Action::new('sendInvites', 'Send invites')
+                ->linkToCrudAction('sendInvites')
+                ->createAsBatchAction())
+            ->addBatchAction(self::exportCsvAction());
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -78,6 +97,65 @@ class BetaRequestCrudController extends AbstractCrudController
             ->add(BetaStatusFilter::new())
             ->add(NumericFilter::new('attempts', 'Attempts'))
             ->add(DateTimeFilter::new('createdAt', 'Requested'));
+    }
+
+    /**
+     * Send the beta invite to everyone selected.
+     *
+     * CSRF is checked once for the batch rather than per row: the per-row
+     * route is a GET carrying its own token in the query string, which does
+     * not translate to a POST of many ids. The batch token is scoped to this
+     * action and this entity, so it is no weaker.
+     *
+     * Already-invited rows are skipped rather than re-sent — the selection
+     * can easily include them (selecting the page, or "all matching"), and
+     * emailing someone their invite twice because of how a list was selected
+     * is not a thing an operator asked for.
+     *
+     * A send that throws does not abort the rest: one bad address should not
+     * silently cancel the invites after it, so failures are counted and
+     * reported alongside the successes.
+     */
+    #[AdminRoute(path: '/batch/send-invites', name: 'batch_send_invites', options: ['methods' => ['POST']])]
+    public function sendInvites(BatchActionDto $batch, AdminContext $context): Response
+    {
+        $this->assertBatchToken($batch);
+
+        $sent = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach ($this->batchSelection->chunks($batch, $context->getRequest(), $this->matchingQuery($context)) as $chunk) {
+            foreach ($chunk as $request) {
+                if (null !== $request->getInvitedAt()) {
+                    ++$skipped;
+                    continue;
+                }
+
+                try {
+                    $this->emailVerification->sendBetaInviteEmail($request->getEmail());
+                    $request->markInvited();
+                    ++$sent;
+                } catch (\Throwable) {
+                    ++$failed;
+                }
+            }
+            $this->em->flush();
+        }
+
+        // The sidebar badge counts verified-but-not-invited rows, which this
+        // has just changed.
+        $this->queueCounts->invalidate();
+
+        $message = \sprintf('%d %s sent.', $sent, 1 === $sent ? 'invite' : 'invites');
+        if ($skipped > 0) {
+            $message .= \sprintf(' %d already invited.', $skipped);
+        }
+        if ($failed > 0) {
+            $message .= \sprintf(' %d failed to send.', $failed);
+        }
+
+        return $this->backToReferrer($context, $failed > 0 ? 'warning' : 'success', $message);
     }
 
     public function configureResponseParameters(KeyValueStore $responseParameters): KeyValueStore

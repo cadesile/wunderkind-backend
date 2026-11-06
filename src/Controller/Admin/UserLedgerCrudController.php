@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Entity\Admin;
 use App\Entity\User;
 use App\Admin\FacetCounter;
@@ -58,6 +61,8 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class UserLedgerCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     /**
      * Marks a row as hand-entered from this form.
      *
@@ -85,6 +90,8 @@ class UserLedgerCrudController extends AbstractCrudController
         private readonly EntityManagerInterface $em,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -108,7 +115,8 @@ class UserLedgerCrudController extends AbstractCrudController
             ->add(Crud::PAGE_INDEX, $createAdjustment)
             // STAYS DISABLED. See the class docblock — re-enabling NEW here would write balances
             // from form input and fork the balance chain.
-            ->disable(Action::NEW, Action::EDIT, Action::DELETE);
+            ->disable(Action::NEW, Action::EDIT, Action::DELETE)
+            ->addBatchAction(self::exportCsvAction());
     }
 
     public function configureCrud(Crud $crud): Crud

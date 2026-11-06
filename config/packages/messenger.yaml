@@ -92,6 +92,10 @@ framework:
             friendly: 'doctrine://default?queue_name=friendly'
 
         routing:
+            # Admin-triggered leaderboard recalculation, from the list pages'
+            # batch actions. The cron and the "generate leaderboards" button
+            # still run synchronously; this is an extra door, not a move.
+            'App\Message\Leaderboard\RecalculateLeaderboardMessage': async
             # Push notifications — see src/Service/Notification/PushNotificationService.php.
             'App\Message\SendPushNotificationMessage': async
             'App\Message\ResolveAdminMessageAudienceForPushMessage': async

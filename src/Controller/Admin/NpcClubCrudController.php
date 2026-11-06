@@ -2,6 +2,9 @@
 
 namespace App\Controller\Admin;
 
+use App\Admin\BatchSelection;
+use App\Admin\CsvExporter;
+use App\Controller\Admin\Batch\BmcBatchActionsTrait;
 use App\Admin\FacetCounter;
 use App\Entity\NpcClub;
 use App\Enum\Country;
@@ -34,11 +37,15 @@ use Symfony\Component\Form\Extension\Core\Type\MoneyType;
 
 class NpcClubCrudController extends AbstractCrudController
 {
+    use BmcBatchActionsTrait;
+
     public function __construct(
         private readonly NpcClubRepository $npcClubRepository,
         private readonly EntityManagerInterface $em,
         private readonly FacetCounter $facets,
         private readonly BmcAdminExtension $bmc,
+        private readonly BatchSelection $batchSelection,
+        private readonly CsvExporter $csvExporter,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -69,7 +76,8 @@ class NpcClubCrudController extends AbstractCrudController
             ->update(Crud::PAGE_INDEX, Action::DELETE, fn (Action $a) => $a
                 ->setLabel('Delete club')->setIcon('trash-2')
                 ->setHtmlAttributes(['title' => 'Delete club', 'aria-label' => 'Delete club'])
-                ->setCssClass('bmc-iconbtn bmc-iconbtn--danger'));
+                ->setCssClass('bmc-iconbtn bmc-iconbtn--danger'))
+            ->addBatchAction(self::exportCsvAction());
     }
 
     public function configureFilters(Filters $filters): Filters
