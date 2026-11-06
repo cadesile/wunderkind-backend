@@ -233,6 +233,13 @@
    enough to re-apply by hand when the handoff stylesheet is updated.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── three-column facets ───────────────────────────────────────────────────
+   prototype/admin-config.js asks for cols: 3 on the short-label facets (city
+   size, clubs owned, company size) but the handoff stylesheet only ships
+   .bmc-checks--2, so every one of them was quietly rendering as a single
+   column. Same shape as the --2 rule. */
+.bmc-checks--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
 /* ── toast stack ───────────────────────────────────────────────────────────
    .bmc-toast is position:fixed at a single bottom:24px, so two flash messages
    land on top of each other. The container owns the position and lets them
