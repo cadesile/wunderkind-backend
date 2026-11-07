@@ -170,6 +170,31 @@ class LocationAdminTest extends WebTestCase
         self::assertSame('pending', $data['run']['batches'][0]['status']);
     }
 
+    public function testTheStatusEndpointCarriesTheNamesForTheRollingTicker(): void
+    {
+        // A count tells an operator the run is working; the names tell them it is returning
+        // real places, which is the thing worth watching when every batch costs money.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSuggestionRuns();
+        $this->seedPullTarget();
+
+        $token = $this->csrfToken($client, 'locations_suggest_towns');
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $token,
+            'country'   => self::SEEDABLE,
+            'max_towns' => '50',
+        ]);
+
+        $client->request('GET', '/admin/locations/suggest-towns/status/' . self::SEEDABLE);
+        $data = json_decode((string) $client->getResponse()->getContent(), true);
+
+        // Present and an array from the first poll, before anything has drained — the ticker
+        // renders nothing rather than erroring on a missing key.
+        self::assertArrayHasKey('recentTowns', $data['run']);
+        self::assertIsArray($data['run']['recentTowns']);
+    }
+
     public function testTheStatusEndpointReportsNoRunForACountryNeverPulled(): void
     {
         // The card renders this as its empty state. A country nobody has pulled towns for is

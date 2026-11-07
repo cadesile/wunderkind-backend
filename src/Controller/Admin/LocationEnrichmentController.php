@@ -84,6 +84,15 @@ class LocationEnrichmentController extends AbstractController
     private const CONNECTION_CACHE_SECONDS = 60;
 
     /**
+     * How many freshly added town names the progress card shows.
+     *
+     * A rolling window, not a full list: a 300-town pull would otherwise turn the card into a
+     * wall of names. Ten is enough to see that real places are arriving — which is the thing
+     * a count cannot tell you — and short enough that it reads as a ticker.
+     */
+    private const RECENT_TOWNS_SHOWN = 10;
+
+    /**
      * @param string|null $location resolved from EasyAdmin's `routeParams`, which arrive as
      *                              request attributes because AdminRouterSubscriber FORWARDS to
      *                              this route rather than redirecting — so the outer request URI
@@ -631,6 +640,13 @@ class LocationEnrichmentController extends AbstractController
             'settledBatches'   => $run->getSucceeded() + $run->getFailed(),
             'failedBatches'    => $run->getFailed(),
             'importedTowns'    => $this->batchRepository->importedForRun($runId),
+            // The names, not just the tally. Scoped to this run's start so the ticker shows
+            // what the pull added rather than what the country already held.
+            'recentTowns'      => $run->getCountryCode() === null ? [] : $this->locationRepository->findRecentlyAddedTowns(
+                $run->getCountryCode(),
+                $run->getStartedAt(),
+                self::RECENT_TOWNS_SHOWN,
+            ),
             'startedAt'        => $run->getStartedAt()->format(\DateTimeInterface::ATOM),
             'finishedAt'       => $run->getFinishedAt()?->format(\DateTimeInterface::ATOM),
             'batches'          => array_map(static fn ($b): array => [

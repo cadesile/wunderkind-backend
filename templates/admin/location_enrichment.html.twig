@@ -208,6 +208,17 @@
                         <div class="progress-bar" id="suggest-progress-bar" role="progressbar" style="width:0%"></div>
                     </div>
                     <div id="suggest-batches" class="d-flex flex-column gap-1"></div>
+
+                    {# Rolling ticker of what has actually landed. A count tells you the run is
+                       working; the names tell you it is returning real places, which is the
+                       thing worth watching when every batch costs money. Newest first, capped,
+                       so older ones fall off as new ones arrive. #}
+                    <div id="suggest-recent" class="mt-2 pt-2 border-top d-none">
+                        <div class="text-muted mb-1" style="font-size:.7rem;">
+                            Latest added <span id="suggest-recent-count"></span>
+                        </div>
+                        <div id="suggest-recent-list" class="d-flex flex-wrap gap-1"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -618,6 +629,19 @@
     const list     = document.getElementById('suggest-batches');
     const depth    = document.getElementById('suggest-queue-depth');
     const submit   = document.getElementById('suggest-submit');
+    const recent      = document.getElementById('suggest-recent');
+    const recentList  = document.getElementById('suggest-recent-list');
+    const recentCount = document.getElementById('suggest-recent-count');
+
+    // Names already shown, so a name arriving between polls can be highlighted for one tick.
+    // Without it every poll would re-render ten identical pills and the ticker would look
+    // static even while towns were landing.
+    const seenTowns = new Set();
+
+    // The FIRST paint highlights nothing. On a reload mid-run every name is new to this page
+    // but none of them is new to the operator, and lighting all ten up would say "ten just
+    // arrived" when nothing had.
+    let tickerPainted = false;
 
     if (!panel) { return; }
 
@@ -653,6 +677,35 @@
         </div>`;
     }
 
+    function renderRecent(towns, importedTotal) {
+        if (!recent) { return; }
+
+        if (!towns || towns.length === 0) {
+            recent.classList.add('d-none');
+            return;
+        }
+
+        recent.classList.remove('d-none');
+
+        // "10 of 143" rather than bare "10": the window is capped, and without the total the
+        // list reads as though the run only added ten.
+        recentCount.textContent = importedTotal > towns.length
+            ? `(${towns.length} of ${importedTotal})`
+            : '';
+
+        recentList.innerHTML = towns.map(name => {
+            const isNew = tickerPainted && !seenTowns.has(name);
+            const cls   = isNew
+                ? 'badge bg-success-subtle text-success-emphasis border border-success-subtle'
+                : 'badge bg-secondary-subtle text-body-secondary border';
+
+            return `<span class="${cls}" style="font-weight:500;">${escHtml(name)}</span>`;
+        }).join('');
+
+        towns.forEach(name => seenTowns.add(name));
+        tickerPainted = true;
+    }
+
     function render(run, queueDepth) {
         if (depth) { depth.textContent = `${queueDepth} queued`; }
 
@@ -676,6 +729,7 @@
         summary.textContent = `${run.country} · ` + parts.join(' · ');
 
         list.innerHTML = run.batches.map(renderBatch).join('');
+        renderRecent(run.recentTowns, run.importedTowns || 0);
 
         // Re-enable the button only once the queue is actually clear: the server refuses a
         // second run while batches are undrained, so offering it would just bounce.
