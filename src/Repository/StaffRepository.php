@@ -147,6 +147,45 @@ class StaffRepository extends ServiceEntityRepository
      * StarterPackService::fillStaffRole() makes (native first, then any), counted rather
      * than fetched so the diagnostic can report a shortfall without consuming anything.
      */
+    /**
+     * Pool staff per role AND nationality, in one grouped query.
+     *
+     * TWO DIMENSIONS BECAUSE THE SCREEN NEEDS BOTH. The staff pool page has six per-role
+     * counters above a nationality picker, and its generate jobs are role × nationality — so
+     * one query serves the tiles, the picker and the batch plan. Summing across roles gives
+     * the picker's per-nationality total; summing across nationalities gives each tile.
+     *
+     * Same reasoning as PlayerRepository::countPoolByNationality(): the alternative was
+     * countInPoolByRoleAndNationality() in a nested loop, which is roles × nationalities
+     * queries a page load.
+     *
+     * Scouts are NOT here — they are a separate table and a separate repository, and the
+     * screen treats them as a seventh tile. See ScoutRepository::countPoolByNationality().
+     *
+     * Combinations with nobody in them are absent, not zero.
+     *
+     * @return array<string, array<string, int>> role backing value => nationality => count
+     */
+    public function countPoolByRoleAndNationality(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.role AS role', 's.nationality AS nat', 'COUNT(s.id) AS n')
+            ->groupBy('s.role')
+            ->addGroupBy('s.nationality')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $role = $row['role'] instanceof StaffRole ? $row['role']->value : (string) $row['role'];
+
+            $out[$role][(string) $row['nat']] = (int) $row['n'];
+        }
+
+        return $out;
+    }
+
     public function countInPoolByRole(StaffRole $role, ?string $nationality = null): int
     {
         $qb = $this->createQueryBuilder('s')

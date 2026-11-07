@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
 use App\Repository\PoolConfigRepository;
+use App\Service\Admin\NationalityPoolCounts;
 use App\Service\MarketPoolService;
 use App\Service\NameGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,6 +22,7 @@ class PoolConfigController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly PoolConfigRepository $poolConfigRepository,
         private readonly MarketPoolService $marketPoolService,
+        private readonly NationalityPoolCounts $nationalityCounts,
     ) {}
 
     // ── Player Pool ──────────────────────────────────────────────────────
@@ -32,7 +34,13 @@ class PoolConfigController extends AbstractController
         return $this->render('admin/pool_player_config.html.twig', [
             'config'        => $this->poolConfigRepository->getConfig(),
             'poolCounts'    => $this->playerCounts(),
+            // Kept: the flat demonym list the old template's chip row reads. Harmless
+            // alongside the grouped rows below and one less thing to break in one go.
             'nationalities' => NameGeneratorService::nationalities(),
+            // The picker: nationalities grouped into the seven headings, each with a count.
+            'nationalityGroups' => $this->nationalityCounts->forPlayers(),
+            'bmcGroup'      => 'Config',
+            'bmcTitle'      => 'Player pool',
         ]);
     }
 
@@ -133,7 +141,12 @@ class PoolConfigController extends AbstractController
     #[IsGranted('ROLE_ADMIN')]
     public function playerPoolCountsJson(): JsonResponse
     {
-        return $this->json($this->playerCounts());
+        // ADDITIVE. `players` keeps its name and meaning; `byNationality` is new, so the
+        // picker can redraw its per-option counts after a generate run without a reload.
+        // Nothing reading the old shape has to change.
+        return $this->json($this->playerCounts() + [
+            'byNationality' => $this->nationalityCounts->forPlayers(),
+        ]);
     }
 
     #[Route('/admin/player-pool-config/clear', name: 'admin_player_pool_clear', methods: ['POST'])]
@@ -174,6 +187,12 @@ class PoolConfigController extends AbstractController
             'config'        => $this->poolConfigRepository->getConfig(),
             'poolCounts'    => $this->staffCounts(),
             'nationalities' => NameGeneratorService::nationalities(),
+            // Staff and scouts summed, because a job is role × nationality and this list is
+            // the nationality half. The per-role split the tiles need is staffByRole().
+            'nationalityGroups' => $this->nationalityCounts->forStaff(),
+            'countsByType'      => $this->nationalityCounts->staffByRole(),
+            'bmcGroup'          => 'Config',
+            'bmcTitle'          => 'Staff pool',
         ]);
     }
 
@@ -284,7 +303,13 @@ class PoolConfigController extends AbstractController
     #[IsGranted('ROLE_ADMIN')]
     public function staffPoolCountsJson(): JsonResponse
     {
-        return $this->json($this->staffCounts());
+        // Additive, as on the player endpoint. `byType` is keyed by the `type` the
+        // generate-chunk endpoint takes, not by the staffCoach/staffFacilityMgr keys above —
+        // those stay exactly as they are.
+        return $this->json($this->staffCounts() + [
+            'byNationality' => $this->nationalityCounts->forStaff(),
+            'byType'        => $this->nationalityCounts->staffByRole(),
+        ]);
     }
 
     #[Route('/admin/staff-pool-config/clear', name: 'admin_staff_pool_clear', methods: ['POST'])]
