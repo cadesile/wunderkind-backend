@@ -6,9 +6,9 @@ namespace App\Command;
 
 use App\Entity\StarterConfig;
 use App\Enum\Country;
-use App\Enum\Location\CountryProfileStatus;
 use App\Repository\LeagueRepository;
 use App\Repository\Location\CountryProfileRepository;
+use App\Service\Location\CountryGoLiveService;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\LeagueService;
@@ -40,6 +40,7 @@ class BootstrapCountryCommand extends Command
         private readonly NpcClubGenerationService    $npcClubGenerationService,
         private readonly StarterConfigRepository     $starterConfigRepository,
         private readonly CountryProfileRepository    $countryProfileRepository,
+        private readonly CountryGoLiveService        $goLiveService,
         private readonly EntityManagerInterface      $em,
     ) {
         parent::__construct();
@@ -54,7 +55,7 @@ class BootstrapCountryCommand extends Command
             ->addOption('delete-existing', null, InputOption::VALUE_NONE, 'Delete existing NPC clubs per tier before regenerating')
             ->addOption('skip-pool', null, InputOption::VALUE_NONE, 'Skip running app:pool:warm for this country')
             ->addOption('skip-worldpack', null, InputOption::VALUE_NONE, 'Skip running app:worldpack:warm for this country')
-            ->addOption('enable', null, InputOption::VALUE_NONE, 'Also mark this country LIVE (player-visible at club creation) — off by default since generation-capable and player-visible are deliberately separate concepts')
+            ->addOption('enable', null, InputOption::VALUE_NONE, 'Also mark this country LIVE, which is what makes it player-visible at club creation. Off by default: generating a country and opening it to players are separate decisions. Refused if the readiness checks do not pass')
             ->addOption('enable-only', null, InputOption::VALUE_NONE, 'Skip every generation step and ONLY flip player-visibility. Use this on a country that is already bootstrapped — a plain --enable re-runs club generation and would add a second full set of clubs');
     }
 
@@ -164,8 +165,11 @@ class BootstrapCountryCommand extends Command
      * profile's own LIVE status, so this sets that instead — one flag, held where whether the
      * country is ready is actually known.
      *
-     * NOT A READINESS CHECK. --enable is an explicit instruction and stays one; whether the
-     * country is actually finished is what `app:country:check` is for.
+     * IT IS NOW A READINESS CHECK, which it deliberately was not before. While visibility was
+     * a separate list, --enable could be taken as the operator's explicit instruction and
+     * `app:country:check` was where you went to find out whether the country was finished.
+     * Setting LIVE is not a free instruction: it is what GET /api/locations answers from.
+     * Covered by BootstrapCountryEnableTest.
      */
     private function enableForPlayers(SymfonyStyle $io, string $countryCode): void
     {
@@ -177,15 +181,21 @@ class BootstrapCountryCommand extends Command
             return;
         }
 
-        if ($profile->getStatus() === CountryProfileStatus::LIVE) {
-            $io->text("{$countryCode} is already live — nothing to do.");
+        // THROUGH THE SAME GATE AS THE ADMIN SCREENS, and that is newly load-bearing. This
+        // used to append to StarterConfig::enabledCountries, which was a separate axis from
+        // the profile's status — so setting it without a readiness check harmed nothing.
+        // Player-visibility IS the LIVE status now, and CountryReadinessService exists so a
+        // half-built country cannot leak out; a CLI that set LIVE directly would be a fourth
+        // way in that skipped the gate the other three enforce.
+        $result = $this->goLiveService->goLive($profile);
+
+        if (!$result['ok']) {
+            $io->warning($result['message']);
+            $io->text('Run app:country:check ' . $countryCode . ' for the full verdict.');
 
             return;
         }
 
-        $profile->setStatus(CountryProfileStatus::LIVE);
-        $this->em->flush();
-
-        $io->success("{$countryCode} is now player-visible (its country profile is LIVE).");
+        $io->success($result['message'] . ' It is now player-visible.');
     }
 }
