@@ -321,3 +321,38 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 
 .bmc-townrow { display: grid; grid-template-columns: minmax(0, 1fr) 120px 96px 72px 110px 76px auto; gap: 10px; align-items: center; min-height: 44px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
 .bmc-townrow:nth-child(even) { background: rgba(0,0,0,.15); }
+
+/* ── dashboard ─────────────────────────────────────────────────────
+   Replaces public/admin-dashboard.css, which is retired along with Chart.js. */
+
+/* A stepped sparkline sits BEHIND the figure as decoration, so the tile needs a
+   stacking context and the stat's own text has to win. */
+.bmc-stat--spark { position: relative; overflow: hidden; }
+.bmc-spark { position: absolute; right: 0; bottom: 0; left: 0; height: 28px; opacity: .35; pointer-events: none; }
+.bmc-spark svg { display: block; width: 100%; height: 100%; }
+.bmc-stat--spark > :not(.bmc-spark) { position: relative; z-index: 1; }
+
+/* In the growth panel the same sparkline is the row, not a backdrop. */
+.bmc-spark--row { position: static; height: 28px; opacity: 1; background: var(--wk-panel); border: 2px solid var(--wk-stroke); }
+.bmc-sparkrow { display: grid; grid-template-columns: 96px minmax(0, 1fr) 80px 96px; gap: 10px; align-items: center; }
+
+.bmc-deltas { display: flex; gap: 10px; flex-wrap: wrap; }
+.bmc-delta { display: flex; align-items: baseline; gap: 4px; }
+.bmc-delta__w { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-faint); }
+.bmc-delta__v { font: var(--text-data); color: var(--wk-positive); }
+.bmc-delta__v.is-zero { color: var(--wk-text-faint); }
+
+.bmc-meter { display: grid; grid-template-columns: minmax(0, 1fr) 72px 56px; grid-template-areas: "k v p" "b b b"; gap: 2px 8px; align-items: center; }
+.bmc-meter > :nth-child(1) { grid-area: k; }
+.bmc-meter > :nth-child(2) { grid-area: v; text-align: right; }
+.bmc-meter > :nth-child(3) { grid-area: p; text-align: right; }
+.bmc-meter > :nth-child(4) { grid-area: b; }
+
+.bmc-rankrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) 96px 140px; gap: 10px; align-items: center; min-height: 40px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
+.bmc-rankrow:nth-child(even) { background: rgba(0,0,0,.15); }
+/* Rank 1 is the one place gold appears on this panel. */
+.bmc-tierchip.is-first { color: var(--wk-accent); border-color: var(--wk-accent); }
+
+/* The skeleton holds its reserved height so the page does not jump as panels land,
+   and has no animation: the design's motion rule is stepped or nothing. */
+.bmc-skeleton { background: var(--wk-panel); border: 2px solid var(--wk-stroke); }

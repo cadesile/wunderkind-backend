@@ -1,76 +1,81 @@
 {#
-   Shared dashboard chrome. Extracted so the KPI tiles and section headings
-   stop being copy-pasted markup with inline styles.
+   Shared dashboard chrome, on the bmc component layer.
+
+   EVERY data-* HOOK IS LOAD-BEARING. admin-dashboard.js queries these by attribute to fill
+   tiles, swap panel states and bind refresh — data-kpi, data-kpi-value, data-kpi-sub,
+   data-window, data-kpi-spark, data-kpi-stock, data-kpi-strip, data-kpi-legend, data-panel
+   and its loading/error/content slots. The classes changed; the attributes did not, which is
+   what let the restyle leave the fetching and caching half of that file alone.
 #}
 
-{# Heading and note sit on separate planes, split by a hairline rule. #}
 {% macro section(title, note) %}
-    <div class="dash-heading">
-        <h2 class="h-title">{{ title }}</h2>
-        <span class="h-rule" aria-hidden="true"></span>
-        {% if note %}<span class="h-note">{{ note }}</span>{% endif %}
+    <div class="bmc-rule">
+        <span class="bmc-rule__title">{{ title }}</span>
+        <span class="bmc-rule__line"></span>
+        {% if note %}<span class="bmc-rule__meta">{{ note }}</span>{% endif %}
     </div>
 {% endmacro %}
 
 {#
-   Activity tile: all-time value, three rolling deltas, sparkline behind.
-   Every metric in this band has a series, so the row never goes ragged.
+   Activity tile: an all-time value, three rolling deltas, a stepped sparkline behind.
+
+   THE SPARKLINE IS DECORATION, not a chart — it sits behind the number and carries no axis,
+   which is why it is absolutely positioned and aria-hidden. Stepped rather than smoothed:
+   these are daily counts, and a curve between two days implies readings that do not exist.
 #}
-{% macro kpi_activity(metric, label, icon, value, modifier) %}
-    <div class="kpi {{ modifier }}" data-kpi="{{ metric }}">
-        <div class="kpi-label"><i class="fa {{ icon }}" aria-hidden="true"></i>{{ label }}</div>
-        <div class="kpi-value{{ value is null ? ' is-muted' : '' }}" data-kpi-value>{{ value is null ? '—' : value|number_format }}</div>
-        <div class="kpi-sub" data-kpi-sub></div>
-        <div class="kpi-deltas" data-kpi-deltas>
+{% macro kpi_activity(metric, label, value, modifier) %}
+    <div class="bmc-stat bmc-stat--spark {{ modifier }}" data-kpi="{{ metric }}">
+        <span class="bmc-stat__label">{{ label }}</span>
+        <span class="bmc-stat__value{{ value is null ? ' ink-dim' : '' }}" data-kpi-value>{{ value is null ? '—' : value|number_format }}</span>
+        <span class="bmc-stat__sub" data-kpi-sub></span>
+        <span class="bmc-deltas" data-kpi-deltas>
             {% for w in ['24h', '7d', '30d'] %}
-                <span class="kpi-delta">
-                    <span class="d-window">{{ w }}</span>
-                    <span class="d-value is-zero" data-window="{{ w }}">–</span>
-                </span>
+                <span class="bmc-delta"><span class="bmc-delta__w">{{ w }}</span><span class="bmc-delta__v is-zero" data-window="{{ w }}">–</span></span>
             {% endfor %}
-        </div>
-        <div class="kpi-spark"><canvas data-kpi-spark aria-hidden="true"></canvas></div>
+        </span>
+        <span class="bmc-spark" data-kpi-spark aria-hidden="true"></span>
     </div>
 {% endmacro %}
 
 {# Inventory tile: a standing count with a composition strip, not a trend. #}
-{% macro kpi_stock(metric, label, icon, value, modifier) %}
-    <div class="kpi {{ modifier }}" data-kpi-stock="{{ metric }}">
-        <div class="kpi-label"><i class="fa {{ icon }}" aria-hidden="true"></i>{{ label }}</div>
-        <div class="kpi-value{{ value is null ? ' is-muted' : '' }}" data-kpi-value>{{ value is null ? '—' : value|number_format }}</div>
-        <div class="kpi-sub" data-kpi-sub></div>
-        <div class="kpi-strip" data-kpi-strip aria-hidden="true"></div>
-        <div class="kpi-strip-legend" data-kpi-legend></div>
+{% macro kpi_stock(metric, label, value, modifier) %}
+    <div class="bmc-stat {{ modifier }}" data-kpi-stock="{{ metric }}">
+        <span class="bmc-stat__label">{{ label }}</span>
+        <span class="bmc-stat__value{{ value is null ? ' ink-dim' : '' }}" data-kpi-value>{{ value is null ? '—' : value|number_format }}</span>
+        <span class="bmc-stat__sub" data-kpi-sub></span>
+        <span class="bmc-strip" data-kpi-strip aria-hidden="true"></span>
+        <span class="bmc-stat__sub" data-kpi-legend></span>
     </div>
 {% endmacro %}
 
 {#
-   A lazily-loaded panel: header with its own refresh control, a skeleton sized
-   to the panel's final height, and an error slot.
+   A lazily-loaded panel.
+
+   THE SKELETON KEEPS ITS RESERVED HEIGHT and loses its animation: holding the space stops the
+   page jumping as each panel lands, which is the whole reason it was sized in the first place;
+   the pulse was decoration, and the design's motion rule is stepped or nothing.
 #}
 {% macro panel(id, title, src, panel_key, height) %}
-    <div class="dash-panel" data-panel id="{{ id }}" data-src="{{ src }}" data-panel-key="{{ panel_key }}">
-        <div class="dash-panel-head">
-            <h3 class="p-title">{{ title }}</h3>
-            <span class="p-meta">
-                <span class="p-stamp" data-panel-stamp></span>
-                <button type="button" class="dash-refresh" data-panel-refresh>
-                    <i class="fa fa-rotate" aria-hidden="true"></i>
-                    <span class="visually-hidden">Refresh {{ title }}</span>
-                </button>
-            </span>
+    <section class="bmc-card" data-domain="club" data-panel id="{{ id }}" data-src="{{ src }}" data-panel-key="{{ panel_key }}">
+        <div class="bmc-card__head">
+            <i data-lucide="activity"></i>
+            <span class="bmc-card__title">{{ title }}</span>
+            <span class="bmc-card__meta" data-panel-stamp></span>
+            <span style="flex:1"></span>
+            <button type="button" class="bmc-iconbtn bmc-iconbtn--sm" data-panel-refresh title="Refresh {{ title }}" aria-label="Refresh {{ title }}">
+                <i data-lucide="rotate-ccw" width="16" height="16"></i>
+            </button>
         </div>
-        <div class="dash-panel-body">
-            <div class="dash-skeleton" data-panel-loading style="min-height:{{ height|default(220) }}px;" role="status">
+        <div class="bmc-card__body">
+            <div class="bmc-skeleton" data-panel-loading style="min-height:{{ height|default(220) }}px" role="status">
                 <span class="visually-hidden">Loading {{ title }}…</span>
-                <i></i><i></i><i></i><i></i>
             </div>
-            <div class="dash-error d-none" data-panel-error role="alert">
-                <i class="fa fa-triangle-exclamation" aria-hidden="true"></i>
+            <div class="bmc-note" data-panel-error role="alert" hidden>
+                <i data-lucide="triangle-alert" class="ink-danger"></i>
                 <span data-panel-error-text></span>
-                <button type="button" class="dash-refresh" data-panel-refresh>Retry</button>
+                <button type="button" class="bmc-quick-btn" data-panel-refresh>RETRY</button>
             </div>
-            <div class="d-none" data-panel-content></div>
+            <div data-panel-content hidden></div>
         </div>
-    </div>
+    </section>
 {% endmacro %}
