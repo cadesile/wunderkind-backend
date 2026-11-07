@@ -23,8 +23,13 @@ interface TownSuggesterInterface
      *                                   back against the full set.
      * @param int          $max          how many to ask for; the reply is ordered largest-first
      *                                   so a cap drops the smallest towns
+     * @param ?int         $timeoutSeconds override the implementation's default wait. A batch of
+     *                                   fifty is a ~2,048-token reply and should answer in well
+     *                                   under a minute, where one big call needs minutes — and a
+     *                                   worker draining batches must not spend its whole budget
+     *                                   waiting on one stalled call.
      */
-    public function suggest(CountryProfile $country, array $excludeNames, int $max): TownSuggestionResult;
+    public function suggest(CountryProfile $country, array $excludeNames, int $max, ?int $timeoutSeconds = null): TownSuggestionResult;
 
     public function provider(): string;
 

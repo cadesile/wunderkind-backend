@@ -229,6 +229,7 @@ class TownSuggestionServiceTest extends KernelTestCase
             new TownSuggestionValidator(),
             $this->seedService,
             self::getContainer()->get(CountryProfileRepository::class),
+            self::getContainer()->get(\App\Repository\Location\TownSuggestionBatchRepository::class),
             $this->em,
             $this->connection,
             new NullLogger(),

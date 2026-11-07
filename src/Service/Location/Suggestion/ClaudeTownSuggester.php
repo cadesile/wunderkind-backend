@@ -43,18 +43,36 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
 
     private const MAX_TOKENS = 16_384;
 
-    /** Longer than the enricher's: composing hundreds of names takes the model longer. */
+    /**
+     * Longer than the enricher's: composing hundreds of names takes the model longer.
+     *
+     * This is the ceiling for a BIG single call. The queued admin path asks in batches of
+     * fifty and passes a much shorter timeout, because at 120s one stalled batch would burn
+     * a large share of its consumer's time budget before the first retry.
+     */
     private const TIMEOUT_SECONDS = 120;
 
     /**
      * How many existing names to put in the prompt.
      *
-     * England already holds thousands; sending them all would cost more in input tokens than
-     * the answer is worth, and would crowd out the instruction. The server-side dedupe against
-     * the full set is what guarantees correctness, so this only has to be good enough to stop
-     * the model wasting its answer on obvious repeats.
+     * Sending them all would cost more in input tokens than the answer is worth, and would
+     * crowd out the instruction. The server-side dedupe against the full set is what guarantees
+     * correctness, so this only has to be good enough to stop the model wasting its answer on
+     * obvious repeats.
+     *
+     * RAISED FROM 400, which was sized against a claim that was not true — the comment here
+     * used to say "England already holds thousands", where in fact the largest country in the
+     * registry has ~330. So 400 truncated nothing at all until a country had been through a
+     * full 300-town pull, and then it started silently truncating the very names that pull had
+     * just added, because imported towns have no population and sort into the tail of the
+     * ordering (see TownSuggestionService::existingTownNames()).
+     *
+     * That mattered little for one big call, which paid the penalty once. It matters a great
+     * deal for a batched run, where every batch asks the same question and the exclusion list
+     * is the only thing that changes the answer. 1,500 names is roughly 5-6k input tokens —
+     * cents — and keeps truncation away for several more full runs.
      */
-    public const MAX_EXCLUSIONS_IN_PROMPT = 400;
+    public const MAX_EXCLUSIONS_IN_PROMPT = 1_500;
 
     public function __construct(private readonly AnthropicJsonClient $client) {}
 
@@ -73,7 +91,7 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
         return self::PROMPT_VERSION;
     }
 
-    public function suggest(CountryProfile $country, array $excludeNames, int $max): TownSuggestionResult
+    public function suggest(CountryProfile $country, array $excludeNames, int $max, ?int $timeoutSeconds = null): TownSuggestionResult
     {
         if (!$this->client->isConfigured()) {
             throw new TownSuggestionUnavailableException(
@@ -92,7 +110,7 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
                 self::schema(),
                 $this->tokenBudget($max),
                 \sprintf('town list for %s', $country->getName()),
-                self::TIMEOUT_SECONDS,
+                $timeoutSeconds ?? self::TIMEOUT_SECONDS,
             );
         } catch (\App\Service\Ai\AiUnavailableException $e) {
             throw new TownSuggestionUnavailableException($e->getMessage(), previous: $e);

@@ -120,9 +120,16 @@ class LocationEnrichmentRun
      * LocationEnrichmentRunRepository::recordOutcome() exists precisely so two workers
      * finishing together cannot both read 4 and both write 5.
      *
-     * A town-suggestion run has no such race: it is one synchronous call whose results are
-     * all in hand before anything is written. Reading its totals back out of the database a
-     * row at a time would be slower and no safer.
+     * The one caller left is the CLI's single-call town suggestion
+     * (TownSuggestionService::suggestForCountry(), recorded as ADMIN_TOWN_SUGGESTION), which has
+     * no such race: it is one synchronous call whose results are all in hand before anything is
+     * written. Reading its totals back out of the database a row at a time would be slower and
+     * no safer.
+     *
+     * The QUEUED town pull is not that and must not use this either — its batches settle one
+     * message at a time, so it goes through recordBatchOutcome() for the same reason enrichment
+     * goes through recordOutcome(), plus one more: the handler calls it after importNames() has
+     * cleared the entity manager, and a write through a detached run would be lost in silence.
      */
     public function setSettled(int $succeeded, int $failed): void
     {

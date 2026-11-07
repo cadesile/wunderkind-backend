@@ -24,7 +24,7 @@ final class FakeTownSuggester implements TownSuggesterInterface
 
     private bool $connected = true;
 
-    /** @var list<array{country: string, exclude: list<string>, max: int}> */
+    /** @var list<array{country: string, exclude: list<string>, max: int, timeout: ?int}> */
     private array $calls = [];
 
     /** @param list<string> $names */
@@ -66,9 +66,14 @@ final class FakeTownSuggester implements TownSuggesterInterface
         return $this;
     }
 
-    public function suggest(CountryProfile $country, array $excludeNames, int $max): TownSuggestionResult
+    public function suggest(CountryProfile $country, array $excludeNames, int $max, ?int $timeoutSeconds = null): TownSuggestionResult
     {
-        $this->calls[] = ['country' => $country->getCode(), 'exclude' => $excludeNames, 'max' => $max];
+        $this->calls[] = [
+            'country' => $country->getCode(),
+            'exclude' => $excludeNames,
+            'max'     => $max,
+            'timeout' => $timeoutSeconds,
+        ];
 
         $next = array_shift($this->script) ?? $this->always ?? new TownSuggestionResult([]);
 
@@ -99,7 +104,7 @@ final class FakeTownSuggester implements TownSuggesterInterface
         return ['ok' => $this->connected, 'detail' => $this->connected ? 'fake' : 'fake is offline'];
     }
 
-    /** @return list<array{country: string, exclude: list<string>, max: int}> */
+    /** @return list<array{country: string, exclude: list<string>, max: int, timeout: ?int}> */
     public function calls(): array
     {
         return $this->calls;

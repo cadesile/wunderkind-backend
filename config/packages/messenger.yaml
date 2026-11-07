@@ -90,6 +90,25 @@ framework:
             #
             # Drained by docker/friendly-consume.sh.
             friendly: 'doctrine://default?queue_name=friendly'
+            # Batched town pulls from the admin enrichment screen. Each message is ONE BILLED
+            # call asking the model for ~50 town names.
+            #
+            # NOT SHARED WITH `enrichment`, though both spend money on the same provider, and
+            # the reason is the other queue's cost cap rather than its throughput.
+            # enrichment-consume.sh drains at --limit=10 per minute deliberately, sized so an
+            # unattended overnight sweep of hundreds of towns cannot drain the budget in one
+            # run. An operator who has just clicked "Pull towns" and is watching a progress bar
+            # must not inherit that: queued behind a full sweep, six batches would not start
+            # for half an hour, which is indistinguishable from the timeout this replaces.
+            #
+            # TownSuggestionService dispatches onto it and
+            # LocationEnrichmentController::suggestTowns() counts undrained rows on it before
+            # queueing another run, the StarterPoolAuditService::TRANSPORT_QUEUE technique. The
+            # const naming this queue must keep matching this queue_name.
+            #
+            # Drained by docker/suggestion-consume.sh, whose flock guard is what makes the
+            # batches of one run drain in order — see that script for why that matters.
+            suggestion: 'doctrine://default?queue_name=suggestion'
 
         routing:
             # Admin-triggered leaderboard recalculation, from the list pages'
@@ -125,6 +144,9 @@ framework:
             # Carries only a challenge id; the handler re-reads it and takes the claim, so a
             # duplicate dispatch is a no-op.
             'App\Message\Friendly\ResolveFriendlyMatchMessage': friendly
+            # One batch of an admin town pull. Carries only a batch id; the handler re-reads
+            # the row and skips a batch already completed, so a duplicate is a no-op.
+            'App\Message\Location\SuggestTownsBatchMessage': suggestion
 
 when@test:
     framework:
@@ -145,6 +167,9 @@ when@test:
                 # dispatch is what tests assert (InMemoryTransport::getSent()). Running the
                 # real handler in-process would call a real provider.
                 enrichment: 'in-memory://'
+                # in-memory for enrichment's reason, which applies with more force: running the
+                # real handler in-process would make a paid call per batch.
+                suggestion: 'in-memory://'
                 # sync://, not in-memory://, and alone among these in being so. The others are
                 # fire-and-forget side effects a test asserts were *dispatched*; this one is
                 # the second half of registration itself, so a test that only saw the envelope
