@@ -337,6 +337,35 @@ class LocationRepository extends ServiceEntityRepository
         ], $rows);
     }
 
+    /**
+     * The biggest towns in a country, by population.
+     *
+     * FOR THE LOCATIONS DASHBOARD, which shows the top few per country with their land. Not
+     * built on findForList(): its SORT_TOWN / SORT_PRICE constants are part of the public
+     * API's `sort` parameter and its keyset cursor is built around those two orderings, so
+     * adding a population sort there would mean touching how the API pages.
+     *
+     * Same filters as classification uses — active, with a real population — because a town
+     * without one is not ranked and showing it as "biggest" would be a lie.
+     *
+     * @return list<Location>
+     */
+    public function findTopByPopulation(string $countryCode, int $limit = 5): array
+    {
+        return $this->createQueryBuilder('l')
+            ->where('l.country = :country')
+            ->andWhere('l.status = :active')
+            ->andWhere('l.population IS NOT NULL')
+            ->andWhere('l.population > 0')
+            ->setParameter('country', strtoupper(trim($countryCode)))
+            ->setParameter('active', LocationStatus::ACTIVE)
+            ->orderBy('l.population', 'DESC')
+            ->addOrderBy('l.town', 'ASC')
+            ->setMaxResults(max(1, $limit))
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return list<Location> */
     public function findByCountry(string $countryCode): array
     {

@@ -310,3 +310,14 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
    columns either side stay put as names vary in length. */
 .bmc-regrow { display: grid; grid-template-columns: minmax(0, 1fr) 120px 96px 160px auto; gap: 10px; align-items: center; min-height: 44px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
 .bmc-regrow:nth-child(even) { background: rgba(0,0,0,.15); }
+
+/* ── locations dashboard ───────────────────────────────────────────
+   The country rail's row, and a town row in the biggest-towns list. */
+.bmc-countryrow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; min-height: 40px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); text-decoration: none; }
+.bmc-countryrow:nth-child(even) { background: rgba(0,0,0,.15); }
+.bmc-countryrow:hover { background: var(--wk-pressed); }
+/* Gold bar on the one being shown — the design's single "you are here" marker. */
+.bmc-countryrow.is-selected { background: var(--wk-pressed); box-shadow: inset 3px 0 0 var(--wk-accent); }
+
+.bmc-townrow { display: grid; grid-template-columns: minmax(0, 1fr) 120px 96px 72px 110px 76px auto; gap: 10px; align-items: center; min-height: 44px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
+.bmc-townrow:nth-child(even) { background: rgba(0,0,0,.15); }

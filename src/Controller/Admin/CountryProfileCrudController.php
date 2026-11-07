@@ -8,6 +8,7 @@ use App\Entity\Location\CountryProfile;
 use App\Enum\Country;
 use App\Enum\Location\CountryProfileStatus;
 use App\Enum\Location\DistanceUnit;
+use App\Service\Location\CountryGoLiveService;
 use App\Service\Location\CountryReadinessService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -39,6 +40,7 @@ class CountryProfileCrudController extends AbstractCrudController
 {
     public function __construct(
         private readonly CountryReadinessService $readinessService,
+        private readonly CountryGoLiveService    $goLiveService,
         private readonly Connection              $connection,
     ) {}
 
@@ -176,26 +178,18 @@ class CountryProfileCrudController extends AbstractCrudController
         $verdict = $this->readinessService->evaluate($profile->getCode());
 
         if (!$verdict['ready']) {
-            $detail = [];
-            foreach ($verdict['checks'] as $check) {
-                if (!$check['ok']) {
-                    $detail[] = "{$check['key']}: {$check['detail']}";
-                }
-            }
-
+            // Through CountryGoLiveService so this screen and the locations dashboard's GO
+            // LIVE button refuse in the same words — the rule is one thing, not two.
             $this->addFlash('danger', sprintf(
                 '%s cannot go Live yet — %s. Nothing was saved.',
                 $profile->getCode(),
-                implode('; ', $detail),
+                $this->goLiveService->blockingMessage($verdict),
             ));
 
             return false;
         }
 
-        $now = new \DateTimeImmutable();
-
-        $profile->setTierStructureReadyAt($profile->getTierStructureReadyAt() ?? $now);
-        $profile->setLocationsLiveAt($profile->getLocationsLiveAt() ?? $now);
+        $this->goLiveService->stampLive($profile);
 
         return true;
     }
