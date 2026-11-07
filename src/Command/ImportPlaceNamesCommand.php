@@ -145,7 +145,13 @@ class ImportPlaceNamesCommand extends Command
                 $added += $this->provisioner->provisionCountry((string) $code)['plotsAdded'];
             }
 
-            $io->text(sprintf('Provisioned %d plot(s) for the imported towns.', $added));
+            // Usually zero, and that is correct: imported names carry no population and no land
+            // value, and plots follow pricing. This tops up any town the country already holds
+            // that was behind its size.
+            $io->text(sprintf(
+                'Provisioned %d plot(s). Freshly imported names get none until enrichment prices them.',
+                $added,
+            ));
         }
 
         $io->success(sprintf('Imported %d town(s).', $totalImported));

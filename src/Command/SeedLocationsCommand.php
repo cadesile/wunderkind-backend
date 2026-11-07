@@ -121,21 +121,16 @@ class SeedLocationsCommand extends Command
         }
 
         $io->table(
-            ['Country', 'Locations added', 'Plots added', 'Outcome'],
+            ['Country', 'Locations added', 'Outcome'],
             array_map(static fn (array $r): array => [
                 $r['country'],
                 (string) $r['locations'],
-                (string) $r['plots'],
                 $r['outcome'],
             ], $result['rows']),
         );
 
         if ($dryRun) {
-            $io->success(sprintf(
-                'Dry run: would add %d location(s) and %d plot(s).',
-                $result['locations'],
-                $result['plots'],
-            ));
+            $io->success(sprintf('Dry run: would add %d location(s).', $result['locations']));
 
             return Command::SUCCESS;
         }
@@ -144,15 +139,16 @@ class SeedLocationsCommand extends Command
             // Said loudly on purpose: a seeded country is NOT ready to go live, and the reason
             // is not obvious from the row count alone.
             $io->warning(sprintf(
-                '%d location(s) have no coordinates and no land value — there is none in PHP to seed. '
-                . 'Run app:locations:enrich to fill them, then app:locations:rivals.',
+                '%d location(s) have no coordinates and no land value — there is none in PHP to seed, '
+                . 'so they have NO PLOTS either and cannot be bought yet. Run app:locations:enrich '
+                . 'to value them (which provisions their plots), then app:locations:rivals.',
                 $result['locations'],
             ));
         }
 
         $this->reportReadiness($countries, $io);
 
-        $io->success(sprintf('Seeded %d location(s) and %d plot(s).', $result['locations'], $result['plots']));
+        $io->success(sprintf('Seeded %d location(s).', $result['locations']));
 
         return Command::SUCCESS;
     }

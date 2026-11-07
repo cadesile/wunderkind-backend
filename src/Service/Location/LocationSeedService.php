@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Service\Location;
 
 use App\Entity\Location\CountryProfile;
-use App\Entity\Location\LandPlot;
 use App\Entity\Location\Location;
 use App\Enum\Country;
 use App\Repository\Location\CountryProfileRepository;
@@ -103,17 +102,15 @@ final class LocationSeedService
     {
         $rows      = [];
         $locations = 0;
-        $plots     = 0;
 
         foreach ($countries as $country) {
             $row = $this->seedCountry($country, $forcedCode === $country->value, $dryRun);
 
             $rows[]     = $row;
             $locations += $row['locations'];
-            $plots      += $row['plots'];
         }
 
-        return ['rows' => $rows, 'locations' => $locations, 'plots' => $plots];
+        return ['rows' => $rows, 'locations' => $locations];
     }
 
     /**
@@ -134,7 +131,6 @@ final class LocationSeedService
             return [
                 'country'   => $code,
                 'locations' => 0,
-                'plots'     => 0,
                 'outcome'   => sprintf(
                     'skipped — %d location(s) already exist (force to add missing towns)',
                     $existingCount,
@@ -172,7 +168,6 @@ final class LocationSeedService
         }
 
         $locations = 0;
-        $plots     = 0;
 
         foreach ($places as $place) {
             $town       = (string) ($place['name'] ?? '');
@@ -188,7 +183,6 @@ final class LocationSeedService
             $usedTowns[$normalised] = true;
 
             ++$locations;
-            ++$plots;
 
             if ($dryRun) {
                 continue;
@@ -205,8 +199,16 @@ final class LocationSeedService
             }
 
             $this->em->persist($location);
-            // Exactly one plot per town — see LandPlot's docblock on why the level exists now.
-            $this->em->persist(new LandPlot($location, 1));
+            // NO PLOT HERE. Seeding used to create one per town, which looked harmless and was
+            // not: a seeded town has no coordinates and no land value, so the plot could never
+            // be bought — PlotHoldService refuses it with "the land has not been valued yet" —
+            // while LocationCapacityService, which reports a town with zero plots as
+            // `awaiting_enrichment`, saw one plot and reported it as available instead. The
+            // catalogue offered a buy button for land that failed at the checkout.
+            //
+            // Plots now follow pricing, from one place: LandPlotProvisioner, which enrichment
+            // calls once a town has a population and a value. That also makes this path and
+            // importNames() agree, where before one created a plot and the other did not.
         }
 
         $citySizes = [];
@@ -227,7 +229,6 @@ final class LocationSeedService
         return [
             'country'   => $code,
             'locations' => $locations,
-            'plots'     => $plots,
             'outcome'   => $outcome,
             'citySizes' => $citySizes,
         ];

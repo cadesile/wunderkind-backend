@@ -994,7 +994,7 @@ class LocationAdminTest extends WebTestCase
         self::assertSame($before, $this->locationCount(), 'a tokenless seed must write nothing');
     }
 
-    public function testSeedingOneCountryCreatesItsTownsAndPlots(): void
+    public function testSeedingOneCountryCreatesItsTownsButNoPlots(): void
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
@@ -1006,10 +1006,14 @@ class LocationAdminTest extends WebTestCase
         ]);
 
         self::assertGreaterThan(0, $this->locationCountFor(self::SEEDABLE), 'towns should exist');
+
+        // No plots: a seeded town has no land value, so a plot on it could never be bought,
+        // and its presence made the catalogue report the town as available rather than as
+        // awaiting enrichment. Plots arrive when enrichment prices the town.
         self::assertSame(
-            $this->locationCountFor(self::SEEDABLE),
+            0,
             $this->plotCountFor(self::SEEDABLE),
-            'exactly one plot per town',
+            'an unpriced town must have no plots',
         );
     }
 

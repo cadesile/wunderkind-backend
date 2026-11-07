@@ -1691,6 +1691,7 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(LandPlotCrudController::class, 'Land plots'),
             MenuItem::linkTo(CountryProfileCrudController::class, 'Countries'),
             MenuItem::linkToRoute('Enrichment', null, 'admin_location_enrichment'),
+            MenuItem::linkToRoute('Configuration', null, 'admin_location_config'),
         ]);
         yield MenuItem::subMenu('People & market', 'person-standing')->setSubItems([
             MenuItem::linkTo(PlayerCrudController::class, 'Players'),

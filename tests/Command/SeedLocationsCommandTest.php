@@ -108,7 +108,7 @@ class SeedLocationsCommandTest extends KernelTestCase
         self::assertStringContainsString('Dry run', $tester->getDisplay());
     }
 
-    public function testSeedsOneLocationAndOnePlotPerRegistryTown(): void
+    public function testSeedsOneLocationPerRegistryTownAndNoPlots(): void
     {
         $this->runSeed(['country' => self::COUNTRY]);
 
@@ -116,8 +116,12 @@ class SeedLocationsCommandTest extends KernelTestCase
 
         self::assertGreaterThan(0, $expected, 'the registry should have towns for this country');
         self::assertSame($expected, $this->locationCount());
-        // Exactly one plot each, so one-club-per-town holds until an operator adds more.
-        self::assertSame($expected, $this->plotCount());
+
+        // NO PLOTS. Seeding used to create one per town, which could never be bought — a seeded
+        // town has no land value, so PlotHoldService refuses it — while making
+        // LocationCapacityService report the town as available instead of awaiting enrichment.
+        // Plots follow pricing now, so they appear when enrichment values the town.
+        self::assertSame(0, $this->plotCount(), 'an unpriced town must have no plots');
     }
 
     /**
@@ -177,7 +181,7 @@ class SeedLocationsCommandTest extends KernelTestCase
         $tester = $this->runSeed(['country' => self::COUNTRY]);
 
         self::assertSame($after, $this->locationCount());
-        self::assertSame($after, $this->plotCount());
+        self::assertSame(0, $this->plotCount(), 'plots follow pricing, not seeding');
         self::assertStringContainsString('skipped', $tester->getDisplay());
     }
 
@@ -200,7 +204,7 @@ class SeedLocationsCommandTest extends KernelTestCase
         $this->runSeed(['--force-country' => self::COUNTRY]);
 
         self::assertSame($full, $this->locationCount(), 'the one missing town should be restored');
-        self::assertSame($full, $this->plotCount());
+        self::assertSame(0, $this->plotCount(), 'plots follow pricing, not seeding');
     }
 
     /**

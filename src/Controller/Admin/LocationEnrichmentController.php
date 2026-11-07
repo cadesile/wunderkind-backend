@@ -461,9 +461,8 @@ class LocationEnrichmentController extends AbstractController
         }
 
         $this->addFlash('success', sprintf(
-            'Seeded %d location(s) and %d plot(s) across %d country/countries.',
+            'Seeded %d location(s) across %d country/countries.',
             $result['locations'],
-            $result['plots'],
             count($countries),
         ));
 
