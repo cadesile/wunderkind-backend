@@ -54,6 +54,27 @@ class LocationConfig
         CitySize::SMALL->value  => 1,
     ];
 
+    /**
+     * What share of a country's priced towns is BIG, and what share is SMALL.
+     *
+     * CONFIGURATION NOW, CONSTANTS BEFORE. These were BIG_SHARE = 0.20 and SMALL_SHARE = 0.50
+     * on LocationClassificationService, and the band an operator cared about could only be
+     * changed by a deploy. The split is a judgement about how much football a country should
+     * hold, not a fact about the code.
+     *
+     * PERCENTAGES OF THE RANKED SET, NOT POPULATION THRESHOLDS. A town is BIG because it is in
+     * the top N% of its country's priced towns by population, so "big" means big relative to
+     * its neighbours and there is no absolute figure that makes a town big on its own. MEDIUM
+     * is simply what is left between the two.
+     */
+    public const MIN_SHARE_PERCENT = 0;
+
+    public const MAX_SHARE_PERCENT = 100;
+
+    public const DEFAULT_BIG_SHARE_PERCENT = 20;
+
+    public const DEFAULT_SMALL_SHARE_PERCENT = 50;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -72,6 +93,12 @@ class LocationConfig
      */
     #[ORM\Column(type: 'json')]
     private array $plotsByCitySize = self::DEFAULT_PLOTS_BY_CITY_SIZE;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => self::DEFAULT_BIG_SHARE_PERCENT])]
+    private int $bigSharePercent = self::DEFAULT_BIG_SHARE_PERCENT;
+
+    #[ORM\Column(type: 'smallint', options: ['default' => self::DEFAULT_SMALL_SHARE_PERCENT])]
+    private int $smallSharePercent = self::DEFAULT_SMALL_SHARE_PERCENT;
 
     public function getId(): ?int
     {
@@ -122,5 +149,59 @@ class LocationConfig
         }
 
         $this->plotsByCitySize = $clean;
+    }
+
+    public function getBigSharePercent(): int
+    {
+        return $this->bigSharePercent;
+    }
+
+    public function getSmallSharePercent(): int
+    {
+        return $this->smallSharePercent;
+    }
+
+    /**
+     * Whatever the two bands leave in the middle.
+     *
+     * Derived rather than stored: three numbers that must sum to 100 is two numbers and a
+     * subtraction, and storing the third only creates something that can disagree.
+     */
+    public function getMediumSharePercent(): int
+    {
+        return max(0, 100 - $this->bigSharePercent - $this->smallSharePercent);
+    }
+
+    /**
+     * Set both bands at once, because they constrain each other.
+     *
+     * CLAMPED HERE, NOT IN THE FORM. The admin screen sends min/max attributes a client can
+     * simply not honour, and app:locations:* has no form at all — the same guarantees have to
+     * hold for both, which is the reasoning setPlotsByCitySize() already follows.
+     *
+     * BIG WINS WHEN THEY OVERLAP, and that is not arbitrary: classify() tests the big cutoff
+     * before the small one, so asking for 60% big and 60% small yields 60/0/40 rather than
+     * anything in the middle. Rather than let the form express a split the algorithm will
+     * silently reinterpret, SMALL gives way here so the stored numbers describe what actually
+     * happens.
+     */
+    public function setShares(int $bigPercent, int $smallPercent): void
+    {
+        $big = max(self::MIN_SHARE_PERCENT, min(self::MAX_SHARE_PERCENT, $bigPercent));
+        $small = max(self::MIN_SHARE_PERCENT, min(self::MAX_SHARE_PERCENT, $smallPercent));
+
+        $this->bigSharePercent   = $big;
+        $this->smallSharePercent = min($small, self::MAX_SHARE_PERCENT - $big);
+    }
+
+    /** The fractions classify() works in. */
+    public function getBigShare(): float
+    {
+        return $this->bigSharePercent / 100;
+    }
+
+    public function getSmallShare(): float
+    {
+        return $this->smallSharePercent / 100;
     }
 }

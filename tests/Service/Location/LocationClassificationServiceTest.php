@@ -125,6 +125,48 @@ class LocationClassificationServiceTest extends TestCase
         self::assertSame([0, 1, 2], array_keys($classified));
     }
 
+    /**
+     * The bands are arguments now, so a different split gives a different pyramid.
+     *
+     * This is the whole point of making them configurable: an operator changing 20/50 on the
+     * location config screen has to actually move towns between sizes.
+     */
+    public function testTheSharesDecideTheSplit(): void
+    {
+        $places = $this->places(100);
+
+        // The default 20/50 is pinned by the England case above; this is a deliberate change.
+        $distribution = $this->distribution(LocationClassificationService::classify($places, 0.10, 0.70));
+
+        self::assertSame(10, $distribution[CitySize::BIG->value]);
+        self::assertSame(70, $distribution[CitySize::SMALL->value]);
+        self::assertSame(20, $distribution[CitySize::MEDIUM->value], 'medium is the remainder');
+    }
+
+    public function testOmittingTheSharesKeepsTheOldConstants(): void
+    {
+        // NpcClubGenerationService calls classify() with one argument and has no container to
+        // read config from, so the no-argument behaviour must not move.
+        $withDefaults = $this->distribution(LocationClassificationService::classify($this->places(100)));
+        $explicit     = $this->distribution(LocationClassificationService::classify(
+            $this->places(100),
+            LocationClassificationService::BIG_SHARE,
+            LocationClassificationService::SMALL_SHARE,
+        ));
+
+        self::assertSame($explicit, $withDefaults);
+    }
+
+    public function testAllBigLeavesNothingBehind(): void
+    {
+        // The edge an operator can reach from the form: 100% big.
+        $distribution = $this->distribution(LocationClassificationService::classify($this->places(40), 1.0, 0.0));
+
+        self::assertSame(40, $distribution[CitySize::BIG->value]);
+        self::assertSame(0, $distribution[CitySize::MEDIUM->value]);
+        self::assertSame(0, $distribution[CitySize::SMALL->value]);
+    }
+
     public function testEmptyInputIsEmptyOutput(): void
     {
         self::assertSame([], LocationClassificationService::classify([]));

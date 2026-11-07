@@ -89,7 +89,7 @@ class PoolConfigController extends AbstractController
 
         $this->em->flush();
 
-        $this->addFlash('success', 'Player pool config saved.');
+        $this->addFlash('success', 'Player pool rules saved');
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_player_pool_config']));
     }
 
@@ -221,8 +221,13 @@ class PoolConfigController extends AbstractController
         // Weekly wage range in pence, interpolated across a scout's experience by
         // ScoutWageCalculator. Changing it does NOT reprice existing scouts — run
         // `app:backfill-scout-wages --force` for that.
-        $config->setScoutWageMin((int) $request->request->get('scoutWageMin', 2500));
-        $config->setScoutWageMax((int) $request->request->get('scoutWageMax', 7000));
+        //
+        // POUNDS IN, PENCE OUT. The screen edits pounds per week, because 2500 meaning £25 is
+        // a trap an operator falls into exactly once. The redesigned form posts
+        // scoutWagePounds*, which is multiplied up here; the older scoutWage* fields are still
+        // read, in pence, so anything posting the previous shape keeps working.
+        $config->setScoutWageMin($this->wagePence($request, 'scoutWagePoundsMin', 'scoutWageMin', 2500));
+        $config->setScoutWageMax($this->wagePence($request, 'scoutWagePoundsMax', 'scoutWageMax', 7000));
         $config->setScoutJudgementMin((int) $request->request->get('scoutJudgementMin', 40));
         $config->setScoutJudgementMax((int) $request->request->get('scoutJudgementMax', 80));
 
@@ -236,7 +241,7 @@ class PoolConfigController extends AbstractController
 
         $this->em->flush();
 
-        $this->addFlash('success', 'Staff pool config saved.');
+        $this->addFlash('success', 'Staff pool rules saved');
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_staff_pool_config']));
     }
 
@@ -327,6 +332,24 @@ class PoolConfigController extends AbstractController
 
         $this->addFlash('success', "Staff pool cleared — {$staff} staff, {$scouts} scouts removed.");
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_staff_pool_config']));
+    }
+
+    /**
+     * A scout wage in pence, from whichever field the form sent.
+     *
+     * The pounds field wins when it is present — it is what the redesigned screen posts. The
+     * pence field is the older shape and is taken verbatim. A blank pounds field is treated as
+     * absent rather than as zero, so a half-filled form cannot silently wipe the wage floor.
+     */
+    private function wagePence(Request $request, string $poundsField, string $penceField, int $default): int
+    {
+        $pounds = $request->request->get($poundsField);
+
+        if ($pounds !== null && trim((string) $pounds) !== '') {
+            return max(0, (int) $pounds) * 100;
+        }
+
+        return (int) $request->request->get($penceField, $default);
     }
 
     /** @return array{staffCoach: int, staffManager: int, staffDirector: int, staffFacilityMgr: int, staffChairman: int, scouts: int} */

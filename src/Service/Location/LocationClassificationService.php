@@ -6,6 +6,7 @@ namespace App\Service\Location;
 
 use App\Enum\CitySize;
 use App\Enum\Country;
+use App\Repository\Location\LocationConfigRepository;
 use App\Repository\Location\LocationRepository;
 use App\Service\CountryContent\CountryContentRegistry;
 use Doctrine\DBAL\ArrayParameterType;
@@ -15,7 +16,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * Assigns each location a BIG / MEDIUM / SMALL size, and persists it.
  *
  * WHY PERSIST SOMETHING DERIVABLE. The split is a property of the whole country's place set —
- * top 20% by population BIG, bottom 50% SMALL, the rest MEDIUM, with a capital forced BIG
+ * the top share by population BIG, the bottom share SMALL, the rest MEDIUM (the shares are
+ * LocationConfig's, 20/50 by default), with a capital forced BIG
  * regardless of rank. So it is not a function of one row, and computing it per call would make
  * the same town classify differently before and after a neighbouring town is added. NpcClub
  * already stores its own `citySize` and `populationSize` at generation time, so a live
@@ -45,16 +47,23 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class LocationClassificationService
 {
-    /** Share of a country's places, by population rank, classified BIG. */
+    /**
+     * The fallback split, used when no configuration is supplied.
+     *
+     * THE LIVE VALUES ARE LocationConfig's. These stay because classify() is static and has a
+     * caller that has no container — NpcClubGenerationService::classifyPlaces() — and because
+     * a fresh install needs the shape it always had. reclassifyCountry() reads the config.
+     */
     public const BIG_SHARE = 0.20;
 
     /** Share classified SMALL, counted from the bottom. */
     public const SMALL_SHARE = 0.50;
 
     public function __construct(
-        private readonly LocationRepository     $locationRepository,
-        private readonly LandPlotProvisioner    $plotProvisioner,
-        private readonly EntityManagerInterface $em,
+        private readonly LocationRepository       $locationRepository,
+        private readonly LandPlotProvisioner      $plotProvisioner,
+        private readonly LocationConfigRepository $configRepository,
+        private readonly EntityManagerInterface   $em,
     ) {}
 
     /**
@@ -65,18 +74,23 @@ final class LocationClassificationService
      * (Nigeria's Abuja, not Lagos, is the precedent) and that the returned array is re-indexed
      * in population order rather than left in input order. Callers rely on both.
      *
+     * THE SHARES ARE ARGUMENTS NOW, defaulting to the constants above. Passing them keeps this
+     * pure and keeps NpcClubGenerationService — which has no container — calling it unchanged.
+     *
      * @param list<array{name?: string, population_size: int, region?: string, is_capital?: bool}> $places
+     * @param ?float $bigShare   0.0-1.0, or null for the default
+     * @param ?float $smallShare 0.0-1.0, or null for the default
      *
      * @return list<array{population_size: int, is_capital?: bool, city_size: CitySize, ...}>
      */
-    public static function classify(array $places): array
+    public static function classify(array $places, ?float $bigShare = null, ?float $smallShare = null): array
     {
         $sorted = $places;
         usort($sorted, static fn (array $a, array $b) => $b['population_size'] <=> $a['population_size']);
 
         $count      = count($sorted);
-        $bigCutoff  = (int) ceil($count * self::BIG_SHARE);
-        $smallCount = (int) ceil($count * self::SMALL_SHARE);
+        $bigCutoff  = (int) ceil($count * ($bigShare   ?? self::BIG_SHARE));
+        $smallCount = (int) ceil($count * ($smallShare ?? self::SMALL_SHARE));
 
         foreach ($sorted as $i => &$place) {
             if (!empty($place['is_capital'])) {
@@ -175,9 +189,11 @@ final class LocationClassificationService
             'is_capital'      => $row['isCapital'],
         ], $rows);
 
+        $config = $this->configRepository->getConfig();
+
         /** @var array<string, list<string>> $idsBySize */
         $idsBySize = [];
-        foreach (self::classify($places) as $place) {
+        foreach (self::classify($places, $config->getBigShare(), $config->getSmallShare()) as $place) {
             $idsBySize[$place['city_size']->value][] = $place['id'];
         }
 

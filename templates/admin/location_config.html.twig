@@ -135,5 +135,187 @@
         </div>
     </div>
 
+    {# ── City size bands + recalculation ──────────────────────────────── #}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-chart-simple text-muted"></i>
+                <span class="fw-semibold small">City size bands</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    A town's size is its <strong>rank within its own country</strong>, not an absolute
+                    population. Every priced town in a country is ordered by population; the top slice is
+                    BIG, the bottom slice is SMALL, and whatever is left in the middle is MEDIUM. So
+                    &ldquo;big&rdquo; means big compared with its neighbours, and a country's capital is
+                    forced BIG whatever its rank. Size decides how many land plots a town carries.
+                </p>
+
+                <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_save_bands'}) }}" class="mb-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('location_config_bands') }}">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-auto">
+                            <label for="bigSharePercent" class="form-label fw-semibold small mb-1">Big (top %)</label>
+                            <input type="number" class="form-control form-control-sm" style="width:110px"
+                                   id="bigSharePercent" name="bigSharePercent" value="{{ bigShare }}"
+                                   min="{{ minShare }}" max="{{ maxShare }}" step="1">
+                        </div>
+                        <div class="col-auto">
+                            <label for="smallSharePercent" class="form-label fw-semibold small mb-1">Small (bottom %)</label>
+                            <input type="number" class="form-control form-control-sm" style="width:110px"
+                                   id="smallSharePercent" name="smallSharePercent" value="{{ smallShare }}"
+                                   min="{{ minShare }}" max="{{ maxShare }}" step="1">
+                        </div>
+                        <div class="col-auto">
+                            <span class="form-label fw-semibold small mb-1 d-block">Medium</span>
+                            <span class="badge bg-secondary" id="mediumSharePreview">{{ mediumShare }}%</span>
+                            <span class="text-muted small ms-1">whatever is left</span>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="fa fa-floppy-disk me-1"></i> Save bands
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-text">
+                        Saving stores the bands; it does not re-sort anything. Run the recalculation below
+                        to apply them. If the two add up to more than 100, big wins and small gives way —
+                        that is the order the ranking actually tests them in.
+                    </div>
+                </form>
+
+                <hr>
+
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="fw-semibold small">Recalculate every town's size</span>
+                    <span class="text-muted small">{{ reclassifyPlan|length }} country(s) with priced towns</span>
+                </div>
+                <p class="text-muted small">
+                    One step per country, run in sequence. Each step re-ranks that country's priced towns
+                    and writes their new size. Towns with no population sit out — they join the ranking
+                    when enrichment prices them. A town that moves <em>down</em> also gives up any land
+                    plot nobody holds; plots that are claimed or on hold are left alone.
+                </p>
+
+                {% if reclassifyPlan is empty %}
+                    <div class="alert alert-secondary py-2 small mb-0">
+                        No priced towns yet, so there is nothing to rank.
+                    </div>
+                {% else %}
+                    <button type="button" class="btn btn-sm btn-warning" id="reclassifyRun"
+                            data-url="{{ path('admin_location_config_reclassify_chunk') }}"
+                            data-token="{{ csrf_token('location_config_reclassify') }}">
+                        <i class="fa fa-rotate me-1"></i> Recalculate all sizes
+                    </button>
+
+                    <div id="reclassifyPanel" class="mt-3" hidden>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <div class="progress flex-grow-1" style="height:8px">
+                                <div class="progress-bar" id="reclassifyBar" style="width:0%"></div>
+                            </div>
+                            <span class="text-muted small" id="reclassifySummary"></span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead><tr>
+                                    <th style="width:110px">Step</th>
+                                    <th>Country</th>
+                                    <th class="text-end" style="width:90px">Towns</th>
+                                    <th>Result</th>
+                                </tr></thead>
+                                <tbody id="reclassifyRows"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <script type="application/json" id="reclassifyPlanData">{{ reclassifyPlan|json_encode|raw }}</script>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
 </div>
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script>
+(function () {
+    // MEDIUM is derived, so show it moving as the other two are typed rather than making the
+    // operator work out what is left.
+    var big = document.getElementById('bigSharePercent'),
+        small = document.getElementById('smallSharePercent'),
+        preview = document.getElementById('mediumSharePreview');
+
+    function drawMedium() {
+        if (!big || !small || !preview) return;
+        var b = Math.max(0, Math.min(100, parseInt(big.value, 10) || 0));
+        var s = Math.min(Math.max(0, Math.min(100, parseInt(small.value, 10) || 0)), 100 - b);
+        preview.textContent = Math.max(0, 100 - b - s) + '%';
+        // Say so before the save does it silently.
+        preview.className = 'badge ' + ((parseInt(small.value, 10) || 0) > 100 - b ? 'bg-warning text-dark' : 'bg-secondary');
+        preview.title = (parseInt(small.value, 10) || 0) > 100 - b
+            ? 'Small will be reduced to ' + s + '% on save: big is tested first, so it wins.'
+            : '';
+    }
+
+    if (big && small) { big.addEventListener('input', drawMedium); small.addEventListener('input', drawMedium); drawMedium(); }
+
+    // ── the recalculation queue ─────────────────────────────────────
+    var runBtn = document.getElementById('reclassifyRun');
+    var planEl = document.getElementById('reclassifyPlanData');
+    if (!runBtn || !planEl || !window.BMC) return;
+
+    var plan = JSON.parse(planEl.textContent);
+    var panel = document.getElementById('reclassifyPanel'),
+        bar = document.getElementById('reclassifyBar'),
+        summary = document.getElementById('reclassifySummary'),
+        rows = document.getElementById('reclassifyRows');
+
+    var BADGE = {
+        queued:  ['Queued',  'bg-secondary'],
+        running: ['Running', 'bg-primary'],
+        done:    ['Done',    'bg-success'],
+        skipped: ['Skipped', 'bg-secondary'],
+        failed:  ['Failed',  'bg-danger']
+    };
+
+    function draw(jobs) {
+        panel.hidden = false;
+        var settled = jobs.filter(function (j) { return j.status !== 'queued' && j.status !== 'running'; }).length;
+        var towns = jobs.reduce(function (a, j) { return a + (j.count || 0); }, 0);
+
+        bar.style.width = Math.round(settled / jobs.length * 100) + '%';
+        summary.textContent = settled + ' of ' + jobs.length + ' countries · ' + towns.toLocaleString('en-GB') + ' town(s) ranked';
+
+        rows.innerHTML = jobs.map(function (j) {
+            var b = BADGE[j.status];
+            return '<tr>' +
+                '<td><span class="badge ' + b[1] + '">' + b[0] + '</span></td>' +
+                '<td>' + j.label + ' <span class="text-muted small">' + j.code + '</span></td>' +
+                '<td class="text-end text-muted">' + j.towns.toLocaleString('en-GB') + '</td>' +
+                '<td class="small ' + (j.status === 'failed' ? 'text-danger' : 'text-muted') + '">' + (j.message || '') + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    runBtn.addEventListener('click', function () {
+        if (!window.confirm('Re-rank every priced town in ' + plan.length + ' country(s)?\n\nTowns that move down give up any land plot nobody holds.')) return;
+
+        runBtn.disabled = true;
+        BMC.runJobs({
+            url: runBtn.dataset.url,
+            token: runBtn.dataset.token,
+            jobs: plan.map(function (c) {
+                return { label: c.name, code: c.code, towns: c.towns, fields: { country: c.code } };
+            }),
+            onUpdate: draw
+        }).then(function (jobs) {
+            runBtn.disabled = false;
+            var failed = jobs.filter(function (j) { return j.status === 'failed'; }).length;
+            BMC.toast(failed ? failed + ' COUNTRY(S) FAILED — SEE THE TABLE' : 'CITY SIZES RECALCULATED');
+        });
+    });
+}());
+</script>
 {% endblock %}
