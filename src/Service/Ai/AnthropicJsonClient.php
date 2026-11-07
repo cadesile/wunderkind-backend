@@ -74,23 +74,54 @@ final class AnthropicJsonClient
     {
         $payload = $this->send($prompt, $maxTokens, $schema, $timeoutSeconds);
 
-        // The structured-outputs contract puts the schema-valid JSON in the first text block as
-        // a string. Parsed defensively anyway: a transport-level success with an unexpected
-        // body shape must be an error we can see, not a silently empty result that looks like a
-        // provider answering unhelpfully.
-        $text = $payload['content'][0]['text'] ?? null;
+        $stopReason = (string) ($payload['stop_reason'] ?? 'unknown');
+        $text       = self::firstTextBlock($payload);
 
         if (!\is_string($text)) {
+            // Truncation is its own failure and gets its own message, because the remedy is
+            // different: an identical retry cannot help, where a transient provider fault
+            // would. The docs are explicit — "retry with a higher max_tokens value".
+            if ($stopReason === 'max_tokens') {
+                throw new AiReplyTruncatedException(\sprintf(
+                    'Claude hit the %d-token ceiling before finishing %s, so the reply was '
+                    . 'truncated. Ask for less in one call, or raise the budget.',
+                    $maxTokens,
+                    $context,
+                ));
+            }
+
+            // What DID come back, so the next occurrence is diagnosable rather than opaque.
+            $this->logger->error('Claude returned no usable text block', [
+                'context'     => $context,
+                'stopReason'  => $stopReason,
+                'blockTypes'  => self::blockTypes($payload),
+                'maxTokens'   => $maxTokens,
+            ]);
+
             throw new AiUnavailableException(\sprintf(
-                'Claude returned no text block for %s (stop_reason: %s).',
+                'Claude returned no text block for %s (stop_reason: %s, blocks: %s).',
                 $context,
-                (string) ($payload['stop_reason'] ?? 'unknown'),
+                $stopReason,
+                implode(', ', self::blockTypes($payload)) ?: 'none',
             ));
         }
 
         $decoded = json_decode($text, true);
 
         if (!\is_array($decoded)) {
+            // A truncated reply usually lands here rather than above: the docs say the output
+            // "might be incomplete and not match your schema", which for a long array means
+            // valid-looking JSON cut off mid-element. Saying so is the difference between an
+            // operator raising the budget and an operator rewriting the prompt.
+            if ($stopReason === 'max_tokens') {
+                throw new AiReplyTruncatedException(\sprintf(
+                    'Claude hit the %d-token ceiling before finishing %s, so the JSON was cut '
+                    . 'off mid-reply. Ask for less in one call, or raise the budget.',
+                    $maxTokens,
+                    $context,
+                ));
+            }
+
             throw new AiUnavailableException(\sprintf('Claude returned text that is not JSON for %s.', $context));
         }
 
@@ -168,6 +199,61 @@ final class AnthropicJsonClient
         }
 
         return $decoded;
+    }
+
+    /**
+     * The first text block, wherever it sits in the content array.
+     *
+     * NOT content[0]. This assumed index 0 and broke the moment a model emitted anything
+     * before its answer: on adaptive-thinking models — Claude Sonnet 5 among them — thinking is
+     * on by default and its block PRECEDES the text block, so content[0]['text'] was null and a
+     * perfectly good 200 was reported as "no text block". The structured-outputs docs say to
+     * iterate rather than index, and they are right.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private static function firstTextBlock(array $payload): ?string
+    {
+        $blocks = $payload['content'] ?? null;
+
+        if (!\is_array($blocks)) {
+            return null;
+        }
+
+        foreach ($blocks as $block) {
+            if (!\is_array($block) || ($block['type'] ?? null) !== 'text') {
+                continue;
+            }
+
+            if (\is_string($block['text'] ?? null)) {
+                return $block['text'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The block types that came back, for the log line.
+     *
+     * Types only — a thinking block's content is the model's reasoning and has no business in
+     * our logs, and the type alone is what identifies the shape problem.
+     *
+     * @param  array<string, mixed> $payload
+     * @return list<string>
+     */
+    private static function blockTypes(array $payload): array
+    {
+        $blocks = $payload['content'] ?? null;
+
+        if (!\is_array($blocks)) {
+            return [];
+        }
+
+        return array_values(array_map(
+            static fn (mixed $b): string => \is_array($b) ? (string) ($b['type'] ?? 'unknown') : 'malformed',
+            $blocks,
+        ));
     }
 
     private static function intOrNull(mixed $v): ?int

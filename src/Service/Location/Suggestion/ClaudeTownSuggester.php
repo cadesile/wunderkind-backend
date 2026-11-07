@@ -36,12 +36,31 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
      *
      * Far above the enricher's 2,048 because this reply is a list, not five scalars: a cap of
      * 300 towns truncated mid-array would decode as invalid JSON and lose the whole call.
+     *
+     * Covers the ANSWER only. The model's own reasoning is budgeted separately — see
+     * THINKING_HEADROOM, which is the part that was missing.
      */
     private const TOKENS_PER_TOWN = 40;
 
     private const MIN_TOKENS = 2_048;
 
-    private const MAX_TOKENS = 16_384;
+    private const MAX_TOKENS = 24_576;
+
+    /**
+     * Budget added on top of the content estimate, for the model's own reasoning.
+     *
+     * THINKING TOKENS COUNT AGAINST max_tokens. On adaptive-thinking models — Claude Sonnet 5
+     * among them — thinking is on by default and the model decides per request whether to use
+     * it; a fifty-town list is apparently hard enough to qualify, where the enricher's five
+     * scalars about one town are not. Without headroom the reasoning ate the whole budget and
+     * the reply was truncated before the list finished, which is exactly what happened on the
+     * first real US run: stop_reason max_tokens at a 2,048 ceiling.
+     *
+     * Costs nothing when unused. max_tokens is a ceiling, not a charge — only tokens actually
+     * generated are billed — so the only price of generosity here is the latency of a reply
+     * allowed to run longer.
+     */
+    private const THINKING_HEADROOM = 4_096;
 
     /**
      * Longer than the enricher's: composing hundreds of names takes the model longer.
@@ -112,6 +131,10 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
                 \sprintf('town list for %s', $country->getName()),
                 $timeoutSeconds ?? self::TIMEOUT_SECONDS,
             );
+        } catch (\App\Service\Ai\AiReplyTruncatedException $e) {
+            // Kept distinct all the way up: the handler stops retrying on this, because the
+            // same ask against the same ceiling truncates identically every time.
+            throw new TownSuggestionTruncatedException($e->getMessage(), previous: $e);
         } catch (\App\Service\Ai\AiUnavailableException $e) {
             throw new TownSuggestionUnavailableException($e->getMessage(), previous: $e);
         }
@@ -160,7 +183,9 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
 
     private function tokenBudget(int $max): int
     {
-        return min(self::MAX_TOKENS, max(self::MIN_TOKENS, $max * self::TOKENS_PER_TOWN));
+        $content = max(self::MIN_TOKENS, $max * self::TOKENS_PER_TOWN);
+
+        return min(self::MAX_TOKENS, $content + self::THINKING_HEADROOM);
     }
 
     /**
