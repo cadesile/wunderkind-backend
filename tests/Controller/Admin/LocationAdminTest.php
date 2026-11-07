@@ -64,6 +64,126 @@ class LocationAdminTest extends WebTestCase
         self::assertSelectorExists('input[name="max_towns"]');
     }
 
+    public function testPullingTownsQueuesOneMessagePerBatchInsteadOfCallingInline(): void
+    {
+        // The whole point of the change. It used to make one 300-town call inside the request
+        // and be cut off by nginx at 60s, so the operator saw a failure for work that was often
+        // still running. Nothing may be asked of the provider during this POST.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSuggestionRuns();
+        $this->seedPullTarget();
+
+        $token = $this->csrfToken($client, 'locations_suggest_towns');
+
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $token,
+            'country'   => self::SEEDABLE,
+            'max_towns' => '120',
+        ]);
+
+        self::assertResponseRedirects();
+        self::assertCount(
+            3,
+            $this->suggestionTransport()->getSent(),
+            '120 towns at 50 a batch is three messages',
+        );
+    }
+
+    public function testASecondPullIsRefusedWhileBatchesAreStillQueued(): void
+    {
+        // A run is now N billed messages, so a second click would double the spend and
+        // interleave two sets of batches competing for the same names.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSuggestionRuns();
+        $this->seedPullTarget();
+
+        $first = $this->csrfToken($client, 'locations_suggest_towns');
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $first,
+            'country'   => self::SEEDABLE,
+            'max_towns' => '50',
+        ]);
+
+        $queuedAfterFirst = \count($this->suggestionTransport()->getSent());
+        self::assertSame(1, $queuedAfterFirst);
+
+        // The guard counts undrained rows in messenger_messages, which the in-memory transport
+        // does not write — so stand one in, to assert the refusal rather than the counting.
+        self::getContainer()->get(Connection::class)->executeStatement(
+            "INSERT INTO messenger_messages (body, headers, queue_name, created_at, available_at)
+             VALUES ('{}', '{}', 'suggestion', NOW(), NOW())",
+        );
+
+        $second = $this->csrfToken($client, 'locations_suggest_towns');
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $second,
+            'country'   => self::SEEDABLE,
+            'max_towns' => '50',
+        ]);
+
+        // THE FLASH IS THE LOAD-BEARING ASSERTION HERE. InMemoryTransport implements
+        // ResetInterface, so the container's resetter empties it at the end of every request —
+        // which means "queued nothing" is trivially true of any request and proves nothing on
+        // its own. The refusal message is the only evidence the guard actually fired.
+        $client->followRedirect();
+        // Flashes render as toasts, which upper-case the message.
+        self::assertStringContainsStringIgnoringCase(
+            'still queued',
+            (string) $client->getResponse()->getContent(),
+            'the guard must say why it refused, not fail silently',
+        );
+
+        self::assertSame(1, $queuedAfterFirst, 'the first pull did queue its batch');
+
+        self::getContainer()->get(Connection::class)
+            ->executeStatement("DELETE FROM messenger_messages WHERE queue_name = 'suggestion'");
+    }
+
+    public function testTheStatusEndpointReportsBatchProgress(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSuggestionRuns();
+        $this->seedPullTarget();
+
+        $token = $this->csrfToken($client, 'locations_suggest_towns');
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $token,
+            'country'   => self::SEEDABLE,
+            'max_towns' => '100',
+        ]);
+
+        $client->request('GET', '/admin/locations/suggest-towns/status/' . self::SEEDABLE);
+
+        self::assertResponseIsSuccessful();
+        $data = json_decode((string) $client->getResponse()->getContent(), true);
+
+        self::assertSame(self::SEEDABLE, $data['country']);
+        self::assertNotNull($data['run'], 'the run just queued must be reported');
+        self::assertSame(2, $data['run']['totalBatches']);
+        self::assertSame(0, $data['run']['settledBatches']);
+        self::assertSame(0, $data['run']['importedTowns']);
+        self::assertCount(2, $data['run']['batches']);
+        self::assertSame([1, 2], array_column($data['run']['batches'], 'index'));
+        self::assertSame('pending', $data['run']['batches'][0]['status']);
+    }
+
+    public function testTheStatusEndpointReportsNoRunForACountryNeverPulled(): void
+    {
+        // The card renders this as its empty state. A country nobody has pulled towns for is
+        // the normal case, not an error.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin/locations/suggest-towns/status/' . self::COUNTRY);
+
+        self::assertResponseIsSuccessful();
+        $data = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertNull($data['run']);
+    }
+
     public function testPullingTownsOffersNoAllCountriesOption(): void
     {
         // Structural, not advisory. Seeding is free and may run across every country; this one
@@ -191,6 +311,37 @@ class LocationAdminTest extends WebTestCase
     private function transport(): InMemoryTransport
     {
         return self::getContainer()->get('messenger.transport.enrichment');
+    }
+
+    private function suggestionTransport(): InMemoryTransport
+    {
+        return self::getContainer()->get('messenger.transport.suggestion');
+    }
+
+    /**
+     * Give the pull target a country profile of its own.
+     *
+     * planRun() refuses a country with no profile, and the seed tests further down this class
+     * both create and purge WA's — so a pull test that merely hoped one was lying around
+     * passed or failed on test ORDER. Seeding it here makes these tests independent of that,
+     * which is what made them pass alone and fail in a full run.
+     */
+    private function seedPullTarget(): void
+    {
+        self::getContainer()->get(\App\Service\Location\LocationSeedService::class)
+            ->seedCountry(\App\Enum\Country::from(self::SEEDABLE));
+    }
+
+    /** Batched pulls leave run and batch rows behind; the stacking guard reads them. */
+    private function purgeSuggestionRuns(): void
+    {
+        $connection = self::getContainer()->get(Connection::class);
+
+        $connection->executeStatement(
+            "DELETE FROM town_suggestion_batch WHERE run_id IN (SELECT id FROM location_enrichment_run WHERE trigger_type = 'town_batch')",
+        );
+        $connection->executeStatement("DELETE FROM location_enrichment_run WHERE trigger_type = 'town_batch'");
+        $connection->executeStatement("DELETE FROM messenger_messages WHERE queue_name = 'suggestion'");
     }
 
     // ───────────────────────── rendering ─────────────────────────

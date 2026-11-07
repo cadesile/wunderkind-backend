@@ -85,6 +85,48 @@ class LocationEnrichmentRunRepository extends ServiceEntityRepository
         );
     }
 
+    /**
+     * Advance a queued town-suggestion run's counters by one settled BATCH.
+     *
+     * A sibling of recordOutcome() rather than a reuse of it. That method maps a four-valued
+     * EnrichmentOutcome onto succeeded/needs_review/failed; a batch is two-valued, so calling
+     * it with ACCEPTED to mean "batch done" would be a lie this file then has to keep telling.
+     *
+     * Raw and atomic for recordOutcome()'s reasons, plus one of its own: the handler calls this
+     * AFTER LocationSeedService::importNames(), which ends in em->clear() when it imported
+     * anything. A write through a hydrated run entity would be a write to a detached object —
+     * silently lost, and only on the batches that actually did something.
+     *
+     * The completion predicate is recordOutcome()'s, unchanged: `queued` holds the batch count,
+     * so the last batch to settle closes the run and nothing has to poll. `needs_review` is not
+     * in the sum because a batch has no partial verdict — see TownSuggestionBatchStatus.
+     */
+    public function recordBatchOutcome(string $runId, bool $failed): void
+    {
+        $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE location_enrichment_run
+                SET succeeded = succeeded + :ok,
+                    failed    = failed + :bad,
+                    status = CASE
+                        WHEN succeeded + failed + 1 >= queued THEN :complete
+                        ELSE status
+                    END,
+                    finished_at = CASE
+                        WHEN succeeded + failed + 1 >= queued THEN :now
+                        ELSE finished_at
+                    END
+              WHERE id = :id',
+            [
+                'ok'       => $failed ? 0 : 1,
+                'bad'      => $failed ? 1 : 0,
+                'complete' => EnrichmentRunStatus::COMPLETE->value,
+                'now'      => new \DateTimeImmutable(),
+                'id'       => $runId,
+            ],
+            ['now' => 'datetime_immutable'],
+        );
+    }
+
     /** Close runs whose queue has drained but which never got their final tick. */
     public function closeStaleRuns(\DateTimeImmutable $olderThan): int
     {

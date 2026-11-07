@@ -19,7 +19,7 @@ final class UnconfiguredTownSuggester implements TownSuggesterInterface
     private const DETAIL = 'No AI provider is configured. Set LOCATION_ENRICHER_PROVIDER, '
         . 'LOCATION_ENRICHER_API_KEY and LOCATION_ENRICHER_MODEL.';
 
-    public function suggest(CountryProfile $country, array $excludeNames, int $max): TownSuggestionResult
+    public function suggest(CountryProfile $country, array $excludeNames, int $max, ?int $timeoutSeconds = null): TownSuggestionResult
     {
         throw new TownSuggestionUnavailableException(self::DETAIL);
     }

@@ -7,16 +7,22 @@ namespace App\Controller\Admin;
 use App\Entity\Admin;
 use App\Enum\Country;
 use App\Enum\Location\EnrichmentStatus;
+use App\Enum\Location\EnrichmentTrigger;
 use App\Repository\Location\LocationEnrichmentAttemptRepository;
 use App\Repository\Location\LocationEnrichmentRunRepository;
 use App\Repository\Location\LocationRepository;
+use App\Repository\Location\TownSuggestionBatchRepository;
 use App\Service\Location\Enrichment\EnrichmentSweepInProgressException;
 use App\Service\Location\Enrichment\LocationEnricherInterface;
 use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use Doctrine\DBAL\Connection;
 use App\Service\Location\LocationImportExportService;
 use App\Service\Location\LocationSeedService;
+use App\Message\Location\SuggestTownsBatchMessage;
 use App\Service\Location\Suggestion\TownSuggestionService;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -51,7 +57,31 @@ class LocationEnrichmentController extends AbstractController
         private readonly LoggerInterface                     $logger,
         private readonly LocationSeedService                 $seedService,
         private readonly TownSuggestionService               $suggestionService,
+        private readonly TownSuggestionBatchRepository       $batchRepository,
+        private readonly MessageBusInterface                 $messageBus,
+        private readonly CacheInterface                      $cache,
     ) {}
+
+    /**
+     * The transport batched town pulls are queued on.
+     *
+     * Must keep matching the `suggestion` queue_name in config/packages/messenger.yaml —
+     * the same contract LocationEnrichmentOrchestrator::TRANSPORT_QUEUE and
+     * StarterPoolAuditService::TRANSPORT_QUEUE carry, and for the same reason: undrained
+     * rows on it are counted to stop a second run stacking on the first.
+     */
+    public const SUGGESTION_QUEUE = 'suggestion';
+
+    /**
+     * How long a provider reachability verdict is reused.
+     *
+     * checkConnection() is a live round trip to the AI provider, and it used to run on EVERY
+     * GET of this page with no cache — so the screen could hang for the client's full 45s
+     * timeout before rendering anything, which is its own flavour of the problem this page's
+     * queued pull was built to fix. 60s is AdminQueueCounts' window: long enough that a
+     * reload costs nothing, short enough that fixing a bad key is visible almost at once.
+     */
+    private const CONNECTION_CACHE_SECONDS = 60;
 
     /**
      * @param string|null $location resolved from EasyAdmin's `routeParams`, which arrive as
@@ -90,7 +120,7 @@ class LocationEnrichmentController extends AbstractController
 
         return $this->render('admin/location_enrichment.html.twig', [
             'focus'         => $focus,
-            'connection'    => $this->enricher->checkConnection(),
+            'connection'    => $this->cachedConnection(),
             'provider'      => $this->enricher->provider(),
             'model'         => $this->enricher->model(),
             'promptVersion' => $this->enricher->promptVersion(),
@@ -107,7 +137,39 @@ class LocationEnrichmentController extends AbstractController
             // seeded — so the seed picker can offer the unseeded ones first and label the rest
             // honestly rather than looking like it does nothing.
             'seedable'      => $this->seedableRows(),
+            // So the Pull towns card can resume its progress poll after a reload. The whole
+            // point of queueing is that the operator is no longer pinned to the request, so
+            // they will navigate away and come back mid-run.
+            'suggestionQueueDepth' => $this->runRepository->countUndeliveredOnQueue(self::SUGGESTION_QUEUE),
+            'suggestionRun'        => $this->latestSuggestionRunPayload($country),
+            // Rendered into the form rather than hardcoded in Twig, so the card and the service
+            // cannot drift on what a batch is or what the cap is.
+            'batchSize'            => TownSuggestionService::BATCH_SIZE,
+            'defaultMax'           => TownSuggestionService::DEFAULT_MAX,
+            'hardMax'              => TownSuggestionService::HARD_MAX,
         ]);
+    }
+
+    /**
+     * The provider verdict, reused for a minute.
+     *
+     * Wrapped rather than called directly because it is a synchronous third-party call on a GET:
+     * uncached it made every page load wait on the provider, at the mercy of the same proxy
+     * timeout as everything else here.
+     *
+     * @return array{ok: bool, detail: string}
+     */
+    private function cachedConnection(): array
+    {
+        /** @var array{ok: bool, detail: string} */
+        return $this->cache->get(
+            'admin.location_enrichment.connection',
+            function (ItemInterface $item): array {
+                $item->expiresAfter(self::CONNECTION_CACHE_SECONDS);
+
+                return $this->enricher->checkConnection();
+            },
+        );
     }
 
     /**
@@ -408,19 +470,27 @@ class LocationEnrichmentController extends AbstractController
     }
 
     /**
-     * Ask the AI provider for more town names for one country, and add the new ones.
+     * Queue a batched town pull for one country.
      *
-     * The admin face of app:locations:suggest-towns. Both call TownSuggestionService and
-     * neither holds logic of its own.
+     * QUEUED, NOT SYNCHRONOUS, AND THAT IS THE WHOLE POINT OF THIS ACTION. It used to call
+     * TownSuggestionService::suggestForCountry() inline: one AI call for up to 300 names, a
+     * ~12,000 output-token generation taking 60-180s, behind an nginx that gives up at 60s. The
+     * operator saw a failure for work that was often still running and sometimes landed
+     * afterwards, with no flash to say so.
      *
-     * SYNCHRONOUS, like seeding and unlike sweeping. It is ONE API call regardless of how many
-     * towns come back, so there is no queue of billed messages to guard against — the cost
-     * profile that makes enrichment asynchronous simply is not present here.
+     * It now writes a run plus one row per ~50 towns and dispatches a message each, so the
+     * request returns at once and progress is real rather than a spinner. Batches also mean a
+     * provider failure costs one batch instead of the run.
      *
-     * ONE COUNTRY AT A TIME, ENFORCED. "All countries" is refused rather than fanning
-     * twenty-five paid calls out of a single click. That also sidesteps the trap in the seed
-     * form directly above this one, where ticking `force` with "All countries" selected does
-     * nothing at all, silently: seed() passes `$force ? $code : null`, and `$code` is null.
+     * ONE COUNTRY AT A TIME, STILL ENFORCED. "All countries" is refused rather than fanning
+     * twenty-five paid runs out of a single click. That also sidesteps the trap in the seed form
+     * beside it, where ticking `force` with "All countries" selected does nothing at all,
+     * silently: seed() passes `$force ? $code : null`, and `$code` is null.
+     *
+     * NOW GUARDED AGAINST STACKING, which the synchronous version did not need. It was one call
+     * and the docblock said so; a run is now N billed messages, so a second click while the
+     * first is draining would double the spend and interleave two sets of batches competing for
+     * the same names. Same countUndeliveredOnQueue() idiom the sweep beside it uses.
      *
      * The towns it adds are unpriced and unplaced. Enrichment fills them in lazily, one paid
      * call each, when a player first opens them — which is the design, not a backlog.
@@ -443,6 +513,18 @@ class LocationEnrichmentController extends AbstractController
             return $this->backToScreen();
         }
 
+        $pending = $this->runRepository->countUndeliveredOnQueue(self::SUGGESTION_QUEUE);
+
+        if ($pending > 0) {
+            $this->addFlash('warning', \sprintf(
+                '%d town batch(es) are still queued. Wait for the current pull to finish — '
+                . 'starting another now would pay twice for overlapping answers.',
+                $pending,
+            ));
+
+            return $this->backToScreen();
+        }
+
         try {
             $country = $this->seedService->resolveCountry($code);
         } catch (\InvalidArgumentException $e) {
@@ -454,52 +536,115 @@ class LocationEnrichmentController extends AbstractController
         $max = (int) ($request->request->get('max_towns') ?: TownSuggestionService::DEFAULT_MAX);
 
         try {
-            $result = $this->suggestionService->suggestForCountry($country, $max, false, $this->currentAdmin());
+            $plan = $this->suggestionService->planRun($country, $max, $this->currentAdmin());
         } catch (\Throwable $e) {
-            $this->logger->error('Town suggestion failed', ['exception' => $e, 'country' => $code]);
-            $this->addFlash('danger', 'Pulling towns failed: ' . $e->getMessage());
+            $this->logger->error('Town suggestion planning failed', ['exception' => $e, 'country' => $code]);
+            $this->addFlash('danger', 'Could not queue the town pull: ' . $e->getMessage());
 
             return $this->backToScreen();
         }
 
-        if ($result['imported'] === 0) {
-            // The honest outcome when a country's catalogue is already as complete as the
-            // model can make it. Phrased so it does not read as a failure.
-            $this->addFlash('info', sprintf(
-                'Nothing new for %s — the model offered %d town(s) and we already held all of them.',
-                $code,
-                $result['offered'],
-            ));
-
-            return $this->backToScreen();
+        // planRun() has already flushed, so a consumer that picks one of these up in the same
+        // second finds its row committed — the reason the orchestrator's dispatchRun() flushes
+        // before dispatching too.
+        foreach ($plan['batches'] as $batch) {
+            $this->messageBus->dispatch(new SuggestTownsBatchMessage((string) $batch->getId()));
         }
 
-        $this->addFlash('success', sprintf(
-            'Added %d town(s) to %s. The model offered %d; %d were already held.',
-            $result['imported'],
+        $batchCount = \count($plan['batches']);
+
+        $this->addFlash('success', \sprintf(
+            'Queued %d batch(es) for %s, up to %d town(s). Progress appears in the Pull towns card; '
+            . 'batches drain about once a minute.',
+            $batchCount,
             $code,
-            $result['offered'],
-            $result['alreadyHeld'],
+            $max,
         ));
-
-        $this->addFlash('warning', sprintf(
-            '%d new location(s) have no coordinates and no land value yet. They enrich lazily '
-            . 'when a player opens them, one paid call each.',
-            $result['imported'],
-        ));
-
-        if ($result['nearDuplicates'] !== []) {
-            // Reported, never merged — the same rule importPlaceNames() follows. Two real
-            // towns in one country can genuinely share a name.
-            $this->addFlash('warning', sprintf(
-                '%d added town(s) look like existing ones (e.g. "%s" vs "%s"). Added anyway — check them.',
-                count($result['nearDuplicates']),
-                $result['nearDuplicates'][0]['imported'],
-                $result['nearDuplicates'][0]['existing'],
-            ));
-        }
 
         return $this->backToScreen();
+    }
+
+    /**
+     * Progress of the newest batched pull for a country, as JSON.
+     *
+     * Its OWN REAL ROUTE, not the /admin?routeName= entry point — the convention
+     * AdminStatsController's docblock sets for admin JSON, and a hard requirement here: the
+     * overview() this page is rendered by makes a provider call, so polling it would make a
+     * six-batch run cost a hundred extra round trips.
+     *
+     * KEYED BY COUNTRY, NOT RUN ID, like admin_worldpack_run_status, and for the same reason:
+     * the point of queueing is that the operator is free to leave, so the id must not be the
+     * only way back to the progress they left behind.
+     *
+     * GET and read-only — it spends nothing, which is why it is not POST like everything else
+     * on this screen.
+     */
+    #[Route('/admin/locations/suggest-towns/status/{country}', name: 'admin_locations_suggest_towns_status', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function suggestTownsStatus(string $country): Response
+    {
+        $code = $this->normalisedCountry($country);
+
+        return $this->json([
+            'country'    => $code,
+            'queueDepth' => $this->runRepository->countUndeliveredOnQueue(self::SUGGESTION_QUEUE),
+            'run'        => $code === null ? null : $this->latestSuggestionRunPayload($code),
+        ]);
+    }
+
+    /**
+     * The newest batched pull, shaped for the progress card.
+     *
+     * FALLS BACK TO ANY COUNTRY when none is given, which is not a nicety — suggestTowns()
+     * redirects to this screen with no `?country=`, so without the fallback the card would be
+     * blank on the one page load that matters most, immediately after queueing.
+     *
+     * Returns null when there has never been a pull at all, which the card renders as its empty
+     * state rather than as an error.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function latestSuggestionRunPayload(?string $country): ?array
+    {
+        $criteria = ['trigger' => EnrichmentTrigger::ADMIN_TOWN_BATCH];
+
+        if ($country !== null) {
+            $criteria['countryCode'] = $country;
+        }
+
+        $run = $this->runRepository->findOneBy($criteria, ['startedAt' => 'DESC']);
+
+        if ($run === null) {
+            return null;
+        }
+
+        $runId   = (string) $run->getId();
+        $batches = $this->batchRepository->findForRun($runId);
+
+        return [
+            'id'      => $runId,
+            'country' => $run->getCountryCode(),
+            'status'  => $run->getStatus()->value,
+            'model'   => $run->getModel(),
+            // Counters on the run are BATCHES for this trigger — see EnrichmentTrigger.
+            'totalBatches'     => $run->getQueued(),
+            'settledBatches'   => $run->getSucceeded() + $run->getFailed(),
+            'failedBatches'    => $run->getFailed(),
+            'importedTowns'    => $this->batchRepository->importedForRun($runId),
+            'startedAt'        => $run->getStartedAt()->format(\DateTimeInterface::ATOM),
+            'finishedAt'       => $run->getFinishedAt()?->format(\DateTimeInterface::ATOM),
+            'batches'          => array_map(static fn ($b): array => [
+                'index'       => $b->getBatchIndex(),
+                'total'       => $b->getTotalBatches(),
+                'status'      => $b->getStatus()->value,
+                'requested'   => $b->getRequested(),
+                'offered'     => $b->getOffered(),
+                'imported'    => $b->getImported(),
+                'alreadyHeld' => $b->getAlreadyHeld(),
+                'attempts'    => $b->getAttempts(),
+                'error'       => $b->getErrorMessage(),
+            ], $batches),
+        ];
     }
 
     /**

@@ -18,21 +18,46 @@ enum EnrichmentTrigger: string
     case ADMIN_ALL = 'admin_all';
 
     /**
-     * Admin asked the model for more town names for a country.
+     * One synchronous call asking the model for more town names for a country.
      *
      * Not an enrichment, but it shares everything a run record exists to answer — which
      * provider, which model, which country, which admin, and what it cost — so it reuses the
      * table rather than adding a near-identical second one.
      *
-     * The counters mean something slightly different here, and only here:
+     * The counters mean something different here:
      *   queued    = candidates the validator accepted
      *   succeeded = rows actually inserted
      *   failed    = candidates rejected, plus ones already held
      * `needsReview` is unused: a suggestion is taken or it is not, and whether the town is
      * real is settled later by enrichment, which records its own verdict.
      *
+     * NOW THE CLI PATH ONLY (app:locations:suggest-towns, which also supports --dry-run). The
+     * admin screen used to use it and timed out doing so; it queues batches instead and records
+     * them under ADMIN_TOWN_BATCH. This case keeps its original meaning precisely so the rows
+     * already in the table still mean what they said — a run's counters must not change
+     * meaning retroactively just because the screen that wrote them moved on.
+     *
      * The backing value is short because trigger_type is VARCHAR(16); spelling it
      * 'admin_town_suggestion' would need a migration to widen the column for no gain.
      */
     case ADMIN_TOWN_SUGGESTION = 'town_suggest';
+
+    /**
+     * Admin queued a batched town pull from the enrichment screen.
+     *
+     * COUNTERS ARE BATCHES HERE, NOT TOWNS:
+     *   queued    = batches dispatched
+     *   succeeded = batches that ran
+     *   failed    = batches that gave up after their own retries
+     *
+     * It cannot be otherwise: `queued` is written at dispatch, before anything has been asked,
+     * and how many towns a run will accept is unknowable then. It is also what lets a run close
+     * itself — LocationEnrichmentRunRepository::recordBatchOutcome() completes the run on the
+     * tick where settled batches reach `queued`, so nothing has to poll.
+     *
+     * Towns added live on the TownSuggestionBatch rows and are summed for display. So a row
+     * here reading "6 / 6" means six batches, and the towns figure is on the screen's own card
+     * rather than in this table's columns.
+     */
+    case ADMIN_TOWN_BATCH = 'town_batch';
 }

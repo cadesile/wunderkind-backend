@@ -128,6 +128,91 @@
         </div>
     </div>
 
+    {# ── Pull towns ─────────────────────────────────────────────────────────
+       Its own card now. It used to be a second form crammed into the Progress by
+       country header beside Seed, which hid the fact that the two are nothing alike:
+       seeding is free, instant and allows "all countries", where this spends money per
+       batch and takes minutes. It also had nowhere to show progress, which is what it
+       most needed — the synchronous version timed out at nginx's 60s while the call ran
+       on, so the operator's only signal was a failure for work that had often succeeded.
+       ─────────────────────────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-5">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-wand-magic-sparkles text-warning"></i>
+                <span class="fw-semibold small">Pull towns</span>
+                <span class="ms-auto badge bg-secondary" id="suggest-queue-depth"
+                      title="Undrained batches on the suggestion queue">
+                    {{ suggestionQueueDepth }} queued
+                </span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Asks the AI provider for towns the curated registry does not have, in
+                    batches of {{ batchSize }}. Each batch is one paid call and they drain about
+                    once a minute, so a 300-town pull takes a few minutes and reports as it goes.
+                    New towns arrive with no coordinates and no land value; enrichment fills
+                    those in lazily, one paid call each, when a player first opens them.
+                </p>
+
+                <form method="post"
+                      action="{{ path('admin', {routeName: 'admin_locations_suggest_towns'}) }}"
+                      id="suggest-form">
+                    <input type="hidden" name="_token" value="{{ csrf_token('locations_suggest_towns') }}">
+
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-7">
+                            <label for="suggestCountry" class="form-label fw-semibold small mb-1">Country</label>
+                            {# No "All countries" option at all. The simplest way to make a paid
+                               fan-out across 25 countries impossible rather than merely
+                               discouraged. #}
+                            <select name="country" id="suggestCountry" class="form-select form-select-sm" required>
+                                <option value="" disabled selected>Country…</option>
+                            {% for row in seedable %}
+                                <option value="{{ row.code }}"{{ selectedCountry == row.code ? ' selected' : '' }}>
+                                    {{ row.code }} — {{ row.name }}
+                                </option>
+                            {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-5">
+                            <label for="suggestMax" class="form-label fw-semibold small mb-1">Most towns</label>
+                            <input type="number" class="form-control form-control-sm" id="suggestMax"
+                                   name="max_towns" value="{{ defaultMax }}" min="1" max="{{ hardMax }}" step="10"
+                                   title="The reply is ordered largest-first, so a cap drops the smallest towns.">
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-sm btn-outline-warning"
+                            id="suggest-submit"
+                            {{ connection.ok and suggestionQueueDepth == 0 ? '' : 'disabled' }}
+                            title="{{ connection.ok ? 'Queue a batched town pull' : connection.detail }}">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Pull towns
+                    </button>
+                    {% if suggestionQueueDepth > 0 %}
+                        <span class="text-muted small ms-2">
+                            {{ suggestionQueueDepth }} batch(es) still queued — wait for the current pull.
+                        </span>
+                    {% endif %}
+                </form>
+
+                {# Progress. Hidden until there is a run to describe. #}
+                <div id="suggest-progress" class="mt-3 pt-3 border-top{{ suggestionRun is null ? ' d-none' : '' }}">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fa fa-list-check fa-sm text-muted"></i>
+                        <span class="fw-semibold small">Latest pull</span>
+                        <span id="suggest-progress-summary" class="text-muted ms-1" style="font-size:.72rem;"></span>
+                    </div>
+                    <div class="progress mb-2" style="height:6px;">
+                        <div class="progress-bar" id="suggest-progress-bar" role="progressbar" style="width:0%"></div>
+                    </div>
+                    <div id="suggest-batches" class="d-flex flex-column gap-1"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# ── Progress per country ───────────────────────────────────────────── #}
     <div class="col-12 col-xl-7">
         <div class="card h-100">
@@ -162,39 +247,6 @@
                     </button>
                 </form>
 
-                {# Pulling towns asks the AI provider for names the registry does not have.
-                   A SEPARATE FORM, not a second button on the one above: this one costs money
-                   and requires a country, where seeding is free and allows "all". Its country
-                   list therefore has no "All countries" option at all, which is the simplest
-                   way to make a paid fan-out across 25 countries impossible rather than merely
-                   discouraged. #}
-                <form method="post"
-                      action="{{ path('admin', {routeName: 'admin_locations_suggest_towns'}) }}"
-                      class="d-flex align-items-center gap-1 ms-2 ps-2 border-start">
-                    <input type="hidden" name="_token" value="{{ csrf_token('locations_suggest_towns') }}">
-
-                    <select name="country" class="form-select form-select-sm py-0"
-                            style="width:auto" aria-label="Country to pull towns for" required>
-                        <option value="" disabled selected>Country…</option>
-                    {% for row in seedable %}
-                        <option value="{{ row.code }}">{{ row.code }} — {{ row.name }}</option>
-                    {% endfor %}
-                    </select>
-
-                    <label class="visually-hidden" for="suggestMax">Most towns to add</label>
-                    <input type="number" class="form-control form-control-sm py-0" id="suggestMax"
-                           name="max_towns" value="300" min="1" max="1000" step="10"
-                           style="width:5.5rem"
-                           title="Most towns to add in one run. The reply is ordered largest-first, so a cap drops the smallest towns.">
-
-                    <button type="submit"
-                            class="btn btn-sm btn-outline-warning py-0 px-2"
-                            {{ connection.ok ? '' : 'disabled' }}
-                            title="{{ connection.ok ? 'Ask the AI provider for more towns' : connection.detail }}"
-                            onclick="return confirm('Make 1 paid API call to pull up to the chosen number of towns?\n\nEach town added will later cost one enrichment call when a player opens it.')">
-                        <i class="fa fa-wand-magic-sparkles me-1"></i> Pull towns
-                    </button>
-                </form>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -545,4 +597,127 @@
     </div>
 
 </div>
+
+{# ── Pull towns progress poll ───────────────────────────────────────────────
+   Recursive setTimeout rather than setInterval, and it swallows transient errors so a
+   blip does not end the watch — the pattern worldpack_cache.html.twig established.
+
+   Polls a dedicated JSON route, never a refresh of this page: overview() makes a live
+   provider call to render the connection verdict, so re-fetching it every 2.5s would
+   turn a six-batch run into a hundred extra round trips.
+   ──────────────────────────────────────────────────────────────────────── #}
+<script>
+(function () {
+    const STATUS_URL_TPL  = '{{ path('admin_locations_suggest_towns_status', {country: '__CC__'}) }}';
+    const POLL_INTERVAL_MS = 2500;
+    const TERMINAL_RUN_STATUSES = ['complete', 'cancelled'];
+
+    const panel    = document.getElementById('suggest-progress');
+    const summary  = document.getElementById('suggest-progress-summary');
+    const bar      = document.getElementById('suggest-progress-bar');
+    const list     = document.getElementById('suggest-batches');
+    const depth    = document.getElementById('suggest-queue-depth');
+    const submit   = document.getElementById('suggest-submit');
+
+    if (!panel) { return; }
+
+    let polling = false;
+
+    const BATCH_BADGE = {
+        pending:   'bg-secondary',
+        running:   'bg-primary',
+        completed: 'bg-success',
+        failed:    'bg-danger',
+    };
+
+    function escHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+    }
+
+    function renderBatch(b) {
+        const badge = BATCH_BADGE[b.status] ?? 'bg-secondary';
+        const spin  = b.status === 'running' ? '<i class="fa fa-spinner fa-spin me-1"></i>' : '';
+        // Imported, not offered: it is the only figure that tells the operator whether the
+        // money bought anything. A batch that offers fifty towns we already hold is a
+        // completed batch with nothing to show, and that is an honest outcome, not a fault.
+        const detail = b.status === 'completed'
+            ? `${b.imported} added` + (b.alreadyHeld > 0 ? `, ${b.alreadyHeld} already held` : '')
+            : (b.status === 'failed' ? escHtml(b.error ?? 'failed') : `${b.requested} requested`);
+        const retry = b.attempts > 1 ? ` <span class="text-muted">(attempt ${b.attempts})</span>` : '';
+
+        return `<div class="d-flex align-items-center gap-2 small">
+            <span class="badge ${badge}" style="min-width:5.5rem;">${spin}Batch ${b.index}/${b.total}</span>
+            <span class="text-muted">${detail}${retry}</span>
+        </div>`;
+    }
+
+    function render(run, queueDepth) {
+        if (depth) { depth.textContent = `${queueDepth} queued`; }
+
+        if (!run) {
+            panel.classList.add('d-none');
+            return;
+        }
+
+        panel.classList.remove('d-none');
+
+        const total   = run.totalBatches || 0;
+        const settled = run.settledBatches || 0;
+        const pct     = total > 0 ? Math.round((settled / total) * 100) : 0;
+
+        bar.style.width = pct + '%';
+        bar.className = 'progress-bar' + (run.failedBatches > 0 ? ' bg-warning' : '');
+
+        const parts = [`${settled} / ${total} batches`, `${run.importedTowns} town(s) added`];
+        if (run.failedBatches > 0) { parts.push(`${run.failedBatches} failed`); }
+        if (TERMINAL_RUN_STATUSES.includes(run.status)) { parts.push('done'); }
+        summary.textContent = `${run.country} · ` + parts.join(' · ');
+
+        list.innerHTML = run.batches.map(renderBatch).join('');
+
+        // Re-enable the button only once the queue is actually clear: the server refuses a
+        // second run while batches are undrained, so offering it would just bounce.
+        if (submit && queueDepth === 0 && TERMINAL_RUN_STATUSES.includes(run.status)) {
+            submit.disabled = false;
+        }
+    }
+
+    function poll(country) {
+        if (polling) { return; }
+        polling = true;
+
+        const tick = async () => {
+            try {
+                const res  = await fetch(STATUS_URL_TPL.replace('__CC__', country));
+                const data = await res.json();
+                render(data.run, data.queueDepth ?? 0);
+
+                if (data.run && TERMINAL_RUN_STATUSES.includes(data.run.status) && (data.queueDepth ?? 0) === 0) {
+                    polling = false;
+                    return; // stop; the panel stays rendered as-is
+                }
+            } catch (e) {
+                // transient — the next tick may recover
+            }
+
+            setTimeout(tick, POLL_INTERVAL_MS);
+        };
+
+        tick();
+    }
+
+    // A run already in flight when the page loaded. This is why the status route is keyed by
+    // country rather than by run id: the operator is no longer pinned to the request, so they
+    // can and will come back to a page they left mid-run.
+    const initial = {{ suggestionRun is null ? 'null' : suggestionRun|json_encode|raw }};
+    if (initial) {
+        render(initial, {{ suggestionQueueDepth }});
+        if (!TERMINAL_RUN_STATUSES.includes(initial.status) || {{ suggestionQueueDepth }} > 0) {
+            poll(initial.country);
+        }
+    }
+})();
+</script>
 {% endblock %}
