@@ -112,7 +112,10 @@ class PoolConfigControllerTest extends WebTestCase
         $this->loginAsAdmin($client);
         $client->request('GET', '/admin?routeName=admin_player_pool_config');
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h5', 'Player Pool Config');
+        $this->assertSelectorTextContains('.bmc-title', 'PLAYER POOL');
+        // The picker is the part with a backend behind it: every nationality gets a row,
+        // whether or not anyone of that nationality is in the pool.
+        $this->assertSelectorExists('#picklist .bmc-pick-row[data-nat="English"]');
     }
 
     public function testStaffPoolConfigPageRendersSuccessfully(): void
@@ -121,7 +124,10 @@ class PoolConfigControllerTest extends WebTestCase
         $this->loginAsAdmin($client);
         $client->request('GET', '/admin?routeName=admin_staff_pool_config');
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h5', 'Staff Pool Config');
+        $this->assertSelectorTextContains('.bmc-title', 'STAFF POOL');
+        $this->assertSelectorExists('#picklist .bmc-pick-row[data-nat="English"]');
+        // Six role tiles plus scouts.
+        $this->assertSelectorExists('.bmc-pooltile[data-type="facility_managers"]');
     }
 
     public function testInvestorPoolConfigPageRendersSuccessfully(): void
@@ -151,7 +157,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Player pool config saved.');
+        $this->assertFlash('Player pool rules saved');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -241,12 +247,59 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Staff pool config saved.');
+        $this->assertFlash('Staff pool rules saved');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
         $this->assertSame(55, $config->getCoachAbilityMin());
         $this->assertSame(9, $config->getScoutPoolTarget());
+    }
+
+    /**
+     * Scout wages are edited in pounds and stored in pence.
+     *
+     * The one unit conversion on these screens. PoolConfig holds pence, an operator thinks in
+     * pounds per week, and a field showing 2500 when it means £25 is a trap you fall into once.
+     */
+    public function testScoutWagesArePostedInPoundsAndStoredInPence(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $token = $this->seedValidCsrfToken($client, 'save_staff_pool_config');
+
+        $client->request('POST', '/admin/staff-pool-config/save', [
+            '_token'              => $token,
+            'scoutWagePoundsMin'  => '30',
+            'scoutWagePoundsMax'  => '90',
+        ]);
+
+        $this->assertResponseRedirects();
+
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
+        $config = $this->getConfig();
+        $this->assertSame(3000, $config->getScoutWageMin());
+        $this->assertSame(9000, $config->getScoutWageMax());
+    }
+
+    /** The older pence fields still work, so anything posting the previous shape is unaffected. */
+    public function testScoutWagesStillAcceptTheOlderPenceFields(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $token = $this->seedValidCsrfToken($client, 'save_staff_pool_config');
+
+        $client->request('POST', '/admin/staff-pool-config/save', [
+            '_token'       => $token,
+            'scoutWageMin' => '2500',
+            'scoutWageMax' => '7000',
+        ]);
+
+        $this->assertResponseRedirects();
+
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
+        $config = $this->getConfig();
+        $this->assertSame(2500, $config->getScoutWageMin());
+        $this->assertSame(7000, $config->getScoutWageMax());
     }
 
     public function testSaveStaffPoolConfigRequiresValidCsrfToken(): void

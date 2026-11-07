@@ -1,682 +1,657 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Player pool — rules, and the generate card that fills it.
+  Design source: prototype/Player Pool.dc.html. Data: PoolConfigController::playerPoolConfig().
 
-{% block content %}
-<div class="row g-4 mt-1">
+  Built the same way as pool_investor_config.html.twig: static markup in Twig styled only with
+  bmc- classes, the save form a plain POST enhanced by form[data-bmc-form], generation running
+  client-side through BMC.runJobs() against the existing generate-chunk route, and destructive
+  actions confirming through the PixelDialog.
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Player Pool Config</h5>
-        <p class="text-muted small mb-0">Controls all random ranges, probability weights, and the pool size target used when generating players. Changes apply to the next generation run.</p>
+  WHAT IS DIFFERENT FROM THE INVESTOR PAGE: this one picks NATIONALITIES rather than pool types,
+  so a run is one job per picked nationality (or a single random job when none are picked), and
+  the picker needs grouping, searching and sorting. The groups and their counts arrive ready
+  from NationalityPoolCounts — see the note there on why they are not computed here.
+#}
+
+{% set target  = config.playerPoolTarget %}
+{% set inPool  = poolCounts.players %}
+{% set pct     = target > 0 ? min(100, (inPool / target * 100)|round) : 0 %}
+{% set short   = max(0, target - inPool) %}
+{% set totalNats = nationalityGroups|reduce((c, rows) => c + rows|length, 0) %}
+
+{% block bmc_page_class %} bmc-page--savebar{% endblock %}
+
+{% block bmc_body %}
+<section class="bmc-card" data-domain="people" id="gen"
+         data-url="{{ path('admin_player_pool_generate_chunk') }}" data-token="{{ csrf_token('generate_player_pool') }}">
+    <div class="bmc-card__head">
+        <i data-lucide="sparkles"></i>
+        <span class="bmc-card__title">GENERATE</span>
+        <span class="bmc-card__meta">Youth-intake players · unassigned</span>
     </div>
 
-    {# ── Pool Status & Generate ──────────────────────────────────────── #}
-    <div class="col-12">
-    <style>
-    .pool-stat-card {
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: 8px;
-        padding: 12px 10px 10px;
-        text-align: center;
-        transition: border-color .18s;
-    }
-    .pool-stat-card:hover { border-color: var(--bs-border-color-translucent); }
-    .pool-stat-count { font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
-    .pool-stat-target { font-size: .75rem; color: var(--bs-secondary-color); }
-    .pool-stat-label { font-size: .7rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
-    .pool-progress { height: 3px; border-radius: 2px; background: var(--bs-border-color); overflow: hidden; margin-top: 7px; }
-    .pool-progress-bar { height: 100%; border-radius: 2px; transition: width .4s ease; }
-
-    .nat-chip {
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 500;
-        border: 1px solid var(--bs-border-color); background: transparent;
-        color: var(--bs-secondary-color); cursor: pointer; transition: all .15s;
-        user-select: none;
-    }
-    .nat-chip:hover { border-color: var(--bs-primary); color: var(--bs-primary); }
-    .nat-chip.active {
-        background: rgba(var(--bs-primary-rgb), .15);
-        border-color: var(--bs-primary); color: var(--bs-primary);
-    }
-    .nat-chip.active::after { content: '×'; margin-left: 2px; font-size: .8rem; opacity: .7; }
-
-    .job-row {
-        display: flex; align-items: center; gap: 10px;
-        padding: 7px 10px; border-radius: 6px;
-        font-size: .8rem; transition: background .15s;
-    }
-    .job-row:nth-child(odd) { background: rgba(255,255,255,.03); }
-    .job-icon { width: 16px; text-align: center; flex-shrink: 0; }
-    .job-label { flex: 1; font-family: monospace; }
-    .job-status { font-size: .72rem; color: var(--bs-secondary-color); }
-    .job-count { font-size: .72rem; font-family: monospace; font-weight: 600; min-width: 60px; text-align: right; }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spin { animation: spin .8s linear infinite; display: inline-block; }
-
-    .activity-log {
-        max-height: 200px; overflow-y: auto; font-size: .75rem; font-family: monospace;
-        background: rgba(0,0,0,.2); border-radius: 6px; padding: 8px 10px;
-        border: 1px solid var(--bs-border-color);
-    }
-    .log-entry { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
-    .log-entry:last-child { border-bottom: none; }
-    .log-time { color: var(--bs-secondary-color); flex-shrink: 0; }
-    .log-label { flex: 1; }
-    .log-count { font-weight: 600; min-width: 70px; text-align: right; }
-
-    .btn-pool-action {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 7px 16px; border-radius: 6px; font-size: .8rem; font-weight: 600;
-        border: 1px solid; cursor: pointer; transition: all .18s; white-space: nowrap;
-    }
-    .btn-pool-action:disabled { opacity: .45; cursor: not-allowed; }
-    </style>
-
-        <div class="card border-primary-subtle">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-person-running text-muted fa-sm"></i>
-                <span class="fw-semibold small">Pool Status &amp; Generate</span>
+    <div class="bmc-card__band" style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <span class="bmc-lbl">IN POOL</span>
+            <div style="display:flex;align-items:baseline;gap:8px">
+                <span class="bmc-hero" id="hero">{{ inPool|number_format }}</span>
+                <span class="bmc-data">/ {{ target|number_format }} target</span>
             </div>
-            <div class="card-body pb-3">
+        </div>
+        <div style="flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:6px">
+            <div class="bmc-bar">
+                <div class="bmc-bar__fill{{ pct >= 100 ? '' : (pct >= 50 ? ' bmc-bar__fill--warning' : ' bmc-bar__fill--danger') }}"
+                     id="hero-bar" style="width:{{ pct }}%"></div>
+            </div>
+            <span class="bmc-data" id="hero-note">
+                {{ inPool == 0 ? 'Nothing in the pool yet.' : (short > 0 ? short|number_format ~ ' short of target.' : 'At or above target.') }}
+            </span>
+        </div>
+        <span class="bmc-badge {{ inPool == 0 ? 'bmc-badge--danger' : (short > 0 ? 'bmc-badge--warning' : 'bmc-badge--positive') }}" id="hero-badge">
+            {{ inPool == 0 ? 'EMPTY' : (short > 0 ? short|number_format ~ ' SHORT' : 'AT TARGET') }}
+        </span>
+    </div>
 
-                {# ── Status Grid ────────────────────────────────────────── #}
-                {% set poolItems = [
-                    { key: 'players', label: 'Players', icon: 'person-running', count: poolCounts.players, target: config.playerPoolTarget },
-                ] %}
-                <div class="row g-2 mb-3">
-                    {% for item in poolItems %}
-                    {% set pct = item.target > 0 ? min(100, (item.count / item.target * 100)|round) : 100 %}
-                    {% set barColor = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444') %}
-                    <div class="col-6 col-sm-4 col-md-2">
-                        <div class="pool-stat-card" data-pool-key="{{ item.key }}">
-                            <i class="fa fa-{{ item.icon }} fa-sm" style="color:var(--bs-secondary-color)"></i>
-                            <div class="pool-stat-count">
-                                <span class="js-count" data-key="{{ item.key }}">{{ item.count }}</span>
-                            </div>
-                            <div class="pool-stat-target">/ {{ item.target }}</div>
-                            <div class="pool-stat-label">{{ item.label }}</div>
-                            <div class="pool-progress">
-                                <div class="pool-progress-bar js-bar" data-key="{{ item.key }}" data-target="{{ item.target }}"
-                                     style="width:{{ pct }}%;background:{{ barColor }}"></div>
-                            </div>
-                        </div>
+    <div class="bmc-card__body">
+        <div class="bmc-tabs" data-bmc-tabs id="modes" role="tablist" aria-label="Generation mode">
+            <button type="button" role="tab" aria-selected="true" aria-controls="pane-replenish" data-value="replenish">
+                REPLENISH TO TARGET<span>Adds only the shortfall · nationality is random</span>
+            </button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="pane-force" data-value="force">
+                FORCE ADD BATCH<span>Adds the full target per job</span>
+            </button>
+        </div>
+
+        <div id="pane-replenish" role="tabpanel">
+            <div class="bmc-inset" style="display:flex;flex-direction:column;gap:6px;padding:12px">
+                <span class="bmc-data">Tops the pool up to its target in one job.</span>
+                <span class="bmc-data">Nationality is drawn at random, weighted the same way generation always is.</span>
+                <span class="bmc-data">A pool already at target is skipped rather than topped up.</span>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+                    <span class="bmc-lbl">STATUS</span>
+                    <span class="bmc-data" id="replenish-status">
+                        {{ short > 0 ? 'Would add ' ~ short|number_format ~ '.' : 'At target — nothing to add.' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div id="pane-force" role="tabpanel" hidden>
+            <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <label class="bmc-search" style="flex:1 1 220px">
+                        <i data-lucide="search" width="16" height="16"></i>
+                        <input class="bmc-input" type="search" id="nat-search" placeholder="Find a nationality or code" aria-label="Find a nationality or code">
+                    </label>
+                    <div class="bmc-segs" data-bmc-radio id="nat-sort" role="radiogroup" aria-label="Sort nationalities">
+                        <button type="button" role="radio" aria-checked="true" data-value="region">REGION</button>
+                        <button type="button" role="radio" aria-checked="false" data-value="az">A–Z</button>
+                        <button type="button" role="radio" aria-checked="false" data-value="thin">THINNEST</button>
                     </div>
+                </div>
+
+                <div class="bmc-inset" style="display:flex;flex-direction:column;gap:8px;padding:10px 12px">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <span class="bmc-lbl bmc-lbl--ink">PICKED</span>
+                        <span style="flex:1"></span>
+                        <button type="button" class="bmc-quick-btn" data-pick="home" title="English, Scottish, Welsh, Northern Irish">HOME NATIONS</button>
+                        <button type="button" class="bmc-quick-btn" data-pick="thin" title="The five with the fewest in the pool">THINNEST 5</button>
+                        <button type="button" class="bmc-quick-btn" data-pick="none">CLEAR</button>
+                    </div>
+                    <div class="bmc-chips" id="nat-chips"></div>
+                </div>
+
+                <div class="bmc-picklist" id="picklist">
+                    {% for heading, rows in nationalityGroups %}
+                        <button type="button" class="bmc-pick-head" data-region="{{ heading }}" role="checkbox" aria-checked="false">
+                            <span class="bmc-tile"></span>
+                            <span class="bmc-pick-head__label">{{ heading }}</span>
+                            <span class="bmc-data" data-region-picked>0</span>
+                            <span class="bmc-data">of {{ rows|length }}</span>
+                        </button>
+                        {% for row in rows %}
+                            {% set share = inPool > 0 ? min(100, (row.count / inPool * 100)|round) : 0 %}
+                            <button type="button" class="bmc-pick-row" role="checkbox" aria-checked="false"
+                                    data-nat="{{ row.nationality }}" data-code="{{ row.code }}"
+                                    data-count="{{ row.count }}" data-region="{{ heading }}"
+                                    {{ row.hasNamePool ? '' : 'title="No name pool — generation falls back to English names"' }}>
+                                <span class="bmc-tile"></span>
+                                <span class="bmc-vchip__code">{{ row.code }}</span>
+                                <span class="bmc-pick-row__name">{{ row.nationality }}{{ row.hasNamePool ? '' : ' *' }}</span>
+                                <span class="bmc-pick-row__n{{ row.count == 0 ? ' ink-warning' : '' }}">{{ row.count|number_format }}</span>
+                                <span class="bmc-bar bmc-bar--8"><span class="bmc-bar__fill" style="width:{{ share }}%"></span></span>
+                            </button>
+                        {% endfor %}
                     {% endfor %}
                 </div>
 
-                {# ── Nationality Multi-Select ─────────────────────────── #}
-                <div class="mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <i class="fa fa-flag fa-sm text-muted"></i>
-                        <span class="fw-semibold small">Nationality</span>
-                        <span class="text-muted" style="font-size:.7rem;">— applies to Force Add only · replenish uses random</span>
-                    </div>
-                    <div id="nat-chips" class="d-flex flex-wrap gap-1">
-                        <button type="button" class="nat-chip active" data-nat="">Random</button>
-                        {% for nat in nationalities %}
-                        <button type="button" class="nat-chip" data-nat="{{ nat }}">{{ nat }}</button>
-                        {% endfor %}
-                    </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <span class="bmc-data" id="pick-footer">{{ totalNats }} shown · 0 picked</span>
+                    <span style="flex:1"></span>
+                    <span class="bmc-data">* falls back to English names</span>
                 </div>
+            </div>
+        </div>
 
-                {# ── Action Buttons ───────────────────────────────────── #}
-                <div class="d-flex gap-2 flex-wrap align-items-center mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
-                    <button id="btn-replenish" class="btn-pool-action"
-                            style="border-color:var(--bs-primary);color:var(--bs-primary);"
-                            title="Only generates if the pool is below its configured target">
-                        <i class="fa fa-arrow-up fa-sm"></i> Replenish to Target
-                    </button>
-                    <button id="btn-force" class="btn-pool-action"
-                            style="border-color:#f59e0b;color:#f59e0b;"
-                            title="Generates the full target count, for each selected nationality">
-                        <i class="fa fa-bolt fa-sm"></i> Force Add Batch
-                    </button>
-                    <button id="btn-clear" class="btn-pool-action ms-auto"
-                            style="border-color:var(--bs-danger);color:var(--bs-danger);"
-                            title="Permanently removes ALL unassigned pool players">
-                        <i class="fa fa-trash fa-sm"></i> Clear All Players
-                    </button>
-                    {# Hidden clear form target #}
-                    <form id="form-clear" method="POST" action="{{ path('admin_player_pool_clear') }}" class="d-none">
-                        <input type="hidden" name="_token" value="{{ csrf_token('clear_player_pool') }}">
-                    </form>
+        <div class="bmc-row" style="margin-top:12px">
+            <div class="bmc-inset" style="flex:1 1 260px;display:flex;flex-direction:column;gap:10px;padding:12px">
+                <span class="bmc-lbl bmc-lbl--ink">THIS RUN</span>
+                <div class="bmc-stats bmc-stats--2">
+                    <div class="bmc-stat"><span class="bmc-stat__label">JOBS</span><span class="bmc-stat__value" id="sum-jobs">1</span></div>
+                    <div class="bmc-stat"><span class="bmc-stat__label">ADDS</span><span class="bmc-stat__value" id="sum-adds">+0</span></div>
                 </div>
-
-                {# ── Progress Panel ───────────────────────────────────── #}
-                <div id="progress-panel" class="d-none mb-3">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <i class="fa fa-list-check fa-sm text-muted"></i>
-                        <span class="fw-semibold small">Batch Progress</span>
-                        <span id="progress-summary" class="text-muted ms-1" style="font-size:.72rem;"></span>
-                    </div>
-                    <div id="progress-jobs" class="d-flex flex-column"></div>
-                </div>
-
-                {# ── Activity Log ─────────────────────────────────────── #}
-                <div id="activity-section" class="d-none">
-                    <div class="d-flex align-items-center justify-content-between mb-1 pt-2" style="border-top:1px solid var(--bs-border-color)">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="fa fa-terminal fa-sm text-muted"></i>
-                            <span class="fw-semibold small">Activity Log</span>
-                            <span class="text-muted" style="font-size:.7rem;">— since page load</span>
-                        </div>
-                        <button type="button" onclick="document.getElementById('activity-log').innerHTML='';document.getElementById('activity-section').classList.add('d-none');"
-                                class="btn btn-link btn-sm p-0 text-muted" style="font-size:.7rem;">clear</button>
-                    </div>
-                    <div id="activity-log" class="activity-log"></div>
-                </div>
-
+                <div id="sum-notes" style="display:flex;flex-direction:column;gap:6px"></div>
+                <button type="button" class="bmc-btn bmc-btn--full" id="run"><span>REPLENISH</span></button>
             </div>
         </div>
     </div>
 
-    <script>
-    (function () {
-        const CSRF    = '{{ csrf_token("generate_player_pool") }}';
-        const CHUNK_URL  = '{{ path("admin_player_pool_generate_chunk") }}';
-        const COUNTS_URL = '{{ path("admin_player_pool_counts") }}';
-
-        const TYPES = [
-            { key: 'players', label: 'Players', supportsNat: true },
-        ];
-
-        // ── Nationality chips ─────────────────────────────────────────
-        document.getElementById('nat-chips').addEventListener('click', function (e) {
-            const chip = e.target.closest('.nat-chip');
-            if (!chip) return;
-            const nat = chip.dataset.nat;
-            const allChips = [...this.querySelectorAll('.nat-chip')];
-
-            if (nat === '') {
-                // Random — deactivate all others, activate Random
-                allChips.forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-            } else {
-                const randomChip = this.querySelector('[data-nat=""]');
-                if (chip.classList.contains('active')) {
-                    chip.classList.remove('active');
-                    // If nothing left selected, re-enable Random
-                    if (!allChips.some(c => c.dataset.nat !== '' && c.classList.contains('active'))) {
-                        randomChip.classList.add('active');
-                    }
-                } else {
-                    randomChip.classList.remove('active');
-                    chip.classList.add('active');
-                }
-            }
-        });
-
-        function getSelectedNats() {
-            return [...document.querySelectorAll('#nat-chips .nat-chip.active')]
-                .filter(c => c.dataset.nat !== '')
-                .map(c => c.dataset.nat);
-        }
-
-        // ── Job queue builder ─────────────────────────────────────────
-        function buildJobs(mode) {
-            const nats = (mode === 'force') ? getSelectedNats() : [];
-            const jobs = [];
-            for (const type of TYPES) {
-                if (type.supportsNat && nats.length > 0) {
-                    for (const nat of nats) {
-                        jobs.push({ type: type.key, label: type.label + ' · ' + nat, nationality: nat, mode });
-                    }
-                } else {
-                    jobs.push({ type: type.key, label: type.label, nationality: null, mode });
-                }
-            }
-            return jobs;
-        }
-
-        // ── Progress rendering ────────────────────────────────────────
-        function renderJobs(jobs) {
-            const container = document.getElementById('progress-jobs');
-            container.innerHTML = '';
-            jobs.forEach((job, i) => {
-                const row = document.createElement('div');
-                row.className = 'job-row';
-                row.id = 'job-' + i;
-                row.innerHTML = `<span class="job-icon" id="ji-${i}">
-                    <i class="fa fa-clock fa-xs" style="color:var(--bs-secondary-color)"></i>
-                </span>
-                <span class="job-label">${esc(job.label)}</span>
-                <span class="job-status" id="js-${i}">queued</span>
-                <span class="job-count" id="jc-${i}"></span>`;
-                container.appendChild(row);
-            });
-        }
-
-        function setJobRunning(i) {
-            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-circle-notch fa-xs spin" style="color:var(--bs-primary)"></i>';
-            document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-primary)">running…</span>';
-        }
-
-        function setJobDone(i, count, skipped) {
-            if (skipped) {
-                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-minus fa-xs" style="color:var(--bs-secondary-color)"></i>';
-                document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-secondary-color)">at target</span>';
-            } else {
-                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-check fa-xs" style="color:#22c55e"></i>';
-                document.getElementById('js-' + i).innerHTML = '<span style="color:#22c55e">done</span>';
-                document.getElementById('jc-' + i).textContent = '+' + count;
-            }
-        }
-
-        function setJobError(i, msg) {
-            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-xmark fa-xs" style="color:var(--bs-danger)"></i>';
-            document.getElementById('js-' + i).innerHTML = `<span style="color:var(--bs-danger)">${esc(msg)}</span>`;
-        }
-
-        // ── Activity log ──────────────────────────────────────────────
-        function addLogEntry(label, count, mode, status) {
-            const section = document.getElementById('activity-section');
-            const log     = document.getElementById('activity-log');
-            section.classList.remove('d-none');
-
-            const now = new Date();
-            const ts  = String(now.getHours()).padStart(2,'0') + ':' +
-                        String(now.getMinutes()).padStart(2,'0') + ':' +
-                        String(now.getSeconds()).padStart(2,'0');
-
-            const statusHtml = status === 'ok'
-                ? `<span style="color:#22c55e">✓</span>`
-                : status === 'skip'
-                    ? `<span style="color:var(--bs-secondary-color)">–</span>`
-                    : `<span style="color:var(--bs-danger)">✕</span>`;
-
-            const countHtml = count > 0
-                ? `<span class="log-count" style="color:#22c55e">+${count}</span>`
-                : `<span class="log-count" style="color:var(--bs-secondary-color)">${status === 'skip' ? 'at target' : 'err'}</span>`;
-
-            const modeTag = `<span style="color:var(--bs-secondary-color);font-size:.65rem;">(${mode})</span>`;
-
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">${ts}</span>${statusHtml}<span class="log-label">${esc(label)}</span>${countHtml}${modeTag}`;
-            log.insertBefore(entry, log.firstChild);
-        }
-
-        // ── Count refresh ─────────────────────────────────────────────
-        async function refreshCounts() {
-            try {
-                const res  = await fetch(COUNTS_URL);
-                const data = await res.json();
-
-                const keyMap = { players: 'players' };
-
-                document.querySelectorAll('.js-bar').forEach(bar => {
-                    const poolKey = bar.dataset.key;
-                    const target  = parseInt(bar.dataset.target, 10);
-
-                    const countKey = Object.keys(keyMap).find(k => keyMap[k] === poolKey);
-                    if (!countKey || !(countKey in data)) return;
-
-                    const count = data[countKey];
-                    const pct   = target > 0 ? Math.min(100, Math.round(count / target * 100)) : 100;
-                    const color = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444');
-
-                    bar.style.width    = pct + '%';
-                    bar.style.background = color;
-
-                    const countEl = document.querySelector('.js-count[data-key="' + poolKey + '"]');
-                    if (countEl) countEl.textContent = count;
-                });
-            } catch (_) { /* silent */ }
-        }
-
-        // ── Main run ──────────────────────────────────────────────────
-        function setButtons(disabled) {
-            ['btn-replenish','btn-force','btn-clear'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.disabled = disabled;
-            });
-        }
-
-        async function runJobs(jobs) {
-            const panel = document.getElementById('progress-panel');
-            const summary = document.getElementById('progress-summary');
-            renderJobs(jobs);
-            panel.classList.remove('d-none');
-            setButtons(true);
-
-            let done = 0, generated = 0;
-            summary.textContent = `0 / ${jobs.length} complete`;
-
-            for (let i = 0; i < jobs.length; i++) {
-                const job = jobs[i];
-                setJobRunning(i);
-
-                const body = new URLSearchParams({
-                    _token:      CSRF,
-                    type:        job.type,
-                    nationality: job.nationality || '',
-                    mode:        job.mode,
-                });
-
-                try {
-                    const res  = await fetch(CHUNK_URL, { method: 'POST', body });
-                    const data = await res.json();
-
-                    if (data.success) {
-                        setJobDone(i, data.count || 0, !!data.skipped);
-                        generated += (data.count || 0);
-                        addLogEntry(job.label, data.count || 0, job.mode, data.skipped ? 'skip' : 'ok');
-                    } else {
-                        setJobError(i, data.message || 'Error');
-                        addLogEntry(job.label, 0, job.mode, 'error');
-                    }
-                } catch (err) {
-                    setJobError(i, 'Network error');
-                    addLogEntry(job.label, 0, job.mode, 'error');
-                }
-
-                done++;
-                summary.textContent = `${done} / ${jobs.length} complete · ${generated} generated`;
-
-                const el = document.getElementById('job-' + Math.min(i + 1, jobs.length - 1));
-                if (el) el.scrollIntoView({ block: 'nearest' });
-            }
-
-            summary.textContent = `${jobs.length} / ${jobs.length} complete · ${generated} total generated`;
-            await refreshCounts();
-            setButtons(false);
-        }
-
-        // ── Button handlers ───────────────────────────────────────────
-        document.getElementById('btn-replenish').addEventListener('click', function () {
-            if (!confirm('Replenish the player pool to its configured target?')) return;
-            runJobs(buildJobs('replenish'));
-        });
-
-        document.getElementById('btn-force').addEventListener('click', function () {
-            const nats = getSelectedNats();
-            const natLabel = nats.length ? nats.join(', ') : 'random nationalities';
-            if (!confirm('Force-add the full target batch of players?\nNationalities: ' + natLabel)) return;
-            runJobs(buildJobs('force'));
-        });
-
-        document.getElementById('btn-clear').addEventListener('click', function () {
-            if (!confirm('Permanently delete ALL unassigned player pool data?\nThis cannot be undone.')) return;
-            document.getElementById('form-clear').submit();
-        });
-
-        // ── Utility ───────────────────────────────────────────────────
-        function esc(str) {
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        }
-    }());
-    </script>
-
-    {# ── Config Form ─────────────────────────────────────────────────── #}
-    <div class="col-12">
-    <form method="POST" action="{{ path('admin_player_pool_config_save') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('save_player_pool_config') }}">
-        <div class="d-flex flex-column gap-4">
-
-            {# ── Pool Target ─────────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-bullseye text-muted"></i>
-                    <span class="fw-semibold small">Pool Target</span>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">
-                        Minimum unassigned count before auto-replenishment triggers. Also used as the batch size for manual generation.
-                    </p>
-                    <div class="row g-3">
-                        <div class="col-md-2">
-                            <label for="playerPoolTarget" class="form-label fw-semibold small">Players</label>
-                            <input type="number" id="playerPoolTarget" name="playerPoolTarget"
-                                   value="{{ config.playerPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 50</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Player Age & Core Stats ──────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-person-running text-muted"></i>
-                    <span class="fw-semibold small">Player — Age &amp; Core Stats</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Age Range</label>
-                            <div class="input-group">
-                                <input type="number" name="playerAgeMin" value="{{ config.playerAgeMin }}"
-                                       min="10" max="45" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="playerAgeMax" value="{{ config.playerAgeMax }}"
-                                       min="10" max="45" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 12–13 — what the POOL contains, youth included</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="playerFirstTeamAgeMin" class="form-label fw-semibold small">First-Team Age Floor</label>
-                            <input type="number" id="playerFirstTeamAgeMin" name="playerFirstTeamAgeMin"
-                                   value="{{ config.playerFirstTeamAgeMin }}" min="0" max="60" class="form-control">
-                            <div class="form-text">
-                                Youngest a player may be in a starter pack or NPC squad. Default: 19 — one year of
-                                margin over 18, because the device derives age against the in-game clock, which runs
-                                slightly behind real time, so a backend-exact 18 can display as 17.
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Potential Range (bell curve)</label>
-                            <div class="row g-2">
-                                <div class="col-4">
-                                    <input type="number" name="playerPotentialMin" value="{{ config.playerPotentialMin }}"
-                                           min="1" max="100" class="form-control" placeholder="Min">
-                                    <div class="form-text">Min. Default: 40</div>
-                                </div>
-                                <div class="col-4">
-                                    <input type="number" name="playerPotentialMax" value="{{ config.playerPotentialMax }}"
-                                           min="1" max="100" class="form-control" placeholder="Max">
-                                    <div class="form-text">Max. Default: 80</div>
-                                </div>
-                                <div class="col-4">
-                                    <input type="number" name="playerPotentialMean" value="{{ config.playerPotentialMean }}"
-                                           min="1" max="100" class="form-control" placeholder="Mean">
-                                    <div class="form-text">Mean. Default: 60</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="playerAgentChancePercent" class="form-label fw-semibold small">Agent Chance (%)</label>
-                            <input type="number" id="playerAgentChancePercent" name="playerAgentChancePercent"
-                                   value="{{ config.playerAgentChancePercent }}" min="0" max="100" class="form-control">
-                            <div class="form-text">Probability a player has an agent on generation. Default: 40</div>
-                        </div>
-                    </div>
-
-                    <hr class="my-3">
-
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label fw-semibold small mb-1">Youth Ability Ceilings</label>
-                            <div class="form-text mb-2">
-                                Caps how much of their potential young players have already realised when generated,
-                                so an academy intake still has its development ahead of it. A ceiling caps the ability
-                                target, which caps every attribute — the realised ratio lands at or below it, never above.
-                                The junior band is checked first. Players at or above the youth age are unaffected.
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Junior band</label>
-                            <div class="input-group">
-                                <span class="input-group-text">under age</span>
-                                <input type="number" name="playerJuniorAbilityCeilingAge"
-                                       value="{{ config.playerJuniorAbilityCeilingAge }}"
-                                       min="0" max="45" class="form-control">
-                                <span class="input-group-text">max</span>
-                                <input type="number" name="playerJuniorAbilityCeilingPercent"
-                                       value="{{ config.playerJuniorAbilityCeilingPercent }}"
-                                       min="1" max="100" class="form-control">
-                                <span class="input-group-text">% of potential</span>
-                            </div>
-                            <div class="form-text">Default: under 16 → max 10%</div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Youth band</label>
-                            <div class="input-group">
-                                <span class="input-group-text">under age</span>
-                                <input type="number" name="playerYouthAbilityCeilingAge"
-                                       value="{{ config.playerYouthAbilityCeilingAge }}"
-                                       min="0" max="45" class="form-control">
-                                <span class="input-group-text">max</span>
-                                <input type="number" name="playerYouthAbilityCeilingPercent"
-                                       value="{{ config.playerYouthAbilityCeilingPercent }}"
-                                       min="1" max="100" class="form-control">
-                                <span class="input-group-text">% of potential</span>
-                            </div>
-                            <div class="form-text">Default: under 20 → max 20%</div>
-                        </div>
-                    </div>
-
-                    <hr class="my-3">
-
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label fw-semibold small mb-1">Youth Draw — Home Nationality Mix</label>
-                            <div class="form-text mb-2">
-                                Share of each tier in <code>GET /api/players/youth</code> that should carry the
-                                requested country's nationality. Lower tiers are overwhelmingly local lads; the elite
-                                band is where a club realistically looks abroad. These are <em>targets</em>: the
-                                endpoint draws from the pool, so a tier with too few home-nationality players falls
-                                back to whatever exists, and the response's
-                                <code>distribution.nationalityMatched</code> reports what was actually achieved.
-                                With the defaults a 200-player draw returns ~175 home / ~25 foreign (12.5%), but
-                                those concentrate at the top — the elite band alone is 55% foreign.
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Local (%)</label>
-                            <input type="number" name="youthHomeNationalityPercentLocal"
-                                   value="{{ config.youthHomeNationalityPercentLocal }}"
-                                   min="0" max="100" class="form-control">
-                            <div class="form-text">Default: 95</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Regional (%)</label>
-                            <input type="number" name="youthHomeNationalityPercentRegional"
-                                   value="{{ config.youthHomeNationalityPercentRegional }}"
-                                   min="0" max="100" class="form-control">
-                            <div class="form-text">Default: 85</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">National (%)</label>
-                            <input type="number" name="youthHomeNationalityPercentNational"
-                                   value="{{ config.youthHomeNationalityPercentNational }}"
-                                   min="0" max="100" class="form-control">
-                            <div class="form-text">Default: 70</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Elite (%)</label>
-                            <input type="number" name="youthHomeNationalityPercentElite"
-                                   value="{{ config.youthHomeNationalityPercentElite }}"
-                                   min="0" max="100" class="form-control">
-                            <div class="form-text">Default: 45</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Player Physical ──────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-ruler-vertical text-muted"></i>
-                    <span class="fw-semibold small">Player — Physical</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Height (cm)</label>
-                            <div class="input-group">
-                                <input type="number" name="playerHeightMin" value="{{ config.playerHeightMin }}"
-                                       min="100" max="220" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="playerHeightMax" value="{{ config.playerHeightMax }}"
-                                       min="100" max="220" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 145–160</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Weight (kg)</label>
-                            <div class="input-group">
-                                <input type="number" name="playerWeightMin" value="{{ config.playerWeightMin }}"
-                                       min="20" max="120" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="playerWeightMax" value="{{ config.playerWeightMax }}"
-                                       min="20" max="120" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 38–55</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Personality Trait Range</label>
-                            <div class="input-group">
-                                <input type="number" name="personalityTraitMin" value="{{ config.personalityTraitMin }}"
-                                       min="0" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="personalityTraitMax" value="{{ config.personalityTraitMax }}"
-                                       min="0" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Applied to all 8 traits (confidence, maturity, …). Default: 30–70</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Position Weighting ───────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-sitemap text-muted"></i>
-                    <span class="fw-semibold small">Position Weighting</span>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">
-                        Relative weights for each position. A random integer is rolled against the total of all four weights —
-                        so the values don't need to sum to 100, only their ratios matter.
-                        Example defaults (8 / 30 / 38 / 24 = 100 total): GK 8%, DEF 30%, MID 38%, ATT 24%.
-                    </p>
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label for="positionWeightGk" class="form-label fw-semibold small">GK</label>
-                            <input type="number" id="positionWeightGk" name="positionWeightGk"
-                                   value="{{ config.positionWeightGk }}" min="0" class="form-control">
-                            <div class="form-text">Default: 8</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="positionWeightDef" class="form-label fw-semibold small">DEF</label>
-                            <input type="number" id="positionWeightDef" name="positionWeightDef"
-                                   value="{{ config.positionWeightDef }}" min="0" class="form-control">
-                            <div class="form-text">Default: 30</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="positionWeightMid" class="form-label fw-semibold small">MID</label>
-                            <input type="number" id="positionWeightMid" name="positionWeightMid"
-                                   value="{{ config.positionWeightMid }}" min="0" class="form-control">
-                            <div class="form-text">Default: 38</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="positionWeightAtt" class="form-label fw-semibold small">ATT</label>
-                            <input type="number" id="positionWeightAtt" name="positionWeightAtt"
-                                   value="{{ config.positionWeightAtt }}" min="0" class="form-control">
-                            <div class="form-text">Default: 24</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>{# /gap wrapper #}
-
-        <div class="mt-4">
-            <button type="submit" class="btn btn-primary btn-sm">Save Player Pool Config</button>
+    <div class="bmc-card__body" id="progress" hidden>
+        <div style="display:flex;align-items:center;gap:10px">
+            <span class="bmc-lbl bmc-lbl--ink">BATCH PROGRESS</span>
+            <span style="flex:1"></span>
+            <span class="bmc-data" id="job-summary"></span>
         </div>
-    </form>
+        <div class="bmc-strip" id="job-strip"></div>
+        <div class="bmc-rows bmc-rows--flush" id="job-rows"></div>
+    </div>
+</section>
+
+<section class="bmc-card" data-domain="people" id="activity" hidden>
+    <div class="bmc-card__head">
+        <i data-lucide="history"></i>
+        <span class="bmc-card__title">ACTIVITY</span>
+        <span class="bmc-card__meta">since page load · UTC</span>
+        <span style="flex:1"></span>
+        <button type="button" class="bmc-quick-btn" id="log-clear">CLEAR</button>
+    </div>
+    <div class="bmc-rows bmc-rows--flush bmc-rows--scroll-200" id="log"></div>
+</section>
+
+<div class="bmc-rule"><span class="bmc-rule__title">GENERATION RULES</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">Saved together · used from the next run</span></div>
+
+<form method="post" action="{{ path('admin', {routeName: 'admin_player_pool_config_save'}) }}" data-bmc-form id="rules" style="display:contents">
+    <input type="hidden" name="_token" value="{{ csrf_token('save_player_pool_config') }}">
+    <div class="bmc-grid">
+
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head"><i data-lucide="target"></i><span class="bmc-card__title">POOL TARGET &amp; AGENTS</span></div>
+            {% for r in [
+                {label: 'POOL TARGET',  field: 'playerPoolTarget',          help: 'How many unassigned players generation aims to keep available.', lo: 1, hi: 100000, w: 104, unit: '',  d: 'Default 50'},
+                {label: 'AGENT CHANCE', field: 'playerAgentChancePercent',  help: 'Chance a new player arrives with an agent.',                     lo: 0, hi: 100,    w: 76,  unit: '%', d: 'Default 40%'},
+            ] %}
+                {% set v = attribute(config, r.field) %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ r.label }}</span>
+                        <span class="bmc-setting__help">{{ r.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="{{ r.d }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num" style="width:{{ r.w }}px"><input name="{{ r.field }}" inputmode="numeric" value="{{ v }}" data-saved="{{ v }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" aria-label="{{ r.label|lower }}">{% if r.unit %}<span class="bmc-num__unit">{{ r.unit }}</span>{% endif %}</label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head"><i data-lucide="trending-up"></i><span class="bmc-card__title">POTENTIAL</span><span class="bmc-card__meta">1–100</span></div>
+            <div class="bmc-card__body" style="gap:6px">
+                {% set pl = config.playerPotentialMin %}{% set ph = config.playerPotentialMax %}{% set pm = config.playerPotentialMean %}
+                <div class="bmc-bar bmc-bar--22">
+                    <span class="bmc-bar__span" style="left:{{ pl }}%;width:{{ max(0, ph - pl) }}%;background:var(--wk-positive)"></span>
+                    <span class="bmc-bar__mark" style="left:{{ pm }}%"></span>
+                </div>
+                <div class="bmc-bar__scale"><span>1</span><span>mean {{ pm }}</span><span>100</span></div>
+            </div>
+            {% for r in [
+                {label: 'MIN',  field: 'playerPotentialMin',  help: 'Lowest potential a new player can roll.',  extra: 'data-lte="playerPotentialMax"'},
+                {label: 'MAX',  field: 'playerPotentialMax',  help: 'Highest potential a new player can roll.', extra: ''},
+                {label: 'MEAN', field: 'playerPotentialMean', help: 'Centre of the draw — must sit inside the range.', extra: 'data-between="playerPotentialMin,playerPotentialMax"'},
+            ] %}
+                {% set v = attribute(config, r.field) %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ r.label }}</span>
+                        <span class="bmc-setting__help">{{ r.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default=""></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num bmc-num--76"><input name="{{ r.field }}" inputmode="numeric" value="{{ v }}" data-saved="{{ v }}" data-min="1" data-max="100" {{ r.extra|raw }} aria-label="potential {{ r.label|lower }}"></label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        <section class="bmc-card bmc-span-all" data-domain="people">
+            <div class="bmc-card__head"><i data-lucide="ruler"></i><span class="bmc-card__title">AGE BANDS &amp; YOUTH CEILINGS</span><span class="bmc-card__meta">ages 10–40</span></div>
+            <div class="bmc-card__body" style="gap:8px">
+                {# Axis is 10–40, so a position is (age - 10) / 30 * 100, clamped. Twig arrow
+                   functions are filter callbacks, not callables, so each one is worked out
+                   here rather than through a helper. #}
+                {% set poolA = max(0, min(100, ((config.playerAgeMin - 10) / 30 * 100)|round)) %}
+                {% set poolB = max(0, min(100, ((config.playerAgeMax - 10) / 30 * 100)|round)) %}
+                {% set junB  = max(0, min(100, ((config.playerJuniorAbilityCeilingAge - 10) / 30 * 100)|round)) %}
+                {% set youB  = max(0, min(100, ((config.playerYouthAbilityCeilingAge - 10) / 30 * 100)|round)) %}
+                {% set ftA   = max(0, min(100, ((config.playerFirstTeamAgeMin - 10) / 30 * 100)|round)) %}
+                {% for row in [
+                    {k: 'POOL',       a: poolA, b: poolB, c: 'var(--wk-positive)', t: config.playerAgeMin ~ '–' ~ config.playerAgeMax},
+                    {k: 'JUNIOR CAP', a: 0,     b: junB,  c: 'var(--wk-warning)',  t: 'under ' ~ config.playerJuniorAbilityCeilingAge},
+                    {k: 'YOUTH CAP',  a: 0,     b: youB,  c: '#38BDF8',            t: 'under ' ~ config.playerYouthAbilityCeilingAge},
+                    {k: 'FIRST TEAM', a: ftA,   b: 100,   c: 'var(--wk-info)',     t: config.playerFirstTeamAgeMin ~ '+'},
+                ] %}
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="bmc-lbl" style="width:88px">{{ row.k }}</span>
+                        <span class="bmc-bar bmc-bar--22" style="flex:1">
+                            <span class="bmc-bar__span" style="left:{{ row.a }}%;width:{{ max(0, row.b - row.a) }}%;background:{{ row.c }}">{{ row.t }}</span>
+                        </span>
+                    </div>
+                {% endfor %}
+                <div class="bmc-bar__scale"><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>35</span><span>40</span></div>
+            </div>
+            {% for r in [
+                {label: 'POOL AGE',        a: 'playerAgeMin',                      b: 'playerAgeMax',                          lo: 10, hi: 45,  unit: 'yrs', help: 'Age range a generated player is drawn from.'},
+                {label: 'FIRST-TEAM FLOOR',a: 'playerFirstTeamAgeMin',             b: null,                                    lo: 0,  hi: 60,  unit: 'yrs', help: 'Youngest age counted as first team.'},
+                {label: 'JUNIOR CEILING',  a: 'playerJuniorAbilityCeilingAge',     b: 'playerJuniorAbilityCeilingPercent',     lo: 0,  hi: 45,  unit: '',    help: 'Under this age, ability is capped at this share of potential.', two: true},
+                {label: 'YOUTH CEILING',   a: 'playerYouthAbilityCeilingAge',      b: 'playerYouthAbilityCeilingPercent',      lo: 0,  hi: 45,  unit: '',    help: 'The looser cap that applies up to this age.', two: true},
+            ] %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ r.label }}</span>
+                        <span class="bmc-setting__help">{{ r.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default=""></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        {% if r.two|default(false) %}
+                            <span class="bmc-unitword">under</span>
+                            <label class="bmc-num bmc-num--76"><input name="{{ r.a }}" inputmode="numeric" value="{{ attribute(config, r.a) }}" data-saved="{{ attribute(config, r.a) }}" data-min="0" data-max="45" aria-label="{{ r.label|lower }} age"></label>
+                            <span class="bmc-unitword">max</span>
+                            <label class="bmc-num bmc-num--76"><input name="{{ r.b }}" inputmode="numeric" value="{{ attribute(config, r.b) }}" data-saved="{{ attribute(config, r.b) }}" data-min="1" data-max="100" aria-label="{{ r.label|lower }} percent"><span class="bmc-num__unit">%</span></label>
+                        {% elseif r.b %}
+                            <label class="bmc-num bmc-num--76"><input name="{{ r.a }}" inputmode="numeric" value="{{ attribute(config, r.a) }}" data-saved="{{ attribute(config, r.a) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" data-lte="{{ r.b }}" aria-label="{{ r.label|lower }} minimum"></label>
+                            <span class="bmc-sep">–</span>
+                            <label class="bmc-num bmc-num--76"><input name="{{ r.b }}" inputmode="numeric" value="{{ attribute(config, r.b) }}" data-saved="{{ attribute(config, r.b) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" aria-label="{{ r.label|lower }} maximum"></label>
+                            <span class="bmc-unitword" style="width:26px">{{ r.unit }}</span>
+                        {% else %}
+                            <label class="bmc-num bmc-num--76"><input name="{{ r.a }}" inputmode="numeric" value="{{ attribute(config, r.a) }}" data-saved="{{ attribute(config, r.a) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" aria-label="{{ r.label|lower }}"></label>
+                            <span class="bmc-unitword" style="width:26px">{{ r.unit }}</span>
+                        {% endif %}
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head"><i data-lucide="users"></i><span class="bmc-card__title">POSITION WEIGHTING</span><span class="bmc-card__meta">relative, not percentages</span></div>
+            {% set pw = {'GK': config.positionWeightGk, 'DEF': config.positionWeightDef, 'MID': config.positionWeightMid, 'ATT': config.positionWeightAtt} %}
+            {% set pwTotal = pw.GK + pw.DEF + pw.MID + pw.ATT %}
+            <div class="bmc-card__body" style="gap:6px">
+                <div class="bmc-bar" style="height:16px;display:flex;padding:0">
+                    {% for k, colour in {'GK': '#3FAA7E', 'DEF': '#38BDF8', 'MID': '#e8852a', 'ATT': '#9bb0c4'} %}
+                        <span style="width:{{ pwTotal > 0 ? (pw[k] / pwTotal * 100)|round(2) : 0 }}%;background:{{ colour }}" title="{{ k }}"></span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% for k, field in {'GK': 'positionWeightGk', 'DEF': 'positionWeightDef', 'MID': 'positionWeightMid', 'ATT': 'positionWeightAtt'} %}
+                {% set v = attribute(config, field) %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ k }}</span>
+                        <span class="bmc-setting__help">{{ pwTotal > 0 ? (v / pwTotal * 100)|round ~ '% of draws' : 'no weight set' }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default=""></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num bmc-num--76"><input name="{{ field }}" inputmode="numeric" value="{{ v }}" data-saved="{{ v }}" data-min="0" data-max="1000" data-nonzero-group="pos" aria-label="{{ k }} weight"></label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head"><i data-lucide="flag"></i><span class="bmc-card__title">YOUTH DRAW · HOME NATIONALITY</span><span class="bmc-card__meta">targets, not guarantees</span></div>
+            {% for r in [
+                {label: 'LOCAL',    field: 'youthHomeNationalityPercentLocal',    d: 'Default 95%'},
+                {label: 'REGIONAL', field: 'youthHomeNationalityPercentRegional', d: 'Default 85%'},
+                {label: 'NATIONAL', field: 'youthHomeNationalityPercentNational', d: 'Default 70%'},
+                {label: 'ELITE',    field: 'youthHomeNationalityPercentElite',    d: 'Default 45%'},
+            ] %}
+                {% set v = attribute(config, r.field) %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ r.label }}</span>
+                        <span class="bmc-setting__help">Share of youth drawn from the club's own nation.</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="{{ r.d }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num bmc-num--76"><input name="{{ r.field }}" inputmode="numeric" value="{{ v }}" data-saved="{{ v }}" data-min="0" data-max="100" aria-label="{{ r.label|lower }} home nationality share"><span class="bmc-num__unit">%</span></label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head"><i data-lucide="activity"></i><span class="bmc-card__title">PHYSICAL &amp; PERSONALITY</span></div>
+            {% for r in [
+                {label: 'HEIGHT',      a: 'playerHeightMin',     b: 'playerHeightMax',     lo: 100, hi: 220, unit: 'cm', help: 'Height range at generation.'},
+                {label: 'WEIGHT',      a: 'playerWeightMin',     b: 'playerWeightMax',     lo: 20,  hi: 120, unit: 'kg', help: 'Weight range at generation.'},
+                {label: 'PERSONALITY', a: 'personalityTraitMin', b: 'personalityTraitMax', lo: 0,   hi: 100, unit: '',   help: 'Range each personality trait is rolled in.'},
+            ] %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ r.label }}</span>
+                        <span class="bmc-setting__help">{{ r.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default=""></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num bmc-num--76"><input name="{{ r.a }}" inputmode="numeric" value="{{ attribute(config, r.a) }}" data-saved="{{ attribute(config, r.a) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" data-lte="{{ r.b }}" aria-label="{{ r.label|lower }} minimum"></label>
+                        <span class="bmc-sep">–</span>
+                        <label class="bmc-num bmc-num--76"><input name="{{ r.b }}" inputmode="numeric" value="{{ attribute(config, r.b) }}" data-saved="{{ attribute(config, r.b) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" aria-label="{{ r.label|lower }} maximum"></label>
+                        <span class="bmc-unitword" style="width:26px">{{ r.unit }}</span>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
     </div>
 
-</div>
+    <section class="bmc-danger">
+        <i data-lucide="triangle-alert"></i>
+        <div class="bmc-danger__text">
+            <span class="bmc-lbl bmc-lbl--ink">CLEAR ALL PLAYERS</span>
+            <span class="bmc-data">Deletes every player in the pool and the guardians attached to them — {{ inPool|number_format }} records. Cannot be undone.</span>
+        </div>
+        <button type="submit" class="bmc-btn bmc-btn--danger-outline" form="clear-form" {{ inPool == 0 ? 'disabled' }}
+                data-bmc-dialog-title="CLEAR {{ inPool|number_format }} PLAYERS?"
+                data-bmc-dialog-message="Every player in the pool is deleted, along with their guardians. This cannot be undone."
+                data-bmc-dialog-confirm="CLEAR" data-bmc-dialog-variant="red"><span>CLEAR ALL PLAYERS</span></button>
+    </section>
+
+    <div class="bmc-savebar" data-bmc-savebar data-idle="Rules are used from the next generation run.">
+        <span class="bmc-savebar__dot"></span>
+        <span class="bmc-savebar__title">ALL SAVED</span>
+        <span class="bmc-savebar__sub"></span>
+        <button type="button" class="bmc-btn" data-bmc-discard><span>DISCARD</span></button>
+        <button type="submit" class="bmc-btn bmc-btn--yellow" data-bmc-save><span>SAVE RULES</span></button>
+    </div>
+</form>
+
+<form method="post" id="clear-form" action="{{ path('admin', {routeName: 'admin_player_pool_clear'}) }}" hidden>
+    <input type="hidden" name="_token" value="{{ csrf_token('clear_player_pool') }}">
+</form>
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script>
+(function () {
+    var $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return [].slice.call((r || document).querySelectorAll(s)); };
+    var n = function (v) { return Number(v).toLocaleString('en-GB'); };
+
+    var gen = $('#gen'), list = $('#picklist'), rows = $$('.bmc-pick-row', list), heads = $$('.bmc-pick-head', list);
+    var mode = 'replenish', running = false, log = [];
+    var target = {{ target }}, inPool = {{ inPool }};
+    var countsUrl = '{{ path('admin_player_pool_counts') }}';
+
+    var JC = { queued: ['QUEUED', 'subtle', 'var(--wk-panel)'], running: ['RUNNING', 'accent', 'var(--wk-accent)'],
+               done: ['DONE', 'positive', 'var(--wk-positive)'], skipped: ['AT TARGET', '', 'var(--wk-text-faint)'],
+               failed: ['FAILED', 'danger', 'var(--wk-danger)'] };
+
+    var picked = function () { return rows.filter(function (r) { return r.getAttribute('aria-checked') === 'true'; }); };
+    var shortfall = function () { return Math.max(0, target - inPool); };
+
+    // ── the picker ──────────────────────────────────────────────────
+    function drawChips() {
+        var p = picked();
+        $('#nat-chips').innerHTML = p.length
+            ? p.map(function (r) {
+                return '<span class="bmc-vchip"><span class="bmc-vchip__code">' + r.dataset.code + '</span>' +
+                       '<span class="bmc-vchip__name">' + r.dataset.nat + '</span>' +
+                       '<button type="button" class="bmc-vchip__x" data-drop="' + r.dataset.nat + '" ' +
+                       'title="Remove ' + r.dataset.nat + '" aria-label="Remove ' + r.dataset.nat + '">×</button></span>';
+              }).join('')
+            : '<span class="bmc-data">Random — nothing picked, so one job draws a nationality the usual way.</span>';
+    }
+
+    function drawHeads() {
+        heads.forEach(function (h) {
+            var mine = rows.filter(function (r) { return r.dataset.region === h.dataset.region; });
+            var on = mine.filter(function (r) { return r.getAttribute('aria-checked') === 'true'; }).length;
+            h.setAttribute('aria-checked', on === 0 ? 'false' : (on === mine.length ? 'true' : 'mixed'));
+            $('.bmc-tile', h).classList.toggle('is-on', on > 0);
+            $('[data-region-picked]', h).textContent = on;
+        });
+    }
+
+    function drawFooter() {
+        var shown = rows.filter(function (r) { return !r.hidden; }).length;
+        $('#pick-footer').textContent = shown + ' shown · ' + picked().length + ' picked';
+    }
+
+    function applySearch() {
+        var q = $('#nat-search').value.trim().toLowerCase();
+        rows.forEach(function (r) {
+            r.hidden = q !== '' && (r.dataset.nat + ' ' + r.dataset.code).toLowerCase().indexOf(q) === -1;
+        });
+        // A heading with nothing left under it is noise.
+        heads.forEach(function (h) {
+            h.hidden = rows.filter(function (r) { return r.dataset.region === h.dataset.region && !r.hidden; }).length === 0;
+        });
+        drawFooter();
+    }
+
+    function applySort(kind) {
+        var order;
+        if (kind === 'az')        order = rows.slice().sort(function (a, b) { return a.dataset.nat.localeCompare(b.dataset.nat); });
+        else if (kind === 'thin') order = rows.slice().sort(function (a, b) { return (+a.dataset.count) - (+b.dataset.count); });
+
+        if (!order) {                       // REGION: headings back in, original order
+            heads.forEach(function (h) { h.hidden = false; });
+            list.innerHTML = '';
+            heads.forEach(function (h) {
+                list.appendChild(h);
+                rows.filter(function (r) { return r.dataset.region === h.dataset.region; })
+                    .forEach(function (r) { list.appendChild(r); });
+            });
+        } else {                            // A-Z / THINNEST: one flat list, no headings
+            heads.forEach(function (h) { h.hidden = true; });
+            order.forEach(function (r) { list.appendChild(r); });
+        }
+        applySearch();
+    }
+
+    rows.forEach(function (r) {
+        r.addEventListener('click', function () {
+            r.setAttribute('aria-checked', r.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+            $('.bmc-tile', r).classList.toggle('is-on', r.getAttribute('aria-checked') === 'true');
+            draw();
+        });
+    });
+
+    heads.forEach(function (h) {
+        h.addEventListener('click', function () {
+            var mine = rows.filter(function (r) { return r.dataset.region === h.dataset.region; });
+            // Tri-state: anything picked in the region clears it, nothing picked takes it all.
+            var on = mine.some(function (r) { return r.getAttribute('aria-checked') === 'true'; });
+            mine.forEach(function (r) {
+                r.setAttribute('aria-checked', on ? 'false' : 'true');
+                $('.bmc-tile', r).classList.toggle('is-on', !on);
+            });
+            draw();
+        });
+    });
+
+    $('#nat-chips').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-drop]'); if (!b) return;
+        rows.filter(function (r) { return r.dataset.nat === b.dataset.drop; }).forEach(function (r) {
+            r.setAttribute('aria-checked', 'false'); $('.bmc-tile', r).classList.remove('is-on');
+        });
+        draw();
+    });
+
+    $$('[data-pick]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var k = b.dataset.pick;
+            var home = ['English', 'Scottish', 'Welsh', 'Northern Irish'];
+            var thinnest = rows.slice().sort(function (a, c) { return (+a.dataset.count) - (+c.dataset.count); })
+                               .slice(0, 5).map(function (r) { return r.dataset.nat; });
+            rows.forEach(function (r) {
+                var on = k === 'home' ? home.indexOf(r.dataset.nat) !== -1
+                       : k === 'thin' ? thinnest.indexOf(r.dataset.nat) !== -1
+                       : false;
+                r.setAttribute('aria-checked', on ? 'true' : 'false');
+                $('.bmc-tile', r).classList.toggle('is-on', on);
+            });
+            draw();
+        });
+    });
+
+    $('#nat-search').addEventListener('input', applySearch);
+    $('#nat-sort').addEventListener('bmc:change', function (e) { applySort(e.detail.value); });
+    $('#modes').addEventListener('bmc:change', function (e) { mode = e.detail.value; draw(); });
+    $('#rules').addEventListener('bmc:state', draw);
+
+    // ── the run plan ────────────────────────────────────────────────
+    function jobs() {
+        if (mode === 'replenish') return [{ label: 'Random', mode: 'replenish' }];
+        var p = picked();
+        return p.length
+            ? p.map(function (r) { return { label: r.dataset.nat, nationality: r.dataset.nat, mode: 'force' }; })
+            : [{ label: 'Random', mode: 'force' }];
+    }
+
+    function draw() {
+        drawChips(); drawHeads(); drawFooter();
+
+        var js = jobs(), force = mode === 'force';
+        var total = force ? js.length * target : shortfall();
+
+        $('#sum-jobs').textContent = n(js.length);
+        $('#sum-adds').textContent = '+' + n(total);
+        $('#replenish-status').textContent = shortfall() > 0
+            ? 'Would add ' + n(shortfall()) + '.'
+            : 'At target — nothing to add.';
+
+        var notes = [];
+        if (force && !picked().length) notes.push(['info', 'ink-info', 'Nothing picked, so one job draws a nationality at random.']);
+        if (force) notes.push(['triangle-alert', 'ink-warning', 'Force add ignores what is already in the pool: ' + n(target) + ' per job.']);
+        if (!force && !shortfall()) notes.push(['check', 'ink-positive', 'The pool is at or above target, so replenish would add nothing.']);
+        if ($('#rules')._bmcDirty) notes.push(['info', 'ink-info', 'Uses the saved target until you save the new one.']);
+        $('#sum-notes').innerHTML = notes.map(function (x) {
+            return '<div class="bmc-note"><i data-lucide="' + x[0] + '" class="' + x[1] + '"></i><span>' + x[2] + '</span></div>';
+        }).join('');
+
+        var run = $('#run');
+        run.disabled = running || (!force && !shortfall());
+        run.className = 'bmc-btn bmc-btn--full' + (force ? ' bmc-btn--orange' : '');
+        $('span', run).textContent = running ? 'RUNNING…'
+            : force ? 'FORCE ADD ' + n(total)
+            : shortfall() ? 'REPLENISH +' + n(shortfall())
+            : 'AT TARGET';
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    // ── running ─────────────────────────────────────────────────────
+    function drawJobs(js) {
+        $('#progress').hidden = false;
+        var done = js.filter(function (j) { return j.status !== 'queued' && j.status !== 'running'; }).length;
+        var added = js.reduce(function (a, j) { return a + (j.count || 0); }, 0);
+        $('#job-summary').textContent = done + ' of ' + js.length + ' jobs · +' + n(added);
+        $('#job-strip').innerHTML = js.map(function (j) {
+            return '<span title="' + j.label + '" style="background:' + JC[j.status][2] + '"></span>';
+        }).join('');
+        $('#job-rows').innerHTML = js.map(function (j) {
+            var c = JC[j.status];
+            return '<div class="bmc-jobrow"><div><span class="bmc-badge' + (c[1] ? ' bmc-badge--' + c[1] : '') + '">' + c[0] + '</span></div>' +
+                   '<span class="bmc-celltext">' + j.label + ' · ' + j.mode + '</span>' +
+                   '<span class="bmc-cellnum ' + (j.status === 'done' ? 'ink-positive' : 'ink-dim') + '">' +
+                   (j.status === 'done' ? '+' + n(j.count) : j.status === 'skipped' ? '0' : '—') + '</span></div>';
+        }).join('');
+    }
+
+    function drawLog() {
+        $('#activity').hidden = !log.length;
+        $('#log').innerHTML = log.map(function (l) {
+            return '<div class="bmc-logrow"><span class="bmc-data">' + l.time + '</span>' +
+                   '<span class="bmc-bodytext ' + (l.ok ? 'ink-positive' : 'ink-dim') + '" style="text-align:center">' + (l.ok ? '✓' : '–') + '</span>' +
+                   '<span class="bmc-celltext">' + l.label + '</span><span class="bmc-lbl">' + l.mode + '</span>' +
+                   '<span class="bmc-cellnum ' + (l.ok ? 'ink-positive' : 'ink-dim') + '">' + l.count + '</span></div>';
+        }).join('');
+    }
+
+    // §2.6: re-read the counts after a run rather than trusting the arithmetic.
+    function refreshCounts() {
+        return fetch(countsUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                inPool = d.players || 0;
+                var pct = target > 0 ? Math.min(100, Math.round(inPool / target * 100)) : 0;
+                var sh  = shortfall();
+                $('#hero').textContent = n(inPool);
+                $('#hero-bar').style.width = pct + '%';
+                $('#hero-bar').className = 'bmc-bar__fill' + (pct >= 100 ? '' : (pct >= 50 ? ' bmc-bar__fill--warning' : ' bmc-bar__fill--danger'));
+                $('#hero-note').textContent = inPool === 0 ? 'Nothing in the pool yet.' : (sh > 0 ? n(sh) + ' short of target.' : 'At or above target.');
+                $('#hero-badge').textContent = inPool === 0 ? 'EMPTY' : (sh > 0 ? n(sh) + ' SHORT' : 'AT TARGET');
+                $('#hero-badge').className = 'bmc-badge ' + (inPool === 0 ? 'bmc-badge--danger' : (sh > 0 ? 'bmc-badge--warning' : 'bmc-badge--positive'));
+
+                var by = d.byNationality || {};
+                rows.forEach(function (r) {
+                    var found = null;
+                    Object.keys(by).forEach(function (g) {
+                        (by[g] || []).forEach(function (x) { if (x.nationality === r.dataset.nat) found = x.count; });
+                    });
+                    if (found !== null) {
+                        r.dataset.count = found;
+                        $('.bmc-pick-row__n', r).textContent = n(found);
+                        $('.bmc-pick-row__n', r).className = 'bmc-pick-row__n' + (found === 0 ? ' ink-warning' : '');
+                    }
+                });
+            })
+            .catch(function () { /* the figures stay as they were; the toast still reports the run */ });
+    }
+
+    $('#log-clear').addEventListener('click', function () { log = []; drawLog(); });
+
+    $('#run').addEventListener('click', function () {
+        var js = jobs(), force = mode === 'force', total = force ? js.length * target : shortfall();
+        BMC.confirm({
+            title: (force ? 'FORCE ADD ' + n(total) : 'REPLENISH +' + n(total)) + '?',
+            confirm: force ? 'FORCE ADD' : 'REPLENISH',
+            variant: force ? 'orange' : 'teal',
+            message: force
+                ? 'Adds ' + n(target) + ' players per job, whatever is already in the pool — ' + js.length + (js.length === 1 ? ' job' : ' jobs') + '.'
+                : 'Tops the pool up to ' + n(target) + '. Nationality is drawn at random.'
+        }).then(function (yes) {
+            if (!yes) return;
+            running = true; draw();
+            BMC.runJobs({
+                url: gen.dataset.url, token: gen.dataset.token,
+                jobs: js.map(function (j) { return { type: 'players', label: j.label, mode: j.mode, nationality: j.nationality }; }),
+                onUpdate: drawJobs
+            }).then(function (done) {
+                var d = new Date(), z = function (x) { return String(x).padStart(2, '0'); };
+                var time = z(d.getUTCHours()) + ':' + z(d.getUTCMinutes()) + ':' + z(d.getUTCSeconds());
+                var added = 0;
+                done.forEach(function (j) {
+                    if (j.status === 'done') added += j.count;
+                    log.unshift({ time: time, label: j.label, mode: j.mode.toUpperCase(), ok: j.status === 'done',
+                                  count: j.status === 'done' ? '+' + n(j.count) : j.status === 'failed' ? 'failed' : 'at target' });
+                });
+                log = log.slice(0, 60);
+                running = false; drawLog();
+                refreshCounts().then(draw);
+                BMC.toast(added ? 'GENERATED ' + n(added) + ' PLAYERS' : 'NOTHING TO ADD');
+            });
+        });
+    });
+
+    draw();
+}());
+</script>
 {% endblock %}
