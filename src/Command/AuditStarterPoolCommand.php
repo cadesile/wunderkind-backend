@@ -62,7 +62,7 @@ class AuditStarterPoolCommand extends Command
             : $this->audit->activeCountries();
 
         if ($countries === []) {
-            $io->warning('No enabled countries — StarterConfig::enabledCountries is empty. Nothing to audit.');
+            $io->warning('No live countries — no country profile has status LIVE. Nothing to audit.');
 
             return Command::SUCCESS;
         }

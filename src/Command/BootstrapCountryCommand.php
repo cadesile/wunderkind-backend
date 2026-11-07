@@ -6,7 +6,9 @@ namespace App\Command;
 
 use App\Entity\StarterConfig;
 use App\Enum\Country;
+use App\Enum\Location\CountryProfileStatus;
 use App\Repository\LeagueRepository;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\LeagueService;
@@ -37,6 +39,7 @@ class BootstrapCountryCommand extends Command
         private readonly LeagueRepository           $leagueRepository,
         private readonly NpcClubGenerationService    $npcClubGenerationService,
         private readonly StarterConfigRepository     $starterConfigRepository,
+        private readonly CountryProfileRepository    $countryProfileRepository,
         private readonly EntityManagerInterface      $em,
     ) {
         parent::__construct();
@@ -51,7 +54,7 @@ class BootstrapCountryCommand extends Command
             ->addOption('delete-existing', null, InputOption::VALUE_NONE, 'Delete existing NPC clubs per tier before regenerating')
             ->addOption('skip-pool', null, InputOption::VALUE_NONE, 'Skip running app:pool:warm for this country')
             ->addOption('skip-worldpack', null, InputOption::VALUE_NONE, 'Skip running app:worldpack:warm for this country')
-            ->addOption('enable', null, InputOption::VALUE_NONE, 'Also add this country to StarterConfig::enabledCountries (player-visible at club creation) — off by default since generation-capable and player-visible are deliberately separate concepts')
+            ->addOption('enable', null, InputOption::VALUE_NONE, 'Also mark this country LIVE (player-visible at club creation) — off by default since generation-capable and player-visible are deliberately separate concepts')
             ->addOption('enable-only', null, InputOption::VALUE_NONE, 'Skip every generation step and ONLY flip player-visibility. Use this on a country that is already bootstrapped — a plain --enable re-runs club generation and would add a second full set of clubs');
     }
 
@@ -154,22 +157,35 @@ class BootstrapCountryCommand extends Command
         return Command::SUCCESS;
     }
 
-    /** Idempotent: adding a country already in the list is a no-op. */
+    /**
+     * Idempotent: a country already LIVE is a no-op.
+     *
+     * USED TO APPEND TO StarterConfig::enabledCountries. Player-visibility is now the country
+     * profile's own LIVE status, so this sets that instead — one flag, held where whether the
+     * country is ready is actually known.
+     *
+     * NOT A READINESS CHECK. --enable is an explicit instruction and stays one; whether the
+     * country is actually finished is what `app:country:check` is for.
+     */
     private function enableForPlayers(SymfonyStyle $io, string $countryCode): void
     {
-        $config  = $this->starterConfigRepository->getConfig();
-        $enabled = $config->getEnabledCountries();
+        $profile = $this->countryProfileRepository->findByCode($countryCode);
 
-        if (in_array($countryCode, $enabled, true)) {
-            $io->text("{$countryCode} is already in StarterConfig::enabledCountries — nothing to do.");
+        if ($profile === null) {
+            $io->warning("{$countryCode} has no country profile, so it cannot be made live.");
 
             return;
         }
 
-        $enabled[] = $countryCode;
-        $config->setEnabledCountries($enabled);
+        if ($profile->getStatus() === CountryProfileStatus::LIVE) {
+            $io->text("{$countryCode} is already live — nothing to do.");
+
+            return;
+        }
+
+        $profile->setStatus(CountryProfileStatus::LIVE);
         $this->em->flush();
 
-        $io->success("{$countryCode} is now player-visible (StarterConfig::enabledCountries).");
+        $io->success("{$countryCode} is now player-visible (its country profile is LIVE).");
     }
 }

@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Enum\Country;
 use App\Enum\LeaderboardCategory;
 use App\Repository\LeagueRepository;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -35,6 +36,7 @@ class WorldOverviewService
         private readonly LeagueRepository $leagueRepository,
         private readonly NpcClubRepository $npcClubRepository,
         private readonly StarterConfigRepository $starterConfigRepository,
+        private readonly CountryProfileRepository $countryProfileRepository,
         private readonly CacheInterface $cache,
     ) {}
 
@@ -62,7 +64,7 @@ class WorldOverviewService
         // be buildable by the world generator long before it is offered to players,
         // and advertising the wrong one is exactly how "9 countries" got shipped.
         $enabledCodes = array_values(array_filter(
-            $config->getEnabledCountries(),
+            $this->countryProfileRepository->liveCountryCodes(),
             static fn ($code): bool => Country::tryFrom((string) $code) !== null
         ));
 

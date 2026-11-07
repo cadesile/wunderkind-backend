@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Tests\Service;
 
 use App\Entity\League;
+use App\Entity\Location\CountryProfile;
 use App\Enum\Country;
+use App\Enum\Location\CountryProfileStatus;
 use App\Enum\LeaderboardCategory;
-use App\Repository\StarterConfigRepository;
+use App\Repository\Location\CountryProfileRepository;
 use App\Service\WorldOverviewService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -40,7 +42,7 @@ class WorldOverviewServiceTest extends KernelTestCase
         $container = self::getContainer();
         $em        = $container->get(EntityManagerInterface::class);
 
-        $code = Country::SE->value;   // not in any default enabledCountries list
+        $code = Country::SE->value;   // a country nothing else in the suite makes live
         foreach ($em->getRepository(League::class)->findBy(['country' => $code]) as $stale) {
             $em->remove($stale);
         }
@@ -56,10 +58,26 @@ class WorldOverviewServiceTest extends KernelTestCase
         $em->persist(new League($code, 2, 'Test Second'));
         $em->flush();
 
-        $config = $container->get(StarterConfigRepository::class)->getConfig();
-        $original = $config->getEnabledCountries();
-        $config->setEnabledCountries([$code]);
-        $em->persist($config);
+        // PLAYABLE IS NOW THE COUNTRY PROFILE'S LIVE STATUS, not a list on the starter config,
+        // so isolating this test means owning the set of live profiles for its duration: demote
+        // whatever else is live, make SE live, and put both back afterwards.
+        $profiles = $container->get(CountryProfileRepository::class);
+        $wasLive  = $profiles->liveCountryCodes();
+
+        foreach ($wasLive as $liveCode) {
+            $profiles->findByCode($liveCode)?->setStatus(CountryProfileStatus::DRAFT);
+        }
+
+        $profile = $profiles->findByCode($code);
+        $created = $profile === null;
+
+        if ($created) {
+            $profile = new CountryProfile($code, Country::from($code)->label());
+            $em->persist($profile);
+        }
+
+        $wasStatus = $profile->getStatus();
+        $profile->setStatus(CountryProfileStatus::LIVE);
         $em->flush();
 
         $service = $container->get(WorldOverviewService::class);
@@ -67,7 +85,16 @@ class WorldOverviewServiceTest extends KernelTestCase
         $data = $service->getOverview();
 
         // Restore, so this test cannot leak into the rest of the suite.
-        $config->setEnabledCountries($original);
+        if ($created) {
+            $em->remove($profile);
+        } else {
+            $profile->setStatus($wasStatus);
+        }
+
+        foreach ($wasLive as $liveCode) {
+            $profiles->findByCode($liveCode)?->setStatus(CountryProfileStatus::LIVE);
+        }
+
         $em->flush();
         $service->clear();
 

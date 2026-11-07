@@ -176,8 +176,18 @@ class StarterConfig
     private ReputationTier $starterReputationTier = ReputationTier::LOCAL;
 
     /**
-     * Country codes (ClubCountryCode values) available to players at club creation.
-     * Default: ['EN'] — England only.
+     * SUPERSEDED, AND NO LONGER READ BY ANYTHING.
+     *
+     * Was the hand-ticked list of countries offered to players at club creation. A country is
+     * now offered when its own CountryProfile is LIVE — see
+     * CountryProfileRepository::liveCountryCodes() — because a separate checkbox could and did
+     * disagree with the readiness it was meant to describe: ticked while the profile was still
+     * DRAFT, or left un-ticked long after the country went live.
+     *
+     * THE COLUMN IS KEPT ON PURPOSE. Dropping it is a migration, and the stored value is the
+     * only record of what was last ticked if the switchover has to be reasoned about. Nothing
+     * writes it and nothing reads it; the accessors below remain only so the mapping and the
+     * migrated database still agree.
      */
     #[ORM\Column(type: 'json')]
     private array $enabledCountries = ['EN'];

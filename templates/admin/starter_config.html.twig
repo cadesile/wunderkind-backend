@@ -541,30 +541,10 @@
             </div>
         </div>
 
-        <div class="card mt-3">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-globe text-muted"></i>
-                <span class="fw-semibold small">Country Config</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">Controls which countries are available when a player creates a new club. Only enable countries with complete league and club data.</p>
-                {# generationCapableCountries comes from Country::generationCapableLabels() —
-                   the same source the "Generate" screen's country dropdowns read, so this
-                   list can never drift out of sync with them again. #}
-                {% for code, label in generationCapableCountries %}
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox"
-                               name="enabledCountries[]"
-                               value="{{ code }}"
-                               id="country_{{ code }}"
-                               {% if code in config.enabledCountries %}checked{% endif %}>
-                        <label class="form-check-label" for="country_{{ code }}">
-                            {{ label }} ({{ code }})
-                        </label>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
+        {# COUNTRY CONFIG LIVED HERE. A country is now offered to players when its profile is
+           LIVE — set on the country itself, where whether it is ready is actually known —
+           rather than ticked here in a list that could disagree with it. Change it at
+           /admin?routeName=admin_locations, on the country. #}
 
         <div class="mt-4">
             <button type="submit" class="btn btn-primary btn-sm">Save Starter Config</button>
