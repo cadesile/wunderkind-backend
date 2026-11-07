@@ -10,6 +10,7 @@ use App\Entity\Location\LandPlot;
 use App\Entity\Location\Location;
 use App\Entity\Location\PlotHold;
 use App\Entity\User;
+use App\Enum\CitySize;
 use App\Enum\Location\ClaimReleaseReason;
 use App\Enum\Location\CountryProfileStatus;
 use App\Enum\UserLedgerEntryType;
@@ -17,6 +18,7 @@ use App\Exception\Location\PlotUnavailableException;
 use App\Repository\Location\PlotClaimRepository;
 use App\Repository\Location\PlotHoldRepository;
 use App\Repository\UserLedgerRepository;
+use App\Service\Location\LandPlotProvisioner;
 use App\Service\Location\PlotClaimService;
 use App\Service\Location\PlotHoldService;
 use App\Service\Location\StadiumEstimateService;
@@ -199,6 +201,148 @@ class PlotHoldAndClaimTest extends KernelTestCase
         );
 
         self::assertTrue($second->isActive());
+    }
+
+    // ──────────────── surplus plots on a demoted town ────────────────
+
+    public function testALiveHoldProtectsAPlotFromTheReap(): void
+    {
+        // A hold is a player at the checkout with a price quoted. Retiring the plot underneath
+        // them would fail the purchase for a reason they could not have seen coming.
+        //
+        // The order is the real-world one: the plot was legitimate when the hold was taken, and
+        // the town was demoted afterwards.
+        [$first, $surplus] = $this->twoPlotBigTown();
+
+        $this->holds->acquire($this->user('holder'), $surplus);
+        $this->demoteToSmall($first);
+
+        self::getContainer()->get(LandPlotProvisioner::class)
+            ->reapSurplus([(string) $first->getLocation()->getId()]);
+
+        self::assertSame('active', $this->statusOf($surplus), 'held, so untouchable');
+    }
+
+    public function testAHoldThatLapsesLeavesNoSurplusPlotBehind(): void
+    {
+        // The gap this closes. Nothing runs when a hold expires, so the plot it was protecting
+        // would stay active above the town's target with no event to collect it — and the next
+        // player could buy land the town is no longer big enough for.
+        [$first, $surplus] = $this->twoPlotBigTown();
+
+        $hold = $this->holds->acquire($this->user('lapser'), $surplus);
+        $this->demoteToSmall($first);
+
+        self::getContainer()->get(LandPlotProvisioner::class)
+            ->reapSurplus([(string) $first->getLocation()->getId()]);
+        self::assertSame('active', $this->statusOf($surplus), 'protected while held');
+
+        // The hold lapses, and nothing runs.
+        $this->connection->executeStatement(
+            'UPDATE plot_hold SET expires_at = :past WHERE id = :id',
+            ['past' => new \DateTimeImmutable('-1 minute'), 'id' => (string) $hold->getId()],
+            ['past' => 'datetime_immutable'],
+        );
+        $this->em->clear();
+
+        // The next player to reach for the town is what collects it.
+        $this->holds->acquire(
+            $this->user('next'),
+            $this->em->find(LandPlot::class, (string) $first->getId()),
+        );
+
+        self::assertSame('retired', $this->statusOf($surplus), 'surplus, and nobody holds it now');
+        self::assertSame('active', $this->statusOf($first), 'the one the town is entitled to');
+    }
+
+    public function testAPlotWhoseHoldLapsedCannotBeHeldAgainIfItIsSurplus(): void
+    {
+        // The refusal a player would see: reaching for the lapsed plot is what retires it, and
+        // the existing not-sellable answer explains why without a new case to learn.
+        [$first, $surplus] = $this->twoPlotBigTown();
+
+        $hold = $this->holds->acquire($this->user('first'), $surplus);
+        $this->demoteToSmall($first);
+
+        $this->connection->executeStatement(
+            'UPDATE plot_hold SET expires_at = :past WHERE id = :id',
+            ['past' => new \DateTimeImmutable('-1 minute'), 'id' => (string) $hold->getId()],
+            ['past' => 'datetime_immutable'],
+        );
+        $this->em->clear();
+
+        $this->expectException(PlotUnavailableException::class);
+
+        $this->holds->acquire(
+            $this->user('unlucky'),
+            $this->em->find(LandPlot::class, (string) $surplus->getId()),
+        );
+    }
+
+    public function testASurplusPlotNobodyEverHeldIsLeftAlone(): void
+    {
+        // The guarantee the narrowing protects. A town can be over target because an operator
+        // lowered plotsByCitySize, or because somebody added a plot by hand — neither is a fault
+        // to be corrected the moment a player looks at the town.
+        [$first, $extra] = $this->twoPlotBigTown();
+        $this->demoteToSmall($first);
+        $this->em->clear();
+
+        $this->holds->acquire(
+            $this->user('ordinary'),
+            $this->em->find(LandPlot::class, (string) $extra->getId()),
+        );
+
+        self::assertSame('active', $this->statusOf($extra), 'never held, so never collected here');
+    }
+
+    public function testReleasingAHoldOnADemotedTownRetiresTheSurplus(): void
+    {
+        [$first, $surplus] = $this->twoPlotBigTown();
+
+        $user = $this->user('quitter');
+        $hold = $this->holds->acquire($user, $surplus);
+        $this->demoteToSmall($first);
+
+        self::assertTrue($this->holds->release($user, (string) $hold->getId()));
+        self::assertSame('retired', $this->statusOf($surplus), 'not back on the market');
+        self::assertSame('active', $this->statusOf($first));
+    }
+
+    /**
+     * A BIG town with two plots, as it would have been before a demotion.
+     *
+     * BIG rather than the entity default of SMALL on purpose: at SMALL the second plot is
+     * surplus from the moment it exists, and acquire() would reap it before a hold could be
+     * taken — which is the right behaviour but the wrong starting position for these.
+     *
+     * @return array{LandPlot, LandPlot}
+     */
+    private function twoPlotBigTown(): array
+    {
+        $first = $this->plot();
+        $first->getLocation()->setCitySize(CitySize::BIG);
+
+        $second = new LandPlot($first->getLocation(), 2);
+        $this->em->persist($second);
+        $this->em->flush();
+
+        return [$first, $second];
+    }
+
+    /** SMALL means a target of one plot, so anything past plot 1 is surplus. */
+    private function demoteToSmall(LandPlot $plot): void
+    {
+        $plot->getLocation()->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+    }
+
+    private function statusOf(LandPlot $plot): string
+    {
+        return (string) $this->connection->fetchOne(
+            'SELECT status FROM land_plot WHERE id = :id',
+            ['id' => (string) $plot->getId()],
+        );
     }
 
     /**

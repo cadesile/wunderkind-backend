@@ -173,8 +173,10 @@ final class LandPlotProvisioner
      *
      * THE COUNTERPART TO TOPPING UP, and the reason this class no longer only grows. Called
      * wherever a plot target can fall out of step with the plots on the ground: after a
-     * reclassification re-bands a country, and after a claim is released on a town that is
-     * already over target.
+     * reclassification re-bands a country, after a claim is released on a town that is already
+     * over target, and from PlotHoldService on acquire and release — that last one because a
+     * held plot is skipped here and an expiring hold runs no code to lift the protection, so
+     * acquiring is the only moment left to collect it before it could be sold.
      *
      * WHAT IS SAFE TO TAKE. A plot is free only when it carries no live claim AND no unexpired
      * hold. The hold half matters as much as the claim: a hold is a player at the checkout with
@@ -193,11 +195,21 @@ final class LandPlotProvisioner
      * one that is midway through a sell-back holding a claim it still needs. Touching neither
      * the identity map nor the unit of work is what keeps this safe to call from both.
      *
+     * $formerlyHeldOnly NARROWS IT TO PLOTS A DEAD HOLD IS HIDING, and exists because being over
+     * target is not by itself a fault. An operator who lowers plotsByCitySize leaves every town
+     * of that size over target on purpose — LandPlotProvisioningRulesTest pins that plots are not
+     * taken away for it — and a town hand-given an extra plot is over target deliberately too.
+     * An unconditional reap wherever we happen to look would quietly undo both. The only case
+     * that genuinely needs collecting outside a re-band is a plot the reap already skipped
+     * because it was held, whose hold has since died with no event to say so; requiring that the
+     * plot has a hold row at all is what separates that plot from one that was simply never
+     * wanted gone.
+     *
      * @param list<string> $locationIds empty reaps nothing — pass a country code instead
      *
      * @return int plots retired
      */
-    public function reapSurplus(array $locationIds): int
+    public function reapSurplus(array $locationIds, bool $formerlyHeldOnly = false): int
     {
         if ($locationIds === []) {
             return 0;
@@ -205,7 +217,7 @@ final class LandPlotProvisioner
 
         return $this->reap('p.location_id IN (:ids)', [
             'ids' => $locationIds,
-        ], ['ids' => ArrayParameterType::STRING]);
+        ], ['ids' => ArrayParameterType::STRING], $formerlyHeldOnly);
     }
 
     /** @return int plots retired */
@@ -220,7 +232,7 @@ final class LandPlotProvisioner
      * @param array<string, mixed> $params
      * @param array<string, mixed> $types
      */
-    private function reap(string $scope, array $params, array $types = []): int
+    private function reap(string $scope, array $params, array $types = [], bool $formerlyHeldOnly = false): int
     {
         $config = $this->configRepository->getConfig();
 
@@ -237,6 +249,12 @@ final class LandPlotProvisioner
         ];
 
         $types += ['now' => 'datetime_immutable'];
+
+        // "Has ever been held, but is not held now" — the NOT held above supplies the second
+        // half. Any hold row will do: a live one has already excluded the plot.
+        $heldFilter = $formerlyHeldOnly
+            ? 'AND EXISTS (SELECT 1 FROM plot_hold ph WHERE ph.plot_id = ranked.id)'
+            : '';
 
         return (int) $this->em->getConnection()->executeStatement(
             "UPDATE land_plot
@@ -255,22 +273,35 @@ final class LandPlotProvisioner
                                END AS target,
                                c.id IS NOT NULL AS claimed,
                                h.id IS NOT NULL AS held,
+                               -- CLAIMED PLOTS RANK FIRST, HELD ONES DO NOT. A claim is
+                               -- permanent occupancy and has to consume one of the target's
+                               -- slots. A hold is fifteen minutes, and ranking it the same way
+                               -- let a transient hold on plot 2 evict free plot 1 — retiring
+                               -- the lasting plot in favour of a checkout that may never
+                               -- complete. A hold only defers its OWN plot (the NOT held below).
                                row_number() OVER (
                                    PARTITION BY p.location_id
                                    ORDER BY (c.id IS NOT NULL) DESC,
-                                            (h.id IS NOT NULL) DESC,
                                             p.plot_number ASC
                                ) AS keep_rank
                           FROM land_plot p
                           JOIN location l ON l.id = p.location_id
                           LEFT JOIN plot_claim c ON c.plot_id = p.id AND c.released_at IS NULL
-                          LEFT JOIN plot_hold  h ON h.plot_id = p.id AND h.expires_at > :now
+                          -- THE FULL LIVENESS TEST, matching PlotHoldRepository's: released and
+                          -- consumed holds are both dead. Keying on expires_at alone made a
+                          -- just-released hold go on protecting its plot, so releasing a hold on
+                          -- a demoted town left the surplus active.
+                          LEFT JOIN plot_hold  h ON h.plot_id = p.id
+                                                AND h.released_at IS NULL
+                                                AND h.consumed_at IS NULL
+                                                AND h.expires_at > :now
                          WHERE p.status = :active
                            AND {$scope}
                     ) ranked
                      WHERE keep_rank > target
                        AND NOT claimed
                        AND NOT held
+                       {$heldFilter}
               )",
             $params,
             $types,

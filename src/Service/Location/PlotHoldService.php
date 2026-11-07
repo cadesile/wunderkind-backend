@@ -30,8 +30,14 @@ use Doctrine\ORM\EntityManagerInterface;
  * be IMMUTABLE, so `WHERE expires_at > now()` is illegal and an expired-but-unreleased row still
  * occupies the index. So acquire() first releases exactly the two rows that could block it, which
  * makes the index agree with the read semantics at the only instant that matters. Every read
- * filters on expires_at independently. app:plots:expire-holds exists for hygiene and is NOT
- * required for correctness.
+ * filters on expires_at independently. (An earlier version of this note promised an
+ * app:plots:expire-holds command for hygiene. There is no such command, and nothing needs one —
+ * correctness never depended on it.)
+ *
+ * NOTHING RUNS WHEN A HOLD LAPSES, which is why acquire() also reaps surplus plots. A hold is
+ * the one thing that protects a plot from LandPlotProvisioner::reapSurplus(), and an expiring
+ * hold fires no code to lift that protection — so acquire() does the collecting, at the only
+ * moment a surplus plot could be sold.
  */
 final class PlotHoldService
 {
@@ -41,6 +47,7 @@ final class PlotHoldService
         private readonly StadiumEstimateService $estimateService,
         private readonly EntityManagerInterface $em,
         private readonly LocationCapacityService $capacityService,
+        private readonly LandPlotProvisioner    $plotProvisioner,
     ) {}
 
     /**
@@ -51,6 +58,27 @@ final class PlotHoldService
      */
     public function acquire(User $user, LandPlot $plot): PlotHold
     {
+        // SURPLUS PLOTS DIE HERE, and this is the only place a lapsed hold's plot can be caught.
+        // reapSurplus() skips a held plot on purpose — that hold is somebody at the checkout —
+        // but a hold that simply expires fires no code, so an over-target town could be left
+        // with a free plot above its band's target and no event to collect it. Acquiring is the
+        // one moment that surplus could do harm: it is how the plot gets sold. Reaping first
+        // means a plot that should be gone cannot be held, and therefore cannot be bought.
+        //
+        // IT IS NOT A SWEEP. Scoped to this one town, idempotent, and a no-op for any town at or
+        // under target — which is every town that has never been demoted.
+        // NARROWED to plots a dead hold is hiding. An unconditional reap here enforced the plot
+        // target on every town anybody reached for, which would have retired plots an operator
+        // left over target on purpose by lowering plotsByCitySize — the one thing
+        // LandPlotProvisioningRulesTest pins as never happening.
+        $this->plotProvisioner->reapSurplus([(string) $plot->getLocation()->getId()], formerlyHeldOnly: true);
+
+        // The statement above is raw SQL, so this entity still believes whatever it was loaded
+        // with. Without the refresh a plot just retired would pass assertSellable() and be held.
+        $this->em->refresh($plot);
+
+        // Says "the plot has been retired" if the reap took this one — the existing refusal is
+        // already the right answer, so there is no new case for a caller to learn.
         $this->assertSellable($plot);
 
         $existingClaim = $this->claimRepository->findActiveForPlot($plot);
@@ -153,7 +181,17 @@ final class PlotHoldService
             throw PlotUnavailableException::holdNotYours();
         }
 
-        return $this->holdRepository->markReleased($holdId, new \DateTimeImmutable());
+        $released = $this->holdRepository->markReleased($holdId, new \DateTimeImmutable());
+
+        if ($released) {
+            // The plot was protected from the reap only by this hold. Now that it is gone, an
+            // over-target town should not keep the plot merely because the player changed their
+            // mind — and the acquire-time reap would otherwise not run until somebody tried to
+            // buy it.
+            $this->plotProvisioner->reapSurplus([(string) $hold->getPlot()->getLocation()->getId()]);
+        }
+
+        return $released;
     }
 
     /**
