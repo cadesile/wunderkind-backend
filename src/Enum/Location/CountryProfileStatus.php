@@ -3,12 +3,21 @@
 namespace App\Enum\Location;
 
 /**
- * How far a country has progressed towards being playable.
+ * How far a country has progressed towards being playable — and, at LIVE, whether it is.
  *
- * Deliberately NOT the same axis as Country::isGenerationCapable() (a property of the code,
- * fixed at deploy) or StarterConfig::$enabledCountries (whether players may found a club
- * there). This one tracks the readiness of the *location* data — see CountryReadinessService
- * and docs/world-generation/adding-a-country.md on why those notions stay apart.
+ * TWO AXES NOW, NOT THREE. This used to track only the readiness of the *location* data,
+ * with StarterConfig::$enabledCountries deciding separately whether players could found a
+ * club there. That second list is gone: a country is offered to players exactly when its
+ * profile is LIVE (CountryProfileRepository::liveCountryCodes()), because a hand-ticked list
+ * could and did disagree with the readiness it was meant to describe — ticked while the
+ * profile was still DRAFT, or left un-ticked long after the country went live.
+ *
+ * STILL NOT THE SAME AXIS as Country::isGenerationCapable(), which is a property of the code
+ * fixed at deploy: what the generator can build is not what an operator has chosen to open.
+ *
+ * REACHING LIVE IS GATED. CountryReadinessService decides whether a country may be promoted,
+ * and all three ways in — the Countries CRUD screen, the locations dashboard's GO LIVE, and
+ * app:country:bootstrap --enable — go through CountryGoLiveService so they agree.
  */
 enum CountryProfileStatus: string
 {

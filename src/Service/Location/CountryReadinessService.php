@@ -22,21 +22,32 @@ use Doctrine\DBAL\Connection;
  * (CountryContentRegistry::missingCategories()) all already exist. This service only reads
  * them, adds the location and enrichment checks, and returns a single verdict.
  *
- * Enforced in three places, so a half-built country cannot leak out:
+ * Enforced everywhere a country can reach LIVE, so a half-built one cannot leak out. All
+ * three write paths go through CountryGoLiveService rather than setting the status directly:
  *   - CountryProfileCrudController refuses to set status LIVE when not ready (flash + early
  *     return, the LanguageCrudController::deleteEntity() idiom).
- *   - GET /api/locations only returns locations of LIVE countries.
- *   - app:country:bootstrap and app:country:check print the verdict.
+ *   - The locations dashboard's GO LIVE button re-checks on POST — an enabled button is not
+ *     a check, since a stale page can click one that was valid when it rendered.
+ *   - app:country:bootstrap --enable refuses the same way. It used to set visibility without
+ *     asking, which was harmless while that was a separate list and is not now.
+ * Plus the read side: GET /api/locations only returns locations of LIVE countries, and
+ * app:country:check prints the verdict without changing anything.
  *
  * NOTE ON `places`: CountryContentRegistry::missingCategories() still reports a `places`
  * category, but place data now lives in the `location` table, so that one entry is dropped
  * here and replaced by the real location checks below. The registry's other categories
  * (suffixes, stadium formats) are still authored in PHP and still count.
  *
- * Deliberately NOT a check on StarterConfig::$enabledCountries. Generation-capable,
- * data-ready and player-visible are three separate notions, and
- * docs/world-generation/adding-a-country.md is emphatic that conflating them is the bug this
- * whole area keeps re-learning.
+ * WHAT THIS DOES AND DOES NOT DECIDE. It answers "is the data ready", not "has an operator
+ * chosen to open this country" — passing every check does not make a country live, it only
+ * makes it promotable. The two notions that remain separate are this one and
+ * Country::isGenerationCapable(), which is fixed at deploy.
+ *
+ * (It used to be three. StarterConfig::$enabledCountries was a third, hand-ticked axis for
+ * player-visibility; it is gone, and LIVE now carries that meaning —
+ * CountryProfileRepository::liveCountryCodes(). The warning in
+ * docs/world-generation/adding-a-country.md about conflating these is still worth heeding for
+ * the two that are left.)
  */
 final class CountryReadinessService
 {

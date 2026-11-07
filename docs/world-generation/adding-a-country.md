@@ -105,10 +105,11 @@ generateClubs()` (once per tier) → seeds `StarterConfig::leagueAbilityRanges[<
 - `--force` — proceed even with missing registry content (generic placeholders)
 - `--delete-existing` — wipe and regenerate NPC clubs per tier
 - `--skip-pool` / `--skip-worldpack` — if you want to run those steps separately
-- `--enable` — also add the country to `StarterConfig::enabledCountries` (see step 6). Only
-  meaningful on a *first* bootstrap: club generation below is additive, so passing `--enable`
-  to a country that is already bootstrapped gives it a second full set of clubs.
-- `--enable-only` — flip player-visibility and do nothing else. This is the one to use on an
+- `--enable` — also mark the country **LIVE**, which is what makes it player-visible (see
+  step 6). Refused if the readiness checks do not pass. Only meaningful on a *first*
+  bootstrap: club generation below is additive, so passing `--enable` to a country that is
+  already bootstrapped gives it a second full set of clubs.
+- `--enable-only` — promote to LIVE and do nothing else. This is the one to use on an
   already-bootstrapped country.
 
 ## 5. Verify
@@ -119,7 +120,8 @@ lando php bin/console app:country:check <CODE>
 
 Read-only report: enum/capability status, which registry categories are present vs. falling
 back to generic, whether a name pool exists, league/NPC-club/worldpack-cache coverage per
-tier, and whether `StarterConfig` has an ability-range entry and the player-visibility flag.
+tier, whether `StarterConfig` has an ability-range entry, and whether the country's profile
+is LIVE (which is what player-visibility means).
 
 Then check the pool can actually serve a new club in that country:
 
@@ -139,12 +141,28 @@ their intersection is empty — most often when a tier's configured band sits in
 ability ceiling, so every player low enough to match is too young to be drawn. This check
 reports the draw filter by filter and names the step where the count collapses.
 
-## 6. Decide whether to make it player-visible
+## 6. Decide whether to open it to players
 
-`StarterConfig::enabledCountries` is a *separate*, deliberately decoupled concept from
-generation-capability (see `Country`'s own class docblock) — a country can be fully generated
-and still hidden from the landing page / club-creation flow until it is switched on, either via
-the Starter Config screen (`/admin?routeName=admin_starter_config`) or:
+A country is offered to players **exactly when its `CountryProfile` is LIVE**. There is no
+separate list: `StarterConfig::enabledCountries` used to be one, and it is gone — a
+hand-ticked list could and did disagree with the readiness it was meant to describe, ticked
+while a profile was still `DRAFT` or left un-ticked long after the country went live. The
+column remains on the entity, documented as superseded and read by nothing.
+
+Generating a country and opening it are still separate decisions: a country can be fully
+generated and sit at `TIER_READY` indefinitely. What changed is that the second decision is
+now recorded on the country itself rather than in a list beside it.
+
+**Promotion is gated.** `CountryReadinessService` must pass first — seven checks covering
+leagues, ability ranges, registry content, locations, plots, enrichment and sellable towns.
+All three ways in go through `CountryGoLiveService`, so they agree:
+
+- **Locations → Dashboard** (`/admin?routeName=admin_locations_dashboard`) — pick the country
+  and use **GO LIVE**. The button is disabled until every check passes, and the checks run
+  again on submit, because an enabled button is not a check.
+- **Countries CRUD** (`/admin?routeName=admin_country_profile_index`) — setting the status to
+  Live is refused with the blocking reasons if it is not ready.
+- The CLI:
 
 ```bash
 lando php bin/console app:country:bootstrap <CODE> --enable-only
@@ -154,7 +172,10 @@ lando php bin/console app:country:bootstrap <CODE> --enable-only
 club generation is additive — it creates `clubs-per-tier` clubs on every run unless
 `--delete-existing` is passed — so a second `--enable` run to flip visibility would quietly
 double the country's club count. `--enable-only` skips every generation step, and is a no-op
-if the country is already enabled.
+if the country is already live.
+
+`locationsLiveAt` is stamped the first time a country reaches LIVE and is never rewritten, so
+a country that goes back to `DRAFT` and returns keeps its original date.
 
 ## League Tier Defaults (financials, trophies, sponsors) — country-independent
 

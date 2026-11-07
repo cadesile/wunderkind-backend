@@ -19,7 +19,7 @@ use Symfony\Contracts\Cache\ItemInterface;
  *
  * This exists so the marketing site stops hard-coding figures. The landing page
  * previously claimed "22 clubs per division", "176 NPC clubs", "9 countries" and
- * a "Brazil launch" while `StarterConfig::$enabledCountries` was `['EN']` — every
+ * a "Brazil launch" while England was the only country actually open — every
  * one of those was wrong, and there was no mechanism that would ever have caught
  * it. Reading from the database means the copy cannot drift again.
  *

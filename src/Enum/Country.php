@@ -19,11 +19,16 @@ namespace App\Enum;
  *
  *   - {@see isGenerationCapable()} — the world generator can build a league
  *     pyramid and NPC clubs for this country. A property of the code.
- *   - `StarterConfig::$enabledCountries` — the country is offered to players
- *     right now. An admin-editable runtime toggle, and a subset of the above.
+ *   - A LIVE `CountryProfile` — the country is offered to players right now. An
+ *     operator decision, recorded on the country itself, and a subset of the
+ *     above. Read it through
+ *     {@see \App\Repository\Location\CountryProfileRepository::liveCountryCodes()}.
+ *     (This was `StarterConfig::$enabledCountries`, a hand-ticked list beside the
+ *     country rather than on it. It could disagree with the readiness it was
+ *     meant to describe, so it is gone.)
  *
  * A country can be generation-capable without being playable; the landing page
- * must advertise the second list, never this one.
+ * must advertise the live countries, never this list.
  */
 enum Country: string
 {
@@ -68,10 +73,10 @@ enum Country: string
 
     // ── Remaining UEFA members, added 2026-10-25 ─────────────────────────
     // NATIONALITY options only, unlike the eleven above: none is listed in
-    // isGenerationCapable() (which defaults to false) and none is in
-    // StarterConfig::$enabledCountries, so no pyramid is generated for them and
-    // no one can found a club there. Keeping those two notions apart is what the
-    // class docblock is about. Russia is deliberately absent.
+    // isGenerationCapable() (which defaults to false) and none has a LIVE country
+    // profile, so no pyramid is generated for them and no one can found a club
+    // there. Keeping those two notions apart is what the class docblock is about.
+    // Russia is deliberately absent.
     //
     // NI is Northern Ireland and collides with ISO's code for Nicaragua; XK is
     // Kosovo (ISO user-assigned). Both follow the pseudo-code precedent EN set.
