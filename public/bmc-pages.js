@@ -7,7 +7,8 @@
  *
  *   BMC.toast(msg)                         stacked toast, 2.5s hold, 300ms stepped fade
  *   BMC.confirm({title, message, confirm, variant}) -> Promise<boolean>   PixelDialog
- *   BMC.runJobs({url, token, jobs, onUpdate}) -> Promise<jobs>            sequential generate-chunk POSTs
+ *   BMC.runJobs({url, token, jobs, onUpdate}) -> Promise<jobs>            sequential chunk POSTs
+ *                                          job: {type?, mode?, nationality?, fields?, label}
  *   BMC.money(el) / BMC.digits(str)        thousands-separator formatting helpers
  *   BMC.refreshForm(form)                  re-run dirty/validation after scripted changes
  *
@@ -248,8 +249,14 @@
             if (i >= jobs.length) return Promise.resolve(jobs);
             var j = jobs[i]; j.status = 'running'; up();
             var body = new FormData();
-            body.append('_token', o.token); body.append('type', j.type); body.append('mode', j.mode);
+            body.append('_token', o.token);
+            // type/mode/nationality are the pool endpoints' vocabulary and stay for them.
+            if (j.type) body.append('type', j.type);
+            if (j.mode) body.append('mode', j.mode);
             if (j.nationality) body.append('nationality', j.nationality);
+            // Anything else the endpoint needs. The location reclassifier posts `country`
+            // this way, so the runner drives it without learning a second vocabulary.
+            if (j.fields) { Object.keys(j.fields).forEach(function (k) { body.append(k, j.fields[k]); }); }
             return fetch(o.url, { method: 'POST', body: body, headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
                 .then(function (r) { return r.json().catch(function () { return { success: false, message: 'HTTP ' + r.status }; }); })
                 .then(function (d) {

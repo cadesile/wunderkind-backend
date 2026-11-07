@@ -6,13 +6,16 @@ namespace App\Controller\Admin;
 
 use App\Entity\Location\LocationConfig;
 use App\Enum\CitySize;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\Location\LocationConfigRepository;
 use App\Service\Location\LandPlotProvisioner;
 use App\Service\Location\LocationCapacityService;
+use App\Service\Location\LocationClassificationService;
 use App\Service\Location\LocationSeedService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -43,6 +46,8 @@ class LocationConfigController extends AbstractController
         private readonly LocationConfigRepository $configRepository,
         private readonly LandPlotProvisioner $provisioner,
         private readonly LocationSeedService $seedService,
+        private readonly LocationClassificationService $classificationService,
+        private readonly CountryProfileRepository $countryProfileRepository,
         private readonly Connection $connection,
         private readonly EntityManagerInterface $em,
     ) {}
@@ -62,6 +67,15 @@ class LocationConfigController extends AbstractController
             'npcPlotCap'    => LocationCapacityService::NPC_PLOT_CAP,
             // What the setting currently means for the estate, so a number is not changed blind.
             'estate'        => $this->estateSummary(),
+            // The size bands, and what they currently work out to.
+            'bigShare'      => $config->getBigSharePercent(),
+            'mediumShare'   => $config->getMediumSharePercent(),
+            'smallShare'    => $config->getSmallSharePercent(),
+            'minShare'      => LocationConfig::MIN_SHARE_PERCENT,
+            'maxShare'      => LocationConfig::MAX_SHARE_PERCENT,
+            // One step per country, which is the unit reclassifyCountry() works in. Only
+            // countries with priced towns appear: the rest have nothing to rank.
+            'reclassifyPlan' => $this->reclassifyPlan(),
             'shortfall'     => $this->shortfall($config),
             'seedable'      => array_map(
                 static fn (\App\Enum\Country $c): string => $c->value,
@@ -130,6 +144,125 @@ class LocationConfigController extends AbstractController
      * the class docblock. Only priced towns are touched; an unpriced one stays at zero plots
      * until enrichment values it.
      */
+    /**
+     * Save the BIG / SMALL shares.
+     *
+     * Its own form rather than part of the plot one: these change what every town IS, where the
+     * plot counts only change how much land a town of that size carries. Saving them does NOT
+     * reclassify — the bands on disk and the bands in the database are allowed to differ until
+     * somebody runs the recalculation and watches it happen.
+     */
+    #[Route('/admin/locations/config/bands', name: 'admin_location_config_save_bands', methods: ['POST'])]
+    public function saveBands(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('location_config_bands', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen();
+        }
+
+        $config = $this->configRepository->getConfig();
+        $config->setShares(
+            (int) $request->request->get('bigSharePercent', LocationConfig::DEFAULT_BIG_SHARE_PERCENT),
+            (int) $request->request->get('smallSharePercent', LocationConfig::DEFAULT_SMALL_SHARE_PERCENT),
+        );
+        $this->em->flush();
+
+        $this->addFlash('success', \sprintf(
+            'City size bands saved — %d%% big, %d%% medium, %d%% small. Run the recalculation to apply them.',
+            $config->getBigSharePercent(),
+            $config->getMediumSharePercent(),
+            $config->getSmallSharePercent(),
+        ));
+
+        return $this->backToScreen();
+    }
+
+    /**
+     * Reclassify ONE country, for the queue on the config screen.
+     *
+     * ONE COUNTRY PER REQUEST, because that is the unit the split is defined over: a town is
+     * BIG because it is in the top share of ITS country, so a country is the smallest piece of
+     * work that produces a correct answer. It is also what keeps the request short enough to
+     * survive a proxy, which is the lesson the town-pull batching already learned the hard way.
+     *
+     * The same JSON shape the pool generate-chunk endpoints return, so the shared
+     * BMC.runJobs() runner drives this without knowing anything about locations.
+     */
+    #[Route('/admin/locations/config/reclassify-chunk', name: 'admin_location_config_reclassify_chunk', methods: ['POST'])]
+    public function reclassifyChunk(Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid('location_config_reclassify', $request->request->get('_token'))) {
+            return $this->json(['success' => false, 'message' => 'Invalid CSRF token.'], 403);
+        }
+
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if ($code === '') {
+            return $this->json(['success' => false, 'message' => 'No country given.'], 400);
+        }
+
+        try {
+            $distribution = $this->classificationService->reclassifyCountry($code);
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+
+        // An empty distribution means no priced towns, which is "nothing to do" rather than a
+        // fault — the same `skipped` the pool endpoints use for a pool already at target.
+        if ($distribution === []) {
+            return $this->json([
+                'success' => true,
+                'skipped' => true,
+                'count'   => 0,
+                'message' => 'No priced towns to rank.',
+            ]);
+        }
+
+        $total = array_sum($distribution);
+
+        return $this->json([
+            'success'      => true,
+            'count'        => $total,
+            'distribution' => $distribution,
+            'message'      => \sprintf(
+                '%d town(s): %d big, %d medium, %d small.',
+                $total,
+                $distribution[CitySize::BIG->value] ?? 0,
+                $distribution[CitySize::MEDIUM->value] ?? 0,
+                $distribution[CitySize::SMALL->value] ?? 0,
+            ),
+        ]);
+    }
+
+    /**
+     * The countries worth reclassifying, with what each currently holds.
+     *
+     * Only countries with at least one priced town: classification ranks on population and
+     * findForClassification() takes only towns that have one, so a country without any would
+     * be a step that always reports nothing.
+     *
+     * @return list<array{code: string, name: string, towns: int}>
+     */
+    private function reclassifyPlan(): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT l.country_code AS code, COUNT(*) AS towns
+               FROM location l
+              WHERE l.status = 'active' AND l.population IS NOT NULL AND l.population > 0
+              GROUP BY l.country_code
+              ORDER BY l.country_code",
+        );
+
+        $names = $this->countryProfileRepository->nameMap();
+
+        return array_map(static fn (array $r): array => [
+            'code'  => (string) $r['code'],
+            'name'  => $names[(string) $r['code']] ?? (string) $r['code'],
+            'towns' => (int) $r['towns'],
+        ], $rows);
+    }
+
     #[Route('/admin/locations/config/provision', name: 'admin_location_config_provision', methods: ['POST'])]
     public function provision(Request $request): Response
     {

@@ -29,7 +29,11 @@ class LocationConfigControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         // Singleton row, shared with every other test in the suite.
-        self::getContainer()->get(Connection::class)->executeStatement('DELETE FROM location_config');
+        $conn = self::getContainer()->get(Connection::class);
+        $conn->executeStatement('DELETE FROM location_config');
+        $conn->executeStatement("DELETE FROM land_plot WHERE location_id IN (SELECT id FROM location WHERE country_code = 'ZQ')");
+        $conn->executeStatement("DELETE FROM location WHERE country_code = 'ZQ'");
+        $conn->executeStatement("DELETE FROM country_profile WHERE code = 'ZQ'");
         parent::tearDown();
     }
 
@@ -166,6 +170,229 @@ class LocationConfigControllerTest extends WebTestCase
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    // ── City size bands ──────────────────────────────────────────────────
+
+    public function testTheBandFieldsAndTheRecalculateQueueRender(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin', ['routeName' => 'admin_location_config']);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('form[action*="admin_location_config_save_bands"]');
+        self::assertSelectorExists('input[name="bigSharePercent"]');
+        self::assertSelectorExists('input[name="smallSharePercent"]');
+    }
+
+    public function testSavingTheBandsPersistsThem(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/bands', [
+            '_token'            => $this->csrfToken($client, 'location_config_bands'),
+            'bigSharePercent'   => '10',
+            'smallSharePercent' => '70',
+        ]);
+
+        self::assertResponseRedirects();
+
+        $config = $this->freshConfig();
+        self::assertSame(10, $config->getBigSharePercent());
+        self::assertSame(70, $config->getSmallSharePercent());
+        self::assertSame(20, $config->getMediumSharePercent(), 'medium is the remainder');
+    }
+
+    /**
+     * Overlapping bands are resolved the way the ranking actually resolves them.
+     *
+     * classify() tests the big cutoff before the small one, so 60/60 really produces 60 big
+     * and 40 small. Storing what was typed would leave the screen describing a split that
+     * never happens.
+     */
+    public function testSmallGivesWayWhenTheBandsOverlap(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/bands', [
+            '_token'            => $this->csrfToken($client, 'location_config_bands'),
+            'bigSharePercent'   => '60',
+            'smallSharePercent' => '60',
+        ]);
+
+        $config = $this->freshConfig();
+        self::assertSame(60, $config->getBigSharePercent());
+        self::assertSame(40, $config->getSmallSharePercent(), 'clamped to what is left');
+        self::assertSame(0, $config->getMediumSharePercent());
+    }
+
+    public function testOutOfRangeBandsAreClampedNotTrusted(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/bands', [
+            '_token'            => $this->csrfToken($client, 'location_config_bands'),
+            'bigSharePercent'   => '900',
+            'smallSharePercent' => '-20',
+        ]);
+
+        $config = $this->freshConfig();
+        self::assertSame(100, $config->getBigSharePercent());
+        self::assertSame(0, $config->getSmallSharePercent());
+    }
+
+    public function testSavingTheBandsNeedsAValidToken(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/bands', [
+            '_token'          => 'not-a-real-token',
+            'bigSharePercent' => '99',
+        ]);
+
+        self::assertResponseRedirects();
+        self::assertNotSame(99, $this->freshConfig()->getBigSharePercent());
+    }
+
+    // ── The recalculation queue ──────────────────────────────────────────
+
+    public function testReclassifyChunkRejectsABadToken(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/reclassify-chunk', [
+            '_token'  => 'not-a-real-token',
+            'country' => 'EN',
+        ]);
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertFalse(json_decode($client->getResponse()->getContent(), true)['success']);
+    }
+
+    public function testReclassifyChunkNeedsACountry(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/reclassify-chunk', [
+            '_token'  => $this->csrfToken($client, 'location_config_reclassify'),
+            'country' => '',
+        ]);
+
+        self::assertResponseStatusCodeSame(400);
+    }
+
+    /**
+     * A country with nothing to rank is "skipped", not a failure.
+     *
+     * Same shape the pool generate-chunk endpoints use for a pool already at target, which is
+     * what lets the shared BMC.runJobs() runner drive this without knowing about locations.
+     */
+    public function testACountryWithNoPricedTownsIsSkipped(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('POST', '/admin/locations/config/reclassify-chunk', [
+            '_token'  => $this->csrfToken($client, 'location_config_reclassify'),
+            'country' => 'ZZ',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $data = json_decode($client->getResponse()->getContent(), true);
+        self::assertTrue($data['success']);
+        self::assertTrue($data['skipped']);
+        self::assertSame(0, $data['count']);
+    }
+
+    /**
+     * The whole feature, end to end: change the bands, run a step, towns move.
+     *
+     * The other tests here prove the bands persist and the endpoint answers. This is the one
+     * that proves they are connected — ten towns at 20/50 band 2/3/5, and at 50/20 they band
+     * 5/3/2. Without it the screen could save numbers nothing reads.
+     */
+    public function testChangingTheBandsAndRunningAStepMovesTowns(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $this->seedTowns('ZQ', 10);
+
+        $client->request('POST', '/admin/locations/config/bands', [
+            '_token'            => $this->csrfToken($client, 'location_config_bands'),
+            'bigSharePercent'   => '50',
+            'smallSharePercent' => '20',
+        ]);
+
+        $client->request('POST', '/admin/locations/config/reclassify-chunk', [
+            '_token'  => $this->csrfToken($client, 'location_config_reclassify'),
+            'country' => 'ZQ',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $data = json_decode($client->getResponse()->getContent(), true);
+
+        self::assertTrue($data['success']);
+        self::assertSame(10, $data['count']);
+        self::assertSame(5, $data['distribution'][CitySize::BIG->value]);
+        self::assertSame(2, $data['distribution'][CitySize::SMALL->value]);
+        self::assertSame(3, $data['distribution'][CitySize::MEDIUM->value]);
+
+        // And the rows really carry it, not just the response.
+        $big = self::getContainer()->get(Connection::class)->fetchOne(
+            "SELECT COUNT(*) FROM location WHERE country_code = 'ZQ' AND city_size = 'BIG'",
+        );
+        self::assertSame(5, (int) $big);
+    }
+
+    /**
+     * Ten priced towns with distinct populations, so the ranking is unambiguous.
+     *
+     * Through the entities rather than raw SQL: both tables carry NOT NULL columns the
+     * constructors fill in — country_profile.default_locale, location.land_source — and
+     * chasing them one INSERT error at a time is how this started.
+     */
+    private function seedTowns(string $code, int $n): void
+    {
+        $em = self::getContainer()->get(\Doctrine\ORM\EntityManagerInterface::class);
+
+        $profile = $em->find(\App\Entity\Location\CountryProfile::class, $code);
+
+        if ($profile === null) {
+            $profile = new \App\Entity\Location\CountryProfile($code, $code);
+            $em->persist($profile);
+            $em->flush();
+        }
+
+        for ($i = 1; $i <= $n; $i++) {
+            $town = 'Town' . $i;
+            $location = new \App\Entity\Location\Location($profile, $town, $code . '-t' . $i, strtolower($town));
+            $location->setRegion('R');
+            $location->setPopulation($i * 1000);
+            $location->setCoordinates(50.0, 0.0);
+            $location->setLandPence(100000);
+            $location->setLandValuedAt(new \DateTimeImmutable());
+
+            $em->persist($location);
+        }
+
+        $em->flush();
+        $em->clear();
+    }
+
+    private function freshConfig(): \App\Entity\Location\LocationConfig
+    {
+        self::getContainer()->get(\Doctrine\ORM\EntityManagerInterface::class)->clear();
+
+        return self::getContainer()->get(\App\Repository\Location\LocationConfigRepository::class)->getConfig();
+    }
 
     private function loginAsAdmin(KernelBrowser $client): void
     {
