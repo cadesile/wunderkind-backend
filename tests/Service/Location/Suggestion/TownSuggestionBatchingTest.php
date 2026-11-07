@@ -70,16 +70,16 @@ class TownSuggestionBatchingTest extends KernelTestCase
     {
         $sizes = TownSuggestionService::planBatchSizes(TownSuggestionService::DEFAULT_MAX);
 
-        self::assertCount(6, $sizes, '300 towns at 50 a batch');
-        self::assertSame([50, 50, 50, 50, 50, 50], $sizes);
+        self::assertCount(12, $sizes, '300 towns at 25 a batch');
+        self::assertSame([25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25], $sizes);
         self::assertSame(TownSuggestionService::DEFAULT_MAX, array_sum($sizes));
     }
 
     public function testARemainderBecomesItsOwnSmallerBatch(): void
     {
-        // The last batch must ask for the remainder, not a full 50 — otherwise a run for 120
-        // quietly pays for 150 towns' worth of generation.
-        self::assertSame([50, 50, 20], TownSuggestionService::planBatchSizes(120));
+        // The last batch must ask for the remainder, not a full 25 — otherwise a run for 120
+        // quietly pays for 125 towns' worth of generation.
+        self::assertSame([25, 25, 25, 25, 20], TownSuggestionService::planBatchSizes(120));
         self::assertSame(120, array_sum(TownSuggestionService::planBatchSizes(120)));
     }
 
