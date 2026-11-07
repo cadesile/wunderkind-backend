@@ -153,6 +153,35 @@ class ClaudeTownSuggesterTest extends TestCase
         $suggester->suggest($this->argentina(), [], 10);
     }
 
+    /**
+     * Regression: the budget had no room for the model's own reasoning.
+     *
+     * Thinking tokens count against max_tokens, and on adaptive-thinking models the model
+     * decides per request whether to think — a fifty-town list qualifies. At the old 2,048
+     * floor the reasoning ate the budget and the list was truncated, which is what the first
+     * real US run hit: stop_reason max_tokens on a batch of fifty.
+     *
+     * Asserting a floor rather than an exact figure: the point is headroom, and pinning the
+     * arithmetic would make a later increase look like a break.
+     */
+    public function testTheBudgetLeavesRoomForTheModelToThink(): void
+    {
+        $batch = $this->capturedMaxTokens(50);
+
+        $this->assertGreaterThan(
+            4_096,
+            $batch,
+            'a 50-town batch needs room for the list AND the reasoning that precedes it',
+        );
+    }
+
+    public function testEvenASingleTownGetsThinkingHeadroom(): void
+    {
+        // The floor applies to the smallest ask too — a one-town batch still reasons, and a
+        // budget that only covered the answer would truncate before reaching it.
+        $this->assertGreaterThan(4_096, $this->capturedMaxTokens(1));
+    }
+
     private function capturedMaxTokens(int $max): int
     {
         $seen = 0;

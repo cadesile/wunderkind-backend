@@ -163,6 +163,35 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
         self::assertCount(2, $this->bus->dispatched, 'two retries, then it gives up');
     }
 
+    public function testATruncatedReplyFailsImmediatelyWithoutBurningRetries(): void
+    {
+        // Truncation is deterministic: the same ask against the same ceiling truncates in the
+        // same place. Retrying it twice more is three billed calls for one answer, which on a
+        // feature whose whole design is cost-controlled is the wrong default.
+        $plan    = $this->service()->planRun(self::COUNTRY, 50);
+        $batchId = (string) $plan['batches'][0]->getId();
+        $runId   = (string) $plan['run']->getId();
+
+        $this->suggester->queue(new \App\Service\Location\Suggestion\TownSuggestionTruncatedException(
+            'Claude hit the 6144-token ceiling before finishing town list for Tunisia.',
+        ));
+
+        $this->handle($batchId);
+
+        $batch = $this->freshBatch($batchId);
+        self::assertSame(TownSuggestionBatchStatus::FAILED, $batch->getStatus());
+        self::assertSame(1, $batch->getAttempts(), 'one attempt, not three');
+        self::assertStringContainsString('ceiling', (string) $batch->getErrorMessage());
+        self::assertNotNull($batch->getFinishedAt());
+
+        self::assertSame([], $this->bus->dispatched, 'nothing re-queued');
+
+        // Still counted, so the run closes rather than waiting for a batch that will not come.
+        $run = $this->runRepository->find($runId);
+        self::assertSame(EnrichmentRunStatus::COMPLETE, $run->getStatus());
+        self::assertSame(1, $run->getFailed());
+    }
+
     public function testAMessageForADeletedBatchIsANoOpRatherThanAnError(): void
     {
         $this->expectNotToPerformAssertions();

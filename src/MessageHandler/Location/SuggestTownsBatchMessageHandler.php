@@ -10,6 +10,7 @@ use App\Repository\Location\LocationEnrichmentRunRepository;
 use App\Repository\Location\TownSuggestionBatchRepository;
 use App\Service\Location\LocationSeedService;
 use App\Service\Location\Suggestion\TownSuggestionService;
+use App\Service\Location\Suggestion\TownSuggestionTruncatedException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -25,6 +26,9 @@ use Symfony\Component\Messenger\Stamp\DelayStamp;
  * what the progress UI shows, not two independently-counting retry mechanisms that can
  * disagree. Letting Messenger's invisible retries run under a live progress bar would make a
  * batch flash "failed" and then un-fail itself.
+ *
+ * ONE FAILURE IS EXEMPT: a truncated reply is terminal immediately. It is deterministic, so
+ * retrying it is purely a way of spending three times as much to learn the same thing.
  *
  * There is a second reason specific to this queue. No retry_strategy is configured anywhere, so
  * Symfony's defaults apply (three retries); three stacked 60s provider timeouts would be 180s
@@ -87,6 +91,21 @@ final class SuggestTownsBatchMessageHandler
         try {
             $country = $this->seedService->resolveCountry($countryCode);
             $summary = $this->suggestionService->runBatch($runId, $batchId, $country, $requested);
+        } catch (TownSuggestionTruncatedException $e) {
+            // TERMINAL ON THE FIRST ATTEMPT, no retry. The reply ran past the token ceiling,
+            // and the same ask against the same ceiling truncates in the same place every
+            // time — so retrying would be two more billed calls to be told the same thing.
+            // Only a smaller batch or a bigger budget fixes it, and neither is this handler's
+            // to decide.
+            $this->logger->error('Town suggestion batch truncated; not retrying', [
+                'runId' => $runId, 'batchId' => $batchId,
+                'batch' => \sprintf('%d/%d', $batchIndex, $totalBatches),
+                'country' => $countryCode, 'exception' => $e,
+            ]);
+            $this->batchRepository->markFailed($batchId, $e->getMessage());
+            $this->runRepository->recordBatchOutcome($runId, failed: true);
+
+            return;
         } catch (\Throwable $e) {
             $this->handleFailure($batchId, $runId, $attempt, $batchIndex, $totalBatches, $countryCode, $e);
 
