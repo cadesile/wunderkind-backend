@@ -9,6 +9,7 @@ use App\Entity\Location\Location;
 use App\Enum\CitySize;
 use App\Enum\Country;
 use App\Enum\Location\CountryProfileStatus;
+use App\Service\Location\LocationClassificationService;
 use App\Service\Location\LocationSeedService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -164,6 +165,67 @@ class ImportPlaceNamesTest extends KernelTestCase
     // ───────────────────────── helpers ─────────────────────────
 
     /** @return array<string, int> */
+    // ── The capital that arrives as a bare name ─────────────────────────────
+
+    public function testACapitalPulledInAsABareNameIsStillFlagged(): void
+    {
+        // The gap this closes. An AI town pull returns names and nothing else, so a capital
+        // arriving that way had no is_capital to be set from — and for the 46 countries with no
+        // curated places, that was every capital.
+        $this->seedService->importNames(Country::EN, ['London']);
+
+        self::assertFalse($this->isCapital('london'), 'nothing knows it yet');
+
+        self::getContainer()->get(LocationClassificationService::class)
+            ->reclassifyCountry(self::COUNTRY);
+
+        self::assertTrue($this->isCapital('london'));
+    }
+
+    public function testTheFlaggedCapitalIsForcedBigOnceItIsPriced(): void
+    {
+        // The flag is only worth setting because of what classify() does with it: London here
+        // is the SMALLEST of the three towns and must still come out BIG.
+        $this->seedService->importNames(Country::EN, ['London']);
+
+        $this->connection->executeStatement(
+            "UPDATE location
+                SET population = 1000, lat = 51.5, lng = -0.1,
+                    land_pence = 100000, land_valued_at = now()
+              WHERE country_code = :c AND town_normalised = 'london'",
+            ['c' => self::COUNTRY],
+        );
+
+        self::getContainer()->get(LocationClassificationService::class)
+            ->reclassifyCountry(self::COUNTRY);
+
+        self::assertSame(
+            CitySize::BIG->value,
+            $this->connection->fetchOne(
+                'SELECT city_size FROM location WHERE country_code = :c AND town_normalised = :t',
+                ['c' => self::COUNTRY, 't' => 'london'],
+            ),
+        );
+    }
+
+    public function testAnOrdinaryTownIsNotMistakenForTheCapital(): void
+    {
+        $this->seedService->importNames(Country::EN, ['Londonderry']);
+
+        self::getContainer()->get(LocationClassificationService::class)
+            ->reclassifyCountry(self::COUNTRY);
+
+        self::assertFalse($this->isCapital('londonderry'), 'matched whole, not by prefix');
+    }
+
+    private function isCapital(string $normalised): bool
+    {
+        return (bool) $this->connection->fetchOne(
+            'SELECT is_capital FROM location WHERE country_code = :c AND town_normalised = :t',
+            ['c' => self::COUNTRY, 't' => $normalised],
+        );
+    }
+
     private function bands(): array
     {
         $out = [];

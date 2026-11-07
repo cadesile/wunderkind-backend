@@ -70,6 +70,7 @@ final class PlotSellBackService
         private readonly PlotClaimValuationRepository $valuationRepository,
         private readonly ClubValuationService         $clubValuation,
         private readonly UserLedgerService            $ledgerService,
+        private readonly LandPlotProvisioner          $plotProvisioner,
         private readonly EntityManagerInterface       $em,
         private readonly LoggerInterface              $logger,
     ) {}
@@ -180,6 +181,26 @@ final class PlotSellBackService
         // if the money did not land.
         $this->em->persist(new PlotClaimValuation($claim, $quote, self::MODEL_VERSION));
         $this->em->flush();
+
+        // THE PLOT MAY NOT BE GOING BACK ON THE MARKET. If the town re-banded downward while
+        // this plot was owned, it has been sitting over its size's target and surviving only
+        // because somebody held it — so the moment the claim ends it is surplus, and relisting
+        // it would undo the demotion one sale at a time.
+        //
+        // AFTER THE RELEASE, AND NEVER IN ITS WAY. The release is already committed above, so a
+        // failure here cannot cost the player the sale; it is caught rather than thrown for the
+        // same reason, and the next reclassification or release of this town collects the plot
+        // instead. A plot left active one cycle too long is a far cheaper fault than a sell-back
+        // that raises after taking the claim away.
+        try {
+            $this->plotProvisioner->reapSurplus([(string) $claim->getLocation()->getId()]);
+        } catch (\Throwable $e) {
+            $this->logger->error('Could not reap surplus plots after a release', [
+                'claimId'   => (string) $claim->getId(),
+                'location'  => (string) $claim->getLocation()->getId(),
+                'exception' => $e,
+            ]);
+        }
 
         if ($payout <= 0) {
             return null;

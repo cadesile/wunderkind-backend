@@ -128,9 +128,10 @@ class LandPlotProvisioningRulesTest extends KernelTestCase
 
     public function testLoweringTheConfigNeverRemovesAPlot(): void
     {
-        // A plot can carry an active claim and somebody's real money; land_plot is referenced
-        // with ON DELETE RESTRICT precisely so a delete fails loudly. So a town that re-bands or
-        // is re-configured downward keeps what it has and simply stops gaining more.
+        // PROVISIONING still only ever adds. Lowering the configured count does not reach back
+        // and retire plots: that is reapSurplus()'s job, and it runs on re-banding and on
+        // release, not on a top-up pass. A config change alone therefore leaves the town as it
+        // is until something reclassifies it.
         $big = $this->town('Keepsville', CitySize::BIG, priced: true);
         $this->provisioner->provisionLocation($big);
         self::assertSame(4, $this->plotCount($big));
@@ -139,6 +140,106 @@ class LandPlotProvisioningRulesTest extends KernelTestCase
 
         self::assertSame(0, $this->provisioner->provisionLocation($big), 'nothing to add');
         self::assertSame(4, $this->plotCount($big), 'and nothing taken away');
+    }
+
+    // ── Reaping the surplus ─────────────────────────────────────────────────
+
+    public function testReBandingDownRetiresThePlotsNobodyHolds(): void
+    {
+        // The gap this closes: a BIG town demoted to SMALL used to go on offering four plots
+        // forever, selling land its size no longer justifies.
+        $town = $this->town('Demoted', CitySize::BIG, priced: true);
+        $this->provisioner->provisionLocation($town);
+        self::assertSame(4, $this->activePlotCount($town));
+
+        $town->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+
+        self::assertSame(3, $this->provisioner->reapSurplus([(string) $town->getId()]));
+        self::assertSame(1, $this->activePlotCount($town));
+    }
+
+    public function testTheLowestNumberedPlotIsTheOneThatSurvives(): void
+    {
+        // Arbitrary but fixed: the reap takes from the top so plot 1 is stable, which keeps a
+        // town's oldest plot — the one most likely to be referenced elsewhere — in place.
+        $town = $this->town('Ordered', CitySize::BIG, priced: true);
+        $this->provisioner->provisionLocation($town);
+
+        $town->setCitySize(CitySize::MEDIUM);
+        $this->em->flush();
+        $this->provisioner->reapSurplus([(string) $town->getId()]);
+
+        self::assertSame([1, 2], $this->activePlotNumbers($town));
+    }
+
+    public function testRetiredRatherThanDeleted(): void
+    {
+        // land_plot is referenced by plot_claim with ON DELETE RESTRICT, so a DELETE would fail
+        // on any plot that had ever been claimed. The row stays; it leaves the active count.
+        $town = $this->town('Kept', CitySize::BIG, priced: true);
+        $this->provisioner->provisionLocation($town);
+
+        $town->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+        $this->provisioner->reapSurplus([(string) $town->getId()]);
+
+        self::assertSame(1, $this->activePlotCount($town), 'active');
+        self::assertSame(4, $this->plotCount($town), 'rows, all four of them');
+    }
+
+    public function testReapingTwiceTakesNothingTheSecondTime(): void
+    {
+        $town = $this->town('Twice', CitySize::BIG, priced: true);
+        $this->provisioner->provisionLocation($town);
+
+        $town->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+
+        self::assertSame(3, $this->provisioner->reapSurplus([(string) $town->getId()]));
+        self::assertSame(0, $this->provisioner->reapSurplus([(string) $town->getId()]), 'idempotent');
+    }
+
+    public function testATownAtItsTargetIsLeftAlone(): void
+    {
+        $town = $this->town('Exact', CitySize::MEDIUM, priced: true);
+        $this->provisioner->provisionLocation($town);
+
+        self::assertSame(0, $this->provisioner->reapSurplus([(string) $town->getId()]));
+        self::assertSame(2, $this->activePlotCount($town));
+    }
+
+    public function testACountryWideReapCoversEveryTown(): void
+    {
+        $a = $this->town('Alpha', CitySize::BIG, priced: true);
+        $b = $this->town('Beta', CitySize::BIG, priced: true);
+        $this->provisioner->provisionCountry(self::COUNTRY);
+
+        // provisionCountry() ends in em->clear(), so both are detached by now and a setter on
+        // them would write nothing. Re-find before editing.
+        $a = $this->em->find(Location::class, $a->getId());
+        $b = $this->em->find(Location::class, $b->getId());
+
+        $a->setCitySize(CitySize::SMALL);
+        $b->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+
+        self::assertSame(6, $this->provisioner->reapSurplusForCountry(self::COUNTRY));
+        self::assertSame(1, $this->activePlotCount($a));
+        self::assertSame(1, $this->activePlotCount($b));
+    }
+
+    public function testReapingNoLocationsIsANoOpRatherThanAWholeTableSweep(): void
+    {
+        // An empty id list must not degrade into "every plot everywhere".
+        $town = $this->town('Safe', CitySize::BIG, priced: true);
+        $this->provisioner->provisionLocation($town);
+
+        $town->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+
+        self::assertSame(0, $this->provisioner->reapSurplus([]));
+        self::assertSame(4, $this->activePlotCount($town));
     }
 
     public function testAConfiguredZeroMeansNoPlots(): void
@@ -218,6 +319,25 @@ class LandPlotProvisioningRulesTest extends KernelTestCase
         $this->em->flush();
 
         return $location;
+    }
+
+    private function activePlotCount(Location $town): int
+    {
+        return (int) $this->connection->fetchOne(
+            "SELECT COUNT(*) FROM land_plot WHERE location_id = :id AND status = 'active'",
+            ['id' => (string) $town->getId()],
+        );
+    }
+
+    /** @return list<int> */
+    private function activePlotNumbers(Location $town): array
+    {
+        return array_map('intval', $this->connection->fetchFirstColumn(
+            "SELECT plot_number FROM land_plot
+              WHERE location_id = :id AND status = 'active'
+              ORDER BY plot_number",
+            ['id' => (string) $town->getId()],
+        ));
     }
 
     private function plotCount(Location $town): int

@@ -102,7 +102,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
 
     public function testPlanningWritesARunAndABatchRowEach(): void
     {
-        $plan = $this->service()->planRun(self::COUNTRY, 120);
+        $plan = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE * 2 + 20);
 
         self::assertCount(3, $plan['batches']);
 
@@ -122,7 +122,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
             self::assertSame(self::COUNTRY->value, $batch->getCountryCode());
         }
 
-        self::assertSame([50, 50, 20], array_map(
+        self::assertSame([TownSuggestionService::BATCH_SIZE, TownSuggestionService::BATCH_SIZE, 20], array_map(
             static fn (TownSuggestionBatch $b): int => $b->getRequested(),
             $plan['batches'],
         ));
@@ -140,14 +140,14 @@ class TownSuggestionBatchingTest extends KernelTestCase
         $this->em->clear();
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->service()->planRun(self::COUNTRY, 50);
+        $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
     }
 
     // ── Running a batch ─────────────────────────────────────────────────────
 
     public function testABatchImportsItsTownsAndReportsWhatItOffered(): void
     {
-        $plan  = $this->service()->planRun(self::COUNTRY, 50);
+        $plan  = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batch = $plan['batches'][0];
 
         $this->suggester->queueNames(['Batchville', 'Queuetown']);
@@ -167,7 +167,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
 
     public function testABatchAsksForItsOwnSizeNotTheWholeRun(): void
     {
-        $plan  = $this->service()->planRun(self::COUNTRY, 120);
+        $plan  = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE * 2 + 20);
         $third = $plan['batches'][2];
 
         $this->suggester->queueNames([]);
@@ -179,7 +179,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
         );
 
         $calls = $this->suggester->calls();
-        self::assertSame(20, $calls[0]['max'], 'the remainder batch asks for 20, not 120');
+        self::assertSame(20, $calls[0]['max'], 'the remainder batch asks for 20, not the whole run');
         self::assertSame(
             TownSuggestionService::BATCH_TIMEOUT_SECONDS,
             $calls[0]['timeout'],
@@ -197,7 +197,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
      */
     public function testALaterBatchIsToldWhatEarlierBatchesAlreadyOffered(): void
     {
-        $plan   = $this->service()->planRun(self::COUNTRY, 100);
+        $plan   = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE * 2);
         $first  = $plan['batches'][0];
         $second = $plan['batches'][1];
 
@@ -236,7 +236,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
     {
         // It is about to be replaced by a retry of the same batch; excluding its own previous
         // answer would make a retry ask a different question than the attempt it replaces.
-        $plan  = $this->service()->planRun(self::COUNTRY, 50);
+        $plan  = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batch = $plan['batches'][0];
 
         $this->suggester->queueNames(['Onlyville']);
@@ -268,7 +268,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
 
     public function testTheRunStaysOpenUntilItsLastBatchSettles(): void
     {
-        $plan  = $this->service()->planRun(self::COUNTRY, 100); // two batches
+        $plan  = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE * 2); // two batches
         $runId = (string) $plan['run']->getId();
 
         $this->runRepository->recordBatchOutcome($runId, failed: false);
@@ -293,7 +293,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
     {
         // Otherwise a provider outage leaves a run at "running" forever, and the stacking guard
         // on the admin screen would refuse every future pull.
-        $plan  = $this->service()->planRun(self::COUNTRY, 50);
+        $plan  = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $runId = (string) $plan['run']->getId();
 
         $this->runRepository->recordBatchOutcome($runId, failed: true);
@@ -307,7 +307,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
 
     public function testImportedTownsAreSummedAcrossBatches(): void
     {
-        $plan  = $this->service()->planRun(self::COUNTRY, 100);
+        $plan  = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE * 2);
         $runId = (string) $plan['run']->getId();
 
         $this->batchRepository->markCompleted((string) $plan['batches'][0]->getId(), 3, 3, 0);
@@ -321,7 +321,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
     public function testRecentlyAddedTownsComeBackNewestFirstAndCapped(): void
     {
         $repo = self::getContainer()->get(\App\Repository\Location\LocationRepository::class);
-        $plan = $this->service()->planRun(self::COUNTRY, 50);
+        $plan = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
 
         // Twelve towns, so the cap has something to drop.
         $names = [];
@@ -356,7 +356,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
         // second the run started do fall inside `>= since`, and pinning that boundary would be
         // pinning a clock rather than a behaviour.
         $repo = self::getContainer()->get(\App\Repository\Location\LocationRepository::class);
-        $plan = $this->service()->planRun(self::COUNTRY, 50);
+        $plan = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
 
         $this->suggester->queueNames(['Freshville', 'Newtown', 'Latestead']);
         $this->service()->runBatch(
@@ -376,7 +376,7 @@ class TownSuggestionBatchingTest extends KernelTestCase
         // Proves the scoping is real and not just ordering: nothing was added after this
         // moment, so nothing comes back.
         $repo = self::getContainer()->get(\App\Repository\Location\LocationRepository::class);
-        $plan = $this->service()->planRun(self::COUNTRY, 50);
+        $plan = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
 
         $this->suggester->queueNames(['Shouldnotappear']);
         $this->service()->runBatch(
