@@ -15,9 +15,13 @@ use Symfony\Component\Uid\UuidV7;
  *
  * The level exists from day one on purpose. A big city plausibly supports several clubs while
  * a small town supports one, and retrofitting a plot level later would mean migrating every
- * claim and hold row plus every API path that names a location. Seeding creates exactly one
- * plot per location (plot_number = 1), so until an operator adds more the behaviour is
- * identical to one-club-per-town.
+ * claim and hold row plus every API path that names a location.
+ *
+ * PLOTS FOLLOW PRICING. Nothing creates one until a town has been enriched — LandPlotProvisioner
+ * gates on Location::isSellable() — because an unpriced plot cannot be bought and its existence
+ * only makes LocationCapacityService report the town as available when it is not. How many a
+ * priced town gets comes from LocationConfig, by city size. Seeding used to hardcode one per
+ * town regardless, which is why some older rows exist on towns that still have no value.
  *
  * `landPenceOverride` is null for the common case and inherits Location::$landPence, so
  * revaluing a town reprices all its plots in one edit. A plot with its own figure keeps it.

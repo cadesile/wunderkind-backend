@@ -86,13 +86,20 @@ class LocationSeedServiceTest extends KernelTestCase
         }
     }
 
-    public function testSeedingWritesOnePlotPerTownAndNoGeography(): void
+    public function testSeedingWritesTownsWithNoPlotsAndNoGeography(): void
     {
         $result = $this->service->seedCountry(Country::from(self::SEEDABLE));
 
         self::assertGreaterThan(0, $result['locations']);
-        self::assertSame($result['locations'], $result['plots'], 'exactly one plot per town');
         self::assertSame('seeded', $result['outcome']);
+
+        // No plots, and the result no longer reports a count for them — it used to report one
+        // per town, which stopped being true when plots became something pricing earns.
+        self::assertArrayNotHasKey('plots', $result);
+        self::assertSame(0, (int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM land_plot p JOIN location l ON l.id = p.location_id WHERE l.country_code = :c',
+            ['c' => self::SEEDABLE],
+        ), 'an unpriced town must have no plots');
 
         // lat, lng and land_pence are deliberately NULL — there is no such data in PHP, and 0/0
         // would put every un-enriched town at the same point in the Atlantic.

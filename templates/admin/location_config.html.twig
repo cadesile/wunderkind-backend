@@ -1,0 +1,139 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+    <div class="col-12">
+        <h5 class="fw-semibold mb-0">Locations &amp; Land — Configuration</h5>
+        <p class="text-muted small mb-0">
+            Settings for the land economy. These are balance dials, changeable without a deploy.
+        </p>
+    </div>
+
+    {# ── Plots per city size ───────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-7">
+        <div class="card h-100">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-map text-primary"></i>
+                <span class="fw-semibold small">Plots per city size</span>
+                <span class="ms-auto badge bg-secondary">{{ npcPlotCap }} max taken by NPC clubs</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    How many clubs a town can hold. City size is a percentile split across each
+                    country&rsquo;s towns &mdash; top 20% by population <strong>big</strong>, bottom 50%
+                    <strong>small</strong>, the rest <strong>medium</strong>, with a capital always big.
+                    Generated clubs take at most {{ npcPlotCap }} plots in any one town, so a town with
+                    fewer than that is full the moment anything is generated there.
+                </p>
+
+                <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_save_plots'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('location_config_plots') }}">
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle small mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Size</th>
+                                    <th style="width:7rem;">Plots</th>
+                                    <th class="text-end">Towns</th>
+                                    <th class="text-end" title="Towns with coordinates and a land value — the only ones that get plots">Priced</th>
+                                    <th class="text-end">Plots now</th>
+                                    <th class="text-end">Default</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for size in citySizes %}
+                                {% set row = estate[size.value] ?? {'towns': 0, 'priced': 0, 'plots': 0} %}
+                                <tr>
+                                    <td class="fw-semibold text-capitalize">{{ size.value }}</td>
+                                    <td>
+                                        <label class="visually-hidden" for="plots_{{ size.value }}">Plots for {{ size.value }}</label>
+                                        <input type="number" class="form-control form-control-sm"
+                                               id="plots_{{ size.value }}" name="plots_{{ size.value }}"
+                                               value="{{ plots[size.value] }}"
+                                               min="{{ minPlots }}" max="{{ maxPlots }}" step="1" required>
+                                    </td>
+                                    <td class="text-end">{{ row.towns }}</td>
+                                    <td class="text-end">
+                                        {% if row.priced < row.towns %}
+                                            <span class="text-muted" title="{{ row.towns - row.priced }} still awaiting enrichment">{{ row.priced }}</span>
+                                        {% else %}{{ row.priced }}{% endif %}
+                                    </td>
+                                    <td class="text-end">{{ row.plots }}</td>
+                                    <td class="text-end text-muted">{{ defaults[size.value] ?? '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="fa fa-floppy-disk me-1"></i> Save
+                        </button>
+                        <span class="text-muted small">
+                            Saving changes the target only. Existing towns are untouched until you run the
+                            top-up, and lowering a figure never removes a plot.
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Apply to the existing estate ──────────────────────────────────────── #}
+    <div class="col-12 col-xl-5">
+        <div class="card h-100 {{ shortfall > 0 ? 'border-primary-subtle' : '' }}">
+            <div class="card-header py-2 d-flex align-items-center gap-2">
+                <i class="fa fa-arrow-up-right-dots text-muted"></i>
+                <span class="fw-semibold small">Top up existing towns</span>
+                <span class="ms-auto badge {{ shortfall > 0 ? 'bg-primary' : 'bg-secondary' }}">
+                    {{ shortfall }} to add
+                </span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Brings every <strong>priced</strong> town up to the plots its size calls for. An
+                    unpriced town stays at zero until enrichment values it &mdash; a plot with no land
+                    value cannot be bought, and creating one would only make the catalogue offer a
+                    purchase that fails. Free, no API calls, and safe to run repeatedly: it tops up and
+                    never removes.
+                </p>
+
+                {% if shortfall == 0 %}
+                    <div class="alert alert-secondary py-2 small mb-3 mb-0">
+                        Every priced town already matches its target. Nothing to do.
+                    </div>
+                {% endif %}
+
+                <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_provision'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('location_config_provision') }}">
+
+                    <div class="mb-3">
+                        <label for="provisionCountry" class="form-label fw-semibold small mb-1">Country</label>
+                        <select name="country" id="provisionCountry" class="form-select form-select-sm">
+                            <option value="">All countries</option>
+                        {% for code in seedable %}
+                            <option value="{{ code }}">{{ code }}</option>
+                        {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="provisionDryRun" name="dry_run" value="1" checked>
+                        <label class="form-check-label small" for="provisionDryRun">
+                            Dry run &mdash; report what would change, write nothing
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="fa fa-arrow-up-right-dots me-1"></i> Run top-up
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

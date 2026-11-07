@@ -34,6 +34,7 @@ class ProvisionLandPlotsCommand extends Command
 {
     public function __construct(
         private readonly LandPlotProvisioner $provisioner,
+        private readonly \App\Repository\Location\LocationConfigRepository $configRepository,
         private readonly LocationSeedService $seedService,
     ) {
         parent::__construct();
@@ -60,15 +61,21 @@ class ProvisionLandPlotsCommand extends Command
             );
         }
 
+        // The LIVE figures, not the defaults. These are operator-tunable now, so printing the
+        // constants would tell you what a fresh install does rather than what this run will.
+        $targets = $this->configRepository->getConfig()->getPlotsByCitySize();
+
         $io->text(sprintf(
             'Targets: %s. NPC clubs take at most %d plot(s) per town.',
             implode(', ', array_map(
                 static fn (string $size, int $n): string => "{$size}={$n}",
-                array_keys(LocationCapacityService::PLOTS_BY_CITY_SIZE),
-                LocationCapacityService::PLOTS_BY_CITY_SIZE,
+                array_keys($targets),
+                $targets,
             )),
             LocationCapacityService::NPC_PLOT_CAP,
         ));
+
+        $io->text('Only priced towns are provisioned — an unpriced one stays at zero plots until enrichment values it.');
 
         if ($dryRun) {
             $io->note('Dry run — nothing will be written.');

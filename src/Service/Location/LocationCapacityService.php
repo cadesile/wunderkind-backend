@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Location;
 
+use App\Entity\Location\LocationConfig;
 use App\Enum\CitySize;
 use App\Exception\Location\PlotUnavailableException;
 use Doctrine\DBAL\ArrayParameterType;
@@ -32,23 +33,25 @@ use Doctrine\DBAL\Connection;
  * than reserving particular ones. A player claiming a plot in a town with capacity left is
  * claiming a real `land_plot` row as before.
  *
- * EVERY NUMBER HERE IS A DIAL. They are constants rather than config because they are balance,
- * not deployment — but they are expected to be tuned against real distributions, so they are
- * gathered here and nowhere else.
+ * MOST NUMBERS HERE ARE DIALS, and the plot counts are no longer among the constants: they
+ * moved to LocationConfig so an operator can tune how much football a city holds without a
+ * deploy. The rest stay constants because they are structural rather than balance.
  */
 final class LocationCapacityService
 {
     /**
-     * Plots a town has, by size.
+     * Plots a town has, by size, when nothing more specific is available.
      *
-     * Derived from city size, which is derived from population, which enrichment now supplies —
-     * so this is the chain that makes "enrichment determines the number of plots" true.
+     * Derived from city size, which is derived from population, which enrichment supplies — so
+     * this is the chain that makes "enrichment determines the number of plots" true.
+     *
+     * NO LONGER THE AUTHORITY. The live figures are on LocationConfig, editable at
+     * /admin?routeName=admin_location_config; this is the fallback those defaults come from and
+     * the answer for callers with no container (a unit test asserting the shape of the rule
+     * rather than one installation's tuning of it). Anything that provisions real plots must go
+     * through LocationConfig::plotsForCitySize().
      */
-    public const PLOTS_BY_CITY_SIZE = [
-        CitySize::BIG->value    => 4,
-        CitySize::MEDIUM->value => 2,
-        CitySize::SMALL->value  => 1,
-    ];
+    public const PLOTS_BY_CITY_SIZE = LocationConfig::DEFAULT_PLOTS_BY_CITY_SIZE;
 
     /**
      * The most plots NPC clubs can take in any one town, however many of them there are.
@@ -73,7 +76,14 @@ final class LocationCapacityService
 
     public function __construct(private readonly Connection $connection) {}
 
-    /** Plots a town of this size should have. */
+    /**
+     * Plots a town of this size should have, per the DEFAULTS.
+     *
+     * Kept, and kept static, for callers that have no container. It is NOT what the provisioner
+     * uses — that reads LocationConfig, because the figures are operator-tunable now. Returns
+     * the same answer as the config on an untouched installation, which is what lets the
+     * existing capacity tests keep asserting against it.
+     */
     public static function plotsFor(CitySize $citySize): int
     {
         return self::PLOTS_BY_CITY_SIZE[$citySize->value] ?? 1;
