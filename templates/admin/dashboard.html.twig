@@ -1,29 +1,40 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  The admin dashboard.
 
-{% block content %}
-    {#
-       Shell only. The headline totals below are server-rendered so the page
-       paints immediately; every panel fetches its own JSON from
-       AdminStatsController, which caches each aggregate for 5 minutes.
+  THE DATA PATH IS UNCHANGED. The headline totals are still server-rendered so the page paints
+  immediately, and every panel still fetches its own JSON from AdminStatsController, which
+  caches each aggregate for five minutes. What changed is the markup admin-dashboard.js emits.
 
-       Assets are page-scoped (not in configureAssets) so Chart.js and the
-       dashboard stylesheet never reach the CRUD screens. The version query is
-       what stops a browser serving a stale copy after a deploy.
-    #}
-    {% set dash_v = '20261022a' %}
-    <link rel="stylesheet" href="{{ asset('admin-dashboard.css') }}?v={{ dash_v }}">
+  CHART.JS IS GONE. The design asks for stepped sparklines behind the numbers and plain bars —
+  both cheaper as inline SVG and a div than as a charting library, and a smoothed curve between
+  two daily counts implies readings that were never taken. That also takes a vendor asset off
+  the page and admin-dashboard.css with it.
+#}
 
+{% block bmc_strip_right %}
+    <button type="button" class="bmc-iconbtn" id="dash-refresh-all" title="Refresh every panel" aria-label="Refresh every panel">
+        <i data-lucide="rotate-ccw" width="16" height="16"></i>
+    </button>
+{% endblock %}
+
+{% block bmc_body %}
     <div class="dash"
          data-dashboard
          data-refresh-url="{{ path('admin_stats_refresh') }}"
-         data-refresh-token="{{ csrf_token('admin_stats_refresh') }}">
+         data-refresh-token="{{ csrf_token('admin_stats_refresh') }}"
+         style="display:flex;flex-direction:column;gap:16px">
 
         {% include 'admin/dashboard/_kpi_strip.html.twig' %}
         {% include 'admin/dashboard/_growth.html.twig' %}
         {% include 'admin/dashboard/_leaderboards.html.twig' %}
         {% include 'admin/dashboard/_pool.html.twig' %}
     </div>
+{% endblock %}
 
-    <script src="{{ asset('vendor/chart.umd.min.js') }}?v={{ dash_v }}"></script>
-    <script src="{{ asset('admin-dashboard.js') }}?v={{ dash_v }}"></script>
+{% block body_javascript %}
+    {{ parent() }}
+    {# Page-scoped: this file is only useful here, and the version query is what stops a
+       browser serving a stale copy after a deploy. #}
+    <script src="{{ asset('admin-dashboard.js') }}?v={{ dash_v|default('20261107a') }}"></script>
 {% endblock %}

@@ -2,18 +2,20 @@
 
 {{ dash.section('Platform', 'rolling windows · 30-day trend') }}
 
-<div data-kpi-strip data-src="{{ path('admin_stats_growth') }}">
-    <div class="kpi-band kpi-band--activity">
-        {{ dash.kpi_activity('users',       'Users',        'fa-users',                stats.users) }}
-        {{ dash.kpi_activity('clubs',       'Clubs',        'fa-shield-halved',        stats.clubs) }}
-        {{ dash.kpi_activity('syncs',       'Syncs',        'fa-rotate',               stats.syncs) }}
-        {{ dash.kpi_activity('activeClubs', 'Active Clubs', 'fa-signal',               null) }}
+<div data-kpi-strip data-src="{{ path('admin_stats_growth') }}" style="display:flex;flex-direction:column;gap:12px">
+    {# Activity: things that happen. Each has a series, so the row never goes ragged. #}
+    <div class="bmc-stats bmc-stats--card">
+        {{ dash.kpi_activity('users',       'Users',        stats.users) }}
+        {{ dash.kpi_activity('clubs',       'Clubs',        stats.clubs) }}
+        {{ dash.kpi_activity('syncs',       'Syncs',        stats.syncs) }}
+        {{ dash.kpi_activity('activeClubs', 'Active clubs', null) }}
     </div>
 
-    <div class="kpi-band kpi-band--stock">
-        {{ dash.kpi_activity('invalidSyncs', 'Invalid Syncs', 'fa-triangle-exclamation', stats.invalidSyncs, 'kpi--danger') }}
-        {{ dash.kpi_stock('players', 'Pool Players', 'fa-person-running',  null, 'kpi--success') }}
-        {{ dash.kpi_stock('staff',   'Pool Staff',   'fa-chalkboard-user', null, 'kpi--success') }}
-        {{ dash.kpi_stock('agents',  'Agents',       'fa-handshake',       null, 'kpi--success') }}
+    {# Stock: things that exist. A composition strip rather than a trend. #}
+    <div class="bmc-stats bmc-stats--card">
+        {{ dash.kpi_activity('invalidSyncs', 'Invalid syncs', stats.invalidSyncs) }}
+        {{ dash.kpi_stock('players', 'Pool players') }}
+        {{ dash.kpi_stock('staff',   'Pool staff') }}
+        {{ dash.kpi_stock('agents',  'Agents') }}
     </div>
 </div>

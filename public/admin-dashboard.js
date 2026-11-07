@@ -30,43 +30,25 @@
 
     var PALETTE = (function () {
         var out = [];
-        for (var i = 1; i <= 12; i++) { out.push(cssVar('--dash-chart-' + i, '#E8CF59')); }
+        // Was --dash-chart-N from admin-dashboard.css, which is retired. The shell's own
+        // palette is the source now.
+        ['--wk-accent', '--wk-positive', '--wk-info-light', '--wk-warning', '--wk-danger']
+            .forEach(function (name) { out.push(cssVar(name, '#E8CF59')); });
         return out;
     })();
-    var GRID = cssVar('--dash-grid', 'rgba(155,176,196,.10)');
-    var TICK = cssVar('--dash-tick', '#9bb0c4');
+    
+    var TICK = cssVar('--wk-text-dim', '#9bb0c4');
     var ACCENT = cssVar('--accent', '#E8CF59');
     var DANGER = cssVar('--bs-danger', '#C44747');
 
     function colorAt(i) { return PALETTE[i % PALETTE.length]; }
     function alpha(hex, a) { return hex + a; }
 
-    if (window.Chart) {
-        Chart.defaults.font.family = "'Space Mono', monospace";
-        Chart.defaults.font.size = 10;
-        Chart.defaults.color = TICK;
-        Chart.defaults.animation = REDUCED ? false : { duration: 240 };
-        Chart.defaults.maintainAspectRatio = false;
-        Chart.defaults.responsive = true;
-    }
+    // Chart.js is gone. The design asks for stepped sparklines behind the numbers and
+    // plain bars; both are cheaper as inline SVG and a div, and a smoothed curve between two
+    // daily counts implies readings that were never taken.
 
     var charts = [];
-    function register(c) { charts.push(c); return c; }
-    function destroyIn(container) {
-        charts = charts.filter(function (c) {
-            if (c.canvas && container.contains(c.canvas)) {
-                // stop() before destroy(): every panel refresh destroys and immediately
-                // recreates its charts, and an animation still queued in Chart.js's
-                // global animator then ticks against a destroyed chart, throwing
-                // "this._fn is not a function" from Animation.tick and aborting the
-                // whole animation frame — which leaves OTHER charts half-rendered.
-                c.stop();
-                c.destroy();
-                return false;
-            }
-            return true;
-        });
-    }
 
     // ── Fetch (deduped: the KPI band and the growth panel share a payload) ──
     var inflight = {};
@@ -156,27 +138,24 @@
     function meterList(facet, opts) {
         opts = opts || {};
         var total = facet.reduce(function (a, r) { return a + r.count; }, 0) || 1;
-        var max = facet.reduce(function (a, r) { return Math.max(a, r.count); }, 0) || 1;
+        var max = opts.max || facet.reduce(function (a, r) { return Math.max(a, r.count); }, 0) || 1;
 
-        var wrap = el('div', 'meters');
+        var wrap = el('div');
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '6px';
 
-        facet.forEach(function (row, i) {
-            var m = el('div', 'meter');
+        facet.forEach(function (row) {
+            var m = el('div', 'bmc-meter');
 
-            var head = el('div', 'm-head');
-            head.appendChild(el('span', 'm-key', prettyKey(row.key)));
+            m.appendChild(el('span', 'bmc-celltext', prettyKey(row.key)));
+            m.appendChild(el('span', 'bmc-cellnum', num(row.count)));
+            m.appendChild(el('span', 'bmc-data', ((row.count / total) * 100).toFixed(1) + '%'));
 
-            var right = el('span');
-            right.appendChild(el('span', 'm-val', num(row.count)));
-            right.appendChild(document.createTextNode(' '));
-            right.appendChild(el('span', 'm-pct', ((row.count / total) * 100).toFixed(1) + '%'));
-            head.appendChild(right);
-            m.appendChild(head);
-
-            var track = el('div', 'm-track');
-            var fill = el('i');
+            var track = el('span', 'bmc-bar bmc-bar--8');
+            var fill = el('span', 'bmc-bar__fill');
             fill.style.width = (max ? (row.count / max) * 100 : 0).toFixed(2) + '%';
-            fill.style.background = opts.color || ACCENT;
+            if (opts.color) { fill.style.background = opts.color; }
             track.appendChild(fill);
             m.appendChild(track);
 
@@ -188,77 +167,51 @@
 
     // ── Charts ───────────────────────────────────────────────────────────
     /** Horizontal bars, sorted descending, with the value printed on each bar. */
-    function rankedBarChart(canvas, facet) {
+    /**
+     * The top categories as horizontal bars, widest first.
+     *
+     * Was a Chart.js bar canvas. Single-hue on purpose: one measure across categories, so a
+     * colour per row would encode nothing. Colour is reserved for the KPI composition strip,
+     * where the swatch is the only link between a segment and its legend.
+     */
+    function rankedBarChart(box, facet) {
         var rows = facet.slice().sort(function (a, b) { return b.count - a.count; }).slice(0, CHART_MAX_BARS);
+        var max = rows.length ? rows[0].count : 1;
 
-        return register(new Chart(canvas.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: rows.map(function (r) { return prettyKey(r.key); }),
-                datasets: [{
-                    data: rows.map(function (r) { return r.count; }),
-                    backgroundColor: alpha(ACCENT, '99'),
-                    borderColor: ACCENT,
-                    borderWidth: 1,
-                    barPercentage: 0.86,
-                    categoryPercentage: 0.88
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                layout: { padding: { right: 34 } },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: function (c) { return num(c.parsed.x); } } }
-                },
-                scales: {
-                    x: { beginAtZero: true, ticks: { precision: 0, color: TICK, maxTicksLimit: 5 }, grid: { color: GRID } },
-                    y: { ticks: { color: TICK, autoSkip: false }, grid: { display: false } }
-                }
-            },
-            plugins: [{
-                // Value labels by default — the bar chart's accessibility grade
-                // depends on the numbers not being hover-only.
-                id: 'valueLabels',
-                afterDatasetsDraw: function (chart) {
-                    var ctx = chart.ctx;
-                    ctx.save();
-                    ctx.fillStyle = TICK;
-                    ctx.font = '10px "Space Mono", monospace';
-                    ctx.textBaseline = 'middle';
-                    chart.getDatasetMeta(0).data.forEach(function (bar, i) {
-                        ctx.fillText(num(rows[i].count), bar.x + 6, bar.y);
-                    });
-                    ctx.restore();
-                }
-            }]
-        }));
+        box.textContent = '';
+        box.appendChild(meterList(rows, { max: max }));
     }
 
-    function sparkline(canvas, series, color) {
-        return register(new Chart(canvas.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: series.map(function (_, i) { return i; }),
-                datasets: [{
-                    data: series,
-                    borderColor: alpha(color, 'aa'),
-                    backgroundColor: alpha(color, '33'),
-                    borderWidth: 1.5,
-                    fill: true,
-                    pointRadius: 0,
-                    tension: 0.35
-                }]
-            },
-            options: {
-                // No animation: a 46px sparkline gains nothing from it, and these are
-                // destroyed/recreated on every refresh (see destroyIn).
-                animation: false,
-                layout: { padding: 0 },
-                plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                scales: { x: { display: false }, y: { display: false, beginAtZero: true } }
-            }
-        }));
+    /**
+     * A stepped sparkline, as inline SVG, sized by its box.
+     *
+     * STEPPED, NOT SMOOTHED. These are daily counts: a curve between two days draws a reading
+     * that was never taken. The design says the same thing — motion and line are stepped or
+     * nothing.
+     *
+     * DECORATION, NOT A CHART. It sits behind the number with no axis and no labels, so it
+     * carries a viewBox and stretches; there is nothing to misread as a precise value.
+     */
+    function sparkline(box, series, color) {
+        var n = series.length;
+        if (!n) { box.innerHTML = ''; return; }
+
+        var max = Math.max.apply(null, series) || 1;
+        var w = 100, h = 28, step = n > 1 ? w / (n - 1) : w;
+        var d = '';
+
+        series.forEach(function (v, i) {
+            var x = i * step;
+            var y = h - (v / max) * h;
+            // Across at the previous height, then up: one flat run per day.
+            d += i === 0 ? 'M0,' + y.toFixed(2) : 'H' + x.toFixed(2) + 'V' + y.toFixed(2);
+        });
+        d += 'H' + w;
+
+        box.innerHTML =
+            '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" focusable="false">' +
+            '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.5" vector-effect="non-scaling-stroke"/>' +
+            '</svg>';
     }
 
     /** True when a series has at least one non-zero point, i.e. something to plot. */
@@ -266,11 +219,6 @@
         return series.some(function (v) { return Number(v) > 0; });
     }
 
-    /** Wipe a sparkline canvas that no longer has a chart on it. */
-    function clearCanvas(canvas) {
-        var ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
 
     // ── KPI band ─────────────────────────────────────────────────────────
     var SPARK_COLOR = { invalidSyncs: DANGER };
@@ -308,8 +256,7 @@
             var spark = tile.querySelector('[data-kpi-spark]');
             var series = growth.trend.series[metric];
             if (spark && series) {
-                destroyIn(spark.parentNode);
-                // An all-zero series has no shape to draw. Chart.js renders it as a
+                        // An all-zero series has no shape to draw. Chart.js renders it as a
                 // single flat stroke along the baseline, which spans the whole tile and
                 // reads as a rule drawn across the dashboard rather than as a chart.
                 // On invalidSyncs that stroke is DANGER red, so a perfectly healthy
@@ -322,7 +269,7 @@
                 if (hasSignal(series)) {
                     sparkline(spark, series, SPARK_COLOR[metric] || ACCENT);
                 } else {
-                    clearCanvas(spark);
+                    spark.innerHTML = '';
                 }
             }
         });
@@ -367,73 +314,53 @@
     }
 
     // ── Growth panel ─────────────────────────────────────────────────────
+    /**
+     * Growth as small multiples: one stepped row per series, each on its own scale.
+     *
+     * WAS ONE CHART WITH THREE LINES SHARING AN AXIS, which is the problem — syncs dwarf
+     * users, so the two that matter sat flat along the bottom. Per-row scaling trades
+     * comparability between rows for readability within one, and the heading says so, because
+     * a reader who assumes a shared axis would draw the wrong conclusion.
+     */
     function renderGrowth(container, data) {
-        destroyIn(container);
         container.textContent = '';
 
         var wrap = el('div');
-        wrap.style.height = '280px';
-        wrap.style.position = 'relative';
-        var canvas = document.createElement('canvas');
-        wrap.appendChild(canvas);
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '10px';
+
+        ['users', 'clubs', 'syncs'].forEach(function (key, i) {
+            var series = data.trend.series[key] || [];
+            var peak = series.length ? Math.max.apply(null, series) : 0;
+            var last = series.length ? series[series.length - 1] : 0;
+
+            var row = el('div', 'bmc-sparkrow');
+            row.appendChild(el('span', 'bmc-lbl', titleize(key)));
+
+            var box = el('span', 'bmc-spark bmc-spark--row');
+            if (hasSignal(series)) {
+                sparkline(box, series, SPARK_COLOR[key] || colorAt(i));
+            }
+            row.appendChild(box);
+
+            row.appendChild(el('span', 'bmc-cellnum', num(last)));
+            row.appendChild(el('span', 'bmc-data', 'peak ' + num(peak)));
+
+            wrap.appendChild(row);
+        });
+
         container.appendChild(wrap);
 
-        // Series are differentiated by dash pattern as well as colour, so the
-        // chart still reads without colour perception.
-        var dashes = [[], [7, 4], [2, 3]];
-        var keys = ['users', 'clubs', 'syncs'];
-
-        register(new Chart(canvas.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: data.trend.days,
-                datasets: keys.map(function (k, i) {
-                    return {
-                        label: titleize(k),
-                        data: data.trend.series[k],
-                        borderColor: colorAt(i),
-                        backgroundColor: alpha(colorAt(i), '1f'),
-                        borderDash: dashes[i],
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        pointHoverRadius: 3,
-                        pointHitRadius: 14,
-                        tension: 0.3,
-                        fill: i === 0
-                    };
-                })
-            },
-            options: {
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { position: 'top', align: 'end', labels: { boxWidth: 26, boxHeight: 1, padding: 14 } },
-                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + num(c.parsed.y); } } }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: {
-                            color: TICK,
-                            maxRotation: 0,
-                            autoSkip: true,
-                            maxTicksLimit: 8,
-                            callback: function (v) {
-                                var d = this.getLabelForValue(v);
-                                return d ? d.slice(8) + '/' + d.slice(5, 7) : d;
-                            }
-                        }
-                    },
-                    y: { beginAtZero: true, ticks: { precision: 0, color: TICK, maxTicksLimit: 6 }, border: { display: false }, grid: { color: GRID } }
-                }
-            }
-        }));
+        var foot = el('p', 'bmc-data', 'Daily · last ' + (data.trend.days || []).length + ' days · each row on its own scale');
+        container.appendChild(foot);
     }
 
     // ── Leaderboards panel ───────────────────────────────────────────────
     function renderLeaderboards(container, data) {
         container.textContent = '';
 
-        var tabs = el('div', 'dash-tabs');
+        var tabs = el('div', 'bmc-segs');
         tabs.setAttribute('role', 'tablist');
         tabs.setAttribute('aria-label', 'Leaderboard category');
 
@@ -445,52 +372,40 @@
             region.textContent = '';
 
             if (!board.entries.length) {
-                region.appendChild(el('p', 'dash-empty', 'No ranked clubs yet — boards only include clubs that have concluded a season.'));
+                region.appendChild(el('span', 'bmc-empty-note',
+                    'NO RANKED CLUBS YET · BOARDS ONLY COUNT CONCLUDED SEASONS'));
                 return;
             }
 
-            var scroll = el('div', 'dash-scroll');
-            var table = el('table', 'dash-table');
+            var rows = el('div', 'bmc-rows bmc-rows--flush');
 
-            var thead = el('thead');
-            var hr = el('tr');
-            [['#', 'col-rank'], ['Club', ''], ['Score', 'col-score num'], ['Label', 'col-label']].forEach(function (h) {
-                hr.appendChild(el('th', h[1], h[0]));
-            });
-            thead.appendChild(hr);
-            table.appendChild(thead);
-
-            var tbody = el('tbody');
             board.entries.forEach(function (row) {
-                var tr = el('tr');
+                var tr = el('div', 'bmc-rankrow');
 
-                var tdRank = el('td', 'col-rank');
-                tdRank.appendChild(el('span', 'rank-badge', row.rank));
-                tr.appendChild(tdRank);
+                // Rank 1 is the one place gold appears here — the design rations it.
+                var rank = el('span', 'bmc-tierchip' + (row.rank === 1 ? ' is-first' : ''), String(row.rank));
+                tr.appendChild(rank);
 
-                tr.appendChild(el('td', null, row.clubName));
+                tr.appendChild(el('span', 'bmc-celltext', row.clubName));
+                tr.appendChild(el('span', 'bmc-cellnum', num(row.score)));
+                tr.appendChild(el('span', 'bmc-data', row.displayLabel || '—'));
 
-                var tdScore = el('td', 'col-score num', num(row.score));
-                tr.appendChild(tdScore);
-
-                tr.appendChild(el('td', 'col-label', row.displayLabel || '—'));
-                tbody.appendChild(tr);
+                rows.appendChild(tr);
             });
-            table.appendChild(tbody);
 
-            scroll.appendChild(table);
-            region.appendChild(scroll);
-            region.appendChild(el('p', 'dash-foot', num(board.total) + ' ranked club' + (board.total === 1 ? '' : 's') + ' in this board.'));
+            region.appendChild(rows);
+            region.appendChild(el('p', 'bmc-data',
+                num(board.total) + ' ranked club' + (board.total === 1 ? '' : 's') + ' in this board.'));
         }
 
         data.boards.forEach(function (board, i) {
-            var btn = el('button', 'dash-tab', board.label);
+            var btn = el('button', null, board.label);
             btn.type = 'button';
             btn.setAttribute('role', 'tab');
-            btn.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+            btn.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
             btn.addEventListener('click', function () {
-                tabs.querySelectorAll('.dash-tab').forEach(function (b) { b.setAttribute('aria-selected', 'false'); });
-                btn.setAttribute('aria-selected', 'true');
+                tabs.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-checked', 'false'); });
+                btn.setAttribute('aria-checked', 'true');
                 paint(board);
             });
             tabs.appendChild(btn);
@@ -507,7 +422,7 @@
         container.textContent = '';
 
         if (!data.total) {
-            container.appendChild(el('p', 'dash-empty', 'Nothing in this pool yet.'));
+            container.appendChild(el('span', 'bmc-empty-note', 'NOTHING IN THIS POOL YET'));
             return;
         }
 
@@ -535,7 +450,7 @@
                 // Deferred so the canvas has laid out before Chart.js measures it.
                 requestAnimationFrame(function () { rankedBarChart(canvas, facet); });
                 if (facet.length > CHART_MAX_BARS) {
-                    cell.appendChild(el('p', 'dash-foot', 'Top ' + CHART_MAX_BARS + ' of ' + facet.length + ' — the full list is in the table below.'));
+                    cell.appendChild(el('p', 'bmc-data', 'Top ' + CHART_MAX_BARS + ' of ' + facet.length + ' — the full list is in the table below.'));
                 }
             } else {
                 cell.appendChild(meterList(facet));
@@ -578,8 +493,9 @@
      * is reachable by keyboard.
      */
     function renderNested(nested, total) {
-        var wrap = el('div', 'dash-scroll');
-        var table = el('table', 'dash-table');
+        var wrap = el('div');
+        wrap.style.overflowX = 'auto';
+        var table = el('table', 'bmc-minitable');
 
         var thead = el('thead');
         var hr = el('tr');
@@ -600,7 +516,7 @@
             var tr = el('tr');
 
             var tdKey = el('td');
-            var btn = el('button', 'dash-toggle');
+            var btn = el('button', 'bmc-quick-btn');
             btn.type = 'button';
             btn.setAttribute('aria-expanded', 'false');
             btn.setAttribute('aria-controls', childId);
@@ -623,7 +539,8 @@
 
             tbody.appendChild(tr);
 
-            var childTr = el('tr', 'dash-children d-none');
+            var childTr = el('tr');
+            childTr.hidden = true;
             childTr.id = childId;
             var childTd = el('td');
             childTd.colSpan = 4;
@@ -633,7 +550,7 @@
                 var col = el('div');
                 col.appendChild(el('h4', null, titleize(dim)));
                 var rows = row.children[dim] || [];
-                col.appendChild(rows.length ? meterList(rows) : el('p', 'dash-empty', '—'));
+                col.appendChild(rows.length ? meterList(rows) : el('span', 'bmc-data', '—'));
                 cg.appendChild(col);
             });
 
@@ -644,7 +561,8 @@
             btn.addEventListener('click', function () {
                 var open = btn.getAttribute('aria-expanded') === 'true';
                 btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-                childTr.classList.toggle('d-none', open);
+                // `hidden` rather than a class, to match the panel slots.
+                childTr.hidden = open;
             });
         });
 
@@ -666,9 +584,11 @@
         var content = panel.querySelector('[data-panel-content]');
 
         function state(which) {
-            loading.classList.toggle('d-none', which !== 'loading');
-            error.classList.toggle('d-none', which !== 'error');
-            content.classList.toggle('d-none', which !== 'content');
+            // `hidden`, not d-none: the bmc macros use the attribute, and bmc-admin.css
+            // enforces [hidden]{display:none!important} so nothing can out-specify it.
+            loading.hidden = which !== 'loading';
+            error.hidden   = which !== 'error';
+            content.hidden = which !== 'content';
         }
 
         function run(force) {
@@ -693,6 +613,30 @@
         run(false);
     }
 
+    /**
+     * The strip's one button: clear every cached aggregate, then reload every panel.
+     *
+     * Lives here rather than in the page's own script because the panels it reloads are this
+     * file's to drive — a second place that knew how to refresh them would be a second place
+     * to keep in step.
+     */
+    function bindRefreshAll() {
+        var btn = document.getElementById('dash-refresh-all');
+        if (!btn) { return; }
+
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            refreshCache(null)
+                .then(function () {
+                    root.querySelectorAll('[data-panel-refresh],[data-pool-refresh]').forEach(function (b) {
+                        if (b !== btn) { b.click(); }
+                    });
+                    if (window.BMC) { BMC.toast('STATS CACHE CLEARED · PANELS RELOADING'); }
+                })
+                .finally(function () { btn.disabled = false; });
+        });
+    }
+
     function bindPool() {
         var panel = root.querySelector('[data-pool-panel]');
         if (!panel) { return; }
@@ -704,9 +648,11 @@
         var current = tabs[0];
 
         function state(which) {
-            loading.classList.toggle('d-none', which !== 'loading');
-            error.classList.toggle('d-none', which !== 'error');
-            content.classList.toggle('d-none', which !== 'content');
+            // `hidden`, not d-none: the bmc macros use the attribute, and bmc-admin.css
+            // enforces [hidden]{display:none!important} so nothing can out-specify it.
+            loading.hidden = which !== 'loading';
+            error.hidden   = which !== 'error';
+            content.hidden = which !== 'content';
         }
 
         function run(tab, force) {
@@ -774,4 +720,5 @@
 
     root.querySelectorAll('[data-panel]').forEach(bindPanel);
     bindPool();
+    bindRefreshAll();
 })();
