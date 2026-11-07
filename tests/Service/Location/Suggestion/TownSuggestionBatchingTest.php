@@ -316,6 +316,81 @@ class TownSuggestionBatchingTest extends KernelTestCase
         self::assertSame(5, $this->batchRepository->importedForRun($runId));
     }
 
+    // ── The rolling ticker's data ───────────────────────────────────────────
+
+    public function testRecentlyAddedTownsComeBackNewestFirstAndCapped(): void
+    {
+        $repo = self::getContainer()->get(\App\Repository\Location\LocationRepository::class);
+        $plan = $this->service()->planRun(self::COUNTRY, 50);
+
+        // Twelve towns, so the cap has something to drop.
+        $names = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $names[] = \sprintf('Tickertown %02d', $i);
+        }
+
+        $this->suggester->queueNames($names);
+        $this->service()->runBatch(
+            (string) $plan['run']->getId(),
+            (string) $plan['batches'][0]->getId(),
+            self::COUNTRY,
+            50,
+        );
+
+        $recent = $repo->findRecentlyAddedTowns(self::COUNTRY->value, $plan['run']->getStartedAt(), 10);
+
+        self::assertCount(10, $recent, 'capped, so a 300-town run does not render a wall of names');
+
+        // Newest first. A whole batch lands inside one second, so this only holds because the
+        // query breaks the timestamp tie on the UuidV7 id rather than trusting created_at.
+        self::assertSame('Tickertown 12', $recent[0]);
+        self::assertSame('Tickertown 11', $recent[1]);
+        self::assertNotContains('Tickertown 01', $recent, 'the oldest two fell off the window');
+    }
+
+    public function testTheTickerShowsTheRunsOwnTownsNotTheSeed(): void
+    {
+        // The ticker says "latest added", so a run's towns must crowd out the 30 the registry
+        // seeded — which is what the ordering above buys. Asserted by content rather than by
+        // an empty-window check: created_at is second-precision, so rows written in the same
+        // second the run started do fall inside `>= since`, and pinning that boundary would be
+        // pinning a clock rather than a behaviour.
+        $repo = self::getContainer()->get(\App\Repository\Location\LocationRepository::class);
+        $plan = $this->service()->planRun(self::COUNTRY, 50);
+
+        $this->suggester->queueNames(['Freshville', 'Newtown', 'Latestead']);
+        $this->service()->runBatch(
+            (string) $plan['run']->getId(),
+            (string) $plan['batches'][0]->getId(),
+            self::COUNTRY,
+            50,
+        );
+
+        $recent = $repo->findRecentlyAddedTowns(self::COUNTRY->value, $plan['run']->getStartedAt(), 10);
+
+        self::assertSame(['Latestead', 'Newtown', 'Freshville'], \array_slice($recent, 0, 3));
+    }
+
+    public function testAWindowAfterTheImportsIsEmpty(): void
+    {
+        // Proves the scoping is real and not just ordering: nothing was added after this
+        // moment, so nothing comes back.
+        $repo = self::getContainer()->get(\App\Repository\Location\LocationRepository::class);
+        $plan = $this->service()->planRun(self::COUNTRY, 50);
+
+        $this->suggester->queueNames(['Shouldnotappear']);
+        $this->service()->runBatch(
+            (string) $plan['run']->getId(),
+            (string) $plan['batches'][0]->getId(),
+            self::COUNTRY,
+            50,
+        );
+
+        $future = new \DateTimeImmutable('+1 hour');
+
+        self::assertSame([], $repo->findRecentlyAddedTowns(self::COUNTRY->value, $future, 10));
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private function service(): TownSuggestionService

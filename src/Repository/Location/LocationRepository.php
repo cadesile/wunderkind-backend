@@ -457,6 +457,52 @@ class LocationRepository extends ServiceEntityRepository
      * thing to tell an operator ("1 town ranked, 864 waiting on enrichment"), so it is counted
      * separately rather than inferred from a difference.
      */
+    /**
+     * The most recently added towns for a country, newest first.
+     *
+     * Feeds the "Pull towns" card's rolling ticker, so an operator watching a run sees the
+     * names arriving rather than only a count going up. Scoped by `$since` — the run's start
+     * — so it shows what THIS pull added rather than whatever the country happened to hold.
+     *
+     * NO NEW COLUMN FOR THIS. The towns a run added are simply the country's newest rows, so
+     * the record already exists; storing a second copy on the batch would be a thing that can
+     * disagree with the table it describes.
+     *
+     * ORDERED BY id AS WELL AS created_at, because created_at is a timestamp(0) — second
+     * precision — and a batch inserts its forty-odd towns in one flush inside the same second.
+     * Ordering on the timestamp alone would make "the latest ten" an arbitrary ten of that
+     * second. The ids are UuidV7s, which sort in creation order, so they break the tie the way
+     * a human would expect.
+     *
+     * THE WINDOW IS FUZZY BY UP TO A SECOND, for that same reason: rows written in the same
+     * second the run started satisfy `>= $since`. So seeding a country and pulling towns for it
+     * within one second would show a few seeded names in the ticker. Left as is deliberately —
+     * this drives a cosmetic ticker, and the precise alternative is a second copy of the names
+     * on the batch row, which is a thing that can disagree with the table it describes. The
+     * ordering above means genuinely new towns still come first regardless.
+     *
+     * @return list<string>
+     */
+    public function findRecentlyAddedTowns(string $countryCode, \DateTimeImmutable $since, int $limit = 10): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT town
+               FROM location
+              WHERE country_code = :country
+                AND created_at >= :since
+              ORDER BY created_at DESC, id DESC
+              LIMIT :limit',
+            [
+                'country' => strtoupper($countryCode),
+                'since'   => $since,
+                'limit'   => max(1, $limit),
+            ],
+            ['since' => 'datetime_immutable', 'limit' => \Doctrine\DBAL\ParameterType::INTEGER],
+        );
+
+        return array_map(static fn (mixed $t): string => (string) $t, $rows);
+    }
+
     public function countStaleWithoutCoordinates(?string $countryCode): int
     {
         $sql    = "SELECT COUNT(*) FROM location
