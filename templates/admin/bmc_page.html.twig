@@ -1,0 +1,50 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+{#
+  Base template for every redesigned NON-LIST admin page (dashboard, competitions,
+  the three pool pages, league overview, locations).
+
+  WHY THIS EXISTS. The shell's layout reproduces EasyAdmin's STOCK content_header_wrapper
+  verbatim and on purpose — see its own note at bundles/EasyAdminBundle/layout.html.twig:126.
+  Blanking that block broke every page that had NOT been redesigned, stripping their title
+  and page-actions, so the default has to stay the real thing and pages that want the new
+  strip override it themselves. That is what this file does, and it is the same pair of
+  blocks the shipped list pages override (crud/bmc_index.html.twig:17,74).
+
+  (The handoff's README explains this the other way round — that the layout puts the strip
+  inside `content` and that overriding `content` is why the tool pages lost their headers.
+  It does not: they look stock because nothing has migrated them yet. The conclusion is
+  right even though the reason given for it is not.)
+
+  So: override `content_header_wrapper` and `main`, via the bmc_* blocks below. Never
+  override `content` in a child — that would swallow the strip for real.
+
+  Variables (pass from the controller's render()):
+    bmcGroup   crumb group, e.g. 'Config'            → "ADMIN › CONFIG"
+    bmcTitle   page title (defaults to the selected menu label)
+    bmcDomain  default card domain for the page: club | match | people
+    bmc_page   OPTIONAL — only if <main data-bmc-page> comes out empty (see README §2.3)
+#}
+
+{% block content_header_wrapper %}
+    <header class="bmc-strip">
+        <div class="bmc-strip__titles">
+            <span class="bmc-crumb">ADMIN › {{ bmcGroup|default('')|upper }}</span>
+            <div class="bmc-title-row">
+                <h1 class="bmc-title">{% block bmc_title %}{{ bmcTitle|default('')|upper }}{% endblock %}</h1>
+                <button type="button" class="bmc-iconbtn bmc-iconbtn--sm bmc-pin" aria-pressed="false" title="Pin to sidebar">
+                    <i data-lucide="pin" width="16" height="16"></i>
+                </button>
+            </div>
+        </div>
+        <div class="bmc-strip__right">
+            {% block bmc_strip_right %}{% endblock %}
+        </div>
+    </header>
+{% endblock %}
+
+{% block main %}
+    <div class="bmc-page{% block bmc_page_class %}{% endblock %}">
+        {% block bmc_body %}{% endblock %}
+    </div>
+    {{ include('admin/_bmc_dialog.html.twig') }}
+{% endblock %}

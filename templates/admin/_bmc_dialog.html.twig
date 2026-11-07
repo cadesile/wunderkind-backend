@@ -1,0 +1,13 @@
+{# PixelDialog — driven by BMC.confirm() in public/bmc-pages.js. One per page. #}
+<div class="bmc-overlay">
+    <div class="bmc-dialog-scrim" id="bmc-dialog" hidden>
+        <div class="bmc-dialog" role="alertdialog" aria-modal="true" aria-labelledby="bmc-dialog-title">
+            <h2 class="bmc-dialog__title" id="bmc-dialog-title">CONFIRM</h2>
+            <p class="bmc-dialog__msg"></p>
+            <div class="bmc-dialog__actions">
+                <button type="button" class="bmc-btn" data-bmc-dialog-cancel><span>CANCEL</span></button>
+                <button type="button" class="bmc-btn bmc-btn--yellow" data-bmc-dialog-ok><span>CONFIRM</span></button>
+            </div>
+        </div>
+    </div>
+</div>

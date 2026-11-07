@@ -1575,10 +1575,10 @@ class DashboardController extends AbstractDashboardController
      * Hand-bumped cache-buster for the two redesign assets. There is no asset
      * pipeline in this project (no importmap, no Encore), so public/ files are
      * served verbatim with no versioning of their own. Bump this on every edit
-     * to public/bmc-admin.css or public/bmc-admin.js. Same approach as
-     * templates/admin/dashboard.html.twig's dash_v.
+     * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
+     * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261107a';
+    private const BMC_ASSET_VERSION = '20261107b';
 
     public function configureAssets(): Assets
     {
@@ -1587,6 +1587,12 @@ class DashboardController extends AbstractDashboardController
             // redesigned yet; bmc-admin.css loads after it so it wins.
             ->addCssFile('admin-theme.css')
             ->addCssFile('bmc-admin.css?v=' . self::BMC_ASSET_VERSION)
+            // The component layer for the redesigned NON-list pages. After
+            // bmc-admin.css because it builds on its tokens (--wk-*, --text-*)
+            // and extends its .bmc-btn / .bmc-badge / .bmc-seg / .bmc-input.
+            // Harmless on pages that do not use it: everything it defines is a
+            // bmc- class nothing else carries.
+            ->addCssFile('bmc-pages.css?v=' . self::BMC_ASSET_VERSION)
             // All three are deferred, and that is load-bearing rather than an
             // optimisation. EasyAdmin emits configureAssets() scripts in <head>,
             // well before the shell markup exists, and bmc-admin.js is a plain
@@ -1603,7 +1609,13 @@ class DashboardController extends AbstractDashboardController
             ->addJsFile(Asset::new('assets/kit-compositor.js')->defer())
             // Must run after the two above: it calls lucide.createIcons() and
             // composeKitSvg() on the way in.
-            ->addJsFile(Asset::new('bmc-admin.js?v=' . self::BMC_ASSET_VERSION)->defer());
+            ->addJsFile(Asset::new('bmc-admin.js?v=' . self::BMC_ASSET_VERSION)->defer())
+            // window.BMC — toast, confirm (PixelDialog), runJobs, money, and the
+            // data-bmc-* form behaviour the redesigned pages are built on. Last,
+            // and deferred for the same reason as the rest: it binds on load.
+            // It defines no global the shell already uses, and every binding is
+            // opt-in by attribute, so pages carrying none are untouched.
+            ->addJsFile(Asset::new('bmc-pages.js?v=' . self::BMC_ASSET_VERSION)->defer());
         // admin-ui.js is gone: it only gave EasyAdmin's sidebar-collapse handle
         // real button semantics, and the redesigned shell replaces that sidebar.
     }
