@@ -84,12 +84,19 @@ class StaffCrudController extends AbstractCrudController
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
+            // BACKING VALUES, NOT ENUM CASES, and the difference is not cosmetic. Symfony's
+            // ChoiceType cannot derive a scalar from an arbitrary object, so a list of enum
+            // INSTANCES submits the list's index — "0", "1", "2" — while the filter rail
+            // renders the enum's backing value. The two never meet: the submitted value is
+            // dropped as an invalid choice and the filter silently does not apply at all.
+            // EasyAdmin warns about this in ChoiceFilter::setTranslatableChoices()'s docblock.
+            // Pinned by FilterRailQueryStringTest.
             ->add(ChoiceFilter::new('role')->setChoices([
-                'Coach'                => StaffRole::COACH,
-                'Manager'              => StaffRole::MANAGER,
-                'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL,
-                'Facility Manager'     => StaffRole::FACILITY_MANAGER,
-                'Chairman'             => StaffRole::CHAIRMAN,
+                'Coach'                => StaffRole::COACH->value,
+                'Manager'              => StaffRole::MANAGER->value,
+                'Director of Football' => StaffRole::DIRECTOR_OF_FOOTBALL->value,
+                'Facility Manager'     => StaffRole::FACILITY_MANAGER->value,
+                'Chairman'             => StaffRole::CHAIRMAN->value,
             ])->canSelectMultiple())
             ->add(ChoiceFilter::new('nationality', 'Nationality')->setChoices($this->nationalityChoices())->canSelectMultiple())
             ->add(NumericFilter::new('coachingAbility', 'Coaching ability'))

@@ -1578,7 +1578,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.css or public/bmc-admin.js. Same approach as
      * templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261106d';
+    private const BMC_ASSET_VERSION = '20261107a';
 
     public function configureAssets(): Assets
     {
