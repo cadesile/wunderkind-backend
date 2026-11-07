@@ -3,6 +3,8 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Setup\SetupQuizQuestion;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ArrayField;
@@ -39,6 +41,26 @@ class SetupQuizQuestionCrudController extends AbstractCrudController
                 . 'correctly. Deactivate a bad question rather than deleting it — answers '
                 . 'reference it, and bonuses already paid were scored against it.',
             );
+    }
+
+    /**
+     * Adds the import/export link to the list page.
+     *
+     * HERE AS WELL AS ON THE HUB, because this is where someone authoring a quiz actually is,
+     * and twenty questions is quicker to write as a file than to type into a form twenty times.
+     * The link goes to the per-domain page rather than straight to the download: that page
+     * carries the two warnings that do not fit on a button — the file holds the answer key, and
+     * a question must be withdrawn rather than deleted.
+     */
+    public function configureActions(Actions $actions): Actions
+    {
+        return $actions->add(
+            Crud::PAGE_INDEX,
+            Action::new('importExport', 'Import / Export', 'fa fa-file-arrow-down')
+                ->linkToRoute('admin', ['routeName' => 'admin_setup_quiz_content'])
+                ->createAsGlobalAction()
+                ->setHtmlAttributes(['title' => 'Move the quiz between environments, or author it from a file']),
+        );
     }
 
     public function configureFields(string $pageName): iterable
