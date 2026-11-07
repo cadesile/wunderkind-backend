@@ -8,6 +8,7 @@ use App\Entity\StarterConfig;
 use App\Enum\Country;
 use App\Enum\PlayerPosition;
 use App\Enum\StaffRole;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
@@ -44,6 +45,7 @@ final class StarterPackDiagnosticService
         private readonly StaffRepository          $staffRepository,
         private readonly ScoutRepository          $scoutRepository,
         private readonly StarterConfigRepository  $starterConfigRepository,
+        private readonly CountryProfileRepository $countryProfileRepository,
         private readonly PoolConfigRepository     $poolConfigRepository,
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly StarterPackService       $starterPackService,
@@ -171,11 +173,15 @@ final class StarterPackDiagnosticService
             ? $this->suggestBand($bornOnOrBefore, $requestedTotal)
             : null;
 
+        // Player-visible now means the country's profile is LIVE, not a ticked box on the
+        // starter config. Read once: both the field below and buildFindings() need it.
+        $liveCountries = $this->countryProfileRepository->liveCountryCodes();
+
         return [
             'country'          => $countryCode,
             'countryLabel'     => $country?->label() ?? $countryCode,
             'countryKnown'     => $country !== null,
-            'countryEnabled'   => in_array($countryCode, $starterConfig->getEnabledCountries(), true),
+            'countryEnabled'   => in_array($countryCode, $liveCountries, true),
             'nationality'      => $nationality,
             'tier'             => $tier,
             'tierIsDefault'    => $tier === StarterPackService::DEFAULT_STARTER_TIER,
@@ -201,7 +207,7 @@ final class StarterPackDiagnosticService
             'findings'         => $this->buildFindings(
                 $verdict, $country, $countryCode, $nationality, $tier, $ability,
                 $firstTeamAgeMin, $bandHoldsOnlyKids, $positions, $staff, $scouts,
-                $suggestion, $starterConfig->getEnabledCountries(),
+                $suggestion, $liveCountries,
             ),
         ];
     }
@@ -257,7 +263,7 @@ final class StarterPackDiagnosticService
      * @param array<string, mixed>             $scouts
      * @param array{min: int, max: int, source: string} $ability
      * @param array{min: int, max: int, sampled: int}|null $suggestion
-     * @param string[] $enabledCountries
+     * @param string[] $enabledCountries codes of every LIVE country profile
      *
      * @return array<int, array{level: string, message: string}>
      */
@@ -390,7 +396,7 @@ final class StarterPackDiagnosticService
             $findings[] = [
                 'level'   => 'info',
                 'message' => sprintf(
-                    '%s is not in StarterConfig.enabledCountries, so clients cannot pick it even '
+                    '%s has no LIVE country profile, so clients cannot pick it even '
                     . 'if the pool can serve it.',
                     $countryCode,
                 ),

@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Enum\StaffRole;
 use App\Message\Pool\TopUpStarterPoolMessage;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
 use App\Repository\ScoutRepository;
@@ -66,6 +67,7 @@ final class StarterPoolAuditService
     public function __construct(
         private readonly StarterPackDiagnosticService $diagnostics,
         private readonly StarterConfigRepository      $starterConfigRepository,
+        private readonly CountryProfileRepository     $countryProfileRepository,
         private readonly PoolConfigRepository         $poolConfigRepository,
         private readonly PlayerRepository             $playerRepository,
         private readonly StaffRepository              $staffRepository,
@@ -82,7 +84,7 @@ final class StarterPoolAuditService
     public function activeCountries(): array
     {
         return array_values(array_filter(
-            $this->starterConfigRepository->getConfig()->getEnabledCountries(),
+            $this->countryProfileRepository->liveCountryCodes(),
             static fn (mixed $code): bool => is_string($code) && $code !== '',
         ));
     }
@@ -261,7 +263,7 @@ final class StarterPoolAuditService
 
         if ($nationality === null) {
             $plan['blockers'][] = sprintf(
-                '%s is enabled for play but is not a known Country case, so no nationality can be generated for it. Add the case to App\Enum\Country or drop it from StarterConfig::enabledCountries.',
+                '%s is live for play but is not a known Country case, so no nationality can be generated for it. Add the case to App\Enum\Country, or take its country profile out of LIVE.',
                 $diagnosis['country'],
             );
 

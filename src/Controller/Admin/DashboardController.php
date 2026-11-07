@@ -597,7 +597,6 @@ class DashboardController extends AbstractDashboardController
         return $this->render('admin/starter_config.html.twig', [
             'config' => $this->starterConfigRepository->getConfig(),
             'dynamicLeagueTiers' => $dynamicLeagueTiers,
-            'generationCapableCountries' => Country::generationCapableLabels(),
         ]);
     }
 
@@ -699,8 +698,8 @@ class DashboardController extends AbstractDashboardController
         $reputationTier      = ReputationTier::tryFrom($reputationTierValue) ?? ReputationTier::LOCAL;
         $config->setStarterReputationTier($reputationTier);
 
-        $enabledCountries = $request->request->all('enabledCountries') ?: ['EN'];
-        $config->setEnabledCountries($enabledCountries);
+        // enabledCountries is no longer submitted or stored: a country is offered to players
+        // when its CountryProfile is LIVE. See CountryProfileRepository::liveCountryCodes().
 
         $ranges = $request->request->all('leagueRanges') ?: [];
         // Basic validation: ensure values are numeric

@@ -35,6 +35,34 @@ class CountryProfileRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * The codes of every LIVE country, which is now the definition of "open to players".
+     *
+     * REPLACED StarterConfig::$enabledCountries, a hand-maintained checkbox list that could and
+     * did disagree with the thing it was describing: a country could be ticked while its profile
+     * was still DRAFT, offering players a country whose locations were not enriched, or sit
+     * un-ticked long after it went LIVE. One flag, set where the readiness is actually known,
+     * cannot drift from itself.
+     *
+     * Projected rather than hydrated — every caller wants codes, and findLive() already exists
+     * for the ones that want the rows.
+     *
+     * @return list<string>
+     */
+    public function liveCountryCodes(): array
+    {
+        return array_map(
+            static fn (mixed $code): string => (string) $code,
+            $this->createQueryBuilder('c')
+                ->select('c.code')
+                ->where('c.status = :live')
+                ->setParameter('live', CountryProfileStatus::LIVE)
+                ->orderBy('c.code', 'ASC')
+                ->getQuery()
+                ->getSingleColumnResult(),
+        );
+    }
+
     /** @return list<CountryProfile> */
     public function findAllOrderedByName(): array
     {

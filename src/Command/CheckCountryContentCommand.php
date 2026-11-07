@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Enum\Country;
 use App\Repository\CountryWorldPackCacheRepository;
 use App\Repository\LeagueRepository;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
@@ -35,6 +36,7 @@ class CheckCountryContentCommand extends Command
         private readonly NpcClubRepository                $npcClubRepository,
         private readonly CountryWorldPackCacheRepository  $cacheRepository,
         private readonly StarterConfigRepository          $starterConfigRepository,
+        private readonly CountryProfileRepository         $countryProfileRepository,
         private readonly LocationCatalogueService         $locationCatalogue,
         private readonly CountryReadinessService          $readinessService,
     ) {
@@ -128,7 +130,7 @@ class CheckCountryContentCommand extends Command
         $config = $this->starterConfigRepository->getConfig();
         $io->table(['Setting', 'Value'], [
             ['leagueAbilityRanges entry', isset($config->getLeagueAbilityRanges()[$countryCode]) ? 'present' : 'MISSING'],
-            ['enabledCountries (player-visible)', in_array($countryCode, $config->getEnabledCountries(), true) ? 'yes' : 'no'],
+            ['profile LIVE (player-visible)', in_array($countryCode, $this->countryProfileRepository->liveCountryCodes(), true) ? 'yes' : 'no'],
         ]);
 
         if ($missing !== [] || !$hasPool || count($leagues) < 8) {
