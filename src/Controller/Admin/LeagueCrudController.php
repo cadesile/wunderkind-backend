@@ -49,11 +49,18 @@ class LeagueCrudController extends AbstractCrudController
                 range(1, 8)
             )))
             ->add(TextFilter::new('name'))
+            // BACKING VALUES, NOT ENUM CASES, and the difference is not cosmetic. Symfony's
+            // ChoiceType cannot derive a scalar from an arbitrary object, so a list of enum
+            // INSTANCES submits the list's index — "0", "1", "2" — while the filter rail
+            // renders the enum's backing value. The two never meet: the submitted value is
+            // dropped as an invalid choice and the filter silently does not apply at all.
+            // EasyAdmin warns about this in ChoiceFilter::setTranslatableChoices()'s docblock.
+            // Pinned by FilterRailQueryStringTest.
             ->add(ChoiceFilter::new('leagueReputationTier')->setChoices([
-                'Local'    => ReputationTier::LOCAL,
-                'Regional' => ReputationTier::REGIONAL,
-                'National' => ReputationTier::NATIONAL,
-                'Elite'    => ReputationTier::ELITE,
+                'Local'    => ReputationTier::LOCAL->value,
+                'Regional' => ReputationTier::REGIONAL->value,
+                'National' => ReputationTier::NATIONAL->value,
+                'Elite'    => ReputationTier::ELITE->value,
             ]))
             ->add(NumericFilter::new('promotionSpots'))
             ->add(NumericFilter::new('tvDeal', 'TV Deal'))

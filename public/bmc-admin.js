@@ -203,8 +203,37 @@
         var submit = function () { clearTimeout(t); railForm.requestSubmit ? railForm.requestSubmit() : railForm.submit(); };
         railForm.addEventListener('change', function (e) { if (e.target.matches('input[type=checkbox], input[type=radio], input[type=date]')) submit(); });
         railForm.addEventListener('input', function (e) { if (e.target.matches('input[type=text], input[type=search]')) { clearTimeout(t); t = setTimeout(submit, 450); } });
-        // Drop empty params so URLs stay short and EasyAdmin doesn't apply empty filters.
-        railForm.addEventListener('submit', function () { $$('input, select', railForm).forEach(function (el) { if (!el.value && el.type !== 'checkbox' && el.type !== 'radio') el.disabled = true; }); });
+        // Drop untouched facets, then empty params within the rest, so the query string
+        // carries only what the operator actually set.
+        //
+        // THE FACET SWEEP IS THE LOAD-BEARING HALF, and it used to be missing. Every facet
+        // renders a hidden `comparison` input — "=" for choices, "between" for ranges, "like"
+        // for text — and a hidden input ALWAYS has a value, so the per-input rule below could
+        // never remove one. Left in, it tells EasyAdmin the filter is applied with no value,
+        // and ChoiceFilterType reads that as IS NULL (see its buildForm: an EQ with a null or
+        // empty value becomes 'IS NULL'). On a non-nullable column — position, status, tier,
+        // size — that matches no rows. So touching any one facet emptied the whole list, on
+        // every redesigned list page, which is exactly what was reported for Players and
+        // Investors.
+        //
+        // A checked box whose value is '' does not count as touched: that is the boolean
+        // segment's ALL option, which means "no filter", not "filter on empty".
+        railForm.addEventListener('submit', function () {
+            $$('.bmc-facet', railForm).forEach(function (facet) {
+                var ticked = $$('input[type=checkbox], input[type=radio]', facet)
+                    .some(function (b) { return b.checked && b.value !== ''; });
+                var typed = $$('input[type=text], input[type=search], input[type=date], input[type=number], select', facet)
+                    .some(function (el) { return el.value; });
+
+                if (!ticked && !typed) {
+                    $$('input, select', facet).forEach(function (el) { el.disabled = true; });
+                }
+            });
+
+            $$('input, select', railForm).forEach(function (el) {
+                if (!el.value && el.type !== 'checkbox' && el.type !== 'radio') el.disabled = true;
+            });
+        });
         $$('[data-bmc-days]', railForm).forEach(function (b) {
             b.addEventListener('click', function () {
                 var box = b.closest('.bmc-facet'), days = +b.getAttribute('data-bmc-days');

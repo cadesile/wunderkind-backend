@@ -105,18 +105,25 @@ class PlayerCrudController extends AbstractCrudController
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
+            // BACKING VALUES, NOT ENUM CASES, and the difference is not cosmetic. Symfony's
+            // ChoiceType cannot derive a scalar from an arbitrary object, so a list of enum
+            // INSTANCES submits the list's index — "0", "1", "2" — while the filter rail
+            // renders the enum's backing value. The two never meet: the submitted value is
+            // dropped as an invalid choice and the filter silently does not apply at all.
+            // EasyAdmin warns about this in ChoiceFilter::setTranslatableChoices()'s docblock.
+            // Pinned by FilterRailQueryStringTest.
             ->add(ChoiceFilter::new('position', 'Position')->setChoices([
-                'Goalkeeper' => PlayerPosition::GOALKEEPER,
-                'Defender'   => PlayerPosition::DEFENDER,
-                'Midfielder' => PlayerPosition::MIDFIELDER,
-                'Attacker'   => PlayerPosition::ATTACKER,
+                'Goalkeeper' => PlayerPosition::GOALKEEPER->value,
+                'Defender'   => PlayerPosition::DEFENDER->value,
+                'Midfielder' => PlayerPosition::MIDFIELDER->value,
+                'Attacker'   => PlayerPosition::ATTACKER->value,
             ])->canSelectMultiple())
             ->add(ChoiceFilter::new('status', 'Status')->setChoices([
-                'Active'               => PlayerStatus::ACTIVE,
-                'Loaned Out'           => PlayerStatus::LOANED_OUT,
-                'Transferred'          => PlayerStatus::TRANSFERRED,
-                'Transferred (Agent)'  => PlayerStatus::TRANSFERRED_VIA_AGENT,
-                'Retired'              => PlayerStatus::RETIRED,
+                'Active'               => PlayerStatus::ACTIVE->value,
+                'Loaned Out'           => PlayerStatus::LOANED_OUT->value,
+                'Transferred'          => PlayerStatus::TRANSFERRED->value,
+                'Transferred (Agent)'  => PlayerStatus::TRANSFERRED_VIA_AGENT->value,
+                'Retired'              => PlayerStatus::RETIRED->value,
             ])->canSelectMultiple())
             // Every case, not the four this used to list: the two it left out
             // (youth and senior intake) are where the players actually come
@@ -166,11 +173,12 @@ class PlayerCrudController extends AbstractCrudController
     }
 
     /** @return array<string, RecruitmentSource> */
+    /** @return array<string, string> label => backing value — see the note in configureFilters() */
     private function recruitmentChoices(): array
     {
         $choices = [];
         foreach (RecruitmentSource::cases() as $case) {
-            $choices[ucwords(str_replace('_', ' ', $case->value))] = $case;
+            $choices[ucwords(str_replace('_', ' ', $case->value))] = $case->value;
         }
 
         return $choices;
