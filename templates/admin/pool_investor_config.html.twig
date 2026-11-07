@@ -1,425 +1,285 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  WORKED EXAMPLE — the Investor pool page rebuilt on bmc_page + bmc-pages.css/js.
+  Design source: prototype/Investor Pool.dc.html. Data: PoolConfigController::investorPoolConfig()
+  (config, poolCounts{agents,sponsors,investors}) plus bmcGroup: 'Config', bmcTitle: 'Investor pool'.
 
-{% block content %}
-<div class="row g-4 mt-1">
+  It is complete for this page and is the pattern the other pages follow:
+    · static markup is Twig, styled only with bmc-* classes (no inline style except live widths)
+    · the save form is a plain POST to the existing save route, enhanced by form[data-bmc-form]
+    · generation runs client-side through BMC.runJobs() against the existing generate-chunk route
+    · destructive actions confirm through the PixelDialog (data-bmc-dialog-*)
+  Keep whatever form action URLs the current pool_investor_config.html.twig uses if they differ —
+  the ones below follow the redirect convention in PoolConfigController.
+#}
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Investor Pool Config</h5>
-        <p class="text-muted small mb-0">Controls the random ranges and pool size targets used when generating agents, sponsors, and investors. Changes apply to the next generation run.</p>
+{% set types = [
+    {key: 'agents',    label: 'AGENTS',    noun: 'Agents',    field: 'agentPoolTarget',    scope: 'Every agent',          count: poolCounts.agents,    target: config.agentPoolTarget},
+    {key: 'sponsors',  label: 'SPONSORS',  noun: 'Sponsors',  field: 'sponsorPoolTarget',  scope: 'Not yet with a club',  count: poolCounts.sponsors,  target: config.sponsorPoolTarget},
+    {key: 'investors', label: 'INVESTORS', noun: 'Investors', field: 'investorPoolTarget', scope: 'Not yet with a club',  count: poolCounts.investors, target: config.investorPoolTarget},
+] %}
+{% set clearN = poolCounts.agents + poolCounts.sponsors + poolCounts.investors %}
+
+{% block bmc_page_class %} bmc-page--savebar{% endblock %}
+
+{% block bmc_body %}
+<section class="bmc-card" data-domain="club" id="gen"
+         data-url="{{ path('admin_investor_pool_generate_chunk') }}" data-token="{{ csrf_token('generate_investor_pool') }}">
+    <div class="bmc-card__head">
+        <i data-lucide="sparkles"></i>
+        <span class="bmc-card__title">GENERATE</span>
+        <span class="bmc-card__meta">Agents, plus unassigned sponsors &amp; investors</span>
     </div>
 
-    {# ── Pool Status & Generate ──────────────────────────────────────── #}
-    <div class="col-12">
-    <style>
-    .pool-stat-card {
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: 8px;
-        padding: 12px 10px 10px;
-        text-align: center;
-        transition: border-color .18s;
-    }
-    .pool-stat-card:hover { border-color: var(--bs-border-color-translucent); }
-    .pool-stat-count { font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
-    .pool-stat-target { font-size: .75rem; color: var(--bs-secondary-color); }
-    .pool-stat-label { font-size: .7rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
-    .pool-progress { height: 3px; border-radius: 2px; background: var(--bs-border-color); overflow: hidden; margin-top: 7px; }
-    .pool-progress-bar { height: 100%; border-radius: 2px; transition: width .4s ease; }
-
-    .job-row {
-        display: flex; align-items: center; gap: 10px;
-        padding: 7px 10px; border-radius: 6px;
-        font-size: .8rem; transition: background .15s;
-    }
-    .job-row:nth-child(odd) { background: rgba(255,255,255,.03); }
-    .job-icon { width: 16px; text-align: center; flex-shrink: 0; }
-    .job-label { flex: 1; font-family: monospace; }
-    .job-status { font-size: .72rem; color: var(--bs-secondary-color); }
-    .job-count { font-size: .72rem; font-family: monospace; font-weight: 600; min-width: 60px; text-align: right; }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spin { animation: spin .8s linear infinite; display: inline-block; }
-
-    .activity-log {
-        max-height: 200px; overflow-y: auto; font-size: .75rem; font-family: monospace;
-        background: rgba(0,0,0,.2); border-radius: 6px; padding: 8px 10px;
-        border: 1px solid var(--bs-border-color);
-    }
-    .log-entry { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
-    .log-entry:last-child { border-bottom: none; }
-    .log-time { color: var(--bs-secondary-color); flex-shrink: 0; }
-    .log-label { flex: 1; }
-    .log-count { font-weight: 600; min-width: 70px; text-align: right; }
-
-    .btn-pool-action {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 7px 16px; border-radius: 6px; font-size: .8rem; font-weight: 600;
-        border: 1px solid; cursor: pointer; transition: all .18s; white-space: nowrap;
-    }
-    .btn-pool-action:disabled { opacity: .45; cursor: not-allowed; }
-    </style>
-
-        <div class="card border-primary-subtle">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-handshake text-muted fa-sm"></i>
-                <span class="fw-semibold small">Pool Status &amp; Generate</span>
-            </div>
-            <div class="card-body pb-3">
-
-                {# ── Status Grid ────────────────────────────────────────── #}
-                {% set poolItems = [
-                    { key: 'agents',    label: 'Agents',    icon: 'handshake',  count: poolCounts.agents,    target: config.agentPoolTarget },
-                    { key: 'sponsors',  label: 'Sponsors',  icon: 'star',       count: poolCounts.sponsors,  target: config.sponsorPoolTarget },
-                    { key: 'investors', label: 'Investors', icon: 'chart-line', count: poolCounts.investors, target: config.investorPoolTarget },
-                ] %}
-                <div class="row g-2 mb-3">
-                    {% for item in poolItems %}
-                    {% set pct = item.target > 0 ? min(100, (item.count / item.target * 100)|round) : 100 %}
-                    {% set barColor = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444') %}
-                    <div class="col-6 col-sm-4 col-md-2">
-                        <div class="pool-stat-card" data-pool-key="{{ item.key }}">
-                            <i class="fa fa-{{ item.icon }} fa-sm" style="color:var(--bs-secondary-color)"></i>
-                            <div class="pool-stat-count">
-                                <span class="js-count" data-key="{{ item.key }}">{{ item.count }}</span>
-                            </div>
-                            <div class="pool-stat-target">/ {{ item.target }}</div>
-                            <div class="pool-stat-label">{{ item.label }}</div>
-                            <div class="pool-progress">
-                                <div class="pool-progress-bar js-bar" data-key="{{ item.key }}" data-target="{{ item.target }}"
-                                     style="width:{{ pct }}%;background:{{ barColor }}"></div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                {# Note: agents/sponsors/investors generation is not nationality-aware, so no nationality selector here. #}
-
-                {# ── Action Buttons ───────────────────────────────────── #}
-                <div class="d-flex gap-2 flex-wrap align-items-center mb-3 pt-2" style="border-top:1px solid var(--bs-border-color)">
-                    <button id="btn-replenish" class="btn-pool-action"
-                            style="border-color:var(--bs-primary);color:var(--bs-primary);"
-                            title="Only generates for pools below their configured target">
-                        <i class="fa fa-arrow-up fa-sm"></i> Replenish to Targets
-                    </button>
-                    <button id="btn-force" class="btn-pool-action"
-                            style="border-color:#f59e0b;color:#f59e0b;"
-                            title="Generates the full target count for every type">
-                        <i class="fa fa-bolt fa-sm"></i> Force Add Batch
-                    </button>
-                    <button id="btn-clear" class="btn-pool-action ms-auto"
-                            style="border-color:var(--bs-danger);color:var(--bs-danger);"
-                            title="Permanently removes ALL unassigned agents, sponsors, and investors">
-                        <i class="fa fa-trash fa-sm"></i> Clear All Investor Data
-                    </button>
-                    {# Hidden clear form target #}
-                    <form id="form-clear" method="POST" action="{{ path('admin_investor_pool_clear') }}" class="d-none">
-                        <input type="hidden" name="_token" value="{{ csrf_token('clear_investor_pool') }}">
-                    </form>
-                </div>
-
-                {# ── Progress Panel ───────────────────────────────────── #}
-                <div id="progress-panel" class="d-none mb-3">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <i class="fa fa-list-check fa-sm text-muted"></i>
-                        <span class="fw-semibold small">Batch Progress</span>
-                        <span id="progress-summary" class="text-muted ms-1" style="font-size:.72rem;"></span>
-                    </div>
-                    <div id="progress-jobs" class="d-flex flex-column"></div>
-                </div>
-
-                {# ── Activity Log ─────────────────────────────────────── #}
-                <div id="activity-section" class="d-none">
-                    <div class="d-flex align-items-center justify-content-between mb-1 pt-2" style="border-top:1px solid var(--bs-border-color)">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="fa fa-terminal fa-sm text-muted"></i>
-                            <span class="fw-semibold small">Activity Log</span>
-                            <span class="text-muted" style="font-size:.7rem;">— since page load</span>
-                        </div>
-                        <button type="button" onclick="document.getElementById('activity-log').innerHTML='';document.getElementById('activity-section').classList.add('d-none');"
-                                class="btn btn-link btn-sm p-0 text-muted" style="font-size:.7rem;">clear</button>
-                    </div>
-                    <div id="activity-log" class="activity-log"></div>
-                </div>
-
-            </div>
+    <div class="bmc-card__band" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="bmc-lbl bmc-lbl--ink">POOLS</span>
+            <span class="bmc-data" id="type-note"></span>
+            <span style="flex:1"></span>
+            <button type="button" class="bmc-quick-btn" data-pick="all">ALL</button>
+            <button type="button" class="bmc-quick-btn" data-pick="below" title="Pick only the pools below their target">BELOW TARGET</button>
+            <button type="button" class="bmc-quick-btn" data-pick="none">NONE</button>
+        </div>
+        <div class="bmc-pooltiles">
+            {% for t in types %}
+                {% set r = t.target > 0 ? t.count / t.target : 1 %}
+                <button type="button" class="bmc-pooltile" role="checkbox" aria-checked="true"
+                        data-type="{{ t.key }}" data-noun="{{ t.noun }}" data-count="{{ t.count }}" data-target="{{ t.target }}">
+                    <span class="bmc-pooltile__top"><span class="bmc-tile is-on"></span><span class="bmc-pooltile__name">{{ t.label }}</span></span>
+                    <span style="display:flex;align-items:baseline;gap:6px"><span class="bmc-fig">{{ t.count|number_format }}</span><span class="bmc-data">/ {{ t.target|number_format }}</span></span>
+                    <span class="bmc-data">{{ t.scope }}</span>
+                    <span class="bmc-bar bmc-bar--8"><span class="bmc-bar__fill{{ r >= 1 ? '' : (r >= 0.5 ? ' bmc-bar__fill--warning' : ' bmc-bar__fill--danger') }}" style="display:block;width:{{ min(100, r * 100) }}%"></span></span>
+                    <span class="bmc-badge {{ t.count == 0 ? 'bmc-badge--danger' : (r >= 1 ? 'bmc-badge--positive' : 'bmc-badge--warning') }}" style="align-self:flex-start">
+                        {{ t.count == 0 ? 'EMPTY' : (r >= 1.5 ? (r|round(1)) ~ '× TARGET' : (r >= 1 ? 'AT TARGET' : (t.target - t.count)|number_format ~ ' SHORT')) }}
+                    </span>
+                </button>
+            {% endfor %}
         </div>
     </div>
 
-    <script>
-    (function () {
-        const CSRF    = '{{ csrf_token("generate_investor_pool") }}';
-        const CHUNK_URL  = '{{ path("admin_investor_pool_generate_chunk") }}';
-        const COUNTS_URL = '{{ path("admin_investor_pool_counts") }}';
-
-        const TYPES = [
-            { key: 'agents',    label: 'Agents' },
-            { key: 'sponsors',  label: 'Sponsors' },
-            { key: 'investors', label: 'Investors' },
-        ];
-
-        // ── Job queue builder (no nationality support for this group) ──
-        function buildJobs(mode) {
-            return TYPES.map(type => ({ type: type.key, label: type.label, nationality: null, mode }));
-        }
-
-        // ── Progress rendering ────────────────────────────────────────
-        function renderJobs(jobs) {
-            const container = document.getElementById('progress-jobs');
-            container.innerHTML = '';
-            jobs.forEach((job, i) => {
-                const row = document.createElement('div');
-                row.className = 'job-row';
-                row.id = 'job-' + i;
-                row.innerHTML = `<span class="job-icon" id="ji-${i}">
-                    <i class="fa fa-clock fa-xs" style="color:var(--bs-secondary-color)"></i>
-                </span>
-                <span class="job-label">${esc(job.label)}</span>
-                <span class="job-status" id="js-${i}">queued</span>
-                <span class="job-count" id="jc-${i}"></span>`;
-                container.appendChild(row);
-            });
-        }
-
-        function setJobRunning(i) {
-            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-circle-notch fa-xs spin" style="color:var(--bs-primary)"></i>';
-            document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-primary)">running…</span>';
-        }
-
-        function setJobDone(i, count, skipped) {
-            if (skipped) {
-                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-minus fa-xs" style="color:var(--bs-secondary-color)"></i>';
-                document.getElementById('js-' + i).innerHTML = '<span style="color:var(--bs-secondary-color)">at target</span>';
-            } else {
-                document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-check fa-xs" style="color:#22c55e"></i>';
-                document.getElementById('js-' + i).innerHTML = '<span style="color:#22c55e">done</span>';
-                document.getElementById('jc-' + i).textContent = '+' + count;
-            }
-        }
-
-        function setJobError(i, msg) {
-            document.getElementById('ji-' + i).innerHTML = '<i class="fa fa-xmark fa-xs" style="color:var(--bs-danger)"></i>';
-            document.getElementById('js-' + i).innerHTML = `<span style="color:var(--bs-danger)">${esc(msg)}</span>`;
-        }
-
-        // ── Activity log ──────────────────────────────────────────────
-        function addLogEntry(label, count, mode, status) {
-            const section = document.getElementById('activity-section');
-            const log     = document.getElementById('activity-log');
-            section.classList.remove('d-none');
-
-            const now = new Date();
-            const ts  = String(now.getHours()).padStart(2,'0') + ':' +
-                        String(now.getMinutes()).padStart(2,'0') + ':' +
-                        String(now.getSeconds()).padStart(2,'0');
-
-            const statusHtml = status === 'ok'
-                ? `<span style="color:#22c55e">✓</span>`
-                : status === 'skip'
-                    ? `<span style="color:var(--bs-secondary-color)">–</span>`
-                    : `<span style="color:var(--bs-danger)">✕</span>`;
-
-            const countHtml = count > 0
-                ? `<span class="log-count" style="color:#22c55e">+${count}</span>`
-                : `<span class="log-count" style="color:var(--bs-secondary-color)">${status === 'skip' ? 'at target' : 'err'}</span>`;
-
-            const modeTag = `<span style="color:var(--bs-secondary-color);font-size:.65rem;">(${mode})</span>`;
-
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">${ts}</span>${statusHtml}<span class="log-label">${esc(label)}</span>${countHtml}${modeTag}`;
-            log.insertBefore(entry, log.firstChild);
-        }
-
-        // ── Count refresh ─────────────────────────────────────────────
-        async function refreshCounts() {
-            try {
-                const res  = await fetch(COUNTS_URL);
-                const data = await res.json();
-
-                const keyMap = { agents: 'agents', sponsors: 'sponsors', investors: 'investors' };
-
-                document.querySelectorAll('.js-bar').forEach(bar => {
-                    const poolKey = bar.dataset.key;
-                    const target  = parseInt(bar.dataset.target, 10);
-
-                    const countKey = Object.keys(keyMap).find(k => keyMap[k] === poolKey);
-                    if (!countKey || !(countKey in data)) return;
-
-                    const count = data[countKey];
-                    const pct   = target > 0 ? Math.min(100, Math.round(count / target * 100)) : 100;
-                    const color = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#f59e0b' : '#ef4444');
-
-                    bar.style.width    = pct + '%';
-                    bar.style.background = color;
-
-                    const countEl = document.querySelector('.js-count[data-key="' + poolKey + '"]');
-                    if (countEl) countEl.textContent = count;
-                });
-            } catch (_) { /* silent */ }
-        }
-
-        // ── Main run ──────────────────────────────────────────────────
-        function setButtons(disabled) {
-            ['btn-replenish','btn-force','btn-clear'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.disabled = disabled;
-            });
-        }
-
-        async function runJobs(jobs) {
-            const panel = document.getElementById('progress-panel');
-            const summary = document.getElementById('progress-summary');
-            renderJobs(jobs);
-            panel.classList.remove('d-none');
-            setButtons(true);
-
-            let done = 0, generated = 0;
-            summary.textContent = `0 / ${jobs.length} complete`;
-
-            for (let i = 0; i < jobs.length; i++) {
-                const job = jobs[i];
-                setJobRunning(i);
-
-                const body = new URLSearchParams({
-                    _token:      CSRF,
-                    type:        job.type,
-                    nationality: job.nationality || '',
-                    mode:        job.mode,
-                });
-
-                try {
-                    const res  = await fetch(CHUNK_URL, { method: 'POST', body });
-                    const data = await res.json();
-
-                    if (data.success) {
-                        setJobDone(i, data.count || 0, !!data.skipped);
-                        generated += (data.count || 0);
-                        addLogEntry(job.label, data.count || 0, job.mode, data.skipped ? 'skip' : 'ok');
-                    } else {
-                        setJobError(i, data.message || 'Error');
-                        addLogEntry(job.label, 0, job.mode, 'error');
-                    }
-                } catch (err) {
-                    setJobError(i, 'Network error');
-                    addLogEntry(job.label, 0, job.mode, 'error');
-                }
-
-                done++;
-                summary.textContent = `${done} / ${jobs.length} complete · ${generated} generated`;
-
-                const el = document.getElementById('job-' + Math.min(i + 1, jobs.length - 1));
-                if (el) el.scrollIntoView({ block: 'nearest' });
-            }
-
-            summary.textContent = `${jobs.length} / ${jobs.length} complete · ${generated} total generated`;
-            await refreshCounts();
-            setButtons(false);
-        }
-
-        // ── Button handlers ───────────────────────────────────────────
-        document.getElementById('btn-replenish').addEventListener('click', function () {
-            if (!confirm('Replenish agents/sponsors/investors to their configured targets?')) return;
-            runJobs(buildJobs('replenish'));
-        });
-
-        document.getElementById('btn-force').addEventListener('click', function () {
-            if (!confirm('Force-add the full target batch for agents, sponsors, and investors?')) return;
-            runJobs(buildJobs('force'));
-        });
-
-        document.getElementById('btn-clear').addEventListener('click', function () {
-            if (!confirm('Permanently delete ALL unassigned agents, sponsors, and investors?\nThis cannot be undone.')) return;
-            document.getElementById('form-clear').submit();
-        });
-
-        // ── Utility ───────────────────────────────────────────────────
-        function esc(str) {
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        }
-    }());
-    </script>
-
-    {# ── Config Form ─────────────────────────────────────────────────── #}
-    <div class="col-12">
-    <form method="POST" action="{{ path('admin_investor_pool_config_save') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('save_investor_pool_config') }}">
-        <div class="d-flex flex-column gap-4">
-
-            {# ── Pool Targets ────────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-bullseye text-muted"></i>
-                    <span class="fw-semibold small">Pool Targets</span>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">
-                        Minimum unassigned count before auto-replenishment triggers. Also used as the batch size for manual generation.
-                    </p>
-                    <div class="row g-3">
-                        <div class="col-md-2">
-                            <label for="agentPoolTarget" class="form-label fw-semibold small">Agents</label>
-                            <input type="number" id="agentPoolTarget" name="agentPoolTarget"
-                                   value="{{ config.agentPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 20</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="sponsorPoolTarget" class="form-label fw-semibold small">Sponsors</label>
-                            <input type="number" id="sponsorPoolTarget" name="sponsorPoolTarget"
-                                   value="{{ config.sponsorPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 10</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="investorPoolTarget" class="form-label fw-semibold small">Investors</label>
-                            <input type="number" id="investorPoolTarget" name="investorPoolTarget"
-                                   value="{{ config.investorPoolTarget }}" min="1" class="form-control">
-                            <div class="form-text">Default: 5</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Agents ───────────────────────────────────────────────── #}
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-handshake text-muted"></i>
-                    <span class="fw-semibold small">Agents</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Age Range</label>
-                            <div class="input-group">
-                                <input type="number" name="agentAgeMin" value="{{ config.agentAgeMin }}"
-                                       min="18" max="80" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="agentAgeMax" value="{{ config.agentAgeMax }}"
-                                       min="18" max="80" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Default: 30–60</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small">Reputation Range</label>
-                            <div class="input-group">
-                                <input type="number" name="agentReputationMin" value="{{ config.agentReputationMin }}"
-                                       min="0" max="100" class="form-control" placeholder="Min">
-                                <span class="input-group-text">–</span>
-                                <input type="number" name="agentReputationMax" value="{{ config.agentReputationMax }}"
-                                       min="0" max="100" class="form-control" placeholder="Max">
-                            </div>
-                            <div class="form-text">Drives commission rate and rating. Default: 30–70</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>{# /gap wrapper #}
-
-        <div class="mt-4">
-            <button type="submit" class="btn btn-primary btn-sm">Save Investor Pool Config</button>
-        </div>
-    </form>
+    <div class="bmc-tabs" role="tablist" aria-label="Generation mode" data-bmc-tabs id="modes">
+        <button type="button" class="bmc-tab" role="tab" aria-selected="true" data-value="replenish">
+            <i data-lucide="arrow-up-to-line" width="18" height="18"></i>
+            <span class="bmc-tab__text"><span class="bmc-tab__label">REPLENISH TO TARGET</span><span class="bmc-tab__sub">Fills each pool’s gap only</span></span>
+        </button>
+        <button type="button" class="bmc-tab" role="tab" aria-selected="false" data-value="force">
+            <i data-lucide="zap" width="18" height="18"></i>
+            <span class="bmc-tab__text"><span class="bmc-tab__label">FORCE ADD BATCH</span><span class="bmc-tab__sub">Adds each pool’s full target</span></span>
+        </button>
     </div>
 
-</div>
+    <div class="bmc-card__band bmc-row">
+        <div style="flex:2 1 420px;min-width:0;display:flex;flex-direction:column;gap:10px">
+            <span class="bmc-lbl bmc-lbl--ink" id="plan-title">BATCH PLAN</span>
+            <div style="border:2px solid var(--wk-stroke);overflow-x:auto">
+                <table class="bmc-minitable">
+                    <thead><tr><th>POOL</th><th class="is-right">NOW</th><th class="is-right">ADDS</th><th class="is-right">AFTER</th></tr></thead>
+                    <tbody id="plan"></tbody>
+                </table>
+            </div>
+        </div>
+        <aside class="bmc-inset" style="flex:1 1 260px;min-width:240px;gap:12px;padding:12px">
+            <span class="bmc-inset__title">THIS RUN</span>
+            <div class="bmc-stats bmc-stats--2">
+                <div class="bmc-stat"><span class="bmc-stat__label">JOBS</span><span class="bmc-stat__value" id="sum-jobs">0</span></div>
+                <div class="bmc-stat"><span class="bmc-stat__label">ADDS</span><span class="bmc-stat__value" id="sum-adds">+0</span></div>
+            </div>
+            <div id="sum-notes" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button type="button" class="bmc-btn bmc-btn--full" id="run"><span>REPLENISH</span></button>
+        </aside>
+    </div>
+
+    <div class="bmc-card__band" id="progress" hidden style="display:flex;flex-direction:column;gap:10px;border-top:3px solid var(--wk-stroke)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <i data-lucide="list-checks" width="16" height="16" class="ink-dim"></i>
+            <span class="bmc-lbl bmc-lbl--ink">BATCH PROGRESS</span><span class="bmc-data" id="job-summary"></span>
+        </div>
+        <div class="bmc-strips" id="job-strip"></div>
+        <div class="bmc-rows" id="job-rows"></div>
+    </div>
+</section>
+
+<section class="bmc-card" data-domain="club" id="activity" hidden>
+    <div class="bmc-card__head">
+        <i data-lucide="history"></i><span class="bmc-card__title">ACTIVITY</span>
+        <span class="bmc-card__meta">since page load · UTC</span>
+        <button type="button" class="bmc-card__link" id="log-clear">CLEAR</button>
+    </div>
+    <div class="bmc-rows bmc-rows--flush bmc-rows--scroll-200" id="log"></div>
+</section>
+
+<div class="bmc-rule"><span class="bmc-rule__title">GENERATION RULES</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">Saved together · used from the next run</span></div>
+
+<form method="post" action="{{ path('admin', {routeName: 'admin_investor_pool_config_save'}) }}" data-bmc-form id="rules" style="display:contents">
+    <input type="hidden" name="_token" value="{{ csrf_token('save_investor_pool_config') }}">
+    <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr))">
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head"><i data-lucide="target"></i><span class="bmc-card__title">POOL TARGETS</span></div>
+            <div class="bmc-setting__help bmc-pretty" style="padding:10px 12px 4px">Auto-replenish triggers when a pool drops below its target. Also the batch size for each Force add job.</div>
+            {% for t in types %}
+                {% set v = attribute(config, t.field) %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ t.label }}</span>
+                        <span class="bmc-setting__help">{{ t.scope }} · in pool: {{ t.count|number_format }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="{{ t.count >= v ? 'At or above target' : (v - t.count)|number_format ~ ' short of target' }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num" style="width:88px"><input name="{{ t.field }}" inputmode="numeric" value="{{ v }}" data-saved="{{ v }}" data-min="0" data-max="10000" aria-label="{{ t.noun }} pool target"></label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head"><i data-lucide="handshake"></i><span class="bmc-card__title">AGENTS</span></div>
+            {% for r in [
+                {label: 'REPUTATION', help: 'Reputation on generation, 0–100.', a: 'agentReputationMin', b: 'agentReputationMax', lo: 0, hi: 100, unit: '', d: '30–70'},
+                {label: 'AGE', help: 'Age range for new agents.', a: 'agentAgeMin', b: 'agentAgeMax', lo: 18, hi: 90, unit: 'yrs', d: '30–60'},
+            ] %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ r.label }}</span>
+                        <span class="bmc-setting__help">{{ r.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="Default {{ r.d }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num"><input name="{{ r.a }}" inputmode="numeric" value="{{ attribute(config, r.a) }}" data-saved="{{ attribute(config, r.a) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" data-lte="{{ r.b }}" aria-label="{{ r.label|lower }} minimum"></label>
+                        <span class="bmc-sep">–</span>
+                        <label class="bmc-num"><input name="{{ r.b }}" inputmode="numeric" value="{{ attribute(config, r.b) }}" data-saved="{{ attribute(config, r.b) }}" data-min="{{ r.lo }}" data-max="{{ r.hi }}" aria-label="{{ r.label|lower }} maximum"></label>
+                        <span class="bmc-unitword" style="width:26px">{{ r.unit }}</span>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+            <div class="bmc-card__body" style="gap:6px;padding-bottom:0">
+                {% set rl = config.agentReputationMin %}{% set rh = config.agentReputationMax %}
+                <div class="bmc-bar bmc-bar--22"><span class="bmc-bar__span" style="left:{{ rl }}%;width:{{ max(0, rh - rl) }}%;background:var(--wk-positive)"></span></div>
+                <div class="bmc-bar__scale"><span>0</span><span>reputation {{ rl }}–{{ rh }}</span><span>100</span></div>
+            </div>
+            <div class="bmc-note" style="padding:12px"><i data-lucide="info" class="ink-info"></i><span>How often a new player arrives with an agent is set on the Player pool page.</span></div>
+        </section>
+    </div>
+
+    <section class="bmc-danger">
+        <i data-lucide="triangle-alert"></i>
+        <div class="bmc-danger__text">
+            <span class="bmc-lbl bmc-lbl--ink">CLEAR THE POOL</span>
+            <span class="bmc-data">Deletes every agent and every sponsor and investor not yet with a club — {{ clearN|number_format }} records. Cannot be undone.</span>
+        </div>
+        <button type="submit" class="bmc-btn bmc-btn--danger-outline" form="clear-form" {{ clearN == 0 ? 'disabled' }}
+                data-bmc-dialog-title="CLEAR {{ clearN|number_format }} FROM THE POOL?"
+                data-bmc-dialog-message="Every agent and every unassigned sponsor and investor is deleted. This cannot be undone."
+                data-bmc-dialog-confirm="CLEAR" data-bmc-dialog-variant="red"><span>CLEAR INVESTOR POOL</span></button>
+    </section>
+
+    <div class="bmc-savebar" data-bmc-savebar data-idle="Targets and agent ranges are used from the next run.">
+        <span class="bmc-savebar__dot"></span>
+        <span class="bmc-savebar__title">ALL SAVED</span>
+        <span class="bmc-savebar__sub"></span>
+        <button type="button" class="bmc-btn" data-bmc-discard><span>DISCARD</span></button>
+        <button type="submit" class="bmc-btn bmc-btn--yellow" data-bmc-save><span>SAVE RULES</span></button>
+    </div>
+</form>
+<form method="post" id="clear-form" action="{{ path('admin', {routeName: 'admin_investor_pool_clear'}) }}" hidden>
+    <input type="hidden" name="_token" value="{{ csrf_token('clear_investor_pool') }}">
+</form>
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script>
+(function () {
+    var $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return [].slice.call((r || document).querySelectorAll(s)); };
+    var n = function (v) { return Number(v).toLocaleString('en-GB'); };
+    var gen = $('#gen'), tiles = $$('.bmc-pooltile', gen), mode = 'replenish', running = false, log = [];
+    var JC = { queued: ['QUEUED', 'subtle', 'var(--wk-panel)'], running: ['RUNNING', 'accent', 'var(--wk-accent)'],
+               done: ['DONE', 'positive', 'var(--wk-positive)'], skipped: ['AT TARGET', '', 'var(--wk-text-faint)'], failed: ['FAILED', 'danger', 'var(--wk-danger)'] };
+    var picked = function () { return tiles.filter(function (t) { return t.getAttribute('aria-checked') === 'true'; }); };
+    var adds = function (t) { var c = +t.dataset.count, tg = +t.dataset.target; return mode === 'force' ? tg : Math.max(0, tg - c); };
+
+    function draw() {
+        tiles.forEach(function (t) { var on = t.getAttribute('aria-checked') === 'true'; $('.bmc-tile', t).classList.toggle('is-on', on); t.disabled = running; });
+        var p = picked(), total = p.reduce(function (a, t) { return a + adds(t); }, 0), force = mode === 'force';
+        var below = tiles.filter(function (t) { return +t.dataset.count < +t.dataset.target; }).length;
+        $('#type-note').textContent = p.length + ' of ' + tiles.length + ' picked · ' + below + ' below target';
+        $('#plan-title').textContent = force ? 'FORCE ADD PLAN' : 'REPLENISH PLAN';
+        $('#plan').innerHTML = p.length ? p.map(function (t) {
+            var a = adds(t), c = +t.dataset.count;
+            return '<tr><td>' + t.dataset.noun + '</td><td class="is-right ink-dim">' + n(c) + '</td><td class="is-right ' + (a ? (force ? 'ink-warning' : 'ink-positive') : 'ink-dim') + '">' + (a ? '+' + n(a) : 'at target') + '</td><td class="is-right">' + n(c + a) + '</td></tr>';
+        }).join('') : '<tr><td colspan="4" class="bmc-empty-note">PICK AT LEAST ONE POOL</td></tr>';
+        var jobsN = force ? p.length : p.filter(function (t) { return adds(t) > 0; }).length;
+        $('#sum-jobs').textContent = n(jobsN); $('#sum-adds').textContent = '+' + n(total);
+        var notes = [];
+        if (!p.length) notes.push(['triangle-alert', 'ink-warning', 'Pick at least one pool above.']);
+        if (!force && p.length && !total) notes.push(['check', 'ink-positive', 'Every picked pool is at or above target, so replenish would add nothing.']);
+        if (force && p.length) notes.push(['info', 'ink-info', 'Force add ignores what is already in the pool. Nationality isn’t used for this pool.']);
+        if ($('#rules')._bmcDirty) notes.push(['info', 'ink-info', 'Uses the saved targets until you save the new ones.']);
+        $('#sum-notes').innerHTML = notes.map(function (x) { return '<div class="bmc-note"><i data-lucide="' + x[0] + '" class="' + x[1] + '"></i><span>' + x[2] + '</span></div>'; }).join('');
+        var run = $('#run');
+        run.disabled = running || !p.length || (!force && !total);
+        run.className = 'bmc-btn bmc-btn--full ' + (force ? 'bmc-btn--orange' : '');
+        $('span', run).textContent = running ? 'RUNNING…' : !p.length ? 'PICK A POOL' : force ? 'FORCE ADD ' + n(total) : total ? 'REPLENISH +' + n(total) : 'AT TARGET';
+        if (window.lucide) lucide.createIcons();
+    }
+    function drawJobs(jobs) {
+        $('#progress').hidden = false;
+        var done = jobs.filter(function (j) { return j.status !== 'queued' && j.status !== 'running'; }).length;
+        var added = jobs.reduce(function (a, j) { return a + (j.count || 0); }, 0);
+        $('#job-summary').textContent = done + ' of ' + jobs.length + ' jobs · +' + n(added);
+        $('#job-strip').innerHTML = jobs.map(function (j) { return '<span title="' + j.label + '" style="background:' + JC[j.status][2] + '"></span>'; }).join('');
+        $('#job-rows').innerHTML = jobs.map(function (j) {
+            var c = JC[j.status];
+            return '<div class="bmc-jobrow"><div><span class="bmc-badge' + (c[1] ? ' bmc-badge--' + c[1] : '') + '">' + c[0] + '</span></div><span class="bmc-celltext">' + j.label + ' · ' + j.mode + '</span><span class="bmc-cellnum ' + (j.status === 'done' ? 'ink-positive' : 'ink-dim') + '">' + (j.status === 'done' ? '+' + n(j.count) : j.status === 'skipped' ? '0' : '—') + '</span></div>';
+        }).join('');
+    }
+    function drawLog() {
+        $('#activity').hidden = !log.length;
+        $('#log').innerHTML = log.map(function (l) {
+            return '<div class="bmc-logrow"><span class="bmc-data">' + l.time + '</span><span class="bmc-bodytext ' + (l.ok ? 'ink-positive' : 'ink-dim') + '" style="text-align:center">' + (l.ok ? '✓' : '–') + '</span><span class="bmc-celltext">' + l.label + '</span><span class="bmc-lbl">' + l.mode + '</span><span class="bmc-cellnum ' + (l.ok ? 'ink-positive' : 'ink-dim') + '">' + l.count + '</span></div>';
+        }).join('');
+    }
+
+    tiles.forEach(function (t) { t.addEventListener('click', function () { t.setAttribute('aria-checked', t.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); draw(); }); });
+    $$('[data-pick]', gen).forEach(function (b) { b.addEventListener('click', function () {
+        var k = b.dataset.pick;
+        tiles.forEach(function (t) { t.setAttribute('aria-checked', k === 'all' || (k === 'below' && +t.dataset.count < +t.dataset.target) ? 'true' : 'false'); });
+        draw();
+    }); });
+    $('#modes').addEventListener('bmc:change', function (e) { mode = e.detail.value; draw(); });
+    $('#rules').addEventListener('bmc:state', draw);
+    $('#log-clear').addEventListener('click', function () { log = []; drawLog(); });
+
+    $('#run').addEventListener('click', function () {
+        var p = picked(), total = p.reduce(function (a, t) { return a + adds(t); }, 0), force = mode === 'force';
+        BMC.confirm({
+            title: (force ? 'FORCE ADD ' : 'REPLENISH +') + n(total) + '?', confirm: force ? 'FORCE ADD' : 'REPLENISH', variant: force ? 'orange' : 'teal',
+            message: force ? 'Adds each picked pool’s full target, whatever is already there: ' + p.map(function (t) { return n(t.dataset.target) + ' ' + t.dataset.noun.toLowerCase(); }).join(', ') + '.'
+                           : 'Tops up ' + p.length + (p.length === 1 ? ' pool' : ' pools') + ' to target. Pools already at target are skipped.'
+        }).then(function (yes) {
+            if (!yes) return;
+            running = true; draw();
+            BMC.runJobs({
+                url: gen.dataset.url, token: gen.dataset.token,
+                jobs: p.map(function (t) { return { type: t.dataset.type, label: t.dataset.noun, mode: mode }; }),
+                onUpdate: drawJobs
+            }).then(function (jobs) {
+                var d = new Date(), z = function (x) { return String(x).padStart(2, '0'); }, time = z(d.getUTCHours()) + ':' + z(d.getUTCMinutes()) + ':' + z(d.getUTCSeconds());
+                var added = 0;
+                jobs.forEach(function (j) {
+                    var tile = tiles.filter(function (t) { return t.dataset.type === j.type; })[0];
+                    if (j.status === 'done') { tile.dataset.count = +tile.dataset.count + j.count; added += j.count; }
+                    log.unshift({ time: time, label: j.label, mode: j.mode.toUpperCase(), ok: j.status === 'done', count: j.status === 'done' ? '+' + n(j.count) : j.status === 'failed' ? 'failed' : 'at target' });
+                });
+                log = log.slice(0, 60); running = false; drawLog(); draw();
+                // Tile figures/bars are server-rendered; refresh them from the counts endpoint
+                // (GET admin_investor_pool_counts) or reload — the prototype redraws them live.
+                BMC.toast(added ? 'GENERATED ' + n(added) : 'EVERY PICKED POOL IS AT TARGET');
+            });
+        });
+    });
+    draw();
+}());
+</script>
 {% endblock %}

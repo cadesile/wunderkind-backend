@@ -327,6 +327,10 @@ class PoolConfigController extends AbstractController
         return $this->render('admin/pool_investor_config.html.twig', [
             'config'     => $this->poolConfigRepository->getConfig(),
             'poolCounts' => $this->investorCounts(),
+            // The page strip's crumb and title. bmcGroup is the sidebar group this item
+            // sits under, so "ADMIN › CONFIG" matches where the operator just clicked.
+            'bmcGroup'   => 'Config',
+            'bmcTitle'   => 'Investor pool',
         ]);
     }
 
@@ -354,7 +358,7 @@ class PoolConfigController extends AbstractController
 
         $this->em->flush();
 
-        $this->addFlash('success', 'Investor pool config saved.');
+        $this->addFlash('success', 'Investor pool rules saved');
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_investor_pool_config']));
     }
 
