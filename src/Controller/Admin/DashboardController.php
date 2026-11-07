@@ -1586,7 +1586,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261107d';
+    private const BMC_ASSET_VERSION = '20261107e';
 
     public function configureAssets(): Assets
     {
@@ -1706,7 +1706,11 @@ class DashboardController extends AbstractDashboardController
         // land-plot economy and its AI enrichment. Four live pages, so they get
         // their own group rather than being buried at the bottom of World.
         yield MenuItem::subMenu('Locations & land', 'map-pin')->setSubItems([
-            MenuItem::linkTo(LocationCrudController::class, 'Locations'),
+            // The dashboard first: it answers "where is each country up to", which is what an
+            // operator opens this group for. The town table is still here, one item down, and
+            // is what the dashboard links to for finding a specific row.
+            MenuItem::linkToRoute('Dashboard', null, 'admin_locations_dashboard'),
+            MenuItem::linkTo(LocationCrudController::class, 'Towns'),
             MenuItem::linkTo(LandPlotCrudController::class, 'Land plots'),
             MenuItem::linkTo(CountryProfileCrudController::class, 'Countries'),
             MenuItem::linkToRoute('Enrichment', null, 'admin_location_enrichment'),

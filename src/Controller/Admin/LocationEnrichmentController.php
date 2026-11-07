@@ -17,6 +17,7 @@ use App\Service\Location\Enrichment\LocationEnricherInterface;
 use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use Doctrine\DBAL\Connection;
 use App\Service\Location\LocationImportExportService;
+use App\Service\Location\LocationDashboardService;
 use App\Service\Location\LocationSeedService;
 use App\Message\Location\SuggestTownsBatchMessage;
 use App\Service\Location\Suggestion\TownSuggestionService;
@@ -48,6 +49,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class LocationEnrichmentController extends AbstractController
 {
     public function __construct(
+        private readonly LocationDashboardService $dashboardService,
         private readonly LocationEnrichmentOrchestrator      $orchestrator,
         private readonly LocationRepository                  $locationRepository,
         private readonly LocationEnrichmentRunRepository     $runRepository,
@@ -308,37 +310,17 @@ class LocationEnrichmentController extends AbstractController
      *
      * @return list<array{code: string, name: string, status: string, total: int, counts: array<string, int>}>
      */
+    /**
+     * Every country with its enrichment breakdown.
+     *
+     * MOVED TO LocationDashboardService. The same FILTER-per-status count now also backs the
+     * locations dashboard, and two copies of a five-way breakdown would drift the first time
+     * a status is added. Kept as a thin method so this controller's callers are unchanged.
+     */
     private function countryRows(): array
     {
-        $rows = $this->connection->fetchAllAssociative(
-            "SELECT c.code, c.name, c.status,
-                    COUNT(l.id) AS total,
-                    COUNT(l.id) FILTER (WHERE l.enrichment_status = 'pending')      AS pending,
-                    COUNT(l.id) FILTER (WHERE l.enrichment_status = 'queued')       AS queued,
-                    COUNT(l.id) FILTER (WHERE l.enrichment_status = 'enriched')     AS enriched,
-                    COUNT(l.id) FILTER (WHERE l.enrichment_status = 'needs_review') AS needs_review,
-                    COUNT(l.id) FILTER (WHERE l.enrichment_status = 'failed')       AS failed
-               FROM country_profile c
-               LEFT JOIN location l ON l.country_code = c.code AND l.status = 'active'
-              GROUP BY c.code, c.name, c.status
-              ORDER BY c.name",
-        );
-
-        return array_map(static fn (array $row): array => [
-            'code'   => (string) $row['code'],
-            'name'   => (string) $row['name'],
-            'status' => (string) $row['status'],
-            'total'  => (int) $row['total'],
-            'counts' => [
-                'pending'      => (int) $row['pending'],
-                'queued'       => (int) $row['queued'],
-                'enriched'     => (int) $row['enriched'],
-                'needs_review' => (int) $row['needs_review'],
-                'failed'       => (int) $row['failed'],
-            ],
-        ], $rows);
+        return array_values($this->dashboardService->countryRows());
     }
-
     /**
      * Seedable countries, each flagged with whether it already has locations.
      *

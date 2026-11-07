@@ -1,0 +1,201 @@
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Locations — every country, its readiness, and its land.
+  Design source: prototype/Location Dashboard.dc.html. Data: LocationDashboardController.
+
+  TWO COLUMNS: a rail of countries on the left, the selected one on the right. Selecting is a
+  link rather than JavaScript, because the readiness verdict is seven queries and is asked for
+  one country only — the one on screen.
+
+  THE TOWN AND PLOT TABLES ARE STILL THE RIGHT TOOL for finding one row, and are linked to
+  rather than reproduced. Note the plots link goes to the LOCATION list, not the land-plot
+  one: LandPlotCrudController has no country filter — a plot relates to a town, not a country
+  — so filtering it by country is not something that URL can express today.
+#}
+
+{% set row = selected ? countries[selected] : null %}
+{% set land = selected ? plots[selected]|default({plots: 0, claimed: 0, held: 0, unclaimed: 0, retired: 0, medianPence: null}) : null %}
+
+{% macro statusBadge(status) %}
+    {%- set map = {live: 'bmc-badge--positive', tier_ready: 'bmc-badge--subtle', retired: 'bmc-badge--danger'} -%}
+    <span class="bmc-badge {{ map[status]|default('') }}">{{ status|replace({'_': ' '})|upper }}</span>
+{% endmacro %}
+
+{% block bmc_body %}
+<div class="bmc-row" style="align-items:flex-start;gap:12px">
+
+    {# ── the country rail ───────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club" style="flex:0 0 280px;max-width:100%">
+        <div class="bmc-card__head">
+            <i data-lucide="globe"></i>
+            <span class="bmc-card__title">COUNTRIES</span>
+            <span class="bmc-card__meta">{{ countries|length }}</span>
+        </div>
+        <div class="bmc-rows bmc-rows--flush" style="max-height:620px;overflow-y:auto">
+            {% for code, c in countries %}
+                <a class="bmc-countryrow{{ code == selected ? ' is-selected' : '' }}"
+                   href="{{ path('admin', {routeName: 'admin_locations_dashboard', routeParams: {country: code}}) }}">
+                    <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ code|lower ~ '.svg') }}')"></span>
+                    <span class="bmc-celltext">{{ c.name }}</span>
+                    <span class="bmc-data">{{ c.total|number_format }}</span>
+                    {{ _self.statusBadge(c.status) }}
+                </a>
+            {% else %}
+                <div class="bmc-card__body"><span class="bmc-empty-note">NO COUNTRY PROFILES YET</span></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ── the selected country ───────────────────────────────────── #}
+    <div style="flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:12px">
+        {% if row is null %}
+            <section class="bmc-card" data-domain="club">
+                <div class="bmc-card__body">
+                    <span class="bmc-empty-note">NO LOCATIONS YET</span>
+                    <span class="bmc-data">Seed a country from the Enrichment screen to get started.</span>
+                </div>
+            </section>
+        {% else %}
+            <section class="bmc-card" data-domain="club">
+                <div class="bmc-card__head">
+                    <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ selected|lower ~ '.svg') }}')"></span>
+                    <span class="bmc-card__title">{{ row.name }}</span>
+                    {{ _self.statusBadge(row.status) }}
+                    <span style="flex:1"></span>
+                    <span class="bmc-data">
+                        {{ profile and profile.locationsLiveAt ? 'LIVE SINCE ' ~ profile.locationsLiveAt|date('Y-m-d') : 'NOT LIVE' }}
+                    </span>
+                </div>
+
+                <div class="bmc-card__band">
+                    <div class="bmc-stats">
+                        <div class="bmc-stat">
+                            <span class="bmc-stat__label">TOWNS</span>
+                            <span class="bmc-stat__value">{{ row.total|number_format }}</span>
+                            <span class="bmc-stat__sub">{{ row.counts.enriched|number_format }} enriched</span>
+                        </div>
+                        <div class="bmc-stat">
+                            <span class="bmc-stat__label">PLOTS</span>
+                            <span class="bmc-stat__value">{{ land.plots|number_format }}</span>
+                            <span class="bmc-stat__sub">{{ land.claimed }} claimed · {{ land.held }} held · {{ land.unclaimed }} open</span>
+                        </div>
+                        <div class="bmc-stat">
+                            <span class="bmc-stat__label">LAND / PLOT</span>
+                            <span class="bmc-stat__value">{{ land.medianPence is null ? '—' : '£' ~ (land.medianPence / 100)|round|number_format(0, '.', ',') }}</span>
+                            <span class="bmc-stat__sub">median</span>
+                        </div>
+                        <div class="bmc-stat">
+                            <span class="bmc-stat__label">SELLABLE</span>
+                            <span class="bmc-stat__value{{ row.sellable >= minSellable ? ' ink-positive' : ' ink-warning' }}">{{ row.sellable|number_format }}</span>
+                            <span class="bmc-stat__sub">of {{ minSellable }} needed to open</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bmc-card__body">
+                    {# Enrichment, as a strip rather than five numbers in a row. #}
+                    <span class="bmc-lbl bmc-lbl--ink">ENRICHMENT</span>
+                    <div class="bmc-strip">
+                        {% for key, colour in {enriched: 'var(--wk-positive)', pending: 'var(--wk-text-faint)', queued: 'var(--wk-accent)', needs_review: 'var(--wk-warning)', failed: 'var(--wk-danger)'} %}
+                            {% if row.counts[key] > 0 %}
+                                <span style="flex:{{ row.counts[key] }};background:{{ colour }}" title="{{ key|replace({'_': ' '}) }}: {{ row.counts[key] }}"></span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="bmc-row" style="gap:12px">
+                        {% for key, label in {enriched: 'ENRICHED', pending: 'PENDING', queued: 'QUEUED', needs_review: 'NEEDS REVIEW', failed: 'FAILED'} %}
+                            <span class="bmc-data">{{ label }} {{ row.counts[key]|number_format }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <div class="bmc-row" style="gap:8px;margin-top:4px">
+                        <a class="bmc-btn bmc-btn--teal" href="{{ ea_url().setController('App\\Controller\\Admin\\LocationCrudController').setAction('index').set('filters', {country: {comparison: '=', value: selected}}).generateUrl() }}">
+                            <span>TOWNS · {{ row.total|number_format }}</span>
+                        </a>
+                        <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_location_enrichment', routeParams: {country: selected}}) }}"><span>ENRICHMENT</span></a>
+                        {% if profile %}
+                            <a class="bmc-btn" href="{{ ea_url().setController('App\\Controller\\Admin\\CountryProfileCrudController').setAction('edit').setEntityId(selected).generateUrl() }}"><span>EDIT COUNTRY</span></a>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            {# ── readiness ──────────────────────────────────────── #}
+            <section class="bmc-card" data-domain="club">
+                <div class="bmc-card__head">
+                    <i data-lucide="{{ verdict.ready ? 'shield-check' : 'list-checks' }}"></i>
+                    <span class="bmc-card__title">READINESS</span>
+                    <span class="bmc-card__meta">{{ verdict.ready ? 'every check passes' : verdict.blocking|length ~ ' blocking' }}</span>
+                    <span style="flex:1"></span>
+                    {% if row.status != 'live' %}
+                        <form method="post" action="{{ path('admin', {routeName: 'admin_locations_go_live'}) }}" style="display:contents">
+                            <input type="hidden" name="_token" value="{{ csrf_token('locations_go_live_' ~ selected) }}">
+                            <input type="hidden" name="country" value="{{ selected }}">
+                            <button type="submit" class="bmc-btn bmc-btn--yellow" {{ verdict.ready ? '' : 'disabled' }}
+                                    title="{{ verdict.ready ? 'Open this country to players' : 'Blocked: ' ~ verdict.blocking|join(', ') }}"
+                                    data-bmc-dialog-title="{{ row.name|upper }} GOES LIVE?"
+                                    data-bmc-dialog-message="Players will be able to found clubs here. The readiness checks are run again before anything is saved."
+                                    data-bmc-dialog-confirm="GO LIVE"><span>GO LIVE</span></button>
+                        </form>
+                    {% endif %}
+                </div>
+                <div class="bmc-rows bmc-rows--flush">
+                    {% for check in verdict.checks %}
+                        <div class="bmc-checkrow">
+                            <span class="bmc-mark {{ check.ok ? 'is-ok' : 'is-bad' }}" aria-hidden="true">{{ check.ok ? '✓' : '!' }}</span>
+                            <span class="bmc-lbl bmc-lbl--ink">{{ check.key|replace({'_': ' '})|upper }}</span>
+                            <span class="bmc-data">{{ check.detail }}</span>
+                            <span></span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            {# ── biggest towns ──────────────────────────────────── #}
+            <section class="bmc-card" data-domain="club">
+                <div class="bmc-card__head">
+                    <i data-lucide="building-2"></i>
+                    <span class="bmc-card__title">BIGGEST TOWNS</span>
+                    <span class="bmc-card__meta">by population, with their land</span>
+                </div>
+                {% if topTowns is empty %}
+                    <div class="bmc-card__body"><span class="bmc-empty-note">NO PRICED TOWNS YET</span></div>
+                {% else %}
+                    <div class="bmc-rows bmc-rows--flush">
+                        {% for t in topTowns %}
+                            {% set l = t.location %}
+                            <div class="bmc-townrow">
+                                <span class="bmc-celltext">
+                                    {{ l.town }}{% if l.isCapital %} <span class="ink-accent" title="Capital">★</span>{% endif %}
+                                </span>
+                                <span class="bmc-data">{{ l.region }}</span>
+                                <span class="bmc-cellnum">{{ l.population|number_format }}</span>
+                                <span class="bmc-badge bmc-badge--subtle">{{ l.citySize.value }}</span>
+                                <span class="bmc-cellnum">
+                                    {{ l.landPence is null ? '—' : '£' ~ (l.landPence / 100)|round|number_format(0, '.', ',') }}
+                                    {%- if l.isLandLocked %} <span title="Hand-set land value — enrichment will not overwrite it">🔒</span>{% endif %}
+                                </span>
+                                <span class="bmc-cellnum">{{ t.capacity.plots }} plot(s)</span>
+                                {% if l.isSellable and t.capacity.plots < 4 %}
+                                    <form method="post" action="{{ path('admin', {routeName: 'admin_locations_add_plots'}) }}" style="display:contents">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('locations_add_plots_' ~ l.id) }}">
+                                        <input type="hidden" name="location" value="{{ l.id }}">
+                                        <button type="submit" class="bmc-btn" title="Top this town up to the plots its size calls for"><span>TOP UP</span></button>
+                                    </form>
+                                {% else %}
+                                    <span></span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% if row.total > topTowns|length %}
+                        <div class="bmc-card__body">
+                            <span class="bmc-data">Showing the {{ topTowns|length }} biggest of {{ row.total|number_format }} towns.</span>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
