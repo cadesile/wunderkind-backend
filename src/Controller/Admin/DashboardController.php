@@ -15,6 +15,7 @@ use App\Repository\SocialPostTemplateRepository;
 use App\Repository\StarterConfigRepository;
 use App\Repository\LanguageRepository;
 use App\Service\Admin\AdminQueueCounts;
+use App\Service\Admin\LeagueTierDefaultDiff;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Asset;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Menu\ControllerMenuItem;
 use App\Service\ConfigImportExportService;
@@ -1079,6 +1080,11 @@ class DashboardController extends AbstractDashboardController
 
         return $this->render('admin/leagues_content.html.twig', [
             'leaguesByCountry' => $leaguesByCountry,
+            // Which leagues have drifted from the tier row they are meant to follow, keyed by
+            // league id. One map feeds the grid's orange cells, the country tabs' counts and
+            // the per-field marks in the pyramids, so there is exactly one definition of
+            // "differs". No extra queries: every League is already loaded above.
+            'leagueDiffs'      => LeagueTierDefaultDiff::forLeagues($leagues, $this->gameConfigRepository->getConfig()),
             'clubsByLeague'    => $this->npcClubRepository->getAllGroupedByLeague(),
             'countryLabels'    => Country::labelMap(),
             'allLeagues'       => $leagues,
