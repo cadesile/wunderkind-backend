@@ -48,20 +48,14 @@ class LeagueAdminController extends AbstractController
             ($promotionSpots !== null && $promotionSpots !== '') ? (int) $promotionSpots : null
         );
 
-        $tvDeal = $request->request->get('tvDeal');
-        $league->setTvDeal(
-            ($tvDeal !== null && $tvDeal !== '') ? ((int) $tvDeal) * 100 : null
-        );
-
-        $prizeMoney = $request->request->get('prizeMoney');
-        $league->setPrizeMoney(
-            ($prizeMoney !== null && $prizeMoney !== '') ? ((int) $prizeMoney) * 100 : null
-        );
-
-        $leaguePositionPot = $request->request->get('leaguePositionPot');
-        $league->setLeaguePositionPot(
-            ($leaguePositionPot !== null && $leaguePositionPot !== '') ? ((int) $leaguePositionPot) * 100 : null
-        );
+        // THROUGH parseMoneyToPence(), WHICH THESE THREE USED TO BYPASS. They cast with a bare
+        // (int), and PHP stops casting at the first non-digit — so "1,000" became 1 and saved
+        // £10 instead of £1,000, silently, on a field the admin screen formats WITH thousands
+        // separators. The bulk form has always stripped them; this one did not, and the two
+        // were the same money in the same units on the same screen.
+        $league->setTvDeal($this->parseMoneyToPence($request->request->get('tvDeal')));
+        $league->setPrizeMoney($this->parseMoneyToPence($request->request->get('prizeMoney')));
+        $league->setLeaguePositionPot($this->parseMoneyToPence($request->request->get('leaguePositionPot')));
 
         $league->setTrophy($this->trophyFromFields([
             'style'           => $request->request->get('trophyStyle'),
@@ -71,6 +65,10 @@ class LeagueAdminController extends AbstractController
             'ribbonSecondary' => $request->request->get('trophyRibbonSecondary'),
         ]));
 
+        // 1-20 HERE, 0-20 IN THE BULK FORM, AND THAT DIFFERENCE IS DELIBERATE. A tier default
+        // of 0 means "no sponsors at this tier" and has to be expressible; an individual
+        // league that exists at all has at least one. Aligning them would either lose the
+        // tier-level "none" or let a single league be sponsorless by accident.
         $sponsorCount = $request->request->get('sponsorCount');
         if ($sponsorCount !== null && $sponsorCount !== '') {
             $league->setSponsorCount(max(1, min(20, (int) $sponsorCount)));
@@ -199,9 +197,16 @@ class LeagueAdminController extends AbstractController
     }
 
     /** Pounds (comma-formatted, from the tier-defaults table's money inputs) -> pence, or null if blank. */
-    private function parseMoneyToPence(string $raw): ?int
+    /**
+     * Pounds as typed — commas and all — to pence, or null for blank.
+     *
+     * NULLABLE INPUT because quickEdit() reads straight off the request, where a field the
+     * form did not send is null rather than ''. The bulk form always sends every key, so it
+     * never needed that; sharing the parser is what makes the two agree about "1,000".
+     */
+    private function parseMoneyToPence(?string $raw): ?int
     {
-        $digits = str_replace(',', '', trim($raw));
+        $digits = str_replace(',', '', trim((string) $raw));
 
         return $digits !== '' ? ((int) $digits) * 100 : null;
     }
