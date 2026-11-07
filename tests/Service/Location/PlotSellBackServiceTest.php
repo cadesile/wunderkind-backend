@@ -13,12 +13,14 @@ use App\Entity\Location\Location;
 use App\Entity\Location\PlotClaim;
 use App\Entity\Location\PlotClaimValuation;
 use App\Entity\User;
+use App\Enum\CitySize;
 use App\Enum\Location\ClaimReleaseReason;
 use App\Enum\Location\CountryProfileStatus;
 use App\Enum\UserLedgerEntryType;
 use App\Repository\Location\PlotClaimValuationRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\Location\ClubValuationService;
+use App\Service\Location\LandPlotProvisioner;
 use App\Service\Location\PlotClaimService;
 use App\Service\Location\PlotHoldService;
 use App\Service\Location\PlotSellBackService;
@@ -320,6 +322,76 @@ class PlotSellBackServiceTest extends KernelTestCase
     // ───────────────────────── helpers ─────────────────────────
 
     /** @return array{0: PlotClaim, 1: Location, 2: User} */
+    // ───────────────────── the surplus reap on release ─────────────────────
+
+    public function testAnOwnedPlotIsNeverRetiredWhileSomebodyHoldsIt(): void
+    {
+        // The protection the whole scheme rests on. The town is over its target and the reap
+        // runs, but the plot is claimed, so it survives — a demotion must never take land off
+        // somebody who paid for it.
+        [$claim, $location] = $this->ownedPlot(landPence: 1_000_00);
+
+        $location = $this->em->find(Location::class, $location->getId());
+        $location->setCitySize(CitySize::SMALL);
+        $this->em->flush();
+
+        self::getContainer()->get(LandPlotProvisioner::class)
+            ->reapSurplus([(string) $location->getId()]);
+
+        self::assertSame('active', $this->plotStatus($claim->getPlot()));
+    }
+
+    public function testReleasingAPlotOnAnOverTargetTownTakesItOffTheMarket(): void
+    {
+        // A SMALL town (target 1) carrying two plots because it was BIG when they were made.
+        // The claimed one survived the demotion; the moment it is released the town is back to
+        // one plot rather than relisting land it is no longer big enough for.
+        [$claim, $location, $user] = $this->ownedPlot(landPence: 1_000_00);
+
+        $location = $this->em->find(Location::class, $location->getId());
+        $this->em->persist(new LandPlot($location, 2));
+        $this->em->flush();
+
+        self::assertSame(2, $this->activePlots($location), 'over target before the release');
+
+        $this->sellBack->execute(
+            $this->em->find(PlotClaim::class, $claim->getId()),
+            ClaimReleaseReason::SOLD_BACK,
+        );
+
+        self::assertSame(1, $this->activePlots($location), 'back to the SMALL target');
+    }
+
+    public function testAReleaseOnATownAtItsTargetRelistsThePlotAsBefore(): void
+    {
+        // The ordinary case, and the one the reap must not touch: one plot, target one, so the
+        // land goes back on the market exactly as it always did.
+        [$claim, $location] = $this->ownedPlot(landPence: 1_000_00);
+
+        $this->sellBack->execute(
+            $this->em->find(PlotClaim::class, $claim->getId()),
+            ClaimReleaseReason::SOLD_BACK,
+        );
+
+        self::assertSame(1, $this->activePlots($this->em->find(Location::class, $location->getId())));
+    }
+
+    private function activePlots(Location $location): int
+    {
+        return (int) $this->connection->fetchOne(
+            "SELECT COUNT(*) FROM land_plot WHERE location_id = :id AND status = 'active'",
+            ['id' => (string) $location->getId()],
+        );
+    }
+
+    private function plotStatus(LandPlot $plot): string
+    {
+        return (string) $this->connection->fetchOne(
+            'SELECT status FROM land_plot WHERE id = :id',
+            ['id' => (string) $plot->getId()],
+        );
+    }
+
     private function ownedPlot(int $landPence, string $town = 'Sellville'): array
     {
         $profile  = $this->em->find(CountryProfile::class, self::COUNTRY);

@@ -6,6 +6,7 @@ namespace App\Service\CountryContent;
 
 use App\Enum\Appearance\WorldRegion;
 use App\Enum\Country;
+use App\Service\ClubNameNormalizer;
 
 /**
  * Single canonical home for per-country generation flavor content: place/population/region
@@ -2177,6 +2178,117 @@ final class CountryContentRegistry
         'EG' => 'north_africa',
         'TN' => 'north_africa',
     ];
+
+    /**
+     * Each country's capital, and the spellings we will accept for it.
+     *
+     * WHY THIS EXISTS SEPARATELY FROM PLACE_NAMES_BY_COUNTRY. `is_capital` forces a town BIG
+     * regardless of population rank (LocationClassificationService::classify()), but it was only
+     * ever set from a curated place row — and curated places exist for 25 of the 71 countries.
+     * The other 46 are built entirely by the AI town pull, which returns names and nothing else,
+     * so the override was silently inert for two thirds of the registry. A capital is a fact we
+     * can simply state, so it is stated here rather than paid for on every enrichment call.
+     *
+     * FIRST ENTRY IS CANONICAL, THE REST ARE ALIASES WE WILL MATCH. The suggester asks for names
+     * "as locally written" and the model is not perfectly consistent about it, so Warszawa and
+     * Warsaw both have to land on the same row. Matching is through ClubNameNormalizer, which
+     * lowercases and strips diacritics — Brasília and Brasilia need no separate entry, and the
+     * pairs listed are genuine alternative names rather than accent variants.
+     *
+     * THREE ENTRIES ARE JUDGEMENT CALLS, flagged so nobody has to rediscover them: CI is
+     * Yamoussoukro, the official capital, not Abidjan, which is the larger city and the seat of
+     * government; CH is Bern, which is a federal city rather than a capital in law; IL is
+     * Jerusalem, which is the declared capital and internationally contested. Each only decides
+     * which town is forced BIG, so changing one is a one-line edit with no migration.
+     *
+     * @var array<string, list<string>>
+     */
+    private const CAPITAL_BY_COUNTRY = [
+        'EN' => ['London'],
+        'IT' => ['Roma', 'Rome'],
+        'DE' => ['Berlin'],
+        'ES' => ['Madrid'],
+        'BR' => ['Brasília', 'Brasilia'],
+        'AR' => ['Buenos Aires'],
+        'NL' => ['Amsterdam'],
+        'FR' => ['Paris'],
+        'PT' => ['Lisboa', 'Lisbon'],
+        'NG' => ['Abuja'],
+        'GH' => ['Accra'],
+        'JP' => ['Tokyo', 'Tōkyō'],
+        'KR' => ['Seoul'],
+        'SE' => ['Stockholm'],
+        'DK' => ['København', 'Copenhagen'],
+        'IE' => ['Dublin', 'Baile Átha Cliath'],
+        'CI' => ['Yamoussoukro'],
+        'SN' => ['Dakar'],
+        'CN' => ['Beijing', 'Peking'],
+        'US' => ['Washington', 'Washington, D.C.', 'Washington DC'],
+        'CA' => ['Ottawa'],
+        'PL' => ['Warszawa', 'Warsaw'],
+        'SC' => ['Edinburgh'],
+        'WA' => ['Cardiff', 'Caerdydd'],
+        'BE' => ['Brussel', 'Bruxelles', 'Brussels'],
+        'MX' => ['Ciudad de México', 'Mexico City'],
+        'TR' => ['Ankara'],
+        'IN' => ['New Delhi'],
+        'SA' => ['Riyadh', 'Ar Riyad'],
+        'CO' => ['Bogotá', 'Bogota'],
+        'EG' => ['Cairo', 'Al Qahirah'],
+        'TN' => ['Tunis'],
+        'AL' => ['Tirana', 'Tiranë'],
+        'AD' => ['Andorra la Vella'],
+        'AM' => ['Yerevan'],
+        'AT' => ['Wien', 'Vienna'],
+        'AZ' => ['Baku', 'Bakı'],
+        'BY' => ['Minsk'],
+        'BA' => ['Sarajevo'],
+        'BG' => ['Sofia', 'Sofiya'],
+        'HR' => ['Zagreb'],
+        'CY' => ['Nicosia', 'Lefkosia'],
+        'CZ' => ['Praha', 'Prague'],
+        'EE' => ['Tallinn'],
+        'FO' => ['Tórshavn', 'Torshavn'],
+        'FI' => ['Helsinki', 'Helsingfors'],
+        'GE' => ['Tbilisi'],
+        'GI' => ['Gibraltar'],
+        'GR' => ['Athina', 'Athens', 'Athína'],
+        'HU' => ['Budapest'],
+        'IS' => ['Reykjavík', 'Reykjavik'],
+        'IL' => ['Jerusalem', 'Yerushalayim'],
+        'KZ' => ['Astana'],
+        'XK' => ['Pristina', 'Prishtinë', 'Priština'],
+        'LV' => ['Riga', 'Rīga'],
+        'LI' => ['Vaduz'],
+        'LT' => ['Vilnius'],
+        'LU' => ['Luxembourg', 'Lëtzebuerg'],
+        'MT' => ['Valletta', 'Il-Belt Valletta'],
+        'MD' => ['Chișinău', 'Chisinau'],
+        'ME' => ['Podgorica'],
+        'MK' => ['Skopje'],
+        'NI' => ['Belfast'],
+        'NO' => ['Oslo'],
+        'RO' => ['București', 'Bucharest', 'Bucuresti'],
+        'SM' => ['San Marino', 'Città di San Marino'],
+        'RS' => ['Beograd', 'Belgrade'],
+        'SK' => ['Bratislava'],
+        'SI' => ['Ljubljana'],
+        'CH' => ['Bern', 'Berne'],
+        'UA' => ['Kyiv', 'Kiev'],
+    ];
+
+    /**
+     * Accepted spellings of this country's capital, normalised for comparison.
+     *
+     * @return list<string>
+     */
+    public static function capitalAliases(Country $country): array
+    {
+        return array_values(array_unique(array_map(
+            ClubNameNormalizer::normalize(...),
+            self::CAPITAL_BY_COUNTRY[$country->value] ?? [],
+        )));
+    }
 
     /** @return array<array{name:string,population_size:int,region:string,is_capital?:bool}>|null */
     public static function places(Country $country): ?array

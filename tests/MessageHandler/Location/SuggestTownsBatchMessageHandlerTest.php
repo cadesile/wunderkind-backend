@@ -76,7 +76,7 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
 
     public function testASuccessfulBatchIsRecordedAndCountedAgainstItsRun(): void
     {
-        $plan    = $this->service()->planRun(self::COUNTRY, 50);
+        $plan    = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batchId = (string) $plan['batches'][0]->getId();
         $runId   = (string) $plan['run']->getId();
 
@@ -102,7 +102,7 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
     {
         // Counting it now would close a run that is still going to do the work, and the screen
         // would say "done" while a batch was still pending.
-        $plan    = $this->service()->planRun(self::COUNTRY, 50);
+        $plan    = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batchId = (string) $plan['batches'][0]->getId();
         $runId   = (string) $plan['run']->getId();
 
@@ -134,7 +134,7 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
 
     public function testTheLastAllowedAttemptIsTerminalAndClosesTheRun(): void
     {
-        $plan    = $this->service()->planRun(self::COUNTRY, 50);
+        $plan    = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batchId = (string) $plan['batches'][0]->getId();
         $runId   = (string) $plan['run']->getId();
 
@@ -168,7 +168,7 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
         // Truncation is deterministic: the same ask against the same ceiling truncates in the
         // same place. Retrying it twice more is three billed calls for one answer, which on a
         // feature whose whole design is cost-controlled is the wrong default.
-        $plan    = $this->service()->planRun(self::COUNTRY, 50);
+        $plan    = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batchId = (string) $plan['batches'][0]->getId();
         $runId   = (string) $plan['run']->getId();
 
@@ -204,7 +204,7 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
     public function testAnAlreadyCompletedBatchIsNotRunAgain(): void
     {
         // A duplicate delivery must not pay for a second call, nor double-count the run.
-        $plan    = $this->service()->planRun(self::COUNTRY, 50);
+        $plan    = $this->service()->planRun(self::COUNTRY, TownSuggestionService::BATCH_SIZE);
         $batchId = (string) $plan['batches'][0]->getId();
         $runId   = (string) $plan['run']->getId();
 

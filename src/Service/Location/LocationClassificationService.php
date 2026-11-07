@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Service\Location;
 
 use App\Enum\CitySize;
+use App\Enum\Country;
 use App\Repository\Location\LocationRepository;
+use App\Service\CountryContent\CountryContentRegistry;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -30,6 +32,16 @@ use Doctrine\ORM\EntityManagerInterface;
  * Recompute triggers: the end of app:locations:seed, the end of an enrichment run that changed
  * any population, and any admin CRUD write that adds or removes a location or edits its
  * population.
+ *
+ * IT ALSO FLAGS THE CAPITAL, because the forced-BIG override is useless if nothing sets the
+ * flag. Curated place rows set it for 25 countries; the other 46 are built by the AI town pull,
+ * which returns bare names. flagCapital() applies CountryContentRegistry's capital list at the
+ * top of every recompute, so the rule finally fires everywhere and old rows heal themselves.
+ *
+ * RE-BANDING HAS A CONSEQUENCE IN LAND. A town that moves down is a town whose plot target has
+ * just fallen, so reclassifyCountry() ends by asking LandPlotProvisioner to retire the surplus.
+ * Only free plots go; an owned one survives until its claim ends. That call lives here rather
+ * than at each trigger so the two cannot come apart.
  */
 final class LocationClassificationService
 {
@@ -41,6 +53,7 @@ final class LocationClassificationService
 
     public function __construct(
         private readonly LocationRepository     $locationRepository,
+        private readonly LandPlotProvisioner    $plotProvisioner,
         private readonly EntityManagerInterface $em,
     ) {}
 
@@ -82,6 +95,55 @@ final class LocationClassificationService
     }
 
     /**
+     * Mark this country's capital before the bands are computed.
+     *
+     * THE OVERRIDE AT classify():69 WAS INERT FOR MOST OF THE REGISTRY. `is_capital` was only
+     * ever set from a curated place row, and curated places exist for 25 of the 71 countries.
+     * The other 46 are built entirely by the AI town pull, which returns names and nothing else
+     * — so their capitals were banded on estimated population like any other town, and the
+     * forced-BIG rule never fired. CountryContentRegistry::capitalAliases() is the fact that was
+     * missing; this is where it gets applied.
+     *
+     * HERE RATHER THAN AT ROW CREATION, which is what makes it self-healing. Every path that
+     * adds or prices a town ends in a recompute, so a capital that arrived through the pull
+     * months ago is flagged the next time its country is reclassified — no backfill command, and
+     * no import path that can forget.
+     *
+     * BEFORE findForClassification(), NOT AFTER. The flag is read by classify() to force the
+     * town BIG, so setting it afterwards would leave the capital banded on population alone
+     * until something else triggered another recompute.
+     *
+     * Normalised on both sides: town_normalised is ClubNameNormalizer output and so is every
+     * alias, so "Warszawa" and "Warsaw" reach the one row without a LIKE or a collation.
+     *
+     * @return int rows flagged — 0 is the normal answer once the capital is already marked
+     */
+    private function flagCapital(string $countryCode): int
+    {
+        $country = Country::tryFrom(strtoupper(trim($countryCode)));
+
+        if ($country === null) {
+            return 0;
+        }
+
+        $aliases = CountryContentRegistry::capitalAliases($country);
+
+        if ($aliases === []) {
+            return 0;
+        }
+
+        return (int) $this->em->getConnection()->executeStatement(
+            'UPDATE location
+                SET is_capital = true
+              WHERE country_code = :code
+                AND town_normalised IN (:names)
+                AND is_capital = false',
+            ['code' => $country->value, 'names' => $aliases],
+            ['names' => ArrayParameterType::STRING],
+        );
+    }
+
+    /**
      * Recompute and store `city_size` for every active location in one country.
      *
      * Written as at most three UPDATEs — one per size, each with an id list — rather than one
@@ -99,6 +161,8 @@ final class LocationClassificationService
      */
     public function reclassifyCountry(string $countryCode): array
     {
+        $this->flagCapital($countryCode);
+
         $rows = $this->locationRepository->findForClassification($countryCode);
 
         if ($rows === []) {
@@ -131,6 +195,13 @@ final class LocationClassificationService
 
             $distribution[$size] = count($ids);
         }
+
+        // RE-BANDING IS THE ONLY THING THAT MOVES A PLOT TARGET DOWNWARD, so the reap belongs
+        // here rather than at the three call sites — a caller that reclassified and forgot to
+        // reap would leave a demoted town selling land its size no longer justifies, and the
+        // discrepancy would be invisible until somebody bought it. Occupied plots are left
+        // alone and collected later, when their claim ends; see LandPlotProvisioner::reapSurplus().
+        $this->plotProvisioner->reapSurplusForCountry($countryCode);
 
         return $distribution;
     }

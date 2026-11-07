@@ -7,6 +7,7 @@ namespace App\Service\Location;
 use App\Entity\Location\LandPlot;
 use App\Entity\Location\Location;
 use App\Enum\CitySize;
+use App\Enum\Location\LandPlotStatus;
 use App\Repository\Location\LocationConfigRepository;
 use App\Repository\Location\LocationRepository;
 use Doctrine\DBAL\ArrayParameterType;
@@ -19,11 +20,22 @@ use Doctrine\ORM\EntityManagerInterface;
  * could each hold exactly one club. Plot count now follows city size — which follows population,
  * which enrichment supplies — so the size of a place decides how much football it can hold.
  *
- * TOPS UP, NEVER REMOVES, and that is not a convenience. A plot can carry an active claim and
- * real money; land_plot is referenced by plot_claim with ON DELETE RESTRICT precisely so a
- * delete fails loudly rather than cascading. So a town that re-bands DOWNWARD keeps the plots it
- * already had: it simply stops gaining more. The alternative — removing a plot someone bought
- * because a population estimate moved — is not a trade worth making.
+ * TOPS UP FREELY, AND TAKES BACK ONLY WHAT NOBODY HOLDS. A town that re-bands DOWNWARD used to
+ * keep every plot it had and simply stop gaining more, which left the catalogue selling land the
+ * town's size no longer justifies — a BIG town demoted to MEDIUM went on offering four plots
+ * forever. reapSurplus() now retires the surplus, but only plots that are free: never one with a
+ * live claim, and never one under a hold, because that hold is somebody mid-checkout.
+ *
+ * AN OWNED PLOT IS NOT LOST, IT IS DEFERRED. A demoted town whose plots are all sold stays over
+ * target until a claim ends, and the reap on release is what collects it then — so the land goes
+ * back to the band's target instead of back on the market. The player who bought it is never
+ * disturbed, and the town converges on its true size as people sell.
+ *
+ * RETIRED, NOT DELETED, and the schema insists: land_plot is referenced by plot_claim with
+ * ON DELETE RESTRICT, so a DELETE fails loudly on any plot that has ever been claimed, released
+ * or not. LandPlotStatus::RETIRED is this codebase's delete — it is what takes a plot out of
+ * LocationCapacityService's count and out of every sellable query, while the purchase history
+ * that points at it stays intact.
  *
  * IDEMPOTENT. Running it twice adds nothing the second time, so it is safe on every seed, after
  * every reclassification, and by hand.
@@ -154,6 +166,115 @@ final class LandPlotProvisioner
         $this->em->flush();
 
         return $added;
+    }
+
+    /**
+     * Retire free plots a town is no longer big enough to justify.
+     *
+     * THE COUNTERPART TO TOPPING UP, and the reason this class no longer only grows. Called
+     * wherever a plot target can fall out of step with the plots on the ground: after a
+     * reclassification re-bands a country, and after a claim is released on a town that is
+     * already over target.
+     *
+     * WHAT IS SAFE TO TAKE. A plot is free only when it carries no live claim AND no unexpired
+     * hold. The hold half matters as much as the claim: a hold is a player at the checkout with
+     * a price quoted, and retiring that plot underneath them would fail the purchase for reasons
+     * they could not have seen coming.
+     *
+     * THE ORDERING IS THE WHOLE ALGORITHM. Rows are ranked claimed-first, then held, then by
+     * plot number, and only ranks beyond the target are retired. That ordering is what makes
+     * occupied plots unreachable rather than merely skipped: a town with target 2 holding four
+     * plots of which three are claimed keeps all three and retires the one free plot, landing at
+     * three — over target, but every remaining plot is somebody's. Skipping occupied rows
+     * without reordering would instead have retired a free plot that should have survived and
+     * left the count wrong.
+     *
+     * ONE STATEMENT, NO ENTITIES. The callers include a path that has just run em->clear(), and
+     * one that is midway through a sell-back holding a claim it still needs. Touching neither
+     * the identity map nor the unit of work is what keeps this safe to call from both.
+     *
+     * @param list<string> $locationIds empty reaps nothing — pass a country code instead
+     *
+     * @return int plots retired
+     */
+    public function reapSurplus(array $locationIds): int
+    {
+        if ($locationIds === []) {
+            return 0;
+        }
+
+        return $this->reap('p.location_id IN (:ids)', [
+            'ids' => $locationIds,
+        ], ['ids' => ArrayParameterType::STRING]);
+    }
+
+    /** @return int plots retired */
+    public function reapSurplusForCountry(string $countryCode): int
+    {
+        return $this->reap('l.country_code = :code', [
+            'code' => strtoupper(trim($countryCode)),
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $types
+     */
+    private function reap(string $scope, array $params, array $types = []): int
+    {
+        $config = $this->configRepository->getConfig();
+
+        // Read through plotsForCitySize() rather than the stored array: it is the accessor that
+        // sanitises an operator-edited row, and a CASE built from raw JSON could put a string
+        // into the comparison.
+        $params += [
+            'big'      => $config->plotsForCitySize(CitySize::BIG),
+            'medium'   => $config->plotsForCitySize(CitySize::MEDIUM),
+            'small'    => $config->plotsForCitySize(CitySize::SMALL),
+            'active'   => LandPlotStatus::ACTIVE->value,
+            'retired'  => LandPlotStatus::RETIRED->value,
+            'now'      => new \DateTimeImmutable(),
+        ];
+
+        $types += ['now' => 'datetime_immutable'];
+
+        return (int) $this->em->getConnection()->executeStatement(
+            "UPDATE land_plot
+                SET status = :retired, updated_at = :now
+              WHERE id IN (
+                    SELECT id FROM (
+                        SELECT p.id,
+                               -- CAST, not a bare placeholder: PDO sends these as text and
+                               -- Postgres then has no `bigint > text` to compare keep_rank
+                               -- against. The cast is on the CASE arms so the column is typed
+                               -- at the point it is built.
+                               CASE l.city_size
+                                   WHEN 'BIG'    THEN CAST(:big AS integer)
+                                   WHEN 'MEDIUM' THEN CAST(:medium AS integer)
+                                   ELSE CAST(:small AS integer)
+                               END AS target,
+                               c.id IS NOT NULL AS claimed,
+                               h.id IS NOT NULL AS held,
+                               row_number() OVER (
+                                   PARTITION BY p.location_id
+                                   ORDER BY (c.id IS NOT NULL) DESC,
+                                            (h.id IS NOT NULL) DESC,
+                                            p.plot_number ASC
+                               ) AS keep_rank
+                          FROM land_plot p
+                          JOIN location l ON l.id = p.location_id
+                          LEFT JOIN plot_claim c ON c.plot_id = p.id AND c.released_at IS NULL
+                          LEFT JOIN plot_hold  h ON h.plot_id = p.id AND h.expires_at > :now
+                         WHERE p.status = :active
+                           AND {$scope}
+                    ) ranked
+                     WHERE keep_rank > target
+                       AND NOT claimed
+                       AND NOT held
+              )",
+            $params,
+            $types,
+        );
     }
 
     /**
