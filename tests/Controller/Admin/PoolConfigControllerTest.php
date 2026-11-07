@@ -28,6 +28,27 @@ class PoolConfigControllerTest extends WebTestCase
 {
     private const TEST_ADMIN_EMAIL = 'pool-config-split-test-admin@example.com';
 
+    /**
+     * A flash reached the page.
+     *
+     * UPPER-CASED ON THE WAY OUT, which is why these assertions were red long before this
+     * file was touched: the redesigned shell renders flashes as toasts and upper-cases
+     * whatever it is given (layout.html.twig's body_javascript), so every assertion written
+     * against the controller's own mixed-case string could never match. Comparing upper to
+     * upper keeps the test about "did the message arrive" rather than about letter case,
+     * and survives the §11 copy rewrite still working through these pages.
+     */
+    private function assertFlash(string $message): void
+    {
+        $body = static::getClient()->getResponse()->getContent();
+
+        self::assertStringContainsString(
+            mb_strtoupper($message),
+            mb_strtoupper($body),
+            \sprintf('expected the flash "%s" on the page', $message),
+        );
+    }
+
     /** Same pattern as SocialAuthControllerTest::loginAsAdmin(). */
     private function loginAsAdmin(KernelBrowser $client): void
     {
@@ -109,7 +130,9 @@ class PoolConfigControllerTest extends WebTestCase
         $this->loginAsAdmin($client);
         $client->request('GET', '/admin?routeName=admin_investor_pool_config');
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h5', 'Investor Pool Config');
+        // Redesigned: the title moved out of an <h5> in the body and into the shell's page
+        // strip, upper-cased from the bmcTitle the controller passes.
+        $this->assertSelectorTextContains('.bmc-title', 'INVESTOR POOL');
     }
 
     // ── Player pool ──────────────────────────────────────────────────────
@@ -128,7 +151,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Player pool config saved.');
+        $this->assertFlash('Player pool config saved.');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -153,7 +176,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token.');
+        $this->assertFlash('Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame(12, $this->getConfig()->getPlayerAgeMin());
@@ -192,7 +215,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Player pool cleared');
+        $this->assertFlash('Player pool cleared');
 
         $em->clear();
         $this->assertNull($em->find(Player::class, $player->getId()), 'player should be deleted');
@@ -218,7 +241,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Staff pool config saved.');
+        $this->assertFlash('Staff pool config saved.');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -243,7 +266,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token.');
+        $this->assertFlash('Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame(40, $this->getConfig()->getCoachAbilityMin());
@@ -284,7 +307,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Staff pool cleared');
+        $this->assertFlash('Staff pool cleared');
 
         $em->clear();
         $this->assertNull($em->find(Staff::class, $staff->getId()), 'staff should be deleted');
@@ -311,7 +334,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Investor pool config saved.');
+        $this->assertFlash('Investor pool rules saved');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -336,7 +359,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token.');
+        $this->assertFlash('Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame(30, $this->getConfig()->getAgentReputationMin());
@@ -379,7 +402,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Investor pool cleared');
+        $this->assertFlash('Investor pool cleared');
 
         $em->clear();
         $this->assertNull($em->find(Agent::class, $agent->getId()), 'agent should be deleted');
