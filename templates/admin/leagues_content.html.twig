@@ -1,1055 +1,478 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  League overview — the tier defaults, which leagues have drifted from them, and the pyramids.
+  Design source: prototype/League Overview.dc.html. Data: DashboardController::leaguesOverview().
 
-{# countryLabels comes from Country::labelMap() — covers every Country case, not just
-   generation-capable ones, since this labels whatever country code is already in the DB. #}
-{% set COUNTRIES = countryLabels %}
+  THREE FORMS, ONE SUBMIT. The tier table and the country × tier picker are the SAME form:
+  bulkEditTierDefaults() always saves the eight rows, and additionally overwrites whichever
+  leagueIds[] were ticked. Splitting them would mean saving the defaults twice to apply them.
 
-{% set NPC_CLUB_CTRL = 'App\\Controller\\Admin\\NpcClubCrudController' %}
-{% set LEAGUE_CTRL   = 'App\\Controller\\Admin\\LeagueCrudController' %}
+  "DIFFERS" IS SERVER-SIDE. leagueDiffs maps a league id to the names of the fields that have
+  drifted from its tier row — see LeagueTierDefaultDiff for why it is not computed here: both
+  sides are pence and nullable ints, and this template renders them as formatted pounds, so a
+  comparison done here would be comparing display strings.
 
-{% set TIER_COLORS = {
-    1: '#ffd700', 2: '#e0b020', 3: '#c0a060',
-    4: '#6c757d', 5: '#6c757d', 6: '#495057',
-    7: '#343a40', 8: '#198754'
-} %}
+  MONEY IS POUNDS IN THE FIELDS, PENCE IN THE DATABASE. Rendered with thousands separators
+  because that is what makes a seven-figure number readable; parseMoneyToPence() strips them
+  on the way back, on both the bulk and the quick-edit paths.
+#}
 
-{% block content %}
-<style>
-    .league-country-section { margin-bottom: 2rem; }
-    .league-country-header {
-        display: flex;
-        align-items: center;
-        gap: .75rem;
-        padding: .6rem 1rem;
-        background: var(--bs-body-bg);
-        border: 1px solid var(--bs-border-color);
-        border-bottom: 2px solid var(--bs-primary);
-        cursor: pointer;
-        user-select: none;
-    }
-    .league-country-header:hover { background: var(--bs-tertiary-bg); }
-    .league-country-code {
-        font-family: 'Courier New', monospace;
-        font-weight: 700;
-        font-size: .9rem;
-        letter-spacing: .05em;
-    }
-    .league-country-name { font-weight: 600; }
-    .league-country-meta { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+{% set tierColours = {1: '#E8CF59', 2: '#9bb0c4', 3: '#e8852a', 4: '#3FAA7E', 5: '#38BDF8', 6: '#3F52A5', 7: '#6f7f94', 8: '#2d3568'} %}
+{% set countries = leaguesByCountry|keys %}
+{% set leagueCount = leagueDiffs|length %}
+{% set differCount = leagueDiffs|filter(d => d|length > 0)|length %}
 
-    .league-tier-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: .75rem;
-        padding: .75rem 0;
-    }
-    .league-card {
-        border: 1px solid var(--bs-border-color);
-        background: var(--bs-body-bg);
-        display: flex;
-        flex-direction: column;
-    }
-    .league-card-header {
-        display: flex;
-        align-items: center;
-        gap: .5rem;
-        padding: .5rem .75rem;
-        border-bottom: 1px solid var(--bs-border-color);
-        background: var(--bs-tertiary-bg);
-    }
-    .tier-badge {
-        font-family: 'Courier New', monospace;
-        font-size: .7rem;
-        font-weight: 700;
-        padding: .2rem .45rem;
-        min-width: 2.2rem;
-        text-align: center;
-        letter-spacing: .03em;
-    }
-    .league-name {
-        font-weight: 600;
-        font-size: .85rem;
-        flex: 1;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .league-edit-btn {
-        font-size: .7rem;
-        padding: .15rem .4rem;
-        opacity: .6;
-        transition: opacity .15s;
-        white-space: nowrap;
-    }
-    .league-edit-btn:hover { opacity: 1; }
+{% macro money(pence) %}{{ pence is null ? '' : (pence / 100)|round|number_format(0, '.', ',') }}{% endmacro %}
 
-    .league-stats {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .3rem;
-        padding: .5rem .75rem;
-        border-bottom: 1px solid var(--bs-border-color);
-    }
-    .league-stat-chip {
-        display: flex;
-        align-items: center;
-        gap: .25rem;
-        font-size: .7rem;
-        padding: .15rem .4rem;
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        white-space: nowrap;
-    }
-    .league-stat-chip .chip-label {
-        color: var(--bs-secondary-color);
-        font-size: .65rem;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-    }
-    .league-stat-chip .chip-val {
-        font-weight: 600;
-        font-family: 'Courier New', monospace;
-    }
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ ea_url().setController('App\\Controller\\Admin\\LeagueCrudController').setAction('index').generateUrl() }}"><span>LEAGUE LIST</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_npc_clubs_content'}) }}" title="Generate a country's pyramid on the NPC clubs screen"><span>GENERATE</span></a>
+{% endblock %}
 
-    .league-sponsors {
-        padding: .4rem .75rem;
-        border-bottom: 1px solid var(--bs-border-color);
-        display: flex;
-        flex-wrap: wrap;
-        gap: .3rem;
-        align-items: center;
-    }
-    .sponsor-label {
-        font-size: .65rem;
-        color: var(--bs-secondary-color);
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        margin-right: .15rem;
-    }
-    .sponsor-chip {
-        font-size: .7rem;
-        padding: .15rem .45rem;
-        background: rgba(var(--bs-warning-rgb), .12);
-        border: 1px solid rgba(var(--bs-warning-rgb), .3);
-        color: var(--bs-warning-text-emphasis);
-        white-space: nowrap;
-    }
+{% block bmc_body %}
+<div class="bmc-stats bmc-stats--card">
+    <div class="bmc-stat"><span class="bmc-stat__label">COUNTRIES</span><span class="bmc-stat__value">{{ countries|length }}</span><span class="bmc-stat__sub">with a pyramid</span></div>
+    <div class="bmc-stat"><span class="bmc-stat__label">LEAGUES</span><span class="bmc-stat__value">{{ leagueCount|number_format }}</span><span class="bmc-stat__sub">across every tier</span></div>
+    <div class="bmc-stat"><span class="bmc-stat__label">DIFFER</span><span class="bmc-stat__value{{ differCount > 0 ? ' ink-warning' : '' }}">{{ differCount|number_format }}</span><span class="bmc-stat__sub">from their tier row</span></div>
+    <div class="bmc-stat"><span class="bmc-stat__label">CLUBS</span><span class="bmc-stat__value">{{ clubsByLeague|reduce((c, l) => c + l|length, 0)|number_format }}</span><span class="bmc-stat__sub">generated into them</span></div>
+</div>
 
-    .league-clubs {
-        padding: .5rem .75rem;
-        display: flex;
-        flex-wrap: wrap;
-        gap: .35rem;
-        align-items: flex-start;
-    }
-    .league-clubs-empty {
-        padding: .5rem .75rem;
-        color: var(--bs-secondary-color);
-        font-size: .75rem;
-        font-style: italic;
-    }
-    .club-label {
-        display: inline-flex;
-        align-items: center;
-        gap: .3rem;
-        font-size: .72rem;
-        padding: .18rem .5rem .18rem .25rem;
-        border: 1px solid var(--bs-border-color);
-        background: var(--bs-secondary-bg);
-        text-decoration: none;
-        color: var(--bs-body-color);
-        cursor: pointer;
-        transition: border-color .15s, background .15s;
-        white-space: nowrap;
-    }
-    .club-label:hover {
-        border-color: var(--bs-primary);
-        background: var(--bs-tertiary-bg);
-        color: var(--bs-body-color);
-    }
-    .club-swatch {
-        width: 10px;
-        height: 10px;
-        flex-shrink: 0;
-        border: 1px solid rgba(0,0,0,.15);
-    }
-    .club-abbr {
-        font-family: 'Courier New', monospace;
-        font-size: .65rem;
-        color: var(--bs-secondary-color);
-    }
+<form method="post" action="{{ path('admin', {routeName: 'admin_league_tier_defaults_bulk_edit'}) }}" id="tiers-form">
+    <input type="hidden" name="_token" value="{{ csrf_token('league_tier_defaults_bulk_edit') }}">
 
-    .no-leagues-msg {
-        padding: 1rem;
-        color: var(--bs-secondary-color);
-        font-style: italic;
-        font-size: .85rem;
-        border: 1px dashed var(--bs-border-color);
-        text-align: center;
-    }
-
-    /* ── Trophy panel on league cards ──────────────────────────────── */
-    .league-trophy-row {
-        display: flex;
-        align-items: center;
-        gap: .75rem;
-        padding: .5rem .75rem;
-        border-bottom: 1px solid var(--bs-border-color);
-        background: var(--bs-tertiary-bg);
-    }
-    /* The sprite is an inline <svg> sized by composeTrophySvg's own scale
-       argument, so this only has to stop it being squeezed by the flex row. */
-    .league-trophy-img {
-        flex-shrink: 0;
-        line-height: 0;
-    }
-    .league-trophy-img svg { display: block; }
-    .league-trophy-meta {
-        display: flex;
-        flex-direction: column;
-        gap: .15rem;
-    }
-    .league-trophy-name {
-        font-size: .72rem;
-        font-weight: 600;
-        font-family: 'Courier New', monospace;
-        color: var(--bs-body-color);
-    }
-    .league-trophy-colour {
-        font-size: .65rem;
-        text-transform: uppercase;
-        letter-spacing: .05em;
-        color: var(--bs-secondary-color);
-    }
-
-    /* Fixed box so the 8 tier rows keep an even height whether or not a
-       trophy is set — the sprite is 34x46 at scale 1.5, plus a little slack. */
-    .tier-trophy-preview {
-        width: 54px;
-        min-height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        line-height: 0;
-    }
-    .tier-trophy-preview svg { display: block; }
-
-    /* ── Trophy panel inside quick-edit modal ───────────────────────── */
-    .qe-trophy-panel {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: .4rem;
-        padding: .6rem;
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        min-height: 96px;
-    }
-    .qe-trophy-panel .qe-trophy-sprite { line-height: 0; }
-    .qe-trophy-panel .qe-trophy-sprite svg { display: block; }
-    .qe-trophy-panel .qe-trophy-label {
-        font-size: .65rem;
-        color: var(--bs-secondary-color);
-        text-transform: uppercase;
-        letter-spacing: .05em;
-        text-align: center;
-    }
-    .qe-trophy-panel.empty .qe-trophy-label { font-style: italic; }
-</style>
-
-<div class="mt-1">
-
-    {# ── Page header ─────────────────────────────────────────────────────── #}
-    <div class="d-flex align-items-center gap-3 mb-3">
-        <div>
-            <h5 class="fw-semibold mb-0">League Overview</h5>
-            <p class="text-muted small mb-0">All leagues grouped by country. Click a club to edit it.</p>
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="layers"></i>
+            <span class="bmc-card__title">TIER DEFAULTS</span>
+            <span class="bmc-card__meta">Saved every time · applied only to leagues ticked below</span>
         </div>
-        <div class="ms-auto d-flex gap-2">
-            <a href="{{ ea_url().setController(LEAGUE_CTRL).setAction('index') }}"
-               class="btn btn-sm btn-outline-secondary">
-                <i class="fa fa-trophy me-1"></i>League CRUD
-            </a>
-            <a href="{{ path('admin_npc_clubs_content') }}"
-               class="btn btn-sm btn-outline-secondary">
-                <i class="fa fa-wand-magic-sparkles me-1"></i>Generate
-            </a>
-        </div>
-    </div>
-
-    {# ── League Tier Defaults (bulk edit) ──────────────────────────────────── #}
-    <div class="card mb-4">
-        <div class="card-header py-2 d-flex align-items-center gap-2">
-            <i class="fa fa-sliders text-muted"></i>
-            <span class="fw-semibold small">League Tier Defaults</span>
-        </div>
-        <div class="card-body">
-            <p class="text-muted small mb-3">
-                One row per tier, shared across every country. Saving always updates the defaults
-                new leagues are generated with (<code>GameConfig::leagueTierDefaults</code>); check
-                leagues in the picker below to also overwrite those existing rows right now.
-            </p>
-            <form method="POST" action="{{ path('admin_league_tier_defaults_bulk_edit') }}">
-                <input type="hidden" name="_token" value="{{ csrf_token('league_tier_defaults_bulk_edit') }}">
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-3">
-                        <thead>
-                            <tr>
-                                <th>Tier</th>
-                                <th>Promotion Spots</th>
-                                <th>TV Deal (£)</th>
-                                <th>Prize Money (£)</th>
-                                <th>Position Pot (£)</th>
-                                <th>Sponsors</th>
-                                <th>Trophy</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for tier in 1..8 %}
-                            {% set row = tierDefaults[tier] ?? {} %}
-                            <tr>
-                                <td>
-                                    <span class="tier-badge" style="background: {{ TIER_COLORS[tier] ?? '#6c757d' }}22; color: {{ TIER_COLORS[tier] ?? '#6c757d' }}; border: 1px solid {{ TIER_COLORS[tier] ?? '#6c757d' }}55;">T{{ tier }}</span>
-                                </td>
-                                <td><input type="number" class="form-control form-control-sm" style="width:90px" name="tiers[{{ tier }}][promotionSpots]" value="{{ row.promotionSpots ?? '' }}" min="0" placeholder="none"></td>
-                                <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][tvDeal]" value="{{ (row.tvDeal is defined and row.tvDeal is not null) ? (row.tvDeal / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
-                                <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][prizeMoney]" value="{{ (row.prizeMoney is defined and row.prizeMoney is not null) ? (row.prizeMoney / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
-                                <td><input type="text" inputmode="numeric" class="form-control form-control-sm tier-money-input" style="width:120px" name="tiers[{{ tier }}][leaguePositionPot]" value="{{ (row.leaguePositionPot is defined and row.leaguePositionPot is not null) ? (row.leaguePositionPot / 100)|round|number_format(0, '.', ',') : '' }}" placeholder="none"></td>
-                                <td><input type="number" class="form-control form-control-sm" style="width:70px" name="tiers[{{ tier }}][sponsorCount]" value="{{ row.sponsorCount ?? 0 }}" min="0" max="20"></td>
-                                {#
-                                   One cell for the whole trophy config, with a live
-                                   sprite beside the controls. Option lists come from
-                                   trophyStyles/trophyFinishes/trophyRibbonColours
-                                   (passed from DashboardController, derived from the
-                                   enums, which mirror the sprite's own lists) — never
-                                   hand-written here.
-
-                                   Ribbon colours are <select>s rather than the admin
-                                   widget's swatch grid: this is a dense 8-row table,
-                                   and 12 swatches x 2 x 8 rows would dwarf every other
-                                   column. The full picker lives on the League edit form.
-                                #}
-                                {% set trophy = row.trophy ?? null %}
-                                <td>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="tier-trophy-preview" data-tier-trophy-preview="{{ tier }}"></div>
-                                        <div class="d-flex flex-column gap-1" data-tier-trophy="{{ tier }}">
-                                            <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyStyle]" style="width:130px" data-tier-trophy-field="style">
-                                                <option value="">— None —</option>
-                                                {% for style in trophyStyles %}
-                                                <option value="{{ style.value }}" {% if (trophy.style ?? null) == style.value %}selected{% endif %}>{{ style.label }}</option>
-                                                {% endfor %}
-                                            </select>
-                                            <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyFinish]" style="width:130px" data-tier-trophy-field="finish">
-                                                {% for finish in trophyFinishes %}
-                                                <option value="{{ finish.value }}" {% if (trophy.finish ?? trophyDefaults.finish) == finish.value %}selected{% endif %}>{{ finish.label }}</option>
-                                                {% endfor %}
-                                            </select>
-                                            <div class="form-check mb-0">
-                                                <input class="form-check-input" type="checkbox" value="1"
-                                                       id="tier-{{ tier }}-ribbons"
-                                                       name="tiers[{{ tier }}][trophyRibbons]"
-                                                       data-tier-trophy-field="ribbons"
-                                                       {% if trophy is null ? trophyDefaults.ribbons : (trophy.ribbons ?? true) %}checked{% endif %}>
-                                                <label class="form-check-label small" for="tier-{{ tier }}-ribbons">Ribbons</label>
-                                            </div>
-                                            <div class="d-flex gap-1">
-                                                <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyRibbonPrimary]" style="width:63px" title="Ribbon primary" data-tier-trophy-field="ribbonPrimary">
-                                                    {% for colour in trophyRibbonColours %}
-                                                    <option value="{{ colour.value }}" {% if (trophy.ribbonPrimary ?? trophyDefaults.ribbonPrimary) == colour.value %}selected{% endif %}>{{ colour.label }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                                <select class="form-select form-select-sm" name="tiers[{{ tier }}][trophyRibbonSecondary]" style="width:63px" title="Ribbon secondary" data-tier-trophy-field="ribbonSecondary">
-                                                    {% for colour in trophyRibbonColours %}
-                                                    <option value="{{ colour.value }}" {% if (trophy.ribbonSecondary ?? trophyDefaults.ribbonSecondary) == colour.value %}selected{% endif %}>{{ colour.label }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        <div class="bmc-card__body" style="overflow-x:auto">
+            <div class="bmc-tiergrid" style="min-width:820px">
+                <div class="bmc-tiergrid__head">
+                    <span>TIER</span><span>TROPHY</span><span>PROMOTED</span>
+                    <span>TV DEAL</span><span>PRIZE MONEY</span><span>POSITION POT</span>
+                    <span>SPONSORS</span><span>LEAGUES</span>
                 </div>
+                {% for tier in 1..8 %}
+                    {% set row = tierDefaults[tier] ?? {} %}
+                    {% set inTier = leaguesByCountry|reduce((c, byTier) => c + (byTier[tier] is defined ? 1 : 0), 0) %}
+                    {% set differInTier = 0 %}
+                    {% for byTier in leaguesByCountry %}
+                        {% if byTier[tier] is defined and leagueDiffs[byTier[tier].id|ea_as_string]|default([])|length > 0 %}
+                            {% set differInTier = differInTier + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    <div class="bmc-tiergrid__row" data-tier="{{ tier }}">
+                        <span class="bmc-tierchip" style="color:{{ tierColours[tier] }}">T{{ tier }}</span>
 
-                <div class="border-top pt-3">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="fw-semibold small">Also apply to existing leagues</span>
-                        <div class="form-check mb-0 ms-2">
-                            <input class="form-check-input" type="checkbox" id="tier-defaults-select-all">
-                            <label class="form-check-label small" for="tier-defaults-select-all">Select all</label>
-                        </div>
+                        <button type="button" class="bmc-trophy-btn" data-trophy-open="{{ tier }}"
+                                title="Edit the tier {{ tier }} trophy" aria-label="Edit the tier {{ tier }} trophy">
+                            <span class="bmc-trophy" data-trophy-sprite="{{ tier }}"></span>
+                            <span class="bmc-trophy-btn__none" data-trophy-none="{{ tier }}" hidden>NONE</span>
+                        </button>
+                        {# The editor writes here; the form posts these, not the dialog's controls. #}
+                        <input type="hidden" name="tiers[{{ tier }}][trophyStyle]"           data-trophy-field="{{ tier }}:style"           value="{{ row.trophy.style|default('') }}">
+                        <input type="hidden" name="tiers[{{ tier }}][trophyFinish]"          data-trophy-field="{{ tier }}:finish"          value="{{ row.trophy.finish|default(trophyDefaults.finish) }}">
+                        <input type="hidden" name="tiers[{{ tier }}][trophyRibbons]"         data-trophy-field="{{ tier }}:ribbons"         value="{{ row.trophy.ribbons|default(false) ? '1' : '' }}">
+                        <input type="hidden" name="tiers[{{ tier }}][trophyRibbonPrimary]"   data-trophy-field="{{ tier }}:ribbonPrimary"   value="{{ row.trophy.ribbonPrimary|default(trophyDefaults.ribbonPrimary) }}">
+                        <input type="hidden" name="tiers[{{ tier }}][trophyRibbonSecondary]" data-trophy-field="{{ tier }}:ribbonSecondary" value="{{ row.trophy.ribbonSecondary|default(trophyDefaults.ribbonSecondary) }}">
+
+                        {% if tier == 1 %}
+                            <label class="bmc-num bmc-num--76" title="Top tier — nobody is promoted into it">
+                                <input value="—" disabled aria-label="tier 1 is not promoted into">
+                            </label>
+                        {% else %}
+                            <label class="bmc-num bmc-num--76"><span class="bmc-num__unit">+</span>
+                                <input name="tiers[{{ tier }}][promotionSpots]" inputmode="numeric" value="{{ row.promotionSpots|default('') }}"
+                                       data-min="0" data-max="10" data-blank="ok" aria-label="tier {{ tier }} promotion spots">
+                            </label>
+                        {% endif %}
+
+                        {% for f in ['tvDeal', 'prizeMoney', 'leaguePositionPot'] %}
+                            <label class="bmc-num"><span class="bmc-num__unit">£</span>
+                                <input name="tiers[{{ tier }}][{{ f }}]" inputmode="numeric" data-kind="money" data-blank="ok"
+                                       value="{{ _self.money(attribute(row, f)|default(null)) }}"
+                                       aria-label="tier {{ tier }} {{ f }}">
+                            </label>
+                        {% endfor %}
+
+                        <label class="bmc-num bmc-num--76">
+                            <input name="tiers[{{ tier }}][sponsorCount]" inputmode="numeric" value="{{ row.sponsorCount|default(0) }}"
+                                   data-min="0" data-max="20" aria-label="tier {{ tier }} sponsor count">
+                        </label>
+
+                        <span class="bmc-data" title="Leagues in this tier that differ from the row">
+                            {% if differInTier > 0 %}<span class="bmc-dot bmc-dot--warning"></span>{% endif %}
+                            {{ differInTier > 0 ? differInTier ~ ' of ' ~ inTier ~ ' differ' : inTier ~ ' match' }}
+                        </span>
                     </div>
-                    <div class="d-flex flex-wrap gap-2" style="max-height:180px; overflow-y:auto;">
-                        {% for league in allLeagues %}
-                        <div class="form-check" style="min-width:220px;">
-                            <input class="form-check-input tier-defaults-league-cb" type="checkbox" name="leagueIds[]" value="{{ league.id|ea_as_string }}" id="tdl-{{ league.id|ea_as_string }}">
-                            <label class="form-check-label small" for="tdl-{{ league.id|ea_as_string }}">{{ league.country }} · T{{ league.tier }} · {{ league.name }}</label>
-                        </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="grid-3x3"></i>
+            <span class="bmc-card__title">ALSO OVERWRITE EXISTING LEAGUES</span>
+            <span class="bmc-card__meta">Tick a league to push the saved tier row onto it</span>
+        </div>
+        <div class="bmc-card__band" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="bmc-data" id="pick-note">0 picked</span>
+            <span style="flex:1"></span>
+            <button type="button" class="bmc-quick-btn" data-lpick="differing">ALL DIFFERING</button>
+            <button type="button" class="bmc-quick-btn" data-lpick="all">ALL</button>
+            <button type="button" class="bmc-quick-btn" data-lpick="none">CLEAR</button>
+        </div>
+        <div class="bmc-card__body" style="overflow-x:auto">
+            <div class="bmc-matrix" style="min-width:min-content">
+                <div class="bmc-matrix__row bmc-matrix__row--head">
+                    <span></span>
+                    {% for tier in 1..8 %}
+                        <button type="button" class="bmc-matrix__col" data-col="{{ tier }}" title="Pick tier {{ tier }}'s differing leagues">T{{ tier }}</button>
+                    {% endfor %}
+                </div>
+                {% for code, byTier in leaguesByCountry %}
+                    <div class="bmc-matrix__row">
+                        <button type="button" class="bmc-matrix__rowhead" data-row="{{ code }}" title="Pick {{ code }}'s differing leagues">
+                            <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ code|lower ~ '.svg') }}')"></span>
+                            <span>{{ code }}</span>
+                        </button>
+                        {% for tier in 1..8 %}
+                            {% set league = byTier[tier]|default(null) %}
+                            {% if league %}
+                                {% set id = league.id|ea_as_string %}
+                                {% set differs = leagueDiffs[id]|default([])|length > 0 %}
+                                <label class="bmc-matrix__cell{{ differs ? ' is-differing' : '' }}"
+                                       title="{{ league.name }}{{ differs ? ' — differs: ' ~ leagueDiffs[id]|join(', ') : ' — matches its tier' }}">
+                                    <input type="checkbox" name="leagueIds[]" value="{{ id }}" data-differs="{{ differs ? '1' : '' }}" data-country="{{ code }}" data-tier="{{ tier }}">
+                                    <span aria-hidden="true">{{ differs ? '✓' : '·' }}</span>
+                                </label>
+                            {% else %}
+                                <span class="bmc-matrix__cell is-empty" title="No tier {{ tier }} league in {{ code }}"></span>
+                            {% endif %}
                         {% endfor %}
                     </div>
-                </div>
-
-                <div class="mt-3">
-                    <button type="submit" class="btn btn-sm btn-primary">
-                        <i class="fa fa-floppy-disk fa-xs me-1"></i>Save Tier Defaults
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    {% if leaguesByCountry is not empty %}
-    <div class="d-flex justify-content-end gap-2 mb-2">
-        <button type="button" id="leagues-expand-all" class="btn btn-sm btn-outline-secondary">Expand all</button>
-        <button type="button" id="leagues-collapse-all" class="btn btn-sm btn-outline-secondary">Collapse all</button>
-    </div>
-    {% endif %}
-
-    {% if leaguesByCountry is empty %}
-        <div class="no-leagues-msg">No leagues found. Use the Generate panel to create league structures.</div>
-    {% else %}
-
-        {% for countryCode, tiers in leaguesByCountry %}
-        {% set countryName = COUNTRIES[countryCode] ?? countryCode %}
-        {% set leagueCount = tiers|length %}
-        {% set totalClubs  = 0 %}
-        {% for tier, league in tiers %}
-            {% set leagueClubs = clubsByLeague[league.id|ea_as_string] ?? [] %}
-            {% set totalClubs  = totalClubs + leagueClubs|length %}
-        {% endfor %}
-
-        <div class="league-country-section">
-
-            {# ── Country header ─────────────────────────────────────────── #}
-            <div class="league-country-header"
-                 data-bs-toggle="collapse"
-                 data-bs-target="#country-{{ countryCode }}"
-                 aria-expanded="false">
-                <span class="league-country-code">{{ countryCode }}</span>
-                <span class="league-country-name">{{ countryName }}</span>
-                <span class="league-country-meta">
-                    <span class="badge bg-secondary">{{ leagueCount }} league{{ leagueCount != 1 ? 's' : '' }}</span>
-                    {% if totalClubs > 0 %}
-                        <span class="badge bg-primary bg-opacity-75">{{ totalClubs }} clubs</span>
-                    {% endif %}
-                    <i class="fa fa-chevron-down fa-xs text-muted ms-1" style="transition: transform .2s; transform: rotate(-90deg);"></i>
-                </span>
+                {% endfor %}
             </div>
-
-            {# ── League cards (collapsed by default — the Tier Defaults form above takes priority) ── #}
-            <div class="collapse" id="country-{{ countryCode }}">
-                <div class="league-tier-grid">
-
-                    {% for tier, league in tiers %}
-                    {% set clubs       = clubsByLeague[league.id|ea_as_string] ?? [] %}
-                    {% set tierColor   = TIER_COLORS[tier] ?? '#6c757d' %}
-                    {% set hasStats    = league.prizeMoney or league.tvDeal or league.leaguePositionPot or league.promotionSpots %}
-                    {% set hasTrophy   = league.trophy is not null %}
-                    {% set hasSponsors = league.sponsors|length > 0 %}
-
-                    <div class="league-card">
-
-                        {# Header: tier badge + name + quick-edit button #}
-                        <div class="league-card-header">
-                            <span class="tier-badge"
-                                  style="background: {{ tierColor }}22; color: {{ tierColor }}; border: 1px solid {{ tierColor }}55;">
-                                T{{ tier }}
-                            </span>
-                            <span class="league-name" title="{{ league.name }}">{{ league.name }}</span>
-                            {% if league.leagueReputationTier %}
-                                <span class="badge bg-secondary bg-opacity-50 fw-normal"
-                                      style="font-size:.6rem;">
-                                    {{ league.leagueReputationTier.value|upper }}
-                                </span>
-                            {% endif %}
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-secondary league-edit-btn"
-                                    title="Quick edit"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#leagueQuickEditModal"
-                                    data-league-id="{{ league.id|ea_as_string }}"
-                                    data-name="{{ league.name|e('html_attr') }}"
-                                    data-tier="{{ league.tier }}"
-                                    data-promotion-spots="{{ league.promotionSpots ?? '' }}"
-                                    data-tv-deal="{{ league.tvDeal is not null ? (league.tvDeal / 100)|round : '' }}"
-                                    data-prize-money="{{ league.prizeMoney is not null ? (league.prizeMoney / 100)|round : '' }}"
-                                    data-league-position-pot="{{ league.leaguePositionPot is not null ? (league.leaguePositionPot / 100)|round : '' }}"
-                                    data-trophy="{{ league.trophy ? league.trophy|json_encode|e('html_attr') : '' }}"
-                                    data-sponsor-count="{{ league.sponsorCount }}"
-                                    data-csrf-token="{{ csrf_token('league_qe_' ~ league.id|ea_as_string) }}"
-                                    data-full-edit-url="{{ ea_url().setController(LEAGUE_CTRL).setAction('edit').setEntityId(league.id|ea_as_string) }}">
-                                <i class="fa fa-pencil"></i>
-                            </button>
-                        </div>
-
-                        {# Trophy panel — only shown when a trophy is configured.
-                           The sprite is drawn client-side from data-trophy by
-                           composeTrophySvg(), the same renderer the field widget and
-                           the landing page use; the labels come from TROPHY_LABELS
-                           below so the admin never shows a raw enum value. #}
-                        {% if hasTrophy %}
-                        <div class="league-trophy-row"
-                             data-trophy="{{ league.trophy|json_encode|e('html_attr') }}">
-                            <div class="league-trophy-img" data-trophy-sprite></div>
-                            <div class="league-trophy-meta">
-                                <span class="league-trophy-name" data-trophy-style-label></span>
-                                <span class="league-trophy-colour" data-trophy-finish-label></span>
-                            </div>
-                        </div>
-                        {% endif %}
-
-                        {# Stats: prize money, TV deal, position pot, promotion spots #}
-                        {% if hasStats %}
-                        <div class="league-stats">
-                            {% if league.prizeMoney %}
-                                <div class="league-stat-chip">
-                                    <span class="chip-label">Prize</span>
-                                    <span class="chip-val">£{{ (league.prizeMoney / 100)|number_format(0, '.', ',') }}</span>
-                                </div>
-                            {% endif %}
-                            {% if league.tvDeal %}
-                                <div class="league-stat-chip">
-                                    <span class="chip-label">TV</span>
-                                    <span class="chip-val">£{{ (league.tvDeal / 100)|number_format(0, '.', ',') }}</span>
-                                </div>
-                            {% endif %}
-                            {% if league.leaguePositionPot %}
-                                <div class="league-stat-chip">
-                                    <span class="chip-label">Pos Pot</span>
-                                    <span class="chip-val">£{{ (league.leaguePositionPot / 100)|number_format(0, '.', ',') }}</span>
-                                </div>
-                            {% endif %}
-                            {% if league.promotionSpots %}
-                                <div class="league-stat-chip">
-                                    <span class="chip-label">Up</span>
-                                    <span class="chip-val" style="color: #198754;">+{{ league.promotionSpots }}</span>
-                                </div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-
-                        {# Sponsors #}
-                        {% if hasSponsors %}
-                        <div class="league-sponsors">
-                            <span class="sponsor-label">
-                                <i class="fa fa-star fa-xs"></i> Sponsors
-                            </span>
-                            {% for sponsor in league.sponsors %}
-                                <span class="sponsor-chip">{{ sponsor.name }}</span>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-
-                        {# Clubs inline labels #}
-                        {% if clubs|length > 0 %}
-                        <div class="league-clubs">
-                            {% for club in clubs %}
-                                <a href="{{ ea_url().setController(NPC_CLUB_CTRL).setAction('edit').setEntityId(club.id|ea_as_string) }}"
-                                   class="club-label"
-                                   title="{{ club.name }}{% if club.stadiumName %} · {{ club.stadiumName }}{% endif %} · Rep {{ club.reputation }}">
-                                    <span class="club-swatch" style="background: {{ club.primaryColor }};"></span>
-                                    {{ club.name }}
-                                    {% if club.abbreviation %}
-                                        <span class="club-abbr">{{ club.abbreviation }}</span>
-                                    {% endif %}
-                                </a>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <div class="league-clubs-empty">No clubs assigned to this league.</div>
-                        {% endif %}
-
-                    </div>{# /.league-card #}
-                    {% endfor %}
-
-                </div>{# /.league-tier-grid #}
-            </div>{# /.collapse #}
-
-        </div>{# /.league-country-section #}
-        {% endfor %}
-
-    {% endif %}
-</div>
-
-{# ── League Quick-Edit Modal ──────────────────────────────────────────────── #}
-<div class="modal fade" id="leagueQuickEditModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:460px;">
-        <div class="modal-content">
-            <form method="POST" id="leagueQuickEditForm" action="">
-                <input type="hidden" name="_token" id="qe-token" value="">
-                <div class="modal-header py-2">
-                    <h6 class="modal-title fw-semibold mb-0">
-                        <i class="fa fa-pencil fa-xs me-1 text-muted"></i> Quick Edit League
-                    </h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body pb-2">
-                    <div class="row g-2">
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold mb-1" for="qe-name">Name</label>
-                            <input type="text" class="form-control form-control-sm" id="qe-name" name="name" required maxlength="100">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-tier">Tier</label>
-                            <input type="number" class="form-control form-control-sm" id="qe-tier" name="tier" min="1" max="8" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-promotionSpots">Promotion Spots</label>
-                            <input type="number" class="form-control form-control-sm" id="qe-promotionSpots" name="promotionSpots" min="0" placeholder="none">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-tvDeal">TV Deal</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text">£</span>
-                                <input type="number" class="form-control" id="qe-tvDeal" name="tvDeal" min="0" step="1" placeholder="none">
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-sponsorCount">Sponsors</label>
-                            <input type="number" class="form-control form-control-sm" id="qe-sponsorCount" name="sponsorCount" min="1" max="20" step="1" placeholder="0">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-prizeMoney">Prize Money</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text">£</span>
-                                <input type="number" class="form-control" id="qe-prizeMoney" name="prizeMoney" min="0" step="1" placeholder="none">
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold mb-1" for="qe-leaguePositionPot">Position Pot</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text">£</span>
-                                <input type="number" class="form-control" id="qe-leaguePositionPot" name="leaguePositionPot" min="0" step="1" placeholder="none">
-                            </div>
-                        </div>
-                        {# ── Trophy row: controls left · live sprite right ──
-                           Posts the same five flat fields the tier-defaults table does,
-                           read back by LeagueAdminController::trophyFromFields(). An
-                           empty Design is the real "no trophy" state. Option lists are
-                           passed from the controller (derived from the enums, which
-                           mirror the sprite's own lists) — never written out here. #}
-                        <div class="col-12">
-                            <div class="d-flex gap-2 align-items-stretch">
-                                <div class="flex-grow-1 d-flex flex-column gap-2">
-                                    <div>
-                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyStyle">Trophy Design</label>
-                                        <select class="form-select form-select-sm" id="qe-trophyStyle" name="trophyStyle">
-                                            <option value="">— None —</option>
-                                            {% for style in trophyStyles %}
-                                                <option value="{{ style.value }}">{{ style.label }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label small fw-semibold mb-1" for="qe-trophyFinish">Finish</label>
-                                        <select class="form-select form-select-sm" id="qe-trophyFinish" name="trophyFinish">
-                                            {% for finish in trophyFinishes %}
-                                                <option value="{{ finish.value }}">{{ finish.label }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="d-flex gap-2 align-items-end">
-                                        <div class="form-check mb-1">
-                                            <input class="form-check-input" type="checkbox" value="1" id="qe-trophyRibbons" name="trophyRibbons">
-                                            <label class="form-check-label small" for="qe-trophyRibbons">Ribbons</label>
-                                        </div>
-                                        <div class="flex-grow-1">
-                                            <label class="form-label small fw-semibold mb-1" for="qe-trophyRibbonPrimary">Ribbon colours</label>
-                                            <div class="d-flex gap-1">
-                                                <select class="form-select form-select-sm" id="qe-trophyRibbonPrimary" name="trophyRibbonPrimary" title="Ribbon primary">
-                                                    {% for colour in trophyRibbonColours %}
-                                                        <option value="{{ colour.value }}">{{ colour.label }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                                <select class="form-select form-select-sm" id="qe-trophyRibbonSecondary" name="trophyRibbonSecondary" title="Ribbon secondary">
-                                                    {% for colour in trophyRibbonColours %}
-                                                        <option value="{{ colour.value }}">{{ colour.label }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="qe-trophy-panel empty" id="qe-trophy-panel" style="width:104px;flex-shrink:0;">
-                                    <div class="qe-trophy-sprite" id="qe-trophy-preview"></div>
-                                    <span class="qe-trophy-label" id="qe-trophy-label">No trophy</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer py-2 d-flex align-items-center gap-2">
-                    <a href="#" id="qe-full-edit-link" class="btn btn-sm btn-outline-secondary me-auto" title="Open full EasyAdmin edit page">
-                        <i class="fa fa-arrow-up-right-from-square fa-xs me-1"></i>Full Edit
-                    </a>
-                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-sm btn-primary">
-                        <i class="fa fa-floppy-disk fa-xs me-1"></i>Save
-                    </button>
-                </div>
-            </form>
+            <div class="bmc-row" style="margin-top:10px;gap:16px">
+                <span class="bmc-data"><span class="bmc-dot bmc-dot--warning"></span> differs from its tier</span>
+                <span class="bmc-data"><span class="bmc-dot"></span> matches</span>
+                <span class="bmc-data">blank · no league at that tier</span>
+            </div>
         </div>
+    </section>
+
+    <div class="bmc-savebar" data-bmc-savebar data-idle="The eight rows are saved every time. Ticked leagues are overwritten with them.">
+        <span class="bmc-savebar__dot"></span>
+        <span class="bmc-savebar__title">ALL SAVED</span>
+        <span class="bmc-savebar__sub"></span>
+        <button type="submit" class="bmc-btn bmc-btn--yellow" id="tiers-save"
+                data-bmc-dialog-title="SAVE TIER DEFAULTS?" data-bmc-dialog-confirm="SAVE"><span>SAVE DEFAULTS</span></button>
     </div>
+</form>
+
+<div class="bmc-rule"><span class="bmc-rule__title">PYRAMIDS</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">orange marks differ from the saved tier row</span></div>
+
+<div class="bmc-tabs bmc-tabs--wrap" data-bmc-tabs id="country-tabs" role="tablist" aria-label="Country">
+    {% for code, byTier in leaguesByCountry %}
+        {% set n = 0 %}
+        {% for l in byTier %}{% if leagueDiffs[l.id|ea_as_string]|default([])|length > 0 %}{% set n = n + 1 %}{% endif %}{% endfor %}
+        <button type="button" role="tab" aria-selected="{{ loop.first ? 'true' : 'false' }}" aria-controls="pyramid-{{ code }}" data-value="{{ code }}">
+            <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ code|lower ~ '.svg') }}')"></span>
+            {{ code }}{% if n > 0 %} <span class="ink-warning">{{ n }}</span>{% endif %}
+        </button>
+    {% endfor %}
 </div>
 
-{# The trophy sprite renderer — the same generated bundle the field widget and
-   the landing page use (public/assets/trophy-compositor.js, built from the
-   shared trophy16.ts by scripts/build-trophy-compositor.sh). This page draws
-   trophies in three places: the per-tier defaults table, each league card, and
-   the quick-edit modal. #}
-<script src="{{ asset('assets/trophy-compositor.js') }}?v={{ 'now'|date('YmdHis') }}"></script>
+{% for code, byTier in leaguesByCountry %}
+    <section class="bmc-card" data-domain="club" id="pyramid-{{ code }}" role="tabpanel" {{ loop.first ? '' : 'hidden' }}>
+        <div class="bmc-card__head">
+            <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ code|lower ~ '.svg') }}')"></span>
+            <span class="bmc-card__title">{{ countryLabels[code]|default(code) }}</span>
+            <span class="bmc-card__meta">{{ byTier|length }} tier(s)</span>
+        </div>
+        <div class="bmc-rows bmc-rows--flush">
+            {% for tier in 1..8 %}
+                {% set league = byTier[tier]|default(null) %}
+                {% if league %}
+                    {% set id = league.id|ea_as_string %}
+                    {% set d = leagueDiffs[id]|default([]) %}
+                    <div class="bmc-leaguerow" data-league="{{ id }}">
+                        <span class="bmc-tierchip" style="color:{{ tierColours[tier] }}">T{{ tier }}</span>
+                        <span class="bmc-trophy" data-league-trophy="{{ id }}" data-trophy='{{ league.trophy|default(null)|json_encode }}'></span>
+                        <span class="bmc-celltext">{{ league.name }}</span>
+                        <span class="bmc-data">{{ clubsByLeague[id]|default([])|length }} club(s)</span>
+                        <span class="bmc-cellnum{{ 'promotionSpots' in d ? ' ink-warning' : '' }}">{{ tier == 1 ? '—' : (league.promotionSpots is null ? '—' : '+' ~ league.promotionSpots) }}</span>
+                        <span class="bmc-cellnum{{ 'tvDeal' in d ? ' ink-warning' : '' }}">{{ league.tvDeal is null ? '—' : '£' ~ _self.money(league.tvDeal) }}</span>
+                        <span class="bmc-cellnum{{ 'prizeMoney' in d ? ' ink-warning' : '' }}">{{ league.prizeMoney is null ? '—' : '£' ~ _self.money(league.prizeMoney) }}</span>
+                        <span class="bmc-cellnum{{ 'leaguePositionPot' in d ? ' ink-warning' : '' }}">{{ league.leaguePositionPot is null ? '—' : '£' ~ _self.money(league.leaguePositionPot) }}</span>
+                        <span class="bmc-cellnum{{ 'sponsorCount' in d ? ' ink-warning' : '' }}">{{ league.sponsorCount }}</span>
+                        <button type="button" class="bmc-iconbtn bmc-iconbtn--sm" title="Quick edit {{ league.name }}" aria-label="Quick edit {{ league.name }}"
+                                data-qe="{{ id }}"
+                                data-qe-url="{{ path('admin', {routeName: 'admin_league_quick_edit', routeParams: {id: id}}) }}"
+                                data-qe-token="{{ csrf_token('league_qe_' ~ id) }}"
+                                data-qe-name="{{ league.name }}" data-qe-tier="{{ tier }}"
+                                data-qe-promotion="{{ league.promotionSpots }}"
+                                data-qe-tv="{{ _self.money(league.tvDeal) }}" data-qe-prize="{{ _self.money(league.prizeMoney) }}"
+                                data-qe-pot="{{ _self.money(league.leaguePositionPot) }}" data-qe-sponsors="{{ league.sponsorCount }}"
+                                data-qe-full="{{ ea_url().setController('App\\Controller\\Admin\\LeagueCrudController').setAction('edit').setEntityId(id).generateUrl() }}">
+                            <i data-lucide="pencil" width="16" height="16"></i>
+                        </button>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+{% endfor %}
+
+{{ include('admin/_league_dialogs.html.twig') }}
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script src="{{ asset('assets/trophy-compositor.js') }}?v={{ 'now'|date('Ymd') }}"></script>
 <script>
-// ── Shared trophy helpers ────────────────────────────────────────────────────
-// Deliberately global (not wrapped in an IIFE) because the quick-edit modal's
-// own IIFE further down needs them too. Labels come from the enum lists the
-// controller passed, so the admin never shows a bare `twotone` to anyone.
-var TROPHY_STYLE_LABELS  = {{ trophyStyles|reduce((acc, s) => acc|merge({(s.value): s.label}), {})|json_encode|raw }};
-var TROPHY_FINISH_LABELS = {{ trophyFinishes|reduce((acc, f) => acc|merge({(f.value): f.label}), {})|json_encode|raw }};
-var TROPHY_DEFAULTS      = {{ trophyDefaults|json_encode|raw }};
+(function () {
+    var $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return [].slice.call((r || document).querySelectorAll(s)); };
 
-function trophyStyleLabel(value)  { return TROPHY_STYLE_LABELS[value]  || value || ''; }
-function trophyFinishLabel(value) { return TROPHY_FINISH_LABELS[value] || value || ''; }
+    var STYLES   = {{ trophyStyles|reduce((a, s) => a|merge({(s.value): s.label}), {})|json_encode|raw }};
+    var FINISHES = {{ trophyFinishes|reduce((a, f) => a|merge({(f.value): f.label}), {})|json_encode|raw }};
+    var DEFAULTS = {{ trophyDefaults|json_encode|raw }};
+    var STYLE_KEYS = Object.keys(STYLES);
 
-/** Transparent and shadowless: these all sit on an existing panel or card. */
-function trophySvg(config, scale) {
-    if (typeof window.composeTrophySvg !== 'function') return '';
-    return window.composeTrophySvg(config, scale, { background: 'none' });
-}
-
-/** A data-trophy attribute to a config, tolerating absent or malformed JSON. */
-function parseTrophy(raw) {
-    if (!raw) return null;
-    try {
-        var parsed = JSON.parse(raw);
-        return parsed && parsed.style ? parsed : null;
-    } catch (e) {
-        return null;
+    // ── trophy sprites ──────────────────────────────────────────────
+    // AS A BACKGROUND IMAGE, NOT AN <svg>. The design's fidelity rules say trophies are drawn
+    // as background images, and .bmc-trophy is sized for exactly that — so the composed SVG is
+    // encoded into a data URI rather than injected as markup.
+    function spriteUrl(config) {
+        if (!config || !config.style || typeof window.composeTrophySvg !== 'function') return '';
+        var svg = window.composeTrophySvg(config, 2, { background: 'none' });
+        return svg ? 'url("data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '")' : '';
     }
-}
 
-/** Fill one .league-trophy-row from its own data-trophy attribute. */
-function renderTrophyRow(row) {
-    var config = parseTrophy(row.getAttribute('data-trophy'));
-    if (!config) return;
-    var sprite = row.querySelector('[data-trophy-sprite]');
-    var styleEl = row.querySelector('[data-trophy-style-label]');
-    var finishEl = row.querySelector('[data-trophy-finish-label]');
-    if (sprite)   sprite.innerHTML    = trophySvg(config, 1.5);
-    if (styleEl)  styleEl.textContent = trophyStyleLabel(config.style);
-    if (finishEl) finishEl.textContent = trophyFinishLabel(config.finish);
-}
-
-/** Push a config (or null, for "no trophy") into the quick-edit modal's controls. */
-function applyTrophyToModal(config) {
-    var c = config || TROPHY_DEFAULTS;
-    var set = function (id, value) {
-        var el = document.getElementById(id);
+    function paint(el, config) {
         if (!el) return;
-        if (el.type === 'checkbox') { el.checked = !!value; } else { el.value = value; }
-    };
-    set('qe-trophyStyle', config ? c.style : '');
-    set('qe-trophyFinish', c.finish);
-    set('qe-trophyRibbons', c.ribbons);
-    set('qe-trophyRibbonPrimary', c.ribbonPrimary);
-    set('qe-trophyRibbonSecondary', c.ribbonSecondary);
-}
-
-// ── Live previews: league cards + the per-tier defaults table ────────────────
-(function () {
-    document.querySelectorAll('.league-trophy-row[data-trophy]').forEach(renderTrophyRow);
-
-    // The tier table's selects aren't a TrophyConfigType widget (see the comment
-    // on that cell), so wire their preview up by hand — one per tier row.
-    document.querySelectorAll('[data-tier-trophy]').forEach(function (group) {
-        var tier = group.getAttribute('data-tier-trophy');
-        var preview = document.querySelector('[data-tier-trophy-preview="' + tier + '"]');
-        if (!preview) return;
-
-        function render() {
-            var config = {};
-            group.querySelectorAll('[data-tier-trophy-field]').forEach(function (el) {
-                var key = el.getAttribute('data-tier-trophy-field');
-                config[key] = el.type === 'checkbox' ? el.checked : el.value;
-            });
-            preview.innerHTML = config.style
-                ? trophySvg(config, 1.5)
-                : '<span class="text-muted" style="font-size:.6rem;line-height:1.2;text-align:center">No<br>trophy</span>';
-        }
-
-        group.addEventListener('change', render);
-        render();
-    });
-})();
-
-// Rotate chevron on collapse toggle
-document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (el) {
-    var chevron = el.querySelector('.fa-chevron-down');
-    var target  = document.querySelector(el.getAttribute('data-bs-target'));
-    if (!target || !chevron) return;
-    target.addEventListener('show.bs.collapse',  function () { chevron.style.transform = 'rotate(0deg)';    });
-    target.addEventListener('hide.bs.collapse',  function () { chevron.style.transform = 'rotate(-90deg)'; });
-});
-
-// Tier Defaults money inputs: live thousands-separator formatting.
-// Values here are whole pounds (already converted from the pence stored on
-// GameConfig/League) — comma-format for readability, but keep the cursor
-// sane while typing by tracking its offset from the end of the string.
-(function () {
-    function digitsOnly(str) { return (str || '').replace(/[^\d]/g, ''); }
-    function formatWithCommas(digits) { return digits === '' ? '' : Number(digits).toLocaleString('en-GB'); }
-
-    document.querySelectorAll('.tier-money-input').forEach(function (input) {
-        input.addEventListener('input', function () {
-            var offsetFromEnd = input.value.length - input.selectionStart;
-            var formatted = formatWithCommas(digitsOnly(input.value));
-            input.value = formatted;
-            var pos = Math.max(0, formatted.length - offsetFromEnd);
-            input.setSelectionRange(pos, pos);
-        });
-        input.addEventListener('blur', function () {
-            input.value = formatWithCommas(digitsOnly(input.value));
-        });
-    });
-})();
-
-// Tier Defaults picker: "select all" toggles every league checkbox
-(function () {
-    var selectAll = document.getElementById('tier-defaults-select-all');
-    if (!selectAll) return;
-    selectAll.addEventListener('change', function () {
-        document.querySelectorAll('.tier-defaults-league-cb').forEach(function (cb) {
-            cb.checked = selectAll.checked;
-        });
-    });
-})();
-
-// Expand all / collapse all country sections
-(function () {
-    var expandBtn   = document.getElementById('leagues-expand-all');
-    var collapseBtn = document.getElementById('leagues-collapse-all');
-    if (!expandBtn || !collapseBtn) return;
-    function toggleAll(show) {
-        document.querySelectorAll('.league-country-section .collapse').forEach(function (el) {
-            var instance = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
-            show ? instance.show() : instance.hide();
-        });
-    }
-    expandBtn.addEventListener('click', function () { toggleAll(true); });
-    collapseBtn.addEventListener('click', function () { toggleAll(false); });
-})();
-
-// Quick-edit modal: populate + AJAX save
-(function () {
-    var modal = document.getElementById('leagueQuickEditModal');
-    if (!modal) return;
-
-    var TIER_COLORS = {
-        1: '#ffd700', 2: '#e0b020', 3: '#c0a060',
-        4: '#6c757d', 5: '#6c757d', 6: '#495057',
-        7: '#343a40', 8: '#198754',
-    };
-
-    // ── trophy preview in modal ──────────────────────────────────────────
-    // Reads the five flat controls and draws the real sprite, so the modal shows
-    // exactly what the League edit form's widget and the app would render.
-    var TROPHY_FIELD_IDS = {
-        style: 'qe-trophyStyle', finish: 'qe-trophyFinish', ribbons: 'qe-trophyRibbons',
-        ribbonPrimary: 'qe-trophyRibbonPrimary', ribbonSecondary: 'qe-trophyRibbonSecondary',
-    };
-
-    function modalTrophyConfig() {
-        var out = {};
-        Object.keys(TROPHY_FIELD_IDS).forEach(function (key) {
-            var el = document.getElementById(TROPHY_FIELD_IDS[key]);
-            if (!el) return;
-            out[key] = el.type === 'checkbox' ? el.checked : el.value;
-        });
-        return out;
+        el.style.backgroundImage = spriteUrl(config);
     }
 
-    function refreshTrophyPreview() {
-        var config = modalTrophyConfig();
-        var panel  = document.getElementById('qe-trophy-panel');
-        var sprite = document.getElementById('qe-trophy-preview');
-        var label  = document.getElementById('qe-trophy-label');
-
-        if (config.style) {
-            sprite.innerHTML  = trophySvg(config, 2);
-            label.textContent = trophyStyleLabel(config.style) + ' · ' + trophyFinishLabel(config.finish);
-            panel.classList.remove('empty');
-        } else {
-            sprite.innerHTML  = '';
-            label.textContent = 'No trophy';
-            panel.classList.add('empty');
-        }
+    function parseTrophy(raw) {
+        if (!raw || raw === 'null') return null;
+        try { var c = JSON.parse(raw); return c && c.style ? c : null; } catch (e) { return null; }
     }
 
-    Object.keys(TROPHY_FIELD_IDS).forEach(function (key) {
-        var el = document.getElementById(TROPHY_FIELD_IDS[key]);
-        if (el) el.addEventListener('change', refreshTrophyPreview);
+    // A target is a tier number or 'qe'; both keep their config in hidden inputs so the form
+    // posts it whether or not the editor was ever opened.
+    function readTarget(target) {
+        var get = function (k) { var el = $('[data-trophy-field="' + target + ':' + k + '"]'); return el ? el.value : ''; };
+        if (!get('style')) return null;
+        return {
+            style: get('style'), finish: get('finish') || DEFAULTS.finish,
+            ribbons: get('ribbons') === '1',
+            ribbonPrimary: get('ribbonPrimary') || DEFAULTS.ribbonPrimary,
+            ribbonSecondary: get('ribbonSecondary') || DEFAULTS.ribbonSecondary
+        };
+    }
+
+    function writeTarget(target, config) {
+        var set = function (k, v) { var el = $('[data-trophy-field="' + target + ':' + k + '"]'); if (el) el.value = v; };
+        set('style', config ? config.style : '');
+        set('finish', config ? config.finish : DEFAULTS.finish);
+        set('ribbons', config && config.ribbons ? '1' : '');
+        set('ribbonPrimary', config ? config.ribbonPrimary : DEFAULTS.ribbonPrimary);
+        set('ribbonSecondary', config ? config.ribbonSecondary : DEFAULTS.ribbonSecondary);
+        drawButton(target);
+    }
+
+    function drawButton(target) {
+        var config = readTarget(target);
+        paint($('[data-trophy-sprite="' + target + '"]'), config);
+        var none = $('[data-trophy-none="' + target + '"]');
+        if (none) none.hidden = !!config;
+    }
+
+    // Tier buttons, the quick-edit button, and every league row's sprite.
+    $$('[data-trophy-sprite]').forEach(function (el) { drawButton(el.getAttribute('data-trophy-sprite')); });
+    $$('[data-league-trophy]').forEach(function (el) { paint(el, parseTrophy(el.getAttribute('data-trophy'))); });
+
+    // ── trophy editor ───────────────────────────────────────────────
+    var trScrim = $('#tr-scrim'), trTarget = null, trDraft = null;
+
+    function drawEditor() {
+        var c = trDraft || DEFAULTS;
+        $$('#tr-styles input').forEach(function (i) { i.checked = !!trDraft && i.value === c.style; });
+        $$('#tr-finishes button').forEach(function (b) { b.setAttribute('aria-checked', b.dataset.value === c.finish ? 'true' : 'false'); });
+        $('#tr-ribbons').checked = !!c.ribbons;
+        $$('[data-ribbon="primary"] input').forEach(function (i) { i.checked = i.value === c.ribbonPrimary; });
+        $$('[data-ribbon="secondary"] input').forEach(function (i) { i.checked = i.value === c.ribbonSecondary; });
+        $('#tr-ribbon-colours').hidden = !c.ribbons;
+        paint($('#tr-preview'), trDraft);
+        $('#tr-caption').textContent = trDraft
+            ? (STYLES[trDraft.style] || trDraft.style) + ' · ' + (FINISHES[trDraft.finish] || trDraft.finish)
+            : 'No trophy';
+    }
+
+    function openEditor(target) {
+        trTarget = target;
+        trDraft = readTarget(target);
+        $('#tr-title').textContent = target === 'qe' ? 'LEAGUE TROPHY' : 'TIER ' + target + ' TROPHY';
+        drawEditor();
+        trScrim.hidden = false;
+        $('#tr-ok').focus();
+    }
+
+    function closeEditor() { trScrim.hidden = true; trTarget = null; }
+
+    $$('[data-trophy-open]').forEach(function (b) {
+        b.addEventListener('click', function () { openEditor(b.getAttribute('data-trophy-open')); });
     });
 
-    // ── toast helper ─────────────────────────────────────────────────────
-    function showToast(msg, type) {
-        type = type || 'success';
-        var ct = document.getElementById('qe-toast-ct');
-        if (!ct) {
-            ct = document.createElement('div');
-            ct.id = 'qe-toast-ct';
-            ct.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-            ct.style.zIndex = '9999';
-            document.body.appendChild(ct);
-        }
-        var t = document.createElement('div');
-        t.className = 'toast align-items-center text-bg-' + type + ' border-0';
-        t.setAttribute('role', 'alert');
-        t.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div>'
-            + '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
-        ct.appendChild(t);
-        new bootstrap.Toast(t, { delay: 3000 }).show();
-        t.addEventListener('hidden.bs.toast', function () { t.remove(); });
-    }
-
-    // ── update card in-place after save ───────────────────────────────────
-    function insertBeforeFirst(card, el, selectors) {
-        for (var i = 0; i < selectors.length; i++) {
-            var ref = card.querySelector(selectors[i]);
-            if (ref) { card.insertBefore(el, ref); return; }
-        }
-        card.appendChild(el);
-    }
-
-    function fmt(pence) {
-        return '£' + Math.round(pence / 100).toLocaleString('en-GB');
-    }
-
-    function updateCard(card, lg, btn) {
-        // Tier badge
-        var tc = TIER_COLORS[lg.tier] || '#6c757d';
-        var badge = card.querySelector('.tier-badge');
-        if (badge) {
-            badge.textContent         = 'T' + lg.tier;
-            badge.style.background    = tc + '22';
-            badge.style.color         = tc;
-            badge.style.borderColor   = tc + '55';
-        }
-
-        // League name
-        var nameEl = card.querySelector('.league-name');
-        if (nameEl) { nameEl.textContent = lg.name; nameEl.title = lg.name; }
-
-        var cardHeader = card.querySelector('.league-card-header');
-
-        // Trophy row. The row owns its own data-trophy, so re-stamping that and
-        // calling the shared renderTrophyRow() keeps a freshly-saved card and a
-        // server-rendered one going through exactly the same code path.
-        var trophyRow = card.querySelector('.league-trophy-row');
-        if (lg.trophy) {
-            if (!trophyRow) {
-                trophyRow = document.createElement('div');
-                trophyRow.className = 'league-trophy-row';
-                trophyRow.innerHTML = '<div class="league-trophy-img" data-trophy-sprite></div>'
-                    + '<div class="league-trophy-meta">'
-                    + '<span class="league-trophy-name" data-trophy-style-label></span>'
-                    + '<span class="league-trophy-colour" data-trophy-finish-label></span>'
-                    + '</div>';
-                insertBeforeFirst(card, trophyRow, ['.league-stats', '.league-sponsors', '.league-clubs', '.league-clubs-empty']);
-            }
-            trophyRow.setAttribute('data-trophy', JSON.stringify(lg.trophy));
-            renderTrophyRow(trophyRow);
-        } else if (trophyRow) {
-            trophyRow.remove();
-        }
-
-        // Stats chips
-        var statsEl  = card.querySelector('.league-stats');
-        var hasStats = lg.prizeMoney || lg.tvDeal || lg.leaguePositionPot || lg.promotionSpots;
-        if (hasStats) {
-            var h = '';
-            if (lg.prizeMoney)        h += '<div class="league-stat-chip"><span class="chip-label">Prize</span><span class="chip-val">' + fmt(lg.prizeMoney) + '</span></div>';
-            if (lg.tvDeal)            h += '<div class="league-stat-chip"><span class="chip-label">TV</span><span class="chip-val">' + fmt(lg.tvDeal) + '</span></div>';
-            if (lg.leaguePositionPot) h += '<div class="league-stat-chip"><span class="chip-label">Pos Pot</span><span class="chip-val">' + fmt(lg.leaguePositionPot) + '</span></div>';
-            if (lg.promotionSpots)    h += '<div class="league-stat-chip"><span class="chip-label">Up</span><span class="chip-val" style="color:#198754;">+' + lg.promotionSpots + '</span></div>';
-            if (statsEl) {
-                statsEl.innerHTML = h;
-            } else {
-                statsEl = document.createElement('div');
-                statsEl.className = 'league-stats';
-                statsEl.innerHTML = h;
-                insertBeforeFirst(card, statsEl, ['.league-sponsors', '.league-clubs', '.league-clubs-empty']);
-            }
-        } else if (statsEl) {
-            statsEl.remove();
-        }
-
-        // Refresh button data attributes so the next modal open shows fresh values
-        btn.dataset.name              = lg.name;
-        btn.dataset.tier              = lg.tier;
-        btn.dataset.promotionSpots    = lg.promotionSpots != null ? lg.promotionSpots : '';
-        btn.dataset.tvDeal            = lg.tvDeal            ? Math.round(lg.tvDeal / 100)            : '';
-        btn.dataset.prizeMoney        = lg.prizeMoney        ? Math.round(lg.prizeMoney / 100)        : '';
-        btn.dataset.leaguePositionPot = lg.leaguePositionPot ? Math.round(lg.leaguePositionPot / 100) : '';
-        btn.dataset.trophy            = lg.trophy ? JSON.stringify(lg.trophy) : '';
-        btn.dataset.sponsorCount      = lg.sponsorCount != null ? lg.sponsorCount : '';
-    }
-
-    // ── modal populate ────────────────────────────────────────────────────
-    var form       = document.getElementById('leagueQuickEditForm');
-    var saveBtn    = form.querySelector('[type="submit"]');
-    var currentBtn = null;
-
-    modal.addEventListener('show.bs.modal', function (event) {
-        currentBtn = event.relatedTarget;
-        var id = currentBtn.dataset.leagueId;
-
-        form.action = '/admin/leagues/' + id + '/quick-edit';
-        document.getElementById('qe-token').value             = currentBtn.dataset.csrfToken       || '';
-        document.getElementById('qe-name').value              = currentBtn.dataset.name             || '';
-        document.getElementById('qe-tier').value              = currentBtn.dataset.tier             || '';
-        document.getElementById('qe-promotionSpots').value    = currentBtn.dataset.promotionSpots   || '';
-        document.getElementById('qe-tvDeal').value            = currentBtn.dataset.tvDeal           || '';
-        document.getElementById('qe-prizeMoney').value        = currentBtn.dataset.prizeMoney       || '';
-        document.getElementById('qe-leaguePositionPot').value = currentBtn.dataset.leaguePositionPot|| '';
-        applyTrophyToModal(parseTrophy(currentBtn.dataset.trophy));
-        document.getElementById('qe-sponsorCount').value      = currentBtn.dataset.sponsorCount     || '';
-        document.getElementById('qe-full-edit-link').href     = currentBtn.dataset.fullEditUrl      || '#';
-        refreshTrophyPreview();
+    $('#tr-styles').addEventListener('change', function (e) {
+        trDraft = trDraft || Object.assign({}, DEFAULTS);
+        trDraft.style = e.target.value;
+        drawEditor();
+    });
+    $('#tr-finishes').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        trDraft = trDraft || Object.assign({}, DEFAULTS);
+        trDraft.finish = b.dataset.value;
+        drawEditor();
+    });
+    $('#tr-ribbons').addEventListener('change', function (e) {
+        trDraft = trDraft || Object.assign({}, DEFAULTS);
+        trDraft.ribbons = e.target.checked;
+        drawEditor();
+    });
+    $('#tr-ribbon-colours').addEventListener('change', function (e) {
+        if (e.target.type !== 'radio') return;
+        trDraft = trDraft || Object.assign({}, DEFAULTS);
+        trDraft[e.target.closest('[data-ribbon]').dataset.ribbon === 'primary' ? 'ribbonPrimary' : 'ribbonSecondary'] = e.target.value;
+        drawEditor();
+    });
+    $('#tr-random').addEventListener('click', function () {
+        trDraft = trDraft || Object.assign({}, DEFAULTS);
+        trDraft.style = STYLE_KEYS[Math.floor(Math.random() * STYLE_KEYS.length)];
+        drawEditor();
     });
 
-    // ── AJAX submit ───────────────────────────────────────────────────────
-    form.addEventListener('submit', function (e) {
+    $('#tr-cancel').addEventListener('click', closeEditor);
+    $('#tr-none').addEventListener('click', function () { writeTarget(trTarget, null); closeEditor(); });
+    $('#tr-ok').addEventListener('click', function () { writeTarget(trTarget, trDraft); closeEditor(); });
+    trScrim.addEventListener('click', function (e) { if (e.target === trScrim) closeEditor(); });
+
+    // ── the country × tier picker ───────────────────────────────────
+    var cells = $$('.bmc-matrix__cell input');
+
+    function drawPicks() {
+        var n = cells.filter(function (c) { return c.checked; }).length;
+        $('#pick-note').textContent = n === 0 ? '0 picked' : n + ' league(s) will be overwritten';
+    }
+
+    cells.forEach(function (c) { c.addEventListener('change', drawPicks); });
+
+    $$('[data-lpick]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var k = b.dataset.lpick;
+            cells.forEach(function (c) { c.checked = k === 'all' || (k === 'differing' && c.dataset.differs === '1'); });
+            drawPicks();
+        });
+    });
+
+    // A row or column header takes that row's or column's DIFFERING leagues — the ones worth
+    // acting on. Taking everything would make the header a worse version of ALL.
+    $$('[data-row]').forEach(function (h) {
+        h.addEventListener('click', function () {
+            cells.filter(function (c) { return c.dataset.country === h.dataset.row && c.dataset.differs === '1'; })
+                 .forEach(function (c) { c.checked = true; });
+            drawPicks();
+        });
+    });
+    $$('[data-col]').forEach(function (h) {
+        h.addEventListener('click', function () {
+            cells.filter(function (c) { return c.dataset.tier === h.dataset.col && c.dataset.differs === '1'; })
+                 .forEach(function (c) { c.checked = true; });
+            drawPicks();
+        });
+    });
+
+    // Saving with leagues ticked rewrites them, so say how many before it happens.
+    $('#tiers-save').addEventListener('click', function () {
+        var n = cells.filter(function (c) { return c.checked; }).length;
+        this.setAttribute('data-bmc-dialog-title', n ? 'OVERWRITE ' + n + ' LEAGUE(S)?' : 'SAVE TIER DEFAULTS?');
+        this.setAttribute('data-bmc-dialog-message', n
+            ? 'The eight tier rows are saved, and ' + n + ' league(s) are overwritten with them.'
+            : 'The eight tier rows are saved. No existing league is changed.');
+    });
+
+    drawPicks();
+
+    // ── quick edit ──────────────────────────────────────────────────
+    var qeScrim = $('#qe-scrim'), qeForm = $('#qe-form'), qeRow = null;
+
+    $$('[data-qe]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            qeRow = b.closest('.bmc-leaguerow');
+            qeForm.action = b.dataset.qeUrl;
+            $('#qe-token').value = b.dataset.qeToken;
+            $('#qe-name').value = b.dataset.qeName;
+            $('#qe-tier').value = b.dataset.qeTier;
+            $('#qe-promotion').value = b.dataset.qePromotion || '';
+            $('#qe-tv').value = b.dataset.qeTv || '';
+            $('#qe-prize').value = b.dataset.qePrize || '';
+            $('#qe-pot').value = b.dataset.qePot || '';
+            $('#qe-sponsors').value = b.dataset.qeSponsors;
+            $('#qe-full').href = b.dataset.qeFull;
+            $('#qe-title').textContent = b.dataset.qeName.toUpperCase();
+            $('#qe-error').hidden = true;
+
+            writeTarget('qe', parseTrophy($('[data-league-trophy="' + b.dataset.qe + '"]').getAttribute('data-trophy')));
+
+            qeScrim.hidden = false;
+            $('#qe-name').focus();
+        });
+    });
+
+    $('#qe-cancel').addEventListener('click', function () { qeScrim.hidden = true; });
+    qeScrim.addEventListener('click', function (e) { if (e.target === qeScrim) qeScrim.hidden = true; });
+
+    qeForm.addEventListener('submit', function (e) {
         e.preventDefault();
 
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin fa-xs me-1"></i>Saving…';
-
-        fetch(form.action, {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: new FormData(form),
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (data.success) {
-                updateCard(currentBtn.closest('.league-card'), data.league, currentBtn);
-                bootstrap.Modal.getInstance(modal).hide();
-                showToast('League "' + data.league.name + '" updated.');
-            } else {
-                showToast(data.error || 'Save failed — please try again.', 'danger');
-            }
-        })
-        .catch(function () {
-            showToast('Network error — please try again.', 'danger');
-        })
-        .finally(function () {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="fa fa-floppy-disk fa-xs me-1"></i>Save';
+        var data = new FormData(qeForm);
+        // STRIP SEPARATORS BEFORE POSTING. The server strips them too now, but the field is
+        // rendered with them and there is no reason to make the endpoint clean up after a
+        // form that knows better.
+        ['tvDeal', 'prizeMoney', 'leaguePositionPot'].forEach(function (k) {
+            data.set(k, String(data.get(k) || '').replace(/[^\d]/g, ''));
         });
+
+        $('#qe-save').disabled = true;
+        fetch(qeForm.action, { method: 'POST', body: data, headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (r) { return r.json().catch(function () { return { success: false, error: 'HTTP ' + r.status }; }); })
+            .then(function (d) {
+                $('#qe-save').disabled = false;
+                if (!d.success) {
+                    $('#qe-error').textContent = d.error || 'Could not save.';
+                    $('#qe-error').hidden = false;
+                    return;
+                }
+                qeScrim.hidden = true;
+                // The row's figures and its drift marks both come from the server, so rather
+                // than patch them from the response and risk the two disagreeing, reload.
+                BMC.toast('LEAGUE SAVED');
+                window.location.reload();
+            })
+            .catch(function () {
+                $('#qe-save').disabled = false;
+                $('#qe-error').textContent = 'Could not reach the server.';
+                $('#qe-error').hidden = false;
+            });
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (!trScrim.hidden) closeEditor();
+        else if (!qeScrim.hidden) qeScrim.hidden = true;
     });
 }());
 </script>

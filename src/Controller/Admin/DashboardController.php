@@ -1080,6 +1080,8 @@ class DashboardController extends AbstractDashboardController
 
         return $this->render('admin/leagues_content.html.twig', [
             'leaguesByCountry' => $leaguesByCountry,
+            'bmcGroup'         => 'World',
+            'bmcTitle'         => 'League overview',
             // Which leagues have drifted from the tier row they are meant to follow, keyed by
             // league id. One map feeds the grid's orange cells, the country tabs' counts and
             // the per-field marks in the pyramids, so there is exactly one definition of
@@ -1584,7 +1586,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261107b';
+    private const BMC_ASSET_VERSION = '20261107c';
 
     public function configureAssets(): Assets
     {

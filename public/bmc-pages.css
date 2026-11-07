@@ -259,3 +259,42 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 .bmc-trophy-btn.is-changed { border-color: var(--wk-info-light); }
 .bmc-trophy-btn__none { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); }
 .bmc-tierchip { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--wk-panel); border: 2px solid var(--wk-stroke); font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); }
+
+/* ── league overview ───────────────────────────────────────────────
+   The handoff's CSS shipped this page's atoms — .bmc-trophy, .bmc-trophy-btn,
+   .bmc-tierchip, .bmc-dialog--wide — but not the three layouts that arrange them.
+   Dimensions are the ones README §6 states, so the grid matches the prototype. */
+
+/* Tier defaults: tier · trophy · promoted · three money columns · sponsors · drift. */
+.bmc-tiergrid { display: flex; flex-direction: column; gap: 2px; }
+.bmc-tiergrid__head,
+.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(3, minmax(128px, 1fr)) 84px 132px; gap: 10px; align-items: center; }
+.bmc-tiergrid__head { padding: 0 2px 4px; font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); text-transform: uppercase; }
+.bmc-tiergrid__row { min-height: 64px; padding: 4px 2px; border-bottom: 1px solid var(--wk-stroke); }
+
+/* Country × tier picker. 2px gutters are the stroke showing through the gaps. */
+.bmc-matrix { display: flex; flex-direction: column; gap: 2px; background: var(--wk-stroke); border: 2px solid var(--wk-stroke); width: max-content; }
+.bmc-matrix__row { display: grid; grid-template-columns: 96px repeat(8, 44px); gap: 2px; }
+.bmc-matrix__col,
+.bmc-matrix__rowhead { display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; background: var(--wk-panel); font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); }
+.bmc-matrix__rowhead { justify-content: flex-start; padding: 0 8px; }
+.bmc-matrix__col:active, .bmc-matrix__rowhead:active { background: var(--wk-pressed); }
+.bmc-matrix__cell { display: flex; align-items: center; justify-content: center; height: 34px; background: var(--wk-surface-inset); font: var(--text-data); color: var(--wk-text-faint); cursor: pointer; }
+.bmc-matrix__cell input { position: absolute; opacity: 0; pointer-events: none; }
+/* Orange is "this league has drifted from its tier row" — the thing worth acting on. */
+.bmc-matrix__cell.is-differing { color: var(--wk-warning); }
+.bmc-matrix__cell:has(input:checked) { background: var(--wk-pressed); color: var(--wk-accent); }
+/* No league at that tier: nothing to pick, and it must not look like an empty choice. */
+.bmc-matrix__cell.is-empty { background: var(--wk-panel); cursor: default; opacity: .35; }
+
+/* One league in a pyramid. */
+.bmc-leaguerow { display: grid; grid-template-columns: 52px 44px minmax(0, 1fr) 96px 72px repeat(3, 110px) 56px 32px; gap: 10px; align-items: center; min-height: 56px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
+.bmc-leaguerow:nth-child(even) { background: rgba(0,0,0,.15); }
+
+/* The drift marker, beside a count rather than instead of it. */
+.bmc-dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: middle; background: var(--wk-text-faint); border: 1px solid var(--wk-stroke); }
+.bmc-dot--warning { background: var(--wk-warning); }
+
+/* Six across, for the twelve ribbon swatches in the trophy editor. bmc-admin.css
+   stops at --3; this is the same idea one column wider. */
+.bmc-checks--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
