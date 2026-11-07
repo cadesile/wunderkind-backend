@@ -298,3 +298,15 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 /* Six across, for the twelve ribbon swatches in the trophy editor. bmc-admin.css
    stops at --3; this is the same idea one column wider. */
 .bmc-checks--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+/* ── active competitions ───────────────────────────────────────────
+   The health check's pass/fail mark, and the row shared by the registering
+   and archive lists. .bmc-checkrow already supplies the health row's grid. */
+.bmc-mark { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 2px solid var(--wk-stroke); font: var(--text-label); color: var(--wk-stroke); }
+.bmc-mark.is-ok  { background: var(--wk-positive); }
+.bmc-mark.is-bad { background: var(--wk-danger); }
+
+/* name · fill bar · count · when · action. The bar takes the slack so the
+   columns either side stay put as names vary in length. */
+.bmc-regrow { display: grid; grid-template-columns: minmax(0, 1fr) 120px 96px 160px auto; gap: 10px; align-items: center; min-height: 44px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
+.bmc-regrow:nth-child(even) { background: rgba(0,0,0,.15); }

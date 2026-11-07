@@ -4,21 +4,23 @@ namespace App\Controller\Admin;
 
 use App\Entity\Competition\ActiveCompetition;
 use App\Entity\Competition\CompetitionFixture;
+use App\Entity\Competition\CompetitionRound;
 use App\Enum\Competition\ActiveCompetitionStatus;
 use App\Enum\Competition\CompetitionDuration;
 use App\Repository\Competition\CompetitionEntrantRepository;
 use App\Repository\Competition\CompetitionFixtureRepository;
 use App\Repository\Competition\CompetitionResultAuditRepository;
 use App\Repository\Competition\CompetitionResultRepository;
-use App\Entity\Competition\CompetitionRound;
 use App\Repository\Competition\CompetitionRoundRepository;
 use App\Service\Competition\CompetitionDrawService;
+use App\Service\Competition\CompetitionHealthService;
 use App\Service\Competition\CompetitionResultsService;
 use App\Service\Competition\CompetitionSpoofEntrantService;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
@@ -27,6 +29,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -88,12 +91,79 @@ class ActiveCompetitionCrudController extends AbstractCrudController
         private readonly CompetitionResultRepository $resultRepository,
         private readonly CompetitionResultAuditRepository $resultAuditRepository,
         private readonly CompetitionEntrantRepository $entrantRepository,
+        private readonly CompetitionHealthService $healthService,
         private readonly EntityManagerInterface $em,
     ) {}
 
     public static function getEntityFqcn(): string
     {
         return ActiveCompetition::class;
+    }
+
+    /**
+     * A dashboard instead of a list, with the list still one click away.
+     *
+     * WHY OVERRIDE RATHER THAN RESTYLE. The other redesigned screens are lists of rows and
+     * bmc_index.html.twig fits them. This one is not: what an operator wants on arriving is
+     * whether the pipeline is healthy, what is running, what is still filling up and what
+     * is due next — four questions a sorted table of every competition ever created answers
+     * badly. The table is still the right tool for finding one specific competition, so it
+     * stays reachable at ?view=list rather than being replaced.
+     *
+     * `view=list` falls straight through to EasyAdmin, so filters, sorting, paging, batch
+     * actions and the global Clear All keep working exactly as configured above.
+     */
+    public function index(AdminContext $context): KeyValueStore|Response
+    {
+        // KeyValueStore|Response, matching the parent: EasyAdmin's index() hands back a
+        // KeyValueStore for the framework to render rather than a built Response, so a
+        // narrower return type here breaks the list view the moment it is asked for.
+        if ($context->getRequest()->query->get('view') === 'list') {
+            return parent::index($context);
+        }
+
+        $all = $this->em->getRepository(ActiveCompetition::class)
+            ->findBy([], ['createdAt' => 'DESC']);
+
+        $urls = $this->container->get(AdminUrlGenerator::class);
+
+        $byStatus   = [];
+        $entrants   = [];
+        $rounds     = [];
+        $detailUrls = [];
+
+        foreach ($all as $competition) {
+            $byStatus[$competition->getStatus()->value][] = $competition;
+            $id = (string) $competition->getId();
+
+            $entrants[$id] = $this->entrantRepository->countForCompetition($competition);
+
+            // Built here rather than in Twig: detail is EasyAdmin's own pretty route and wants
+            // an entityId, which path('admin', …) cannot supply on its own.
+            $detailUrls[$id] = $urls->setController(self::class)->setAction(Action::DETAIL)
+                ->setEntityId($id)->unset('view')->generateUrl();
+
+            // Only for the ones a round is meaningful for — the archive does not show it, and
+            // this is a query per competition.
+            if (\in_array($competition->getStatus(), [ActiveCompetitionStatus::RUNNING, ActiveCompetitionStatus::SCHEDULED], true)) {
+                $rounds[$id] = $this->roundRepository->findCurrentRound($competition);
+            }
+        }
+
+        return $this->render('admin/competition/active_competitions_dashboard.html.twig', [
+            // Never been on a screen before — its only consumer was CompetitionHealthCommand.
+            'health'      => $this->healthService->snapshot(),
+            'byStatus'    => $byStatus,
+            'entrants'    => $entrants,
+            'rounds'      => $rounds,
+            'total'       => \count($all),
+            'detailUrls'  => $detailUrls,
+            'listUrl'     => $urls->setController(self::class)->setAction(Action::INDEX)
+                ->setEntityId(null)->set('view', 'list')->generateUrl(),
+            'clearAllUrl' => $this->generateUrl('admin', ['routeName' => 'admin_active_competitions_clear_all']),
+            'bmcGroup'    => 'Seasons & competitions',
+            'bmcTitle'    => 'Active competitions',
+        ]);
     }
 
     public function detail(AdminContext $context): Response

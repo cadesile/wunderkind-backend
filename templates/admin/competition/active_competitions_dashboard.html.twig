@@ -1,0 +1,201 @@
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Active competitions — the dashboard that replaced the stock CRUD index.
+  Design source: prototype/Competitions Dashboard.dc.html.
+  Data: ActiveCompetitionCrudController::index().
+
+  FOUR QUESTIONS, IN THE ORDER AN OPERATOR ASKS THEM: is the pipeline healthy, what is
+  running, what is still filling up, and what is due next. The archive is last because it is
+  where you look for something specific, and the stock table — still one click away at
+  ?view=list — is better at that than any of this.
+
+  THE HEALTH BLOCK IS NEW TO THE ADMIN. CompetitionHealthService::snapshot() existed but had
+  only ever been read by app:competition:health on the command line. Its `warnings` list is
+  human-readable and deliberately ordered, so the verdict line is the first warning rather
+  than anything recomputed here.
+#}
+
+{% set live       = (byStatus.running|default([]))|merge(byStatus.scheduled|default([])) %}
+{% set registering = byStatus.registering|default([]) %}
+{% set archive    = (byStatus.completed|default([]))|merge(byStatus.cancelled|default([])) %}
+
+{% macro utc(when) %}{{ when is null ? '—' : when|date('Y-m-d H:i:s') }}{% endmacro %}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ listUrl }}"><span>ALL STORED · {{ total|number_format }}</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+{# ── 1. pipeline health ─────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="match">
+    <div class="bmc-card__head">
+        <i data-lucide="{{ health.healthy ? 'shield-check' : 'triangle-alert' }}"></i>
+        <span class="bmc-card__title">PIPELINE</span>
+        <span class="bmc-card__meta">{{ _self.utc(health.at|date('Y-m-d H:i:s')) }} UTC</span>
+    </div>
+    <div class="bmc-card__band">
+        <span class="bmc-lbl bmc-lbl--ink {{ health.healthy ? 'ink-positive' : 'ink-danger' }}">
+            {{ health.healthy ? 'PIPELINE HEALTHY' : (health.warnings|first|upper) }}
+        </span>
+    </div>
+    <div class="bmc-rows bmc-rows--flush">
+        {% set checks = [
+            {k: 'QUEUE',       ok: health.queue.failed == 0 and health.queue.pending is defined, d: health.queue.unavailable|default(null) ? health.queue.unavailable : health.queue.pending ~ ' pending · ' ~ health.queue.failed ~ ' failed'},
+            {k: 'ROUNDS',      ok: health.rounds.staleClaims == 0 and health.rounds.overdueDraw == 0 and health.rounds.overdueResolve == 0, d: health.rounds.claimed ~ ' claimed · ' ~ health.rounds.overdueDraw ~ ' overdue draw · ' ~ health.rounds.overdueResolve ~ ' overdue resolve'},
+            {k: 'CACHE',       ok: health.cache.openWithoutRow == 0 and health.cache.stalePayloadVersion == 0, d: health.cache.rows ~ ' row(s) · ' ~ health.cache.openWithoutRow ~ ' open without one'},
+            {k: 'SUBMISSIONS', ok: health.submissions.failed == 0 and health.submissions.stalePending == 0, d: health.submissions.pending ~ ' pending · ' ~ health.submissions.failed ~ ' failed'},
+        ] %}
+        {% for c in checks %}
+            <div class="bmc-checkrow">
+                <span class="bmc-mark {{ c.ok ? 'is-ok' : 'is-bad' }}" aria-hidden="true">{{ c.ok ? '✓' : '!' }}</span>
+                <span class="bmc-lbl bmc-lbl--ink">{{ c.k }}</span>
+                <span class="bmc-data">{{ c.d }}</span>
+                <span></span>
+            </div>
+        {% endfor %}
+    </div>
+    {% if health.warnings|length > 1 %}
+        <div class="bmc-card__body" style="gap:4px">
+            {% for w in health.warnings %}
+                <div class="bmc-note"><i data-lucide="triangle-alert" class="ink-warning"></i><span>{{ w }}</span></div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</section>
+
+{# ── 2. live ────────────────────────────────────────────────────── #}
+<div class="bmc-rule"><span class="bmc-rule__title">LIVE</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">running and scheduled · next event first</span></div>
+
+{% if live is empty %}
+    <section class="bmc-card" data-domain="match">
+        <div class="bmc-card__body">
+            <span class="bmc-empty-note">NOTHING RUNNING · CUPS LOCK WHEN THEIR LAST SLOT FILLS</span>
+        </div>
+    </section>
+{% else %}
+    <div class="bmc-grid">
+        {% for c in live %}
+            {% set id = c.id|ea_as_string %}
+            {% set round = rounds[id]|default(null) %}
+            <section class="bmc-card" data-domain="match">
+                <div class="bmc-card__head">
+                    <span class="bmc-trophy" data-trophy='{{ c.template.trophy|default(null)|json_encode }}'></span>
+                    <span class="bmc-card__title">{{ c.template.name }}</span>
+                    <span class="bmc-badge {{ c.status.value == 'running' ? 'bmc-badge--positive' : 'bmc-badge--accent' }}">{{ c.status.value|upper }}</span>
+                </div>
+                <div class="bmc-card__body">
+                    <div class="bmc-stats bmc-stats--2">
+                        <div class="bmc-stat"><span class="bmc-stat__label">ROUND</span><span class="bmc-stat__value">{{ round ? round.roundIndex : '—' }}</span><span class="bmc-stat__sub">{{ round ? round.status.value : 'not drawn' }}</span></div>
+                        <div class="bmc-stat"><span class="bmc-stat__label">ENTRANTS</span><span class="bmc-stat__value">{{ entrants[id]|default(0) }}</span><span class="bmc-stat__sub">of {{ c.entrantCapacity }}</span></div>
+                    </div>
+                    <span class="bmc-data">Starts {{ _self.utc(c.startsAt) }} · ends {{ _self.utc(c.endsAt) }} UTC</span>
+                    <div class="bmc-row" style="gap:8px">
+                        <a class="bmc-btn bmc-btn--teal" href="{{ detailUrls[id]|default('#') }}"><span>OPEN BRACKET</span></a>
+                        {% if round %}
+                            <form method="post" action="{{ path('admin', {routeName: 'admin_active_competition_round_force_draw', routeParams: {round: round.id|ea_as_string}}) }}" style="display:contents">
+                                <input type="hidden" name="_token" value="{{ csrf_token('force_draw_round') }}">
+                                <button type="submit" class="bmc-btn"
+                                        data-bmc-dialog-title="FORCE DRAW ROUND {{ round.roundIndex }}?"
+                                        data-bmc-dialog-message="Draws this round immediately, without waiting for its scheduled time."
+                                        data-bmc-dialog-confirm="FORCE DRAW"><span>FORCE DRAW</span></button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{# ── 3. registering ─────────────────────────────────────────────── #}
+<div class="bmc-rule"><span class="bmc-rule__title">REGISTERING</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">filling up · a cup locks when its last slot goes</span></div>
+
+<section class="bmc-card" data-domain="match">
+    {% if registering is empty %}
+        <div class="bmc-card__body"><span class="bmc-empty-note">NOTHING OPEN FOR REGISTRATION</span></div>
+    {% else %}
+        <div class="bmc-rows bmc-rows--flush">
+            {% for c in registering %}
+                {% set id = c.id|ea_as_string %}
+                {% set n = entrants[id]|default(0) %}
+                {% set pct = c.entrantCapacity > 0 ? min(100, (n / c.entrantCapacity * 100)|round) : 0 %}
+                <div class="bmc-regrow">
+                    <span class="bmc-celltext">{{ c.template.name }}</span>
+                    <span class="bmc-bar bmc-bar--8"><span class="bmc-bar__fill{{ pct >= 100 ? '' : (pct >= 50 ? ' bmc-bar__fill--warning' : ' bmc-bar__fill--danger') }}" style="width:{{ pct }}%"></span></span>
+                    <span class="bmc-cellnum">{{ n }} / {{ c.entrantCapacity }}</span>
+                    <span class="bmc-data">{{ _self.utc(c.registrationOpenedAt) }}</span>
+                    {% if n < c.entrantCapacity %}
+                        <a class="bmc-btn" href="{{ path('admin', {routeName: 'admin_active_competition_spoof_all', routeParams: {activeCompetition: id}}) }}"
+                           title="Fill this competition to capacity with spoof entrants"><span>SPOOF ALL</span></a>
+                    {% else %}
+                        <span class="bmc-badge bmc-badge--positive">FULL</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</section>
+
+{# ── 4. archive ─────────────────────────────────────────────────── #}
+<div class="bmc-rule"><span class="bmc-rule__title">ARCHIVE</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">finished and cancelled</span></div>
+
+<section class="bmc-card" data-domain="match">
+    <div class="bmc-card__head">
+        <i data-lucide="archive"></i>
+        <span class="bmc-card__title">ARCHIVE</span>
+        <span class="bmc-card__meta">{{ archive|length }} of {{ total }} stored</span>
+        <span style="flex:1"></span>
+        <a class="bmc-btn" href="{{ listUrl }}" title="The full table, with search, filters and batch actions"><span>ALL STORED</span></a>
+    </div>
+    {% if archive is empty %}
+        <div class="bmc-card__body"><span class="bmc-empty-note">NOTHING ARCHIVED YET</span></div>
+    {% else %}
+        <div class="bmc-rows bmc-rows--flush bmc-rows--scroll-200">
+            {% for c in archive|slice(0, 25) %}
+                <div class="bmc-regrow">
+                    <span class="bmc-celltext">{{ c.template.name }}</span>
+                    <span class="bmc-badge {{ c.status.value == 'cancelled' ? 'bmc-badge--danger' : 'bmc-badge--subtle' }}">{{ c.status.value|upper }}</span>
+                    <span class="bmc-cellnum">{{ entrants[c.id|ea_as_string]|default(0) }}</span>
+                    <span class="bmc-data">{{ _self.utc(c.completedAt ?? c.cancelledAt ?? c.createdAt) }}</span>
+                    <a class="bmc-btn" href="{{ detailUrls[c.id|ea_as_string]|default('#') }}"><span>OPEN</span></a>
+                </div>
+            {% endfor %}
+        </div>
+        {% if archive|length > 25 %}
+            <div class="bmc-card__body"><span class="bmc-data">Showing the 25 most recent of {{ archive|length }}. Use ALL STORED to search.</span></div>
+        {% endif %}
+    {% endif %}
+</section>
+
+{% if total > 0 %}
+    <section class="bmc-danger">
+        <i data-lucide="triangle-alert"></i>
+        <div class="bmc-danger__text">
+            <span class="bmc-lbl bmc-lbl--ink">CLEAR EVERY COMPETITION</span>
+            <span class="bmc-data">Deletes all {{ total|number_format }} stored competitions, running ones included. Cannot be undone.</span>
+        </div>
+        <a class="bmc-btn bmc-btn--danger-outline" href="{{ clearAllUrl }}"><span>CLEAR ALL</span></a>
+    </section>
+{% endif %}
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script src="{{ asset('assets/trophy-compositor.js') }}?v={{ 'now'|date('Ymd') }}"></script>
+<script>
+(function () {
+    // Trophies as background images, same as the League overview — see its note.
+    [].slice.call(document.querySelectorAll('[data-trophy]')).forEach(function (el) {
+        var raw = el.getAttribute('data-trophy');
+        if (!raw || raw === 'null' || typeof window.composeTrophySvg !== 'function') return;
+        try {
+            var c = JSON.parse(raw);
+            if (!c || !c.style) return;
+            var svg = window.composeTrophySvg(c, 2, { background: 'none' });
+            if (svg) el.style.backgroundImage = 'url("data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '")';
+        } catch (e) { /* a malformed trophy just leaves the sprite blank */ }
+    });
+}());
+</script>
+{% endblock %}

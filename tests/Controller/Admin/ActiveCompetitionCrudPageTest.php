@@ -45,6 +45,14 @@ use App\Tests\Support\EntrantFixtureTrait;
  */
 class ActiveCompetitionCrudPageTest extends WebTestCase
 {
+    /*
+     * THESE ASK FOR ?view=list, AND THAT IS NOT INCIDENTAL. The controller's index() now
+     * renders a dashboard — pipeline health, what is live, what is filling up — because that
+     * is what an operator arriving at the screen wants. The stock EasyAdmin table is still
+     * there behind ?view=list, with its filters, sorting, paging, row actions and batch
+     * delete untouched, and it is the table these cover: a duration column, a delete token
+     * form, the global Clear All link, a row linking through to detail.
+     */
     use EntrantFixtureTrait;
 
     private const TEST_ADMIN_EMAIL = 'active-competition-crud-test-admin@example.com';
@@ -77,6 +85,59 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         }
     }
 
+    // ── the dashboard that replaced the index ───────────────────────────
+
+    public function testTheIndexIsADashboardWithThePipelineHealthOnIt(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin/active-competition');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('.bmc-title', 'ACTIVE COMPETITIONS');
+
+        // CompetitionHealthService::snapshot() had never been on a screen — its only reader
+        // was app:competition:health. One check row per signal it reports.
+        self::assertSelectorExists('.bmc-checkrow');
+        self::assertSelectorTextContains('body', 'PIPELINE');
+    }
+
+    public function testTheStockTableIsStillReachableFromTheDashboard(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin/active-competition');
+        self::assertResponseIsSuccessful();
+
+        // Replacing the index would strand search, filters and batch actions if the table
+        // were not linked from it.
+        $link = $crawler->filter('a[href*="view=list"]')->first();
+        self::assertGreaterThan(0, $link->count(), 'the dashboard must link to the full table');
+
+        $client->click($link->link());
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('table');
+    }
+
+    public function testARegisteringCompetitionAppearsInTheFillingUpList(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        // One open competition with a single entrant: REGISTERING, and not yet full.
+        $this->buildOpenCompetitionWithOneEntrant($em);
+
+        $client->request('GET', '/admin/active-competition');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('.bmc-regrow', 'a registering competition gets a row');
+        // Not full, so the shortcut to fill it is offered.
+        self::assertSelectorTextContains('body', 'SPOOF ALL');
+    }
+
     public function testIndexPageRendersAnInstanceWithoutCrashingOnTheDurationEnum(): void
     {
         $client = static::createClient();
@@ -90,7 +151,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $em->persist($instance);
         $em->flush();
 
-        $client->request('GET', '/admin/active-competition');
+        $client->request('GET', '/admin/active-competition', ['view' => 'list']);
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'Crud Page Probe Active Cup');
@@ -402,7 +463,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $em       = self::getContainer()->get(EntityManagerInterface::class);
         $instance = $this->buildCompetitionWithOneProcessedRound($em);
 
-        $crawler = $client->request('GET', '/admin/active-competition');
+        $crawler = $client->request('GET', '/admin/active-competition', ['view' => 'list']);
         self::assertResponseIsSuccessful();
 
         $link = $crawler->filter(sprintf('a[href*="%s"]', $instance->getId()))->first();
@@ -440,7 +501,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         // session-backed CSRF token; JS sets its action to the clicked row's delete URL
         // before submitting. Read that same token and POST directly, rather than
         // fabricating one outside any request context.
-        $crawler = $client->request('GET', '/admin/active-competition');
+        $crawler = $client->request('GET', '/admin/active-competition', ['view' => 'list']);
         self::assertResponseIsSuccessful();
 
         $token = $crawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
@@ -460,7 +521,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $this->buildCompetitionWithOneProcessedRound($em);
         $this->buildEmptyOpenCompetition($em);
 
-        $crawler = $client->request('GET', '/admin/active-competition');
+        $crawler = $client->request('GET', '/admin/active-competition', ['view' => 'list']);
         $crawler = $client->click($crawler->selectLink('Clear All')->link());
         self::assertResponseIsSuccessful();
         $this->assertStringContainsString('Delete All', $crawler->text());
