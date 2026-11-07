@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Player;
 use App\Enum\PlayerPosition;
 use App\Enum\PlayerStatus;
+use App\Enum\RecruitmentSource;
 use App\Service\Admin\StatBuckets;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -51,6 +52,50 @@ class PlayerRepository extends ServiceEntityRepository
             ->select('COUNT(p.id)')
             ->getQuery()
             ->getSingleScalarResult();
+    }
+
+    /**
+     * Pool players per nationality, in one grouped query.
+     *
+     * FOR THE NATIONALITY PICKER on the player pool screen, which needs a count beside every
+     * option. The alternative was calling countInPoolByNationality() once per nationality —
+     * about seventy queries a page load — or reusing getPoolBreakdown(), which gets its
+     * nationality facet by pulling the whole pool through getArrayResult() and tallying in
+     * PHP for a cached stats endpoint. A GROUP BY is the cheap, obvious answer.
+     *
+     * SCOPED TO YOUTH INTAKE, AND THAT IS DELIBERATE — it makes these numbers sum to the
+     * figure printed above them, which PoolConfigController::playerCounts() gets the same way.
+     *
+     * Note the inconsistency it is deliberately NOT joining: countInPoolByNationality() just
+     * below has no source filter at all, so it counts every player row including ones already
+     * at a club, and that unfiltered meaning is what WarmPoolCommand,
+     * TopUpStarterPoolMessageHandler and StarterPoolAuditService use to decide whether to
+     * generate more. The admin screen and the top-up logic already disagree about what "the
+     * pool" is. Reconciling them is a real change with real consequences for generation; this
+     * method stays with the screen it feeds rather than quietly inventing a third answer.
+     *
+     * Nationalities with nobody in the pool are absent, not zero — the caller lists every
+     * nationality from Country::nationalityMap() and reads misses as 0.
+     *
+     * @return array<string, int> nationality => players in the pool
+     */
+    public function countPoolByNationality(): array
+    {
+        $rows = $this->createQueryBuilder('p')
+            ->select('p.nationality AS nat', 'COUNT(p.id) AS n')
+            ->where('p.recruitmentSource = :source')
+            ->setParameter('source', RecruitmentSource::YOUTH_INTAKE)
+            ->groupBy('p.nationality')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $out[(string) $row['nat']] = (int) $row['n'];
+        }
+
+        return $out;
     }
 
     public function countInPoolByNationality(string $nationality): int

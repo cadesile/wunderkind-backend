@@ -40,6 +40,35 @@ class ScoutRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
+    /**
+     * Scouts per nationality, in one grouped query.
+     *
+     * The scout half of the staff pool screen's picker — see
+     * StaffRepository::countPoolByRoleAndNationality() for why these are grouped rather than
+     * called once per nationality. Scouts live in their own table, so they need their own
+     * query; the screen adds them to the staff totals as a seventh tile.
+     *
+     * Nationalities with no scouts are absent, not zero.
+     *
+     * @return array<string, int> nationality => scouts
+     */
+    public function countPoolByNationality(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.nationality AS nat', 'COUNT(s.id) AS n')
+            ->groupBy('s.nationality')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $out[(string) $row['nat']] = (int) $row['n'];
+        }
+
+        return $out;
+    }
+
     public function countByNationality(string $nationality): int
     {
         return (int) $this->createQueryBuilder('s')
