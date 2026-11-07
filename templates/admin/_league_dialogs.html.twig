@@ -1,0 +1,138 @@
+{#
+  The two dialogs the League overview opens: quick edit, and the trophy editor.
+
+  SEPARATE FROM THE PAGE because both are long, and because the page's own markup is already
+  three grids deep. They sit outside .bmc-page like the PixelDialog does, and are driven by
+  the page's script rather than by BMC.confirm() — that one is for yes/no, and these collect.
+
+  THE TROPHY EDITOR SERVES BOTH CALLERS. It writes into whichever target was opened: a tier
+  row's hidden inputs, or the quick-edit form's. `data-trophy-target` says which.
+#}
+<div class="bmc-overlay">
+    {# ── quick edit ──────────────────────────────────────────────── #}
+    <div class="bmc-dialog-scrim" id="qe-scrim" hidden>
+        <div class="bmc-dialog bmc-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="qe-title">
+            <h2 class="bmc-dialog__title" id="qe-title">EDIT LEAGUE</h2>
+
+            <form id="qe-form" method="post" action="">
+                <input type="hidden" name="_token" id="qe-token" value="">
+
+                <div class="bmc-grid bmc-grid--340" style="gap:10px">
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">NAME</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" name="name" id="qe-name" maxlength="100" required></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">TIER</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="tier" id="qe-tier" required></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">PROMOTED</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="promotionSpots" id="qe-promotion" placeholder="none"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">SPONSORS</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="sponsorCount" id="qe-sponsors"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">TV DEAL £</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="tvDeal" id="qe-tv" placeholder="none"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">PRIZE MONEY £</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="prizeMoney" id="qe-prize" placeholder="none"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">POSITION POT £</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="leaguePositionPot" id="qe-pot" placeholder="none"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">TROPHY</span>
+                        <button type="button" class="bmc-trophy-btn" data-trophy-open="qe" title="Edit this league's trophy" aria-label="Edit this league's trophy">
+                            <span class="bmc-trophy" data-trophy-sprite="qe"></span>
+                            <span class="bmc-trophy-btn__none" data-trophy-none="qe" hidden>NONE</span>
+                        </button>
+                    </div>
+                </div>
+
+                {# What the endpoint reads; the editor writes these, never the button. #}
+                <input type="hidden" name="trophyStyle"           data-trophy-field="qe:style"           value="">
+                <input type="hidden" name="trophyFinish"          data-trophy-field="qe:finish"          value="">
+                <input type="hidden" name="trophyRibbons"         data-trophy-field="qe:ribbons"         value="">
+                <input type="hidden" name="trophyRibbonPrimary"   data-trophy-field="qe:ribbonPrimary"   value="">
+                <input type="hidden" name="trophyRibbonSecondary" data-trophy-field="qe:ribbonSecondary" value="">
+
+                <p class="bmc-dialog__msg" id="qe-error" hidden></p>
+
+                <div class="bmc-dialog__actions" style="margin-top:16px">
+                    <button type="button" class="bmc-btn" id="qe-cancel"><span>CANCEL</span></button>
+                    <a class="bmc-btn" id="qe-full" href="#"><span>FULL EDIT</span></a>
+                    <button type="submit" class="bmc-btn bmc-btn--yellow" id="qe-save"><span>SAVE</span></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ── trophy editor ───────────────────────────────────────────── #}
+    <div class="bmc-dialog-scrim" id="tr-scrim" hidden>
+        <div class="bmc-dialog bmc-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="tr-title">
+            <h2 class="bmc-dialog__title" id="tr-title">TROPHY</h2>
+
+            <div class="bmc-row" style="gap:16px;align-items:flex-start">
+                <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:6px;align-items:center">
+                    <span class="bmc-trophy" id="tr-preview" style="width:88px;height:104px"></span>
+                    <span class="bmc-data" id="tr-caption">—</span>
+                </div>
+
+                <div style="flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:12px">
+                    <div>
+                        <span class="bmc-lbl bmc-lbl--ink">DESIGN</span>
+                        <div class="bmc-checks bmc-checks--3" id="tr-styles" role="radiogroup" aria-label="Trophy design">
+                            {% for s in trophyStyles %}
+                                <label class="bmc-check"><input type="radio" name="trStyle" value="{{ s.value }}"><span class="bmc-tile"></span><span class="bmc-check__text"><span class="bmc-check__label">{{ s.label }}</span></span></label>
+                            {% endfor %}
+                        </div>
+                        <button type="button" class="bmc-quick-btn" id="tr-random" style="margin-top:6px">RANDOMISE</button>
+                    </div>
+
+                    <div>
+                        <span class="bmc-lbl bmc-lbl--ink">FINISH</span>
+                        <div class="bmc-segs" id="tr-finishes" role="radiogroup" aria-label="Trophy finish">
+                            {% for f in trophyFinishes %}
+                                <button type="button" role="radio" aria-checked="false" data-value="{{ f.value }}">{{ f.label|upper }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="bmc-check" style="padding:0">
+                            <input type="checkbox" id="tr-ribbons"><span class="bmc-tile"></span>
+                            <span class="bmc-check__text"><span class="bmc-check__label">RIBBONS</span></span>
+                        </label>
+                        <div class="bmc-row" id="tr-ribbon-colours" style="gap:12px;margin-top:6px">
+                            {% for which in ['Primary', 'Secondary'] %}
+                                <div style="flex:1 1 120px;min-width:0">
+                                    <span class="bmc-lbl">{{ which|upper }}</span>
+                                    <div class="bmc-checks bmc-checks--6" role="radiogroup" aria-label="Ribbon {{ which|lower }}" data-ribbon="{{ which|lower }}">
+                                        {% for colour in trophyRibbonColours %}
+                                            <label class="bmc-check" title="{{ colour }}" style="padding:2px">
+                                                <input type="radio" name="trRibbon{{ which }}" value="{{ colour }}">
+                                                <span class="bmc-tile" style="background:{{ colour }}"></span>
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bmc-dialog__actions" style="margin-top:16px">
+                <button type="button" class="bmc-btn" id="tr-cancel"><span>CANCEL</span></button>
+                <button type="button" class="bmc-btn bmc-btn--danger-outline" id="tr-none"><span>NO TROPHY</span></button>
+                <button type="button" class="bmc-btn bmc-btn--yellow" id="tr-ok"><span>USE IT</span></button>
+            </div>
+        </div>
+    </div>
+</div>
