@@ -59,6 +59,13 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
      * Costs nothing when unused. max_tokens is a ceiling, not a charge — only tokens actually
      * generated are billed — so the only price of generosity here is the latency of a reply
      * allowed to run longer.
+     *
+     * HEADROOM ALONE WAS NOT ENOUGH, which is why suggest() now also asks for EFFORT_LOW. A US
+     * run at fifty towns a batch lost three of five to this ceiling while the other two cleared
+     * it on an identical ask — the spend that varied was the reasoning, not the list. Headroom
+     * absorbs that variance; low effort reduces it at the source. Naming a town is recall, and
+     * the deliberation the API's default effort of high buys was being spent on a question that
+     * does not reward it.
      */
     private const THINKING_HEADROOM = 4_096;
 
@@ -130,6 +137,7 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
                 $this->tokenBudget($max),
                 \sprintf('town list for %s', $country->getName()),
                 $timeoutSeconds ?? self::TIMEOUT_SECONDS,
+                AnthropicJsonClient::EFFORT_LOW,
             );
         } catch (\App\Service\Ai\AiReplyTruncatedException $e) {
             // Kept distinct all the way up: the handler stops retrying on this, because the

@@ -88,6 +88,41 @@ class AnthropicJsonClientTest extends TestCase
         $this->assertArrayNotHasKey('output_config', $seen);
     }
 
+    public function testEffortRidesAlongsideTheSchemaRatherThanReplacingIt(): void
+    {
+        // Both live under output_config, so the risk this guards is one overwriting the other:
+        // a request carrying effort but no format would be free text again, which is the
+        // failure testItRequestsStructuredOutputWithTheSchemaItWasGiven() exists to prevent.
+        $seen = null;
+        $client = $this->client(function (string $m, string $u, array $options) use (&$seen) {
+            $seen = json_decode($options['body'], true);
+
+            return $this->reply(['answer' => 'yes']);
+        });
+
+        $client->sendJson('hello', self::SCHEMA, 100, 'a test', null, AnthropicJsonClient::EFFORT_LOW);
+
+        $this->assertSame('low', $seen['output_config']['effort']);
+        $this->assertSame(self::SCHEMA, $seen['output_config']['format']['schema']);
+    }
+
+    public function testNoEffortSendsNoEffortRatherThanGuessingOne(): void
+    {
+        // The API's own default is high. Sending nothing is what keeps that default the
+        // server's to change, and keeps the enricher's requests byte-identical to before
+        // effort existed.
+        $seen = null;
+        $client = $this->client(function (string $m, string $u, array $options) use (&$seen) {
+            $seen = json_decode($options['body'], true);
+
+            return $this->reply(['answer' => 'yes']);
+        });
+
+        $client->sendJson('hello', self::SCHEMA, 100, 'a test');
+
+        $this->assertArrayNotHasKey('effort', $seen['output_config']);
+    }
+
     public function testItReturnsTheDecodedObjectAndTheTokenCounts(): void
     {
         $client = $this->client(fn () => $this->reply(['answer' => 'forty-two'], inputTokens: 123, outputTokens: 45));

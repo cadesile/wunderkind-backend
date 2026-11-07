@@ -91,6 +91,23 @@ class ClaudeTownSuggesterTest extends TestCase
         $this->assertFalse($schema['properties']['towns']['items']['additionalProperties']);
     }
 
+    public function testItAsksForLowEffortBecauseNamingTownsIsRecallNotReasoning(): void
+    {
+        // Thinking tokens come out of the same max_tokens as the answer, and the API's default
+        // effort of high was spending enough of a 6,144-token ceiling to truncate roughly a
+        // third of a US run's batches while the rest cleared the identical ask.
+        $body = null;
+        $suggester = $this->suggester(function (string $m, string $u, array $options) use (&$body) {
+            $body = json_decode($options['body'], true);
+
+            return $this->reply([]);
+        });
+
+        $suggester->suggest($this->argentina(), [], 10);
+
+        $this->assertSame('low', $body['output_config']['effort']);
+    }
+
     public function testTheTokenBudgetScalesWithTheNumberAskedFor(): void
     {
         // A reply truncated mid-array decodes as invalid JSON and loses the whole call — so the

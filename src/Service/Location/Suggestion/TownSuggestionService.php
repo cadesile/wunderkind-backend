@@ -51,12 +51,27 @@ final class TownSuggestionService
     /**
      * Towns asked for per queued batch.
      *
-     * Fifty sits exactly on ClaudeTownSuggester's MIN_TOKENS floor — tokenBudget(50) is
-     * max(2048, 50 * 40) = 2048 — so anything smaller buys no cheaper call while needing more
-     * of them. Each batch is therefore one short generation rather than a slice of a long one,
-     * which is what keeps a failure to one batch and makes the progress bar move.
+     * WAS FIFTY, WHICH TRUNCATED ABOUT A THIRD OF THE TIME. A US run showed batches 2, 4 and 5
+     * dying on AiReplyTruncatedException at the 6,144-token ceiling while 1 and 3 completed the
+     * identical ask — so the overrun was never the list length, it was the model's own
+     * reasoning, which LOCATION_ENRICHER_MODEL (claude-sonnet-5) does adaptively at the default
+     * `high` effort and which is billed against the same max_tokens as the answer.
+     *
+     * SITTING BELOW ClaudeTownSuggester's MIN_TOKENS FLOOR IS NOW THE POINT, and it is the
+     * opposite of what this comment used to say. tokenBudget() is max(2048, n * 40) + 4096, so
+     * anything at or under 51 towns gets the same 6,144 ceiling: halving the batch halves the
+     * answer without lowering the budget, and every token saved falls through to the reasoning.
+     * Twenty-five towns is roughly 700 output tokens of that 6,144 where fifty was roughly
+     * 1,400, and a shorter list is less to reason about in the first place.
+     *
+     * THE PRICE IS INPUT TOKENS, PAID TWICE OVER. Each batch re-sends up to
+     * MAX_EXCLUSIONS_IN_PROMPT names, so a 300-town run is now twelve calls carrying that list
+     * rather than six — a few cents on Sonnet, against a third of the run failing.
+     *
+     * Each batch stays one short generation rather than a slice of a long one, which is what
+     * keeps a failure to one batch and makes the progress bar move.
      */
-    public const BATCH_SIZE = 50;
+    public const BATCH_SIZE = 25;
 
     /**
      * How long one batch may wait on the provider.

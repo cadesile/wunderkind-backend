@@ -38,6 +38,24 @@ final class AnthropicJsonClient
 
     private const DEFAULT_TIMEOUT_SECONDS = 45;
 
+    /**
+     * How hard the model is allowed to think before answering.
+     *
+     * `output_config.effort` is generally available — no beta header — and defaults to HIGH when
+     * absent, which is what every call here used to get by saying nothing. That default is sized
+     * for reasoning, and these are not reasoning calls: both callers ask for recall against a
+     * fixed schema, and the thinking tokens come out of the SAME max_tokens as the answer.
+     *
+     * LOW IS NOT A TOKEN CEILING. It lowers how much the model spends deliberating, it does not
+     * cap it — a budget that is too tight still truncates, just less often. Sizing max_tokens
+     * remains the caller's job.
+     */
+    public const EFFORT_LOW = 'low';
+
+    public const EFFORT_MEDIUM = 'medium';
+
+    public const EFFORT_HIGH = 'high';
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
@@ -67,12 +85,14 @@ final class AnthropicJsonClient
      * "town list for Argentina". Without it a failure in a batch is untraceable.
      *
      * @param array<string, mixed> $schema
+     * @param ?string              $effort one of the EFFORT_* constants; null sends nothing and
+     *                                     takes the API's own default of high
      *
      * @throws AiUnavailableException
      */
-    public function sendJson(string $prompt, array $schema, int $maxTokens, string $context, ?int $timeoutSeconds = null): AnthropicJsonResponse
+    public function sendJson(string $prompt, array $schema, int $maxTokens, string $context, ?int $timeoutSeconds = null, ?string $effort = null): AnthropicJsonResponse
     {
-        $payload = $this->send($prompt, $maxTokens, $schema, $timeoutSeconds);
+        $payload = $this->send($prompt, $maxTokens, $schema, $timeoutSeconds, $effort);
 
         $stopReason = (string) ($payload['stop_reason'] ?? 'unknown');
         $text       = self::firstTextBlock($payload);
@@ -139,13 +159,14 @@ final class AnthropicJsonClient
      * forcing a schema onto that would make the cheapest possible call more expensive and
      * more likely to fail for reasons unrelated to connectivity.
      *
-     * @param array<string, mixed>|null $schema null sends no output_config at all
+     * @param array<string, mixed>|null $schema null sends no format block
+     * @param ?string                   $effort one of the EFFORT_* constants; null sends nothing
      *
      * @return array<string, mixed>
      *
      * @throws AiUnavailableException on any transport, auth, rate-limit or server error
      */
-    public function send(string $prompt, int $maxTokens, ?array $schema = null, ?int $timeoutSeconds = null): array
+    public function send(string $prompt, int $maxTokens, ?array $schema = null, ?int $timeoutSeconds = null, ?string $effort = null): array
     {
         $body = [
             'model'      => $this->model,
@@ -153,8 +174,23 @@ final class AnthropicJsonClient
             'messages'   => [['role' => 'user', 'content' => $prompt]],
         ];
 
+        // BOTH LIVE UNDER output_config, which is why this is assembled rather than assigned.
+        // `format` used to be set directly and effort has to join it in the same object — two
+        // separate assignments would have the second silently overwrite the first.
+        $outputConfig = [];
+
         if ($schema !== null) {
-            $body['output_config'] = ['format' => ['type' => 'json_schema', 'schema' => $schema]];
+            $outputConfig['format'] = ['type' => 'json_schema', 'schema' => $schema];
+        }
+
+        if ($effort !== null) {
+            $outputConfig['effort'] = $effort;
+        }
+
+        // Omitted entirely when empty: an empty object is not the same as absent, and the
+        // connection check wants the cheapest possible round trip with nothing extra to reject.
+        if ($outputConfig !== []) {
+            $body['output_config'] = $outputConfig;
         }
 
         try {
