@@ -51,6 +51,21 @@ class WorldInitializationService
      *     constant exists to prevent, and the second time it has happened
      *     (see version 1's note about all-10s personality matrices).
      *
+     * 4 — every NPC club snapshot gains a `land` block: the town it plays in,
+     *     that town's region, whether it is a capital, the number of the land
+     *     plot its ground stands on, and what that ground costs in pence.
+     *     `region`, `citySize`, `populationSize` and `isCapital` are untouched
+     *     on the club, so the addition is additive — but a pack cached under
+     *     version 3 has no `land` key at all, and without this bump it would
+     *     keep being served forever, the cache having no TTL. That is the
+     *     third time, and the first one caught before it shipped rather than
+     *     after: npc_club.land_plot_id and the snapshot change landed in the
+     *     same commit as this line.
+     *
+     *     `land.plotNumber` is null until `app:npc-clubs:seat-plots` has run
+     *     for the country (generation seats new clubs itself), so warm AFTER
+     *     seating or the rebuilt packs carry nulls.
+     *
      * ⚠️ Bumping this makes every cached row a miss, so the next client request per
      * country/tier pays the rebuild (~2s for an 8-club tier, ~3-4s for 18) on its
      * critical path. To pre-empt that, run plain `app:worldpack:warm <CODE>` per
@@ -60,7 +75,7 @@ class WorldInitializationService
      * Warming is a manual step, and the admin dashboard's `stalePacks` count is the
      * signal for what is still outstanding.
      */
-    public const WORLD_PACK_VERSION = 3;
+    public const WORLD_PACK_VERSION = 4;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
