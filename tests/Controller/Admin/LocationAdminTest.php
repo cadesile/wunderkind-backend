@@ -12,6 +12,7 @@ use App\Enum\Location\CountryProfileStatus;
 use App\Enum\Location\EnrichmentStatus;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Service\Location\Suggestion\TownSuggestionService;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -76,17 +77,24 @@ class LocationAdminTest extends WebTestCase
 
         $token = $this->csrfToken($client, 'locations_suggest_towns');
 
+        // DERIVED FROM BATCH_SIZE, NOT WRITTEN OUT. This read "120 towns at 50 a batch is
+        // three messages" until BATCH_SIZE moved to 25 and it quietly became five — which the
+        // missing messenger_messages table hid, because the case errored before it ever got
+        // far enough to compare the numbers.
+        $towns    = TownSuggestionService::BATCH_SIZE * 2 + 1;
+        $expected = (int) ceil($towns / TownSuggestionService::BATCH_SIZE);
+
         $client->request('POST', '/admin/locations/suggest-towns', [
             '_token'    => $token,
             'country'   => self::SEEDABLE,
-            'max_towns' => '120',
+            'max_towns' => (string) $towns,
         ]);
 
         self::assertResponseRedirects();
         self::assertCount(
-            3,
+            $expected,
             $this->suggestionTransport()->getSent(),
-            '120 towns at 50 a batch is three messages',
+            \sprintf('%d towns at %d a batch is %d message(s)', $towns, TownSuggestionService::BATCH_SIZE, $expected),
         );
     }
 
@@ -99,11 +107,13 @@ class LocationAdminTest extends WebTestCase
         $this->purgeSuggestionRuns();
         $this->seedPullTarget();
 
+        // Exactly one batch, so the guard is what refuses the second pull rather than the
+        // batch arithmetic. Sized off BATCH_SIZE for the reason given in the case above.
         $first = $this->csrfToken($client, 'locations_suggest_towns');
         $client->request('POST', '/admin/locations/suggest-towns', [
             '_token'    => $first,
             'country'   => self::SEEDABLE,
-            'max_towns' => '50',
+            'max_towns' => (string) TownSuggestionService::BATCH_SIZE,
         ]);
 
         $queuedAfterFirst = \count($this->suggestionTransport()->getSent());
@@ -120,7 +130,7 @@ class LocationAdminTest extends WebTestCase
         $client->request('POST', '/admin/locations/suggest-towns', [
             '_token'    => $second,
             'country'   => self::SEEDABLE,
-            'max_towns' => '50',
+            'max_towns' => (string) TownSuggestionService::BATCH_SIZE,
         ]);
 
         // THE FLASH IS THE LOAD-BEARING ASSERTION HERE. InMemoryTransport implements
@@ -152,7 +162,9 @@ class LocationAdminTest extends WebTestCase
         $client->request('POST', '/admin/locations/suggest-towns', [
             '_token'    => $token,
             'country'   => self::SEEDABLE,
-            'max_towns' => '100',
+            // Two batches exactly, so the endpoint is reporting a multi-batch run without the
+            // count being a magic number. Sized off BATCH_SIZE, as above.
+            'max_towns' => (string) (TownSuggestionService::BATCH_SIZE * 2),
         ]);
 
         $client->request('GET', '/admin/locations/suggest-towns/status/' . self::SEEDABLE);
@@ -381,9 +393,45 @@ class LocationAdminTest extends WebTestCase
             ->seedCountry(\App\Enum\Country::from(self::SEEDABLE));
     }
 
+    /**
+     * `messenger_messages` on demand, because this file both reads and writes it.
+     *
+     * NOTHING ELSE CREATES IT HERE. The Doctrine transport makes the table lazily on first
+     * dispatch, and every transport is in-memory under when@test — so it is never created by
+     * running the suite, and doctrine:schema:create does not make it either, knowing only
+     * entities. Worse, CompetitionHealthServiceTest DROPS it on purpose to exercise the
+     * absent-table path, so whether this file passed came down to which order the two ran in.
+     * That is what made these four cases "order-dependent flakes" rather than a real failure.
+     *
+     * The production guard (LocationEnrichmentRunRepository::countUndeliveredOnQueue) already
+     * swallows the missing table and returns 0, which is why the APPLICATION is fine without
+     * it. This file is not: it stands a row in to prove the stacking guard refuses, and a
+     * DELETE against a missing table throws.
+     *
+     * Same columns and same reasoning as CompetitionHealthServiceTest::setUp().
+     */
+    private function ensureMessengerTable(): void
+    {
+        self::getContainer()->get(Connection::class)->executeStatement(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS messenger_messages (
+                id BIGSERIAL PRIMARY KEY,
+                body TEXT NOT NULL,
+                headers TEXT NOT NULL,
+                queue_name VARCHAR(190) NOT NULL,
+                created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+                available_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+                delivered_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL
+            )
+            SQL,
+        );
+    }
+
     /** Batched pulls leave run and batch rows behind; the stacking guard reads them. */
     private function purgeSuggestionRuns(): void
     {
+        $this->ensureMessengerTable();
+
         $connection = self::getContainer()->get(Connection::class);
 
         $connection->executeStatement(
