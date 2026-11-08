@@ -1,621 +1,500 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
-
+{% extends 'admin/bmc_page.html.twig' %}
 {#
-   Location AI enrichment: what is left, what needs a human, and the three triggers.
+  Locations & land → Enrichment, on bmc_page + bmc-pages.css/js.
+  Data: LocationEnrichmentController::overview().
 
-   Every trigger is a POST with a CSRF token and targets path('admin', {routeName: ...}) rather
-   than the bare route — per src/Controller/Admin/CLAUDE.md, routeName is read from the query
-   string so this works for POST bodies too, and a bare route would miss EasyAdmin's `ea`
-   context. The reason they are POST rather than links is money: each one queues billed API
-   calls, and a crawler or a browser prefetch must not be able to spend any.
+  EVERY TRIGGER IS A POST, and that is about money rather than correctness: each one queues
+  billed API calls, and a crawler or a browser prefetch must not be able to spend any. They
+  target path('admin', {routeName: …}) rather than the bare route — routeName is read from the
+  query string so it works for a POST body too, and a bare route would miss EasyAdmin's `ea`
+  context. See src/Controller/Admin/CLAUDE.md.
+
+  CONFIRMS MOVED FROM window.confirm TO THE PIXELDIALOG. The old page used
+  onclick="return confirm(…)" on the two spending buttons. data-bmc-dialog-* replaces it —
+  but note bmc-admin.js binds [data-bmc-confirm] to window.confirm, so the two attributes must
+  never appear on one element (bmc-pages.js header, §2.4).
+
+  THE PULL-TOWNS POLL IS CARRIED OVER ALMOST VERBATIM. It is the one piece of real behaviour
+  on this page and its comments record why it is shaped the way it is; only the class names it
+  writes have changed, from Bootstrap badges and .d-none to bmc-* and the `hidden` property.
 #}
 
-{% set statusColours = {
-    'pending':      'secondary',
-    'queued':       'info',
-    'enriched':     'success',
+{% set statusBadge = {
+    'pending':      'subtle',
+    'queued':       'accent',
+    'enriched':     'positive',
     'needs_review': 'warning',
-    'failed':       'danger'
+    'failed':       'danger',
 } %}
 
-{% block content %}
-<div class="row g-4 mt-1">
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_locations_dashboard'}) }}"><span>DASHBOARD</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_location_config'}) }}"><span>CONFIGURATION</span></a>
+{% endblock %}
 
-    {# ── Header ─────────────────────────────────────────────────────────── #}
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Location Enrichment</h5>
-        <p class="text-muted small mb-0">
-            Seeded towns carry a name, region and population. Coordinates and land values are
-            supplied by an AI provider, validated per field, and stored once — subsequent reads
-            never call out again.
+{% block bmc_body %}
+
+{# ── provider, and whether it can be reached at all ──────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="plug"></i>
+        <span class="bmc-card__title">PROVIDER</span>
+        <span class="bmc-card__meta">last 30 days: {{ usage.attempts|number_format }} call(s) · {{ usage.inputTokens|number_format }} in / {{ usage.outputTokens|number_format }} out</span>
+    </div>
+
+    <div class="bmc-stats">
+        <div class="bmc-stat"><span class="bmc-stat__label">PROVIDER</span><span class="bmc-stat__value">{{ provider }}</span></div>
+        <div class="bmc-stat"><span class="bmc-stat__label">MODEL</span><span class="bmc-stat__value" style="font:var(--text-body-step)">{{ model }}</span></div>
+        <div class="bmc-stat"><span class="bmc-stat__label">PROMPT</span><span class="bmc-stat__value" style="font:var(--text-body-step)">{{ promptVersion }}</span></div>
+        <div class="bmc-stat"><span class="bmc-stat__label">QUEUE</span><span class="bmc-stat__value {{ queueDepth > 0 ? 'ink-accent' : 'ink-dim' }}">{{ queueDepth }}</span><span class="bmc-stat__sub">undrained</span></div>
+    </div>
+
+    <div class="bmc-card__band">
+        {% if connection.ok %}
+            <div class="bmc-status"><span class="bmc-dot" style="background:var(--wk-positive)"></span>{{ connection.detail }}</div>
+        {% else %}
+            {# Said loudly and at the top. A silently unreachable provider once cost this
+               codebase a day of push notifications (see NotificationLog), so an unconfigured
+               enricher must be impossible to miss BEFORE a sweep. #}
+            <div class="bmc-danger">
+                <i data-lucide="triangle-alert"></i>
+                <div class="bmc-danger__text">
+                    <span class="bmc-lbl bmc-lbl--ink">ENRICHER NOT REACHABLE</span>
+                    <span class="bmc-data">{{ connection.detail }}</span>
+                    <span class="bmc-data">Sweeping now would record a failure against every location it touched.</span>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+{# ── one location, arrived from a Location row's Enrich action ───────── #}
+{% if focus %}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="crosshair"></i>
+            <span class="bmc-card__title">ENRICH ONE LOCATION</span>
+            <span class="bmc-card__meta">{{ focus.enrichment_attempts }} attempt(s) so far</span>
+        </div>
+        <div class="bmc-card__band" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <span class="bmc-celltext">{{ focus.town }} <span class="bmc-data">{{ focus.country_code }}</span></span>
+            <span class="bmc-badge bmc-badge--{{ statusBadge[focus.enrichment_status] ?? 'subtle' }}">{{ focus.enrichment_status }}</span>
+            <span style="flex:1"></span>
+            {# A POST, not the link that brought you here. The row action in the Locations list
+               is deliberately side-effect-free, because an EasyAdmin row action is a plain GET
+               and enriching costs money. #}
+            <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_single'}) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_single') }}">
+                <input type="hidden" name="location" value="{{ focus.id }}">
+                <button type="submit" class="bmc-btn bmc-btn--blue" {{ connection.ok ? '' : 'disabled' }}><span>ENRICH {{ focus.town|upper }}</span></button>
+            </form>
+        </div>
+        {% if focus.enrichment_error %}
+            <div class="bmc-card__body"><span class="bmc-note"><i data-lucide="triangle-alert"></i>Last error: {{ focus.enrichment_error }}</span></div>
+        {% endif %}
+    </section>
+{% endif %}
+
+<div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(440px,1fr))">
+
+    {# ── pull towns ──────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="wand-sparkles"></i>
+            <span class="bmc-card__title">PULL TOWNS</span>
+            <span class="bmc-card__meta"><span id="suggest-queue-depth">{{ suggestionQueueDepth }} queued</span></span>
+        </div>
+        <div class="bmc-card__body">
+            <p class="bmc-bodytext">
+                Asks the AI provider for towns the curated registry does not have, in batches of
+                {{ batchSize }}. Each batch is one paid call and they drain about once a minute, so a
+                300-town pull takes a few minutes and reports as it goes. New towns arrive with no
+                coordinates and no land value; enrichment fills those in lazily, one paid call each,
+                when a player first opens them.
+            </p>
+
+            <form method="post" action="{{ path('admin', {routeName: 'admin_locations_suggest_towns'}) }}"
+                  id="suggest-form" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:12px">
+                <input type="hidden" name="_token" value="{{ csrf_token('locations_suggest_towns') }}">
+
+                <div class="bmc-field-col">
+                    <label class="bmc-lbl bmc-lbl--ink" for="suggestCountry">COUNTRY</label>
+                    {# No "All countries" option at all. The simplest way to make a paid fan-out
+                       across 25 countries impossible rather than merely discouraged. #}
+                    <span class="bmc-select">
+                        <select name="country" id="suggestCountry" required style="min-width:190px">
+                            <option value="" disabled selected>Country…</option>
+                            {% for row in seedable %}
+                                <option value="{{ row.code }}"{{ selectedCountry == row.code ? ' selected' : '' }}>{{ row.code }} — {{ row.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </span>
+                </div>
+
+                <div class="bmc-field-col">
+                    <label class="bmc-lbl bmc-lbl--ink" for="suggestMax">MOST TOWNS</label>
+                    <label class="bmc-num bmc-num--104">
+                        <input type="number" id="suggestMax" name="max_towns" value="{{ defaultMax }}"
+                               min="1" max="{{ hardMax }}" step="1" inputmode="numeric"
+                               title="The reply is ordered largest-first, so a cap drops the smallest towns.">
+                    </label>
+                </div>
+
+                <button type="submit" class="bmc-btn bmc-btn--orange" id="suggest-submit"
+                        {{ connection.ok and suggestionQueueDepth == 0 ? '' : 'disabled' }}
+                        title="{{ connection.ok ? 'Queue a batched town pull' : connection.detail }}"><span>PULL TOWNS</span></button>
+            </form>
+
+            {% if suggestionQueueDepth > 0 %}
+                <span class="bmc-note" style="margin-top:8px"><i data-lucide="clock"></i>{{ suggestionQueueDepth }} batch(es) still queued — wait for the current pull.</span>
+            {% endif %}
+        </div>
+
+        {# Progress. Hidden until there is a run to describe. #}
+        <div class="bmc-card__band" id="suggest-progress" {{ suggestionRun is null ? 'hidden' : '' }}
+             style="display:flex;flex-direction:column;gap:10px;border-top:3px solid var(--wk-stroke)">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <i data-lucide="list-checks" width="16" height="16" class="ink-dim"></i>
+                <span class="bmc-lbl bmc-lbl--ink">LATEST PULL</span>
+                <span class="bmc-data" id="suggest-progress-summary"></span>
+            </div>
+            <span class="bmc-bar"><span class="bmc-bar__fill" id="suggest-progress-bar" style="display:block;width:0%"></span></span>
+            <div id="suggest-batches" style="display:flex;flex-direction:column;gap:6px"></div>
+
+            {# Rolling ticker of what has actually landed. A count tells you the run is working;
+               the names tell you it is returning real places, which is the thing worth watching
+               when every batch costs money. Newest first, capped, so older ones fall off. #}
+            <div id="suggest-recent" hidden style="display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--wk-stroke);padding-top:8px">
+                <span class="bmc-data">Latest added <span id="suggest-recent-count"></span></span>
+                <div id="suggest-recent-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+        </div>
+    </section>
+
+    {# ── everything outstanding ──────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="sparkles"></i>
+            <span class="bmc-card__title">ENRICH EVERYTHING OUTSTANDING</span>
+        </div>
+        <div class="bmc-card__body">
+            <p class="bmc-bodytext">
+                Queues one message per outstanding town. Each is a billed API call, so a second sweep
+                is refused while one is still draining.
+            </p>
+        </div>
+
+        <div class="bmc-stats">
+            <div class="bmc-stat"><span class="bmc-stat__label">OUTSTANDING</span><span class="bmc-stat__value">{{ outstanding|number_format }}</span></div>
+            {% for status in statuses %}
+                {% set n = totals[status.value] ?? 0 %}
+                {% if n > 0 %}
+                    <div class="bmc-stat"><span class="bmc-stat__label">{{ status.label|upper }}</span><span class="bmc-stat__value">{{ n|number_format }}</span></div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="bmc-card__band">
+            <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}"
+                  style="display:flex;flex-direction:column;gap:10px">
+                <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_sweep') }}">
+
+                <label class="bmc-check" style="padding-left:0;align-items:flex-start">
+                    <input type="checkbox" name="include_review" value="1" id="include_review">
+                    <span class="bmc-tile" style="margin-top:2px"></span>
+                    <span style="display:flex;flex-direction:column;gap:2px">
+                        <span class="bmc-celltext">Also re-ask about <strong>needs review</strong> rows</span>
+                        <span class="bmc-data">Off by default — re-rolling a row nobody has judged hides the thing that needed judging.</span>
+                    </span>
+                </label>
+
+                <button type="submit" class="bmc-btn bmc-btn--blue" style="align-self:flex-start"
+                        {{ (connection.ok and outstanding > 0 and queueDepth == 0) ? '' : 'disabled' }}
+                        data-bmc-dialog-title="QUEUE UP TO {{ outstanding|number_format }} PAID CALL(S)?"
+                        data-bmc-dialog-message="One billed API call per outstanding town. A second sweep is refused until this one drains."
+                        data-bmc-dialog-confirm="QUEUE THEM" data-bmc-dialog-variant="yellow"><span>ENRICH ALL OUTSTANDING</span></button>
+
+                {% if queueDepth > 0 %}
+                    <span class="bmc-note"><i data-lucide="clock"></i>{{ queueDepth }} message(s) still queued — wait for the current sweep to drain.</span>
+                {% endif %}
+            </form>
+        </div>
+    </section>
+</div>
+
+{# ── progress by country ─────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="flag"></i>
+        <span class="bmc-card__title">PROGRESS BY COUNTRY</span>
+        <span class="bmc-card__meta">{{ countries|length }} seeded</span>
+    </div>
+
+    {# Seeding writes town rows from CountryContentRegistry. Free and fast — no external call,
+       no spend — unlike every Enrich button on this page. #}
+    <div class="bmc-card__band">
+        <form method="post" action="{{ path('admin', {routeName: 'admin_locations_seed'}) }}"
+              style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <input type="hidden" name="_token" value="{{ csrf_token('locations_seed') }}">
+            <span class="bmc-lbl bmc-lbl--ink">SEED</span>
+            <span class="bmc-select">
+                <select name="country" aria-label="Country to seed" style="min-width:190px">
+                    <option value="">All countries</option>
+                    {% for row in seedable %}
+                        <option value="{{ row.code }}">{{ row.code }} — {{ row.name }}{% if row.seeded %} (seeded){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </span>
+            <label class="bmc-check" title="Add towns missing from a country that already has locations. Never rewrites an existing row.">
+                <input type="checkbox" id="seedForce" name="force" value="1">
+                <span class="bmc-tile"></span>
+                <span class="bmc-data">force</span>
+            </label>
+            <button type="submit" class="bmc-btn bmc-btn--green"><span>SEED</span></button>
+            <span class="bmc-data">Free — writes rows from the curated registry, no API calls.</span>
+        </form>
+    </div>
+
+    {% if countries is empty %}
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+            <span class="bmc-empty-note">NO COUNTRIES SEEDED YET</span>
+            <p class="bmc-bodytext">
+                Seeding writes <strong>865 towns across 25 countries</strong> from the curated registry —
+                one location and one plot each. It makes no external calls and costs nothing. Coordinates
+                and land values are <em>not</em> seeded (there are none in the source data); enrichment
+                fills those in afterwards.
+            </p>
+            <form method="post" action="{{ path('admin', {routeName: 'admin_locations_seed'}) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('locations_seed') }}">
+                <button type="submit" class="bmc-btn bmc-btn--green"><span>SEED ALL COUNTRIES</span></button>
+            </form>
+        </div>
+    {% else %}
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:680px">
+                <thead><tr>
+                    <th>COUNTRY</th>
+                    <th class="is-right">TOWNS</th>
+                    <th class="is-right">ENRICHED</th>
+                    <th class="is-right">LEFT</th>
+                    <th class="is-right">REVIEW</th>
+                    <th class="is-right">FAILED</th>
+                    <th>STATUS</th>
+                    <th class="is-right">SWEEP</th>
+                </tr></thead>
+                <tbody>
+                {% for row in countries %}
+                    {% set left = row.counts.pending + row.counts.queued %}
+                    {% set due  = row.counts.pending + row.counts.failed %}
+                    <tr>
+                        <td><span class="bmc-celltext">{{ row.name }}</span> <span class="bmc-data">{{ row.code }}</span></td>
+                        <td class="is-right bmc-cellnum">{{ row.total|number_format }}</td>
+                        <td class="is-right bmc-cellnum">{{ row.counts.enriched|number_format }}</td>
+                        <td class="is-right bmc-cellnum">{{ left > 0 ? left|number_format : '—' }}</td>
+                        <td class="is-right">{{ row.counts.needs_review > 0 ? '<span class="bmc-badge bmc-badge--warning">' ~ row.counts.needs_review ~ '</span>'|raw : '—' }}</td>
+                        <td class="is-right">{{ row.counts.failed > 0 ? '<span class="bmc-badge bmc-badge--danger">' ~ row.counts.failed ~ '</span>'|raw : '—' }}</td>
+                        <td><span class="bmc-badge bmc-badge--subtle">{{ row.status }}</span></td>
+                        <td class="is-right">
+                            {% if due > 0 %}
+                                <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}" style="display:inline">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_sweep') }}">
+                                    <input type="hidden" name="country" value="{{ row.code }}">
+                                    <button type="submit" class="bmc-btn" {{ connection.ok ? '' : 'disabled' }}
+                                            data-bmc-dialog-title="QUEUE {{ due }} PAID CALL(S) FOR {{ row.name|upper }}?"
+                                            data-bmc-dialog-message="One billed API call per outstanding town in this country."
+                                            data-bmc-dialog-confirm="QUEUE THEM" data-bmc-dialog-variant="yellow"><span>ENRICH</span></button>
+                                </form>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</section>
+
+{# ── the rows that need a human ───────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="list-checks"></i>
+        <span class="bmc-card__title">NEEDS A HUMAN</span>
+        <span class="bmc-card__meta">{{ reviewQueue|length }} flagged</span>
+    </div>
+
+    {% if reviewQueue is empty %}
+        <div class="bmc-card__body"><span class="bmc-empty-note">NOTHING FLAGGED — EVERY ENRICHED TOWN PASSED VALIDATION</span></div>
+    {% else %}
+        <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_subset'}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_subset') }}">
+            <div style="overflow-x:auto">
+                <table class="bmc-minitable" style="min-width:720px">
+                    <thead><tr>
+                        <th style="width:44px"></th>
+                        <th>TOWN</th>
+                        <th>COUNTRY</th>
+                        <th>STATUS</th>
+                        <th>COORDS</th>
+                        <th class="is-right">LAND VALUE</th>
+                        <th class="is-right">ATTEMPTS</th>
+                        <th>LAST ERROR / REASON</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for row in reviewQueue %}
+                        <tr>
+                            <td>
+                                <label class="bmc-check" style="padding:0">
+                                    <input type="checkbox" name="locations[]" value="{{ row.id }}" aria-label="Select {{ row.town }}">
+                                    <span class="bmc-tile"></span>
+                                </label>
+                            </td>
+                            <td><span class="bmc-celltext">{{ row.town }}</span></td>
+                            <td><span class="bmc-data">{{ row.country_code }}</span></td>
+                            <td><span class="bmc-badge bmc-badge--{{ statusBadge[row.enrichment_status] ?? 'subtle' }}">{{ row.enrichment_status }}</span></td>
+                            <td><span class="bmc-data">{{ row.lat is null ? '—' : 'set' }}</span></td>
+                            <td class="is-right bmc-cellnum">{{ row.land_pence is null ? '—' : '£' ~ (row.land_pence / 100)|number_format(2) }}</td>
+                            <td class="is-right bmc-cellnum">{{ row.enrichment_attempts }}</td>
+                            <td><span class="bmc-data">{{ row.enrichment_error ?: '—' }}</span></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="bmc-card__band" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <button type="submit" class="bmc-btn bmc-btn--blue" {{ connection.ok ? '' : 'disabled' }}><span>RE-ENRICH SELECTED</span></button>
+                <span class="bmc-data">An explicit retry is the only path past the attempt cap.</span>
+            </div>
+        </form>
+    {% endif %}
+</section>
+
+{# ── export & import ──────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="arrow-left-right"></i>
+        <span class="bmc-card__title">EXPORT &amp; IMPORT</span>
+        <span class="bmc-card__meta">enrich once, then move the result</span>
+    </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">
+            Enrichment costs one billed API call per town, plus the review pass over every valuation it
+            produces. This file is what stops dev, prod and every rebuilt database from paying for the
+            same 865 towns again.
+        </p>
+        <p class="bmc-bodytext">
+            Carries country profiles (including the bounding box validation needs), locations with their
+            coordinates, population, land values, provenance, <em>locks</em> and enrichment status, and
+            their plots. Deliberately carries <strong>no claims, holds or ledger entries</strong> — those
+            are real money and real player data. Rival sets and stadium estimates are left out too: both
+            are derived and cheaper to recompute than to map between databases.
         </p>
     </div>
 
-    {# ── Focused location (arrived from a Location row's Enrich action) ──── #}
-    {% if focus %}
-    <div class="col-12">
-        <div class="card border-primary">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-crosshairs text-primary"></i>
-                <span class="fw-semibold small">Enrich one location</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-3 small align-items-end">
-                    <div class="col-6 col-md-3">
-                        <div class="text-muted">Town</div>
-                        <div class="fw-semibold">{{ focus.town }} <span class="text-muted">{{ focus.country_code }}</span></div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="text-muted">Status</div>
-                        <span class="badge bg-{{ statusColours[focus.enrichment_status] ?? 'secondary' }}">{{ focus.enrichment_status }}</span>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <div class="text-muted">Attempts</div>
-                        <div class="fw-semibold">{{ focus.enrichment_attempts }}</div>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        {#
-                           A POST, not the link that brought you here. The row action in the
-                           Locations list is deliberately side-effect-free, because an EasyAdmin
-                           row action is a plain GET and enriching costs money.
-                        #}
-                        <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_single'}) }}">
-                            <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_single') }}">
-                            <input type="hidden" name="location" value="{{ focus.id }}">
-                            <button type="submit" class="btn btn-sm btn-primary" {{ connection.ok ? '' : 'disabled' }}>
-                                Enrich {{ focus.town }}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                {% if focus.enrichment_error %}
-                    <div class="alert alert-warning mt-3 mb-0 small">
-                        <strong>Last error:</strong> {{ focus.enrichment_error }}
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {# ── Provider / connection ──────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-plug {{ connection.ok ? 'text-success' : 'text-danger' }}"></i>
-                <span class="fw-semibold small">Provider</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-3 small">
-                    <div class="col-6 col-md-3">
-                        <div class="text-muted">Provider</div>
-                        <div class="fw-semibold">{{ provider }}</div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="text-muted">Model</div>
-                        <div class="fw-semibold">{{ model }}</div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="text-muted">Prompt</div>
-                        <div class="fw-semibold">{{ promptVersion }}</div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="text-muted">Queue depth</div>
-                        <div class="fw-semibold">{{ queueDepth }} undrained</div>
-                    </div>
-                </div>
-
-                {% if not connection.ok %}
-                    {#
-                       Said loudly and at the top. A silently unreachable provider once cost
-                       this codebase a day of push notifications (see NotificationLog), so an
-                       unconfigured enricher must be impossible to miss BEFORE a sweep.
-                    #}
-                    <div class="alert alert-danger mt-3 mb-0 small">
-                        <strong>Enricher not reachable.</strong> {{ connection.detail }}
-                        <div class="mt-1">Sweeping now would record a failure against every location it touched.</div>
-                    </div>
-                {% else %}
-                    <div class="alert alert-success mt-3 mb-0 small mb-0">{{ connection.detail }}</div>
-                {% endif %}
-
-                <div class="text-muted small mt-3">
-                    Last 30 days: {{ usage.attempts }} call(s),
-                    {{ usage.inputTokens|number_format }} input / {{ usage.outputTokens|number_format }} output tokens.
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {# ── Pull towns ─────────────────────────────────────────────────────────
-       Its own card now. It used to be a second form crammed into the Progress by
-       country header beside Seed, which hid the fact that the two are nothing alike:
-       seeding is free, instant and allows "all countries", where this spends money per
-       batch and takes minutes. It also had nowhere to show progress, which is what it
-       most needed — the synchronous version timed out at nginx's 60s while the call ran
-       on, so the operator's only signal was a failure for work that had often succeeded.
-       ─────────────────────────────────────────────────────────────────────── #}
-    <div class="col-12 col-xl-5">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-wand-magic-sparkles text-warning"></i>
-                <span class="fw-semibold small">Pull towns</span>
-                <span class="ms-auto badge bg-secondary" id="suggest-queue-depth"
-                      title="Undrained batches on the suggestion queue">
-                    {{ suggestionQueueDepth }} queued
-                </span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Asks the AI provider for towns the curated registry does not have, in
-                    batches of {{ batchSize }}. Each batch is one paid call and they drain about
-                    once a minute, so a 300-town pull takes a few minutes and reports as it goes.
-                    New towns arrive with no coordinates and no land value; enrichment fills
-                    those in lazily, one paid call each, when a player first opens them.
-                </p>
-
-                <form method="post"
-                      action="{{ path('admin', {routeName: 'admin_locations_suggest_towns'}) }}"
-                      id="suggest-form">
-                    <input type="hidden" name="_token" value="{{ csrf_token('locations_suggest_towns') }}">
-
-                    <div class="row g-2 align-items-end mb-3">
-                        <div class="col-7">
-                            <label for="suggestCountry" class="form-label fw-semibold small mb-1">Country</label>
-                            {# No "All countries" option at all. The simplest way to make a paid
-                               fan-out across 25 countries impossible rather than merely
-                               discouraged. #}
-                            <select name="country" id="suggestCountry" class="form-select form-select-sm" required>
-                                <option value="" disabled selected>Country…</option>
-                            {% for row in seedable %}
-                                <option value="{{ row.code }}"{{ selectedCountry == row.code ? ' selected' : '' }}>
-                                    {{ row.code }} — {{ row.name }}
-                                </option>
-                            {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-5">
-                            <label for="suggestMax" class="form-label fw-semibold small mb-1">Most towns</label>
-                            <input type="number" class="form-control form-control-sm" id="suggestMax"
-                                   name="max_towns" value="{{ defaultMax }}" min="1" max="{{ hardMax }}" step="1"
-                                   title="The reply is ordered largest-first, so a cap drops the smallest towns.">
-                        </div>
-                    </div>
-
-                    <button type="submit"
-                            class="btn btn-sm btn-outline-warning"
-                            id="suggest-submit"
-                            {{ connection.ok and suggestionQueueDepth == 0 ? '' : 'disabled' }}
-                            title="{{ connection.ok ? 'Queue a batched town pull' : connection.detail }}">
-                        <i class="fa fa-wand-magic-sparkles me-1"></i> Pull towns
-                    </button>
-                    {% if suggestionQueueDepth > 0 %}
-                        <span class="text-muted small ms-2">
-                            {{ suggestionQueueDepth }} batch(es) still queued — wait for the current pull.
-                        </span>
-                    {% endif %}
-                </form>
-
-                {# Progress. Hidden until there is a run to describe. #}
-                <div id="suggest-progress" class="mt-3 pt-3 border-top{{ suggestionRun is null ? ' d-none' : '' }}">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <i class="fa fa-list-check fa-sm text-muted"></i>
-                        <span class="fw-semibold small">Latest pull</span>
-                        <span id="suggest-progress-summary" class="text-muted ms-1" style="font-size:.72rem;"></span>
-                    </div>
-                    <div class="progress mb-2" style="height:6px;">
-                        <div class="progress-bar" id="suggest-progress-bar" role="progressbar" style="width:0%"></div>
-                    </div>
-                    <div id="suggest-batches" class="d-flex flex-column gap-1"></div>
-
-                    {# Rolling ticker of what has actually landed. A count tells you the run is
-                       working; the names tell you it is returning real places, which is the
-                       thing worth watching when every batch costs money. Newest first, capped,
-                       so older ones fall off as new ones arrive. #}
-                    <div id="suggest-recent" class="mt-2 pt-2 border-top d-none">
-                        <div class="text-muted mb-1" style="font-size:.7rem;">
-                            Latest added <span id="suggest-recent-count"></span>
-                        </div>
-                        <div id="suggest-recent-list" class="d-flex flex-wrap gap-1"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {# ── Progress per country ───────────────────────────────────────────── #}
-    <div class="col-12 col-xl-7">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2 flex-wrap">
-                <i class="fa fa-flag text-primary"></i>
-                <span class="fw-semibold small">Progress by country</span>
-
-                {# Seeding writes town rows from CountryContentRegistry. Free and fast — no
-                   external call, no spend — unlike the Enrich buttons below. #}
-                <form method="post"
-                      action="{{ path('admin', {routeName: 'admin_locations_seed'}) }}"
-                      class="ms-auto d-flex align-items-center gap-1">
-                    <input type="hidden" name="_token" value="{{ csrf_token('locations_seed') }}">
-
-                    <select name="country" class="form-select form-select-sm py-0"
-                            style="width:auto" aria-label="Country to seed">
+    <div class="bmc-card__band bmc-row" style="gap:16px">
+        <div class="bmc-field-col" style="flex:1 1 280px">
+            <span class="bmc-lbl bmc-lbl--ink">EXPORT</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <span class="bmc-select">
+                    <select id="exportCountry" style="min-width:190px">
                         <option value="">All countries</option>
-                    {% for row in seedable %}
-                        <option value="{{ row.code }}">
-                            {{ row.code }} — {{ row.name }}{% if row.seeded %} (seeded){% endif %}
-                        </option>
-                    {% endfor %}
-                    </select>
-
-                    <div class="form-check form-check-inline m-0 ms-1" title="Add towns missing from a country that already has locations. Never rewrites an existing row.">
-                        <input class="form-check-input" type="checkbox" id="seedForce" name="force" value="1">
-                        <label class="form-check-label small text-muted" for="seedForce">force</label>
-                    </div>
-
-                    <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2">
-                        <i class="fa fa-seedling me-1"></i> Seed
-                    </button>
-                </form>
-
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0 small align-middle">
-                        <thead>
-                            <tr>
-                                <th>Country</th>
-                                <th class="text-end">Towns</th>
-                                <th class="text-end">Enriched</th>
-                                <th class="text-end">Left</th>
-                                <th class="text-end">Review</th>
-                                <th class="text-end">Failed</th>
-                                <th>Status</th>
-                                <th class="text-end">Sweep</th>
-                            </tr>
-                        </thead>
-                        <tbody>
                         {% for row in countries %}
-                            {% set left = row.counts.pending + row.counts.queued %}
-                            <tr>
-                                <td class="fw-semibold">{{ row.name }} <span class="text-muted">{{ row.code }}</span></td>
-                                <td class="text-end">{{ row.total }}</td>
-                                <td class="text-end">{{ row.counts.enriched }}</td>
-                                <td class="text-end">{{ left > 0 ? left : '—' }}</td>
-                                <td class="text-end">
-                                    {% if row.counts.needs_review > 0 %}
-                                        <span class="badge bg-warning">{{ row.counts.needs_review }}</span>
-                                    {% else %}—{% endif %}
-                                </td>
-                                <td class="text-end">
-                                    {% if row.counts.failed > 0 %}
-                                        <span class="badge bg-danger">{{ row.counts.failed }}</span>
-                                    {% else %}—{% endif %}
-                                </td>
-                                <td><span class="badge bg-secondary">{{ row.status }}</span></td>
-                                <td class="text-end">
-                                    {% if row.counts.pending + row.counts.failed > 0 %}
-                                        <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}" class="d-inline">
-                                            <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_sweep') }}">
-                                            <input type="hidden" name="country" value="{{ row.code }}">
-                                            <button type="submit"
-                                                    class="btn btn-sm btn-outline-primary py-0 px-2"
-                                                    {{ connection.ok ? '' : 'disabled' }}
-                                                    onclick="return confirm('Queue {{ row.counts.pending + row.counts.failed }} paid API call(s) for {{ row.name }}?')">
-                                                Enrich
-                                            </button>
-                                        </form>
-                                    {% else %}—{% endif %}
-                                </td>
-                            </tr>
-                        {% else %}
-                            <tr>
-                                <td colspan="8" class="text-center py-4">
-                                    <p class="text-muted mb-1">No countries seeded yet.</p>
-                                    <p class="text-muted small mb-3">
-                                        Seeding writes <strong>865 towns across 25 countries</strong>
-                                        from the curated registry &mdash; one location and one plot
-                                        each. It makes no external calls and costs nothing.
-                                        Coordinates and land values are <em>not</em> seeded (there
-                                        are none in the source data); enrichment fills those in
-                                        afterwards.
-                                    </p>
-                                    <form method="post"
-                                          action="{{ path('admin', {routeName: 'admin_locations_seed'}) }}"
-                                          class="d-inline">
-                                        <input type="hidden" name="_token" value="{{ csrf_token('locations_seed') }}">
-                                        <button type="submit" class="btn btn-sm btn-primary">
-                                            <i class="fa fa-seedling me-1"></i> Seed all countries
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
+                            <option value="{{ row.code }}"{{ row.code == selectedCountry ? ' selected' : '' }}>{{ row.code }} — {{ row.name }}</option>
                         {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                    </select>
+                </span>
+                <a class="bmc-btn bmc-btn--green" id="exportLink" href="{{ path('admin', {routeName: 'admin_locations_export'}) }}"><span>DOWNLOAD JSON</span></a>
             </div>
+            <span class="bmc-data">Reads only. Writes nothing.</span>
         </div>
+
+        <form method="post" action="{{ path('admin', {routeName: 'admin_locations_import'}) }}"
+              enctype="multipart/form-data" class="bmc-field-col" style="flex:1 1 320px">
+            <input type="hidden" name="_token" value="{{ csrf_token('locations_import') }}">
+            <span class="bmc-lbl bmc-lbl--ink">IMPORT</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="file" id="locationsFile" name="locations_file" accept="application/json,.json" required
+                       class="bmc-data" style="max-width:240px">
+                <button type="submit" class="bmc-btn bmc-btn--blue"><span>APPLY</span></button>
+            </div>
+            <label class="bmc-check" style="padding-left:0">
+                <input type="checkbox" id="importDryRun" name="dry_run" value="1" checked>
+                <span class="bmc-tile"></span>
+                <span class="bmc-data">Dry run — report what would change and write nothing</span>
+            </label>
+            <span class="bmc-data">
+                An <strong>upsert</strong>, matched on country + slug. Nothing is ever deleted, and there is
+                no &ldquo;clear first&rdquo;: a town can carry an active claim, and the database refuses to
+                delete one. Fields you have <strong>locked</strong> here are skipped and counted — an import
+                must not undo your review.
+            </span>
+        </form>
     </div>
+</section>
 
-    {# ── Global sweep ───────────────────────────────────────────────────── #}
-    <div class="col-12 col-xl-5">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-wand-magic-sparkles text-primary"></i>
-                <span class="fw-semibold small">Enrich everything outstanding</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small">
-                    Queues one message per outstanding town. Each is a billed API call, so a
-                    second sweep is refused while one is still draining.
-                </p>
-
-                <div class="d-flex gap-3 mb-3 small">
-                    <div>
-                        <div class="text-muted">Outstanding</div>
-                        <div class="fs-5 fw-semibold">{{ outstanding }}</div>
-                    </div>
-                    {% for status in statuses %}
-                        {% set n = totals[status.value] ?? 0 %}
-                        {% if n > 0 %}
-                            <div>
-                                <div class="text-muted">{{ status.label }}</div>
-                                <div class="fs-5 fw-semibold">{{ n }}</div>
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-
-                <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_sweep') }}">
-
-                    <div class="form-check small mb-3">
-                        <input class="form-check-input" type="checkbox" name="include_review" value="1" id="include_review">
-                        <label class="form-check-label" for="include_review">
-                            Also re-ask about <strong>needs review</strong> rows
-                            <span class="text-muted d-block">
-                                Off by default — re-rolling a row nobody has judged hides the thing that needed judging.
-                            </span>
-                        </label>
-                    </div>
-
-                    <button type="submit"
-                            class="btn btn-sm btn-primary"
-                            {{ (connection.ok and outstanding > 0 and queueDepth == 0) ? '' : 'disabled' }}
-                            onclick="return confirm('Queue up to {{ outstanding }} paid API call(s)?')">
-                        Enrich all outstanding
-                    </button>
-
-                    {% if queueDepth > 0 %}
-                        <div class="text-warning small mt-2">
-                            {{ queueDepth }} message(s) still queued — wait for the current sweep to drain.
-                        </div>
-                    {% endif %}
-                </form>
-            </div>
+{# ── recent runs ──────────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="history"></i>
+        <span class="bmc-card__title">RECENT RUNS</span>
+        <span class="bmc-card__meta">last {{ recentRuns|length }}</span>
+    </div>
+    {% if recentRuns is empty %}
+        <div class="bmc-card__body"><span class="bmc-empty-note">NO ENRICHMENT HAS BEEN RUN YET</span></div>
+    {% else %}
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:720px">
+                <thead><tr>
+                    <th>STARTED</th><th>TRIGGER</th><th>SCOPE</th><th>MODEL</th>
+                    <th class="is-right">QUEUED</th><th class="is-right">OK</th>
+                    <th class="is-right">REVIEW</th><th class="is-right">FAILED</th><th>STATE</th>
+                </tr></thead>
+                <tbody>
+                {% for run in recentRuns %}
+                    <tr>
+                        <td><span class="bmc-data">{{ run.startedAt|date('Y-m-d H:i:s') }}</span></td>
+                        <td><span class="bmc-celltext">{{ run.trigger.value }}</span></td>
+                        <td><span class="bmc-data">{{ run.countryCode ?? 'all' }}</span></td>
+                        <td><span class="bmc-data">{{ run.model }}</span></td>
+                        <td class="is-right bmc-cellnum">{{ run.queued }}</td>
+                        <td class="is-right bmc-cellnum">{{ run.succeeded }}</td>
+                        <td class="is-right bmc-cellnum">{{ run.needsReview }}</td>
+                        <td class="is-right bmc-cellnum">{{ run.failed }}</td>
+                        <td><span class="bmc-badge bmc-badge--subtle">{{ run.status.value }}</span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
+    {% endif %}
+</section>
+{% endblock %}
 
-    {# ── Review queue: the rows that need a human ───────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-list-check text-warning"></i>
-                <span class="fw-semibold small">Needs a human ({{ reviewQueue|length }})</span>
-            </div>
-            <div class="card-body p-0">
-                {% if reviewQueue is empty %}
-                    <div class="p-3 text-muted small">Nothing flagged. Every enriched town passed validation.</div>
-                {% else %}
-                <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_subset'}) }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_subset') }}">
-
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0 small align-middle">
-                            <thead>
-                                <tr>
-                                    <th style="width:2rem"></th>
-                                    <th>Town</th>
-                                    <th>Country</th>
-                                    <th>Status</th>
-                                    <th>Coords</th>
-                                    <th>Land value</th>
-                                    <th class="text-end">Attempts</th>
-                                    <th>Last error / reason</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            {% for row in reviewQueue %}
-                                <tr>
-                                    <td><input class="form-check-input" type="checkbox" name="locations[]" value="{{ row.id }}"></td>
-                                    <td class="fw-semibold">{{ row.town }}</td>
-                                    <td>{{ row.country_code }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ statusColours[row.enrichment_status] ?? 'secondary' }}">
-                                            {{ row.enrichment_status }}
-                                        </span>
-                                    </td>
-                                    <td>{{ row.lat is null ? '—' : 'set' }}</td>
-                                    <td>{{ row.land_pence is null ? '—' : (row.land_pence / 100)|number_format(2) }}</td>
-                                    <td class="text-end">{{ row.enrichment_attempts }}</td>
-                                    <td class="text-muted">{{ row.enrichment_error ?: '—' }}</td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="p-3 border-top">
-                        <button type="submit" class="btn btn-sm btn-outline-primary" {{ connection.ok ? '' : 'disabled' }}>
-                            Re-enrich selected
-                        </button>
-                        <span class="text-muted small ms-2">
-                            An explicit retry is the only path past the attempt cap.
-                        </span>
-                    </div>
-                </form>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    {# ── Export / import ────────────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-right-left text-success"></i>
-                <span class="fw-semibold small">Export &amp; import</span>
-            </div>
-            <div class="card-body">
-                <p class="small text-muted">
-                    Enrichment costs one billed API call per town, plus the review pass over every
-                    valuation it produces. <strong>Enrich once, then move the result.</strong> This
-                    file is what stops dev, prod and every rebuilt database from paying for the
-                    same 865 towns again.
-                </p>
-                <p class="small text-muted mb-3">
-                    Carries country profiles (including the bounding box validation needs),
-                    locations with their coordinates, population, land values, provenance,
-                    <em>locks</em> and enrichment status, and their plots. Deliberately carries
-                    <strong>no claims, holds or ledger entries</strong> &mdash; those are real
-                    money and real player data. Rival sets and stadium estimates are left out too:
-                    both are derived and cheaper to recompute than to map between databases.
-                </p>
-
-                <div class="row g-3">
-                    <div class="col-md-5">
-                        <label for="exportCountry" class="form-label fw-semibold small">Export</label>
-                        <div class="input-group">
-                            <select id="exportCountry" class="form-select form-select-sm">
-                                <option value="">All countries</option>
-                            {% for row in countries %}
-                                <option value="{{ row.code }}" {% if row.code == selectedCountry %}selected{% endif %}>
-                                    {{ row.code }} &mdash; {{ row.name }}
-                                </option>
-                            {% endfor %}
-                            </select>
-                            <a class="btn btn-sm btn-outline-success"
-                               id="exportLink"
-                               href="{{ path('admin', {routeName: 'admin_locations_export'}) }}">
-                                <i class="fa fa-download me-1"></i> Download JSON
-                            </a>
-                        </div>
-                        <div class="form-text">Reads only. Writes nothing.</div>
-                    </div>
-
-                    <div class="col-md-7">
-                        <form method="post"
-                              action="{{ path('admin', {routeName: 'admin_locations_import'}) }}"
-                              enctype="multipart/form-data">
-                            <input type="hidden" name="_token" value="{{ csrf_token('locations_import') }}">
-                            <label for="locationsFile" class="form-label fw-semibold small">Import</label>
-                            <div class="input-group">
-                                <input type="file" id="locationsFile" name="locations_file"
-                                       accept="application/json,.json"
-                                       class="form-control form-control-sm" required>
-                                <button type="submit" class="btn btn-sm btn-outline-primary">
-                                    <i class="fa fa-upload me-1"></i> Apply
-                                </button>
-                            </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox"
-                                       id="importDryRun" name="dry_run" value="1" checked>
-                                <label class="form-check-label small" for="importDryRun">
-                                    Dry run &mdash; report what would change and write nothing
-                                </label>
-                            </div>
-                            <div class="form-text">
-                                An <strong>upsert</strong>, matched on country + slug. Nothing is
-                                ever deleted, and there is no &ldquo;clear first&rdquo;: a town can
-                                carry an active claim, and the database refuses to delete one.
-                                Fields you have <strong>locked</strong> here are skipped and
-                                counted &mdash; an import must not undo your review.
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {# Keeps the download link's ?country= in step with the select, so the button exports what
-       the operator just chose rather than whatever the page loaded with. #}
-    <script>
-        (function () {
-            var select = document.getElementById('exportCountry');
-            var link   = document.getElementById('exportLink');
-            if (!select || !link) { return; }
-
-            var base = link.getAttribute('href');
-
-            function sync() {
-                link.setAttribute(
-                    'href',
-                    select.value ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'country=' + encodeURIComponent(select.value) : base
-                );
-            }
-
-            select.addEventListener('change', sync);
-            sync();
-        })();
-    </script>
-
-    {# ── Recent runs ────────────────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-clock-rotate-left text-primary"></i>
-                <span class="fw-semibold small">Recent runs</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0 small align-middle">
-                        <thead>
-                            <tr>
-                                <th>Started</th>
-                                <th>Trigger</th>
-                                <th>Scope</th>
-                                <th>Model</th>
-                                <th class="text-end">Queued</th>
-                                <th class="text-end">OK</th>
-                                <th class="text-end">Review</th>
-                                <th class="text-end">Failed</th>
-                                <th>State</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        {% for run in recentRuns %}
-                            <tr>
-                                <td>{{ run.startedAt|date('Y-m-d H:i:s') }}</td>
-                                <td>{{ run.trigger.value }}</td>
-                                <td>{{ run.countryCode ?? 'all' }}</td>
-                                <td class="text-muted">{{ run.model }}</td>
-                                <td class="text-end">{{ run.queued }}</td>
-                                <td class="text-end">{{ run.succeeded }}</td>
-                                <td class="text-end">{{ run.needsReview }}</td>
-                                <td class="text-end">{{ run.failed }}</td>
-                                <td><span class="badge bg-secondary">{{ run.status.value }}</span></td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="9" class="text-muted">No enrichment has been run yet.</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
+{% block body_javascript %}
+{{ parent() }}
+<script>
+// Keeps the download link's ?country= in step with the select, so the button exports what the
+// operator just chose rather than whatever the page loaded with.
+(function () {
+    var select = document.getElementById('exportCountry'), link = document.getElementById('exportLink');
+    if (!select || !link) { return; }
+    var base = link.getAttribute('href');
+    function sync() {
+        link.setAttribute('href', select.value
+            ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'country=' + encodeURIComponent(select.value)
+            : base);
+    }
+    select.addEventListener('change', sync);
+    sync();
+})();
+</script>
 
 {# ── Pull towns progress poll ───────────────────────────────────────────────
-   Recursive setTimeout rather than setInterval, and it swallows transient errors so a
-   blip does not end the watch — the pattern worldpack_cache.html.twig established.
+   Recursive setTimeout rather than setInterval, and it swallows transient errors so a blip
+   does not end the watch — the pattern worldpack_cache.html.twig established.
 
-   Polls a dedicated JSON route, never a refresh of this page: overview() makes a live
-   provider call to render the connection verdict, so re-fetching it every 2.5s would
-   turn a six-batch run into a hundred extra round trips.
+   Polls a dedicated JSON route, never a refresh of this page: overview() makes a live provider
+   call to render the connection verdict, so re-fetching it every 2.5s would turn a six-batch
+   run into a hundred extra round trips.
    ──────────────────────────────────────────────────────────────────────── #}
 <script>
 (function () {
@@ -648,10 +527,10 @@
     let polling = false;
 
     const BATCH_BADGE = {
-        pending:   'bg-secondary',
-        running:   'bg-primary',
-        completed: 'bg-success',
-        failed:    'bg-danger',
+        pending:   'subtle',
+        running:   'accent',
+        completed: 'positive',
+        failed:    'danger',
     };
 
     function escHtml(s) {
@@ -661,45 +540,34 @@
     }
 
     function renderBatch(b) {
-        const badge = BATCH_BADGE[b.status] ?? 'bg-secondary';
-        const spin  = b.status === 'running' ? '<i class="fa fa-spinner fa-spin me-1"></i>' : '';
+        const badge = BATCH_BADGE[b.status] ?? 'subtle';
         // Imported, not offered: it is the only figure that tells the operator whether the
         // money bought anything. A batch that offers fifty towns we already hold is a
         // completed batch with nothing to show, and that is an honest outcome, not a fault.
         const detail = b.status === 'completed'
             ? `${b.imported} added` + (b.alreadyHeld > 0 ? `, ${b.alreadyHeld} already held` : '')
             : (b.status === 'failed' ? escHtml(b.error ?? 'failed') : `${b.requested} requested`);
-        const retry = b.attempts > 1 ? ` <span class="text-muted">(attempt ${b.attempts})</span>` : '';
+        const retry = b.attempts > 1 ? ` (attempt ${b.attempts})` : '';
 
-        return `<div class="d-flex align-items-center gap-2 small">
-            <span class="badge ${badge}" style="min-width:5.5rem;">${spin}Batch ${b.index}/${b.total}</span>
-            <span class="text-muted">${detail}${retry}</span>
+        return `<div style="display:flex;align-items:center;gap:8px">
+            <span class="bmc-badge bmc-badge--${badge}" style="min-width:104px;justify-content:center">BATCH ${b.index}/${b.total}</span>
+            <span class="bmc-data">${detail}${retry}</span>
         </div>`;
     }
 
     function renderRecent(towns, importedTotal) {
         if (!recent) { return; }
 
-        if (!towns || towns.length === 0) {
-            recent.classList.add('d-none');
-            return;
-        }
-
-        recent.classList.remove('d-none');
+        if (!towns || towns.length === 0) { recent.hidden = true; return; }
+        recent.hidden = false;
 
         // "10 of 143" rather than bare "10": the window is capped, and without the total the
         // list reads as though the run only added ten.
-        recentCount.textContent = importedTotal > towns.length
-            ? `(${towns.length} of ${importedTotal})`
-            : '';
+        recentCount.textContent = importedTotal > towns.length ? `(${towns.length} of ${importedTotal})` : '';
 
         recentList.innerHTML = towns.map(name => {
             const isNew = tickerPainted && !seenTowns.has(name);
-            const cls   = isNew
-                ? 'badge bg-success-subtle text-success-emphasis border border-success-subtle'
-                : 'badge bg-secondary-subtle text-body-secondary border';
-
-            return `<span class="${cls}" style="font-weight:500;">${escHtml(name)}</span>`;
+            return `<span class="bmc-badge bmc-badge--${isNew ? 'positive' : 'subtle'}">${escHtml(name)}</span>`;
         }).join('');
 
         towns.forEach(name => seenTowns.add(name));
@@ -709,19 +577,15 @@
     function render(run, queueDepth) {
         if (depth) { depth.textContent = `${queueDepth} queued`; }
 
-        if (!run) {
-            panel.classList.add('d-none');
-            return;
-        }
-
-        panel.classList.remove('d-none');
+        if (!run) { panel.hidden = true; return; }
+        panel.hidden = false;
 
         const total   = run.totalBatches || 0;
         const settled = run.settledBatches || 0;
         const pct     = total > 0 ? Math.round((settled / total) * 100) : 0;
 
         bar.style.width = pct + '%';
-        bar.className = 'progress-bar' + (run.failedBatches > 0 ? ' bg-warning' : '');
+        bar.className = 'bmc-bar__fill' + (run.failedBatches > 0 ? ' bmc-bar__fill--warning' : '');
 
         const parts = [`${settled} / ${total} batches`, `${run.importedTowns} town(s) added`];
         if (run.failedBatches > 0) { parts.push(`${run.failedBatches} failed`); }

@@ -333,6 +333,30 @@ class LocationAdminTest extends WebTestCase
         return $location;
     }
 
+    /**
+     * The page says this, whatever case it says it in.
+     *
+     * THREE ASSERTIONS HERE PINNED COPY RATHER THAN BEHAVIOUR, and the redesign broke all
+     * three by upper-casing headings and buttons — "Seed" became "SEED", "Enrich one location"
+     * became "ENRICH ONE LOCATION". None of them cares about the casing: they care that the
+     * unreachable-provider warning is shown, that the focused-location card rendered, and that
+     * the empty state offers a button instead of naming a CLI command. Matching
+     * case-insensitively says that, and survives the next restyle.
+     *
+     * Where a test cares about STRUCTURE it still uses a selector — assertSelectorExists on the
+     * seed form above this one is doing the real work there.
+     */
+    private function assertPageMentions(KernelBrowser $client, string $needle): void
+    {
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsStringIgnoringCase(
+            $needle,
+            strip_tags($body),
+            \sprintf('the page should mention "%s"', $needle),
+        );
+    }
+
     private function transport(): InMemoryTransport
     {
         return self::getContainer()->get('messenger.transport.enrichment');
@@ -456,7 +480,7 @@ class LocationAdminTest extends WebTestCase
         $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'Enricher not reachable');
+        $this->assertPageMentions($client, 'Enricher not reachable');
     }
 
     public function testAdminScreensRequireAuthentication(): void
@@ -576,7 +600,7 @@ class LocationAdminTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertCount(0, $this->transport()->getSent(), 'merely opening the screen must queue nothing');
-        self::assertSelectorTextContains('body', 'Enrich one location');
+        $this->assertPageMentions($client, 'Enrich one location');
 
         $form = $crawler->filter('form[action*="admin_location_enrich_single"]')->form();
         $client->submit($form);
@@ -968,7 +992,7 @@ class LocationAdminTest extends WebTestCase
         // The empty state used to say "Run app:locations:seed", which is a dead end for anyone
         // without shell access to the box.
         self::assertSelectorExists('form[action*="admin_locations_seed"]');
-        self::assertSelectorTextContains('body', 'Seed');
+        $this->assertPageMentions($client, 'Seed');
     }
 
     public function testSeedIsPostOnly(): void
@@ -1105,5 +1129,79 @@ class LocationAdminTest extends WebTestCase
         );
         $connection->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => self::SEEDABLE]);
         $connection->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => self::SEEDABLE]);
+    }
+
+    /**
+     * The redesigned shell, held to the same checklist as the other rebuilt pages.
+     *
+     * The failure modes are real ones: a controller that forgets bmcGroup/bmcTitle renders an
+     * empty crumb and no heading, and a page that leaves <main data-bmc-page> empty breaks the
+     * sidebar pin silently.
+     */
+    public function testTheEnrichmentPageRendersInTheRedesignedShell(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+        $this->fixture();
+
+        $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('.bmc-title', 'ENRICHMENT');
+        self::assertSelectorTextContains('.bmc-crumb', 'LOCATIONS & LAND');
+        self::assertSelectorExists('.bmc-page');
+        self::assertSelectorNotExists('.card-body', 'no Bootstrap cards should survive the rebuild');
+        self::assertSelectorNotExists('.form-select', 'selects must use the .bmc-select component');
+    }
+
+    /**
+     * SPENDING BUTTONS CONFIRM THROUGH THE PIXELDIALOG, not window.confirm.
+     *
+     * Both sweep buttons used onclick="return confirm(…)". The hazard the rebuild has to avoid
+     * is documented in the bmc-pages.js header: bmc-admin.js binds [data-bmc-confirm] to
+     * window.confirm, so an element carrying BOTH that and data-bmc-dialog-* would prompt
+     * twice. This pins the dialog attributes are present and the old pair is not.
+     */
+    public function testTheSweepButtonsConfirmThroughTheDialogRatherThanWindowConfirm(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+        $this->fixture();
+
+        $crawler = $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+        $body    = (string) $client->getResponse()->getContent();
+
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('button[data-bmc-dialog-title]')->count(),
+            'the paid sweeps must route through the PixelDialog',
+        );
+        self::assertStringNotContainsString('onclick="return confirm', $body);
+        self::assertSame(
+            0,
+            $crawler->filter('[data-bmc-confirm][data-bmc-dialog-title]')->count(),
+            'an element must never carry both confirm bindings — it would prompt twice',
+        );
+    }
+
+    /** The poll keeps its hooks: renaming one of these silently stops the progress panel. */
+    public function testThePullTownsProgressPanelKeepsItsHooks(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purge();
+        $this->fixture();
+
+        $client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+
+        foreach ([
+            'suggest-progress', 'suggest-progress-summary', 'suggest-progress-bar',
+            'suggest-batches', 'suggest-queue-depth', 'suggest-submit',
+            'suggest-recent', 'suggest-recent-list', 'suggest-recent-count',
+        ] as $id) {
+            self::assertSelectorExists('#' . $id, "the poll reads #{$id}");
+        }
     }
 }

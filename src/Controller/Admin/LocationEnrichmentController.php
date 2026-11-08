@@ -130,6 +130,10 @@ class LocationEnrichmentController extends AbstractController
             : null;
 
         return $this->render('admin/location_enrichment.html.twig', [
+            // The page strip's crumb and title. bmcGroup is the LIVE sidebar group label so
+            // the crumb and the open submenu agree — DashboardController::configureMenuItems().
+            'bmcGroup'      => 'Locations & land',
+            'bmcTitle'      => 'Enrichment',
             'focus'         => $focus,
             'connection'    => $this->cachedConnection(),
             'provider'      => $this->enricher->provider(),
