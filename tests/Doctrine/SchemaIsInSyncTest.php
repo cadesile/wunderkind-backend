@@ -34,12 +34,22 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * raw migration SQL only (see Version20261103120000 and LocationRival). SchemaTool does not
  * see them either way, which is exactly why they are safe to keep there.
  *
- * One exclusion, and only one: the migrations bundle's own storage table. It is not an
- * entity, so SchemaTool proposes dropping it. The console command never shows that because
- * DoctrineMigrationsBundle registers the table in the connection's schema-asset filter at
- * runtime, and a direct SchemaTool call does not go through that filter. The name is read
- * back from the migrations configuration rather than hardcoded, so renaming it in
- * doctrine_migrations.yaml does not quietly turn this test into a no-op.
+ * TWO EXCLUSIONS, and both for the same reason: a table that is not an entity, so SchemaTool
+ * proposes dropping it, while the console command never shows that because a bundle registers
+ * the table in the connection's schema-asset filter at runtime — and a direct SchemaTool call
+ * does not go through that filter.
+ *
+ *   · The migrations bundle's own storage table. Its name is read back from the migrations
+ *     configuration rather than hardcoded, so renaming it in doctrine_migrations.yaml does not
+ *     quietly turn this test into a no-op.
+ *
+ *   · `messenger_messages`, the Doctrine transport's queue table. It is created lazily on
+ *     first dispatch, so whether it exists when this test runs depended entirely on what ran
+ *     before it — CompetitionHealthServiceTest creates it, one of its cases DROPS it, and
+ *     LocationAdminTest creates it too. That is what made this test an order-dependent flake
+ *     rather than a signal. Hardcoded, unlike the migrations table: under when@test every
+ *     transport is in-memory, so there is no Doctrine transport to read a table_name off, and
+ *     'messenger_messages' is Symfony's default.
  *
  * If this fails, the message prints the SQL the ORM thinks is still outstanding. Either the
  * migration is missing, or an entity attribute does not match what the migration built. On
@@ -49,6 +59,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 class SchemaIsInSyncTest extends KernelTestCase
 {
+    /** The Doctrine transport's queue table — see the class docblock on why it is excluded. */
+    private const MESSENGER_TABLE = 'messenger_messages';
+
     public function testOrmMappingMatchesTheMigratedDatabase(): void
     {
         self::bootKernel();
@@ -61,10 +74,18 @@ class SchemaIsInSyncTest extends KernelTestCase
 
         $sql = (new SchemaTool($em))->getUpdateSchemaSql($metadata);
 
-        $migrationsTable = $this->migrationsTableName();
-        $outstanding     = array_values(array_filter(
+        $ignored     = [$this->migrationsTableName(), self::MESSENGER_TABLE];
+        $outstanding = array_values(array_filter(
             $sql,
-            static fn (string $statement): bool => !str_contains($statement, $migrationsTable),
+            static function (string $statement) use ($ignored): bool {
+                foreach ($ignored as $table) {
+                    if (str_contains($statement, $table)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
         ));
 
         self::assertSame(
