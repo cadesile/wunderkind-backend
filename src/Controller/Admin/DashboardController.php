@@ -1329,6 +1329,9 @@ class DashboardController extends AbstractDashboardController
         $enabledCountries = Country::generationCapableLabels();
 
         return $this->render('admin/worldpack_cache.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup'         => 'Config',
+            'bmcTitle'         => 'Worldpack cache',
             'entries'          => $entries,
             'byCountry'        => $byCountry,
             'totalEntries'     => count($entries),
@@ -1590,7 +1593,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261108c';
+    private const BMC_ASSET_VERSION = '20261108d';
 
     public function configureAssets(): Assets
     {

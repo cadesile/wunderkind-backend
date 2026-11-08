@@ -61,17 +61,22 @@ class WorldPackControllerTest extends WebTestCase
 
     /**
      * These endpoints are JSON-only (no rendered form), but the admin/worldpack_cache
-     * page embeds both tokens as JS constants for its own fetch() calls — extract them
+     * page embeds both tokens as JS variables for its own fetch() calls — extract them
      * from a real page load rather than resolving CsrfTokenManagerInterface directly
      * from the test container, which has no session outside an active request.
+     *
+     * THE DECLARATION KEYWORD IS NOT PART OF THE CONTRACT. These patterns required `const`,
+     * and all five tests here broke when the page rebuild wrapped its script in an IIFE and
+     * switched to `var` — a change with no bearing on what the tokens are. What matters is the
+     * name and the value, so that is all the pattern asks for now.
      */
     private function fetchCsrfTokens(KernelBrowser $client): array
     {
         $crawler = $client->request('GET', '/admin', ['routeName' => 'admin_worldpack_cache']);
         $html    = $crawler->html();
 
-        preg_match("/const REGENERATE_TOKEN\s*=\s*'([^']+)';/", $html, $regenMatch);
-        preg_match("/const RETRY_TOKEN\s*=\s*'([^']+)';/", $html, $retryMatch);
+        preg_match("/(?:const|let|var)\s+REGENERATE_TOKEN\s*=\s*'([^']+)'/", $html, $regenMatch);
+        preg_match("/(?:const|let|var)\s+RETRY_TOKEN\s*=\s*'([^']+)'/", $html, $retryMatch);
 
         return [
             'regenerate' => $regenMatch[1] ?? self::fail('Could not find REGENERATE_TOKEN in page'),
@@ -102,7 +107,9 @@ class WorldPackControllerTest extends WebTestCase
         $client->request('GET', '/admin', ['routeName' => 'admin_worldpack_cache']);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h5', 'Worldpack Cache');
+        // The title moved out of an <h5> and into the page strip, upper-cased, when this page
+        // was rebuilt on bmc_page — see WorldpackCacheScreenTest for the rest of that shell.
+        self::assertSelectorTextContains('.bmc-title', 'WORLDPACK CACHE');
     }
 
     public function testRegenerateCountryStartsARunAndReturnsItsId(): void
