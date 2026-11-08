@@ -83,6 +83,8 @@ class NotificationDebugController extends AbstractController
     public function debug(): Response
     {
         return $this->render('admin/notifications/debug.html.twig', [
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Debug tools',
             'clubs'          => $this->clubRepository->findBy([], ['name' => 'ASC']),
             'recentLogs'     => $this->notificationLogRepository->findBy([], ['createdAt' => 'DESC'], 20),
             'triggerTypes'   => array_keys(self::DEBUG_TRIGGERS),

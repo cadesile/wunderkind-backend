@@ -1,219 +1,228 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Operate → Comms → Social connections, on bmc_page + bmc-pages.css/js.
+  Data: DashboardController::socialConnections() — connections, schedulePeriods, scheduleConfig,
+  templates, previewRequested, previewText, previewTemplate.
 
-{% block content %}
-<div class="row g-4 mt-1">
+  THREE FORMS AND THEY POST TO THREE DIFFERENT PLACES ON PURPOSE. Two go straight to their
+  named route because those actions only ever REDIRECT; the preview form goes through
+  /admin?routeName=… because socialTestPreview() RENDERS this same @EasyAdmin-extending
+  template, and the `ea` Twig context only exists for requests that pass through the
+  dashboard's own route — a direct POST there dies on "i18n on null". The original comments
+  making that argument are kept inline below, because the distinction is invisible from the
+  markup and someone will otherwise "tidy" them into agreement.
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Social Account Connections</h5>
-        <p class="text-muted small mb-0">Connect Facebook Pages and X (Twitter) accounts the backend can post to later. Tokens are encrypted at rest.</p>
+  THE SCHEDULE FORM IS NOT data-bmc-form. Its rows are checkbox + interval pairs built from an
+  enum, and the save bar would be a page-level claim about one card among four.
+#}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_app_links'}) }}"><span>APP LINKS</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+{# ── connect ─────────────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="plug"></i>
+        <span class="bmc-card__title">CONNECT A NEW ACCOUNT</span>
+        <span class="bmc-card__meta">tokens are encrypted at rest</span>
     </div>
-
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-plug text-muted"></i>
-                <span class="fw-semibold small">Connect a New Account</span>
-            </div>
-            <div class="card-body d-flex gap-2">
-                <a href="{{ path('admin_social_facebook_connect') }}" class="btn btn-primary btn-sm">
-                    <i class="fa-brands fa-facebook me-1"></i> Connect Facebook Page
-                </a>
-                <a href="{{ path('admin_social_twitter_connect') }}" class="btn btn-dark btn-sm">
-                    <i class="fa-brands fa-x-twitter me-1"></i> Connect X Account
-                </a>
-            </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">
+            Connect Facebook Pages and X (Twitter) accounts the backend can post to later.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+            <a class="bmc-btn bmc-btn--blue" href="{{ path('admin_social_facebook_connect') }}"><span>CONNECT FACEBOOK PAGE</span></a>
+            <a class="bmc-btn" href="{{ path('admin_social_twitter_connect') }}"><span>CONNECT X ACCOUNT</span></a>
         </div>
     </div>
+</section>
 
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-list text-muted"></i>
-                <span class="fw-semibold small">Connected Accounts</span>
+{# ── what is connected ───────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="list"></i>
+        <span class="bmc-card__title">CONNECTED ACCOUNTS</span>
+        <span class="bmc-card__meta">{{ connections|length }}</span>
+    </div>
+    {% if connections is empty %}
+        <div class="bmc-card__body"><span class="bmc-empty-note">NO ACCOUNTS CONNECTED YET</span></div>
+    {% else %}
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:760px">
+                <thead><tr>
+                    <th>PLATFORM</th><th>ACCOUNT</th><th>STATUS</th>
+                    <th>CONNECTED</th><th>LAST REFRESHED</th><th>TOKEN EXPIRES</th><th></th>
+                </tr></thead>
+                <tbody>
+                    {% for connection in connections %}
+                        <tr>
+                            <td><span class="bmc-celltext">{{ connection.platform.value == 'facebook' ? 'Facebook' : 'X (Twitter)' }}</span></td>
+                            <td>
+                                <span class="bmc-celltext">{{ connection.displayName }}</span>
+                                <span class="bmc-data" style="display:block"><code class="bmc-code">{{ connection.externalAccountId }}</code></span>
+                            </td>
+                            <td>
+                                <span class="bmc-badge bmc-badge--{{ connection.active ? 'positive' : 'subtle' }}">
+                                    {{ connection.active ? 'ACTIVE' : 'DISCONNECTED' }}
+                                </span>
+                            </td>
+                            <td><span class="bmc-data">{{ connection.connectedAt ? connection.connectedAt|date('Y-m-d H:i') : '—' }}</span></td>
+                            <td><span class="bmc-data">{{ connection.lastRefreshedAt ? connection.lastRefreshedAt|date('Y-m-d H:i') : '—' }}</span></td>
+                            <td><span class="bmc-data">{{ connection.tokenExpiresAt ? connection.tokenExpiresAt|date('Y-m-d H:i') : 'Never' }}</span></td>
+                            <td style="text-align:right">
+                                {% if connection.active %}
+                                    <form method="post" action="{{ path('admin_social_disconnect', {id: connection.id}) }}" style="display:inline">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('social_disconnect') }}">
+                                        <button type="submit" class="bmc-btn bmc-btn--danger-outline"
+                                                data-bmc-dialog-title="DISCONNECT {{ connection.displayName|upper }}?"
+                                                data-bmc-dialog-message="The stored token is revoked. Reconnecting means going through the provider's OAuth flow again."
+                                                data-bmc-dialog-confirm="DISCONNECT" data-bmc-dialog-variant="red"><span>DISCONNECT</span></button>
+                                    </form>
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</section>
+
+{# ── the schedule ────────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="clock"></i>
+        <span class="bmc-card__title">AUTO-POST SCHEDULE</span>
+        <span class="bmc-card__meta">checked every 15 minutes by a background job</span>
+    </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">
+            Each period tier round-robins through every category before repeating — the rotation cursor lives
+            in <code class="bmc-code">GameConfig</code>. Enabling a tier here posts automatically whenever its
+            interval elapses, and a change takes effect without a deploy.
+        </p>
+    </div>
+
+    {#
+        This form only ever REDIRECTS (never renders), so — unlike the preview form below — it can
+        safely POST directly to the named route instead of going through /admin?routeName=…, the
+        same exemption admin_social_test_publish and admin_app_links_save already use. See
+        CLAUDE.md's EasyAdmin Custom Routes gotcha.
+    #}
+    <form method="post" action="{{ path('admin_social_schedule_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('save_social_schedule') }}">
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:520px">
+                <thead><tr><th>PERIOD</th><th>ENABLED</th><th>INTERVAL</th><th>LAST RAN</th></tr></thead>
+                <tbody>
+                    {% for period in schedulePeriods %}
+                        {% set lastRun = scheduleConfig.getLastAutoPostRunAt(period) %}
+                        <tr>
+                            <td><span class="bmc-celltext">{{ period.value }}</span></td>
+                            <td>
+                                <label class="bmc-check" style="padding:0">
+                                    <input type="checkbox" name="schedule[{{ period.value }}][enabled]" value="1"
+                                           {{ scheduleConfig.isAutoPostEnabled(period) ? 'checked' : '' }}
+                                           aria-label="Auto-post {{ period.value }}">
+                                    <span class="bmc-tile"></span>
+                                </label>
+                            </td>
+                            <td>
+                                <label class="bmc-num bmc-num--76">
+                                    <input name="schedule[{{ period.value }}][intervalHours]" inputmode="numeric"
+                                           value="{{ scheduleConfig.getAutoPostIntervalHours(period) }}"
+                                           aria-label="{{ period.value }} interval, hours">
+                                    <span class="bmc-num__unit">h</span>
+                                </label>
+                            </td>
+                            <td><span class="bmc-data">{{ lastRun ? lastRun|date('Y-m-d H:i') : 'never' }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="bmc-card__band">
+            <button type="submit" class="bmc-btn bmc-btn--yellow"><span>SAVE SCHEDULE</span></button>
+        </div>
+    </form>
+</section>
+
+{# ── test post ───────────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="flask-conical"></i>
+        <span class="bmc-card__title">TEST POST</span>
+        <span class="bmc-card__meta">preview is free · publish is real</span>
+    </div>
+    <div class="bmc-card__body">
+        {#
+            This form MUST post through EasyAdmin's own entry point (/admin?routeName=…) rather
+            than directly to the named route. socialTestPreview() renders this same
+            @EasyAdmin-extending template inline — unlike the other custom actions on this page,
+            which only ever redirect — and the `ea` Twig context the layout reads is populated by
+            AdminRouterSubscriber only for requests that pass through the dashboard's own route.
+            A direct POST to admin_social_test_preview blows up with "i18n on null". Same root
+            cause as CLAUDE.md's EasyAdmin Custom Routes gotcha, applied to an action that
+            renders rather than redirects.
+        #}
+        <form method="post" action="{{ path('admin', {routeName: 'admin_social_test_preview'}) }}"
+              style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+            <input type="hidden" name="_token" value="{{ csrf_token('social_test_preview') }}">
+            <div class="bmc-field-col">
+                <label class="bmc-lbl bmc-lbl--ink" for="templateId">TEMPLATE</label>
+                <span class="bmc-select">
+                    <select name="templateId" id="templateId" style="min-width:280px">
+                        {% for template in templates %}
+                            <option value="{{ template.id }}">{{ template.category.value }} / {{ template.platform.value }} / {{ template.period.value }}</option>
+                        {% endfor %}
+                    </select>
+                </span>
             </div>
-            <div class="card-body p-0">
-                {% if connections is empty %}
-                    <p class="text-muted small p-3 mb-0">No accounts connected yet.</p>
-                {% else %}
-                    <table class="table table-sm mb-0 align-middle">
-                        <thead>
-                            <tr>
-                                <th>Platform</th>
-                                <th>Account</th>
-                                <th>Status</th>
-                                <th>Connected</th>
-                                <th>Last Refreshed</th>
-                                <th>Token Expires</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for connection in connections %}
-                                <tr>
-                                    <td>
-                                        {% if connection.platform.value == 'facebook' %}
-                                            <i class="fa-brands fa-facebook text-primary me-1"></i> Facebook
-                                        {% else %}
-                                            <i class="fa-brands fa-x-twitter me-1"></i> X (Twitter)
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="fw-semibold">{{ connection.displayName }}</span>
-                                        <span class="text-muted small d-block font-monospace">{{ connection.externalAccountId }}</span>
-                                    </td>
-                                    <td>
-                                        {% if connection.active %}
-                                            <span class="badge bg-success">Active</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">Disconnected</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="small text-muted">{{ connection.connectedAt ? connection.connectedAt|date('Y-m-d H:i') : '—' }}</td>
-                                    <td class="small text-muted">{{ connection.lastRefreshedAt ? connection.lastRefreshedAt|date('Y-m-d H:i') : '—' }}</td>
-                                    <td class="small text-muted">{{ connection.tokenExpiresAt ? connection.tokenExpiresAt|date('Y-m-d H:i') : 'Never' }}</td>
-                                    <td class="text-end">
-                                        {% if connection.active %}
-                                        <form method="POST" action="{{ path('admin_social_disconnect', {id: connection.id}) }}" class="d-inline">
-                                            <input type="hidden" name="_token" value="{{ csrf_token('social_disconnect') }}">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Disconnect {{ connection.displayName }}?');">Disconnect</button>
-                                        </form>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <button type="submit" class="bmc-btn bmc-btn--blue"><span>PREVIEW</span></button>
+        </form>
+
+        {% if previewRequested and previewText is not null %}
+            <div class="bmc-inset" style="margin-top:12px">
+                <span class="bmc-inset__title">RENDERED PREVIEW — {{ previewTemplate.category.value }} / {{ previewTemplate.platform.value }}</span>
+                <p class="bmc-bodytext" style="margin:0">{{ previewText }}</p>
+                {% if previewTemplate.platform.value == 'twitter' %}
+                    <span class="bmc-data {{ previewText|length > 280 ? 'ink-danger' : '' }}">{{ previewText|length }} / 280 characters</span>
                 {% endif %}
             </div>
-        </div>
+
+            <div class="bmc-danger" style="margin-top:12px">
+                <i data-lucide="triangle-alert"></i>
+                <div class="bmc-danger__text">
+                    <span class="bmc-lbl bmc-lbl--ink">PUBLISHING IS REAL AND CANNOT BE UNDONE</span>
+                    <span class="bmc-data">
+                        This posts to the connected {{ previewTemplate.platform.value }} account(s), live.
+                    </span>
+                </div>
+            </div>
+
+            {# Posted directly, not via admin?routeName=…, which is safe ONLY because
+               socialTestPublish() always redirects and never renders Twig. If it ever gains a
+               render path — an error page instead of a redirect — route it through
+               path('admin', {routeName: 'admin_social_test_publish'}) like the preview form
+               above, or it hits the same "i18n on null" gap. #}
+            <form method="post" action="{{ path('admin_social_test_publish') }}" style="margin-top:12px">
+                <input type="hidden" name="_token" value="{{ csrf_token('social_test_publish') }}">
+                <input type="hidden" name="templateId" value="{{ previewTemplate.id }}">
+                <input type="hidden" name="renderedText" value="{{ previewText }}">
+                <button type="submit" class="bmc-btn bmc-btn--danger-outline"
+                        data-bmc-dialog-title="PUBLISH THIS POST LIVE?"
+                        data-bmc-dialog-message="It goes to the real connected account and cannot be undone."
+                        data-bmc-dialog-confirm="PUBLISH" data-bmc-dialog-variant="red"><span>PUBLISH NOW</span></button>
+            </form>
+        {% elseif previewRequested %}
+            <span class="bmc-note" style="margin-top:12px">
+                <i data-lucide="info"></i>
+                No leaderboard data currently available for this category and period — nothing would be posted.
+            </span>
+        {% endif %}
     </div>
-
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-clock text-muted"></i>
-                <span class="fw-semibold small">Auto-Post Schedule</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small">
-                    Each period tier round-robins through every category before repeating (see the
-                    rotation cursor in <code>GameConfig</code>). Enabling a tier here posts automatically
-                    whenever its interval elapses — checked every 15 minutes by a background job, so a
-                    change here takes effect without a deploy.
-                </p>
-                {#
-                    This form only ever redirects (never renders), so — unlike the preview form below —
-                    it can safely POST directly to the named route instead of going through
-                    /admin?routeName=..., same exemption already used by admin_social_test_publish
-                    and admin_app_links_save. See CLAUDE.md's EasyAdmin Custom Routes gotcha.
-                #}
-                <form method="POST" action="{{ path('admin_social_schedule_save') }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('save_social_schedule') }}">
-                    <table class="table table-sm align-middle mb-3">
-                        <thead>
-                            <tr>
-                                <th>Period</th>
-                                <th>Enabled</th>
-                                <th>Interval (hours)</th>
-                                <th>Last ran</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for period in schedulePeriods %}
-                                <tr>
-                                    <td>{{ period.value }}</td>
-                                    <td>
-                                        <input type="checkbox" class="form-check-input" name="schedule[{{ period.value }}][enabled]" value="1"
-                                               {{ scheduleConfig.isAutoPostEnabled(period) ? 'checked' : '' }}>
-                                    </td>
-                                    <td>
-                                        <input type="number" min="1" class="form-control form-control-sm" style="width: 6rem;"
-                                               name="schedule[{{ period.value }}][intervalHours]"
-                                               value="{{ scheduleConfig.getAutoPostIntervalHours(period) }}">
-                                    </td>
-                                    <td class="small text-muted">
-                                        {% set lastRun = scheduleConfig.getLastAutoPostRunAt(period) %}
-                                        {{ lastRun ? lastRun|date('Y-m-d H:i') : 'never' }}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <button type="submit" class="btn btn-outline-primary btn-sm">Save Schedule</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-flask text-muted"></i>
-                <span class="fw-semibold small">Test Post</span>
-            </div>
-            <div class="card-body">
-                {#
-                    This form must POST through EasyAdmin's own entry point
-                    (/admin?routeName=...) rather than directly to the named
-                    route. socialTestPreview() renders this same
-                    @EasyAdmin-extending template inline (unlike the other
-                    custom actions on this page, which only ever redirect) —
-                    the `ea` Twig context used by @EasyAdmin/layout.html.twig
-                    is only populated by AdminRouterSubscriber for requests
-                    that pass through the dashboard's own route, so a direct
-                    POST to admin_social_test_preview would blow up with
-                    "i18n on null" (see CLAUDE.md's EasyAdmin Custom Routes
-                    gotcha — same root cause, just also applicable here for
-                    an action that renders rather than redirects).
-                #}
-                <form method="POST" action="{{ path('admin', {routeName: 'admin_social_test_preview'}) }}" class="row g-2 align-items-end">
-                    <input type="hidden" name="_token" value="{{ csrf_token('social_test_preview') }}">
-                    <div class="col-auto">
-                        <label class="form-label small mb-0">Template</label>
-                        <select name="templateId" class="form-select form-select-sm">
-                            {% for template in templates %}
-                                <option value="{{ template.id }}">
-                                    {{ template.category.value }} / {{ template.platform.value }} / {{ template.period.value }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-auto">
-                        <button type="submit" class="btn btn-outline-primary btn-sm">Preview</button>
-                    </div>
-                </form>
-
-                {% if previewRequested and previewText is not null %}
-                    <div class="alert alert-info mt-3 mb-2">
-                        <strong>Rendered preview ({{ previewTemplate.category.value }} / {{ previewTemplate.platform.value }}):</strong>
-                        <p class="mb-0 mt-1">{{ previewText }}</p>
-                        {% if previewTemplate.platform.value == 'twitter' %}
-                            <small class="text-muted">{{ previewText|length }} / 280 characters</small>
-                        {% endif %}
-                    </div>
-
-                    <div class="alert alert-warning small mb-2">
-                        This will publish a REAL post to the connected {{ previewTemplate.platform.value }} account(s). This cannot be undone.
-                    </div>
-
-                    {# Hit directly (not via admin?routeName=...) is safe only because socialTestPublish()
-                       always redirects and never renders Twig. If it ever gains a render path
-                       (e.g. an error page instead of a redirect), route this through
-                       path('admin', {routeName: 'admin_social_test_publish'}) like the preview
-                       form above, or it will hit the same "i18n on null" EasyAdmin gap. #}
-                    <form method="POST" action="{{ path('admin_social_test_publish') }}"
-                          onsubmit="return confirm('Publish this post live to the real connected account? This cannot be undone.');">
-                        <input type="hidden" name="_token" value="{{ csrf_token('social_test_publish') }}">
-                        <input type="hidden" name="templateId" value="{{ previewTemplate.id }}">
-                        <input type="hidden" name="renderedText" value="{{ previewText }}">
-                        <button type="submit" class="btn btn-danger btn-sm">Publish Now</button>
-                    </form>
-                {% elseif previewRequested %}
-                    <div class="alert alert-secondary mt-3 mb-0 small">No leaderboard data currently available for this category/period — nothing would be posted.</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-</div>
+</section>
 {% endblock %}

@@ -298,6 +298,10 @@ class SocialAuthControllerTest extends WebTestCase
         $client->request('GET', '/admin?routeName=admin_social_connections');
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h5', 'Social Account Connections');
+        // The title moved out of an <h5> and into the page strip when this page was rebuilt
+        // on bmc_page. Asserting the connect links too, since a title alone would pass on an
+        // otherwise empty page.
+        $this->assertSelectorTextContains('.bmc-title', 'SOCIAL CONNECTIONS');
+        $this->assertSelectorExists('a[href*="admin_social_facebook_connect"], a[href*="social/facebook"]');
     }
 }

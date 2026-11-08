@@ -141,6 +141,9 @@ class DashboardController extends AbstractDashboardController
     public function socialConnections(): Response
     {
         return $this->render('admin/social_connections.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'Comms',
+            'bmcTitle' => 'Social connections',
             'connections'      => $this->socialAccountConnectionRepository->findAllOrdered(),
             'templates'        => $this->socialPostTemplateRepository->findAllOrdered(),
             'previewTemplate'  => null,
@@ -194,6 +197,9 @@ class DashboardController extends AbstractDashboardController
         $previewText = $renderer->render($template);
 
         return $this->render('admin/social_connections.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'Comms',
+            'bmcTitle' => 'Social connections',
             'connections'      => $this->socialAccountConnectionRepository->findAllOrdered(),
             'templates'        => $this->socialPostTemplateRepository->findAllOrdered(),
             'previewTemplate'  => $template,
@@ -254,7 +260,11 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function settings(): Response
     {
-        return $this->render('admin/settings.html.twig');
+        return $this->render('admin/settings.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Settings & tools',
+        ]);
     }
 
     // ── Game Config ───────────────────────────────────────────────────────
@@ -1006,6 +1016,9 @@ class DashboardController extends AbstractDashboardController
         $facilities  = $this->facilityTemplateRepository->findBy(['isActive' => true]);
 
         return $this->render('admin/npc_clubs_content.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'World',
+            'bmcTitle' => 'Generate',
             'config'               => $config,
             'gameConfig'           => $gameConfig,
             'facilities'           => $facilities,
@@ -1134,6 +1147,9 @@ class DashboardController extends AbstractDashboardController
         ksort($byCategory);
 
         return $this->render('admin/facilities_content.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'Templates',
+            'bmcTitle' => 'Facility templates',
             'facilities' => $facilities,
             'byCategory' => $byCategory,
         ]);
@@ -1529,6 +1545,8 @@ class DashboardController extends AbstractDashboardController
         }
 
         return $this->render('admin/logs.html.twig', [
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Logs',
             'files'        => $files,
             'selectedFile' => $selectedFile,
             'lines'        => $lines,
@@ -1587,6 +1605,9 @@ class DashboardController extends AbstractDashboardController
     public function importExport(LanguageRepository $languageRepository): Response
     {
         return $this->render('admin/import_export.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Import / Export',
             // Only the translations card needs these, but the template reads
             // them unconditionally to keep its empty-state check simple.
             'languages' => $languageRepository->findEnabled(),
@@ -1602,7 +1623,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261108g';
+    private const BMC_ASSET_VERSION = '20261108h';
 
     public function configureAssets(): Assets
     {

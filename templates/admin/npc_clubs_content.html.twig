@@ -1,400 +1,377 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  World → Generate, on bmc_page + bmc-pages.css/js.
+  Data: DashboardController::npcClubsContent() — clubCount, clubsByCountry,
+  generationCapableCountries, facilities, gameConfig.
 
-{% block content %}
-<div class="row g-4 mt-1">
+  FOUR INDEPENDENT FORMS, THREE OF THEM PLAIN POSTS. Generate clubs is the exception: it posts
+  by fetch() so the pool table can be redrawn from the response rather than reloading a page
+  that would also re-run every other query on it.
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Clubs &amp; Leagues — Quick Actions</h5>
-        <p class="text-muted small mb-0">
-            Generate NPC clubs for a specific country and tier, or replenish the senior player pool.
-            NPC clubs are pure metadata — squads are assembled by the frontend at game-start using the player pool.
+  THE REDRAW MUST MATCH THE SERVER-RENDERED TABLE. It rebuilds the same markup in JS, so the
+  two halves have to agree on classes — they drifted into Bootstrap-vs-bmc once already during
+  this rebuild. Keeping the row builder next to the Twig that it mirrors is the cheapest guard
+  available without a component layer.
+
+  LEAGUE GENERATION CAN DELETE. Choosing fewer tiers than a country already has removes the
+  surplus tiers AND the pool clubs in them, so it confirms; the two save forms do not.
+#}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_leagues_overview'}) }}"><span>LEAGUE OVERVIEW</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_worldpack_cache'}) }}"><span>WORLDPACK CACHE</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+{# ── what exists now ─────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="shield"></i>
+        <span class="bmc-card__title">CLUB POOL</span>
+        <span class="bmc-card__meta"><span id="club-pool-total">{{ clubCount|number_format }} total</span></span>
+    </div>
+    <div id="club-pool-body">
+        {% if clubsByCountry is empty %}
+            <div class="bmc-card__body"><span class="bmc-empty-note">NO CLUBS GENERATED YET</span></div>
+        {% else %}
+            <div style="overflow-x:auto">
+                <table class="bmc-minitable" id="club-pool-table" style="min-width:600px">
+                    <thead><tr>
+                        <th>COUNTRY</th>
+                        {% for tier in 1..8 %}<th class="is-right">T{{ tier }}</th>{% endfor %}
+                        <th class="is-right">TOTAL</th>
+                    </tr></thead>
+                    <tbody id="club-pool-tbody">
+                        {% for country, tiers in clubsByCountry %}
+                            <tr>
+                                <td><span class="bmc-celltext">{{ country }}</span></td>
+                                {% for tier in 1..8 %}
+                                    <td class="is-right">
+                                        {%- if tiers[tier] is defined %}<span class="bmc-badge bmc-badge--subtle">{{ tiers[tier] }}</span>
+                                        {%- else %}<span class="ink-dim">—</span>{% endif -%}
+                                    </td>
+                                {% endfor %}
+                                <td class="is-right bmc-cellnum">{{ tiers|reduce((carry, v) => carry + v, 0) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+<div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(400px,1fr))">
+
+    {# ── clubs ───────────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="wand-sparkles"></i>
+            <span class="bmc-card__title">GENERATE CLUBS</span>
+        </div>
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px">
+            <p class="bmc-bodytext">
+                Generates NPC clubs for one country and league tier. Facility levels, reputation and balance
+                are preset by tier band. NPC clubs are pure metadata — squads are assembled by the frontend
+                at game start from the player pool.
+            </p>
+
+            <div id="generate-clubs-alert" hidden></div>
+
+            <form id="generate-clubs-form" method="post" action="{{ path('admin_npc_clubs_generate') }}"
+                  style="display:flex;flex-direction:column;gap:10px">
+                <input type="hidden" name="_token" value="{{ csrf_token('generate_npc_clubs') }}">
+
+                <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+                    <div class="bmc-field-col">
+                        <label class="bmc-lbl bmc-lbl--ink" for="country">COUNTRY</label>
+                        <span class="bmc-select">
+                            <select id="country" name="country" style="min-width:190px">
+                                {% for code, label in generationCapableCountries %}
+                                    <option value="{{ code }}">{{ label }} ({{ code }})</option>
+                                {% endfor %}
+                            </select>
+                        </span>
+                    </div>
+                    <div class="bmc-field-col">
+                        <label class="bmc-lbl bmc-lbl--ink" for="tier">TIER</label>
+                        <label class="bmc-num bmc-num--60"><input type="number" id="tier" name="tier" value="4" min="1" max="8" inputmode="numeric"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <label class="bmc-lbl bmc-lbl--ink" for="count">COUNT</label>
+                        <label class="bmc-num bmc-num--60"><input type="number" id="count" name="count" value="8" min="1" max="50" inputmode="numeric"></label>
+                    </div>
+                </div>
+
+                <label class="bmc-check" style="padding-left:0">
+                    <input type="checkbox" id="delete_existing" name="delete_existing" value="1">
+                    <span class="bmc-tile"></span>
+                    <span class="bmc-data ink-danger">Delete existing clubs in this country and tier first</span>
+                </label>
+
+                <button type="submit" id="generate-clubs-btn" class="bmc-btn bmc-btn--blue" style="align-self:flex-start"><span>GENERATE CLUBS</span></button>
+            </form>
+        </div>
+    </section>
+
+    {# ── leagues ─────────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="trophy"></i>
+            <span class="bmc-card__title">GENERATE LEAGUE STRUCTURE</span>
+        </div>
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px;height:100%">
+            <p class="bmc-bodytext">
+                Creates League records for a country, named &ldquo;League 1&rdquo; upward, skipping tiers that
+                already exist. Run this <em>before</em> generating clubs so clubs are auto-assigned to their
+                league. NPC quality scales to the depth chosen, so the bottom tier is always the bottom of
+                that country's pyramid.
+            </p>
+
+            <div class="bmc-danger">
+                <i data-lucide="triangle-alert"></i>
+                <div class="bmc-danger__text">
+                    <span class="bmc-data">
+                        Choosing <strong>fewer</strong> tiers than the country already has deletes the surplus
+                        tiers and the pool clubs in them.
+                    </span>
+                </div>
+            </div>
+
+            <form method="post" action="{{ path('admin_leagues_generate') }}"
+                  style="display:flex;flex-direction:column;gap:10px;margin-top:auto">
+                <input type="hidden" name="_token" value="{{ csrf_token('generate_leagues') }}">
+                <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+                    <div class="bmc-field-col">
+                        <label class="bmc-lbl bmc-lbl--ink" for="league_country">COUNTRY</label>
+                        <span class="bmc-select">
+                            <select id="league_country" name="country" style="min-width:190px">
+                                {% for code, label in generationCapableCountries %}
+                                    <option value="{{ code }}">{{ label }} ({{ code }})</option>
+                                {% endfor %}
+                            </select>
+                        </span>
+                    </div>
+                    <div class="bmc-field-col">
+                        <label class="bmc-lbl bmc-lbl--ink" for="league_tiers">TIERS</label>
+                        <label class="bmc-num bmc-num--60"><input type="number" id="league_tiers" name="tiers" value="8" min="1" max="8" step="1" required inputmode="numeric"></label>
+                    </div>
+                </div>
+                <span class="bmc-data">1–8. Tier 1 is the top division. Default 8.</span>
+                <button type="submit" class="bmc-btn bmc-btn--orange" style="align-self:flex-start"
+                        data-bmc-dialog-title="GENERATE THE LEAGUE PYRAMID?"
+                        data-bmc-dialog-message="Choosing fewer tiers than this country already has deletes the surplus tiers and every pool club in them."
+                        data-bmc-dialog-confirm="GENERATE" data-bmc-dialog-variant="yellow"><span>GENERATE LEAGUES</span></button>
+            </form>
+        </div>
+    </section>
+</div>
+
+{# ── facility level ranges ───────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="building"></i>
+        <span class="bmc-card__title">FACILITY LEVEL RANGES BY TIER BAND</span>
+        <span class="bmc-card__meta">starting level per facility when clubs are generated</span>
+    </div>
+
+    {% if facilities is empty %}
+        <div class="bmc-card__body"><span class="bmc-empty-note">NO ACTIVE FACILITY TEMPLATES — ADD FACILITIES FIRST</span></div>
+    {% else %}
+        {% set bandLabels = ['TIERS 1–2', 'TIERS 3–4', 'TIERS 5–6', 'TIERS 7–8'] %}
+        {% set trainingSlugs = ['training_pitch', 'strength_suite'] %}
+        {% set standsSlugs   = ['north_stand', 'south_stand', 'east_stand', 'west_stand'] %}
+        {# Fallbacks mirroring NpcClubGenerationService::FACILITY_LEVELS. #}
+        {% set defaults = [
+            {training: [7,9], stands: [4,5], other: [3,5]},
+            {training: [5,6], stands: [3,4], other: [2,3]},
+            {training: [3,4], stands: [2,3], other: [1,2]},
+            {training: [1,2], stands: [0,1], other: [0,1]},
+        ] %}
+
+        <div class="bmc-card__body">
+            <p class="bmc-bodytext">
+                Max values are capped to each facility's own max upgrade level. Set both min and max to
+                <strong>0</strong> to exclude a facility from clubs generated in that tier band.
+            </p>
+        </div>
+
+        <form method="post" action="{{ path('admin_npc_clubs_save_facility_config') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('npc_facility_config') }}">
+            <div style="overflow-x:auto">
+                <table class="bmc-minitable" style="min-width:760px">
+                    <thead>
+                        <tr>
+                            <th>FACILITY</th>
+                            {% for bandLabel in bandLabels %}<th class="is-right" colspan="2">{{ bandLabel }}</th>{% endfor %}
+                        </tr>
+                        <tr>
+                            <th>SLUG</th>
+                            {% for i in 0..3 %}<th class="is-right">MIN</th><th class="is-right">MAX</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for facility in facilities %}
+                            {% set slug = facility.slug %}
+                            {% set isTraining = slug in trainingSlugs %}
+                            {% set isStands   = slug in standsSlugs %}
+                            <tr>
+                                <td>
+                                    <span class="bmc-celltext">{{ facility.label }}</span>
+                                    <span class="bmc-data" style="display:block"><code class="bmc-code">{{ slug }}</code></span>
+                                </td>
+                                {% for band in 0..3 %}
+                                    {% set stored = gameConfig.npcFacilityLevelRanges[band][slug] ?? null %}
+                                    {% if isTraining %}
+                                        {% set fallbackMin = defaults[band].training[0] %}{% set fallbackMax = defaults[band].training[1] %}
+                                    {% elseif isStands %}
+                                        {% set fallbackMin = defaults[band].stands[0] %}{% set fallbackMax = defaults[band].stands[1] %}
+                                    {% else %}
+                                        {% set fallbackMin = defaults[band].other[0] %}{% set fallbackMax = defaults[band].other[1] %}
+                                    {% endif %}
+                                    <td class="is-right">
+                                        <label class="bmc-num bmc-num--56"><input type="number"
+                                               name="facilityRanges[{{ band }}][{{ slug }}][min]"
+                                               value="{{ stored ? stored.min : fallbackMin }}" min="0" max="{{ facility.maxLevel }}"
+                                               inputmode="numeric" title="Band {{ band + 1 }} min for {{ slug }} — 0 omits the facility"></label>
+                                    </td>
+                                    <td class="is-right">
+                                        <label class="bmc-num bmc-num--56"><input type="number"
+                                               name="facilityRanges[{{ band }}][{{ slug }}][max]"
+                                               value="{{ stored ? stored.max : fallbackMax }}" min="0" max="{{ facility.maxLevel }}"
+                                               inputmode="numeric" title="Band {{ band + 1 }} max for {{ slug }} — 0/0 omits the facility"></label>
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="bmc-card__band">
+                <button type="submit" class="bmc-btn bmc-btn--yellow"><span>SAVE FACILITY RANGES</span></button>
+            </div>
+        </form>
+    {% endif %}
+</section>
+
+{# ── city size weighting ─────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="building-2"></i>
+        <span class="bmc-card__title">CITY SIZE WEIGHTING</span>
+        <span class="bmc-card__meta">tiers 2–7 interpolate between these two</span>
+    </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">
+            How likely a BIG, MEDIUM or SMALL city is to be picked when generating a club for a tier.
+            Tier 1 and tier 8 are the anchors and the rest interpolate linearly between them. Values are
+            percentages and do not need to sum to 100.
         </p>
     </div>
 
-    {# ── Status ─────────────────────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-shield-halved text-muted"></i>
-                <span class="fw-semibold small">Club Pool</span>
-                <span class="ms-auto badge bg-secondary" id="club-pool-total">{{ clubCount }} total</span>
-            </div>
-            <div class="card-body p-0" id="club-pool-body">
-                {% if clubsByCountry is empty %}
-                    <p class="text-muted small p-3 mb-0" id="club-pool-empty">No clubs generated yet.</p>
-                {% else %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0 small" id="club-pool-table">
-                            <thead class="table-light">
-                                <tr>
-                                    <th class="ps-3">Country</th>
-                                    {% for tier in 1..8 %}
-                                        <th class="text-center">T{{ tier }}</th>
-                                    {% endfor %}
-                                    <th class="text-end pe-3">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody id="club-pool-tbody">
-                                {% for country, tiers in clubsByCountry %}
-                                    <tr>
-                                        <td class="ps-3 fw-semibold">{{ country }}</td>
-                                        {% for tier in 1..8 %}
-                                            <td class="text-center">
-                                                {% if tiers[tier] is defined %}
-                                                    <span class="badge bg-primary bg-opacity-75">{{ tiers[tier] }}</span>
-                                                {% else %}
-                                                    <span class="text-muted">—</span>
-                                                {% endif %}
-                                            </td>
-                                        {% endfor %}
-                                        <td class="text-end pe-3 fw-semibold">{{ tiers|reduce((carry, v) => carry + v, 0) }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% endif %}
-            </div>
+    <form method="post" action="{{ path('admin_npc_clubs_save_size_weights') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('npc_size_weights') }}">
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:460px">
+                <thead><tr><th>TIER</th><th class="is-right">BIG %</th><th class="is-right">MEDIUM %</th><th class="is-right">SMALL %</th></tr></thead>
+                <tbody>
+                    {% for row in ['tier1', 'tier8'] %}
+                        <tr>
+                            <td><span class="bmc-celltext">{{ row == 'tier1' ? 'Tier 1' : 'Tier 8' }}</span></td>
+                            {% for size in ['big', 'medium', 'small'] %}
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--60"><input type="number"
+                                           name="sizeWeights[{{ row }}][{{ size }}]"
+                                           value="{{ attribute(gameConfig.npcClubSizeWeights[row], size) ?? 0 }}"
+                                           min="0" max="100" inputmode="numeric"
+                                           aria-label="{{ row }} {{ size }} percent"></label>
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
-
-    {# ── Generate Clubs ─────────────────────────────────────────────────── #}
-    <div class="col-12 col-lg-6">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-wand-magic-sparkles text-primary"></i>
-                <span class="fw-semibold small">Generate Clubs</span>
-            </div>
-            <div class="card-body d-flex flex-column gap-3">
-                <p class="text-muted small mb-0">
-                    Generates NPC clubs for a specific country and league tier.
-                    Facility levels, reputation, and balance are preset by tier band.
-                </p>
-                <div id="generate-clubs-alert" class="d-none small"></div>
-                <form id="generate-clubs-form" method="POST" action="{{ path('admin_npc_clubs_generate') }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('generate_npc_clubs') }}">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label for="country" class="form-label fw-semibold small">Country (ISO)</label>
-                            <select id="country" name="country" class="form-select form-select-sm">
-                                {% for code, label in generationCapableCountries %}
-                                    <option value="{{ code }}">{{ label }} ({{ code }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="tier" class="form-label fw-semibold small">Tier (1–8)</label>
-                            <input type="number" id="tier" name="tier" value="4"
-                                   min="1" max="8" class="form-control form-control-sm">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="count" class="form-label fw-semibold small">Count</label>
-                            <input type="number" id="count" name="count" value="8"
-                                   min="1" max="50" class="form-control form-control-sm">
-                        </div>
-                    </div>
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <button type="submit" id="generate-clubs-btn" class="btn btn-primary btn-sm">
-                            <i class="fa fa-plus me-1"></i>Generate Clubs
-                        </button>
-                        <div class="form-check mb-0">
-                            <input class="form-check-input" type="checkbox" id="delete_existing" name="delete_existing" value="1">
-                            <label class="form-check-label small text-danger fw-semibold" for="delete_existing">
-                                Delete existing first
-                            </label>
-                        </div>
-                    </div>
-                </form>
-            </div>
+        <div class="bmc-card__band">
+            <button type="submit" class="bmc-btn bmc-btn--yellow"><span>SAVE SIZE WEIGHTS</span></button>
         </div>
-    </div>
+    </form>
+</section>
+{% endblock %}
 
-    {# ── Generate League Structure ───────────────────────────────────────── #}
-    <div class="col-12 col-lg-6">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-trophy text-warning"></i>
-                <span class="fw-semibold small">Generate League Structure</span>
-            </div>
-            <div class="card-body d-flex flex-column gap-3">
-                <p class="text-muted small mb-0">
-                    Creates League records for a country, named "League 1" upward, and skips
-                    tiers that already exist. Run this before generating clubs so clubs are
-                    auto-assigned to their league.
-                    <br>
-                    <strong class="text-warning">Choosing fewer tiers than the country already
-                    has deletes the surplus tiers and the pool clubs in them.</strong>
-                    NPC quality scales to the depth you choose, so the bottom tier is always
-                    the bottom of that country's pyramid.
-                </p>
-                <div class="mt-auto">
-                    <form method="POST" action="{{ path('admin_leagues_generate') }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('generate_leagues') }}">
-                        <div class="mb-3">
-                            <label for="league_country" class="form-label fw-semibold small">Country (ISO)</label>
-                            <select id="league_country" name="country" class="form-select form-select-sm">
-                                {% for code, label in generationCapableCountries %}
-                                    <option value="{{ code }}">{{ label }} ({{ code }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="league_tiers" class="form-label fw-semibold small">Tiers</label>
-                            <input type="number" class="form-control form-control-sm" id="league_tiers"
-                                   name="tiers" value="8" min="1" max="8" step="1" required>
-                            <div class="form-text small">1–8. Tier 1 is the top division. Default 8.</div>
-                        </div>
-                        <button type="submit" class="btn btn-warning btn-sm">
-                            <i class="fa fa-trophy me-1"></i>Generate Leagues
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    {# ── Facility Level Ranges ──────────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-building text-info"></i>
-                <span class="fw-semibold small">Facility Level Ranges by Tier Band</span>
-                <span class="ms-auto text-muted small">Starting level range assigned per facility when clubs are generated</span>
-            </div>
-            <div class="card-body">
-                {% if facilities is empty %}
-                    <p class="text-muted small mb-0">No active facility templates found. Add facilities first.</p>
-                {% else %}
-                    {% set bandLabels = ['Tiers 1–2', 'Tiers 3–4', 'Tiers 5–6', 'Tiers 7–8'] %}
-                    {% set trainingSlugs = ['training_pitch', 'strength_suite'] %}
-                    {% set standsSlugs   = ['north_stand', 'south_stand', 'east_stand', 'west_stand'] %}
-                    {# Hardcoded fallback defaults matching NpcClubGenerationService::FACILITY_LEVELS #}
-                    {% set defaults = [
-                        {training: [7,9], stands: [4,5], other: [3,5]},
-                        {training: [5,6], stands: [3,4], other: [2,3]},
-                        {training: [3,4], stands: [2,3], other: [1,2]},
-                        {training: [1,2], stands: [0,1], other: [0,1]}
-                    ] %}
-
-                    <p class="text-muted small mb-3">
-                        Max values are capped to each facility's max upgrade level.
-                        Set both min and max to <strong>0</strong> to exclude a facility from clubs generated in that tier band.
-                    </p>
-                    <form method="POST" action="{{ path('admin_npc_clubs_save_facility_config') }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('npc_facility_config') }}">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-3 small align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-3" style="min-width:140px">Facility</th>
-                                        {% for bandLabel in bandLabels %}
-                                            <th class="text-center" colspan="2" style="min-width:120px">{{ bandLabel }}</th>
-                                        {% endfor %}
-                                    </tr>
-                                    <tr class="table-secondary">
-                                        <th class="ps-3 text-muted" style="font-size:10px">SLUG</th>
-                                        {% for i in 0..3 %}
-                                            <th class="text-center text-muted" style="font-size:10px">MIN</th>
-                                            <th class="text-center text-muted" style="font-size:10px">MAX</th>
-                                        {% endfor %}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for facility in facilities %}
-                                        {% set slug = facility.slug %}
-                                        {% set isTraining = slug in trainingSlugs %}
-                                        {% set isStands   = slug in standsSlugs %}
-                                        <tr>
-                                            <td class="ps-3">
-                                                <span class="fw-semibold">{{ facility.label }}</span><br>
-                                                <code class="text-muted" style="font-size:9px">{{ slug }}</code>
-                                            </td>
-                                            {% for band in 0..3 %}
-                                                {% set stored = gameConfig.npcFacilityLevelRanges[band][slug] ?? null %}
-                                                {% if isTraining %}
-                                                    {% set fallbackMin = defaults[band].training[0] %}
-                                                    {% set fallbackMax = defaults[band].training[1] %}
-                                                {% elseif isStands %}
-                                                    {% set fallbackMin = defaults[band].stands[0] %}
-                                                    {% set fallbackMax = defaults[band].stands[1] %}
-                                                {% else %}
-                                                    {% set fallbackMin = defaults[band].other[0] %}
-                                                    {% set fallbackMax = defaults[band].other[1] %}
-                                                {% endif %}
-                                                {% set currentMin = stored ? stored.min : fallbackMin %}
-                                                {% set currentMax = stored ? stored.max : fallbackMax %}
-                                                <td class="text-center p-1">
-                                                    <input type="number" name="facilityRanges[{{ band }}][{{ slug }}][min]"
-                                                           value="{{ currentMin }}" min="0" max="{{ facility.maxLevel }}"
-                                                           class="form-control form-control-sm text-center p-1"
-                                                           style="width:60px;margin:0 auto"
-                                                           title="Band {{ band + 1 }} min for {{ slug }} (0 = omit facility)">
-                                                </td>
-                                                <td class="text-center p-1">
-                                                    <input type="number" name="facilityRanges[{{ band }}][{{ slug }}][max]"
-                                                           value="{{ currentMax }}" min="0" max="{{ facility.maxLevel }}"
-                                                           class="form-control form-control-sm text-center p-1"
-                                                           style="width:60px;margin:0 auto"
-                                                           title="Band {{ band + 1 }} max for {{ slug }} (0/0 = omit facility)">
-                                                </td>
-                                            {% endfor %}
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="fa fa-save me-1"></i>Save Facility Ranges
-                        </button>
-                    </form>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    {# ── City Size Weighting ───────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-city text-success"></i>
-                <span class="fw-semibold small">City Size Weighting</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Controls how likely a BIG/MEDIUM/SMALL city is to be picked when generating a club
-                    for a given tier. Tier 1 and Tier 8 are the anchors — tiers 2–7 interpolate
-                    linearly between them. Values are percentages and don't need to sum to 100.
-                </p>
-                <form method="POST" action="{{ path('admin_npc_clubs_save_size_weights') }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('npc_size_weights') }}">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-3 small align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th class="ps-3">Tier</th>
-                                    <th class="text-center">Big %</th>
-                                    <th class="text-center">Medium %</th>
-                                    <th class="text-center">Small %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for row in ['tier1', 'tier8'] %}
-                                    <tr>
-                                        <td class="ps-3 fw-semibold">{{ row == 'tier1' ? 'Tier 1' : 'Tier 8' }}</td>
-                                        <td class="text-center p-1">
-                                            <input type="number" name="sizeWeights[{{ row }}][big]"
-                                                   value="{{ gameConfig.npcClubSizeWeights[row].big ?? 0 }}" min="0" max="100"
-                                                   class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
-                                        </td>
-                                        <td class="text-center p-1">
-                                            <input type="number" name="sizeWeights[{{ row }}][medium]"
-                                                   value="{{ gameConfig.npcClubSizeWeights[row].medium ?? 0 }}" min="0" max="100"
-                                                   class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
-                                        </td>
-                                        <td class="text-center p-1">
-                                            <input type="number" name="sizeWeights[{{ row }}][small]"
-                                                   value="{{ gameConfig.npcClubSizeWeights[row].small ?? 0 }}" min="0" max="100"
-                                                   class="form-control form-control-sm text-center p-1" style="width:70px;margin:0 auto">
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        <i class="fa fa-save me-1"></i>Save Size Weights
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-{% block javascripts %}
+{% block body_javascript %}
+{{ parent() }}
 <script>
 (function () {
-    const form    = document.getElementById('generate-clubs-form');
-    const btn     = document.getElementById('generate-clubs-btn');
-    const alert   = document.getElementById('generate-clubs-alert');
-
+    var form  = document.getElementById('generate-clubs-form');
+    var btn   = document.getElementById('generate-clubs-btn');
+    var note  = document.getElementById('generate-clubs-alert');
     if (!form) return;
+
+    function say(ok, text) {
+        note.hidden = false;
+        note.className = 'bmc-status';
+        note.innerHTML = '<span class="bmc-dot" style="background:var(--wk-' + (ok ? 'positive' : 'danger') + ')"></span>' +
+                         String(text).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+    }
 
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
 
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating…';
-        alert.className = 'd-none small';
+        btn.querySelector('span').textContent = 'GENERATING…';
+        note.hidden = true;
 
         try {
-            const resp = await fetch(form.action, {
+            var resp = await fetch(form.action, {
                 method: 'POST',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 body: new FormData(form),
             });
+            var data = await resp.json();
 
-            const data = await resp.json();
-
-            alert.className = 'small alert mb-0 py-2 ' + (data.success ? 'alert-success' : 'alert-danger');
-            alert.textContent = data.message;
-
-            if (data.success) {
-                updatePoolTable(data.clubCount, data.clubsByCountry);
-            }
+            say(data.success, data.message);
+            if (data.success) redrawPool(data.clubCount, data.clubsByCountry);
         } catch (err) {
-            alert.className = 'small alert alert-danger mb-0 py-2';
-            alert.textContent = 'Request failed — ' + err.message;
+            say(false, 'Request failed — ' + err.message);
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa fa-plus me-1"></i>Generate Clubs';
+            btn.querySelector('span').textContent = 'GENERATE CLUBS';
         }
     });
 
-    function updatePoolTable(total, byCountry) {
-        document.getElementById('club-pool-total').textContent = total + ' total';
+    // MIRRORS THE TWIG ABOVE. If the server-rendered table changes, this has to change with it
+    // — there is no shared component, so the two are kept adjacent on purpose.
+    function redrawPool(total, byCountry) {
+        document.getElementById('club-pool-total').textContent = Number(total).toLocaleString('en-GB') + ' total';
 
-        const body = document.getElementById('club-pool-body');
+        var body = document.getElementById('club-pool-body');
         if (!byCountry || Object.keys(byCountry).length === 0) {
-            body.innerHTML = '<p class="text-muted small p-3 mb-0">No clubs generated yet.</p>';
+            body.innerHTML = '<div class="bmc-card__body"><span class="bmc-empty-note">NO CLUBS GENERATED YET</span></div>';
             return;
         }
 
-        const countries = Object.keys(byCountry).sort();
-        const rows = countries.map(country => {
-            const tiers = byCountry[country];
-            let rowTotal = 0;
-            let cells = '';
-            for (let t = 1; t <= 8; t++) {
-                const n = tiers[t] ?? 0;
+        var rows = Object.keys(byCountry).sort().map(function (country) {
+            var tiers = byCountry[country], rowTotal = 0, cells = '';
+            for (var t = 1; t <= 8; t++) {
+                var n = tiers[t] || 0;
                 rowTotal += n;
                 cells += n
-                    ? `<td class="text-center"><span class="badge bg-primary bg-opacity-75">${n}</span></td>`
-                    : `<td class="text-center"><span class="text-muted">—</span></td>`;
+                    ? '<td class="is-right"><span class="bmc-badge bmc-badge--subtle">' + n + '</span></td>'
+                    : '<td class="is-right"><span class="ink-dim">—</span></td>';
             }
-            return `<tr>
-                <td class="ps-3 fw-semibold">${country}</td>
-                ${cells}
-                <td class="text-end pe-3 fw-semibold">${rowTotal}</td>
-            </tr>`;
+            return '<tr><td><span class="bmc-celltext">' + country + '</span></td>' + cells +
+                   '<td class="is-right bmc-cellnum">' + rowTotal + '</td></tr>';
         }).join('');
 
-        body.innerHTML = `
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 small" id="club-pool-table">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-3">Country</th>
-                            ${[1,2,3,4,5,6,7,8].map(t => `<th class="text-center">T${t}</th>`).join('')}
-                            <th class="text-end pe-3">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody id="club-pool-tbody">${rows}</tbody>
-                </table>
-            </div>`;
+        var heads = [1,2,3,4,5,6,7,8].map(function (t) { return '<th class="is-right">T' + t + '</th>'; }).join('');
+
+        body.innerHTML =
+            '<div style="overflow-x:auto"><table class="bmc-minitable" id="club-pool-table" style="min-width:600px">' +
+            '<thead><tr><th>COUNTRY</th>' + heads + '<th class="is-right">TOTAL</th></tr></thead>' +
+            '<tbody id="club-pool-tbody">' + rows + '</tbody></table></div>';
     }
 }());
 </script>
-{% endblock %}
 {% endblock %}
